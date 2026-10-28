@@ -19,7 +19,7 @@ class ActivityController
         $page = $data['page'] ?? null;
         $scene = $data['scene'] ?? null;
         if ($data['event'] === 'proposal_section') {
-            abort_unless(in_array($page, Activity::SECTIONS, true) && $scene === null, 422);
+            abort_unless(in_array($page, $activity->sections($version), true) && $scene === null, 422);
         } else {
             app(CampusReviewManifest::class)->resolveReviewEdition($version, $data['event'] === 'campus_page' ? (string) $page : 'home');
             abort_unless($data['event'] === 'campus_page' ? $scene === null : ($page === null && $scene !== null), 422);

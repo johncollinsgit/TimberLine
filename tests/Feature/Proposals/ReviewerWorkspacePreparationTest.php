@@ -412,4 +412,50 @@ final class ReviewerWorkspacePreparationTest extends ReviewerWorkspaceFixture
         $this->prep('preview')->assertNotFound();
         $this->assertSame(1, Version::count());
     }
+
+    public function test_reviewed_new_fictional_baseline_prepares_only_a_distinct_draft_and_replays_without_changing_prior_work(): void
+    {
+        $before = $this->protectedState();
+        $oldHash = $this->input['approval_sha256'];
+        $this->approval['data_basis'] = 'reviewed_new_fictional_baseline';
+        $this->approval['import_evidence_sha256'] = ReviewerWorkspaceSchema::digest(['basis' => 'reviewed_new_fictional_baseline', 'fixture' => 'explicit-new-graph-review']);
+        $this->input['approval_sha256'] = ReviewerWorkspaceSchema::digest($this->approval);
+        $this->input['import_evidence_sha256'] = $this->approval['import_evidence_sha256'];
+        config(['service_proposals.reviewer_workspace.owner_preparation.approvals' => [$this->input['approval_sha256'] => $this->approval]]);
+        $this->assertNotSame($oldHash, $this->input['approval_sha256']);
+        $this->assertSame([$this->input['approval_sha256'] => $this->approval], ReviewerWorkspacePreparation::parseApprovals(json_encode((object) [$this->input['approval_sha256'] => $this->approval])));
+        $apply = $this->prepare();
+        $prepared = Draft::findOrFail($this->approval['prepared_draft_id']);
+        $this->assertNotSame($this->original->id, $prepared->id);
+        $this->assertNotSame($this->version->payload['review_workspace']['workspace_id'], $prepared->payload['review_workspace']['workspace_id']);
+        $this->assertSame($before, $this->protectedState());
+        $drafts = DB::table('service_proposal_drafts')->orderBy('id')->get()->toJson();
+        $this->prep('apply', $apply)->assertOk()->assertJsonPath('replayed', true);
+        $this->prep('status', $this->statusBody())->assertOk()->assertJsonPath('settled', true);
+        $this->assertSame($drafts, DB::table('service_proposal_drafts')->orderBy('id')->get()->toJson());
+        $this->assertSame($before, $this->protectedState());
+        Http::assertNothingSent();
+    }
+
+    public function test_reviewed_new_fictional_baseline_does_not_bypass_provenance_staleness_or_predecessor_workspace_guards(): void
+    {
+        $this->approval['data_basis'] = 'reviewed_new_fictional_baseline';
+        $this->input['approval_sha256'] = ReviewerWorkspaceSchema::digest($this->approval);
+        config(['service_proposals.reviewer_workspace.owner_preparation.approvals' => [$this->input['approval_sha256'] => $this->approval]]);
+        $before = [$this->protectedState(), DB::table('service_proposal_drafts')->orderBy('id')->get()->toJson()];
+        $bad = $this->input;
+        $bad['import_evidence_sha256'] = str_repeat('0', 64);
+        $this->prep('preview', $bad)->assertStatus(409);
+        DB::table('service_proposal_drafts')->where('id', $this->original->id)->update(['revision' => $this->approval['source_draft_revision'] + 1]);
+        $this->prep('preview')->assertStatus(409);
+        DB::table('service_proposal_drafts')->where('id', $this->original->id)->update(['revision' => $this->approval['source_draft_revision']]);
+        $this->approval['workspace_descriptor']['workspace_id'] = $this->version->payload['review_workspace']['workspace_id'];
+        $sameWorkspaceHash = ReviewerWorkspaceSchema::digest($this->approval);
+        config(['service_proposals.reviewer_workspace.owner_preparation.approvals' => [$sameWorkspaceHash => $this->approval]]);
+        $bad = $this->input;
+        $bad['approval_sha256'] = $sameWorkspaceHash;
+        $this->prep('preview', $bad)->assertStatus(409);
+        $this->assertSame($before, [$this->protectedState(), DB::table('service_proposal_drafts')->orderBy('id')->get()->toJson()]);
+        Http::assertNothingSent();
+    }
 }

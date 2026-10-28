@@ -47,7 +47,7 @@ final class ReviewerWorkspacePreparation
     private static function policy(array $row): void
     {
         ReviewerWorkspaceSchema::exact($row, self::POLICY);
-        abort_unless($row['schema_version'] === 1 && $row['data_basis'] === 'reviewed_current_edits'
+        abort_unless($row['schema_version'] === 1 && in_array($row['data_basis'], ['reviewed_current_edits', 'reviewed_new_fictional_baseline'], true)
             && is_int($row['source_draft_revision']) && $row['source_draft_revision'] > 0
             && ReviewerWorkspaceSchema::text($row['build_id'], 120) && ReviewerWorkspaceSchema::utc($row['expires_at']), 422);
         foreach (['source_draft_id', 'prepared_draft_id', 'predecessor_version_id'] as $key) {

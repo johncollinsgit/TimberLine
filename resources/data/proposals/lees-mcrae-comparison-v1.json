@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "id": "lees-mcrae-comparison-v1",
+  "content": {
+    "purpose": "Far-left Compare options panel for the next reviewed Lees-McRae proposal edition",
+    "basis": {
+      "saved_revision": 5,
+      "saved_at": "2026-10-27T02:04:25+00:00",
+      "source_pdf_sha256": "63b6b4163e64e721760cb8d024abb0c9dab09eb2e0d070e2758641e11f082bc6",
+      "currency": "USD",
+      "status": "Nonbinding discussion draft; neither option selected"
+    },
+    "tab": {
+      "key": "compare",
+      "label": "Compare options",
+      "position": "first",
+      "default_for_new_comparison_snapshot": true
+    },
+    "heading": "Choose the scope that fits Lees-McRae",
+    "intro": "Start with one department, or commit to three connected department workspaces. Both options begin with your people and the way work moves across campus. The three-workspace bundle adds a better combined price as those departments come online.",
+    "options": [
+      {
+        "id": "one-workspace",
+        "name": "One workspace",
+        "subtitle": "A focused start for one department",
+        "setup_cents": 300000,
+        "monthly_cents": 100000,
+        "activation_note": "after that workspace activates",
+        "workspaces": 1
+      },
+      {
+        "id": "three-workspace-bundle",
+        "name": "Three-workspace bundle",
+        "subtitle": "Three committed departments, connected in phases",
+        "setup_cents": 700000,
+        "monthly_cents": 250000,
+        "activation_note": "total when all three are active",
+        "workspaces": 3
+      }
+    ],
+    "rows": [
+      {
+        "label": "Department workspaces",
+        "values": [
+          "1 agreed department",
+          "3 agreed departments"
+        ]
+      },
+      {
+        "label": "Users within the agreed department scope",
+        "values": [
+          "No per-user seat fee",
+          "No per-user seat fee"
+        ]
+      },
+      {
+        "label": "Discovery on campus",
+        "values": [
+          "1 day, up to 9 working hours",
+          "1 day per workspace as it onboards; 3 days total"
+        ]
+      },
+      {
+        "label": "Workspace setup",
+        "values": [
+          "Discovery, agreed workflow design, configuration, pilot and launch preparation",
+          "The same setup for each of the 3 departments"
+        ]
+      },
+      {
+        "label": "Onboarding video calls",
+        "values": [
+          "One scheduled 30-minute call each week, up to 4 calls",
+          "The same allowance per department"
+        ]
+      },
+      {
+        "label": "Ongoing support",
+        "values": [
+          "Ticketing, troubleshooting and maintenance of the agreed system",
+          "The same support for each active workspace"
+        ]
+      },
+      {
+        "label": "Scheduled video consultation",
+        "values": [
+          "Up to 60 minutes per active workspace each month",
+          "Up to 60 minutes per active workspace each month"
+        ]
+      },
+      {
+        "label": "AI, voice, text and email",
+        "values": [
+          "Actual attributable provider cost, with no Evergrove markup; usage method and limits to be agreed",
+          "The same usage terms, with proposed department access and budget controls"
+        ]
+      },
+      {
+        "label": "Contract term",
+        "values": [
+          "12 months for the workspace from activation or contractual billing commencement",
+          "12 months for each workspace from its activation or contractual billing commencement"
+        ]
+      }
+    ],
+    "stages": [
+      {
+        "label": "First department",
+        "setup_cents": 300000,
+        "monthly_total_cents": 100000
+      },
+      {
+        "label": "Second department",
+        "setup_cents": 200000,
+        "monthly_total_cents": 200000
+      },
+      {
+        "label": "Third department",
+        "setup_cents": 200000,
+        "monthly_total_cents": 250000
+      }
+    ],
+    "value": {
+      "heading": "A clear bundle advantage",
+      "monthly_saving_cents": 50000,
+      "setup_saving_cents": 200000,
+      "basis": "Compared with three separate one-workspace packages: $9,000 setup and $3,000 per month. The bundle is $7,000 setup and $2,500 per month when all three workspaces are active. These differences exclude usage and additional approved work; actual billing follows staged activation."
+    },
+    "activation_note": "Departments launch sequentially. Monthly fees begin at each workspace's approved activation, subject to the existing Implementation Timeline, Client Dependencies, and Billing Commencement provision. Calendar dates and setup invoice due dates remain to be agreed.",
+    "scope_note": "Both options cover the selected campus-operations workflows. Admissions and large-scale marketing are outside the initial offer. Additional departments, substantial workflows, major integrations, large migrations and software replacement require a separate scope and written price approval.",
+    "next_step": "Choose the first department and its launch checklist, confirm the selected package, then agree scope, responsibilities, activation milestones and usage controls."
+  },
+  "commercial_source": {
+    "source_reference": "Library libfile_3d9946d31a7081918e8eea1dea3c232b / Evergrove_Lees_McRae_Proposal_Draft.pdf / version9 / pages4–7",
+    "source_copy_sha256": "8603c2399a7513067f4e688110c1c00ae08db47dd6edcdc51a2fc55b791b9220",
+    "protected_sha256": "ed346fd96edfa0e1d8ce29c99040599bbc5fd81a830014f1c43752030b8e2061"
+  }
+}

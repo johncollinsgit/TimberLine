@@ -18,6 +18,12 @@ class Activity
 
     public const SECTIONS = ['letter', 'overview', 'approach', 'scope', 'terms', 'review'];
 
+    public function sections(Version $version): array
+    {
+        return app(ProposalComparison::class)->from($version->payload) !== null
+            ? ['compare', ...self::SECTIONS] : self::SECTIONS;
+    }
+
     public function enabled(Version $version): bool
     {
         return config('service_proposals.enabled') === true

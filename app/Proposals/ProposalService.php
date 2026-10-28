@@ -88,12 +88,16 @@ class ProposalService
             'source' => ['nullable', Rule::in(['manual', 'ai_draft', 'voice_draft'])],
             'scope_notes' => ['nullable', 'string', 'max:8000'],
             'include_personal_letter' => ['nullable', 'boolean'],
+            'include_comparison' => ['nullable', 'boolean'],
             'usage_plan' => ['nullable', Rule::in(['unconfirmed', 'separately_billed', 'workspace_allowance', 'pooled_bundle_allowance'])],
             'approach_key' => ['nullable', Rule::in(['evergrove_department_journey'])],
             'reviewer_names' => ['nullable', 'array', 'max:20'], 'reviewer_names.*' => ['required', 'string', 'distinct', 'max:80'],
         ])->validate();
         $client = $this->asset($tenant, $data['client_id'], 'client');
         $includeLetter = (bool) ($data['include_personal_letter'] ?? false);
+        $includeComparison = (bool) ($data['include_comparison'] ?? false);
+        abort_if($includeComparison && (($client->payload['reference'] ?? null) !== CampusReviewManifest::CLIENT_REFERENCE
+            || config('service_proposals.owner_workspaces.'.$tenant->id) !== 'enterprise'), 422, 'This comparison is for the Lees-McRae proposal.');
         abort_if($includeLetter && (($client->payload['reference'] ?? null) !== CampusReviewManifest::CLIENT_REFERENCE
             || config('service_proposals.owner_workspaces.'.$tenant->id) !== 'enterprise'), 422, 'This personal letter is for the Lees-McRae proposal.');
         $items = [];
@@ -120,15 +124,22 @@ class ProposalService
             $payload['personal_letter'] = PersonalLetter::snapshot();
         }
 
-        return DB::transaction(function () use ($tenant, $actor, $input, $id, $client, $payload): Draft {
+        return DB::transaction(function () use ($tenant, $actor, $input, $id, $client, $payload, $includeComparison): Draft {
             if ($id) {
                 $draft = Draft::query()->where('tenant_id', $tenant->id)->lockForUpdate()->findOrFail($id);
                 abort_unless((int) ($input['revision'] ?? 0) === (int) $draft->revision, 409, 'This draft changed. Reload before saving.');
                 abort_if(ReviewerWorkspacePreparation::isPrepared($draft), 409, 'Prepared drafts are read-only. Edit the original draft.');
                 $payload = CommercialSnapshot::preserve($draft->payload, $payload);
+                if ($includeComparison) {
+                    $payload['comparison'] = app(ProposalComparison::class)->snapshot($payload);
+                }
                 $draft->fill(['client_id' => $client->id, 'payload' => $payload, 'revision' => $draft->revision + 1])->save();
 
                 return $draft;
+            }
+
+            if ($includeComparison) {
+                $payload['comparison'] = app(ProposalComparison::class)->snapshot($payload);
             }
 
             return Draft::create(['tenant_id' => $tenant->id, 'client_id' => $client->id, 'payload' => $payload, 'created_by' => $actor]);

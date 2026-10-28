@@ -1,3 +1,20 @@
+## Reviewed comparison and new fictional edition basis (source candidate)
+
+A saved, compatible Lees-McRae proposal can explicitly include a far-left
+Compare options tab. Its trusted snapshot binds the reviewed commercial terms;
+ordinary saves preserve those terms, and unflagged old editions retain their
+tabs and content. Activity recognizes the new section only for a valid snapshot.
+
+Preparation and initialization separately admit `reviewed_new_fictional_baseline`
+for an explicitly reviewed NEW fictional workspace. Its provenance is not a
+browser capture or recovery. Existing edits, links, passwords, comments, archives
+and workspaces remain untouched. All actual-owner, source, seed, predecessor,
+new-workspace and original-intent recovery checks remain. Source changes do not
+publish, initialize, activate providers or create a budget. See
+`docs/operations/proposal-comparison-tab.md` and the reviewer preparation and
+initialization runbooks. Normal exact-head CI/review and explicit runtime stages
+remain required.
+
 ## Campus shell reconciliation (source follow-up)
 
 Persistent header search and the retained bottom-right Campus assistant reuse

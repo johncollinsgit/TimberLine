@@ -40,7 +40,7 @@ class RecordActivity
             if ($kind === 'proposal_view') {
                 $kind = $unlocked ? 'proposal_view' : 'link_opened';
                 $section = $request->attributes->get('service_proposal_activity_section', $request->query('section', 'overview'));
-                $page = is_string($section) && in_array($section, Activity::SECTIONS, true) ? $section : 'overview';
+                $page = is_string($section) && in_array($section, app(Activity::class)->sections($version), true) ? $section : 'overview';
             } elseif ($kind === 'campus_page') {
                 $page = $request->route('page', 'home');
             }
