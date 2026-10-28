@@ -67,6 +67,22 @@ final class ReviewerWorkspaceCommands
         return $row;
     }
 
+    /** A task link does not grant permission to change the submitted ticket's fields. */
+    private function linkedTicketFields(array $selection, array $graph, array $task, array $payload): void
+    {
+        if ($selection['persona'] === 'demo_manager') {
+            return;
+        }
+        foreach ($graph['tickets'] as $ticket) {
+            if ($ticket['task_id'] !== $task['id']) {
+                continue;
+            }
+            foreach (['assignee_id', 'priority', 'building_id'] as $field) {
+                abort_if(array_key_exists($field, $payload) && $payload[$field] !== $task[$field], 403);
+            }
+        }
+    }
+
     public function apply(array $scope, array $selection, array $graph, array $command, string $at): array
     {
         $action = $command['action'];
@@ -142,11 +158,13 @@ final class ReviewerWorkspaceCommands
             abort_if($row['status'] === 'archived', 409);
             if ($action === 'task.update') {
                 ReviewerWorkspaceSchema::exact($payload, ['title', 'description', 'assignee_id', 'building_id', 'building_version', 'priority', 'due_on']);
+                $this->linkedTicketFields($selection, $graph, $row, $payload);
                 $this->person($graph, $payload['assignee_id'], $row['area_id']);
                 $this->building($graph, $payload['building_id'], $payload['building_version'], $row['area_id']);
                 unset($payload['building_version']);
             } elseif ($action === 'task.assign') {
                 ReviewerWorkspaceSchema::exact($payload, ['assignee_id']);
+                $this->linkedTicketFields($selection, $graph, $row, $payload);
                 $this->person($graph, $payload['assignee_id'], $row['area_id']);
             } elseif ($action === 'task.status') {
                 ReviewerWorkspaceSchema::exact($payload, ['status']);

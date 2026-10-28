@@ -90,9 +90,10 @@ final class ReviewerWorkspaceAccess
         }
 
         return match ($selection['persona']) {
-            'demo_manager', 'manager' => ['job.create', 'project.create', 'project.update', 'project.archive', 'task.create', 'task.update', 'task.assign', 'task.status', 'task.archive', 'ticket.create', 'ticket.update', 'ticket.classify', 'ticket.assign', 'ticket.plan', 'ticket.status', 'ticket.reorder', 'plan.create', 'plan.update', 'plan.cancel'],
-            'worker' => ['task.status', 'ticket.create', 'ticket.update'],
-            'requester' => ['ticket.create', 'ticket.update'], default => [],
+            'demo_manager' => ['job.create', 'project.create', 'project.update', 'project.archive', 'task.create', 'task.update', 'task.assign', 'task.status', 'task.archive', 'ticket.create', 'ticket.update', 'ticket.classify', 'ticket.assign', 'ticket.plan', 'ticket.status', 'ticket.reorder', 'plan.create', 'plan.update', 'plan.cancel'],
+            'manager' => ['job.create', 'project.create', 'project.update', 'project.archive', 'task.create', 'task.update', 'task.assign', 'task.status', 'task.archive', 'ticket.create', 'plan.create', 'plan.update', 'plan.cancel'],
+            'worker' => ['task.status', 'ticket.create'],
+            'requester' => ['ticket.create'], default => [],
         };
     }
 }

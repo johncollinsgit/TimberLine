@@ -54,3 +54,33 @@ Counters remain in memory and do not change drafts, saved records, permissions,
 receipts, private editions, providers or runtime configuration. Normal exact-head
 CI, protected deployment and fresh hosted phone/tour acceptance remain required;
 local passing checks alone are not a hosted repair claim.
+
+
+## Guided public assistant (source follow-up)
+
+Campus assistant searches only the current fictional state projection. Jobs,
+projects, tasks and requests return explicit current record choices; opening a
+choice refreshes that projection and rechecks persona, kind and ID. Recorded
+status, operations rank, requested priority and dates remain distinct. Missing
+facts say Not recorded. Event matches are work records, not an authoritative
+event schedule. This is deterministic guided simulation with no model request,
+paid endpoint, private review API or native campus authority.
+
+Explicit add/create ticket intent starts problem and impact clarification,
+department/building choices and a user-selected priority. Unknown building and
+no requested date are supported. A bounded persona-scoped browser-session draft
+can survive reload; storage denial leaves a clear in-tab limitation. Summary
+then opens the existing request form for review and optional local file
+references. Only the existing explicit Submit demo request dispatches its
+retained local intent. Assistant preparation cannot overwrite an existing
+request draft, files or unresolved original intent. The existing request model,
+receipts, permissions and unknown-result recovery are unchanged.
+
+Every mounted handler checks exact view, form, captured persona/state and
+navigation generation, including before and after asynchronous record lookup.
+Retired input, submit and summary controls cannot write another persona's draft
+or prepare a new request. A status question about a new ticket remains lookup,
+not creation. The actual-source Node and Chromium/WebKit desktop/phone-viewport
+checks cover these boundaries. Local simulation does not establish physical
+mobile/Safari, native persistence, a real model or provider acceptance. Normal
+exact-head CI, protected deployment and fresh hosted acceptance remain required.

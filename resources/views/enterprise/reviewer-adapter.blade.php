@@ -67,7 +67,7 @@
         });
         const chooser = document.getElementById('reviewer-perspective');
         const executiveOption=document.createElement('option');executiveOption.value='executive';executiveOption.textContent='Executive · read-only';chooser.prepend(executiveOption);
-        if(boot.defaultPersona==='demo_manager'){const managerOption=document.createElement('option');managerOption.value='demo_manager';managerOption.textContent='Blaine · demo manager';chooser.prepend(managerOption);}
+        if(boot.defaultPersona==='demo_manager'){const managerOption=document.createElement('option');managerOption.value='demo_manager';managerOption.textContent=shared?'Blaine · Demo admin':'Blaine · demo manager';chooser.prepend(managerOption);}
         if (shared) for (const option of [...chooser.options]) {
             if (!boot.reviewerPersonas.includes(option.value) || option.value === 'worker') option.remove();
         }
