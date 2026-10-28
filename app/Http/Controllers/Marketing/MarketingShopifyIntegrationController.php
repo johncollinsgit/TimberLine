@@ -980,11 +980,7 @@ class MarketingShopifyIntegrationController extends Controller
             return $this->missingTenantContextResponse('birthday_status');
         }
 
-        $resolved = $this->signedBirthdayIdentity(
-            $request,
-            $storeContext,
-            $this->resolveProfile($request, scope: 'birthday_status', allowCreate: false)
-        );
+        $resolved = $this->birthdayClubIdentity($request, $storeContext, 'birthday_status');
         if (! $resolved['profile']) {
             $states = ['unknown_customer', 'add_birthday_unlock_reward'];
             $this->logStorefrontEvent($request, 'widget_birthday_status_lookup', [
@@ -1094,7 +1090,7 @@ class MarketingShopifyIntegrationController extends Controller
             return $this->missingTenantContextResponse('birthday_capture');
         }
 
-        $resolved = $this->resolveProfile($request, scope: 'birthday_capture', allowCreate: true, allowBody: true);
+        $resolved = $this->birthdayClubIdentity($request, $storeContext, 'birthday_capture', allowBody: true, allowCreate: true);
         if (! $resolved['profile']) {
             $this->logStorefrontEvent($request, 'widget_birthday_capture', [
                 'status' => 'error',
@@ -1205,11 +1201,7 @@ class MarketingShopifyIntegrationController extends Controller
             return $this->missingTenantContextResponse('birthday_claim');
         }
 
-        $resolved = $this->signedBirthdayIdentity(
-            $request,
-            $storeContext,
-            $this->resolveProfile($request, scope: 'birthday_claim', allowCreate: false, allowBody: true)
-        );
+        $resolved = $this->birthdayClubIdentity($request, $storeContext, 'birthday_claim', allowBody: true);
         if (! $resolved['profile']) {
             return $this->identityErrorResponse($resolved['status'], $request);
         }
@@ -3433,9 +3425,20 @@ class MarketingShopifyIntegrationController extends Controller
     {
         $club = app(\App\Services\Marketing\BirthdayClubService::class);
 
-        return $club->enabled((int) $profile->tenant_id)
-            ? $club->issuances($profile)->map(fn ($reward) => $this->birthdayIssuancePayload($reward))->all()
-            : [];
+        if (! $club->enabled((int) $profile->tenant_id)) {
+            return [];
+        }
+        $request = request();
+        if ($request->attributes->get('marketing_storefront_auth_mode') === 'app_proxy'
+            && (int) $request->attributes->get('birthday_club_verified_profile_id', 0) !== (int) $profile->id) {
+            $customerId = $this->normalizeShopifyCustomerId($request->query('logged_in_customer_id', ''));
+            $linked = $customerId !== '' ? $this->profileFromShopifyCustomerId($customerId, 'retail', (int) $profile->tenant_id) : null;
+            if (! $linked || ! in_array((int) $profile->id, $club->identity($linked)['profile_ids'], true)) {
+                return [];
+            }
+        }
+
+        return $club->issuances($profile)->map(fn ($reward) => $this->birthdayIssuancePayload($reward))->all();
     }
 
     protected function birthdayIssuancePayload(mixed $issuance): ?array
@@ -3608,6 +3611,25 @@ class MarketingShopifyIntegrationController extends Controller
      * @param  array<string,mixed>  $resolved
      * @return array<string,mixed>
      */
+    protected function birthdayClubIdentity(Request $request, array $storeContext, string $scope, bool $allowBody = false, bool $allowCreate = false): array
+    {
+        $strict = $request->attributes->get('marketing_storefront_auth_mode') === 'app_proxy'
+            && app(\App\Services\Marketing\BirthdayClubService::class)->enabled((int) ($storeContext['tenant_id'] ?? 0));
+        $resolved = $strict
+            ? ['status' => 'missing_identity', 'profile' => null, 'sync' => []]
+            : $this->resolveProfile($request, scope: $scope, allowCreate: $allowCreate, allowBody: $allowBody);
+        // Proxy query/body profile IDs and email are not evidence of shopper ownership.
+        if (! $strict && $scope === 'birthday_capture') {
+            return $resolved;
+        }
+        $resolved = $this->signedBirthdayIdentity($request, $storeContext, $resolved);
+        if ($strict && $resolved['profile']) {
+            $request->attributes->set('birthday_club_verified_profile_id', (int) $resolved['profile']->id);
+        }
+
+        return $resolved;
+    }
+
     protected function signedBirthdayIdentity(Request $request, array $storeContext, array $resolved): array
     {
         $customerId = $this->normalizeShopifyCustomerId($request->query('logged_in_customer_id', ''));
@@ -3690,6 +3712,9 @@ class MarketingShopifyIntegrationController extends Controller
      */
     protected function birthdayCatchupProfileForSignedCustomer(Request $request, MarketingProfile $profile, array $storeContext): MarketingProfile
     {
+        if (app(\App\Services\Marketing\BirthdayClubService::class)->enabled((int) ($storeContext['tenant_id'] ?? 0))) {
+            return $profile;
+        }
         $customerId = $this->normalizeShopifyCustomerId($request->query('logged_in_customer_id', ''));
         $storeKey = $this->normalizeStoreKey($storeContext['store_key'] ?? null);
         $tenantId = (int) ($storeContext['tenant_id'] ?? 0);

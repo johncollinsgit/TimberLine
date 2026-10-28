@@ -150,6 +150,14 @@ class BirthdayRewardEngineService
         $cycleYear = (int) ($options['cycle_year'] ?? now()->year);
         $club = app(BirthdayClubService::class);
         if ($club->enabled($tenantId) && ! ($options['birthday_cycle_locked'] ?? false)) {
+            $identity = $club->identity($birthdayProfile->marketingProfile);
+            if ((int) $identity['tenant_id'] !== (int) $tenantId) {
+                throw new RuntimeException('Birthday tenant context does not match its customer.');
+            }
+            $canonicalBirthday = CustomerBirthdayProfile::query()->where('marketing_profile_id', $identity['canonical_profile_id'])->first();
+            if ($canonicalBirthday && $canonicalBirthday->birth_month && $canonicalBirthday->birth_day) {
+                $birthdayProfile = $canonicalBirthday;
+            }
             $result = $club->withCycleLock($birthdayProfile, $cycleYear, fn () => $this->issueAnnualReward($birthdayProfile, [
                 ...$options, 'birthday_cycle_locked' => true, 'send_email' => false,
             ]));

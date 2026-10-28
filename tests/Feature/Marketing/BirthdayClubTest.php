@@ -132,14 +132,14 @@ test('coverage reconciliation is read only by default and apply changes coverage
         ->and(BirthdayMessageEvent::count())->toBe(0);
 });
 
-test('historical primary email suppresses a second primary through a different template', function () {
+test('historical primary email suppresses a second primary through a different template', function (string $family) {
     [, $profile, $birthday] = clubCustomer();
     $gift = clubGift($profile, $birthday);
-    BirthdayMessageEvent::create(['event_key' => 'birthday_email:'.$gift->id.':birthday_email_catchup_2026', 'marketing_profile_id' => $profile->id, 'customer_birthday_profile_id' => $birthday->id, 'birthday_reward_issuance_id' => $gift->id, 'campaign_type' => 'birthday_email', 'channel' => 'email', 'status' => 'sent']);
+    BirthdayMessageEvent::create(['event_key' => $family.$gift->id.':birthday_email_catchup_2026', 'marketing_profile_id' => $profile->id, 'customer_birthday_profile_id' => $birthday->id, 'birthday_reward_issuance_id' => $gift->id, 'campaign_type' => 'birthday_email', 'channel' => 'email', 'status' => 'sent']);
     Http::preventStrayRequests();
     $result = app(BirthdayEmailDispatchService::class)->sendIssuanceEmail($gift, ['template_key' => 'birthday_email_primary', 'force' => true]);
     expect($result['already_recorded'])->toBeTrue()->and($result['attempted'])->toBeFalse()->and(BirthdayMessageEvent::count())->toBe(1);
-});
+})->with(['birthday_email:', 'birthday-email:']);
 
 test('unique verified retail catchup ownership shares coverage without merging profiles', function () {
     [$tenant, $profile, $birthday] = clubCustomer();
@@ -153,6 +153,17 @@ test('unique verified retail catchup ownership shares coverage without merging p
     $result = app(BirthdayRewardEngineService::class)->issueAnnualReward($linkedBirthday, ['send_email' => false]);
     expect($result['issuance']->id)->toBe($gift->id)->and(BirthdayRewardIssuance::count())->toBe(1)
         ->and($linked->fresh()->merged_into_profile_id)->toBeNull();
+
+    // Ownership survives corrected birthday/email; it cannot move to a new account reusing the email.
+    $linked->update(['email' => 'corrected@example.test', 'normalized_email' => 'corrected@example.test']);
+    $linkedBirthday->update(['birth_month' => 1, 'birth_day' => 2]);
+    CustomerExternalProfile::where('marketing_profile_id', $linked->id)->update(['normalized_email' => 'corrected@example.test']);
+    $replacement = MarketingProfile::create(['tenant_id' => $tenant->id, 'email' => $profile->email, 'normalized_email' => $profile->email]);
+    CustomerExternalProfile::create(['tenant_id' => $tenant->id, 'marketing_profile_id' => $replacement->id, 'provider' => 'shopify', 'integration' => 'shopify', 'store_key' => 'retail', 'external_customer_id' => '222222', 'normalized_email' => $profile->email]);
+    expect($club->issuances($linked)->pluck('id')->all())->toContain($gift->id)
+        ->and($club->issuances($replacement))->toHaveCount(0);
+    $again = app(BirthdayRewardEngineService::class)->issueAnnualReward($linkedBirthday->fresh(), ['send_email' => false]);
+    expect($again['issuance']->id)->toBe($gift->id)->and(BirthdayRewardIssuance::count())->toBe(1);
 });
 
 test('signed club API keeps old gifts accessible and rejects another customer issuance without effects', function () {
@@ -210,4 +221,24 @@ test('retired signup keeps approved commitments but rejects new manual awards', 
     $new = \App\Models\CandleCashTaskCompletion::create(['candle_cash_task_id' => $task->id, 'marketing_profile_id' => $profile->id, 'status' => 'pending', 'completion_key' => 'new-disabled-'.$profile->id, 'reward_amount' => 2]);
     expect(fn () => app(CandleCashTaskService::class)->approveCompletion($new))->toThrow(\RuntimeException::class, 'retired');
     expect(CandleCashTransaction::where('marketing_profile_id', $profile->id)->count())->toBe(1);
+});
+
+test('anonymous signed proxy cannot read claim or overwrite a birthday by supplying its profile id', function () {
+    require_once __DIR__.'/../ShopifyEmbeddedTestHelpers.php';
+    [$tenant, $profile, $birthday] = clubCustomer();
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'club-test-secret');
+    configureStorefrontRetailStoreContext();
+    \App\Models\ShopifyStore::updateOrCreate(['store_key' => 'retail'], ['tenant_id' => $tenant->id, 'shop_domain' => 'retail.example.myshopify.com', 'access_token' => 'fixture-only', 'installed_at' => now()]);
+    CustomerExternalProfile::create(['tenant_id' => $tenant->id, 'marketing_profile_id' => $profile->id, 'provider' => 'shopify', 'integration' => 'shopify', 'store_key' => 'retail', 'external_customer_id' => '12345']);
+    $gift = clubGift($profile, $birthday);
+    $before = $birthday->fresh()->getRawOriginal();
+    $params = ['shop' => 'retail.example.myshopify.com', 'timestamp' => (string) time(), 'marketing_profile_id' => $profile->id, 'logged_in_customer_id' => ''];
+    ksort($params);
+    $params['signature'] = hash_hmac('sha256', collect($params)->map(fn ($v, $k) => $k.'='.$v)->implode(''), 'club-test-secret');
+    Http::preventStrayRequests();
+    $this->getJson(route('marketing.shopify.v1.birthday.status', $params))->assertOk()->assertJsonPath('data.profile_id', null)->assertJsonPath('data.reward.issuance', null);
+    $this->postJson(route('marketing.shopify.v1.birthday.claim', $params), ['issuance_id' => $gift->id])->assertStatus(422);
+    $this->postJson(route('marketing.shopify.v1.birthday.capture', $params), ['marketing_profile_id' => $profile->id, 'birth_month' => 1, 'birth_day' => 1])->assertStatus(422);
+    expect($birthday->fresh()->getRawOriginal())->toBe($before)->and(BirthdayMessageEvent::count())->toBe(0);
 });

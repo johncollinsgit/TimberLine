@@ -21,7 +21,7 @@ class ReconcileBirthdayClub extends Command
 
             return self::FAILURE;
         }
-        $summary = ['tenant_id' => $tenantId, 'apply_coverage' => (bool) $this->option('apply-coverage'), 'profiles' => 0, 'entitlements' => 0, 'cycles' => 0, 'ambiguous_profile_ids' => [], 'states' => [], 'types' => []];
+        $summary = ['tenant_id' => $tenantId, 'apply_coverage' => (bool) $this->option('apply-coverage'), 'profiles' => 0, 'entitlements' => 0, 'cycles' => 0, 'ambiguous_profile_ids' => [], 'birthday_date_conflicts' => [], 'states' => [], 'types' => []];
         foreach (CustomerBirthdayProfile::query()->whereHas('marketingProfile', fn ($q) => $q->where('tenant_id', $tenantId))->with('marketingProfile')->lazyById(250) as $birthday) {
             $summary['profiles']++;
             $rewards = BirthdayRewardIssuance::query()->where('customer_birthday_profile_id', $birthday->id)->get();
@@ -36,7 +36,11 @@ class ReconcileBirthdayClub extends Command
                 $summary['types'][$reward->reward_type] = ($summary['types'][$reward->reward_type] ?? 0) + 1;
             }
             try {
-                $club->identity($birthday->marketingProfile);
+                $identity = $club->identity($birthday->marketingProfile);
+                $dates = CustomerBirthdayProfile::query()->whereIn('marketing_profile_id', $identity['profile_ids'])->whereNotNull('birth_month')->whereNotNull('birth_day')->get();
+                if ($dates->map(fn ($row) => $row->birth_month.'-'.$row->birth_day)->unique()->count() > 1) {
+                    $summary['birthday_date_conflicts'][(string) $identity['canonical_profile_id']] = $identity['profile_ids'];
+                }
                 foreach (array_unique($years) as $year) {
                     $summary['cycles']++;
                     if ($this->option('apply-coverage')) {

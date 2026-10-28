@@ -50,7 +50,7 @@ class BirthdayEmailDispatchService
                 ->where('channel', 'email')->where(function ($q) use ($primary, $eventKey) {
                     $q->where('event_key', $eventKey);
                     if ($primary) {
-                        $q->orWhere('event_key', 'like', '%:birthday_email_primary')->orWhere('event_key', 'like', '%:birthday_email_catchup_2026');
+                        $q->orWhere('event_key', 'like', '%:birthday_email_primary')->orWhere('event_key', 'like', '%:birthday_email_catchup_2026')->orWhere('event_key', 'like', 'birthday-email:%');
                     } else {
                         $q->orWhere('event_key', 'like', '%:birthday_email_followup');
                     }

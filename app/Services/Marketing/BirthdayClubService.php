@@ -45,6 +45,14 @@ class BirthdayClubService
         $ids = array_values(array_unique([(int) $canonical->id, (int) $profile->id, ...$this->verifiedCatchupIds($canonical)]));
         for ($pass = 0; $pass < 100; $pass++) {
             $previous = $ids;
+            $coverage = DB::table('birthday_cycle_coverage as c')
+                ->join('birthday_reward_issuances as r', 'r.id', '=', 'c.issuance_id')
+                ->join('marketing_profiles as p', 'p.id', '=', 'r.marketing_profile_id')
+                ->join('marketing_profiles as owner', 'owner.id', '=', 'c.canonical_profile_id')
+                ->where('c.tenant_id', $tenantId)->where('p.tenant_id', $tenantId)->where('owner.tenant_id', $tenantId)
+                ->where(fn ($q) => $q->whereIn('c.canonical_profile_id', $ids)->orWhereIn('r.marketing_profile_id', $ids))
+                ->get(['c.canonical_profile_id', 'r.marketing_profile_id']);
+            $ids = array_values(array_unique(array_merge($ids, $coverage->pluck('canonical_profile_id')->all(), $coverage->pluck('marketing_profile_id')->all())));
             $ids = array_values(array_unique(array_merge($ids, MarketingProfile::query()->where('tenant_id', $tenantId)->whereIn('merged_into_profile_id', $ids)->pluck('id')->all())));
             $keys = MarketingProfileLink::query()->where('tenant_id', $tenantId)->whereIn('marketing_profile_id', $ids)->where('source_type', 'shopify_customer')->where('source_id', 'like', 'retail:%')->pluck('source_id');
             if ($keys->isNotEmpty()) {
@@ -62,7 +70,10 @@ class BirthdayClubService
             sort($ids);
             sort($previous);
             if ($ids === $previous) {
-                return ['tenant_id' => $tenantId, 'canonical_profile_id' => (int) $roots->min('id'), 'profile_ids' => $ids];
+                $retailIds = CustomerExternalProfile::query()->where('tenant_id', $tenantId)->whereIn('marketing_profile_id', $ids)->where('provider', 'shopify')->where('store_key', 'retail')->pluck('marketing_profile_id');
+                $retailRoots = $this->profiles->canonicalCollection(MarketingProfile::query()->where('tenant_id', $tenantId)->whereIn('id', $retailIds)->get(), $tenantId);
+
+                return ['tenant_id' => $tenantId, 'canonical_profile_id' => (int) ($retailRoots?->min('id') ?: $roots->min('id')), 'profile_ids' => $ids];
             }
         }
         throw new RuntimeException('Birthday customer alias chain requires review.');
@@ -82,6 +93,13 @@ class BirthdayClubService
         if ($donors->count() !== 1) {
             return [];
         }
+        // Once a verified retail owner has coverage, later email reuse cannot transfer its gifts.
+        $bound = DB::table('birthday_cycle_coverage as c')->join('birthday_reward_issuances as r', 'r.id', '=', 'c.issuance_id')
+            ->join('customer_external_profiles as e', 'e.marketing_profile_id', '=', 'c.canonical_profile_id')
+            ->where('c.tenant_id', $tenantId)->where('e.tenant_id', $tenantId)->where('e.provider', 'shopify')->where('e.store_key', 'retail')->whereIn('r.marketing_profile_id', $donors)->exists();
+        if ($bound) {
+            return [];
+        }
         $verified = CustomerExternalProfile::query()->where('tenant_id', $tenantId)->where('provider', 'shopify')->where('store_key', 'retail')
             ->where('normalized_email', $email)->whereNotNull('external_customer_id')->where('external_customer_id', '<>', '')->get();
         if ($verified->pluck('external_customer_id')->unique()->count() !== 1) {
@@ -93,10 +111,6 @@ class BirthdayClubService
         }
         $ids = array_values(array_unique([(int) $donors->first(), (int) $linked->first()->id]));
         if (! in_array((int) $profile->id, $ids, true)) {
-            return [];
-        }
-        $birthdays = CustomerBirthdayProfile::query()->whereIn('marketing_profile_id', $ids)->whereNotNull('birth_month')->whereNotNull('birth_day')->get();
-        if ($birthdays->map(fn ($birthday) => $birthday->birth_month.'-'.$birthday->birth_day)->unique()->count() > 1) {
             return [];
         }
 
