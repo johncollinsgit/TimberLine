@@ -3,7 +3,13 @@
 This is the Shopify wholesale lane, separate from retail and native Website Commerce.
 Buyer submissions default off (`WHOLESALE_LABELS_ENABLED=false`). Artwork management
 requires an active tenant owner/admin or an explicitly assigned `wholesale_label_manager`.
-Application-review permission does not grant artwork access.
+Application-review permission does not grant artwork access. To add artwork access
+without replacing an existing review role, an authorized operator can set
+`WHOLESALE_LABEL_MANAGERS` to a JSON array of explicit integer `tenant_id`, integer
+`user_id`, and exact `shop_domain` assignments, then rebuild config. Confirm the
+staff assignment with the owner first and record the grant in the staff audit.
+Inactive users or tenant memberships remain denied. An empty array revokes these
+additional grants; it does not change existing tenant roles.
 
 ## Ordering and private evidence
 
@@ -62,7 +68,11 @@ use verified staff requests. Production remains held until valid artwork approva
 2. Install/verify the pinned tracer, private storage, PDF rendering and processing
    worker. Keep new submissions disabled until the complete development-store
    upload, checkout, ingestion, approval and retrieval flow passes.
-3. Deploy only the directories in `shopify.app.wholesale.toml`. The Function's
+3. Deploy the complete extension set in `shopify.app.wholesale.toml`. App versions
+   replace the previous snapshot, so retain the existing marketing pixel, bundle
+   scent validation and marketing embed along with the two label extensions.
+   Review the release preview and use `--allow-updates`; never approve unrelated
+   removals. The Function's
    custom-label requirement activates only when shop metafield
    `forestry.custom_labels_enabled` is `true`. Quantity protection is independent.
 4. Publish only the reviewed files in `resources/shopify/wholesale-labels/manifest.json`

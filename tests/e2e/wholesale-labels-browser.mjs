@@ -6,7 +6,7 @@ const localeText=await fs.readFile(new URL('locales/en.default.json',theme),'utf
 const browser=await chromium.launch({headless:true});
 for(const width of [1280,390]){
  const page=await browser.newPage({viewport:{width,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
- let counter=0,fail=true,prepared=0;
+ let counter=0,fail=true,prepared=0,savedInstructions='';
  let cart={attributes:{},items:[{variant_id:101,key:'101-a',quantity:3,product_title:'Wholesale Fictional candle',variant_title:'8oz Cotton Wick',properties:{'Gift note':'Keep this A'}},{variant_id:101,key:'101-b',quantity:3,product_title:'Wholesale Fictional candle',variant_title:'8oz Cotton Wick',properties:{'Gift note':'Keep this B'}},{variant_id:102,key:'102',quantity:6,product_title:'Wholesale Other candle',variant_title:'16oz Cotton Wick',properties:{'Delivery preference':'Keep this too'}}]};
  const label={id:'87654321-4321-4321-8321-cba987654321',name:'Fictional approved logo',preview:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1sAAAAASUVORK5CYII=',status:'approved'};
  const receipt='12345678-1234-4234-8234-123456789abc';
@@ -16,7 +16,8 @@ for(const width of [1280,390]){
   if(url.pathname==='/')return route.fulfill({contentType:'text/html',body:'<html><body></body></html>'});
   if(url.pathname==='/cart.js')return reply(cart);
   if(url.pathname==='/apps/forestry/wholesale/labels')return reply({labels:[label]});
-  if(url.pathname==='/apps/forestry/wholesale/labels/requests'){prepared++;assert.equal(body.mode,'reuse');assert.equal(body.groups.length,2);return reply({receipt,revision_id:label.id,variant_id:'42044189966417'});}
+  if(url.pathname==='/apps/forestry/wholesale/labels/requests/'+receipt)return reply({mode:'reuse',label,bound:false,instructions:savedInstructions});
+  if(url.pathname==='/apps/forestry/wholesale/labels/requests'){prepared++;savedInstructions=body.instructions;assert.equal(savedInstructions,'Fixture: preserve these label instructions.');assert.equal(body.mode,'reuse');assert.equal(body.groups.length,2);return reply({receipt,revision_id:label.id,variant_id:'42044189966417'});}
   if(url.pathname==='/cart/change.js'){
    const item=cart.items.find(i=>i.key===body.id);assert.ok(item,'Only fresh line keys can be mutated');
    if(fail&&item.variant_id===102){fail=false;return reply({message:'Recoverable fixture failure'},503);}
@@ -32,12 +33,13 @@ for(const width of [1280,390]){
  await page.addStyleTag({path:new URL('assets/mf-custom-labels.css',theme).pathname});
  await page.addScriptTag({path:new URL('assets/mf-custom-labels.js',theme).pathname});
  await page.locator('[data-mf-label-open]').click();await page.locator('[data-continue]').click();
- await page.locator('details summary').first().click();await page.locator('[data-group="1"]').uncheck();await page.locator('[data-confirm]').click();
+ await page.locator('details summary').first().click();await page.locator('[data-group="1"]').uncheck();await page.locator('details summary').nth(1).click();await page.locator('[name=instructions]').fill('Fixture: preserve these label instructions.');await page.locator('[data-confirm]').click();
  await page.locator('[role=alert]').filter({hasText:'Recoverable fixture failure'}).waitFor();
  await page.locator('[data-confirm]').click();await page.waitForFunction(()=>!document.querySelector('dialog').open);
  assert.equal(prepared,2);assert.equal(cart.items.find(i=>i.properties['Gift note']==='Keep this A').properties['_MF label request'],receipt);
  assert.equal(cart.items.find(i=>i.properties['Gift note']==='Keep this B').properties['_MF label request'],undefined);
  assert.equal(cart.items.find(i=>i.variant_id===102).properties['Delivery preference'],'Keep this too');assert.equal(cart.items.find(i=>i.variant_id===42044189966417).quantity,1);
+ await page.locator('[data-mf-label-checkout-summary] button').filter({hasText:copy.edit}).click();await page.locator('[data-continue]').click();assert.equal(await page.locator('[name=instructions]').inputValue(),'Fixture: preserve these label instructions.');assert.equal(await page.locator('[data-group="1"]').isChecked(),false);await page.locator('[data-close]').click();
  await page.locator('[data-mf-label-checkout-summary] button').filter({hasText:copy.remove}).click();await page.waitForFunction(()=>document.querySelector('[data-mf-label-checkout-summary]')&&!document.querySelector('[data-mf-label-checkout-summary]').textContent.includes('Fictional approved logo'));
  assert.equal(cart.items.length,3);assert.equal(cart.items.find(i=>i.properties['Gift note']==='Keep this A').properties['_MF label request'],'');assert.equal(cart.attributes['Custom labels'],'No');assert.deepEqual(errors,[]);await page.close();
 }

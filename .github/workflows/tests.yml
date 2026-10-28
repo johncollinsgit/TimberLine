@@ -168,6 +168,11 @@ jobs:
           npm ci --prefix extensions/wholesale-checkout-access
           npm exec --yes --package=@shopify/cli@5.0.0 -- npm --prefix extensions/wholesale-checkout-access test -- --run
 
+      - name: Verify retained bundle validation Function
+        run: |
+          npm ci --prefix extensions/everbranch-bundle-scent-validation
+          npm exec --yes --package=@shopify/cli@5.0.0 -- npm --prefix extensions/everbranch-bundle-scent-validation test -- --run
+
       - name: Verify Fleet embedding and allowance in Chromium and WebKit
         run: npm run test:highlevel-fleet
 

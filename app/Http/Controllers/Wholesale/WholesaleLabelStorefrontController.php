@@ -77,6 +77,6 @@ class WholesaleLabelStorefrontController extends Controller
         $owner = $auth->storefront($request);
         $record = $library->owned(WholesaleLabelRequest::class, $owner)->findOrFail($receipt);
 
-        return response()->json(['receipt' => $record->id, 'mode' => $record->mode, 'revision_id' => $record->revision_id, 'status' => $record->status, 'bound' => (bool) $record->bound_at, 'label' => $record->revision_id ? $library->revisionPayload($library->owned(WholesaleLabelRevision::class, $owner)->findOrFail($record->revision_id), '/apps/forestry/wholesale/labels/assets') : null])->header('Cache-Control', 'private, no-store');
+        return response()->json(['receipt' => $record->id, 'mode' => $record->mode, 'revision_id' => $record->revision_id, 'status' => $record->status, 'instructions' => $record->instructions, 'bound' => (bool) $record->bound_at, 'label' => $record->revision_id ? $library->revisionPayload($library->owned(WholesaleLabelRevision::class, $owner)->findOrFail($record->revision_id), '/apps/forestry/wholesale/labels/assets') : null])->header('Cache-Control', 'private, no-store');
     }
 }
