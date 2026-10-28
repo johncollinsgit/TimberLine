@@ -267,4 +267,47 @@ final class ReviewerWorkspaceInitializationTest extends ReviewerWorkspaceFixture
             $this->assertNull(ReviewerWorkspaceInitialization::parseApprovals(json_encode((object) [$this->input['approval_sha256'] => $bad])));
         }
     }
+
+    public function test_reviewed_new_fictional_baseline_initializes_only_the_new_publication_and_exact_replay_preserves_edits(): void
+    {
+        $before = $this->tables();
+        $oldHash = $this->input['approval_sha256'];
+        $this->approval['data_basis'] = 'reviewed_new_fictional_baseline';
+        $this->approval['import_evidence_sha256'] = ReviewerWorkspaceSchema::digest(['basis' => 'reviewed_new_fictional_baseline', 'fixture' => 'explicit-new-graph-review']);
+        $this->input['approval_sha256'] = ReviewerWorkspaceSchema::digest($this->approval);
+        $this->input['import_evidence_sha256'] = $this->approval['import_evidence_sha256'];
+        config(['service_proposals.reviewer_workspace.owner_initialization.approvals' => [$this->input['approval_sha256'] => $this->approval]]);
+        $this->assertNotSame($oldHash, $this->input['approval_sha256']);
+        $this->assertNotSame($this->predecessor, $this->version->id);
+        $this->assertSame([$this->input['approval_sha256'] => $this->approval], ReviewerWorkspaceInitialization::parseApprovals(json_encode((object) [$this->input['approval_sha256'] => $this->approval])));
+        $preview = $this->callOwner('preview', $this->input)->assertOk()->assertJsonPath('mutated', false)->json('preview');
+        $apply = $this->input + ['preview' => $preview];
+        $this->callOwner('apply', $apply)->assertOk()->assertJsonPath('replayed', false);
+        $reader = $this->recipient();
+        app(ReviewerWorkspace::class)->command($reader, $this->token, $this->command());
+        $changed = $this->rows();
+        $this->callOwner('apply', $apply)->assertOk()->assertJsonPath('replayed', true);
+        $this->callOwner('status', $this->statusBody())->assertOk()->assertJsonPath('settled', true);
+        $this->assertSame($changed, $this->rows());
+        $this->assertSame($before, $this->tables());
+        Http::assertNothingSent();
+    }
+
+    public function test_reviewed_new_fictional_baseline_keeps_seed_provenance_and_new_version_guards_closed(): void
+    {
+        $this->approval['data_basis'] = 'reviewed_new_fictional_baseline';
+        $this->input['approval_sha256'] = ReviewerWorkspaceSchema::digest($this->approval);
+        config(['service_proposals.reviewer_workspace.owner_initialization.approvals' => [$this->input['approval_sha256'] => $this->approval]]);
+        $before = [$this->rows(), $this->tables()];
+        $bad = $this->input;
+        $bad['import_evidence_sha256'] = str_repeat('0', 64);
+        $this->callOwner('preview', $bad)->assertStatus(409);
+        $bad = $this->input;
+        $bad['seed']['projects'][0]['title'] = 'Unreviewed fictional replacement';
+        $this->callOwner('preview', $bad)->assertStatus(409);
+        $this->approval['version_id'] = $this->approval['predecessor_version_id'];
+        $this->assertNull(ReviewerWorkspaceInitialization::parseApprovals(json_encode((object) [ReviewerWorkspaceSchema::digest($this->approval) => $this->approval])));
+        $this->assertSame($before, [$this->rows(), $this->tables()]);
+        Http::assertNothingSent();
+    }
 }

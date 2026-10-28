@@ -14,6 +14,8 @@ change an account, connect a provider or initialize a budget.
 The public Campus assistant is one retained modeless panel beside the guided
 walkthrough control. Ordinary navigation and Close retain the same draft DOM;
 step changes retain the bounded persona draft. Escape restores launcher focus.
+Its lookup form keeps a 14px gap between the input and submit button, including
+the focused outline, with a full-width submit button on small phones.
 Perspective changes immediately retire former search and assistant handlers,
 including while the asynchronous new projection is loading. Explicit creation
 still leads through clarification and summary to the existing request form;
@@ -47,12 +49,15 @@ Financial presentation is documented in
 `proposal-financial-usage-example.md`. Its example and collapsed adjustments do
 not change the calculator, selected services, rates, terms or saved comparisons.
 
-A current private edition requires the existing actual-owner preservation,
-capture/reconciliation, preparation, separate publication and initialization
-procedure in `proposal-reviewer-workspace-preparation.md` and
-`proposal-reviewer-workspace-initialization.md`. Preserve old links, selected
-reviewer names, comments, graph IDs/deletions and canonical plans. A clean source
-fixture is not recovery of current work. Missing capture/runtime/cleanup
-authority is a concrete private-edition blocker, independent of ordinary UI
+A current private browser-sample edition uses normal actual-owner publication;
+its fictional browser records are not a persisted shared workspace. A private
+shared workspace additionally requires the preparation and initialization
+procedures in `proposal-reviewer-workspace-preparation.md` and
+`proposal-reviewer-workspace-initialization.md`. Capture/reconciliation applies
+to the current-edits basis; a separately reviewed new fictional baseline uses
+its own explicit provenance and leaves existing work untouched. Preserve old
+links, selected reviewer names, comments, graph IDs/deletions and canonical plans.
+A clean source fixture is not recovery of current work. Missing runtime/cleanup
+authority blocks the shared-workspace transition independently of ordinary UI
 source delivery. No API key, provider/capture flag, scanner, grant or budget is
 configured by this change.

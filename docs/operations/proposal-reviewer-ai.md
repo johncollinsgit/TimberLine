@@ -158,3 +158,32 @@ workspace retrieval, provider billing, physical microphone or physical mobile
 acceptance. Complete those applicable checks against an approved hosted candidate
 before making live claims. Current immutable review access/comments must survive
 an explicitly reviewed publication transition; do not silently rebind its source.
+
+## Provider-free private review simulation
+
+A current password-authorized, browser-local proposal review may expose the
+Demo assistant while paid reviewer AI is disabled. Paid and simulated controls
+are mutually exclusive. Trusted presentation selects it;
+URL, saved browser state and perspective names do not. Public presentation and
+an immutable shared-workspace descriptor do not select this path. Shared mode
+retains its existing fail-closed admission with no browser fallback. Archived v5
+and all existing passwords, comments and editions remain unchanged.
+
+Choose a permitted fictional department, ask for a job, then follow up about that
+same current record. Saved High/Low priority is reported as recorded; missing or
+invalid priority stays unknown. Text and exact candidate selection work without
+the voice SDK. Talk requires an explicit click; Stop and Interrupt reuse the
+existing voice lifecycle. Leaving Ask or hiding the page stops local voice and
+retires late callbacks while retaining page-local drafts/outbox. Changing
+perspective stops voice and clears the previous perspective's RAM drafts,
+previews and outbox. Browser speech may use its speech service. No model callback
+or paid provider is wired to simulation.
+
+The chosen job can prepare an editable demo email. Select a currently permitted
+department, review the exact subject/body, then choose Simulate send. Only a
+RAM-only demo outbox entry appears; no real recipient, mailbox, provider,
+notification, campus write or email delivery exists. Confirming the same preview
+returns one original simulated outcome. Source changes and perspective changes
+retire its authority. Drafts/outbox are page-local, not shared or durable after
+reload; actual proposal page comments remain a separate saved review channel.
+A new immutable publication and source-bound acceptance remain separate actions.

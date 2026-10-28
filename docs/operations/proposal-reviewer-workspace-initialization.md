@@ -1,18 +1,45 @@
 # Real-owner workspace initialization — source only
 
+## Explicit new fictional baseline, separate from recovery
+
+The closed approval `data_basis` accepts exactly `reviewed_current_edits` or
+`reviewed_new_fictional_baseline`. The first retains its existing capture and
+reconciliation prerequisites. The second means a newly reviewed fictional graph,
+not recovered browser edits or imported campus data. Never relabel a fresh source
+seed as recovery. Existing v5, links, passwords, comments, archive and browser state
+remain untouched; no absence of private edits is inferred.
+
+For the new basis, the compatibility wire field `import_evidence_sha256` is an
+opaque digest of the actually reviewed new-baseline provenance artifact. Its legacy
+name does not claim capture/import evidence. Review the graph and provenance first;
+never fabricate a digest to stand in for that review. The basis is part of the
+closed policy and approval digest, so existing signed consent and intent binding
+cannot be reused under a different basis. No new client input fields or authority
+are accepted. The server checks these exact hashes, not the truth of a claimed
+human review; the actual artifact and graph review remain separate prerequisites. Unknown basis values still refuse.
+
+Both paths retain the same exact source, owner/silo/anchor, seed, predecessor,
+distinct prepared draft/new publication/workspace, descriptor, expiry, consent,
+idempotency and current ACL requirements. There is no reset, migration fallback,
+old-edition relabel, automatic publication or provider activation. Source support
+alone does not approve a specific graph or runtime action. The steps below about
+capturing actual current edits apply only to `reviewed_current_edits`; a separately
+reviewed new baseline uses its explicit new-artifact provenance instead. Any later
+publication and initialization remain separate real-owner actions.
+
 This default-off owner HTTP stage initializes one already-published future immutable fictional workspace. It does not publish, attach descriptors, capture/import current browser state, create a silo/anchor/User/membership/ledger, enable AI, stage credentials/configuration, install retention or send anything. Existing v5 access and feedback stay on their original Version. Files/images/PDF/scanning remain separate and off. No runtime values are installed by this source.
 
 ## Restrictive data approval and prerequisites
 
 An actual currently active verified owner/admin and fresh active owner-local membership are mandatory. Data JSON, a preview signature, caller actor/tenant fields or a fictional reviewer label never supplies this authority. The operator uses the existing real owner login/session, same-origin JSON and CSRF. No CLI impersonation entry is supplied.
 
-Before considering this entry, independently capture/reconcile actual current edits from the relevant legitimate browsers and separate persisted stores. Preserve IDs, deletions, ordering, assignment/building links and canonical plans, and document conflicts explicitly. The fresh twenty-job source seed is not recovery. This stage checks the exact approved closed graph and evidence digest; it does not inspect the contents of a browser capture or establish that an operator actually reviewed it. That review, supported capture/reconciliation utility, trusted draft descriptor assembly and a new immutable publication remain separate prerequisites. Do not label an arbitrary JSON graph `reviewed_current_edits` and treat that string as evidence.
+For `reviewed_current_edits`, before considering this entry, independently capture/reconcile actual current edits from the relevant legitimate browsers and separate persisted stores. Preserve IDs, deletions, ordering, assignment/building links and canonical plans, and document conflicts explicitly. The fresh twenty-job source seed is not recovery. This stage checks the exact approved closed graph and evidence digest; it does not inspect the contents of a browser capture or establish that an operator actually reviewed it. That review, supported capture/reconciliation utility, trusted draft descriptor assembly and a new immutable publication remain separate prerequisites. Do not label an arbitrary JSON graph `reviewed_current_edits` and treat that string as evidence.
 
 The trusted owner runtime may later receive `SERVICE_PROPOSALS_REVIEWER_WORKSPACE_INITIALIZATION_APPROVALS_JSON`: a maximum24KiB JSON object with at most10 SHA256-keyed records. Each key is the actual `ReviewerWorkspaceSchema::digest(record)`. Every record has exactly:
 
 ```
 schema_version: 1
-data_basis: "reviewed_current_edits"
+data_basis: "reviewed_current_edits" | "reviewed_new_fictional_baseline"
 version_id, version_hash, build_id, source_hash
 workspace_id, descriptor_sha256, seed_sha256, import_evidence_sha256
 predecessor_version_id, predecessor_version_hash

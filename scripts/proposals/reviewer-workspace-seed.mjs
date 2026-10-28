@@ -7,7 +7,7 @@ import vm from 'node:vm';
 /** Pure fresh fictional fixture export. No browser-state input, HTTP, runtime initialization or publication. */
 export const SOURCE_PINS = Object.freeze({
   'resources/js/enterprise/reviewer/job-sample.js':'66cc7917bec20b0835364e6c6b5f41f7960dd98f401485e80bd69649a39511c1',
-  'resources/js/enterprise/reviewer/sample-adapter.js':'173c9f0f04f36c539a9a919c1760fa8698f9d6dd0a9a7797512990b56c22cea7',
+  'resources/js/enterprise/reviewer/sample-adapter.js':'291302611a287f97431dd573eb9806f7bb68f2f8e212afd66e9c48513f3fa653',
   'resources/data/enterprise/lees-mcrae-locations.json':'71d604a832a6ebf9e7e4e5203eb62b11aea54322471d394f456ddd99de85e287',
 });
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));

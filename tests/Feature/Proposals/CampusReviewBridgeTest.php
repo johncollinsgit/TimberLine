@@ -266,3 +266,40 @@ test('campus review commands require the actual session CSRF token', function ()
     expect(Comment::count())->toBe(1);
     Http::assertNothingSent();
 });
+
+test('private current browser review exposes simulated controls and voice assets without paid approval or new authority', function (): void {
+    ['version' => $version, 'token' => $token] = campusPublish($this);
+    campusUnlock($this, $token);
+    $before = [User::count(), DB::table('tenant_user')->count(), Version::count(), Comment::count()];
+    $response = $this->get(campusUrl($token, '/campus/ask'))->assertOk()
+        ->assertSee('id="reviewer-simulation"', false)->assertSee('Simulate send')
+        ->assertSee('"reviewerSimulation":true', false)->assertSee('EverbranchVoiceJobs', false)
+        ->assertSee('Drafts and demo outbox last only on this page');
+    expect($response->headers->get('Content-Security-Policy'))->toContain("connect-src 'self'", "script-src 'nonce-");
+    expect($version->fresh()->payload)->not->toHaveKey('review_workspace')->not->toHaveKey('reviewer_ai');
+    expect([User::count(), DB::table('tenant_user')->count(), Version::count(), Comment::count()])->toBe($before);
+    Http::assertNothingSent();
+    Mail::assertNothingSent();
+});
+
+test('ordinary public sample retains its inactive private conversation and provider gates', function (): void {
+    config(['tenancy.domains.canonical.landlord_host' => 'evergrove.test']);
+    $this->get('https://evergrove.test/platform/demos/lees-mcrae')->assertOk()
+        ->assertDontSee('id="reviewer-simulation"', false)->assertDontSee('"reviewerSimulation":true', false)
+        ->assertSee('Coming soon. Continue exploring projects, tickets and team updates in this demo.');
+    Http::assertNothingSent();
+    Mail::assertNothingSent();
+});
+
+test('trusted live reviewer AI presentation keeps paid controls and assets exclusive from simulation', function (): void {
+    ['version' => $version, 'token' => $token] = campusPublish($this);
+    campusUnlock($this, $token);
+    $context = $this->getJson(campusUrl($token, '/campus/ask/review'))->assertOk()->json('review');
+    // Presentation-only fixture. No connection approval, key, budget or provider call is created.
+    $context['reviewer_ai'] = ['enabled' => true];
+    $response = app(\App\Enterprise\ReviewerPresentation::class)->respond(\Illuminate\Http\Request::create(campusUrl($token, '/campus/ask')), false, $context);
+    expect($response->getContent())->toContain('id="proposal-ai-controls"', 'EverbranchReviewerVoice')
+        ->not->toContain('id="reviewer-simulation"', '"reviewerSimulation":true');
+    Http::assertNothingSent();
+    Mail::assertNothingSent();
+});

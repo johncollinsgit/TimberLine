@@ -1,14 +1,41 @@
 # Reviewed future workspace draft preparation
 
+## Explicit new fictional baseline, separate from recovery
+
+The closed approval `data_basis` accepts exactly `reviewed_current_edits` or
+`reviewed_new_fictional_baseline`. The first retains its existing capture and
+reconciliation prerequisites. The second means a newly reviewed fictional graph,
+not recovered browser edits or imported campus data. Never relabel a fresh source
+seed as recovery. Existing v5, links, passwords, comments, archive and browser state
+remain untouched; no absence of private edits is inferred.
+
+For the new basis, the compatibility wire field `import_evidence_sha256` is an
+opaque digest of the actually reviewed new-baseline provenance artifact. Its legacy
+name does not claim capture/import evidence. Review the graph and provenance first;
+never fabricate a digest to stand in for that review. The basis is part of the
+closed policy and approval digest, so existing signed consent and intent binding
+cannot be reused under a different basis. No new client input fields or authority
+are accepted. The server checks these exact hashes, not the truth of a claimed
+human review; the actual artifact and graph review remain separate prerequisites. Unknown basis values still refuse.
+
+Both paths retain the same exact source, owner/silo/anchor, seed, predecessor,
+distinct prepared draft/new publication/workspace, descriptor, expiry, consent,
+idempotency and current ACL requirements. There is no reset, migration fallback,
+old-edition relabel, automatic publication or provider activation. Source support
+alone does not approve a specific graph or runtime action. The steps below about
+capturing actual current edits apply only to `reviewed_current_edits`; a separately
+reviewed new baseline uses its explicit new-artifact provenance instead. Any later
+publication and initialization remain separate real-owner actions.
+
 This default-off owner-only mechanism prepares a **new private draft**. It does not publish, capture browser state, import/initialize a workspace, provision an anchor, copy passwords/access grants/comments, enable AI or write a campaign ledger. Existing editions and their data remain unchanged.
 
-Preparation requires a separately reviewed current-edit preservation packet. The legacy sample sessionStorage key is not an immutable Version binding. Preserve the raw current browser state before upgrades; reconcile it with the intended edition and separately retained native workspace/comments/names/selections. A clean source exporter is not recovery. This code does not implement that capture or establish that a claimed hash corresponds to observed data.
+For `reviewed_current_edits`, preparation requires a separately reviewed current-edit preservation packet. The legacy sample sessionStorage key is not an immutable Version binding. Preserve the raw current browser state before upgrades; reconcile it with the intended edition and separately retained native workspace/comments/names/selections. A clean source exporter is not recovery. This code does not implement that capture or establish that a claimed hash corresponds to observed data.
 
 ## Restrictive server metadata
 
 `SERVICE_PROPOSALS_REVIEWER_WORKSPACE_PREPARATION_APPROVALS_JSON` is a closed JSON object keyed by each row's canonical SHA256, at most ten rows/24,000 bytes. Every row has precisely:
 
-- `schema_version:1`, `data_basis:"reviewed_current_edits"`
+- `schema_version:1`, `data_basis:"reviewed_current_edits"` or `"reviewed_new_fictional_baseline"`
 - `source_draft_id`, integer `source_draft_revision`, exact complete source `source_draft_sha256`
 - a fixed **new** `prepared_draft_id`
 - exact `predecessor_version_id` and `predecessor_version_hash`
@@ -42,7 +69,7 @@ Each prepared draft admits one publication intent. The original publication key/
 
 Focused local tests use synthetic accounts, real mounted kernel/HTML CSRF, actual private ClientSilo marker, SQLite and denied provider transport. They are not targetPHP8.4, MySQL locking/concurrency, actual operator/browser capture, hosted publication or runtime acceptance. Current-row locks are implemented; independent real MySQL process proof and normal exact-head CI remain mandatory for a production candidate. No runtime settings or existing edition were changed here.
 
-Before a real transition: capture/reconcile current edits; review seed/import proof and actual legacy content-hash compatibility packet; freeze/review release and policies; observe current owner/silo/anchor; approve the exact future publication/runtime packet; prepare via actual owner, separately publish with a new password; separately initialize using the original reviewed initializer intent; verify cross-session edits/comments/access and install/observe authorized bounded cleanup. AI/key/scheduler activation are separate held phases. This library cannot substitute for those prerequisites.
+Before a real transition: capture/reconcile current edits for the current-edits basis, or explicitly review the new fictional graph/provenance for the new-baseline basis; review seed/provenance proof and actual legacy content-hash compatibility packet; freeze/review release and policies; observe current owner/silo/anchor; approve the exact future publication/runtime packet; prepare via actual owner, separately publish with a new password; separately initialize using the original reviewed initializer intent; verify cross-session edits/comments/access and install/observe authorized bounded cleanup. AI/key/scheduler activation are separate held phases. This library cannot substitute for those prerequisites.
 
 ## Required real MySQL lifecycle gate
 

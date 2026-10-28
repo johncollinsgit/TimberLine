@@ -1,3 +1,33 @@
+## Private proposal conversation simulation (source candidate)
+
+Current private browser-sample editions can demonstrate context-aware job
+conversation, optional browser voice, editable department email drafts and an
+explicit simulated outbox. This mode is separate from paid AI and shared-server
+workspace mode. Drafts and simulated deliveries stay in page memory; existing
+proposal review names and page comments retain their server persistence. Nothing
+is actually sent. Native/public authority and provider gates remain unchanged.
+Normal source checks, independent review, deployment and a separately published
+new private edition remain required; old links and editions are preserved.
+See `docs/operations/proposal-reviewer-ai.md`. Physical microphone and mobile
+acceptance are separate from synthetic speech and viewport checks.
+
+## Reviewed comparison and new fictional edition basis (source candidate)
+
+A saved, compatible Lees-McRae proposal can explicitly include a far-left
+Compare options tab. Its trusted snapshot binds the reviewed commercial terms;
+ordinary saves preserve those terms, and unflagged old editions retain their
+tabs and content. Activity recognizes the new section only for a valid snapshot.
+
+Preparation and initialization separately admit `reviewed_new_fictional_baseline`
+for an explicitly reviewed NEW fictional workspace. Its provenance is not a
+browser capture or recovery. Existing edits, links, passwords, comments, archives
+and workspaces remain untouched. All actual-owner, source, seed, predecessor,
+new-workspace and original-intent recovery checks remain. Source changes do not
+publish, initialize, activate providers or create a budget. See
+`docs/operations/proposal-comparison-tab.md` and the reviewer preparation and
+initialization runbooks. Normal exact-head CI/review and explicit runtime stages
+remain required.
+
 ## Birthday Club consolidation (2026-10-28; source candidate)
 
 Modern Forestry's prospective tenant policy can publish one Birthday Club page,

@@ -1154,3 +1154,76 @@ test("asset custody and reservation conflicts remain distinct and contractor qua
         0,
     );
 });
+
+test('private simulated review uses current departmental facts without changing saved work or storage', async () => {
+    const {adapter,api,values}=sample({reviewerSimulation:true});
+    const before=plain(adapter.snapshot()), storage=[...values];
+    const context=adapter.demoContext(api.ids.area);
+    assert.ok(context.departments.some(row=>row.id===api.ids.area));
+    const result=await adapter.request('/enterprise/voice/jobs',{area_id:api.ids.area,question:'event',focus:api.ids.task});
+    assert.equal(result.provider_dispatch,false);assert.equal(result.mode,'record_backed');assert.equal(result.outcome,'matched');
+    assert.match(result.reply,/Priority:/);assert.equal(result.job.id,api.ids.task);
+    const followup=await adapter.request('/enterprise/voice/jobs',{area_id:api.ids.area,question:'Where is it?',focus:result.job.id});
+    assert.equal(followup.job.id,result.job.id);assert.deepEqual(plain(adapter.snapshot()),before);assert.deepEqual([...values],storage);
+});
+
+test('real public presentation and descriptor-present shared mode never admit this private browser simulation', () => {
+    for(const boot of [{},{reviewerSimulation:false},{reviewerSimulation:true,reviewerWorkspace:{enabled:true}}]){
+        const {adapter,api}=sample(boot);
+        assert.throws(()=>adapter.demoContext(api.ids.area),/unavailable/);
+        assert.throws(()=>adapter.demoOutbox(),/unavailable/);
+    }
+});
+
+test('editable demo email requires exact confirmation and replays one RAM-only simulated delivery', () => {
+    const {adapter,api,values}=sample({reviewerSimulation:true});const before=plain(adapter.snapshot()), storage=[...values];
+    const preview=adapter.demoEmail({area_id:api.ids.area,job_id:api.ids.task,department_id:api.ids.it,subject:'Reviewed subject',body:'My edited fictional update.'});
+    assert.equal(preview.status,'preview');assert.equal(preview.body,'My edited fictional update.');assert.equal(adapter.demoOutbox().length,0);
+    assert.throws(()=>adapter.demoDeliver({preview_id:preview.id,confirmed:false}),/Confirm/);
+    const sent=adapter.demoDeliver({preview_id:preview.id,confirmed:true});
+    assert.equal(sent.status,'simulated_delivery');assert.equal(sent.delivered_to_provider,false);assert.equal(sent.department_id,api.ids.it);
+    assert.equal(adapter.demoDeliver({preview_id:preview.id,confirmed:true}).replayed,true);assert.equal(adapter.demoOutbox().length,1);
+    assert.deepEqual(plain(adapter.snapshot()),before);assert.deepEqual([...values],storage);
+});
+
+test('simulated drafts retain department/persona boundaries, closed fields and honest reload lifetime', () => {
+    const {adapter,api}=sample({reviewerSimulation:true});
+    const input={area_id:api.ids.area,job_id:api.ids.task,department_id:api.ids.it,subject:'Demo',body:'Fictional only'};
+    for(const changed of [{...input,subject:''},{...input,body:'x'.repeat(3001)},{...input,to:'actual@example.invalid'},{...input,department_id:webcrypto.randomUUID()}])assert.throws(()=>adapter.demoEmail(changed));
+    const preview=adapter.demoEmail(input);adapter.setPersona('worker');
+    assert.throws(()=>adapter.demoDeliver({preview_id:preview.id,confirmed:true}),/expired|perspective/);
+    assert.equal(adapter.demoOutbox().length,0);
+    assert.throws(()=>adapter.demoEmail({...input,department_id:api.ids.projects}),/unavailable/);
+    adapter.setPersona('requester');assert.throws(()=>adapter.demoEmail(input),/unavailable/);
+    const fresh=sample({reviewerSimulation:true});assert.equal(fresh.adapter.demoOutbox().length,0);
+});
+
+test('an actual source job change refuses an existing simulated preview without additional work mutation', async () => {
+    const {adapter,api}=sample({reviewerSimulation:true});
+    const preview=adapter.demoEmail({area_id:api.ids.area,job_id:api.ids.task,department_id:api.ids.it,subject:'Demo',body:'Draft before change'});
+    const job=await adapter.request('/enterprise/operations/tasks/'+api.ids.task);
+    await adapter.request('/enterprise/operations/commands',{action:'task.interrupt',task_id:job.id,expected_version:job.version,expected_task_version:job.task_version,request_id:webcrypto.randomUUID(),checkpoint:'Fictional pause',reason:'Fictional priority',emergency_task_id:api.ids.emergency});
+    const changed=plain(adapter.snapshot());assert.throws(()=>adapter.demoDeliver({preview_id:preview.id,confirmed:true}),/source job changed/);
+    assert.equal(adapter.demoOutbox().length,0);assert.deepEqual(plain(adapter.snapshot()),changed);
+});
+
+test('old simulated context is retired synchronously on perspective change including ABA', () => {
+    const {adapter,api}=sample({reviewerSimulation:true});let retired=0;adapter.subscribeDemo(()=>retired++);
+    const before=adapter.demoContext(api.ids.area).stamp;const preview=adapter.demoEmail({area_id:api.ids.area,job_id:api.ids.task,department_id:api.ids.it,subject:'Demo',body:'Fictional'});
+    adapter.setPersona('worker');adapter.setPersona('manager');assert.equal(retired,2);assert.notEqual(adapter.demoContext(api.ids.area).stamp,before);
+    assert.throws(()=>adapter.demoDeliver({preview_id:preview.id,confirmed:true}));
+});
+
+
+test('spoken priority reflects actual saved High and Low and keeps absent or invalid priority unknown', async () => {
+    for (const priority of ['high','low',null,'old-invalid']) {
+        const f=sample({reviewerSimulation:true}),state=plain(f.adapter.snapshot());
+        state.tasks.find(row=>row.id===f.api.ids.task).priority=priority;
+        const values=new Map([[f.api.storageKey+':synthetic',JSON.stringify(state)]]);
+        const storage={getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};
+        const adapter=f.api.create({...f.boot,sampleStorage:storage});
+        const result=await adapter.request('/enterprise/voice/jobs',{area_id:f.api.ids.area,question:'Show job',focus:f.api.ids.task});
+        assert.equal(result.job.priority,['high','low'].includes(priority)?priority:null);
+        assert.match(result.reply,new RegExp('Priority: '+(['high','low'].includes(priority)?priority:'not recorded')));
+    }
+});
