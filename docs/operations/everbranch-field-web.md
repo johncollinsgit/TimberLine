@@ -33,3 +33,9 @@ After protected deployment, verify Nate's canonical bootstrap still contains Fle
 - Browser: actual compiled bundle in Chromium and WebKit, 390×844 and reduced 390×490 viewports, fictional API fixtures; sign-in/greeting, fleet visibility, reorder/save/reload, multiline messages, gallery controls/gesture, composer, clock controls, three hours views and assistant UI.
 - Chromium: manifest, service-worker public-shell cache, offline shell, absence of API data in the cache.
 - These are browser/viewport checks, not physical iPhone or Android installation, keyboards, camera permissions, GPS or push acceptance. Ask the recipient to install the verified deployed URL and confirm their own current jobs, clock and photos; do not report those device checks as already run.
+
+## Google sign-in and app sharing follow-up
+
+Field web.2 adds Sign in with Google through the existing stateful Google OAuth connection and the mobile S256 PKCE broker. The fixed HTTPS Field return and code exchange are bound to the original challenge; browser return parameters are scrubbed before exchange, and the existing HttpOnly cookie lane receives the token. Field Google login refuses unverified/unknown/inactive accounts and does not use the legacy stateless fallback or create memberships. Native callback behavior and existing non-Field Google flows remain unchanged. Source895b430. No new Google client, callback registration, Gmail inbox scope or credential is added.
+
+Share app invokes navigator.share from an explicit tap with only the public canonical app URL; unsupported browsers copy that URL. It does not claim to open Safari’s Add to Home Screen action. Android installation uses its existing browser prompt; iPhone installation still requires Apple’s system action.

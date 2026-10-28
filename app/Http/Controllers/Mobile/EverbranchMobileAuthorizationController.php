@@ -18,7 +18,7 @@ class EverbranchMobileAuthorizationController extends Controller
     {
         $validated = $request->validate([
             'client_id' => ['required', 'in:everbranch-mobile'],
-            'redirect_uri' => ['required', 'in:everbranch://auth/callback'],
+            'redirect_uri' => ['required', 'in:everbranch://auth/callback,https://app.theeverbranch.com/field/'],
             'code_challenge' => ['required', 'string', 'size:43', 'regex:/^[A-Za-z0-9_-]+$/'],
             'code_challenge_method' => ['required', 'in:S256'],
             'state' => ['required', 'string', 'min:16', 'max:255', 'regex:/^[A-Za-z0-9._~-]+$/'],
@@ -43,6 +43,7 @@ class EverbranchMobileAuthorizationController extends Controller
                 'fingerprint' => $fingerprint,
                 'state' => $validated['state'],
                 'auth_method' => $validated['auth_method'],
+                'field_web' => $validated['redirect_uri'] === 'https://app.theeverbranch.com/field/',
                 'expires_at' => now()->addMinutes(10)->timestamp,
             ]);
         }
@@ -62,6 +63,10 @@ class EverbranchMobileAuthorizationController extends Controller
             $request->session()->put('url.intended', $canonicalUrl);
 
             return redirect()->route('verification.notice');
+        }
+
+        if ($validated['redirect_uri'] === 'https://app.theeverbranch.com/field/') {
+            abort_unless($user->tenants()->wherePivot('membership_active', true)->exists(), 403);
         }
 
         $plainCode = Str::random(64);

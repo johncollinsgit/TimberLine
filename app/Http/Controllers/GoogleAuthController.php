@@ -71,6 +71,9 @@ class GoogleAuthController extends Controller
         try {
             $googleUser = $this->googleProvider()->user();
         } catch (InvalidStateException $stateException) {
+            if (request()->session()->get('everbranch.mobile.authorization_intent.field_web') === true) {
+                return $this->redirectWithGoogleError();
+            }
             $this->logGoogleOAuthFailure(
                 failureClass: GoogleOAuthFailureClassifier::STATE_ERROR,
                 errorCode: 'invalid_state',
@@ -138,19 +141,26 @@ class GoogleAuthController extends Controller
                 ->withErrors(['email' => 'Google did not return a usable email address.']);
         }
 
-        if (!$this->emailAllowedByDomain($email)) {
+        if (! $this->emailAllowedByDomain($email)) {
             return redirect()->route('login')
                 ->withErrors(['email' => 'That Google account is not allowed for this workspace.']);
         }
 
         $user = User::query()->where('google_id', $googleId)->first();
 
-        if (!$user) {
+        if (! $user) {
             $user = User::query()->where('email', $email)->first();
         }
 
-        if (!$user) {
-            if (!config('services.google.auto_provision', true)) {
+        if (request()->session()->get('everbranch.mobile.authorization_intent.field_web') === true) {
+            $verified = data_get($googleUser->user, 'email_verified', data_get($googleUser->user, 'verified_email', false));
+            if ($verified !== true || ! $user || ! $user->is_active || ! $user->hasVerifiedEmail()) {
+                return redirect()->route('login')->withErrors(['email' => 'Use the Google account matching your active, verified Everbranch team account.']);
+            }
+        }
+
+        if (! $user) {
+            if (! config('services.google.auto_provision', true)) {
                 return redirect()->route('login')
                     ->withErrors(['email' => 'No Everbranch account exists for that Google email. Ask an administrator to create one.']);
             }
@@ -351,7 +361,7 @@ class GoogleAuthController extends Controller
     {
         $allowed = config('services.google.allowed_domains', []);
 
-        if (!is_array($allowed) || $allowed === []) {
+        if (! is_array($allowed) || $allowed === []) {
             return true;
         }
 
