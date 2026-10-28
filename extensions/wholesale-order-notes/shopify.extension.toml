@@ -12,3 +12,11 @@ target = "purchase.thank-you.block.render"
 
 [extensions.capabilities]
 network_access = true
+
+[extensions.settings]
+
+[[extensions.settings.fields]]
+key = "backend_url"
+type = "single_line_text_field"
+name = "Backstage service address (optional)"
+description = "Leave blank for standard Backstage. Test installations can specify their isolated HTTPS server."

@@ -2177,7 +2177,6 @@ Route::prefix('shopify/marketing/v1')
             ->name('google-business.review.start');
     });
 
-Route::match(['POST', 'OPTIONS'], '/shopify/marketing/v1/wholesale/order-note', [\App\Http\Controllers\Wholesale\WholesaleOrderNoteController::class, 'handle'])->middleware('throttle:20,1')->withoutMiddleware([VerifyCsrfToken::class]);
 Route::match(['POST', 'OPTIONS'], '/shopify/wholesale/order-note', [\App\Http\Controllers\Wholesale\WholesaleOrderNoteController::class, 'handle'])->middleware('throttle:20,1')->withoutMiddleware([VerifyCsrfToken::class]);
 
 Route::prefix('shopify/marketing/v1/wholesale/labels')->middleware('throttle:60,1')->withoutMiddleware([VerifyCsrfToken::class])->group(function () {
