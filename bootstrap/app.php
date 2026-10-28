@@ -24,6 +24,12 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->remove(FrameGuard::class);
+        // WebRTC SDP is line-oriented and its final CRLF is significant. Leave
+        // other requests on Laravel's normal TrimStrings behavior.
+        $middleware->replace(
+            \Illuminate\Foundation\Http\Middleware\TrimStrings::class,
+            \App\Http\Middleware\PreserveFieldLiveSdp::class,
+        );
         $middleware->web(prepend: [
             \App\Http\Middleware\ProfileShopifyEmbeddedRequest::class,
             \App\Http\Middleware\ResolveHostTenantContext::class,

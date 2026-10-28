@@ -3,6 +3,8 @@
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\User;
+use Illuminate\Cookie\CookieValuePrefix;
+use Illuminate\Support\Facades\Crypt;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\User as GoogleUser;
 
@@ -12,6 +14,58 @@ function fieldGoogleIntent(): array
 
     return [$verifier, ['client_id' => 'everbranch-mobile', 'redirect_uri' => 'https://app.theeverbranch.com/field/', 'code_challenge' => rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '='), 'code_challenge_method' => 'S256', 'state' => str_repeat('s', 32), 'auth_method' => 'google']];
 }
+
+test('Field Google OAuth keeps its app session through the provider redirect and callback', function (): void {
+    config([
+        'app.url' => 'https://app.theeverbranch.com',
+        'tenancy.domains.canonical.base_domain' => 'theeverbranch.com',
+        'tenancy.domains.canonical.public_host' => 'app.theeverbranch.com',
+        'tenancy.domains.canonical.landlord_host' => 'app.theeverbranch.com',
+        'tenancy.landlord.primary_host' => 'app.theeverbranch.com',
+        'tenancy.landlord.hosts' => ['app.theeverbranch.com'],
+        'services.google.enabled' => true,
+        'services.google.client_id' => 'test',
+        'services.google.client_secret' => 'test',
+        'services.google.redirect' => 'https://app.theeverbranch.com/auth/google/callback',
+    ]);
+    $tenant = Tenant::create(['name' => 'Field', 'slug' => 'field-google-cookie']);
+    TenantAccessProfile::create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    $user = User::factory()->create(['email' => 'field-cookie@example.test', 'is_active' => true, 'email_verified_at' => now()]);
+    $user->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
+    [, $intent] = fieldGoogleIntent();
+
+    $authorization = $this->get('https://app.theeverbranch.com/mobile/authorize?'.http_build_query($intent));
+    $authorization->assertRedirect(route('auth.google.redirect'));
+    $mobileSessionCookie = collect($authorization->headers->getCookies())
+        ->first(fn ($cookie) => $cookie->getName() === 'everbranch-mobile-auth-session');
+    expect($mobileSessionCookie)->not->toBeNull();
+    $sessionId = CookieValuePrefix::remove(Crypt::decryptString($mobileSessionCookie->getValue()));
+    $this->withCookie($mobileSessionCookie->getName(), $sessionId);
+
+    $provider = Mockery::mock();
+    $provider->shouldReceive('scopes')->once()->with(['openid', 'profile', 'email'])->andReturnSelf();
+    $provider->shouldReceive('redirect')->once()->andReturnUsing(function () {
+        session()->put('field_oauth_probe', 'same-session');
+
+        return redirect('https://accounts.google.com/o/oauth2/auth');
+    });
+    $provider->shouldReceive('user')->once()->andReturnUsing(function () use ($user) {
+        expect(session('field_oauth_probe'))->toBe('same-session');
+
+        return (new GoogleUser)->setRaw(['email_verified' => true])->map([
+            'id' => 'field-google-cookie-user', 'email' => $user->email, 'name' => 'Field User',
+        ]);
+    });
+    Socialite::shouldReceive('driver')->with('google')->twice()->andReturn($provider);
+
+    $redirect = $this->get('https://app.theeverbranch.com/auth/google/redirect');
+    $redirect->assertRedirect('https://accounts.google.com/o/oauth2/auth');
+    expect(collect($redirect->headers->getCookies())
+        ->contains(fn ($cookie) => $cookie->getName() === 'everbranch-mobile-auth-session'))->toBeTrue();
+
+    $callback = $this->get('https://app.theeverbranch.com/auth/google/callback');
+    $callback->assertRedirectContains('/mobile/authorize?');
+});
 
 test('field Google sign in reuses the existing user and exchanges one PKCE code into an http only session', function (): void {
     $tenant = Tenant::create(['name' => 'Field', 'slug' => 'field-google']);

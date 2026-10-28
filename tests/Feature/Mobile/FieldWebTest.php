@@ -48,12 +48,29 @@ test('personal job ordering is scoped and preserves unrelated preferences and ot
     $one = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'One', 'status' => 'open']);
     $two = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Two', 'status' => 'open']);
     $other = Tenant::create(['name' => 'Other', 'slug' => 'other-field-web']);
+    TenantAccessProfile::create(['tenant_id' => $other->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    TenantModuleEntitlement::create(['tenant_id' => $other->id, 'module_key' => 'field_service', 'availability_status' => 'available', 'enabled_status' => 'enabled', 'entitlement_source' => 'test']);
     $foreign = FieldServiceJob::create(['tenant_id' => $other->id, 'title' => 'Private', 'status' => 'open']);
     $this->putJson($base.'/web/job-order', ['job_ids' => [$two->id, $one->id]])->assertOk();
     $this->getJson($base.'/web/job-order')->assertJsonPath('job_order', [$two->id, $one->id]);
     expect($user->fresh()->ui_preferences['unrelated'])->toBe('preserved');
     $this->putJson($base.'/web/job-order', ['job_ids' => [$foreign->id]])->assertForbidden();
     $this->putJson($base.'/web/job-order', ['job_ids' => [$one->id, $one->id]])->assertUnprocessable();
+
+    $user->tenants()->attach($other->id, ['role' => 'member', 'membership_active' => true]);
+    $otherBase = '/api/mobile/v1/workspaces/'.$other->slug.'/field-service';
+    $this->getJson($otherBase.'/web/job-order')->assertJsonPath('job_order', []);
+    $this->putJson($otherBase.'/web/job-order', ['job_ids' => [$foreign->id]])->assertOk();
+    $this->getJson($base.'/web/job-order')->assertJsonPath('job_order', [$two->id, $one->id]);
+
+    $secondUser = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    $tenant->users()->attach($secondUser->id, ['role' => 'member', 'membership_active' => true]);
+    Sanctum::actingAs($secondUser, ['mobile:read', 'mobile:write']);
+    $this->getJson($base.'/web/job-order')->assertJsonPath('job_order', []);
+    $this->putJson($base.'/web/job-order', ['job_ids' => [$one->id, $two->id]])->assertOk();
+    Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+    $this->getJson($base.'/web/job-order')->assertJsonPath('job_order', [$two->id, $one->id]);
+
     $tenant->users()->updateExistingPivot($user->id, ['membership_active' => false]);
     $this->getJson($base.'/web/job-order')->assertNotFound();
 });
@@ -91,6 +108,36 @@ function fieldWebAiReady(Tenant $tenant, User $user): void
     AiBranchAccount::create(['tenant_id' => $tenant->id, 'enabled' => true, 'budget_cents' => 2500, 'approved_at' => now()]);
     Http::fake(['api.openai.com/v1/responses' => Http::response(['id' => 'resp_test', 'status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => 'Panel installation is scheduled. [job:1]']]]], 'usage' => ['input_tokens' => 400, 'output_tokens' => 30, 'input_tokens_details' => ['cached_tokens' => 0]]])]);
 }
+
+test('Field Live preserves the exact SDP offer bytes through validation and OpenAI forwarding', function (): void {
+    [$tenant, $user, $base] = fieldWebFixture();
+    fieldWebAiReady($tenant, $user);
+    $offer = "v=0\r\no=- 431 3 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n";
+    $answer = "v=0\r\no=- 731 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n";
+    Http::fake(['api.openai.com/v1/live/sessions' => Http::response([
+        'session' => ['id' => 'live_test_session'],
+        'transport' => ['sdp' => $answer],
+    ])]);
+
+    $this->postJson($base.'/web/assistant/live', ['sdp' => $offer])
+        ->assertOk()->assertJsonPath('session_id', 'live_test_session')->assertJsonPath('sdp', $answer);
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.openai.com/v1/live/sessions'
+        && data_get($request->data(), 'transport.sdp') === $offer);
+
+    $eventsBeforeInvalid = TenantAiUsageEvent::count();
+    $this->postJson($base.'/web/assistant/live', ['sdp' => rtrim($offer, "\r\n")])
+        ->assertUnprocessable()->assertJsonValidationErrors('sdp');
+    Http::assertSentCount(1);
+    expect(TenantAiUsageEvent::count())->toBe($eventsBeforeInvalid);
+});
+
+test('normal Field assistant requests still use standard string trimming', function (): void {
+    [$tenant, $user, $base] = fieldWebFixture();
+    fieldWebAiReady($tenant, $user);
+
+    $this->postJson($base.'/web/assistant', ['question' => "  Summarize the available job notes. \t", 'request_id' => (string) Str::uuid()])->assertOk();
+    Http::assertSent(fn ($request) => data_get($request->data(), 'input.1.content') === 'Summarize the available job notes.');
+});
 
 test('startup reads do not consume assistant turns and its ten turn limit remains per user', function (): void {
     [$tenant, $user, $base] = fieldWebFixture();
