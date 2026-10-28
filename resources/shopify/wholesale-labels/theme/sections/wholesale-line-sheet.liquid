@@ -1,0 +1,2077 @@
+{% comment %}
+  Wholesale Line Sheet (gated) — Modern Forestry Wholesale
+  Polished UI + smoother motion + FIXED grid layout (no more 260px squeeze)
+
+  Gates:
+    • Logged in + tagged "wholesale"  → show catalog
+    • Logged in but NOT tagged        → show apply invite
+    • Not logged in                   → show login/apply invite
+
+  Improvements:
+    - Catalog UI restyle to match your wholesale application “soft card” vibe
+    - Smooth focus mode + open/close without full re-render
+    - FIX: filter panel no longer uses inline display:none (prevents grid collapsing)
+    - Quantity updates use Shopify's cart add/change endpoints and remain in sync with the live cart
+{% endcomment %}
+
+{%- capture wholesale_guard_state -%}{%- render 'wholesale-guard' -%}{%- endcapture -%}
+{%- assign wholesale_guard_parts = wholesale_guard_state | strip | split: '|' -%}
+{%- assign is_logged_in = false -%}
+{%- if wholesale_guard_parts[0] == 'true' -%}
+  {%- assign is_logged_in = true -%}
+{%- endif -%}
+{%- assign has_wholesale_access = false -%}
+{%- if wholesale_guard_parts[1] == 'true' -%}
+  {%- assign has_wholesale_access = true -%}
+{%- endif -%}
+
+<script>
+  (function () {
+    // If they tried to access the line sheet, remember it
+    const target = "/pages/wholesale-line-sheet";
+    const key = "mf_post_login_return";
+
+    // If we're ON the line sheet gate (not logged in), set the intent
+    if (location.pathname === target) {
+      sessionStorage.setItem(key, target);
+    }
+
+    // If Shopify dumps them on /account (common), bounce them back
+    if (location.pathname === "/account" || location.pathname.startsWith("/account/")) {
+      const desired = sessionStorage.getItem(key);
+      if (desired) {
+        sessionStorage.removeItem(key);
+        location.replace(desired);
+      }
+    }
+  })();
+</script>
+
+{% if is_logged_in == false %}
+  <section class="wl-gate-shell">
+    <div class="wl-gate-inner page-width">
+
+      <div class="wl-gate-hero">
+        <div class="wl-gate-pill">
+          <span class="wl-gate-pill__dot" aria-hidden="true"></span>
+          <span>Wholesale</span>
+        </div>
+
+        <h1 class="wl-gate-h1">Wholesale login required.</h1>
+        <p class="wl-gate-sub">
+          Please log in to your approved wholesale account to place an order.
+          If you don’t have access yet, you can apply below.
+        </p>
+      </div>
+
+      <div class="wl-gate-card" role="region" aria-label="Wholesale access">
+        <div class="wl-gate-card__top">
+          <div class="wl-gate-actions">
+            <a class="wl-btn wl-btn--primary"
+               href="{{ routes.account_login_url }}?return_url={{ request.path | url_encode }}&return_to={{ request.path | url_encode }}">
+              Log in
+            </a>
+
+            <a class="wl-btn wl-btn--secondary" href="/pages/wholesale-application-1">Apply for wholesale</a>
+          </div>
+
+          <div class="wl-match" aria-label="Strike a match">
+            <button class="wl-match__btn" type="button">
+              <span class="wl-match__match" aria-hidden="true"></span>
+              <span class="wl-match__striker" aria-hidden="true"></span>
+              <span class="wl-match__label">Strike a match</span>
+            </button>
+
+            <div class="wl-match__note"
+              role="status"
+              aria-live="polite"
+              data-note-default="Tip: click the match. We’ll keep it warm in here.">
+              Tip: click the match. We’ll keep it warm in here.
+            </div>
+
+            <div class="wl-fx" aria-hidden="true">
+              <div class="wl-glow"></div>
+              <div class="wl-flame"></div>
+              <canvas class="wl-embers" width="1" height="1"></canvas>
+            </div>
+
+            <div class="wl-logo" aria-hidden="true">
+              {% if settings.logo != blank %}
+                <img
+                  class="wl-logo__img"
+                  src="{{ settings.logo | image_url: width: 320 }}"
+                  alt="{{ shop.name | escape }}"
+                  loading="lazy"
+                  width="320"
+                  height="120"
+                >
+              {% else %}
+                <div class="wl-logo__fallback">Modern Forestry</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+{% elsif has_wholesale_access == false %}
+  <section class="wl-gate-shell">
+    <div class="wl-gate-inner page-width">
+
+      <div class="wl-gate-hero">
+        <div class="wl-gate-pill">
+          <span class="wl-gate-pill__dot" aria-hidden="true"></span>
+          <span>Wholesale</span>
+        </div>
+
+        <h1 class="wl-gate-h1">Wholesale access required.</h1>
+        <p class="wl-gate-sub">
+          You’re logged in, but this account isn’t approved for wholesale ordering yet.
+          Apply below and we’ll get you set up.
+        </p>
+      </div>
+
+      <div class="wl-gate-card" role="region" aria-label="Wholesale access">
+        <div class="wl-gate-card__top">
+          <div class="wl-gate-actions">
+            <a class="wl-btn wl-btn--primary" href="/pages/wholesale-application-1">Apply for wholesale</a>
+            <a class="wl-btn wl-btn--secondary" href="{{ routes.account_url }}">My Account</a>
+            <a class="wl-btn wl-btn--secondary" href="mailto:modernforestryteam@gmail.com">Contact Us</a>
+          </div>
+
+          <div class="wl-match" aria-label="Strike a match">
+            <button class="wl-match__btn" type="button">
+              <span class="wl-match__match" aria-hidden="true"></span>
+              <span class="wl-match__striker" aria-hidden="true"></span>
+              <span class="wl-match__label">Strike a match</span>
+            </button>
+
+            <div class="wl-match__note"
+              role="status"
+              aria-live="polite"
+              data-note-default="We review applications by hand — usually within 1–2 business days.">
+              We review applications by hand — usually within 1–2 business days.
+            </div>
+
+            <div class="wl-fx" aria-hidden="true">
+              <div class="wl-glow"></div>
+              <div class="wl-flame"></div>
+              <canvas class="wl-embers" width="1" height="1"></canvas>
+            </div>
+
+            <div class="wl-logo" aria-hidden="true">
+              {% if settings.logo != blank %}
+                <img
+                  class="wl-logo__img"
+                  src="{{ settings.logo | image_url: width: 320 }}"
+                  alt="{{ shop.name | escape }}"
+                  loading="lazy"
+                  width="320"
+                  height="120"
+                >
+              {% else %}
+                <div class="wl-logo__fallback">Modern Forestry</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+{% else %}
+  {%- comment -%} ====== START: Wholesale catalog code ====== {%- endcomment -%}
+
+  {% if collections.wholesale and collections.wholesale.products.size > 0 %}
+    <div class="wholesale-line-sheet" data-mf-wholesale>
+      <div class="mf-wl-intro page-width">
+        <p class="mf-wl-eyebrow">Modern Forestry wholesale</p>
+        <div>
+          <h1>{{ 'wholesale.line_sheet.title' | t }}</h1>
+          <p>{{ 'wholesale.line_sheet.intro' | t }}</p>
+        </div>
+        <img class="mf-wl-intro__art" src="{{ 'mf-painted-woodland.webp' | asset_url }}" alt="" aria-hidden="true" width="1600" height="595">
+      </div>
+
+      <div class="mf-wl-layout page-width" id="mfWlLayout">
+        <aside id="filterPanel" class="collection-filter" aria-label="Filters">
+          <div class="mf-filter-head">
+            <strong>Browse by collection</strong>
+          </div>
+
+          <ul class="mf-filter-list">
+            <li><button class="filter-btn" data-collection="Winter Collection" type="button">Winter</button></li>
+            <li><button class="filter-btn" data-collection="Spring Collection" type="button">Spring</button></li>
+            <li><button class="filter-btn" data-collection="Summer Collection" type="button">Summer</button></li>
+            <li><button class="filter-btn" data-collection="Autumn Collection" type="button">Autumn</button></li>
+            <li><button class="filter-btn" data-collection="Classic Collection" type="button">Classic</button></li>
+            <li><button class="filter-btn active" data-collection="All" type="button">Show all</button></li>
+          </ul>
+        </aside>
+
+        <main class="mf-wl-main">
+          <div class="toolbar-shell">
+            <div class="toolbar-row" role="region" aria-label="Wholesale tools">
+              <div class="mf-order-summary">
+                <span>Your order</span>
+                <strong id="cartTotal">$0.00</strong>
+                <small id="cartProgress">Add $150.00 to reach the order minimum.</small>
+              </div>
+
+              <div class="toolbar-left">
+                <button class="filter-btn-icon" type="button">
+                  <span aria-hidden="true">☰</span> Collections
+                </button>
+
+                <div class="sort-dropdown">
+                  <button class="sort-btn" type="button" aria-haspopup="listbox" aria-expanded="false">Sort <span aria-hidden="true">⌄</span></button>
+                  <ul class="sort-options" role="listbox" style="display:none;">
+                    <li role="option" tabindex="0" data-sort="az">Alphabetical A → Z</li>
+                    <li role="option" tabindex="0" data-sort="za">Alphabetical Z → A</li>
+                    <li role="option" tabindex="0" data-sort="newest">Newest scents on top</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="search-bar-container">
+                <input type="text" id="productSearchInput" placeholder="{{ 'wholesale.line_sheet.search' | t }}" aria-label="{{ 'wholesale.line_sheet.search' | t }}" />
+                <span class="search-icon" aria-hidden="true">🔍</span>
+              </div>
+
+              <div class="toolbar-cart">
+                <a id="cartSummary" class="cart-icon-button" href="{{ routes.cart_url }}">
+                  Review order <span id="cartCount">0 items</span>
+                </a>
+              </div>
+
+              <div class="reset-cart-wrapper">
+                <button class="reset-cart-button" type="button" onclick="resetWholesaleCart()">Clear order</button>
+              </div>
+            </div>
+            <p class="toolbar-meta">{{ 'wholesale.line_sheet.rules' | t }}</p>
+          </div>
+
+          <p id="cartMessage" class="mf-order-message" role="status" aria-live="polite"></p>
+
+          <div class="mf-order-table-wrap">
+            <table id="productGrid" class="product-grid">
+              <caption class="visually-hidden">{{ 'wholesale.line_sheet.caption' | t }}</caption>
+              <colgroup><col class="mf-col-product"><col class="mf-col-size"><col class="mf-col-price"><col class="mf-col-quantity"><col class="mf-col-total"></colgroup>
+              <thead><tr>
+                <th scope="col">{{ 'wholesale.line_sheet.product' | t }}</th>
+                <th scope="col">{{ 'wholesale.line_sheet.size' | t }}</th>
+                <th scope="col">{{ 'wholesale.line_sheet.unit_price' | t }}</th>
+                <th scope="col">{{ 'wholesale.line_sheet.quantity' | t }}</th>
+                <th scope="col">{{ 'wholesale.line_sheet.total' | t }}</th>
+              </tr></thead>
+            </table>
+          </div>
+
+          <div id="noResultsMessage" class="mf-empty" style="display:none;">
+            No products found matching your search.
+          </div>
+        </main>
+      </div>
+
+      <!-- Product JSON -->
+      {% capture wholesale_json %}[
+        {% paginate collections.wholesale.products by 250 %}
+          {% assign first = true %}
+          {% for product in collections.wholesale.products %}
+            {% assign season_label = 'Uncategorized' %}
+            {% assign tag_string = product.tags | join: ',' %}
+
+            {% if tag_string contains 'Winter Collection' %}
+              {% assign season_label = 'Winter Collection' %}
+            {% elsif tag_string contains 'Spring Collection' %}
+              {% assign season_label = 'Spring Collection' %}
+            {% elsif tag_string contains 'Summer Collection' %}
+              {% assign season_label = 'Summer Collection' %}
+            {% elsif tag_string contains 'Autumn Collection' %}
+              {% assign season_label = 'Autumn Collection' %}
+            {% elsif tag_string contains 'Classic Collection' %}
+              {% assign season_label = 'Classic Collection' %}
+            {% endif %}
+
+            {% unless first %},{% endunless %}
+            {% assign first = false %}
+            {
+              "title": {{ product.title | json }},
+              "handle": {{ product.handle | json }},
+              "season": {{ season_label | json }},
+              "image": {% if product.featured_image %}{{ product.featured_image | image_url: width: 640 | json }}{% else %}null{% endif %},
+              "variants": [
+                {% for variant in product.variants %}
+                  {
+                    "id": {{ variant.id }},
+                    "name": {{ variant.title | json }},
+                    "price": {{ variant.price | divided_by: 100.0 }},
+                    "sku": {{ variant.sku | json }},
+                    "available": {{ variant.available | json }},
+                    "increment": {% render 'mf-order-increment', product: product, variant: variant %}
+                  }{% unless forloop.last %},{% endunless %}
+                {% endfor %}
+              ]
+            }
+          {% endfor %}
+        {% endpaginate %}
+      ]{% endcapture %}
+
+      <script id="wholesale-products-json" type="application/json">{{ wholesale_json | strip_newlines }}</script>
+    </div>
+  {% else %}
+    <div class="page-width" style="padding:3rem 0; text-align:center;">
+      <p style="color:red;">
+        ⚠️ No products found in the <strong>wholesale</strong> collection.<br>
+        Make sure the collection exists, is published, and has products assigned to it.
+      </p>
+    </div>
+  {% endif %}
+
+  {%- comment -%} ====== END: Wholesale catalog code ====== {%- endcomment -%}
+{% endif %}
+
+<style>
+  * { box-sizing: border-box; }
+
+  /* =========================
+     Wholesale Gate (matches form vibe)
+     ========================= */
+  .wl-gate-shell{
+    position: relative;
+    min-height: calc(100vh - 180px);
+    padding: clamp(28px, 5vw, 64px) 0;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(1200px 600px at 50% -100px, rgba(0,0,0,.06), transparent 70%);
+  }
+
+  .wl-gate-inner{ width: 100%; max-width: 980px; }
+
+  .wl-gate-hero{
+    text-align: left;
+    margin: 0 auto clamp(16px, 3vw, 22px);
+    max-width: 920px;
+  }
+
+  .wl-gate-pill{
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: rgba(0,0,0,.04);
+    border: 1px solid rgba(0,0,0,.08);
+    font-weight: 600;
+    letter-spacing: .2px;
+    margin-bottom: 16px;
+  }
+
+  .wl-gate-pill__dot{
+    width: 10px; height: 10px; border-radius: 50%;
+    background: rgba(0,0,0,.35);
+    box-shadow: 0 0 0 3px rgba(0,0,0,.08);
+  }
+
+  .wl-gate-h1{
+    margin: 0 0 10px;
+    font-size: clamp(34px, 4.2vw, 56px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+
+  .wl-gate-sub{
+    margin: 0;
+    max-width: 760px;
+    font-size: clamp(15px, 1.6vw, 18px);
+    line-height: 1.5;
+    opacity: .78;
+  }
+
+  .wl-gate-card{
+    margin-top: clamp(14px, 2vw, 18px);
+    border-radius: 18px;
+    background: #fff;
+    border: 1px solid rgba(0,0,0,.10);
+    box-shadow: 0 10px 30px rgba(0,0,0,.08);
+    overflow: hidden;
+  }
+
+  .wl-gate-card__top{
+    padding: clamp(18px, 2.6vw, 26px);
+    display: grid;
+    gap: 16px;
+  }
+
+  .wl-gate-actions{
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .wl-btn{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 18px;
+    border-radius: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    border: 1px solid rgba(0,0,0,.12);
+    transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease;
+    min-width: 180px;
+  }
+
+  .wl-btn:active{ transform: translateY(1px); }
+
+  .wl-btn--primary{
+    background: rgba(0,0,0,.88);
+    color: #fff;
+    border-color: rgba(0,0,0,.88);
+    box-shadow: 0 10px 24px rgba(0,0,0,.16);
+  }
+
+  .wl-btn--primary:hover{ background: rgba(0,0,0,.94); }
+
+  .wl-btn--secondary{
+    background: rgba(0,0,0,.03);
+    color: rgba(0,0,0,.88);
+  }
+
+  .wl-btn--secondary:hover{ background: rgba(0,0,0,.05); }
+
+  .wl-match{
+    position: relative;
+    border-radius: 16px;
+    border: 1px solid rgba(0,0,0,.08);
+    background: linear-gradient(180deg, rgba(0,0,0,.02), rgba(0,0,0,.01));
+    padding: 16px;
+    display: grid;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .wl-match__btn{
+    width: max-content;
+    max-width: 100%;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    padding: 10px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(0,0,0,.10);
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .wl-match__btn:hover{
+    transform: translateY(-1px);
+    border-color: rgba(0,0,0,.18);
+    box-shadow: 0 10px 22px rgba(0,0,0,.08);
+  }
+
+  .wl-match__label{ font-weight: 700; }
+  .wl-match__note{ font-size: 13px; opacity: .72; }
+
+  .wl-match__match{
+    width: 56px; height: 10px; border-radius: 999px;
+    background: linear-gradient(90deg, #caa06a 0%, #b07b44 72%, #8a2b2b 72%, #8a2b2b 100%);
+    position: relative;
+    transform: translateX(0);
+  }
+
+  .wl-match__match::after{
+    content:"";
+    position:absolute;
+    right:-6px; top:50%;
+    transform: translateY(-50%);
+    width:12px; height:12px; border-radius:4px;
+    background:#8a2b2b;
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,.18);
+  }
+
+  .wl-match__striker{
+    width: 36px; height: 12px; border-radius: 999px;
+    background: repeating-linear-gradient(45deg, rgba(0,0,0,.18) 0 4px, rgba(0,0,0,.08) 4px 8px);
+    border: 1px solid rgba(0,0,0,.12);
+    opacity: .9;
+  }
+
+  .wl-sparks{ position:absolute; width:1px; height:1px; pointer-events:none; opacity:0; left:0; top:0; }
+  .wl-match.is-striking .wl-sparks{ opacity:1; animation: wlSparks 520ms ease-out both; }
+
+  .wl-fx{
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    --fx-x: 50%;
+    --fx-y: 58px;
+  }
+
+  .wl-glow{
+    position:absolute;
+    inset:-80px -80px -60px -80px;
+    border-radius: 32px;
+    opacity: 0;
+    transition: opacity .35s ease;
+    background: radial-gradient(520px 230px at 50% 30%, rgba(255,183,77,.18), transparent 62%);
+  }
+
+  .wl-flame{
+    position:absolute;
+    left: var(--fx-x);
+    top:  var(--fx-y);
+    transform: translate(-50%, -50%) scale(.6);
+    width: 18px; height: 28px;
+    border-radius: 50% 50% 45% 45%;
+    opacity: 0;
+    background: radial-gradient(circle at 60% 70%,
+      rgba(255,255,255,.95),
+      rgba(255,196,61,.95) 35%,
+      rgba(255,122,0,.92) 70%,
+      rgba(160,30,0,.86) 100%);
+    filter: drop-shadow(0 0 10px rgba(255,163,26,.45));
+    transition: opacity .25s ease, transform .25s ease;
+  }
+
+  .wl-embers{
+    position:absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+  }
+
+  .wl-logo{
+    display: grid;
+    place-items: center;
+    margin-top: 10px;
+    opacity: 0;
+    transform: translateY(8px) scale(.98);
+    transition: opacity .4s ease, transform .4s ease;
+  }
+
+  .wl-logo__img{
+    display:block;
+    max-width: 220px;
+    width: 100%;
+    height: auto;
+    filter: drop-shadow(0 18px 28px rgba(0,0,0,.12));
+  }
+
+  .wl-logo__fallback{
+    font-weight: 800;
+    letter-spacing: .04em;
+    opacity: .72;
+    padding: .6rem 1rem;
+    border-radius: 16px;
+    background: rgba(255,255,255,.75);
+    box-shadow: 0 12px 24px rgba(0,0,0,.10);
+  }
+
+  .wl-match.is-striking .wl-glow{ opacity: .22; }
+  .wl-match.is-burning .wl-flame{
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    animation: wlFlicker 1.15s infinite ease-in-out;
+  }
+
+  .wl-match.is-rising .wl-flame{
+    animation: wlRise 3.8s ease-in-out both, wlFlicker 1.1s infinite ease-in-out;
+  }
+
+  .wl-match.is-embers .wl-embers{ opacity: 1; }
+  .wl-match.is-logo .wl-logo{ opacity: 1; transform: translateY(0) scale(1); }
+  .wl-match.is-striking .wl-match__match{ animation: wlStrike 520ms cubic-bezier(.2,.9,.2,1) both; }
+  .wl-match.is-striking .wl-match__btn{ animation: wlShake 520ms ease-out both; }
+
+  .wl-warm-overlay{
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .35s ease;
+    z-index: 9999;
+    background:
+      radial-gradient(900px 420px at 50% 18%, rgba(255, 190, 110, .22), transparent 60%),
+      radial-gradient(700px 360px at 20% 70%, rgba(255, 160, 70, .12), transparent 62%),
+      radial-gradient(700px 360px at 80% 70%, rgba(255, 160, 70, .12), transparent 62%);
+    mix-blend-mode: screen;
+  }
+
+  body.wl-warm .wl-warm-overlay{
+    opacity: 1;
+    animation: wlWarmPulse 1.1s ease-in-out both;
+  }
+
+  @keyframes wlWarmPulse{
+    0%{ opacity:0; }
+    18%{ opacity:1; }
+    70%{ opacity:.85; }
+    100%{ opacity:0; }
+  }
+
+  @keyframes wlStrike{
+    0%{ transform: translateX(0) rotate(0deg); }
+    55%{ transform: translateX(18px) rotate(-6deg); }
+    100%{ transform: translateX(26px) rotate(-10deg); }
+  }
+
+  @keyframes wlShake{
+    0%{ transform: translateY(0); }
+    35%{ transform: translateY(-1px); }
+    70%{ transform: translateY(0); }
+    100%{ transform: translateY(0); }
+  }
+
+  @keyframes wlFlicker{
+    0%{ filter: drop-shadow(0 0 10px rgba(255,163,26,.42)); }
+    40%{ filter: drop-shadow(0 0 14px rgba(255,163,26,.58)); }
+    100%{ filter: drop-shadow(0 0 10px rgba(255,163,26,.42)); }
+  }
+
+  @keyframes wlRise{
+    0%{ transform: translate(-50%, -50%) scale(1); }
+    60%{ transform: translate(-50%, calc(-50% - 85px)) scale(1.25); }
+    100%{ transform: translate(-50%, calc(-50% - 110px)) scale(.9); opacity: .85; }
+  }
+
+  @keyframes wlSparks{
+    0%{
+      transform: translate(0,0) scale(.8);
+      filter: blur(0);
+      box-shadow:
+        0 0 0 0 rgba(255,200,60,.0),
+        0 0 0 0 rgba(255,140,0,.0),
+        0 0 0 0 rgba(255,240,200,.0);
+    }
+    22%{
+      box-shadow:
+        8px -10px 0 0 rgba(255,200,60,.95),
+        14px -2px  0 0 rgba(255,140,0,.85),
+        6px  -2px  0 0 rgba(255,240,200,.9),
+        18px -14px 0 0 rgba(255,200,60,.75),
+        10px  2px  0 0 rgba(255,140,0,.65);
+    }
+    100%{
+      transform: translate(10px,-6px) scale(1.1);
+      filter: blur(.2px);
+      box-shadow:
+        18px -18px 0 0 rgba(255,200,60,0),
+        24px -6px  0 0 rgba(255,140,0,0),
+        16px -8px  0 0 rgba(255,240,200,0),
+        26px -24px 0 0 rgba(255,200,60,0),
+        14px  0px  0 0 rgba(255,140,0,0);
+    }
+  }
+
+  @media (max-width: 640px){
+    .wl-btn{ width: 100%; min-width: 0; }
+    .wl-match__btn{ width: 100%; justify-content: center; }
+  }
+
+  /* =========================
+     Catalog (Line Sheet) — Modern Forestry style
+     ========================= */
+  .wholesale-line-sheet{
+    --bg: #f6f6f5;
+    --card: #ffffff;
+    --ink: rgba(0,0,0,.88);
+    --muted: rgba(0,0,0,.62);
+    --line: rgba(0,0,0,.10);
+    --line-2: rgba(0,0,0,.14);
+    --shadow: 0 10px 30px rgba(0,0,0,.06);
+    --radius: 18px;
+    --radius-sm: 14px;
+    --sticky-top: 14px;
+
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    padding: clamp(18px, 2.6vw, 32px);
+    background: var(--bg);
+  }
+
+  /* IMPORTANT: default is single-column; filters hidden.
+     When filters open, we add .has-filters to switch to 2 columns. */
+  .mf-wl-layout{
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+
+  .mf-wl-layout.has-filters{
+    grid-template-columns: 260px 1fr;
+  }
+
+  .mf-wl-main{ min-width: 0; }
+
+  .collection-filter{
+    display: none;
+    border: 1px solid var(--line);
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 14px;
+  }
+
+  .mf-wl-layout.has-filters .collection-filter{
+    display: block;
+    position: sticky;
+    top: 16px;
+  }
+
+  .mf-filter-head{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    padding: 8px 8px 10px;
+    border-bottom: 1px solid rgba(0,0,0,.06);
+    margin-bottom: 10px;
+  }
+
+  .mf-filter-list{ list-style:none; padding:0; margin:0; display:grid; gap:8px; }
+
+  .filter-btn{
+    width: 100%;
+    text-align: left;
+    border-radius: 999px;
+    border: 1px solid rgba(0,0,0,.10);
+    background: rgba(0,0,0,.02);
+    padding: 10px 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform .12s ease, background-color .12s ease, border-color .12s ease;
+  }
+
+  .filter-btn:hover{
+    background: rgba(0,0,0,.04);
+    border-color: rgba(0,0,0,.14);
+    transform: translateY(-1px);
+  }
+
+  .filter-btn.active{
+    background: rgba(0,0,0,.88);
+    border-color: rgba(0,0,0,.88);
+    color: #fff;
+  }
+
+  /* Toolbar */
+  .toolbar-shell{
+    position: sticky;
+    top: var(--sticky-top);
+    z-index: 20;
+    margin-bottom: 14px;
+    padding: 10px;
+    border-radius: 16px;
+    border: 1px solid rgba(0,0,0,.09);
+    background: rgba(255,255,255,.84);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 12px 28px rgba(0,0,0,.08);
+  }
+
+  .toolbar-row{
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    gap: 10px;
+    align-items: center;
+    padding: 0;
+  }
+
+  .toolbar-left{
+    display:flex;
+    gap: 10px;
+    align-items:center;
+    flex-shrink: 0;
+  }
+
+  .toolbar-meta{
+    margin: 8px 4px 0;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: .02em;
+    font-weight: 700;
+  }
+
+  .cart-icon-button,
+  .filter-btn-icon,
+  .sort-btn,
+  .reset-cart-button{
+    height: 44px;
+    padding: 0 14px;
+    border-radius: 12px;
+    border: 1px solid var(--line-2);
+    background: var(--card);
+    font-weight: 800;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap: 8px;
+    text-decoration:none;
+    color: var(--ink);
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background-color .12s ease;
+    box-shadow: 0 2px 10px rgba(0,0,0,.04);
+    white-space: nowrap;
+  }
+
+  .cart-icon-button:hover,
+  .filter-btn-icon:hover,
+  .sort-btn:hover,
+  .reset-cart-button:hover{
+    transform: translateY(-1px);
+    border-color: rgba(0,0,0,.22);
+    background-color: rgba(0,0,0,.02);
+    box-shadow: 0 10px 24px rgba(0,0,0,.07);
+  }
+
+  .search-bar-container{
+    position: relative;
+    height: 44px;
+    border-radius: 14px;
+    border: 1px solid var(--line-2);
+    background: var(--card);
+    display:flex;
+    align-items:center;
+    padding: 0 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.04);
+    min-width: 0;
+  }
+
+  .search-bar-container input[type="text"]{
+    border: none;
+    outline: none;
+    width: 100%;
+    height: 100%;
+    font-size: 15px;
+    font-weight: 600;
+    background: transparent;
+    color: var(--ink);
+    padding-right: 28px;
+  }
+
+  .search-bar-container input::placeholder{
+    color: rgba(0,0,0,.45);
+    font-weight: 600;
+  }
+
+  .search-icon{
+    position:absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: .55;
+    pointer-events:none;
+  }
+
+  .sort-dropdown{ position: relative; }
+  .sort-options{
+    position:absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    width: 220px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 18px 40px rgba(0,0,0,.12);
+    padding: 6px;
+    list-style:none;
+    margin: 0;
+    z-index: 50;
+  }
+
+  .sort-options li{
+    padding: 10px 10px;
+    border-radius: 12px;
+    cursor:pointer;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .sort-options li:hover{ background: rgba(0,0,0,.04); }
+
+  .filter-btn-icon:focus-visible,
+  .sort-btn:focus-visible,
+  .reset-cart-button:focus-visible,
+  .cart-icon-button:focus-visible,
+  .search-bar-container input:focus-visible,
+  .open-button:focus-visible,
+  .quantity-button:focus-visible,
+  .filter-btn:focus-visible {
+    outline: 2px solid rgba(0,0,0,.85);
+    outline-offset: 2px;
+  }
+
+  /* Grid */
+  .product-grid{
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 980px;
+    margin: 0 auto;
+  }
+
+  .product-section{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    transition: transform .18s ease, opacity .18s ease, filter .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+
+  .product-section:hover{
+    border-color: rgba(0,0,0,.16);
+    box-shadow: 0 16px 34px rgba(0,0,0,.1);
+  }
+
+  .product-header{
+    display:grid;
+    grid-template-columns: 1fr auto;
+    align-items:center;
+    gap: 12px;
+    padding: 14px 14px;
+  }
+
+  .product-title{
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: .1px;
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
+    padding: 10px 8px;
+    border-radius: 14px;
+    transition: background-color .12s ease, transform .12s ease;
+  }
+
+  .product-title:hover{
+    background: rgba(0,0,0,.03);
+    transform: translateY(-1px);
+  }
+
+  .open-button{
+    border: 1px solid var(--line-2);
+    background: rgba(0,0,0,.03);
+    border-radius: 999px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 900;
+    cursor:pointer;
+    transition: transform .12s ease, background-color .12s ease, border-color .12s ease;
+    white-space: nowrap;
+  }
+
+  .open-button:hover{
+    transform: translateY(-1px);
+    background: rgba(0,0,0,.05);
+    border-color: rgba(0,0,0,.20);
+  }
+
+  /* Animated variants */
+  .variant-list{
+    padding: 0 14px 14px;
+    display: grid;
+    gap: 10px;
+    overflow: hidden;
+    height: 0;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: height .24s ease, opacity .18s ease, transform .18s ease;
+    will-change: height, opacity, transform;
+  }
+
+  .variant-list.is-open{
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .variant-prompt{
+    font-weight: 900;
+    color: rgba(0,0,0,.72);
+    margin-top: 2px;
+    padding: 6px 10px;
+    border-radius: 12px;
+    background: rgba(0,0,0,.03);
+    border: 1px solid rgba(0,0,0,.06);
+  }
+
+  .variant-row{
+    display:grid;
+    grid-template-columns: 1fr auto;
+    align-items:center;
+    gap: 12px;
+    padding: 10px 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(0,0,0,.06);
+    background: rgba(0,0,0,.015);
+    transition: border-color .14s ease, background-color .14s ease, transform .14s ease;
+  }
+
+  .variant-row:hover{
+    border-color: rgba(0,0,0,.14);
+    background: rgba(255,255,255,0.92);
+    transform: translateY(-1px);
+  }
+
+  .variant-name{
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--ink);
+  }
+
+  .quantity-wrapper{
+    display:inline-flex;
+    align-items:center;
+    border: 1px solid rgba(0,0,0,.14);
+    background: #fff;
+    border-radius: 999px;
+    overflow:hidden;
+    box-shadow: 0 6px 18px rgba(0,0,0,.06);
+  }
+
+  .quantity-button{
+    background: rgba(0,0,0,.90);
+    color: #fff;
+    border: none;
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    font-weight: 900;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition: transform .12s ease, background-color .12s ease;
+  }
+
+  .quantity-button:hover{ transform: translateY(-1px); background: rgba(0,0,0,.95); }
+  .quantity-button:active{ transform: translateY(0px); }
+
+  .quantity-display{
+    min-width: 54px;
+    text-align:center;
+    padding: 0 10px;
+    font-size: 16px;
+    font-weight: 900;
+    color: var(--ink);
+  }
+
+  /* Focus mode */
+  .product-grid.is-focusing .product-section{
+    opacity: .55;
+    filter: saturate(.9);
+  }
+
+  .product-grid.is-focusing .product-section.is-focus{
+    opacity: 1;
+    filter: none;
+    transform: translateY(-1px);
+  }
+
+  .mf-empty{
+    text-align:center;
+    margin-top: 22px;
+    font-weight: 900;
+    color: rgba(0,0,0,.55);
+  }
+
+  /* Responsive */
+  @media (max-width: 980px){
+    .mf-wl-layout.has-filters{ grid-template-columns: 1fr; }
+    .mf-wl-layout.has-filters .collection-filter{ position: static; }
+
+    .toolbar-shell{
+      position: static;
+      padding: 12px;
+    }
+
+    .toolbar-row{ grid-template-columns: 1fr 1fr; }
+    .search-bar-container{ grid-column: 1 / -1; }
+    .toolbar-left{ justify-content: space-between; }
+    .reset-cart-wrapper, .toolbar-cart{ justify-content: flex-start; }
+  }
+
+  @media (max-width: 560px){
+    .toolbar-row{ grid-template-columns: 1fr; }
+    .product-header{ grid-template-columns: 1fr; }
+    .open-button{ width: 100%; }
+    .variant-row{ grid-template-columns: 1fr; }
+    .quantity-wrapper{ width: 100%; justify-content: center; }
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce){
+    .product-section,
+    .product-title,
+    .variant-list,
+    .open-button,
+    .quantity-button,
+    .cart-icon-button,
+    .filter-btn-icon,
+    .sort-btn,
+    .reset-cart-button{
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+
+.wholesale-line-sheet {
+  --mf-ink: #28372e;
+  --mf-paper: #e9ede3;
+  --mf-card: #faf8f0;
+  --mf-moss: #2f4838;
+  --mf-amber: #9a6d35;
+  --mf-rule: rgba(47, 72, 56, .22);
+  --mf-muted: #596250;
+  padding: 3.2rem 0 6rem;
+  background: var(--mf-paper);
+  color: var(--mf-ink);
+  font-family: var(--font-body-family);
+}
+.wholesale-line-sheet .mf-wl-intro { display: flex; position: relative; flex-direction: column; justify-content: center; min-height: 20rem; padding-bottom: 3.2rem; isolation: isolate; background: var(--mf-paper); }
+.wholesale-line-sheet .mf-wl-intro > div { max-width: 57%; }
+.wholesale-line-sheet .mf-wl-intro__art { position: absolute; right: 3rem; bottom: 1rem; z-index: -1; width: 43%; height: 18rem; object-fit: contain; mix-blend-mode: multiply; pointer-events: none; }
+.wholesale-line-sheet .mf-wl-eyebrow { margin: 0 0 .8rem; color: var(--mf-moss); font-size: 1rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.wholesale-line-sheet .mf-wl-intro h1 { margin: 0; color: var(--mf-ink); font-family: var(--font-heading-family); font-size: clamp(3rem, 4vw, 4.4rem); font-weight: 400; line-height: 1.1; letter-spacing: -.04em; }
+.wholesale-line-sheet .mf-wl-intro p:not(.mf-wl-eyebrow) { max-width: 70ch; margin: .8rem 0 0; color: var(--mf-muted); font-size: 1.4rem; line-height: 1.5; }
+.wholesale-line-sheet .mf-wl-layout,
+.wholesale-line-sheet .mf-wl-layout.has-filters { display: block; }
+.wholesale-line-sheet .collection-filter,
+.wholesale-line-sheet .mf-wl-layout.has-filters .collection-filter { display: block; position: static; margin: 0 0 1.6rem; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.wholesale-line-sheet .mf-filter-head { padding: 0; margin: 0 0 .8rem; border: 0; color: var(--mf-muted); font-size: 1.1rem; }
+.wholesale-line-sheet .mf-filter-list { display: flex; flex-wrap: wrap; gap: .7rem; padding: 0; }
+.wholesale-line-sheet .filter-btn { width: auto; min-height: 4rem; padding: .8rem 1.5rem; border: 1px solid var(--mf-rule); border-radius: 999px; background: #f7f7ef; color: var(--mf-ink); font-size: 1.2rem; font-weight: 600; }
+.wholesale-line-sheet .filter-btn.active { background: var(--mf-moss); border-color: var(--mf-moss); color: #fff5e5; }
+.wholesale-line-sheet .filter-btn.active::before { content: none; }
+.wholesale-line-sheet .filter-btn:hover { transform: none; border-color: var(--mf-moss); }
+.wholesale-line-sheet .toolbar-shell { position: sticky; top: calc(var(--header-height, 7rem) + 1rem); z-index: 10; margin: 0 0 1.6rem; padding: 1.4rem; border: 1px solid var(--mf-rule); border-radius: 20px; background: #faf8f0; box-shadow: 0 8px 24px rgba(35, 60, 49, .08); backdrop-filter: none; }
+.wholesale-line-sheet .toolbar-row { display: grid; grid-template-columns: minmax(15rem, 1fr) auto minmax(18rem, 1.5fr) auto auto; gap: 1rem; }
+.wholesale-line-sheet .mf-order-summary { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: .3rem .8rem; }
+.wholesale-line-sheet .mf-order-summary span { color: var(--mf-muted); font-size: 1rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.wholesale-line-sheet .mf-order-summary strong { color: var(--mf-ink); font-size: 2.2rem; font-weight: 600; line-height: 1; }
+.wholesale-line-sheet .mf-order-summary small { grid-column: 1 / -1; color: var(--mf-muted); font-size: 1.05rem; line-height: 1.4; }
+.wholesale-line-sheet .cart-icon-button,
+.wholesale-line-sheet .sort-btn,
+.wholesale-line-sheet .reset-cart-button { min-height: 4.8rem; height: auto; padding: .8rem 1.4rem; border-color: var(--mf-rule); border-radius: 12px; background: var(--mf-card); color: var(--mf-ink); font-size: 1.15rem; font-weight: 600; box-shadow: none; }
+.wholesale-line-sheet .cart-icon-button { flex-direction: column; gap: .2rem; background: var(--mf-moss); color: #fff5e5; border-color: var(--mf-moss); line-height: 1.2; }
+.wholesale-line-sheet #cartCount { font-size: 1rem; }
+.wholesale-line-sheet .filter-btn-icon { display: none; }
+.wholesale-line-sheet .search-bar-container { min-height: 4.8rem; height: 4.8rem; border-color: var(--mf-rule); border-radius: 12px; background: #edf0e7; box-shadow: none; }
+.wholesale-line-sheet .search-bar-container input[type='text'] { color: var(--mf-ink); font: inherit; font-size: 1.2rem; }
+.wholesale-line-sheet .search-bar-container input::placeholder { color: #626958; }
+.wholesale-line-sheet .toolbar-meta { margin: 1rem 0 0; color: var(--mf-muted); font-size: 1.05rem; font-weight: 400; }
+.wholesale-line-sheet .mf-order-message { margin: 0 0 1rem; color: var(--mf-moss); font-size: 1.2rem; }
+.wholesale-line-sheet .mf-order-message.is-error { color: #a23422; }
+.wholesale-line-sheet .mf-order-table-wrap { overflow: hidden; border: 1px solid var(--mf-rule); border-radius: 24px; background: var(--mf-card); }
+.wholesale-line-sheet .product-grid { display: table; width: 100%; max-width: none; margin: 0; border-collapse: collapse; table-layout: fixed; color: var(--mf-ink); }
+.wholesale-line-sheet .product-grid thead { background: #2f4838; }
+.wholesale-line-sheet .product-grid th { padding: 1.4rem 1.6rem; text-align: left; color: #faf8f0; font-size: 1.05rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.wholesale-line-sheet .mf-col-product { width: 32%; }
+.wholesale-line-sheet .mf-col-size { width: 22%; }
+.wholesale-line-sheet .mf-col-price { width: 12%; }
+.wholesale-line-sheet .mf-col-quantity { width: 22%; }
+.wholesale-line-sheet .mf-col-total { width: 12%; }
+.wholesale-line-sheet .product-section { display: table-row-group; background: var(--mf-card); border: 0; border-radius: 0; box-shadow: none; }
+.wholesale-line-sheet .product-section[hidden] { display: none; }
+.wholesale-line-sheet .product-section:nth-of-type(even) { background: #eef1e8; }
+.wholesale-line-sheet .product-section:hover { box-shadow: none; transform: none; }
+.wholesale-line-sheet .product-section + .product-section { border-top: 1px solid var(--mf-rule); }
+.wholesale-line-sheet .product-grid td { padding: 1.2rem 1.6rem; vertical-align: middle; font-size: 1.4rem; }
+.wholesale-line-sheet .product-grid .product-cell { vertical-align: top; }
+.wholesale-line-sheet .mf-product-heading { display: flex; align-items: flex-start; gap: 1.2rem; padding-top: .3rem; }
+.wholesale-line-sheet .mf-product-image,
+.wholesale-line-sheet .mf-product-image--placeholder { flex: 0 0 6.4rem; width: 6.4rem; height: 6.4rem; min-height: 0; border-radius: 12px; object-fit: cover; background: #e4dac9; }
+.wholesale-line-sheet .mf-product-image--placeholder { display: grid; place-items: center; }
+.wholesale-line-sheet .mf-product-meta { color: var(--mf-muted); font-size: .85rem; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
+.wholesale-line-sheet .product-title { margin: .35rem 0 .6rem; padding: 0; color: var(--mf-ink); font-family: var(--font-body-family); font-size: 1.6rem; font-weight: 650; letter-spacing: -.02em; line-height: 1.35; cursor: default; }
+.wholesale-line-sheet .product-title:hover { transform: none; background: transparent; }
+.wholesale-line-sheet .mf-product-order-state { display: block; color: var(--mf-moss); font-size: 1rem; line-height: 1.4; }
+.wholesale-line-sheet .variant-row + .variant-row > td { border-top: 1px solid rgba(47, 72, 56, .08); }
+.wholesale-line-sheet .variant-row { display: table-row; border: 0; border-radius: 0; background: transparent; }
+.wholesale-line-sheet .variant-row:hover { transform: none; background: rgba(112, 137, 100, .08); }
+.wholesale-line-sheet .variant-name { color: var(--mf-ink); font-size: 1.35rem; font-weight: 500; }
+.wholesale-line-sheet .variant-detail { display: block; margin-top: .4rem; color: var(--mf-muted); font-size: .95rem; }
+.wholesale-line-sheet .quantity-wrapper { display: inline-flex; width: auto; justify-content: flex-start; border: 1px solid var(--mf-moss); border-radius: 12px; background: #fffdf7; box-shadow: none; }
+.wholesale-line-sheet .quantity-button { flex: 0 0 4rem; width: 4rem; height: 4.4rem; background: #2f4838; color: #faf8f0; border: 0; font-size: 1.5rem; font-weight: 700; }
+.wholesale-line-sheet .quantity-button:hover { background: #426148; transform: none; }
+.wholesale-line-sheet input.quantity-display { display: block; width: 4.6rem; min-width: 0; height: 4.4rem; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--mf-ink); font: inherit; font-size: 1.25rem; font-weight: 600; text-align: center; appearance: textfield; }
+.wholesale-line-sheet input.quantity-display::-webkit-inner-spin-button,
+.wholesale-line-sheet input.quantity-display::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.wholesale-line-sheet .quantity-button:disabled,
+.wholesale-line-sheet .quantity-display:disabled { cursor: wait; opacity: .5; }
+.wholesale-line-sheet .variant-row.is-unavailable .quantity-wrapper { display: none; }
+.wholesale-line-sheet .mf-line-total,
+.wholesale-line-sheet .mf-unit-price { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wholesale-line-sheet .mf-mobile-label { display: none; }
+.wholesale-line-sheet .mf-empty { color: var(--mf-muted); font-size: 1.4rem; }
+.wholesale-line-sheet :is(button, input, a):focus-visible { outline: 2px solid #8b6536; outline-offset: 3px; }
+@media (max-width: 1050px) {
+  .wholesale-line-sheet .toolbar-row { grid-template-columns: auto minmax(14rem, 1fr) auto auto; }
+  .wholesale-line-sheet .mf-order-summary { grid-column: 1 / -1; }
+  .wholesale-line-sheet .product-grid td,
+  .wholesale-line-sheet .product-grid th { padding-inline: 1rem; }
+  .wholesale-line-sheet .mf-col-product { width: 30%; }
+  .wholesale-line-sheet .mf-col-size { width: 22%; }
+  .wholesale-line-sheet .mf-col-price { width: 12%; }
+  .wholesale-line-sheet .mf-col-quantity { width: 24%; }
+  .wholesale-line-sheet .mf-col-total { width: 12%; }
+  .wholesale-line-sheet .mf-product-image { display: none; }
+}
+@media (max-width: 749px) {
+  .wholesale-line-sheet { padding-top: 2rem; }
+  .wholesale-line-sheet .mf-wl-intro { min-height: 0; padding-bottom: 1.6rem; }
+  .wholesale-line-sheet .mf-wl-intro > div { max-width: none; }
+  .wholesale-line-sheet .mf-wl-intro__art { position: static; z-index: auto; width: 100%; height: auto; max-height: 15rem; margin-top: .8rem; }
+  .wholesale-line-sheet .toolbar-shell { position: static; padding: 1.2rem; }
+  .wholesale-line-sheet .toolbar-row { grid-template-columns: auto 1fr auto; }
+  .wholesale-line-sheet .mf-order-summary,
+  .wholesale-line-sheet .search-bar-container { grid-column: 1 / -1; }
+  .wholesale-line-sheet .toolbar-cart { grid-column: 2; }
+  .wholesale-line-sheet .reset-cart-wrapper { display: block; }
+  .wholesale-line-sheet .reset-cart-button { white-space: normal; }
+  .wholesale-line-sheet .filter-btn { min-height: 4.8rem; }
+  .wholesale-line-sheet .mf-order-table-wrap { border-radius: 20px; }
+  .wholesale-line-sheet .product-grid,
+  .wholesale-line-sheet .product-section { display: block; }
+  .wholesale-line-sheet .product-grid colgroup { display: none; }
+  .wholesale-line-sheet .product-grid thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .wholesale-line-sheet .product-section { padding: 1.6rem; }
+  .wholesale-line-sheet .variant-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem 1rem; padding: 1.4rem 0; }
+  .wholesale-line-sheet .product-grid td { display: block; padding: 0; border: 0; }
+  .wholesale-line-sheet .product-cell { grid-column: 1 / -1; margin-bottom: .6rem; }
+  .wholesale-line-sheet .mf-product-image { display: block; flex-basis: 5.6rem; width: 5.6rem; height: 5.6rem; }
+  .wholesale-line-sheet .product-title { font-size: 1.6rem; }
+  .wholesale-line-sheet .variant-row + .variant-row { border-top: 1px solid var(--mf-rule); }
+  .wholesale-line-sheet .variant-row + .variant-row > td { border: 0; }
+  .wholesale-line-sheet .mf-size-cell { grid-column: 1; }
+  .wholesale-line-sheet .mf-unit-price { grid-column: 1; grid-row: auto; font-size: 1.1rem; color: var(--mf-muted); }
+  .wholesale-line-sheet .mf-quantity-cell { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+  .wholesale-line-sheet .variant-row:first-child .mf-quantity-cell { grid-row: 2 / span 2; }
+  .wholesale-line-sheet .mf-line-total { grid-column: 1 / -1; margin-top: .3rem; color: var(--mf-muted); font-size: 1rem; }
+  .wholesale-line-sheet .mf-mobile-label { display: inline; }
+  .wholesale-line-sheet .quantity-button { flex-basis: 4.8rem; width: 4.8rem; height: 4.8rem; }
+  .wholesale-line-sheet input.quantity-display { height: 4.8rem; width: 4.4rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wholesale-line-sheet * { animation: none !important; transition: none !important; }
+}
+
+</style>
+
+<script>
+  // ---------------- Match animation (6s) + embers + warm overlay ----------------
+  document.addEventListener("DOMContentLoaded", () => {
+    const matchWidgets = document.querySelectorAll(".wl-match");
+    if (!matchWidgets.length) return;
+
+    if (!document.querySelector(".wl-warm-overlay")) {
+      const o = document.createElement("div");
+      o.className = "wl-warm-overlay";
+      o.setAttribute("aria-hidden", "true");
+      document.body.appendChild(o);
+    }
+
+    function playFX() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        const o1 = ctx.createOscillator();
+        const o2 = ctx.createOscillator();
+        const g  = ctx.createGain();
+        o1.type = "triangle";
+        o2.type = "square";
+        o1.frequency.setValueAtTime(280, now);
+        o2.frequency.setValueAtTime(540, now);
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.exponentialRampToValueAtTime(0.12, now + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+        o1.connect(g); o2.connect(g); g.connect(ctx.destination);
+        o1.start(now); o2.start(now);
+        o1.stop(now + 0.13); o2.stop(now + 0.13);
+
+        const o3 = ctx.createOscillator();
+        const g3 = ctx.createGain();
+        o3.type = "sine";
+        o3.frequency.setValueAtTime(380, now + 0.18);
+        o3.frequency.exponentialRampToValueAtTime(120, now + 0.65);
+        g3.gain.setValueAtTime(0.0001, now + 0.18);
+        g3.gain.exponentialRampToValueAtTime(0.06, now + 0.24);
+        g3.gain.exponentialRampToValueAtTime(0.0001, now + 0.68);
+        o3.connect(g3); g3.connect(ctx.destination);
+        o3.start(now + 0.18);
+        o3.stop(now + 0.7);
+
+        setTimeout(() => ctx.close && ctx.close(), 900);
+      } catch (e) {}
+    }
+
+    function startEmbers(canvas) {
+      if (!canvas) return () => {};
+      const ctx = canvas.getContext("2d");
+      let raf = null;
+      let running = true;
+
+      function resize() {
+        const r = canvas.getBoundingClientRect();
+        canvas.width = Math.max(1, Math.floor(r.width * devicePixelRatio));
+        canvas.height = Math.max(1, Math.floor(r.height * devicePixelRatio));
+        ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      }
+
+      const embers = [];
+      function spawn() {
+        const r = canvas.getBoundingClientRect();
+        embers.push({
+          x: r.width * 0.5 + (Math.random() - 0.5) * 50,
+          y: 80 + Math.random() * 18,
+          vx: (Math.random() - 0.5) * 0.4,
+          vy: -0.8 - Math.random() * 1.1,
+          life: 1.0,
+          size: 1 + Math.random() * 2.2
+        });
+        if (embers.length > 90) embers.splice(0, embers.length - 90);
+      }
+
+      function tick() {
+        if (!running) return;
+        const r = canvas.getBoundingClientRect();
+        ctx.clearRect(0, 0, r.width, r.height);
+
+        if (Math.random() < 0.7) spawn();
+
+        for (let i = embers.length - 1; i >= 0; i--) {
+          const p = embers[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy -= 0.006;
+          p.life -= 0.013;
+
+          if (p.life <= 0 || p.y < -60) {
+            embers.splice(i, 1);
+            continue;
+          }
+
+          ctx.globalAlpha = Math.max(0, p.life);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(255,170,60,1)";
+          ctx.fill();
+        }
+
+        ctx.globalAlpha = 1;
+        raf = requestAnimationFrame(tick);
+      }
+
+      resize();
+      window.addEventListener("resize", resize);
+      raf = requestAnimationFrame(tick);
+
+      return () => {
+        running = false;
+        if (raf) cancelAnimationFrame(raf);
+        window.removeEventListener("resize", resize);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      };
+    }
+
+    matchWidgets.forEach((wrap) => {
+      const btn  = wrap.querySelector(".wl-match__btn");
+      const note = wrap.querySelector(".wl-match__note");
+      const embersCanvas = wrap.querySelector(".wl-embers");
+      if (!btn) return;
+
+      const defaultNote = note ? (note.getAttribute("data-note-default") || note.textContent || "") : "";
+
+      if (!wrap.querySelector(".wl-sparks")) {
+        const s = document.createElement("div");
+        s.className = "wl-sparks";
+        s.setAttribute("aria-hidden", "true");
+        wrap.appendChild(s);
+      }
+      const sparks = wrap.querySelector(".wl-sparks");
+
+      function positionFX() {
+        const match = btn.querySelector(".wl-match__match");
+        const wrapRect = wrap.getBoundingClientRect();
+        const btnRect  = btn.getBoundingClientRect();
+
+        let x = (btnRect.left - wrapRect.left) + (btnRect.width * 0.36);
+        let y = (btnRect.top  - wrapRect.top)  + (btnRect.height * 0.52);
+
+        if (match) {
+          const m = match.getBoundingClientRect();
+          x = (m.right - wrapRect.left) - 6;
+          y = (m.top - wrapRect.top) + (m.height / 2);
+        }
+
+        wrap.style.setProperty("--fx-x", `${x}px`);
+        wrap.style.setProperty("--fx-y", `${y}px`);
+        if (sparks) { sparks.style.left = `${x}px`; sparks.style.top = `${y}px`; }
+      }
+
+      let stopEmbers = null;
+      let timers = [];
+
+      function clearSeq() {
+        timers.forEach(t => clearTimeout(t));
+        timers = [];
+        wrap.classList.remove("is-striking","is-burning","is-rising","is-embers","is-logo","is-lit");
+        document.body.classList.remove("wl-warm");
+        if (stopEmbers) { stopEmbers(); stopEmbers = null; }
+        if (note) note.textContent = defaultNote || "";
+      }
+
+      function runSeq() {
+        if (wrap.classList.contains("is-striking") || wrap.classList.contains("is-lit")) {
+          clearSeq();
+          return;
+        }
+
+        positionFX();
+        playFX();
+
+        wrap.classList.add("is-striking");
+        if (note) note.textContent = "…shhk…";
+
+        timers.push(setTimeout(() => {
+          wrap.classList.remove("is-striking");
+          wrap.classList.add("is-burning", "is-embers");
+          if (note) note.textContent = "🔥";
+          stopEmbers = startEmbers(embersCanvas);
+        }, 1200));
+
+        timers.push(setTimeout(() => {
+          wrap.classList.add("is-rising");
+          if (note) note.textContent = "…woah.";
+        }, 1700));
+
+        timers.push(setTimeout(() => {
+          document.body.classList.add("wl-warm");
+          wrap.classList.add("is-logo");
+        }, 5000));
+
+        timers.push(setTimeout(() => {
+          document.body.classList.remove("wl-warm");
+          wrap.classList.add("is-lit");
+          wrap.classList.remove("is-rising");
+          if (note) note.textContent = "You're Lit!";
+        }, 6000));
+      }
+
+      btn.addEventListener("click", (e) => { e.preventDefault(); runSeq(); });
+
+      let downX = null;
+      btn.addEventListener("pointerdown", (e) => { downX = e.clientX; });
+      btn.addEventListener("pointerup", (e) => {
+        if (downX == null) return;
+        const dx = e.clientX - downX;
+        downX = null;
+        if (dx > 22) runSeq();
+      });
+
+      window.addEventListener("resize", () => positionFX());
+    });
+  });
+
+  // ---------------- Catalog logic (smooth, no full re-render on open/qty) ----------------
+  (function(){
+    const root = document.querySelector('[data-mf-wholesale]');
+    if (!root) return;
+
+    const jsonEl = document.getElementById("wholesale-products-json");
+    if (!jsonEl) return;
+
+    const grid = document.getElementById('productGrid');
+    const noResults = document.getElementById("noResultsMessage");
+    const input = document.getElementById("productSearchInput");
+    const sortBtn = document.querySelector(".sort-btn");
+    const sortMenu = document.querySelector(".sort-options");
+    const filterToggle = document.querySelector(".filter-btn-icon");
+    const layout = document.getElementById("mfWlLayout");
+
+    const copy = {
+      standard: {{ 'wholesale.line_sheet.standard' | t | json }},
+      wholesale: {{ 'wholesale.line_sheet.wholesale' | t | json }},
+      unavailable: {{ 'wholesale.line_sheet.unavailable' | t | json }},
+      quantity: {{ 'wholesale.line_sheet.quantity' | t | json }},
+      addThree: {{ 'wholesale.line_sheet.add_three' | t | json }},
+      removeThree: {{ 'wholesale.line_sheet.remove_three' | t | json }},
+      addOne: {{ 'wholesale.line_sheet.add_one' | t | json }},
+      removeOne: {{ 'wholesale.line_sheet.remove_one' | t | json }},
+      invalidQuantity: {{ 'wholesale.line_sheet.invalid_quantity' | t | json }},
+      orderUpdated: {{ 'wholesale.line_sheet.order_updated' | t | json }},
+      total: {{ 'wholesale.line_sheet.total' | t | json }}
+    };
+
+    const state = {
+      products: [],
+      sortMode: "az",
+      searchQuery: "",
+      filterSeason: "All",
+      orderSelections: [],
+      sectionByTitle: new Map(),
+      qtyByVariantId: new Map(),
+      busyVariants: new Set()
+    };
+
+    function money(n){
+      const v = Number(n) || 0;
+      return `$${v.toFixed(2)}`;
+    }
+
+    function normalizeTitle(t){ return String(t || "").trim(); }
+
+    function setMessage(message, isError){
+      const messageEl = document.getElementById('cartMessage');
+      if (!messageEl) return;
+      messageEl.textContent = message || '';
+      messageEl.classList.toggle('is-error', Boolean(isError));
+    }
+
+    function updateCartDisplay(){
+      const totalItems = state.orderSelections.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
+      const totalPrice = state.orderSelections.reduce((sum, i) => sum + ((Number(i.price) || 0) * (Number(i.quantity) || 0)), 0);
+
+      const cartCountElem = document.getElementById('cartCount');
+      if (cartCountElem) cartCountElem.textContent = `${totalItems} ${totalItems === 1 ? 'item' : 'items'}`;
+
+      const totalEl = document.getElementById('cartTotal');
+      if (totalEl) totalEl.textContent = money(totalPrice);
+
+      const progressEl = document.getElementById('cartProgress');
+      if (progressEl) {
+        const remaining = Math.max(0, 150 - totalPrice);
+        progressEl.textContent = remaining > 0
+          ? `Add ${money(remaining)} to reach the order minimum.`
+          : 'Order minimum reached. Review your order when ready.';
+      }
+
+      const cartSummary = document.getElementById('cartSummary');
+      if (cartSummary) {
+        cartSummary.innerHTML = `Review order <span id="cartCount">${totalItems} ${totalItems === 1 ? 'item' : 'items'}</span>`;
+      }
+    }
+
+    function renderCartState(){
+      state.qtyByVariantId.clear();
+      state.orderSelections.forEach((item) => state.qtyByVariantId.set(Number(item.variantId), (state.qtyByVariantId.get(Number(item.variantId)) || 0) + (Number(item.quantity) || 0)));
+
+      state.sectionByTitle.forEach((section) => {
+        section.querySelectorAll('[data-variant-id]').forEach((row) => {
+          const variantId = Number(row.getAttribute('data-variant-id'));
+          const display = row.querySelector('.quantity-display');
+          const quantity = state.qtyByVariantId.get(variantId) || 0;
+          if (display) display.value = String(quantity);
+          const selection = state.orderSelections.find((item) => Number(item.variantId) === variantId);
+          const total = row.querySelector('.mf-line-total-value');
+          if (total) total.textContent = quantity ? money(quantity * Number(selection?.price || 0)) : '—';
+        });
+        updateHeaderCount(section);
+      });
+      updateCartDisplay();
+    }
+
+    document.addEventListener('mf:cart-changed', (event) => syncCart(event.detail));
+
+    function syncCart(cart){
+      state.orderSelections = (cart.items || []).map(item => ({
+        product: item.product_title,
+        variantId: item.variant_id,
+        lineKey: item.key,
+        name: item.variant_title,
+        price: item.final_price / 100,
+        quantity: item.quantity,
+        properties: { ...(item.properties || {}) }
+      }));
+      renderCartState();
+    }
+
+    function setOptimisticQuantity(productTitle, variantId, quantity){
+      const vid = Number(variantId);
+      const itemIndex = state.orderSelections.findIndex((item) => Number(item.variantId) === vid);
+
+      if (quantity <= 0) {
+        if (itemIndex >= 0) state.orderSelections.splice(itemIndex, 1);
+        renderCartState();
+        return;
+      }
+
+      if (itemIndex >= 0) {
+        state.orderSelections[itemIndex].quantity = quantity;
+        renderCartState();
+        return;
+      }
+
+      const product = state.products.find((item) => item.title === productTitle);
+      const variant = product?.variants?.find((item) => Number(item.id) === vid);
+      if (!variant) return;
+
+      state.orderSelections.push({
+        product: productTitle,
+        variantId: vid,
+        lineKey: null,
+        name: variant.name,
+        price: Number(variant.price) || 0,
+        quantity
+      });
+      renderCartState();
+    }
+
+    function renderCartSections(sections){
+      if (!sections) return;
+
+      const bubbleMarkup = sections['cart-icon-bubble'];
+      const bubble = document.getElementById('cart-icon-bubble');
+      if (bubbleMarkup && bubble) {
+        const freshBubble = new DOMParser().parseFromString(bubbleMarkup, 'text/html').getElementById('cart-icon-bubble');
+        if (freshBubble) bubble.replaceWith(freshBubble);
+      }
+
+      const drawerMarkup = sections['cart-drawer'];
+      const drawer = document.querySelector('cart-drawer');
+      const drawerContent = drawer?.querySelector('#CartDrawer');
+      if (drawerMarkup && drawerContent) {
+        const freshDrawer = new DOMParser().parseFromString(drawerMarkup, 'text/html').querySelector('#CartDrawer');
+        if (freshDrawer) drawerContent.innerHTML = freshDrawer.innerHTML;
+      }
+      if (drawer) drawer.classList.toggle('is-empty', state.orderSelections.length === 0);
+
+      if (drawer?.setHeaderCartIconAccessibility) drawer.setHeaderCartIconAccessibility();
+    }
+
+    async function refreshCart() {
+      const response = await fetch('/cart.js', { headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error('We could not load your order. Please refresh and try again.');
+      const cart = await response.json();
+      syncCart(cart);
+      return cart;
+    }
+
+    window.resetWholesaleCart = function resetWholesaleCart() {
+      setMessage('Clearing your order…');
+      fetch('/cart/clear.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ sections: ['cart-icon-bubble', 'cart-drawer'] })
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error('We could not clear your order.');
+          return response.json();
+        })
+        .then((cart) => {
+          syncCart(cart);
+          renderCartSections(cart.sections);
+          setMessage('Your order is clear.');
+        })
+        .catch((error) => setMessage(error.message, true));
+    }
+
+    function updateHeaderCount(sec){
+      const title = sec.dataset.productTitle;
+      const items = state.orderSelections.filter(o => o.product === title && (Number(o.quantity) || 0) > 0);
+      const units = items.reduce((total, item) => total + (Number(item.quantity) || 0), 0);
+
+      const titleEl = sec.querySelector('.product-title');
+      if (titleEl) {
+        titleEl.textContent = title.replace(/^wholesale\s+/i, '');
+      }
+
+      const orderState = sec.querySelector('.mf-product-order-state');
+      if (orderState) {
+        orderState.textContent = units > 0
+          ? `${units} ${units === 1 ? 'unit' : 'units'} in your order`
+          : '';
+      }
+    }
+
+    function setVariantListOpen(sec, open){
+      const vl = sec.querySelector('.variant-list');
+      if (!vl) return;
+
+      if (open) {
+        vl.classList.add('is-open');
+        vl.style.height = 'auto';
+        const h = vl.scrollHeight;
+        vl.style.height = '0px';
+        requestAnimationFrame(() => {
+          vl.style.height = h + 'px';
+          setTimeout(() => { vl.style.height = 'auto'; }, 260);
+        });
+        sec.classList.add('is-open');
+      } else {
+        const cur = vl.scrollHeight;
+        vl.style.height = cur + 'px';
+        requestAnimationFrame(() => {
+          vl.style.height = '0px';
+          vl.classList.remove('is-open');
+        });
+        sec.classList.remove('is-open');
+      }
+    }
+
+    function setFocus(titleOrNull){
+      // Cards can be opened independently. Search and sort must never hide an
+      // in-progress order or dim the rest of the catalog.
+      void titleOrNull;
+    }
+
+    function passesFilters(product){
+      const searchable = [
+        product.title,
+        product.handle,
+        ...(product.variants || []).map((variant) => `${variant.name || ''} ${variant.sku || ''}`)
+      ].join(' ').toLowerCase();
+      if (state.searchQuery && !searchable.includes(state.searchQuery)) return false;
+      if (state.filterSeason && state.filterSeason !== "All" && product.season !== state.filterSeason) return false;
+      return true;
+    }
+
+    function applyVisibility(){
+      let visibleCount = 0;
+
+      state.products.forEach((p) => {
+        const sec = state.sectionByTitle.get(p.title);
+        if (!sec) return;
+        const show = passesFilters(p);
+        sec.hidden = !show;
+        if (show) visibleCount++;
+      });
+
+      if (noResults) noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+    }
+
+    function sortProducts(){
+      const list = [...state.products];
+      if (state.sortMode === "newest") list.sort((a,b) => (b.handle || "").localeCompare(a.handle || ""));
+      else if (state.sortMode === "za") list.sort((a,b) => (b.title || "").localeCompare(a.title || ""));
+      else list.sort((a,b) => (a.title || "").localeCompare(b.title || ""));
+
+      const frag = document.createDocumentFragment();
+      list.forEach((p) => {
+        const sec = state.sectionByTitle.get(p.title);
+        if (sec) frag.appendChild(sec);
+      });
+      grid.appendChild(frag);
+      state.products = list;
+    }
+
+    function nextPackQuantity(currentQuantity, direction, increment = 3){
+      const current = Math.max(0, Number(currentQuantity) || 0);
+      if (direction > 0) return Math.max(increment, Math.ceil((current + 1) / increment) * increment);
+      return Math.max(0, Math.floor((current - 1) / increment) * increment);
+    }
+
+    function setVariantBusy(variantId, isBusy){
+      const selector = `[data-variant-id="${Number(variantId)}"] :is(.quantity-button, .quantity-display)`;
+      document.querySelectorAll(selector).forEach((button) => { button.disabled = isBusy; });
+    }
+
+    function variantIncrement(id){return Number(state.products.flatMap(p=>p.variants).find(v=>Number(v.id)===Number(id))?.increment)||3;}
+
+    function adjustQuantity(productTitle, variantId, delta){
+      const current = state.qtyByVariantId.get(Number(variantId)) || 0;
+      return commitQuantity(productTitle, variantId, nextPackQuantity(current, delta, variantIncrement(variantId)));
+    }
+
+    async function commitQuantity(productTitle, variantId, quantity){
+      const vid = Number(variantId);
+      const title = normalizeTitle(productTitle);
+      if (state.busyVariants.has(vid)) return;
+
+      const existing = state.orderSelections.find((item) => Number(item.variantId) === vid);
+      const duplicates = state.orderSelections.filter((item) => Number(item.variantId) === vid);
+      if (duplicates.length > 1) { setMessage({{ 'wholesale.labels.manage_in_cart' | t | json }}, true); return; }
+      const currentQty = Number(existing?.quantity) || 0;
+      const newQty = Number(quantity);
+      if (!Number.isInteger(newQty) || newQty < 0 || newQty % variantIncrement(vid) !== 0) {
+        renderCartState();
+        setMessage(copy.invalidQuantity, true);
+        return;
+      }
+      if (newQty === currentQty) return;
+      const previousSelections = state.orderSelections.map((item) => ({ ...item }));
+
+      state.busyVariants.add(vid);
+      setVariantBusy(vid, true);
+      setOptimisticQuantity(title, vid, newQty);
+      setMessage(copy.orderUpdated);
+
+      try {
+        const endpoint = currentQty === 0 && newQty > 0 ? '/cart/add.js' : '/cart/change.js';
+        const body = currentQty === 0 && newQty > 0
+          ? { items: [{ id: vid, quantity: newQty }], sections: ['cart-icon-bubble', 'cart-drawer'] }
+          : { id: existing?.lineKey || vid, quantity: newQty, sections: ['cart-icon-bubble', 'cart-drawer'] };
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.description || payload.message || 'We could not update your order.');
+        }
+
+        const payload = await response.json();
+        if (Array.isArray(payload.items) && payload.item_count !== undefined) {
+          syncCart(payload);
+        } else if (Array.isArray(payload.items)) {
+          payload.items.forEach((item) => {
+            const selection = state.orderSelections.find((entry) => Number(entry.variantId) === Number(item.variant_id));
+            if (!selection) return;
+            selection.lineKey = item.key;
+            selection.price = Number(item.final_price) / 100;
+            selection.quantity = Number(item.quantity) || selection.quantity;
+          });
+          renderCartState();
+        }
+        renderCartSections(payload.sections);
+        if (typeof publish === 'function' && typeof PUB_SUB_EVENTS !== 'undefined') {
+          publish(PUB_SUB_EVENTS.cartUpdate, { source: 'mf-wholesale-line-sheet', cartData: payload });
+        }
+      } catch (error) {
+        state.orderSelections = previousSelections;
+        renderCartState();
+        setMessage(error.message || 'We could not update your order. Please try again.', true);
+      } finally {
+        state.busyVariants.delete(vid);
+        setVariantBusy(vid, false);
+      }
+    }
+
+    function buildSection(product){
+      const sec = document.createElement('tbody');
+      const labelService = !!window.MFCustomLabels && ['custom-label-set-up', 'use-my-custom-label'].includes(product.handle);
+      if (labelService) sec.dataset.mfLabelProduct = product.handle;
+      sec.className = 'product-section';
+      sec.id = product.handle || '';
+      sec.dataset.season = product.season || 'Uncategorized';
+      sec.dataset.productTitle = product.title;
+      const variants = product.variants || [];
+      variants.forEach((variant, index) => {
+        const row = document.createElement('tr');
+        row.className = 'variant-row';
+        row.setAttribute('data-variant-id', String(variant.id));
+        if (index === 0) {
+          const cell = document.createElement('td');
+          cell.className = 'product-cell';
+          cell.rowSpan = variants.length;
+          const heading = document.createElement('div');
+          heading.className = 'mf-product-heading';
+          const image = document.createElement(product.image ? 'img' : 'div');
+          image.className = product.image ? 'mf-product-image' : 'mf-product-image--placeholder';
+          if (product.image) {
+            image.src = product.image;
+            image.alt = '';
+            image.width = 64;
+            image.height = 64;
+            image.loading = 'lazy';
+          } else {
+            image.setAttribute('aria-hidden', 'true');
+            image.textContent = '✦';
+          }
+          const content = document.createElement('div');
+          const meta = document.createElement('div');
+          meta.className = 'mf-product-meta';
+          meta.textContent = product.season === 'Uncategorized' ? copy.wholesale : product.season;
+          const title = document.createElement('h2');
+          title.className = 'product-title';
+          title.textContent = product.title.replace(/^wholesale\s+/i, '');
+          const order = document.createElement('span');
+          order.className = 'mf-product-order-state';
+          content.append(meta, title, order);
+          heading.append(image, content);
+          cell.appendChild(heading);
+          row.appendChild(cell);
+        }
+        const size = document.createElement('td');
+        size.className = 'mf-size-cell';
+        const name = document.createElement('span');
+        name.className = 'variant-name';
+        name.textContent = variant.name === 'Default Title' ? copy.standard : variant.name;
+        size.appendChild(name);
+        if (variant.sku) {
+          const sku = document.createElement('span');
+          sku.className = 'variant-detail';
+          sku.textContent = variant.sku;
+          size.appendChild(sku);
+        }
+        const price = document.createElement('td');
+        price.className = 'mf-unit-price';
+        price.textContent = money(variant.price);
+        const quantityCell = document.createElement('td');
+        quantityCell.className = 'mf-quantity-cell';
+        const wrapper = document.createElement('div');
+        wrapper.className = 'quantity-wrapper';
+        const minus = document.createElement('button');
+        minus.className = 'quantity-button';
+        minus.type = 'button';
+        minus.textContent = '−';
+        minus.setAttribute('aria-label', `${Number(variant.increment)===1?copy.removeOne:copy.removeThree}: ${product.title}, ${variant.name}`);
+        minus.addEventListener('click', () => adjustQuantity(product.title, variant.id, -1));
+        const input = document.createElement('input');
+        input.className = 'quantity-display';
+        input.type = 'number';
+        input.min = '0';
+        const increment = Number(variant.increment)||3;
+        input.step = String(increment);
+        input.inputMode = 'numeric';
+        input.value = String(state.qtyByVariantId.get(Number(variant.id)) || 0);
+        input.setAttribute('aria-label', `${copy.quantity}: ${product.title}, ${variant.name}`);
+        input.addEventListener('change', () => {
+          const quantity = Number(input.value);
+          if (!Number.isInteger(quantity) || quantity < 0 || quantity % increment !== 0) {
+            input.setCustomValidity(copy.invalidQuantity);
+            input.reportValidity();
+            input.setCustomValidity('');
+            renderCartState();
+            setMessage(copy.invalidQuantity, true);
+            return;
+          }
+          commitQuantity(product.title, variant.id, quantity);
+        });
+        input.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') { event.preventDefault(); input.blur(); }
+        });
+        const plus = document.createElement('button');
+        plus.className = 'quantity-button';
+        plus.type = 'button';
+        plus.textContent = '+';
+        plus.setAttribute('aria-label', `${Number(variant.increment)===1?copy.addOne:copy.addThree}: ${product.title}, ${variant.name}`);
+        plus.addEventListener('click', () => adjustQuantity(product.title, variant.id, 1));
+        wrapper.append(minus, input, plus);
+        quantityCell.appendChild(wrapper);
+        if (labelService) {
+          const entry = document.createElement('div'); entry.className = 'mf-label-entry';
+          const button = document.createElement('button'); button.type = 'button'; button.className = 'button button--secondary';
+          button.dataset.mfLabelOpen = product.handle === 'custom-label-set-up' ? 'new' : 'reuse';
+          button.textContent = product.handle === 'custom-label-set-up' ? {{ 'wholesale.labels.setup_action' | t | json }} : {{ 'wholesale.labels.reuse_action' | t | json }};
+          entry.append(button); quantityCell.append(entry);
+        }
+
+        if (!variant.available) {
+          row.classList.add('is-unavailable');
+          minus.disabled = input.disabled = plus.disabled = true;
+          const unavailable = document.createElement('span');
+          unavailable.className = 'variant-detail';
+          unavailable.textContent = copy.unavailable;
+          quantityCell.appendChild(unavailable);
+        }
+        const total = document.createElement('td');
+        total.className = 'mf-line-total';
+        const label = document.createElement('span');
+        label.className = 'mf-mobile-label';
+        label.textContent = `${copy.total}: `;
+        const value = document.createElement('span');
+        value.className = 'mf-line-total-value';
+        value.textContent = '—';
+        total.append(label, value);
+        row.append(size, price, quantityCell, total);
+        sec.appendChild(row);
+      });
+      updateHeaderCount(sec);
+      return sec;
+    }
+
+    function closeDropdown(){
+      if (!sortMenu || !sortBtn) return;
+      sortMenu.style.display = "none";
+      sortBtn.setAttribute("aria-expanded","false");
+    }
+
+    function openDropdown(){
+      if (!sortMenu || !sortBtn) return;
+      sortMenu.style.display = "block";
+      sortBtn.setAttribute("aria-expanded","true");
+    }
+
+    function init(){
+      state.products = JSON.parse(jsonEl.textContent || "[]");
+
+      const frag = document.createDocumentFragment();
+      state.sectionByTitle.clear();
+      state.products.forEach((product) => {
+        const section = buildSection(product);
+        state.sectionByTitle.set(product.title, section);
+        frag.appendChild(section);
+      });
+      grid.querySelectorAll('tbody').forEach((body) => body.remove());
+      grid.appendChild(frag);
+      sortProducts();
+      applyVisibility();
+
+      refreshCart().catch((error) => setMessage(error.message, true));
+
+      // Search
+      if (input) {
+        input.addEventListener("input", (e) => {
+          state.searchQuery = String(e.target.value || "").toLowerCase().trim();
+          setFocus(null);
+          applyVisibility();
+        });
+
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { e.preventDefault(); e.target.blur(); }
+        });
+      }
+
+      // Sort
+      if (sortBtn) {
+        sortBtn.addEventListener("click", () => {
+          if (!sortMenu) return;
+          const open = sortMenu.style.display === "block";
+          if (open) closeDropdown();
+          else openDropdown();
+        });
+      }
+
+      if (sortMenu) {
+        sortMenu.querySelectorAll("li").forEach((opt) => {
+          opt.addEventListener("click", () => {
+            state.sortMode = opt.dataset.sort || "az";
+            closeDropdown();
+            setFocus(null);
+            sortProducts();
+            applyVisibility();
+          });
+        });
+      }
+
+      document.addEventListener("click", (e) => {
+        if (!sortMenu || !sortBtn) return;
+        const inDrop = sortMenu.contains(e.target) || sortBtn.contains(e.target);
+        if (!inDrop) closeDropdown();
+      });
+
+      // FILTER TOGGLE — FIXED (no inline display changes)
+      if (filterToggle && layout) {
+        filterToggle.addEventListener("click", () => {
+          layout.classList.toggle("has-filters");
+        });
+      }
+
+      // Filters
+      document.querySelectorAll(".filter-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          state.filterSeason = btn.dataset.collection || "All";
+          setFocus(null);
+          applyVisibility();
+        });
+      });
+    }
+
+    init();
+  })();
+</script>

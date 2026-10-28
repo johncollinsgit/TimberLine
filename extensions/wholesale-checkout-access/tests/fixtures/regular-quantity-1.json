@@ -1,0 +1,53 @@
+{
+  "payload": {
+    "export": "cart-validations-generate-run",
+    "target": "cart.validations.generate.run",
+    "input": {
+      "cart": {
+        "buyerIdentity": {
+          "customer": {
+            "hasWholesaleAccess": true
+          }
+        },
+        "lines": [
+          {
+            "quantity": 1,
+            "receipt": null,
+            "revision": null,
+            "mode": null,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/101",
+              "title": "Wax Melt",
+              "product": {
+                "handle": "wholesale-fictional",
+                "singleQuantity": false
+              }
+            }
+          }
+        ],
+        "labelChoice": null
+      },
+      "shop": {
+        "labelProgram": null
+      },
+      "buyerJourney": {
+        "step": "CHECKOUT_COMPLETION"
+      }
+    },
+    "output": {
+      "operations": [
+        {
+          "validationAdd": {
+            "errors": [
+              {
+                "message": "Order each candle size and wax melt scent in multiples of 3 (3, 6, 9). Update your cart before checkout.",
+                "target": "$.cart"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

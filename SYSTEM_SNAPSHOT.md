@@ -1,3 +1,13 @@
+## Wholesale custom labels (October 27; additive release candidate)
+
+The Shopify wholesale lane adds a private customer artwork library, buyer wizard,
+Backstage import/proof approval, immutable purchase references and production holds.
+New setup/reuse fees are one per order; regular candles and wax melts remain in
+multiples of three. Customer artwork never becomes public Shopify media. Buyer
+submissions and the separate Thank you request form remain default off until the
+complete development-store flow passes. Preserve protected deployment, private
+shared storage and pinned VTracer 0.6.5. See `docs/operations/wholesale-custom-labels.md`.
+
 ## Subscription pilot reporting (2026-10-27; release candidate)
 
 - `/subscriptions/pilot` and the existing Subscriptions/Backstage screens share

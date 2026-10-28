@@ -116,6 +116,31 @@ jobs:
       - name: Verify Team preservation and work contracts with synthetic data
         run: npm run test:team-work-local
 
+      - name: Prepare safe PDF conversion
+        run: |
+          if ! command -v gs >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ghostscript
+          fi
+          echo "WHOLESALE_LABEL_GS=$(command -v gs)" >> "$GITHUB_ENV"
+
+      - name: Build pinned custom-label vector tracer
+        run: |
+          rustup target add x86_64-unknown-linux-musl
+          CARGO_BUILD_TARGET=x86_64-unknown-linux-musl CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld scripts/labels/install-vtracer.sh "$RUNNER_TEMP/label-tools"
+          sha256sum "$RUNNER_TEMP/label-tools/vtracer-0.6.5" > "$RUNNER_TEMP/label-tools/vtracer-0.6.5.sha256"
+          echo "WHOLESALE_LABEL_VTRACER=$RUNNER_TEMP/label-tools/vtracer-0.6.5" >> "$GITHUB_ENV"
+
+      - name: Retain pinned Linux label tracer
+        uses: actions/upload-artifact@v4
+        with:
+          name: wholesale-label-tracer-linux
+          path: |
+            ${{ runner.temp }}/label-tools/vtracer-0.6.5
+            ${{ runner.temp }}/label-tools/vtracer-0.6.5.sha256
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Prepare application key
         run: |
           cp .env.example .env
@@ -127,6 +152,21 @@ jobs:
       - name: Install browsers for Fleet embedding checks
         timeout-minutes: 45
         run: npx playwright install --with-deps chromium webkit
+
+      - name: Verify wholesale cart and private-label buyer workflows
+        run: |
+          node tests/e2e/wholesale-quantity-browser.mjs
+          node tests/e2e/wholesale-labels-browser.mjs
+          node tests/e2e/wholesale-reorder-browser.mjs
+          node tests/e2e/wholesale-cart-refresh-browser.mjs
+          node tests/e2e/wholesale-label-admin-browser.mjs
+          node --test scripts/labels/batch-import.test.mjs
+          npx tsc --noEmit -p extensions/wholesale-order-notes/tsconfig.json
+
+      - name: Verify wholesale checkout validation Function
+        run: |
+          npm ci --prefix extensions/wholesale-checkout-access
+          npm exec --yes --package=@shopify/cli@5.0.0 -- npm --prefix extensions/wholesale-checkout-access test -- --run
 
       - name: Verify Fleet embedding and allowance in Chromium and WebKit
         run: npm run test:highlevel-fleet
@@ -237,7 +277,8 @@ jobs:
         env:
           TEAM_WORK_DISPOSABLE_MYSQL: '1'
           SES_PLATFORM_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php tests/Integration/ServiceProposalMySqlRecoveryTest.php --compact
+          WHOLESALE_LABELS_DISPOSABLE_MYSQL: '1'
+        run: php ./vendor/bin/pest tests/Integration/WholesaleLabelsMySqlRecoveryTest.php tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php tests/Integration/ServiceProposalMySqlRecoveryTest.php --compact
 
       - name: Verify subscription pilot evidence partial-DDL recovery
         run: php ./vendor/bin/pest tests/Integration/SubscriptionPilotMySqlRecoveryTest.php --compact

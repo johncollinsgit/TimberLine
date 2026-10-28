@@ -1,0 +1,105 @@
+{
+  "payload": {
+    "export": "cart-validations-generate-run",
+    "target": "cart.validations.generate.run",
+    "input": {
+      "cart": {
+        "buyerIdentity": {
+          "customer": {
+            "hasWholesaleAccess": true
+          }
+        },
+        "lines": [
+          {
+            "quantity": 3,
+            "receipt": {
+              "value": "12345678-1234-4234-8234-123456789abc"
+            },
+            "revision": {
+              "value": "87654321-4321-4321-8321-cba987654321"
+            },
+            "mode": {
+              "value": "new"
+            },
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/101",
+              "title": "Wax Melt",
+              "product": {
+                "handle": "wholesale-fictional",
+                "singleQuantity": false
+              }
+            }
+          },
+          {
+            "quantity": 1,
+            "receipt": {
+              "value": "12345678-1234-4234-8234-123456789abc"
+            },
+            "revision": {
+              "value": "87654321-4321-4321-8321-cba987654321"
+            },
+            "mode": {
+              "value": "new"
+            },
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/42044203761745",
+              "title": "Standard",
+              "product": {
+                "handle": "custom-label-set-up",
+                "singleQuantity": false
+              }
+            }
+          },
+          {
+            "quantity": 1,
+            "receipt": {
+              "value": "12345678-1234-4234-8234-123456789abc"
+            },
+            "revision": {
+              "value": "87654321-4321-4321-8321-cba987654321"
+            },
+            "mode": {
+              "value": "new"
+            },
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/42044203761745",
+              "title": "Standard",
+              "product": {
+                "handle": "custom-label-set-up",
+                "singleQuantity": false
+              }
+            }
+          }
+        ],
+        "labelChoice": {
+          "value": "Yes"
+        }
+      },
+      "shop": {
+        "labelProgram": {
+          "value": "true"
+        }
+      },
+      "buyerJourney": {
+        "step": "CHECKOUT_COMPLETION"
+      }
+    },
+    "output": {
+      "operations": [
+        {
+          "validationAdd": {
+            "errors": [
+              {
+                "message": "Choose your custom label in the cart. Each order needs exactly one matching setup or reuse fee.",
+                "target": "$.cart"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

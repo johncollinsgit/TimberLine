@@ -1,12 +1,15 @@
 query CartValidationsGenerateRunInput {
+  buyerJourney { step }
+  shop { labelProgram: metafield(namespace: "forestry", key: "custom_labels_enabled") { value } }
   cart {
-    buyerIdentity {
-      customer {
-        hasWholesaleAccess: hasAnyTag(tags: ["wholesale"])
-      }
-    }
+    labelChoice: attribute(key: "Custom labels") { value }
+    buyerIdentity { customer { hasWholesaleAccess: hasAnyTag(tags: ["wholesale"]) } }
     lines {
       quantity
+      receipt: attribute(key: "_MF label request") { value }
+      revision: attribute(key: "_MF label revision") { value }
+      mode: attribute(key: "_MF label mode") { value }
+      merchandise { __typename ... on ProductVariant { id title product { handle singleQuantity: hasAnyTag(tags: ["SingleQuantity"]) } } }
     }
   }
 }
