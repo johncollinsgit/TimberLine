@@ -33,6 +33,7 @@
     savedAssistantFields();
   }
   function openSavedAssistant(profile){
+    if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;
     if(savedAssistantBusy||savedAssistantPending||conversationBusy||conversationState)return;
     savedAssistantEditing=profile||null;$('saved-assistant-form').reset();$('saved-assistant-form').hidden=false;$('saved-assistant-delete-confirm').hidden=true;
     $('saved-assistant-edit-title').textContent=profile?'Inspect or edit your assistant':'Make an Everbranch Assistant';
@@ -41,14 +42,16 @@
     $('saved-assistant-provenance').textContent=profile?`Explicitly saved by account ${profile.provenance.created_by} on ${profile.provenance.created_at}. ${profile.retention}`:'This configuration is explicitly saved by you; it is never captured from chat automatically.';
     $('saved-assistant-status').textContent='Review this private configuration before saving. Do not enter secrets.';savedAssistantFields();conversationFields();$('saved-assistant-name').focus();
   }
-  const savedAssistantCurrent=(generation,scope)=>generation===savedAssistantGeneration&&scope===savedAssistantScope&&scope===conversationScope&&scope===conversationScopeValue()&&savedAssistantEnabled()&&section==='ask';
+  const savedAssistantCurrent=(generation,scope)=>generation===savedAssistantGeneration&&scope===savedAssistantScope&&scope===conversationScope&&scope===conversationScopeValue()&&savedAssistantEnabled()&&(section==='ask'||typeof campusAssistantActive==='function'&&campusAssistantActive());
   async function savedAssistantRefresh(generation,scope){
+    if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;
     const result=await api(`${nextBase}/conversation/assistants${nextQuery()}&area_id=${encodeURIComponent(area)}`);
     if(!savedAssistantCurrent(generation,scope))return false;
     if(!conversationScoped(result)||result.provider_dispatch!==false||!Array.isArray(result.items))throw new Error('Saved assistant scope changed.');
     data.saved_assistants=result;renderSavedAssistants();conversationFields();return true;
   }
   async function mutateSavedAssistant(){
+    if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;
     if(savedAssistantBusy||!savedAssistantPending)return;
     const exact=savedAssistantPending,generation=++savedAssistantGeneration,scope=savedAssistantScope;savedAssistantBusy=true;savedAssistantFields();
     try{
@@ -68,17 +71,17 @@
       $('saved-assistant-status').textContent=savedAssistantPending?'The outcome is unconfirmed. Retry this exact configuration; it will not be saved again automatically.':error.status===409?'Close configuration, refresh saved assistants, then inspect the current saved details before editing.':error.message+' Review the fields and confirm again.';
     }finally{if(savedAssistantCurrent(generation,scope)){savedAssistantBusy=false;savedAssistantFields();conversationFields();}}
   }
-  $('saved-assistant-choice').onchange=()=>{if(conversationState||conversationBusy)return;$('chat-log').replaceChildren();$('ask-question').value='';renderSavedAssistants();conversationFields();};
+  $('saved-assistant-choice').onchange=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(conversationState||conversationBusy)return;$('chat-log').replaceChildren();$('ask-question').value='';renderSavedAssistants();conversationFields();};
   $('saved-assistant-new').onclick=()=>openSavedAssistant(null);$('saved-assistant-edit').onclick=()=>openSavedAssistant(selectedSavedAssistant());
-  $('saved-assistant-cancel').onclick=()=>{if(savedAssistantPending||savedAssistantBusy)return;$('saved-assistant-form').hidden=true;$('saved-assistant-form').reset();savedAssistantEditing=null;conversationFields();$('saved-assistant-choice').focus();};
-  $('saved-assistant-form').oninput=event=>{if(savedAssistantPending||savedAssistantBusy)return;if(event.target!==$('saved-assistant-confirm'))$('saved-assistant-confirm').checked=false;savedAssistantFields();};
+  $('saved-assistant-cancel').onclick=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(savedAssistantPending||savedAssistantBusy)return;$('saved-assistant-form').hidden=true;$('saved-assistant-form').reset();savedAssistantEditing=null;conversationFields();$('saved-assistant-choice').focus();};
+  $('saved-assistant-form').oninput=event=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(savedAssistantPending||savedAssistantBusy)return;if(event.target!==$('saved-assistant-confirm'))$('saved-assistant-confirm').checked=false;savedAssistantFields();};
   $('saved-assistant-form').onsubmit=event=>{
-    event.preventDefault();if(savedAssistantBusy||conversationBusy||conversationState)return;if(savedAssistantPending)return savedAssistantPending.action==='save'?mutateSavedAssistant():undefined;
+    event.preventDefault();if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(savedAssistantBusy||conversationBusy||conversationState)return;if(savedAssistantPending)return savedAssistantPending.action==='save'?mutateSavedAssistant():undefined;
     if(!$('saved-assistant-confirm').checked||data.saved_assistants?.can_manage!==true)return;
     const id=savedAssistantEditing?.id||crypto.randomUUID();savedAssistantPending={action:'save',id,body:{id,request_id:crypto.randomUUID(),area_id:area,expected_version:savedAssistantEditing?.version||0,confirmed:true,name:$('saved-assistant-name').value.trim(),purpose:$('saved-assistant-purpose').value.trim(),instructions:$('saved-assistant-instructions').value.trim(),checks:[...document.querySelectorAll('[data-saved-assistant-check]:checked:not(:disabled)')].map(node=>node.value)}};
     return mutateSavedAssistant();
   };
-  $('saved-assistant-refresh').onclick=async()=>{if(savedAssistantBusy)return;const generation=++savedAssistantGeneration,scope=savedAssistantScope;savedAssistantBusy=true;savedAssistantFields();try{await savedAssistantRefresh(generation,scope);}catch(error){if(savedAssistantCurrent(generation,scope)){$('saved-assistant-status').textContent='Saved assistants are unavailable under current access.';data.saved_assistants=null;$('saved-assistant-form').reset();$('saved-assistant-form').hidden=true;}}finally{if(savedAssistantCurrent(generation,scope)){savedAssistantBusy=false;savedAssistantFields();conversationFields();}}};
-  $('saved-assistant-delete').onclick=()=>{if(!savedAssistantEditing||savedAssistantPending)return;$('saved-assistant-delete-confirm').hidden=false;$('saved-assistant-delete-yes').focus();};
-  $('saved-assistant-delete-no').onclick=()=>{$('saved-assistant-delete-confirm').hidden=true;$('saved-assistant-delete').focus();};
-  $('saved-assistant-delete-yes').onclick=()=>{if(savedAssistantBusy)return;if(!savedAssistantPending){if(!savedAssistantEditing)return;savedAssistantPending={action:'delete',id:savedAssistantEditing.id,body:{area_id:area,expected_version:savedAssistantEditing.version,request_id:crypto.randomUUID(),confirmed:true}};}return mutateSavedAssistant();};
+  $('saved-assistant-refresh').onclick=async()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(savedAssistantBusy)return;const generation=++savedAssistantGeneration,scope=savedAssistantScope;savedAssistantBusy=true;savedAssistantFields();try{await savedAssistantRefresh(generation,scope);}catch(error){if(savedAssistantCurrent(generation,scope)){$('saved-assistant-status').textContent='Saved assistants are unavailable under current access.';data.saved_assistants=null;$('saved-assistant-form').reset();$('saved-assistant-form').hidden=true;}}finally{if(savedAssistantCurrent(generation,scope)){savedAssistantBusy=false;savedAssistantFields();conversationFields();}}};
+  $('saved-assistant-delete').onclick=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(!savedAssistantEditing||savedAssistantPending)return;$('saved-assistant-delete-confirm').hidden=false;$('saved-assistant-delete-yes').focus();};
+  $('saved-assistant-delete-no').onclick=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;$('saved-assistant-delete-confirm').hidden=true;$('saved-assistant-delete').focus();};
+  $('saved-assistant-delete-yes').onclick=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(savedAssistantBusy)return;if(!savedAssistantPending){if(!savedAssistantEditing)return;savedAssistantPending={action:'delete',id:savedAssistantEditing.id,body:{area_id:area,expected_version:savedAssistantEditing.version,request_id:crypto.randomUUID(),confirmed:true}};}return mutateSavedAssistant();};
