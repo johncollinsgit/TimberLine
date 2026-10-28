@@ -27,16 +27,34 @@ final class CampusReviewSourceBoundTest extends TestCase
     public function test_expanded_fixed_source_closure_remains_hashed_without_omitting_files(): void
     {
         $this->isolated(function (string $root): void {
-            // Fixed dependencies grew; 170 fixture members still exceed the old 200-entry closure
-            // together with those dependencies, while retaining the reviewed 256-member cap.
-            for ($i = 0; $i < 170; $i++) {
+            // Retain 170 actual inputs, including four expanded fixed dependencies.
+            // Together with the other fixed names this reaches the exact 256-member cap.
+            $fixed = [
+                'app/Proposals/ProposalComparison.php',
+                'app/Proposals/CommercialSnapshot.php',
+                'app/Proposals/CommercialSections.php',
+                'resources/data/proposals/lees-mcrae-comparison-v1.json',
+            ];
+            foreach ($fixed as $path) {
+                if (! is_dir(dirname($root.'/'.$path))) {
+                    mkdir(dirname($root.'/'.$path), 0700, true);
+                }
+                file_put_contents($root.'/'.$path, '// fixed fixture dependency');
+            }
+            for ($i = 0; $i < 166; $i++) {
                 file_put_contents($root.'/resources/js/enterprise/bounded-'.$i.'.js', '// fixture '.$i);
             }
+            $this->assertCount(170, File::allFiles($root));
             $manifest = new CampusReviewManifest;
             $first = $manifest->current();
             $this->assertSame($first, $manifest->current());
-            file_put_contents($root.'/resources/js/enterprise/bounded-169.js', '// changed final dependency');
-            $this->assertNotSame($first['source_hash'], $manifest->current()['source_hash']);
+            foreach (['resources/js/enterprise/bounded-165.js', ...$fixed] as $path) {
+                $original = file_get_contents($root.'/'.$path);
+                file_put_contents($root.'/'.$path, '// changed dependency');
+                $this->assertNotSame($first['source_hash'], $manifest->current()['source_hash'], $path);
+                file_put_contents($root.'/'.$path, $original);
+                $this->assertSame($first, $manifest->current(), $path);
+            }
         });
     }
 
