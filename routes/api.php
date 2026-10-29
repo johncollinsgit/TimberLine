@@ -88,6 +88,8 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::get('/work/{kind}/{resource}', [EverbranchMobileController::class, 'workDetail'])->middleware('abilities:mobile:read')->whereIn('kind', ['orders', 'jobs', 'clients'])->whereNumber('resource')->name('workspace.work.show');
                 Route::get('/field-service', [EverbranchMobileFieldServiceController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.field-service.index');
                 Route::get('/field-service/invoices', [EverbranchMobileInvoiceController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.field-service.invoices.index');
+                Route::post('/field-service/invoices/preview', \App\Http\Controllers\Mobile\EverbranchMobileInvoicePreviewController::class)
+                    ->middleware(['module:field_service', 'abilities:mobile:write', 'throttle:20,1'])->name('workspace.field-service.invoices.preview');
                 Route::get('/field-service/address-suggestions', [EverbranchMobileInvoiceController::class, 'addressSuggestions'])->middleware(['abilities:mobile:read', 'throttle:30,1'])->name('workspace.field-service.address-suggestions');
                 Route::get('/class-scheduling', [EverbranchMobileClassSchedulingController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.class-scheduling.index');
                 Route::get('/class-scheduling/classes/{scheduledClass}', [EverbranchMobileClassSchedulingController::class, 'show'])->middleware('abilities:mobile:read')->whereNumber('scheduledClass')->name('workspace.class-scheduling.show');
@@ -116,7 +118,9 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::get('/field-service/web/materials', [\App\Http\Controllers\Mobile\FieldWebController::class, 'materials'])->middleware('abilities:mobile:read');
                 Route::put('/field-service/web/job-order', [\App\Http\Controllers\Mobile\FieldWebController::class, 'saveOrder'])->middleware('abilities:mobile:write');
                 Route::post('/field-service/web/assistant', [\App\Http\Controllers\Mobile\FieldWebController::class, 'assistant'])->middleware(['abilities:mobile:write', 'throttle:10,1,field-crew-assistant:']);
+                Route::post('/field-service/web/invoice-draft-assistant', [\App\Http\Controllers\Mobile\FieldWebController::class, 'invoiceDraftAssistant'])->middleware(['abilities:mobile:write', 'throttle:10,1,field-invoice-draft:']);
                 Route::post('/field-service/web/assistant/live', [\App\Http\Controllers\Mobile\FieldWebController::class, 'liveAssistant'])->middleware(['abilities:mobile:write', 'throttle:10,1,field-crew-live:']);
+                Route::post('/field-service/web/assistant/live-invoice-draft', [\App\Http\Controllers\Mobile\FieldWebController::class, 'liveInvoiceDraftAssistant'])->middleware(['abilities:mobile:write', 'throttle:10,1,field-invoice-live:']);
                 Route::post('/field-service/web/assistant/live/close', [\App\Http\Controllers\Mobile\FieldWebController::class, 'closeLiveAssistant'])->middleware(['abilities:mobile:write', 'throttle:30,1,field-crew-live-close:']);
                 Route::get('/field-service/my-day', [EverbranchMobileFieldServiceController::class, 'myDay'])->middleware('abilities:mobile:read')->name('workspace.field-service.my-day');
                 Route::get('/field-service/tasks', [EverbranchMobileFieldServiceController::class, 'tasks'])->middleware('abilities:mobile:read')->name('workspace.field-service.tasks.index');
