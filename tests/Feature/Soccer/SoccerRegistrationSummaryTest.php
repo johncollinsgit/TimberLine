@@ -38,9 +38,9 @@ it('emails both organizers once per signup and confirmed payment with cumulative
     expect($messages)->toHaveCount(3);
     foreach (['john@example.com', 'sarah@example.com'] as $recipient) {
         $message = $messages->first(fn ($message) => $message->getTo()[0]->getAddress() === $recipient);
-        expect($message->getSubject())->toContain('New family registration', 'Example Parent');
+        expect($message->getSubject())->toContain('Family application received', 'Example Parent');
         expect($message->getHtmlBody())->toContain('Avery', 'Riley', 'Blue Dragons', 'Green Bears', 'Season tally', '$0.00')->not->toContain('private medical value');
-        expect($message->getTextBody())->toContain('Families: 1', 'Kids with spots: 2', 'Not paid: 2');
+        expect($message->getTextBody())->toContain('Families: 1', 'Confirmed places: 0', 'Temporary reservations (payment unconfirmed): 2', 'Unpaid applications (temporary + saved): 2');
     }
     $invoice = $this->store->query('invoices', $this->tenant->id)->sole();
     $payments = app(SoccerPaymentService::class);
@@ -52,7 +52,7 @@ it('emails both organizers once per signup and confirmed payment with cumulative
     $summaries = $messages->filter(fn ($message) => str_contains($message->getSubject(), 'Payment received'));
     expect($summaries)->toHaveCount(2);
     foreach ($summaries as $message) {
-        expect($message->getTextBody())->toContain('Paid: 2', 'Not paid: 0', 'Net collected: $60.00');
+        expect($message->getTextBody())->toContain('Paid: 2', 'Confirmed places: 2', 'Temporary reservations (payment unconfirmed): 0', 'Net collected: $60.00');
     }
     Http::assertNothingSent();
 });
@@ -83,7 +83,129 @@ it('emails a waitlist-only signup and suppresses recipients removed before deliv
     app(SoccerDeliveryService::class)->run($this->tenant->id);
     $messages = Mail::mailer()->getSymfonyTransport()->messages()->map(fn ($sent) => $sent->getOriginalMessage());
     expect($messages)->toHaveCount(2);
-    expect($messages->first(fn ($message) => $message->getTo()[0]->getAddress() === 'john@example.com')->getTextBody())->toContain('Kids with spots: 0', 'Waitlisted: 2');
+    expect($messages->first(fn ($message) => $message->getTo()[0]->getAddress() === 'john@example.com')->getTextBody())->toContain('Confirmed places: 0', 'Waitlisted: 2');
     expect($this->store->query('deliveries', $this->tenant->id)->where('error', 'admin_recipient_removed')->count())->toBe(1);
     Http::assertNothingSent();
+});
+
+it('keeps expired saved applications out of occupied places and renders matching team totals', function () {
+    $registration = app(SoccerRegistrationService::class);
+    $registration->register($this->tenant->id, $this->family, $this->input);
+    $event = $this->store->query('events', $this->tenant->id)->where('action', 'family_registration_submitted')->sole();
+    $this->travel(31)->minutes();
+    $registration->tick($this->tenant->id, $this->season);
+    $summary = app(SoccerRegistrationSummaryService::class)->forEvent($this->tenant->id, $event);
+    expect($summary['totals'])->toMatchArray(['children' => 0, 'confirmed' => 0, 'reserved' => 0, 'pending' => 2, 'unpaid' => 2, 'waiting' => 0, 'net_cents' => 0]);
+    foreach (['confirmed', 'reserved', 'pending', 'paid', 'waived'] as $metric) {
+        expect(array_sum(array_column($summary['groups'], $metric)))->toBe($summary['totals'][$metric]);
+    }
+    expect(array_column($summary['children'], 'status'))->toBe(array_fill(0, 2, 'Application saved - no spot reserved; payment unconfirmed'));
+    foreach (['registration-summary', 'registration-summary-text'] as $view) {
+        $body = view('emails.soccer.'.$view, ['summary' => $summary])->render();
+        expect($body)->toContain('0', '2', 'no spot reserved; payment unconfirmed')->not->toContain('Kids with spots', 'Payment due');
+    }
+    Http::assertNothingSent();
+});
+
+it('renders current payment facts when payment precedes delivery of the signup notice', function () {
+    app(SoccerRegistrationService::class)->register($this->tenant->id, $this->family, $this->input);
+    $invoice = $this->store->query('invoices', $this->tenant->id)->sole();
+    app(SoccerPaymentService::class)->paid($this->tenant->id, $invoice->id, 'stripe', 'intent:fictional-race', 6000, []);
+    app(SoccerPaymentService::class)->paid($this->tenant->id, $invoice->id, 'stripe', 'intent:fictional-race', 6000, []);
+    app(SoccerDeliveryService::class)->run($this->tenant->id);
+    app(SoccerDeliveryService::class)->run($this->tenant->id);
+    $messages = Mail::mailer()->getSymfonyTransport()->messages()->map(fn ($sent) => $sent->getOriginalMessage());
+    expect($messages->filter(fn ($message) => $message->getTo()[0]->getAddress() === 'john@example.com'))->toHaveCount(2);
+    $signup = $messages->first(fn ($message) => str_contains($message->getSubject(), 'Family application received'));
+    expect($signup->getTextBody())->toContain('Confirmed places: 2', 'Temporary reservations (payment unconfirmed): 0', 'Confirmed - paid', 'Net collected: $60.00');
+    expect($this->store->query('payments', $this->tenant->id)->count())->toBe(1);
+});
+
+it('does not confirm late duplicate payments against a released reservation', function () {
+    app(SoccerRegistrationService::class)->register($this->tenant->id, $this->family, $this->input);
+    $invoice = $this->store->query('invoices', $this->tenant->id)->sole();
+    $this->travel(31)->minutes();
+    app(SoccerRegistrationService::class)->tick($this->tenant->id, $this->season);
+    app(SoccerPaymentService::class)->paid($this->tenant->id, $invoice->id, 'stripe', 'intent:fictional-late', 6000, []);
+    app(SoccerPaymentService::class)->paid($this->tenant->id, $invoice->id, 'stripe', 'intent:fictional-late', 6000, []);
+    $event = $this->store->query('events', $this->tenant->id)->where('action', 'family_registration_submitted')->sole();
+    $summary = app(SoccerRegistrationSummaryService::class)->forEvent($this->tenant->id, $event);
+    expect($summary['totals'])->toMatchArray(['confirmed' => 0, 'pending' => 2, 'paid' => 0, 'net_cents' => 0]);
+    expect($this->store->query('events', $this->tenant->id)->where('action', 'payment_confirmed')->exists())->toBeFalse();
+    expect($this->store->query('events', $this->tenant->id)->where('action', 'payment_needs_review')->count())->toBe(1);
+    expect($this->store->query('payments', $this->tenant->id)->count())->toBe(1);
+});
+
+it('previews and sends one correction to only the accepted original organizer recipient', function () {
+    app(SoccerRegistrationService::class)->register($this->tenant->id, $this->family, $this->input);
+    app(SoccerDeliveryService::class)->run($this->tenant->id);
+    $original = $this->store->query('deliveries', $this->tenant->id)->get()->first(fn ($row) => ($this->store->decrypt($row->payload)['email'] ?? null) === 'john@example.com');
+    $before = $this->store->query('deliveries', $this->tenant->id)->count();
+    $this->artisan('soccer:correct-registration-summary', ['delivery' => $original->id, '--recipient' => 'john@example.com'])->assertSuccessful();
+    expect($this->store->query('deliveries', $this->tenant->id)->count())->toBe($before);
+    // Leave an unrelated new notification pending; correction must not drain it.
+    $unrelated = app(\App\Services\Soccer\SoccerEvents::class)->record($this->tenant->id, null, $this->family, 'test_unrelated', [], familyText: 'Unrelated pending notice');
+    $args = ['delivery' => $original->id, '--recipient' => 'john@example.com', '--apply' => true];
+    $this->artisan('soccer:correct-registration-summary', $args)->assertSuccessful();
+    $this->artisan('soccer:correct-registration-summary', $args)->expectsOutputToContain('No new send attempted')->assertSuccessful();
+    $messages = Mail::mailer()->getSymfonyTransport()->messages()->map(fn ($sent) => $sent->getOriginalMessage());
+    $corrections = $messages->filter(fn ($message) => str_contains($message->getSubject(), 'Corrected registration summary'));
+    expect($corrections)->toHaveCount(1);
+    $message = $corrections->first();
+    expect(array_map(fn ($address) => $address->getAddress(), $message->getTo()))->toBe(['john@example.com']);
+    expect($message->getCc())->toBe([])->and($message->getBcc())->toBe([]);
+    expect($message->getTextBody())->toContain('Correction to the original', 'Confirmed places: 0', 'Temporary reservations (payment unconfirmed): 2');
+    expect($this->store->query('deliveries', $this->tenant->id)->where('event_id', $unrelated)->sole()->status)->toBe('pending');
+});
+
+it('refuses a correction to the parent or an unaccepted original delivery', function () {
+    app(SoccerRegistrationService::class)->register($this->tenant->id, $this->family, $this->input);
+    $original = $this->store->query('deliveries', $this->tenant->id)->get()->first(fn ($row) => ($this->store->decrypt($row->payload)['email'] ?? null) === 'john@example.com');
+    $this->artisan('soccer:correct-registration-summary', ['delivery' => $original->id, '--recipient' => 'john@example.com', '--apply' => true])->assertFailed();
+    app(SoccerDeliveryService::class)->run($this->tenant->id);
+    $this->artisan('soccer:correct-registration-summary', ['delivery' => $original->id, '--recipient' => 'parent@example.com', '--apply' => true])->assertFailed();
+    config()->set('soccer.admin_notification_emails', ['sarah@example.com']);
+    $this->artisan('soccer:correct-registration-summary', ['delivery' => $original->id, '--recipient' => 'john@example.com', '--apply' => true])->assertFailed();
+    expect($this->store->query('events', $this->tenant->id)->where('action', 'registration_summary_corrected')->exists())->toBeFalse();
+});
+
+it('serializes accented names as UTF-8 in both MIME parts', function () {
+    $this->store->query('players', $this->tenant->id)->where('id', $this->children[0]['player_id'])->update(['name' => 'Fictional Núñez']);
+    app(SoccerRegistrationService::class)->register($this->tenant->id, $this->family, $this->input);
+    app(SoccerDeliveryService::class)->run($this->tenant->id);
+    $message = Mail::mailer()->getSymfonyTransport()->messages()->map(fn ($sent) => $sent->getOriginalMessage())->first(fn ($message) => $message->getTo()[0]->getAddress() === 'john@example.com');
+    $mime = $message->toString();
+    expect(substr_count(strtolower($mime), 'charset=utf-8'))->toBe(2);
+    expect(substr_count($mime, 'Content-Transfer-Encoding: base64'))->toBe(2);
+    foreach ($message->getBody()->getParts() as $part) {
+        expect(base64_decode($part->bodyToString(), true))->toContain('Fictional Núñez');
+    }
+    expect($message->getTextBody())->toContain('Fictional Núñez')->not->toContain('NÃºñez');
+    expect($message->getHtmlBody())->toContain('Fictional Núñez')->not->toContain('NÃºñez');
+});
+
+it('holds an uncertain correction without a second send on replay', function () {
+    app(SoccerRegistrationService::class)->register($this->tenant->id, $this->family, $this->input);
+    app(SoccerDeliveryService::class)->run($this->tenant->id);
+    $original = $this->store->query('deliveries', $this->tenant->id)->get()->first(fn ($row) => ($this->store->decrypt($row->payload)['email'] ?? null) === 'john@example.com');
+    Mail::partialMock()->shouldReceive('to')->with('john@example.com')->once()->andThrow(new RuntimeException('Unknown SMTP result'));
+    $args = ['delivery' => $original->id, '--recipient' => 'john@example.com', '--apply' => true];
+    $this->artisan('soccer:correct-registration-summary', $args)->expectsOutputToContain('uncertain')->assertFailed();
+    $this->artisan('soccer:correct-registration-summary', $args)->expectsOutputToContain('No new send attempted')->assertFailed();
+    $correction = $this->store->query('events', $this->tenant->id)->where('action', 'registration_summary_corrected')->sole();
+    expect($this->store->query('deliveries', $this->tenant->id)->where('event_id', $correction->id)->sole()->status)->toBe('uncertain');
+});
+
+it('distinguishes confirmed coach waivers from an unpaid sibling reservation in both notices', function () {
+    $player = $this->store->insert('players', $this->tenant->id, ['family_id' => $this->family, 'name' => 'Taylor', 'birthday' => '2018-01-01', 'profile' => $this->store->encrypt([])]);
+    $this->store->insert('releases', $this->tenant->id, ['family_id' => $this->family, 'player_id' => $player, 'season_key' => 'spring-2027', 'source_key' => Str::uuid(), 'form_version' => 'test', 'answers' => $this->store->encrypt([]), 'sha256' => str_repeat('a', 64), 'signed_at' => now()]);
+    $input = [...$this->input, 'volunteer' => true, 'coach_jersey_size' => 'Adult L', 'coach_parent' => 'mother', 'coach_name' => 'Example Parent', 'coach_teams' => ['green-bears'], 'coach_available_8_of_10' => true];
+    $input['children'][] = ['player_id' => $player, 'needs_jersey' => false];
+    app(SoccerRegistrationService::class)->register($this->tenant->id, $this->family, $input);
+    app(SoccerDeliveryService::class)->run($this->tenant->id);
+    $messages = Mail::mailer()->getSymfonyTransport()->messages()->map(fn ($sent) => $sent->getOriginalMessage());
+    $admin = $messages->first(fn ($message) => $message->getTo()[0]->getAddress() === 'john@example.com');
+    expect($admin->getTextBody())->toContain('Confirmed places: 2', 'Fee waived: 2', 'Paid: 0', 'Temporary reservations (payment unconfirmed): 1', 'Net collected: $0.00');
+    $parent = $messages->first(fn ($message) => $message->getTo()[0]->getAddress() === 'parent@example.com');
+    expect($parent->getTextBody())->toContain('waived fees have confirmed places', 'payment is not yet confirmed', 'Pay $30.00', 'application stays saved');
 });
