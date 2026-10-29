@@ -123,6 +123,7 @@ class FieldWebController extends Controller
         }
 
         abort_unless(! ($data['review_mode'] ?? false) || isset($data['context_job_id']), 422, 'Choose a job before reviewing its messages.');
+
         return response()->json($assistant->ask($tenant, $user, $data['question'], $data['request_id'], $data['history'] ?? [], $data['context_job_id'] ?? null, (bool) ($data['review_mode'] ?? false)))
             ->header('Cache-Control', 'no-store, private');
     }

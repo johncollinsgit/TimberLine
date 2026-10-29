@@ -237,6 +237,10 @@ test('reviewed material and reminder writes revalidate source revisions and mate
 
     $review = $this->postJson($base.'/web/assistant', ['question' => 'Review this job conversation.', 'request_id' => (string) Str::uuid(), 'context_job_id' => $job->id, 'review_mode' => true])->assertOk()->json();
     $payload = ['name' => 'New construction boxes', 'quantity' => 2, 'unit' => 'boxes', 'client_uuid' => (string) Str::uuid(), 'review_source_token' => $review['review_source_token']];
+    $missingQuantity = $payload;
+    unset($missingQuantity['quantity']);
+    $this->postJson($base.'/jobs/'.$job->id.'/materials/requests', $missingQuantity)->assertUnprocessable();
+    expect(\App\Models\FieldServiceMaterial::where('tenant_id', $tenant->id)->count())->toBe(0);
     $this->postJson($base.'/jobs/'.$job->id.'/materials/requests', [...$payload, 'quantity' => '1.234'])->assertUnprocessable();
     expect(\App\Models\FieldServiceMaterial::where('tenant_id', $tenant->id)->count())->toBe(0);
     $created = $this->postJson($base.'/jobs/'.$job->id.'/materials/requests', $payload)->assertCreated()->json('material');

@@ -27,14 +27,14 @@ test('review request key index repairs after partial DDL and preserves the origi
     $uuid = (string) Illuminate\Support\Str::uuid();
     $material = FieldServiceMaterial::create(['tenant_id' => $tenant->id, 'requested_by_user_id' => $user->id,
         'review_client_uuid' => $uuid, 'name' => '4 square boxes', 'quantity' => 2, 'status' => 'needed']);
-    $original = $material->getAttributes();
+    $original = (array) DB::table('field_service_materials')->where('id', $material->id)->first();
 
     Schema::table('field_service_materials', fn ($table) => $table->dropUnique('fs_material_review_idempotency_uq'));
     $migration->up();
     $migration->up();
 
     expect(Schema::hasIndex('field_service_materials', 'fs_material_review_idempotency_uq'))->toBeTrue()
-        ->and(FieldServiceMaterial::findOrFail($material->id)->getAttributes())->toBe($original);
+        ->and((array) DB::table('field_service_materials')->where('id', $material->id)->first())->toBe($original);
     try {
         FieldServiceMaterial::create(['tenant_id' => $tenant->id, 'requested_by_user_id' => $user->id,
             'review_client_uuid' => $uuid, 'name' => 'Different material', 'quantity' => 1, 'status' => 'needed']);

@@ -190,11 +190,18 @@ class FieldCrewAssistant
         $allowed = collect($messageSources)->pluck('id')->map(fn ($id): int => (int) $id)->all();
         $citations = fn ($ids): array => collect(is_array($ids) ? $ids : [])->map(fn ($id): int => (int) $id)->filter(fn ($id) => in_array($id, $allowed, true))->unique()->values()->all();
         $materials = collect($data['materials'])->take(12)->map(function ($item) use ($citations): ?array {
-            if (! is_array($item) || ! is_string($item['name'] ?? null) || trim($item['name']) === '') return null;
+            if (! is_array($item) || ! is_string($item['name'] ?? null) || trim($item['name']) === '') {
+                return null;
+            }
             $qty = $item['quantity'] ?? null;
-            if ($qty !== null && (! is_numeric($qty) || (float) $qty <= 0 || (float) $qty > 999999)) $qty = null;
+            if ($qty !== null && (! is_numeric($qty) || (float) $qty <= 0 || (float) $qty > 999999)) {
+                $qty = null;
+            }
             $ids = $citations($item['source_message_ids'] ?? []);
-            if ($ids === []) return null;
+            if ($ids === []) {
+                return null;
+            }
+
             return ['name' => mb_substr(trim($item['name']), 0, 255), 'quantity' => $qty === null ? null : (float) $qty,
                 'unit' => is_string($item['unit'] ?? null) ? mb_substr(trim($item['unit']), 0, 40) : null, 'source_message_ids' => $ids];
         })->filter()->values()->all();

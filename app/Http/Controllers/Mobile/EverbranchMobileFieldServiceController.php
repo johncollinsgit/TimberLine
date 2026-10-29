@@ -1102,7 +1102,7 @@ class EverbranchMobileFieldServiceController extends Controller
         abort_unless($access->canAccessJob($user, $tenantModel, $job) && $access->canUpdateProgress($user, $tenantModel, $job), 403);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'quantity' => ['sometimes', 'required_with:client_uuid,review_source_token', 'numeric', 'min:0.01', 'max:999999'],
+            'quantity' => ['required_with:client_uuid,review_source_token', 'numeric', 'min:0.01', 'max:999999'],
             'unit' => ['sometimes', 'nullable', 'string', 'max:40'],
             'client_uuid' => ['sometimes', 'required_with:review_source_token', 'uuid'], 'review_source_token' => ['required_with:client_uuid', 'string', 'max:12000'],
         ]);
@@ -1111,6 +1111,7 @@ class EverbranchMobileFieldServiceController extends Controller
         $reviewQuantity = (float) ($validated['quantity'] ?? 1);
         $reviewUnit = filled($validated['unit'] ?? null) ? trim((string) $validated['unit']) : null;
         if ($reviewKey !== null) {
+            abort_unless(isset($validated['quantity']), 422, 'Enter a quantity before adding this material.');
             abort_unless(preg_match('/^\d+(?:\.\d{1,2})?$/', (string) $validated['quantity']) === 1,
                 422, 'Use at most two decimal places for the quantity.');
             $existing = FieldServiceMaterial::query()->where('tenant_id', $tenantModel->id)
@@ -1126,7 +1127,6 @@ class EverbranchMobileFieldServiceController extends Controller
             }
         }
         if (isset($validated['client_uuid'])) {
-            abort_unless(isset($validated['quantity']), 422, 'Enter a quantity before adding this material.');
             app(\App\Services\FieldService\FieldCrewAssistant::class)->assertReviewSourceToken(
                 (string) $validated['review_source_token'], $tenantModel, $user, (int) $job->id, (int) \App\Models\TeamChannel::query()
                     ->where('tenant_id', $tenantModel->id)->where('field_service_job_id', $job->id)->where('kind', 'job')->whereNull('archived_at')->value('id')
