@@ -16,19 +16,29 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 class FieldCrewLiveVoice
 {
     private const MAX_SECONDS = 600;
+
     private const MICROS_PER_MINUTE = 50000;
+
     private const MAX_RESERVATION_MICROS = 500000;
 
-    public function start(Tenant $tenant, User $user, string $sdp): array
+    public function start(Tenant $tenant, User $user, string $sdp, bool $invoiceDraft = false): array
     {
         app(FieldCrewAssistant::class)->authorize($tenant, $user);
+        if ($invoiceDraft) {
+            abort_unless(app(\App\Services\Tenancy\TenantFinancialAccess::class)->allows($user, $tenant), 403,
+                'Invoice preparation is limited to workspace financial admins.');
+        }
         $apiKey = trim((string) config('ai_branch.api_key'));
         abort_unless($apiKey !== '', 503, 'Workspace AI provider setup needs review.');
         $reservationId = (string) Str::uuid();
 
-        $event = DB::transaction(function () use ($tenant, $user, $reservationId): TenantAiUsageEvent {
+        $event = DB::transaction(function () use ($tenant, $user, $reservationId, $invoiceDraft): TenantAiUsageEvent {
             AiBranchAccount::where('tenant_id', $tenant->id)->lockForUpdate()->firstOrFail();
             $authority = app(FieldCrewAssistant::class)->authorize($tenant, $user);
+            if ($invoiceDraft) {
+                abort_unless(app(\App\Services\Tenancy\TenantFinancialAccess::class)->allows($user, $tenant), 403,
+                    'Invoice preparation is limited to workspace financial admins.');
+            }
             app(FieldCrewAssistant::class)->assertMonthlyBudget($tenant, self::MAX_RESERVATION_MICROS);
 
             return TenantAiUsageEvent::create([
@@ -40,17 +50,19 @@ class FieldCrewLiveVoice
             ]);
         }, 3);
 
-        $instructions = 'You are the signed-in company’s live Everbranch field work assistant. Speak naturally, warmly, and briefly, like a helpful coworker on a call. You can hear the user interrupt and correct you; acknowledge corrections and keep context across turns. Greet the user and ask how you can help. For questions about company work, current clocks, hours, jobs, tasks, materials, or to open a job or app page, delegate to the workspace application so it can check current records and permissions. Never guess workspace facts. If the user asks to open something, delegate and let the app open only destinations it confirms. Customer records and contact details are admin-only. Do not claim that you changed records, clocked anyone in or out, sent a message, or ordered anything. The workspace application can answer questions and navigate, but this voice session has no write controls. For general conversation, answer briefly without searching workspace data.';
+        $instructions = $invoiceDraft
+            ? 'You are a live voice assistant helping a workspace financial admin prepare an editable invoice preview. Speak naturally, briefly, and conversationally. Ask for missing customer name, email, work description, quantity, unit price, provider, memo, or due date; do not guess or invent any value. When the user gives invoice details, delegate to the workspace application so it can validate and update the current editable draft. Keep context across turns and corrections. Never claim that an invoice was saved, issued, sent, charged, synced, or paid. This screen only prepares a reviewable preview and has no write controls.'
+            : 'You are the signed-in company’s live Everbranch field work assistant. Speak naturally, warmly, and briefly, like a helpful coworker on a call. You can hear the user interrupt and correct you; acknowledge corrections and keep context across turns. Greet the user and ask how you can help. For questions about company work, current clocks, hours, jobs, tasks, materials, or to open a job or app page, delegate to the workspace application so it can check current records and permissions. Never guess workspace facts. If the user asks to open something, delegate and let the app open only destinations it confirms. Customer records and contact details are admin-only. Do not claim that you changed records, clocked anyone in or out, sent a message, or ordered anything. The workspace application can answer questions and navigate, but this voice session has no write controls. For general conversation, answer briefly without searching workspace data.';
 
         try {
             $response = Http::withToken($apiKey)->withHeaders(['OpenAI-Safety-Identifier' => hash('sha256', 'everbranch-field-user:'.$user->id)])
                 ->acceptJson()->timeout(35)->post('https://api.openai.com/v1/live/sessions', [
-                'session' => [
-                    'model' => 'gpt-live-1', 'instructions' => $instructions, 'delegation' => ['type' => 'client'],
-                    'audio' => ['output' => ['voice' => 'marin']], 'store' => false,
-                ],
-                'transport' => ['type' => 'webrtc', 'sdp' => $sdp],
-            ]);
+                    'session' => [
+                        'model' => 'gpt-live-1', 'instructions' => $instructions, 'delegation' => ['type' => 'client'],
+                        'audio' => ['output' => ['voice' => 'marin']], 'store' => false,
+                    ],
+                    'transport' => ['type' => 'webrtc', 'sdp' => $sdp],
+                ]);
         } catch (\Throwable $error) {
             // The upstream may have created a session even if this server lost its response.
             $event->forceFill(['status' => 'uncertain'])->save();

@@ -128,6 +128,29 @@ class FieldWebController extends Controller
             ->header('Cache-Control', 'no-store, private');
     }
 
+    public function invoiceDraftAssistant(Request $request, \App\Services\FieldService\FieldServiceInvoiceDraftAssistant $assistant, \App\Services\Tenancy\TenantFinancialAccess $financialAccess)
+    {
+        [$tenant, $user] = $this->context($request);
+        abort_unless($financialAccess->allows($user, $tenant), 403, 'Invoice preparation is limited to workspace financial admins.');
+        $data = $request->validate([
+            'question' => ['required', 'string', 'max:3000'], 'request_id' => ['required', 'uuid'],
+            'history' => ['sometimes', 'array', 'max:8'], 'history.*.role' => ['required', 'in:user,assistant'],
+            'history.*.text' => ['required', 'string', 'max:3000'],
+            'current_draft' => ['required', 'array'],
+            'current_draft.customer_name' => ['nullable', 'string', 'max:160'],
+            'current_draft.customer_email' => ['nullable', 'email', 'max:254'],
+            'current_draft.invoice_provider' => ['required', 'in:everbranch_pay,quickbooks'],
+            'current_draft.due_date' => ['nullable', 'date_format:Y-m-d'], 'current_draft.memo' => ['nullable', 'string', 'max:2000'],
+            'current_draft.line_items' => ['present', 'array', 'max:20'],
+            'current_draft.line_items.*.description' => ['required', 'string', 'max:500'],
+            'current_draft.line_items.*.quantity' => ['nullable', 'integer', 'min:1', 'max:10000'],
+            'current_draft.line_items.*.unit_amount_cents' => ['nullable', 'integer', 'min:0', 'max:999999999'],
+        ]);
+
+        return response()->json($assistant->prepare($tenant, $user, $data['question'], $data['request_id'], $data['history'] ?? [], $data['current_draft']))
+            ->header('Cache-Control', 'no-store, private');
+    }
+
     public function liveAssistant(Request $request, \App\Services\FieldService\FieldCrewLiveVoice $voice)
     {
         [$tenant, $user] = $this->context($request);
@@ -138,6 +161,23 @@ class FieldWebController extends Controller
         }]]);
 
         return response()->json($voice->start($tenant, $user, $data['sdp']))->header('Cache-Control', 'no-store, private');
+    }
+
+    public function liveInvoiceDraftAssistant(Request $request, \App\Services\FieldService\FieldCrewLiveVoice $voice, \App\Services\Tenancy\TenantFinancialAccess $financialAccess)
+    {
+        [$tenant, $user] = $this->context($request);
+        abort_unless($financialAccess->allows($user, $tenant), 403, 'Invoice preparation is limited to workspace financial admins.');
+        $data = $request->validate(['sdp' => ['required', 'string', 'max:180000', static function (string $attribute, mixed $value, \Closure $fail): void {
+            if (! is_string($value) || ! str_starts_with($value, "v=0\r\n")
+                || ! str_contains($value, "\r\nt=") || preg_match('/\r\nm=[^\r\n]+(?:\r\n|$)/', $value) !== 1) {
+                $fail('A complete WebRTC offer is required.');
+            }
+        }]]);
+
+        // Laravel trims terminal CRLF from JSON strings globally; restore the SDP line ending before forwarding.
+        $sdp = str_ends_with($data['sdp'], "\r\n") ? $data['sdp'] : $data['sdp']."\r\n";
+
+        return response()->json($voice->start($tenant, $user, $sdp, invoiceDraft: true))->header('Cache-Control', 'no-store, private');
     }
 
     public function closeLiveAssistant(Request $request, \App\Services\FieldService\FieldCrewLiveVoice $voice)
