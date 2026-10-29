@@ -115,6 +115,49 @@ class TenantBrandProfileService
         ];
     }
 
+    /**
+     * Build a branded preview without creating or updating a tenant profile.
+     * Unlike presentationFor(), this method is safe for read-only previews.
+     *
+     * @return array<string,mixed>
+     */
+    public function previewPresentationFor(Tenant $tenant): array
+    {
+        $profile = $tenant->brandProfile()->first();
+        $default = $this->defaultAttributes($tenant);
+        $lightPath = trim((string) ($profile?->light_logo_path ?: $default['light_logo_path']));
+        $darkPath = trim((string) ($profile?->dark_logo_path ?: $default['dark_logo_path'] ?: $lightPath));
+        $lightSource = (string) data_get($profile?->asset_sources, 'light_logo', 'bundled');
+        $darkSource = (string) data_get($profile?->asset_sources, 'dark_logo', 'bundled');
+
+        return [
+            'display_name' => trim((string) ($profile?->display_name ?: $default['display_name'])) ?: (string) $tenant->name,
+            'tagline' => trim((string) ($profile?->tagline ?: $default['tagline'] ?? '')) ?: null,
+            'light_logo_url' => $this->previewAssetUrl($profile, 'light_logo', $lightPath, $lightSource),
+            'dark_logo_url' => $this->previewAssetUrl($profile, 'dark_logo', $darkPath, $darkSource),
+            'primary_color' => $this->normalizedHex((string) ($profile?->primary_color ?: $default['primary_color']), (string) $default['primary_color']),
+            'accent_color' => $this->normalizedHex((string) ($profile?->accent_color ?: $default['accent_color']), (string) $default['accent_color']),
+            'surface_color' => $this->normalizedHex((string) ($profile?->surface_color ?: $default['surface_color']), (string) $default['surface_color']),
+            'text_color' => $this->normalizedHex((string) ($profile?->text_color ?: $default['text_color']), (string) $default['text_color']),
+        ];
+    }
+
+    protected function previewAssetUrl(?TenantBrandProfile $profile, string $slot, string $path, string $source): ?string
+    {
+        if ($path === '') {
+            return null;
+        }
+        if ($source === 'upload' && $profile) {
+            return route('tenant.brand.assets.show', [
+                'profile' => $profile->getKey(),
+                'slot' => $slot,
+                'v' => $profile->updated_at?->getTimestamp() ?? $profile->getKey(),
+            ]);
+        }
+
+        return asset(ltrim($path, '/'));
+    }
+
     /** @param array<string,mixed> $attributes */
     public function update(TenantBrandProfile $profile, array $attributes, User $actor): TenantBrandProfile
     {
