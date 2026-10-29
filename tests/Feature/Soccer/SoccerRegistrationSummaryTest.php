@@ -170,7 +170,7 @@ it('refuses a correction to the parent or an unaccepted original delivery', func
 });
 
 it('serializes accented names as UTF-8 in both MIME parts', function () {
-    $this->store->query('players', $this->tenant->id)->where('id', $this->children[0]['player_id'])->update(['name' => 'Avia Sánchez']);
+    $this->store->query('players', $this->tenant->id)->where('id', $this->children[0]['player_id'])->update(['name' => 'Fictional Núñez']);
     app(SoccerRegistrationService::class)->register($this->tenant->id, $this->family, $this->input);
     app(SoccerDeliveryService::class)->run($this->tenant->id);
     $message = Mail::mailer()->getSymfonyTransport()->messages()->map(fn ($sent) => $sent->getOriginalMessage())->first(fn ($message) => $message->getTo()[0]->getAddress() === 'john@example.com');
@@ -178,10 +178,10 @@ it('serializes accented names as UTF-8 in both MIME parts', function () {
     expect(substr_count(strtolower($mime), 'charset=utf-8'))->toBe(2);
     expect(substr_count($mime, 'Content-Transfer-Encoding: base64'))->toBe(2);
     foreach ($message->getBody()->getParts() as $part) {
-        expect(base64_decode($part->bodyToString(), true))->toContain('Avia Sánchez');
+        expect(base64_decode($part->bodyToString(), true))->toContain('Fictional Núñez');
     }
-    expect($message->getTextBody())->toContain('Avia Sánchez')->not->toContain('SÃ¡nchez');
-    expect($message->getHtmlBody())->toContain('Avia Sánchez')->not->toContain('SÃ¡nchez');
+    expect($message->getTextBody())->toContain('Fictional Núñez')->not->toContain('NÃºñez');
+    expect($message->getHtmlBody())->toContain('Fictional Núñez')->not->toContain('NÃºñez');
 });
 
 it('holds an uncertain correction without a second send on replay', function () {
