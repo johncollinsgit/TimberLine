@@ -11,6 +11,7 @@ Route::get('/team/integrations/{provider}/callback', [\App\Http\Controllers\Team
 Route::middleware(['auth', 'verified', 'tenant.access', \App\Http\Middleware\EnsureTeamWorkViewer::class, 'throttle:120,1'])->group(function (): void {
     Route::get('/teams', [TeamWorkController::class, 'app'])->name('team.app');
     Route::prefix('team')->name('team.')->group(function (): void {
+        Route::get('/search', \App\Http\Controllers\TeamSearchController::class)->withoutMiddleware('throttle:120,1')->middleware('throttle:team-search')->name('search');
         Route::controller(\App\Http\Controllers\TeamOperationsController::class)->name('operations.')->group(function (): void {
             Route::get('/areas', 'areas')->name('areas');
             Route::post('/areas', 'createArea')->name('areas.create');

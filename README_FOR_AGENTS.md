@@ -1,3 +1,13 @@
+## Native Teams global search (2026-10-29; source candidate)
+
+Read `docs/operations/teams-global-search.md` before changing search. Preserve
+tenant/user/object/field permissions, encrypted payloads, keyed lookup tokens and
+the default-off `TEAM_WORK_SEARCH_ENABLED` gate. Rebuilds never infer current
+authority for legacy source snapshots. The campus palette uses only its current
+fictional projection, and commands open existing reviewed forms. Shared asset
+changes require the deterministic campus embed step and search/browser regressions.
+Do not upgrade archived private editions or claim production activation from source.
+
 ## Private proposal conversation simulation (source candidate)
 
 Current private browser-sample editions can demonstrate context-aware job

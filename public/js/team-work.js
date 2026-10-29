@@ -189,6 +189,7 @@
       if (data.workspace?.id !== root.dataset.workspaceId) throw new Error('Workspace response did not match this page. Reload to verify access.');
       acceptedFilters = Object.fromEntries(filterIds.map(id => [id, $(id).value]));
       projects = data.projects; members = data.members; renderProjectResults(data.project_search); syncSurfaceLinks();
+      document.dispatchEvent(new Event('team:search-refresh'));
       canUseTemplates = data.can_create_project; templateCatalog = projects.flatMap(project => (project.templates || []).map(template => ({ ...template, project, choice: project.id + '/' + template.id }))); $('templates').disabled = !templateCatalog.length;
       $('home').hidden = $('mode').value !== 'home';
       for (const control of ['layout', 'completion']) $(control).closest('label').hidden = ['home', 'inbox'].includes($('mode').value); $('home-counts').replaceChildren();
@@ -517,7 +518,7 @@
     taskFiles = result.files; $('files').replaceChildren();
     const labels = { uploading: 'Upload paused - select the same file to resume.', quarantined: 'Stored privately. Awaiting security scan; download is unavailable.', rejected: 'Security or file validation failed; download is unavailable.', ready: 'Available to authorized collaborators.' };
     for (const file of taskFiles) {
-      const row = element('div', '', 'comment'); row.append(element('p', file.filename), element('p', labels[file.status] || file.status, 'muted'));
+      const row = element('div', '', 'comment'); row.dataset.fileId = file.id; row.append(element('p', file.filename), element('p', labels[file.status] || file.status, 'muted'));
       if (file.downloadable) { const link = element('a', 'Download attachment'); link.href = url(root.dataset.filesUrl + '/' + file.id + '/download'); link.target = '_blank'; link.rel = 'noopener'; row.append(link); }
       if (file.can_manage && ['uploading', 'quarantined', 'rejected'].includes(file.status)) {
         const cancel = element('button', 'Cancel upload'); cancel.type = 'button'; cancel.onclick = async () => { try { await request(root.dataset.filesUrl + '/' + file.id, { method: 'DELETE', headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content } }); await loadFiles(taskId); } catch (error) { status(error.message); } }; row.append(cancel);
@@ -722,6 +723,7 @@
     $('new-task').disabled = true; $('new-project').disabled = true; $('templates').disabled = true; $('edit-project').hidden = true;
   }
   function sealCore(retained = null) {
+    document.dispatchEvent(new Event('team:access-lost'));
     premium?.reset();
     if (!coreAccessBlocked) coreStash = retained || (coreRefreshing ? coreStash : captureCore()) || coreStash;
     coreAccessBlocked = true; coreEpoch++; coreClosed = null; clearCoreOriginals(); freezeCore(true); coreNotice();
@@ -855,6 +857,27 @@
     page = 1; projectSearchPage = 1; clearDetail(); load();
   };
   const appCreate = document.getElementById('teams-create'); if (appCreate) appCreate.onclick = () => { if (workspaceReady()) createTask(); };
+  window.TeamSearchBridge = {
+    available: () => !workspaceNavigating && !coreAccessBlocked && !!members.length,
+    request,
+    readyToNavigate: () => coreNavigationReady() && workspaceReady(),
+    async open(target, current = () => true) {
+      if (!coreNavigationReady() || !workspaceReady()) return false;
+      if (target.kind === 'task') { await openTask(target.id); if (!current()) return false; if (target.file) { document.getElementById('teams-tab-files')?.click(); [...$('files').children].find(row => row.dataset.fileId === target.file)?.scrollIntoView({ block: 'nearest' }); } return true; }
+      if (target.kind === 'project') { enterProject(target.id); await load(); await openOverview(target.id); return true; }
+      if (target.kind === 'navigate') {
+        const button = document.querySelector('[data-team-mode="' + target.id + '"]');
+        if (button) button.click(); else { $('mode').value = target.id; $('mode').dispatchEvent(new Event('change')); }
+        return true;
+      }
+      if (target.kind === 'create-task') { createTask(); return true; }
+      if (target.kind === 'create-project') { editProject(); return true; }
+      if (target.kind === 'area' && window.TeamOperations) { await window.TeamOperations.area(target.area); return true; }
+      if (target.kind === 'operation' && window.TeamOperations) { await window.TeamOperations.open(target.area, target.id); return true; }
+      if (target.kind === 'create-operation' && window.TeamOperations) { await window.TeamOperations.create(target.area); return true; }
+      throw new Error('This workspace tool is not ready. Try again after it finishes loading.');
+    },
+  };
   installCoreGuard();
   (async () => {
     const initialTask = root.dataset.initialTask, initialComment = root.dataset.initialComment, initialProject = root.dataset.initialProject;

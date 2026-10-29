@@ -935,6 +935,40 @@ final class WorkGraph
         }
     }
 
+    /** Minimal search-only projection under the same canonical object and field policies as read(). */
+    public function searchProjection(array $state, array $actor, string $type, string $id): ?array
+    {
+        $this->authorize($actor);
+        if ($type === 'project') {
+            $project = $state['projects'][$id] ?? null;
+            if (! $project || ! $this->projectAccess($project, $actor)) {
+                return null;
+            }
+
+            return array_intersect_key($project, array_flip(['id', 'name', 'description', 'owner_id', 'archived', 'updated_at', 'current_status']));
+        }
+        $task = $state['tasks'][$id] ?? null;
+        if (! $task || ! $this->taskAccess($state, $task, $actor)) {
+            return null;
+        }
+        $result = array_intersect_key($task, array_flip(['id', 'title', 'description', 'assignee_id', 'creator_id', 'completed_at', 'updated_at']));
+        $result['memberships'] = [];
+        foreach ($task['memberships'] as $projectId => $membership) {
+            if (isset($state['projects'][$projectId]) && $this->projectAccess($state['projects'][$projectId], $actor)) {
+                $result['memberships'][$projectId] = $membership;
+            }
+        }
+        $result['custom_fields'] = array_intersect_key($task['custom_fields'] ?? [], $result['memberships']);
+        $result['comments'] = [];
+        foreach ($task['comments'] as $comment) {
+            if (empty($comment['deleted_at'])) {
+                $result['comments'][] = ['body' => $comment['body']];
+            }
+        }
+
+        return $result;
+    }
+
     public function search(array $state, array $actor, string $query = '', bool $mine = false, bool $includeCompleted = false): array
     {
         $this->authorize($actor);

@@ -16,6 +16,6 @@ class TeamSourceSnapshot extends Model
 
     protected function casts(): array
     {
-        return ['payload' => 'encrypted:array', 'observed_at' => 'datetime'];
+        return ['payload' => 'encrypted:array', 'observed_at' => 'datetime', 'search_generation' => 'integer', 'search_observed_at' => 'datetime'];
     }
 }

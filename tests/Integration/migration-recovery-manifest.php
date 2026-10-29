@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_29_150000_create_team_search_index.php' => [
+        'test' => 'tests/Integration/TeamSearchMySqlRecoveryTest.php',
+        'scenarios' => ['encrypted documents and checkpoints survive missing terms table', 'named lookup and document indexes recover without replacing rows', 'completed DDL replay remains idempotent'],
+    ],
     '2026_10_28_223000_add_field_material_review_idempotency.php' => [
         'test' => 'tests/Integration/FieldMaterialReviewMySqlRecoveryTest.php',
         'scenarios' => ['the idempotency UUID column and unique tenant/user index recover independently after partial DDL and repeated execution preserves requests'],

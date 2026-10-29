@@ -66,6 +66,8 @@ class AppServiceProvider extends ServiceProvider
 
     protected function configureDefaults(): void
     {
+        \App\Models\TeamOperationRecord::observe(\App\Observers\TeamSearchObserver::class);
+        \Illuminate\Support\Facades\RateLimiter::for('team-search', fn ($request) => \Illuminate\Cache\RateLimiting\Limit::perMinute(240)->by((string) $request->user()?->id.':'.(string) $request->attributes->get('current_tenant')?->id));
         MarketingReviewHistory::observe(MarketingReviewHistoryObserver::class);
         MarketingProfile::observe(MarketingProfileWorkflowObserver::class);
         \App\Models\MessagingConversationMessage::observe(\App\Observers\MarketingDeskObserver::class);

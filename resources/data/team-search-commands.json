@@ -1,0 +1,6 @@
+{
+  "create-task": {"title": "Create task", "kind": "create-task"},
+  "create-project": {"title": "Create project", "kind": "create-project"},
+  "submit-request": {"title": "Submit request", "kind": "submit-request"},
+  "create-operation": {"title": "Create record", "kind": "create-operation"}
+}
