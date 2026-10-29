@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'search_enabled' => (bool) env('TEAM_WORK_SEARCH_ENABLED', false),
+    'search_index_enabled' => (bool) env('TEAM_WORK_SEARCH_INDEX_ENABLED', false),
     'premium_enabled' => (bool) env('TEAM_WORK_PREMIUM_ENABLED', false),
     'asana_enabled' => (bool) env('TEAM_WORK_ASANA_ENABLED', false),
     'asana' => [

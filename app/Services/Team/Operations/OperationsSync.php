@@ -183,7 +183,24 @@ class OperationsSync
 
     public function snapshot(TeamProviderConnection $c, string $key, array $payload): TeamSourceSnapshot
     {
-        return TeamSourceSnapshot::query()->firstOrCreate(['tenant_id' => $c->tenant_id, 'connection_id' => $c->id, 'resource_key' => hash('sha256', $key), 'checksum' => hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR))], ['id' => (string) Str::uuid(), 'payload' => $payload, 'observed_at' => now()]);
+        $snapshot = TeamSourceSnapshot::query()->firstOrCreate(['tenant_id' => $c->tenant_id, 'connection_id' => $c->id, 'resource_key' => hash('sha256', $key), 'checksum' => hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR))], ['id' => (string) Str::uuid(), 'payload' => $payload, 'observed_at' => now()]);
+        // Only a current successful source read may attest a retained snapshot's generation.
+        // Never infer this for historical evidence during a search rebuild.
+        if ((config('team_work.search_enabled') || config('team_work.search_index_enabled')) && \Illuminate\Support\Facades\Schema::hasColumn('team_source_snapshots', 'search_generation')
+            && $c->fresh()?->generation === $c->generation && $c->fresh()?->status === 'connected') {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($snapshot, $c) {
+                \Illuminate\Support\Facades\DB::table('team_work_locks')->insertOrIgnore(['tenant_id' => $c->tenant_id]);
+                \Illuminate\Support\Facades\DB::table('team_work_locks')->where('tenant_id', $c->tenant_id)->lockForUpdate()->first();
+                $current = TeamProviderConnection::where('tenant_id', $c->tenant_id)->lockForUpdate()->find($c->id);
+                if ($current?->generation !== $c->generation || $current->status !== 'connected') {
+                    return;
+                }
+                $snapshot->update(['search_generation' => $c->generation, 'search_observed_at' => now()]);
+                app(\App\Services\Team\Search\SearchDocuments::class)->indexSnapshot($snapshot);
+            });
+        }
+
+        return $snapshot;
     }
 
     public function upsert(TeamProviderConnection $c, string $kind, string $source, string $title, string $status, array $data, ?string $start = null, ?string $end = null): TeamOperationRecord

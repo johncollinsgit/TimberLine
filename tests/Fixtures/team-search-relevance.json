@@ -1,0 +1,22 @@
+{
+  "documents": [
+    {"id":"task:alpha","identifier":"J-05","type":"task","title":"Érable pipe repair","body":"Plumber will inspect the copper pipe in Avery Hall. Discussion: overnight leak.","updated_at":"2026-10-29T12:00:00Z"},
+    {"id":"task:beta","identifier":"J-06","type":"task","title":"Pipe repair","body":"Inspect the drain.","completed":true,"updated_at":"2026-10-29T11:00:00Z"},
+    {"id":"project:alpha","identifier":"P01","type":"project","title":"Avery Hall improvements","body":"Pipe repair work and plumbing inspection","updated_at":"2026-10-28T12:00:00Z"},
+    {"id":"task:gamma","identifier":"J-07","type":"task","title":"Inspection checklist","body":"Check the electrical panel.","updated_at":"2026-10-29T10:00:00Z"},
+    {"id":"command:create","type":"command","title":"Create task","body":""}
+  ],
+  "cases": [
+    {"query":"J05","ids":["task:alpha"]},
+    {"query":"erable","ids":["task:alpha"]},
+    {"query":"ERABLE pi","ids":["task:alpha"]},
+    {"query":"pipe repair","ids":["task:beta","task:alpha","project:alpha"]},
+    {"query":"plumbr","ids":["task:alpha","project:alpha"]},
+    {"query":"plubmer","ids":["task:alpha"]},
+    {"query":"inspektio","ids":["task:gamma","project:alpha"]},
+    {"query":"\"overnight leak\"","ids":["task:alpha"]},
+    {"query":"\"pipe copper\"","ids":[]},
+    {"query":"> create","ids":["command:create"]},
+    {"query":"xqzty","ids":[]}
+  ]
+}

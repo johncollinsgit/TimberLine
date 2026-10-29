@@ -1,3 +1,13 @@
+## Native Teams global search (2026-10-29; source candidate)
+
+Teams has a first-party centered instant search/command palette behind default-off
+`TEAM_WORK_SEARCH_ENABLED`. A tenant-keyed token index and encrypted display payloads
+support current-authority results, source generation checks, historical project
+updates and resumable reconciliation. The public campus demo embeds the shared
+palette without provider access. Existing view filters, private editions and draft
+guards remain. See `docs/operations/teams-global-search.md` for backfill, verification
+and rollout; source checks do not establish production activation.
+
 ## Wren registration notification correction (2026-10-29; source candidate)
 
 Organizer summaries separate confirmed places, temporary unpaid reservations,

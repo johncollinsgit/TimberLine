@@ -2845,7 +2845,7 @@ CREATE TABLE `field_service_materials` (
   `tenant_id` bigint unsigned NOT NULL,
   `field_service_job_id` bigint unsigned DEFAULT NULL,
   `requested_by_user_id` bigint unsigned DEFAULT NULL,
-  `review_client_uuid` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `review_client_uuid` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `field_material_catalog_item_id` bigint unsigned DEFAULT NULL,
   `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `quantity` decimal(10,2) NOT NULL DEFAULT '1.00',
@@ -9944,6 +9944,48 @@ CREATE TABLE `team_provider_connections` (
   UNIQUE KEY `tpc_identity` (`tenant_id`,`user_id`,`area_id`,`provider`,`account_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_search_documents`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_search_documents` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `kind` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity_id` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `schema_version` int unsigned NOT NULL,
+  `fingerprint` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `indexed_at` timestamp NOT NULL,
+  `sort_closed` tinyint(1) NOT NULL DEFAULT '0',
+  `sort_updated` bigint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `tsd_identity` (`tenant_id`,`kind`,`entity_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_search_runs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_search_runs` (
+  `tenant_id` bigint unsigned NOT NULL,
+  `schema_version` int unsigned NOT NULL DEFAULT '1',
+  `source` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'project',
+  `after_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `completed_at` timestamp NULL DEFAULT NULL,
+  `warnings` int unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_search_terms`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_search_terms` (
+  `tenant_id` bigint unsigned NOT NULL,
+  `document_id` bigint unsigned NOT NULL,
+  `token` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  UNIQUE KEY `tst_lookup` (`tenant_id`,`token`,`document_id`),
+  KEY `tst_document` (`tenant_id`,`document_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `team_source_snapshots`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -9955,6 +9997,8 @@ CREATE TABLE `team_source_snapshots` (
   `checksum` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `observed_at` timestamp NOT NULL,
+  `search_generation` int unsigned DEFAULT NULL,
+  `search_observed_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `tss_version` (`tenant_id`,`connection_id`,`resource_key`,`checksum`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -13505,3 +13549,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (313,'2026_10_27_22
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (314,'2026_10_27_223000_create_subscription_pilot_execution',38);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (315,'2026_10_28_210000_create_birthday_cycle_coverage',39);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (316,'2026_10_28_223000_add_field_material_review_idempotency',40);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (317,'2026_10_29_150000_create_team_search_index',41);

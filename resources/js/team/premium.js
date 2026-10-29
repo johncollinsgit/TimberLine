@@ -83,7 +83,7 @@ export function installPremium(root) {
     }
     $('detail-meta').after(tabs);
     tabs.addEventListener('keydown', event => { if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return; event.preventDefault(); const buttons = [...tabs.children], index = buttons.indexOf(document.activeElement); const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length; buttons[next].focus(); buttons[next].click(); });
-    new MutationObserver(() => { if ($('detail').dataset.loadedId) { tabs.firstElementChild.click(); if (!$('detail').contains(document.activeElement)) { $('detail-heading').tabIndex = -1; $('detail-heading').focus({ preventScroll: true }); } } }).observe($('detail'), { attributes: true, attributeFilter: ['data-loaded-id'] });
+    new MutationObserver(() => { if ($('detail').dataset.loadedId) { tabs.firstElementChild.click(); if (!$('detail').contains(document.activeElement) && !document.activeElement?.closest('.eb-search')) { $('detail-heading').tabIndex = -1; $('detail-heading').focus({ preventScroll: true }); } } }).observe($('detail'), { attributes: true, attributeFilter: ['data-loaded-id'] });
   }
   detailTabs();
   async function preferences(value) {
@@ -197,7 +197,7 @@ export function installPremium(root) {
     if (event.key === 'Tab' && innerWidth <= 600 && root.classList.contains('detail-open') && !$('detail').hidden && !document.querySelector('dialog[open]')) { const controls = [...$('detail').querySelectorAll('button,a[href],input,select,textarea,[tabindex="0"]')].filter(item => !item.disabled && item.getClientRects().length); if ((event.shiftKey && (document.activeElement === controls[0] || document.activeElement === $('detail-heading'))) || (!event.shiftKey && document.activeElement === controls.at(-1))) { event.preventDefault(); (event.shiftKey ? controls.at(-1) : controls[0])?.focus(); } }
     if (event.key === 'Escape') { if (document.querySelector('dialog[open]')) return; if (root.classList.contains('detail-open')) { $('draft-close').click(); focusedRow?.focus(); } document.body.classList.remove('teams-menu-open'); }
     const typing = /INPUT|TEXTAREA|SELECT/.test(event.target.tagName) || event.target.isContentEditable;
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); if (context?.ready()) $('search').focus(); }
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k' && !window.TeamSearchPalette) { event.preventDefault(); if (context?.ready()) $('search').focus(); }
     if (typing || event.metaKey || event.ctrlKey || event.altKey || document.querySelector('dialog[open]')) return;
     if (event.key === 'n' && context?.ready()) { event.preventDefault(); ctxCreate(); }
     if (['ArrowDown', 'ArrowUp'].includes(event.key) && event.target.closest('#tw-list')) { const rows = [...$('list').querySelectorAll('.task-open')]; const current = rows.indexOf(document.activeElement); event.preventDefault(); rows[Math.max(0, Math.min(rows.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)))]?.focus(); }

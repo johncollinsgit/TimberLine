@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 /** Canonical persistent graph. V1 serializes commands per tenant; all projections remain object-authorized. */
 class TeamWorkRepository
 {
-    public function state(int $tenantId): array
+    public function state(int $tenantId, bool $history = true): array
     {
         abort_unless($tenantId > 0, 403);
         $state = WorkGraph::empty();
@@ -28,6 +28,9 @@ class TeamWorkRepository
             if (isset($state['tasks'][$row->task_id], $state['projects'][$row->project_id])) {
                 $state['tasks'][$row->task_id]['memberships'][$row->project_id] = ['section_id' => $row->section_id, 'position' => (int) $row->position];
             }
+        }
+        if (! $history) {
+            return $state;
         }
         foreach (DB::table('team_work_events')->where('tenant_id', $tenantId)->orderBy('id')->get() as $row) {
             $state['events'][] = json_decode($row->payload, true, 512, JSON_THROW_ON_ERROR);
@@ -51,6 +54,7 @@ class TeamWorkRepository
             $before = $this->state($tenantId);
             $result = app(WorkGraph::class)->execute($before, $actor, $command, now()->toIso8601String());
             $this->save($tenantId, $before, $result['state']);
+            app(\App\Services\Team\Search\SearchDocuments::class)->graph($tenantId, $before, $result['state']);
             if (! $result['replayed'] && ! config('enterprise.runtime')) {
                 $this->notifications($tenantId, $actor, $command, $before, $result['state']);
             }
@@ -166,6 +170,11 @@ class TeamWorkRepository
     private function recordVersion(int $tenantId, string $type, array $entity): void
     {
         $snapshot = json_encode($entity, JSON_THROW_ON_ERROR);
+        if (DB::connection()->getDriverName() === 'mysql') {
+            // MySQL normalizes JSON key order/spacing on storage. Hash the bytes it
+            // will actually retain, so immutable history can be verified on reads.
+            $snapshot = (string) DB::scalar('SELECT CAST(? AS JSON)', [$snapshot]);
+        }
         DB::table('team_work_versions')->insert(['tenant_id' => $tenantId, 'entity_type' => $type, 'entity_id' => $entity['id'],
             'version' => $entity['version'], 'sha256' => hash('sha256', $snapshot), 'snapshot' => $snapshot, 'recorded_at' => now()]);
     }

@@ -30,6 +30,8 @@ $html = str_replace([
 
 // Match the repository's text normalization so reviewed/deployed bytes agree.
 $html = str_replace("\r\n", "\n", $html);
+require_once __DIR__.'/embed-campus-search.php';
+$html = embedCampusSearch($html);
 
 $target = __DIR__.'/../../resources/demos/lees-mcrae-campus.html';
 file_put_contents($target, $html);
