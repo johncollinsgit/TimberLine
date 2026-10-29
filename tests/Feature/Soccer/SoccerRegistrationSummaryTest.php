@@ -177,6 +177,14 @@ it('serializes accented names as UTF-8 in both MIME parts', function () {
     $mime = $message->toString();
     expect(substr_count(strtolower($mime), 'charset=utf-8'))->toBe(2);
     expect(substr_count($mime, 'Content-Transfer-Encoding: base64'))->toBe(2);
+    $trackingHeaders = iterator_to_array($message->getHeaders()->all('X-SMTPAPI'), false);
+    expect($trackingHeaders)->toHaveCount(1);
+    expect(json_decode($trackingHeaders[0]->getBodyAsString(), true, 512, JSON_THROW_ON_ERROR))->toBe([
+        'filters' => [
+            'clicktrack' => ['settings' => ['enable' => 0, 'enable_text' => false]],
+            'opentrack' => ['settings' => ['enable' => 0]],
+        ],
+    ]);
     foreach ($message->getBody()->getParts() as $part) {
         expect(base64_decode($part->bodyToString(), true))->toContain('Fictional Núñez');
     }

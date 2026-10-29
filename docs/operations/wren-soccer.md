@@ -376,6 +376,17 @@ Use the existing offline reconciliation preview with the expected family and
 amount before applying; never manufacture a new Venmo reference for an existing
 receipt.
 
+## Organizer summary encoding
+
+Organizer summary messages explicitly request UTF-8/base64 and disable SendGrid
+click/open tracking per message through `X-SMTPAPI`. Account defaults and other
+mail classes remain unchanged. The 2026-10-29 synthetic acceptance test preserved
+both UTF-8 MIME parts, accented text and the original public link with those
+filters disabled; the earlier tracked correction arrived relabeled ISO-8859-1.
+This implicates the downstream rewrite path without identifying an individual
+provider filter. Do not replay an accepted correction to test encoding. Any
+additional external test message requires specific approval.
+
 ## Rollback
 
 Close registration first. Disable soccer processing/SMS if necessary and use the
