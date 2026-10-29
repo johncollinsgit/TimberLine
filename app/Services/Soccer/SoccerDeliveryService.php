@@ -8,9 +8,9 @@ class SoccerDeliveryService
 {
     public function __construct(private SoccerStore $store) {}
 
-    public function run(int $tenant): void
+    public function run(int $tenant, ?string $deliveryId = null): void
     {
-        $ids = $this->store->query('deliveries', $tenant)->whereIn('status', ['pending', 'failed'])->where('attempts', '<', 5)->where(fn ($q) => $q->whereNull('retry_at')->orWhere('retry_at', '<=', now()))->orderBy('created_at')->limit(50)->pluck('id');
+        $ids = $this->store->query('deliveries', $tenant)->when($deliveryId !== null, fn ($q) => $q->where('id', $deliveryId))->whereIn('status', ['pending', 'failed'])->where('attempts', '<', 5)->where(fn ($q) => $q->whereNull('retry_at')->orWhere('retry_at', '<=', now()))->orderBy('created_at')->limit(50)->pluck('id');
         foreach ($ids as $id) {
             $candidate = $this->store->row('deliveries', $tenant, $id);
             $channel = $this->store->decrypt($candidate->payload)['channel'] ?? 'sms';

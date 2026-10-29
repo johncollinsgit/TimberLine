@@ -8,6 +8,17 @@ palette without provider access. Existing view filters, private editions and dra
 guards remain. See `docs/operations/teams-global-search.md` for backfill, verification
 and rollout; source checks do not establish production activation.
 
+## Wren registration notification correction (2026-10-29; source candidate)
+
+Organizer summaries separate confirmed places, temporary unpaid reservations,
+saved applications without reservations and waitlists using a season-locked
+snapshot. Parent offers explain payment confirmation and reservation expiry.
+Summary MIME is UTF-8/base64. The preview-first correction command targets one
+accepted original organizer delivery and recipient with durable replay/unknown
+outcome protection. No registration, payment or provider configuration changes.
+Follow `docs/operations/wren-soccer.md`; normal protected CI/release, current live
+evidence and one received correction remain separate acceptance requirements.
+
 ## Private proposal conversation simulation (source candidate)
 
 Current private browser-sample editions can demonstrate context-aware job

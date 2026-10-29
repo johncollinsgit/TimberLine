@@ -113,7 +113,7 @@ jobs:
 
   test_and_build:
     name: Test And Build Gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: setup
     if: needs.setup.outputs.run_full_gate == 'true'
     environment: Testing
