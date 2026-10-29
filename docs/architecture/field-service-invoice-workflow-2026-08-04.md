@@ -50,3 +50,21 @@
   always type or correct an address. The server receives normalized address
   fields, not a third-party provider identifier as a trust boundary.
 - Financial document amounts and private notes are never returned to members.
+
+## Future product direction: tenant invoice and payment experience
+
+Queued after the Collins Field web release: develop a tenant-branded invoice
+experience under Everbranch Pay, using Stripe as the payment rail, with a
+QuickBooks/provider choice for the tenant's accounting workflow, tenant-branded
+invoice templates, and an explicit review-and-send confirmation. This records
+product direction only; it does not change the existing invoice ledger, import,
+payment, or send behavior.
+
+The accounting-provider role and payment-provider role must be defined
+separately before implementation. Preserve the current tenant-scoped
+QuickBooks import and canonical `field_service_financial_documents` records.
+Do not assume QuickBooks write-back, tax or fee treatment, saved-payment
+authority, email/SMS delivery, or invoice collection behavior from this
+direction alone. Each tenant must own its branding, provider connections,
+permissions, and send confirmation. Any payment or provider activation remains
+behind the existing audited entitlement and readiness gates.
