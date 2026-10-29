@@ -142,6 +142,38 @@ waitlist offers require each waiting sibling to head its team queue.
 
 ## Organizer registration summaries (2026-10-19)
 
+### Clear payment/reservation summaries and one correction (2026-10-29)
+
+Application-received notices do not imply payment or a confirmed place. The
+summary reads one season-locked snapshot and separates registered places
+(paid or fee waived), temporary unpaid reservations, saved applications without
+reservations, and waitlists. Occupied places equal confirmed plus temporary;
+saved unpaid applications are reported separately, including in each team.
+Unknown provider outcomes keep their existing reservation/review safeguards.
+Parent offers explain payment confirmation, the deadline and saved application
+retention; fee-waived places remain confirmed without invented receipts.
+Organizer MIME parts explicitly use UTF-8/base64 for names and punctuation.
+Verify the received MIME after release; local serialization alone does not prove
+what an SMTP intermediary delivers.
+
+To correct exactly one accepted organizer email, verify its original envelope
+recipient and `X-Everbranch-Logical-Message-ID` from the original received mail.
+Check the mailbox and delivery records for an earlier correction first. Preview:
+
+```sh
+php artisan soccer:correct-registration-summary ORIGINAL_DELIVERY_UUID --recipient=VERIFIED_ORIGINAL_EMAIL
+```
+
+Inspect the family, current child statuses and totals against the actual
+registration, payment and provider evidence before adding `--apply`. The command
+requires an accepted original admin delivery and its still-allowed recipient.
+It creates one durable correction per original delivery, sends only that row
+through the existing mailer and reports its provider receipt. It does not drain
+unrelated queued notices or contact a parent. Replay does not send again, even
+when the existing result is pending, sending, suppressed or uncertain. Inspect
+those outcomes before any manual recovery. No registration/payment changes or
+mass replay are part of this procedure.
+
 `WREN_SOCCER_ADMIN_NOTIFICATION_EMAILS` is a comma-separated allowlist of the
 owner-approved organizer addresses. Each submitted family registration, including
 waitlist-only and waived registrations, queues one private HTML/plain-text email
