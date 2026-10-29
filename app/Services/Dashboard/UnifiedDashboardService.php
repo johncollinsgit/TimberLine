@@ -103,6 +103,8 @@ class UnifiedDashboardService
             ],
             'experience_profile' => $profile,
             'hero' => $hero,
+            'field_app_href' => $clientFacingFieldService && $tenant instanceof Tenant && $user instanceof User
+                && $this->fieldServiceAccess->role($user, $tenant) !== '' ? url('/field/') : null,
             'fleet_tracker' => $clientFacingFieldService && $tenant instanceof Tenant && $user instanceof User
                 && $this->fleetTrackingAccess->enabledFor($tenant)
                 && $this->fleetTrackingAccess->canView($user, $tenant)

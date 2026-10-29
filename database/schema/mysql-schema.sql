@@ -2845,6 +2845,7 @@ CREATE TABLE `field_service_materials` (
   `tenant_id` bigint unsigned NOT NULL,
   `field_service_job_id` bigint unsigned DEFAULT NULL,
   `requested_by_user_id` bigint unsigned DEFAULT NULL,
+  `review_client_uuid` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `field_material_catalog_item_id` bigint unsigned DEFAULT NULL,
   `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `quantity` decimal(10,2) NOT NULL DEFAULT '1.00',
@@ -2860,6 +2861,7 @@ CREATE TABLE `field_service_materials` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `fs_material_review_idempotency_uq` (`tenant_id`,`requested_by_user_id`,`review_client_uuid`),
   KEY `field_service_materials_field_service_job_id_foreign` (`field_service_job_id`),
   KEY `fs_materials_tenant_status_idx` (`tenant_id`,`status`),
   KEY `field_service_materials_status_index` (`status`),
@@ -13502,3 +13504,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (312,'2026_10_27_21
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (313,'2026_10_27_220000_create_wholesale_label_library',37);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (314,'2026_10_27_223000_create_subscription_pilot_execution',38);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (315,'2026_10_28_210000_create_birthday_cycle_coverage',39);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (316,'2026_10_28_223000_add_field_material_review_idempotency',40);

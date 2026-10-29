@@ -25,6 +25,8 @@ test('Fleet Tracker appears on the web home only for an authorized workspace adm
     expect(data_get($dashboard->forRequest($request, $admin), 'fleet_tracker.href'))
         ->toBe(route('field-service.fleet-tracking.index'))
         ->and(data_get($dashboard->forRequest($request, $admin), 'fleet_tracker.hours_href'))->toBe(route('field-service.payroll-hours'))
+        ->and(data_get($dashboard->forRequest($request, $admin), 'field_app_href'))->toBe(url('/field/'))
+        ->and(data_get($dashboard->forRequest($request, $employee), 'field_app_href'))->toBe(url('/field/'))
         ->and(data_get($dashboard->forRequest($request, $employee), 'fleet_tracker'))->toBeNull();
 
     config()->set('services.fleet_tracking.enabled', false);

@@ -59,6 +59,18 @@
             @endif
         </header>
 
+        @if(filled($dashboard['field_app_href'] ?? null))
+            <nav class="grid gap-2" aria-label="Field work app">
+                <a href="{{ $dashboard['field_app_href'] }}" class="flex min-h-20 items-center justify-between gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-emerald-950 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">
+                    <span class="flex items-center gap-4">
+                        <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-800 text-white" aria-hidden="true"><svg class="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5h16v13H4z"/><path d="M8 9h8M8 12h5M8 15h7"/><path d="m17 2 2 2-2 2"/></svg></span>
+                        <span><strong class="block text-base font-semibold">Open Everbranch Field</strong><small class="mt-0.5 block text-sm text-emerald-800">Your jobs, messages, and time clock</small></span>
+                    </span>
+                    <span class="text-xl" aria-hidden="true">→</span>
+                </a>
+            </nav>
+        @endif
+
         @if(is_array($dashboard['fleet_tracker'] ?? null))
             <nav class="grid gap-2" aria-label="Field operations shortcuts">
                 <a href="{{ $dashboard['fleet_tracker']['href'] }}" class="flex min-h-20 items-center justify-between gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-emerald-950 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">
