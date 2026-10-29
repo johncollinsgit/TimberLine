@@ -21,7 +21,7 @@ class RebuildTeamSearch extends Command
         $tenant = Tenant::findOrFail($this->argument('tenant'));
         $batch = filter_var($this->option('batch'), FILTER_VALIDATE_INT);
         $maximum = filter_var($this->option('max-batches'), FILTER_VALIDATE_INT);
-        if (! $batch || $batch > 1000 || $maximum === false || $maximum < 0) {
+        if ($batch === false || $batch < 1 || $batch > 1000 || $maximum === false || $maximum < 0) {
             $this->error('Use a batch from 1 to 1000 and a nonnegative maximum.');
 
             return self::FAILURE;

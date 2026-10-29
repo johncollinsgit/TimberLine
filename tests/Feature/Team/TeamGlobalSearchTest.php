@@ -82,6 +82,15 @@ test('pagination is stable bound to query and actor and excludes hidden matches 
     $this->getJson($path.'&cursor=invalid')->assertUnprocessable();
 });
 
+test('backfill rejects invalid batch sizes before creating a rebuild checkpoint', function (): void {
+    [$tenant] = teamWorkspace();
+    foreach (['-1', '0', '1001', 'invalid'] as $batch) {
+        $this->artisan('team:search-rebuild', ['tenant' => $tenant->id, '--batch' => $batch])->assertExitCode(1);
+        expect(DB::table('team_search_runs')->where('tenant_id', $tenant->id)->exists())->toBeFalse();
+    }
+    Http::assertNothingSent();
+});
+
 test('backfill resumes checkpoints and reconciles physical deletion without provider calls', function (): void {
     [$tenant, $owner] = teamWorkspace();
     config(['team_work.search_enabled' => false]);
