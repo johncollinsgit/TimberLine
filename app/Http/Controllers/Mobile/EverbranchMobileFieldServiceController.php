@@ -1102,22 +1102,63 @@ class EverbranchMobileFieldServiceController extends Controller
         abort_unless($access->canAccessJob($user, $tenantModel, $job) && $access->canUpdateProgress($user, $tenantModel, $job), 403);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'quantity' => ['sometimes', 'numeric', 'min:0.01', 'max:999999'],
+            'quantity' => ['sometimes', 'required_with:client_uuid,review_source_token', 'numeric', 'min:0.01', 'max:999999'],
             'unit' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'client_uuid' => ['sometimes', 'required_with:review_source_token', 'uuid'], 'review_source_token' => ['required_with:client_uuid', 'string', 'max:12000'],
         ]);
-        $material = FieldServiceMaterial::query()->create([
+        $reviewKey = $validated['client_uuid'] ?? null;
+        $reviewName = trim((string) $validated['name']);
+        $reviewQuantity = (float) ($validated['quantity'] ?? 1);
+        $reviewUnit = filled($validated['unit'] ?? null) ? trim((string) $validated['unit']) : null;
+        if ($reviewKey !== null) {
+            abort_unless(preg_match('/^\d+(?:\.\d{1,2})?$/', (string) $validated['quantity']) === 1,
+                422, 'Use at most two decimal places for the quantity.');
+            $existing = FieldServiceMaterial::query()->where('tenant_id', $tenantModel->id)
+                ->where('requested_by_user_id', $user->id)->where('review_client_uuid', $reviewKey)->first();
+            if ($existing) {
+                abort_unless((int) $existing->field_service_job_id === (int) $job->id
+                    && trim((string) $existing->name) === $reviewName
+                    && (float) $existing->quantity === $reviewQuantity
+                    && ($existing->unit ?: null) === $reviewUnit, 409,
+                    'This review key was already used for a different material request.');
+
+                return response()->json(['ok' => true, 'material' => $this->materialPayload($existing)], 200);
+            }
+        }
+        if (isset($validated['client_uuid'])) {
+            abort_unless(isset($validated['quantity']), 422, 'Enter a quantity before adding this material.');
+            app(\App\Services\FieldService\FieldCrewAssistant::class)->assertReviewSourceToken(
+                (string) $validated['review_source_token'], $tenantModel, $user, (int) $job->id, (int) \App\Models\TeamChannel::query()
+                    ->where('tenant_id', $tenantModel->id)->where('field_service_job_id', $job->id)->where('kind', 'job')->whereNull('archived_at')->value('id')
+            );
+        }
+        $attributes = [
             'tenant_id' => (int) $tenantModel->id,
             'field_service_job_id' => (int) $job->id,
             'requested_by_user_id' => (int) $user->id,
-            'name' => trim((string) $validated['name']),
-            'quantity' => (float) ($validated['quantity'] ?? 1),
-            'unit' => filled($validated['unit'] ?? null) ? trim((string) $validated['unit']) : null,
+            'name' => $reviewName,
+            'quantity' => $reviewQuantity,
+            'unit' => $reviewUnit,
             'status' => 'needed',
-        ]);
-        $officeIds = $this->officeRecipients($tenantModel)->pluck('id')->map(fn ($id): int => (int) $id)->all();
-        $notifications->notifyJobEvent($job, $user, 'material_requested', 'Material requested: '.$material->name, 'material-requested:'.$material->id, $officeIds);
+        ];
+        $material = isset($validated['client_uuid'])
+            ? FieldServiceMaterial::query()->firstOrCreate([
+                'tenant_id' => (int) $tenantModel->id, 'requested_by_user_id' => (int) $user->id,
+                'review_client_uuid' => $validated['client_uuid'],
+            ], $attributes)
+            : FieldServiceMaterial::query()->create($attributes);
+        if (isset($validated['client_uuid'])) {
+            abort_unless((int) $material->field_service_job_id === (int) $job->id
+                && trim((string) $material->name) === $attributes['name']
+                && (float) $material->quantity === $attributes['quantity']
+                && ($material->unit ?: null) === $attributes['unit'], 409, 'This review key was already used for a different material request.');
+        }
+        if ($material->wasRecentlyCreated && $reviewKey === null) {
+            $officeIds = $this->officeRecipients($tenantModel)->pluck('id')->map(fn ($id): int => (int) $id)->all();
+            $notifications->notifyJobEvent($job, $user, 'material_requested', 'Material requested: '.$material->name, 'material-requested:'.$material->id, $officeIds);
+        }
 
-        return response()->json(['ok' => true, 'material' => $this->materialPayload($material)], 201);
+        return response()->json(['ok' => true, 'material' => $this->materialPayload($material)], $material->wasRecentlyCreated ? 201 : 200);
     }
 
     public function updateMaterial(Request $request, string $tenant, FieldServiceJob $job, FieldServiceMaterial $material, FieldServiceAccessService $access, FieldServiceJobNotificationService $notifications): JsonResponse

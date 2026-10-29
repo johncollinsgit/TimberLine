@@ -18,6 +18,18 @@ beforeEach(function (): void {
     $this->withoutVite();
 });
 
+test('field-enabled dashboard exposes a clear link to the separately guarded Field app', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Collins Field Dashboard', 'slug' => 'collins-field-dashboard']);
+    TenantAccessProfile::query()->create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    TenantModuleState::query()->create(['tenant_id' => $tenant->id, 'module_key' => 'field_service', 'enabled_override' => true, 'setup_status' => 'configured']);
+    $user = User::factory()->create(['role' => 'admin']);
+    $user->tenants()->attach($tenant->id, ['role' => 'admin', 'membership_active' => true]);
+
+    $this->actingAs($user)->get(route('dashboard'))->assertOk()
+        ->assertSeeText('Open Everbranch Field')
+        ->assertSee('href="'.url('/field/').'"', false);
+});
+
 test('dashboard renders customer-focused hero metric for direct crm tenants', function () {
     $tenant = Tenant::query()->create([
         'name' => 'CRM Dashboard Tenant',

@@ -107,19 +107,23 @@ class FieldWebController extends Controller
         [$tenant, $user] = $this->context($request);
         $data = $request->validate(['question' => ['required', 'string', 'max:3000'], 'request_id' => ['required', 'uuid'],
             'history' => ['sometimes', 'array', 'max:8'], 'history.*.role' => ['required', 'in:user,assistant'],
-            'history.*.text' => ['required', 'string', 'max:4000'], 'context_job_id' => ['nullable', 'integer', 'min:1']]);
+            'history.*.text' => ['required', 'string', 'max:4000'], 'context_job_id' => ['nullable', 'integer', 'min:1'],
+            'review_mode' => ['sometimes', 'boolean']]);
 
-        $hours = app(\App\Services\FieldService\FieldCrewHours::class)->answer($tenant, $user, $data['question'], $data['history'] ?? []);
-        if ($hours !== null) {
-            return response()->json($hours)->header('Cache-Control', 'no-store, private');
+        if (! ($data['review_mode'] ?? false)) {
+            $hours = app(\App\Services\FieldService\FieldCrewHours::class)->answer($tenant, $user, $data['question'], $data['history'] ?? []);
+            if ($hours !== null) {
+                return response()->json($hours)->header('Cache-Control', 'no-store, private');
+            }
+
+            $navigation = app(\App\Services\FieldService\FieldCrewNavigation::class)->resolve($tenant, $user, $data['question'], $data['context_job_id'] ?? null);
+            if ($navigation !== null) {
+                return response()->json($navigation)->header('Cache-Control', 'no-store, private');
+            }
         }
 
-        $navigation = app(\App\Services\FieldService\FieldCrewNavigation::class)->resolve($tenant, $user, $data['question'], $data['context_job_id'] ?? null);
-        if ($navigation !== null) {
-            return response()->json($navigation)->header('Cache-Control', 'no-store, private');
-        }
-
-        return response()->json($assistant->ask($tenant, $user, $data['question'], $data['request_id'], $data['history'] ?? [], $data['context_job_id'] ?? null))
+        abort_unless(! ($data['review_mode'] ?? false) || isset($data['context_job_id']), 422, 'Choose a job before reviewing its messages.');
+        return response()->json($assistant->ask($tenant, $user, $data['question'], $data['request_id'], $data['history'] ?? [], $data['context_job_id'] ?? null, (bool) ($data['review_mode'] ?? false)))
             ->header('Cache-Control', 'no-store, private');
     }
 

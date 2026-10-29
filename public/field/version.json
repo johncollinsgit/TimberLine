@@ -1,7 +1,7 @@
 {
-  "version": "2.3.30-web.7",
-  "build": "01839340c7b275ef",
-  "worker": "/field/sw-01839340c7b275ef.js",
+  "version": "2.3.30-web.8",
+  "build": "ed3249b3ec718025",
+  "worker": "/field/sw-ed3249b3ec718025.js",
   "baseline": "Everbranch Field Showcase 2.3.29 + workspace assistant",
-  "built_at": "2026-10-28T23:26:12.964Z"
+  "built_at": "2026-10-29T00:06:59.113Z"
 }

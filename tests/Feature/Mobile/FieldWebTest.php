@@ -178,6 +178,84 @@ test('crew AI uses current team records without private notes or other tenants a
     Http::assertSentCount(1);
 });
 
+test('job message review is on demand, cites only permitted job messages, and drafts stay reviewable', function (): void {
+    [$tenant, $user, $base] = fieldWebFixture();
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'DB-Keys', 'status' => 'open']);
+    $channel = \App\Models\TeamChannel::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id,
+        'created_by_user_id' => $user->id, 'kind' => 'job', 'name' => 'DB-Keys']);
+    $message = \App\Models\TeamMessage::create(['tenant_id' => $tenant->id, 'team_channel_id' => $channel->id,
+        'created_by_user_id' => $user->id, 'client_uuid' => (string) Str::uuid(),
+        'body' => 'Need two 4 square boxes for tomorrow. Please remind the crew before the start.', 'mention_user_ids' => []]);
+    config(['ai_branch.api_key' => 'test-only', 'ai_branch.rates_valid_until' => now()->addMonth()->toIso8601String()]);
+    AiBranchAccount::create(['tenant_id' => $tenant->id, 'enabled' => true, 'budget_cents' => 2500, 'approved_at' => now()]);
+    $reviewReply = json_encode([
+        'summary' => 'The crew needs two boxes before starting.',
+        'materials' => [['name' => '4 square boxes', 'quantity' => 2, 'unit' => 'boxes', 'source_message_ids' => [$message->id]]],
+        'reminder' => ['body' => 'Bring the boxes before the start.', 'timing' => 'Tomorrow morning', 'source_message_ids' => [$message->id]],
+    ], JSON_THROW_ON_ERROR);
+    Http::fake(['api.openai.com/v1/responses' => Http::response([
+        'id' => 'resp_review', 'status' => 'completed',
+        'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => $reviewReply]]]],
+        'usage' => ['input_tokens' => 400, 'output_tokens' => 50, 'input_tokens_details' => ['cached_tokens' => 0]],
+    ])]);
+
+    $response = $this->postJson($base.'/web/assistant', ['question' => 'Review recent messages and draft materials and a reminder.',
+        'request_id' => (string) Str::uuid(), 'context_job_id' => $job->id, 'review_mode' => true])
+        ->assertOk()->assertJsonPath('review.summary', 'The crew needs two boxes before starting.')
+        ->assertJsonPath('review.materials.0.quantity', 2)
+        ->assertJsonPath('review.reminder.recipient', 'Job team')
+        ->assertJsonPath('review.reminder.channel', 'Job chat')
+        ->assertJsonPath('review.reminder.timing', 'When you review and send it')
+        ->assertJsonPath('message_sources.0.id', $message->id);
+    Http::assertSent(fn ($request) => str_contains((string) data_get($request->data(), 'input.0.content'), 'Need two 4 square boxes')
+        && str_contains((string) data_get($request->data(), 'input.0.content'), 'message:'.$message->id)
+        && ! str_contains((string) data_get($request->data(), 'input.0.content'), $response->json('review_source_token')));
+    expect($channel->members()->count())->toBe(0); // Review reads the channel without marking it read or joining it.
+    expect($response->json('review_source_token'))->not->toBeEmpty();
+});
+
+test('reviewed material and reminder writes revalidate source revisions and material retries are idempotent', function (): void {
+    \Illuminate\Support\Facades\Queue::fake();
+    [$tenant, $user, $base] = fieldWebFixture();
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'DB-Keys', 'status' => 'open']);
+    $channel = \App\Models\TeamChannel::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id,
+        'created_by_user_id' => $user->id, 'kind' => 'job', 'name' => 'DB-Keys']);
+    $message = \App\Models\TeamMessage::create(['tenant_id' => $tenant->id, 'team_channel_id' => $channel->id,
+        'created_by_user_id' => $user->id, 'client_uuid' => (string) Str::uuid(), 'body' => 'Order two new construction boxes.', 'mention_user_ids' => []]);
+    config(['ai_branch.api_key' => 'test-only', 'ai_branch.rates_valid_until' => now()->addMonth()->toIso8601String()]);
+    AiBranchAccount::create(['tenant_id' => $tenant->id, 'enabled' => true, 'budget_cents' => 2500, 'approved_at' => now()]);
+    $reviewReply = json_encode([
+        'summary' => 'Two boxes were requested.',
+        'materials' => [['name' => 'New construction boxes', 'quantity' => 2, 'unit' => 'boxes', 'source_message_ids' => [$message->id]]],
+        'reminder' => ['body' => 'Please bring the boxes.', 'source_message_ids' => [$message->id]],
+    ], JSON_THROW_ON_ERROR);
+    Http::fake(['api.openai.com/v1/responses' => Http::response([
+        'id' => 'resp_review', 'status' => 'completed',
+        'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => $reviewReply]]]],
+        'usage' => ['input_tokens' => 400, 'output_tokens' => 45, 'input_tokens_details' => ['cached_tokens' => 0]],
+    ])]);
+
+    $review = $this->postJson($base.'/web/assistant', ['question' => 'Review this job conversation.', 'request_id' => (string) Str::uuid(), 'context_job_id' => $job->id, 'review_mode' => true])->assertOk()->json();
+    $payload = ['name' => 'New construction boxes', 'quantity' => 2, 'unit' => 'boxes', 'client_uuid' => (string) Str::uuid(), 'review_source_token' => $review['review_source_token']];
+    $this->postJson($base.'/jobs/'.$job->id.'/materials/requests', [...$payload, 'quantity' => '1.234'])->assertUnprocessable();
+    expect(\App\Models\FieldServiceMaterial::where('tenant_id', $tenant->id)->count())->toBe(0);
+    $created = $this->postJson($base.'/jobs/'.$job->id.'/materials/requests', $payload)->assertCreated()->json('material');
+    $this->postJson($base.'/jobs/'.$job->id.'/materials/requests', $payload)->assertOk()->assertJsonPath('material.id', $created['id']);
+    expect(\App\Models\FieldServiceMaterial::where('tenant_id', $tenant->id)->count())->toBe(1);
+
+    $reminderPayload = ['body' => 'Please bring the boxes.', 'client_uuid' => (string) Str::uuid(), 'review_source_token' => $review['review_source_token']];
+    $reminder = $this->postJson($base.'/channels/'.$channel->id.'/messages', $reminderPayload)->assertCreated()->json('message');
+    $this->postJson($base.'/channels/'.$channel->id.'/messages', $reminderPayload)->assertOk()->assertJsonPath('message.id', $reminder['id']);
+    expect(\App\Models\TeamMessage::where('team_channel_id', $channel->id)->count())->toBe(2);
+
+    $message->forceFill(['body' => 'Changed to one box.', 'edited_at' => now()])->save();
+    $stalePayload = [...$payload, 'client_uuid' => (string) Str::uuid()];
+    $this->postJson($base.'/jobs/'.$job->id.'/materials/requests', $stalePayload)->assertConflict();
+    $this->postJson($base.'/channels/'.$channel->id.'/messages', ['body' => 'Please follow up on the boxes.', 'client_uuid' => (string) Str::uuid(), 'review_source_token' => $review['review_source_token']])->assertConflict();
+    expect(\App\Models\FieldServiceMaterial::where('tenant_id', $tenant->id)->count())->toBe(1)
+        ->and(\App\Models\TeamMessage::where('team_channel_id', $channel->id)->count())->toBe(2);
+});
+
 test('shared monthly crew AI budget refuses a reservation before dispatch', function (): void {
     [$tenant, $user, $base] = fieldWebFixture();
     fieldWebAiReady($tenant, $user);

@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_28_223000_add_field_material_review_idempotency.php' => [
+        'test' => 'tests/Integration/FieldMaterialReviewMySqlRecoveryTest.php',
+        'scenarios' => ['the idempotency UUID column and unique tenant/user index recover independently after partial DDL and repeated execution preserves requests'],
+    ],
     '2026_10_28_210000_create_birthday_cycle_coverage.php' => [
         'test' => 'tests/Integration/BirthdayClubMySqlRecoveryTest.php',
         'scenarios' => ['retained coverage before unique-index DDL, repeated recovery and code rollback preserve annual evidence; real concurrent issuance shares one entitlement'],
