@@ -302,6 +302,7 @@ it('computes building counts and exact ticket facts instead of trusting model ar
     $this->postJson($this->demoBase.'/api/assistant/lookup', [...$lookup, 'filters' => campusJobFilters(['building' => 'Shelton Learning Commons', 'statuses' => ['Open']])])->assertOk()->assertJsonPath('counts.total', 2)->assertJsonPath('counts.closed', 0);
     $this->postJson($this->demoBase.'/api/assistant/lookup', [...$lookup, 'filters' => campusJobFilters(['kind' => 'details', 'ticketIds' => ['FM-B13-3', 'NOT-A-JOB']])])->assertOk()->assertJsonCount(0, 'ticketIds');
     $this->postJson($this->demoBase.'/api/assistant/lookup', [...$lookup, 'filters' => campusJobFilters(['building' => 'Unknown secret building'])])->assertUnprocessable();
+    $this->postJson($this->demoBase.'/api/assistant/lookup', [...$lookup, 'filters' => campusJobFilters(['statuses' => ''])])->assertUnprocessable();
     $official = collect($campus['buildings'])->first(fn ($b) => str_starts_with($b['name'], 'Shelton Learning Commons'))['name'];
     $this->postJson($this->demoBase.'/api/assistant/lookup', [...$lookup, 'filters' => campusJobFilters(['building' => $official])])->assertOk()->assertJsonPath('counts.total', 4);
     Http::assertSentCount(1);

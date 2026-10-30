@@ -49,6 +49,9 @@ class JobLookup
 
     public function render(array $context, array $filters): array
     {
+        foreach (['statuses', 'groupBy', 'ticketIds'] as $key) {
+            abort_unless(is_array($filters[$key] ?? null), 422, 'Job filter lists must be arrays.');
+        }
         $filters = array_map(fn ($v) => $v === null ? '' : $v, $filters);
         abort_if(array_diff(array_keys($filters), array_keys($this->schema($context)['properties'])), 422, 'Unsupported job filters.');
         Validator::make($filters, [
