@@ -46,7 +46,9 @@ JS;
     $environment = 'globalThis.mountCampusSearch({get data(){return data},set data(value){data=value},get pending(){return campusScopePending},get scope(){return campusScopeGeneration},get navigation(){return tourGeneration},api,publicPerson,esc,go,toast,showModal,modal,nav,openCampusRecord})';
     $html = str_replace('globalThis.mountCampusSearch();return;', $environment.';return;', $html);
 
-    return str_replace("\r\n", "\n", $html);
+    require_once __DIR__.'/embed-campus-media.php';
+
+    return embedCampusMedia(str_replace("\r\n", "\n", $html));
 }
 
 if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {

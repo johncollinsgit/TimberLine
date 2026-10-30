@@ -172,7 +172,7 @@ jobs:
         tests/e2e/enterprise-work-table-drawer.test.mjs tests/e2e/enterprise-detail-placement.test.mjs tests/e2e/enterprise-project-detail-generation.test.mjs tests/e2e/enterprise-work-views.test.mjs
         tests/e2e/enterprise-roll-call-projects.test.mjs tests/e2e/enterprise-shell-navigation.test.mjs tests/e2e/enterprise-preference-lifecycle.test.mjs tests/e2e/enterprise-theme.test.mjs
         tests/e2e/enterprise-executive.test.mjs tests/e2e/enterprise-role-preview.test.mjs tests/js/enterprise-sample-voice.test.mjs tests/js/enterprise-usage.test.mjs
-        tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs tests/e2e/enterprise-request-classification-draft.test.mjs tests/e2e/enterprise-work-map-geometry.test.mjs tests/e2e/enterprise-mobile-navigation-sync.test.mjs tests/e2e/enterprise-notification-readiness.test.mjs tests/e2e/enterprise-campus-prototype-tour.test.mjs tests/e2e/enterprise-campus-reports.test.mjs tests/e2e/enterprise-campus-timeline.test.mjs tests/e2e/enterprise-campus-material-examples.test.mjs tests/e2e/enterprise-campus-material-ui.test.mjs tests/e2e/enterprise-campus-capacity.test.mjs tests/e2e/enterprise-campus-requests-model.test.mjs tests/e2e/enterprise-campus-requests-ui.test.mjs tests/e2e/enterprise-campus-map-building-labels.test.mjs tests/e2e/enterprise-campus-assistant.test.mjs tests/e2e/enterprise-campus-shell.test.mjs tests/e2e/enterprise-campus-shell-reconciliation.test.mjs
+        tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs tests/e2e/enterprise-request-classification-draft.test.mjs tests/e2e/enterprise-work-map-geometry.test.mjs tests/e2e/enterprise-mobile-navigation-sync.test.mjs tests/e2e/enterprise-notification-readiness.test.mjs tests/e2e/enterprise-campus-prototype-tour.test.mjs tests/e2e/enterprise-campus-reports.test.mjs tests/e2e/enterprise-campus-timeline.test.mjs tests/e2e/enterprise-campus-material-examples.test.mjs tests/e2e/enterprise-campus-material-ui.test.mjs tests/e2e/enterprise-campus-capacity.test.mjs tests/e2e/enterprise-campus-requests-model.test.mjs tests/e2e/enterprise-campus-requests-ui.test.mjs tests/e2e/enterprise-campus-map-building-labels.test.mjs tests/e2e/enterprise-campus-media.test.mjs tests/e2e/enterprise-campus-assistant.test.mjs tests/e2e/enterprise-campus-shell.test.mjs tests/e2e/enterprise-campus-shell-reconciliation.test.mjs
     - name: Check private reviewer AI snapshot, receipts, voice and gallery without providers
       run: node --test tests/e2e/proposal-reviewer-*.test.mjs tests/e2e/enterprise-attachment-gallery.test.mjs tests/e2e/independent-shared-files-bridge.test.mjs tests/js/reviewer-workspace-*.test.mjs tests/js/reviewer-shared-*.test.mjs
     - name: Check voice shell scope without providers
@@ -371,6 +371,11 @@ jobs:
       env:
         ENTERPRISE_EVIDENCE: test-results/enterprise/read-only-assistant
       run: node tests/browser/enterprise-read-only-assistant.smoke.mjs
+      if: matrix.kind == 'components'
+    - name: Check public campus photographs, slideshows and draft preservation
+      env:
+        CAMPUS_MEDIA_EVIDENCE: test-results/enterprise/campus-media
+      run: node tests/e2e/campus-media.browser.mjs
       if: matrix.kind == 'components'
     - name: Check conversation UI with isolated runtime and fake HTTP only
       env:

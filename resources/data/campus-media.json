@@ -1,0 +1,336 @@
+{
+  "version": 1,
+  "caption": "Illustrative demo photos",
+  "assets": {
+    "presentation": {
+      "file": "presentation.jpg",
+      "title": "Presentation room with screen and seating",
+      "author": "Pavel Danilyuk",
+      "source": "https://www.pexels.com/photo/empty-seats-inside-a-conference-room-8761311/",
+      "download": "https://images.pexels.com/photos/8761311/pexels-photo-8761311.jpeg?auto=compress&cs=tinysrgb&w=800&fm=jpg&q=64",
+      "license": "Pexels License",
+      "license_url": "https://www.pexels.com/license/",
+      "mime": "image/jpeg",
+      "bytes": 71258,
+      "sha256": "7ca0cb576f19e5f9db5eed7be2def857f27440727c25999274bb6344c665bba5",
+      "width": 800,
+      "height": 534,
+      "position": "50% 50%"
+    },
+    "printer": {
+      "file": "printer.jpg",
+      "title": "Office printer and workstation",
+      "author": "Tima Miroshnichenko",
+      "source": "https://www.pexels.com/photo/printer-and-a-computer-in-an-office-9574509/",
+      "download": "https://images.pexels.com/photos/9574509/pexels-photo-9574509.jpeg?auto=compress&cs=tinysrgb&w=800&fm=jpg&q=64",
+      "license": "Pexels License",
+      "license_url": "https://www.pexels.com/license/",
+      "mime": "image/jpeg",
+      "bytes": 51914,
+      "sha256": "a453027b298648d1a92ed5da4cd43a2dad5bd691701326dc85c2c208209b1abf",
+      "width": 800,
+      "height": 533,
+      "position": "50% 50%"
+    },
+    "campus": {
+      "file": "campus.jpg",
+      "title": "Campus walkway and visitor approach",
+      "author": "Miguel Andres Parra",
+      "source": "https://www.pexels.com/photo/group-of-students-on-the-walkway-in-front-of-the-university-building-17893014/",
+      "download": "https://images.pexels.com/photos/17893014/pexels-photo-17893014.jpeg?auto=compress&cs=tinysrgb&w=800&fm=jpg&q=64",
+      "license": "Pexels License",
+      "license_url": "https://www.pexels.com/license/",
+      "mime": "image/jpeg",
+      "bytes": 207322,
+      "sha256": "a85f5422694a6bf997a77fd754851a469c3a6d0d9a29db3095fd2a2628425a11",
+      "width": 800,
+      "height": 1200,
+      "position": "50% 50%"
+    },
+    "painting": {
+      "file": "painting.jpg",
+      "title": "A roller applying a fresh wall finish",
+      "author": "Stephanie Ho",
+      "source": "https://www.pexels.com/photo/person-holding-paint-roller-while-painting-the-wall-994164/",
+      "download": "https://images.pexels.com/photos/994164/pexels-photo-994164.jpeg?auto=compress&cs=tinysrgb&w=800&fm=jpg&q=64",
+      "license": "Pexels License",
+      "license_url": "https://www.pexels.com/license/",
+      "mime": "image/jpeg",
+      "bytes": 77551,
+      "sha256": "cd85bf4564402d32df620bf1b0debe075d853fb0c59f7a5dfb570e701559e96d",
+      "width": 800,
+      "height": 800,
+      "position": "50% 50%"
+    },
+    "lounge": {
+      "file": "lounge.jpg",
+      "title": "Shared lounge seating and common space",
+      "author": "Curtis Adams",
+      "source": "https://www.pexels.com/photo/empty-modern-lounge-room-in-office-5008401/",
+      "download": "https://images.pexels.com/photos/5008401/pexels-photo-5008401.jpeg?auto=compress&cs=tinysrgb&w=800&fm=jpg&q=64",
+      "license": "Pexels License",
+      "license_url": "https://www.pexels.com/license/",
+      "mime": "image/jpeg",
+      "bytes": 68245,
+      "sha256": "98fa56792ad5529b750c9934a58f194e347bd6d2bbbe07b768bbb67cf7204924",
+      "width": 800,
+      "height": 533,
+      "position": "50% 50%"
+    },
+    "materials": {
+      "file": "materials.jpg",
+      "title": "Paintbrushes and roller for a wall refresh",
+      "author": "Ivan S",
+      "source": "https://www.pexels.com/photo/paintbrushes-and-a-paint-roller-covered-in-paint-5799016/",
+      "download": "https://images.pexels.com/photos/5799016/pexels-photo-5799016.jpeg?auto=compress&cs=tinysrgb&w=800&fm=jpg&q=64",
+      "license": "Pexels License",
+      "license_url": "https://www.pexels.com/license/",
+      "mime": "image/jpeg",
+      "bytes": 107949,
+      "sha256": "06a73fbce2b9c4a693373d612d80327f16f903532f2d58907133b92a3b204dd2",
+      "width": 800,
+      "height": 1200,
+      "position": "50% 50%"
+    },
+    "boardwalk": {
+      "file": "boardwalk.jpg",
+      "title": "Autumn woodland boardwalk",
+      "author": "Erhan Üstünbaş",
+      "source": "https://www.pexels.com/photo/wooden-boardwalk-in-a-forest-18852064/",
+      "download": "https://images.pexels.com/photos/18852064/pexels-photo-18852064.jpeg?auto=compress&cs=tinysrgb&w=800&fm=jpg&q=64",
+      "license": "Pexels License",
+      "license_url": "https://www.pexels.com/license/",
+      "mime": "image/jpeg",
+      "bytes": 260622,
+      "sha256": "03575ac27a8695cb9049395e0c44c7fe85c9d9a9673c4e0bdea7b5eb11ebfc3a",
+      "width": 800,
+      "height": 1200,
+      "position": "50% 50%"
+    },
+    "network": {
+      "file": "network.jpg",
+      "title": "Network equipment and cable connections",
+      "author": "Paul Seling",
+      "source": "https://www.pexels.com/photo/cables-of-electronic-devices-12266915/",
+      "download": "https://images.pexels.com/photos/12266915/pexels-photo-12266915.jpeg?auto=compress&cs=tinysrgb&w=800&fm=jpg&q=64",
+      "license": "Pexels License",
+      "license_url": "https://www.pexels.com/license/",
+      "mime": "image/jpeg",
+      "bytes": 184674,
+      "sha256": "882c0233086ad64997a00ffd80e35fecfb174703d8c93ce37b185039dc1b14e8",
+      "width": 800,
+      "height": 1200,
+      "position": "50% 50%"
+    },
+    "trail": {
+      "file": "trail.jpg",
+      "title": "Wooden visitor route through green woodland",
+      "author": "Yuen Tou Zan",
+      "source": "https://www.pexels.com/photo/wooden-boardwalk-in-forest-13201521/",
+      "download": "https://images.pexels.com/photos/13201521/pexels-photo-13201521.jpeg?auto=compress&cs=tinysrgb&w=800&fm=jpg&q=64",
+      "license": "Pexels License",
+      "license_url": "https://www.pexels.com/license/",
+      "mime": "image/jpeg",
+      "bytes": 224242,
+      "sha256": "c19ad45cbe84fd65230fb25da2c842f48d7c38f5743e0405d3939b861a654b39",
+      "width": 800,
+      "height": 1066,
+      "position": "50% 50%"
+    },
+    "winter": {
+      "file": "winter.jpg",
+      "title": "Snow-covered path between winter trees",
+      "author": "Simon Berger",
+      "source": "https://www.pexels.com/photo/landscape-photography-of-snow-pathway-between-trees-during-winter-688660/",
+      "download": "https://images.pexels.com/photos/688660/pexels-photo-688660.jpeg?auto=compress&cs=tinysrgb&w=800&fm=jpg&q=64",
+      "license": "Pexels License",
+      "license_url": "https://www.pexels.com/license/",
+      "mime": "image/jpeg",
+      "bytes": 133317,
+      "sha256": "5f169feae62c5cd560d814ffac47726f2d800131e16a193118b4c225419e535f",
+      "width": 800,
+      "height": 600,
+      "position": "50% 50%"
+    },
+    "plumbing": {
+      "legacy_id": "plumbing",
+      "title": "Plumbing fitting repair",
+      "author": "Tomwsulcer",
+      "source": "https://commons.wikimedia.org/wiki/File:Plumber_uses_two_wrenches_to_tighten_a_fitting.jpg",
+      "license": "CC0 1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "position": "50% 50%"
+    }
+  },
+  "records": {
+    "project": {
+      "visit": [
+        "campus",
+        "presentation"
+      ],
+      "commons": [
+        "presentation",
+        "network",
+        "printer"
+      ],
+      "residence": [
+        "lounge",
+        "painting",
+        "materials"
+      ],
+      "wildlife": [
+        "trail",
+        "boardwalk"
+      ],
+      "winter": [
+        "winter"
+      ]
+    },
+    "task": {
+      "v1": [
+        "campus",
+        "presentation"
+      ],
+      "v2": [
+        "presentation",
+        "lounge"
+      ],
+      "v3": [
+        "campus"
+      ],
+      "v4": [
+        "campus",
+        "presentation"
+      ],
+      "c1": [
+        "network",
+        "presentation"
+      ],
+      "c2": [
+        "presentation",
+        "network"
+      ],
+      "c3": [
+        "presentation"
+      ],
+      "c4": [
+        "printer",
+        "network"
+      ],
+      "r1": [
+        "lounge",
+        "painting"
+      ],
+      "r2": [
+        "materials"
+      ],
+      "r3": [
+        "painting",
+        "materials"
+      ],
+      "r4": [
+        "lounge"
+      ],
+      "w1": [
+        "trail"
+      ],
+      "w2": [
+        "boardwalk"
+      ],
+      "w3": [
+        "trail",
+        "boardwalk"
+      ]
+    },
+    "job": {
+      "J01": [
+        "campus",
+        "presentation"
+      ],
+      "J02": [
+        "presentation",
+        "network"
+      ],
+      "J03": [
+        "materials",
+        "painting"
+      ],
+      "J04": [
+        "trail",
+        "boardwalk"
+      ],
+      "J05": [
+        "plumbing"
+      ],
+      "J06": [
+        "presentation",
+        "network"
+      ],
+      "J07": [
+        "printer",
+        "network"
+      ],
+      "J08": [
+        "network",
+        "presentation"
+      ],
+      "J09": [
+        "lounge",
+        "presentation"
+      ],
+      "J10": [
+        "painting",
+        "materials"
+      ]
+    },
+    "request": {
+      "REQ-104": [
+        "presentation"
+      ],
+      "REQ-103": [
+        "trail",
+        "boardwalk"
+      ],
+      "REQ-STAGE-01": [
+        "lounge"
+      ],
+      "REQ-STAGE-02": [
+        "campus"
+      ],
+      "REQ-STAGE-03": [
+        "campus",
+        "presentation"
+      ],
+      "REQ-STAGE-04": [
+        "presentation",
+        "network"
+      ],
+      "REQ-STAGE-05": [
+        "materials",
+        "painting"
+      ],
+      "REQ-STAGE-06": [
+        "network"
+      ],
+      "REQ-STAGE-07": [
+        "materials"
+      ],
+      "REQ-STAGE-08": [
+        "campus"
+      ],
+      "REQ-STAGE-09": [
+        "lounge"
+      ],
+      "REQ-STAGE-10": [
+        "painting"
+      ],
+      "REQ-STAGE-13": [
+        "campus",
+        "presentation"
+      ],
+      "REQ-STAGE-14": [
+        "materials"
+      ]
+    }
+  }
+}
