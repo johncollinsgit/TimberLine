@@ -87,6 +87,29 @@
                 </aside>
                 </div>
             </section>
+            @if($braintreeAvailable ?? false)
+            <section class="space-y-5 rounded-2xl border border-zinc-200 bg-white p-6 sm:p-8" aria-labelledby="braintree-setup-title">
+                <div><p class="text-xs font-semibold uppercase tracking-widest text-emerald-800">Another way to accept payments</p><h2 id="braintree-setup-title" class="mt-3 text-2xl font-semibold">Use your existing Braintree account</h2><p class="mt-2 text-sm leading-6 text-zinc-600">Keep eligible cards and PayPal methods in your existing business vault. Verify the account here before reviewing a subscription transfer. Connecting does not charge anyone or change Recharge billing.</p></div>
+                @foreach($braintreeConnections as $braintreeConnection)
+                <div class="rounded-xl border border-zinc-200 p-4"><p class="font-semibold">{{ $braintreeConnection->external_account_label }}</p><p class="mt-1 text-sm text-zinc-600">{{ ucfirst(data_get($braintreeConnection->metadata, 'environment')) }} · {{ data_get($braintreeConnection->metadata, 'currency') }} · Account verified for review</p><p class="mt-1 text-xs text-zinc-500">Customer collection is not enabled. {{ $braintreeConnection->last_synced_at ? 'Last checked '.$braintreeConnection->last_synced_at->diffForHumans().'.' : '' }}</p>
+                <form method="post" action="{{ route('tenant-payments.braintree.refresh', ['tenant' => $tenant->slug, 'connection' => $braintreeConnection->id]) }}" class="mt-3">@csrf<button class="fb-btn fb-btn-secondary">Check Braintree account</button></form></div>
+                @endforeach
+                <details><summary class="cursor-pointer text-sm font-semibold">{{ $braintreeConnections->isEmpty() ? 'Connect Braintree securely' : 'Connect another Braintree merchant account' }}</summary>
+                <form method="post" action="{{ route('tenant-payments.braintree.connect', ['tenant' => $tenant->slug]) }}" class="mt-5 space-y-4" autocomplete="off">@csrf
+                    <p class="text-xs leading-5 text-zinc-500">Use the API details for the original business account. Enter credentials here only; they are encrypted in Everbranch and never shown after saving.</p>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <label class="text-sm">Business label<input name="label" maxlength="120" required class="mt-1 block w-full rounded-lg border-zinc-300"></label>
+                        <label class="text-sm">Environment<select name="environment" required class="mt-1 block w-full rounded-lg border-zinc-300"><option value="">Choose environment</option><option value="production">Production</option><option value="sandbox">Sandbox · test only</option></select></label>
+                        <label class="text-sm">Braintree merchant ID<input name="merchant_id" required maxlength="100" class="mt-1 block w-full rounded-lg border-zinc-300" spellcheck="false"></label>
+                        <label class="text-sm">Merchant account ID<input name="merchant_account_id" required maxlength="100" class="mt-1 block w-full rounded-lg border-zinc-300" spellcheck="false"></label>
+                        <label class="text-sm">Public API key<input name="braintree_public_key" type="password" required maxlength="200" autocomplete="new-password" class="mt-1 block w-full rounded-lg border-zinc-300"></label>
+                        <label class="text-sm">Private API key<input name="password" type="password" required maxlength="200" autocomplete="new-password" class="mt-1 block w-full rounded-lg border-zinc-300"></label>
+                    </div>
+                    <label class="flex items-start gap-2 text-sm"><input name="reviewed" type="checkbox" value="1" required class="mt-1"><span>I confirm this Braintree merchant account belongs to {{ $tenant->name }} and authorize Everbranch to verify its account. Customer billing requires a separate review.</span></label>
+                    <button class="fb-btn fb-btn-primary">Verify and connect Braintree</button>
+                </form></details>
+            </section>
+            @endif
             <section class="rounded-2xl border border-zinc-200 bg-white p-6 sm:p-8" aria-labelledby="bank-feed-title"><h2 id="bank-feed-title" class="text-lg font-semibold">Connect bank transactions <span class="text-sm font-normal text-zinc-500">Optional</span></h2><p class="mt-2 text-sm leading-6 text-zinc-600">Bring bank transactions into your cash-flow view and reconcile deposits. This is separate from your payout bank and is never required to accept payments. Existing accounting records stay authoritative.</p>@if($accountingConnected ?? false)<p class="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-950">QuickBooks is already connected for read-only accounting. Keep using that connection for the information it supplies; add a bank feed only if you need additional transaction detail.</p>@endif @if($bankSpace)<a class="fb-btn fb-btn-secondary mt-4 inline-flex" href="{{ route('trajectory.index', ['space' => $bankSpace->id, 'tab' => 'accounts']) }}">Connect bank transactions</a>@else<p class="mt-3 text-sm text-zinc-500">Available when your business cash-flow workspace is enabled. Your payment setup can continue without it.</p>@endif</section>
             <section class="space-y-4 rounded-2xl border border-zinc-200 bg-white p-6 sm:p-8">
                     <h2 class="text-lg font-semibold text-zinc-950">PayPal</h2>

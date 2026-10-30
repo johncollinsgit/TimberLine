@@ -1,3 +1,14 @@
+## Braintree account verification (October 30; source candidate)
+
+An exact tenant rollout adds Braintree account verification to the existing
+owner-only Accept payments page. The official PHP SDK reads the selected active
+merchant account; tenant-owned credentials are encrypted and hidden, excluded
+from flash input and bound to an immutable connection identity/revision. Exact
+customer/method lookups return masked proof only. No charge, verification hold,
+vault mutation, billing-owner switch or Stripe replacement is implemented.
+See `docs/operations/self-service-payments.md`. Keep collection and source-stop
+acceptance separate from connecting the merchant.
+
 ## Candle Club authorization and scent notes (October 30; source candidate)
 
 The private subscription page uses Modern Forestry branding only for that exact

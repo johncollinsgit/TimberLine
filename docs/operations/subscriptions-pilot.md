@@ -195,9 +195,10 @@ separate customer-experience prerequisites before a broader cutover.
 
 An October 30 read-only production check found no Braintree merchant/public/private
 configuration and no tenant-owned Braintree integration for Modern Forestry.
-Safari reached Braintree's sign-in screen. This does not establish that the
-merchant lacks a Braintree account; it means Everbranch cannot yet verify or use
-its vault. Do not substitute global fallback credentials or paste credentials
+The owner subsequently signed in to Modern Forestry Soy Candles in Braintree.
+The account has an existing vault; Everbranch still lacks a verified API connection.
+The separate source candidate in `self-service-payments.md` adds connection and
+read-only verification setup, with no charge adapter or billing switch. Do not substitute global fallback credentials or paste credentials
 into chat, code, URLs or logs.
 
 The owner's preferred outcome is no customer action where an existing payment

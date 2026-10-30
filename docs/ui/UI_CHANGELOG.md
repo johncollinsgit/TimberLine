@@ -1,3 +1,10 @@
+## 2026-10-30 — Existing Braintree account verification (source candidate)
+
+- The owner payment-setup page can show a separately gated Braintree account
+  connection form, masked account status and an explicit collection-disabled
+  message. Opening the page makes no provider request; stored API keys never
+  return to the page. This adds verification setup, not a billing switch.
+
 ## 2026-10-30 — Candle Club authorization and scent notes
 
 - Modern Forestry's private authorization page has forest/cream styling, the
