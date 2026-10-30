@@ -32,10 +32,14 @@ class SubscriptionBillingCycle extends Model
                     throw new \LogicException('Original subscription cycle terms and provider request are immutable.');
                 }
             }
-            foreach (['provider_reference', 'payment_started_at', 'shopify_request', 'shopify_order_id', 'handoff_started_at'] as $field) {
+            foreach (['provider_reference', 'payment_started_at', 'paid_at', 'shopify_request', 'shopify_order_id', 'handoff_started_at'] as $field) {
                 if ($row->getOriginal($field) !== null && $row->isDirty($field)) {
                     throw new \LogicException('An original subscription provider attempt cannot be replaced.');
                 }
+            }
+            $priorDispatch = data_get($row->getOriginal('reconciliation'), 'dispatch_started_at');
+            if ($priorDispatch !== null && data_get($row->reconciliation, 'dispatch_started_at') !== $priorDispatch) {
+                throw new \LogicException('The original provider dispatch marker cannot be replaced or erased.');
             }
         });
         static::deleting(fn () => throw new \LogicException('Retain subscription payment evidence.'));

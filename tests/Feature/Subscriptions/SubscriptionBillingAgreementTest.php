@@ -57,7 +57,7 @@ function prepareBillingAgreement($case): SubscriptionBillingAgreement
     return $case->service->prepare($case->tenant->id, $case->owner, $case->member->id, $case->input, $review['terms_hash']);
 }
 
-/** Test-only fixture for a later reviewed cutover. There is deliberately no production activation method yet. */
+/** Operator schedule fixtures avoid network; the separate execution suite exercises actual activation checks. */
 function activateBillingFixture($case): SubscriptionBillingAgreement
 {
     $row = prepareBillingAgreement($case);

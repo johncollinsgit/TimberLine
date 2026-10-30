@@ -30,7 +30,7 @@
         <div class="grid gap-3 sm:grid-cols-3" aria-label="Pilot overview">
             <div class="border-l-2 border-emerald-800 pl-4"><p class="text-xs text-zinc-500">Prepared members</p><p class="mt-1 text-2xl font-semibold">{{ $pilot['total_prepared'] }}</p></div>
             <div class="border-l-2 border-zinc-300 pl-4"><p class="text-xs text-zinc-500">Optional Stripe fallback</p><p class="mt-1 text-base font-semibold">{{ $pilot['payment_ready'] ? 'Account ready; separate customer setup' : 'Account setup incomplete' }}</p></div>
-            <div class="border-l-2 border-amber-400 pl-4"><p class="text-xs text-zinc-500">Double-charge verification</p><p class="mt-1 text-base font-semibold">{{ collect($pilot['members'])->contains('duplicate_alert', true) ? 'Review required' : 'Incomplete provider coverage' }}</p></div>
+            <div class="border-l-2 border-amber-400 pl-4"><p class="text-xs text-zinc-500">Double-charge verification</p><p class="mt-1 text-base font-semibold">{{ collect($pilot['members'])->contains('duplicate_alert', true) ? 'Review required' : (collect($pilot['members'])->every(fn ($member) => $member['coverage_current'] ?? false) ? 'No additional payments observed' : 'Incomplete provider coverage') }}</p></div>
         </div>
         <div class="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
             <table class="w-full text-left text-sm">
@@ -53,7 +53,7 @@
             <section class="rounded-lg border border-zinc-200 bg-white p-4">
                 <h3 class="font-semibold text-zinc-950">Observed subscription payments</h3>
                 <p class="mt-1 text-xs text-zinc-500">{{ $pilot['currency'] ?? 'Select one currency to compare amounts.' }} · Source observations, not reconciled revenue. Missing feeds appear as gaps.</p>
-                <div class="relative mt-4 h-64"><canvas data-pilot-payments role="img" aria-label="Observed Recharge, Stripe and Shopify Payments by billing month"></canvas></div>
+                <div class="relative mt-4 h-64"><canvas data-pilot-payments role="img" aria-label="Observed Recharge, Stripe, Shopify Payments and Braintree collections by billing month"></canvas></div>
                 <details class="mt-3 text-xs text-zinc-600"><summary class="cursor-pointer">View payment chart data</summary>
                     <table class="mt-2 w-full text-left"><thead><tr><th>Month</th>@foreach($pilot['chart']['datasets'] as $dataset)<th>{{ $dataset['label'] }}</th>@endforeach</tr></thead><tbody>
                     @foreach($pilot['chart']['labels'] as $i => $month)<tr><td>{{ $month }}</td>@foreach($pilot['chart']['datasets'] as $dataset)<td>{{ isset($dataset['data'][$i]) ? number_format($dataset['data'][$i], 2) : 'Not verified' }}</td>@endforeach</tr>@endforeach
@@ -64,7 +64,7 @@
                 <h3 class="font-semibold text-zinc-950">Target-cycle outcomes</h3>
                 <p class="mt-1 text-xs text-zinc-500">Payment, order and shipment evidence are tracked independently.</p>
                 <div class="relative mt-4 h-64"><canvas data-pilot-outcomes role="img" aria-label="Pilot members with observed payment, order and fulfillment results"></canvas></div>
-                <p class="mt-3 text-xs text-zinc-500">Prepared members have no confirmed Stripe charge until provider evidence is received.</p>
+                <p class="mt-3 text-xs text-zinc-500">Payments require current processor evidence. Sandbox amounts are excluded from real collections.</p>
             </section>
         </div>
         <section class="rounded-lg border border-zinc-200 bg-white">

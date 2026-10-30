@@ -1,3 +1,16 @@
+## 2026-10-30 — Braintree replacement payment and fulfillment readouts (source candidate)
+
+- The pilot dashboard reads the new original Braintree cycle alongside existing
+  provider observations. Captured production payments and sandbox acceptance
+  have distinct labels; sandbox, refunded and disputed amounts are excluded
+  from collection totals. Uncertain/source-duplicate outcomes require review.
+- Owned external Shopify orders and fulfillment appear only after their saved
+  cycle, customer, merchant, original receipt and terms match. Their external
+  payment receipt never counts as another collection. Report viewing stays offline.
+- Gated Braintree verification/activation/collection and polling source are
+  implemented; customer-facing replacement controls and hosted acceptance remain
+  outstanding. No live customer billing or source ownership was changed.
+
 ## 2026-10-30 — Customer gateway badges and replacement preparation (source candidate)
 
 - Everbranch customer purchase history displays locally bundled payment gateway

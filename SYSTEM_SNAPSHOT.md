@@ -6,7 +6,14 @@ payment authorizations. The examined baseline and staged acceptance plan are in
 cycle and action tables separate processor from billing owner. Preview-first
 commands prepare exact allowed members and change only activated Everbranch
 schedules, retaining the original anchor and original provider attempts. There
-is no replacement activation, collection or new provider worker in this checkpoint.
+is a separately gated Braintree executor and five-minute reconciliation worker.
+Exact original method/source mapping, merchant acceptance and fresh source-stop
+coverage precede individual activation and one durable recurring sale. Unknown
+results never resubmit. The generic Shopify bridge records the original external
+payment once; owned order/fulfillment projection and production-only payment
+charts remain separate. Sandbox collections are excluded from real totals.
+Customer controls, Shopify-vaulted adoption, operations and actual two-member
+acceptance remain outstanding; no production activation has been performed.
 
 Everbranch customer purchase history shows icons and text for recorded gateways,
 including split payments. Existing Shopify ingestion captures minimal gateway
@@ -21,8 +28,9 @@ An exact tenant rollout adds Braintree account verification to the existing
 owner-only Accept payments page. The official PHP SDK reads the selected active
 merchant account; tenant-owned credentials are encrypted and hidden, excluded
 from flash input and bound to an immutable connection identity/revision. Exact
-customer/method lookups return masked proof only. No charge, verification hold,
-vault mutation, billing-owner switch or Stripe replacement is implemented.
+customer/method lookups return masked proof only. This connection flow performs
+no charge, verification hold, vault mutation or billing-owner switch. The separate
+replacement executor has its own exact rollout, source-stop and collection gates.
 See `docs/operations/self-service-payments.md`. Keep collection and source-stop
 acceptance separate from connecting the merchant.
 
@@ -40,8 +48,9 @@ members using the existing feedback endpoint. Comments remain private/pending
 for review; request UUIDs make unchanged retries converge without rewriting an
 accepted comment. No schema or billing changes are included. Release the backend
 before the native update and validate the hosted page separately. Braintree vault
-reuse and provider-to-provider Stripe migration are possible design paths, not
-implemented or activated by this source. See `docs/operations/subscriptions-pilot.md`.
+reuse now has separate default-off replacement source; real merchant/source
+acceptance and customer activation remain unproven. Provider-to-provider Stripe
+migration is not performed by this source. See `docs/operations/subscriptions-pilot.md`.
 
 ## Facilities mobile controls (October 30; source candidate)
 

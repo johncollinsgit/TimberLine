@@ -45,7 +45,8 @@ class SubscriptionBillingAgreementService
             if ($current) {
                 abort_unless(SubscriptionEvidence::canonical($current->terms) === SubscriptionEvidence::canonical($candidate['terms'])
                     && SubscriptionEvidence::canonical($current->method_binding) === SubscriptionEvidence::canonical($candidate['method_binding'])
-                    && SubscriptionEvidence::canonical($current->authorization_evidence) === SubscriptionEvidence::canonical($candidate['authorization_evidence']), 409, 'The retained agreement differs from this preparation.');
+                    && collect($current->authorization_evidence)->only(['reference', 'continuing_authorization_reviewed_by', 'source_terms_reviewed_by'])->all()
+                        === collect($candidate['authorization_evidence'])->only(['reference', 'continuing_authorization_reviewed_by', 'source_terms_reviewed_by'])->all(), 409, 'The retained agreement differs from this preparation.');
 
                 return $current;
             }
@@ -132,6 +133,7 @@ class SubscriptionBillingAgreementService
         $data = Validator::make($input, [
             'processor' => ['required', 'in:braintree,shopify'], 'method_binding' => ['required', 'array'],
             'shipping_cents' => ['required', 'integer', 'min:0', 'max:10000000'], 'tax_cents' => ['required', 'integer', 'min:0', 'max:10000000'],
+            'tax_rate_bps' => ['sometimes', 'integer', 'min:0', 'max:10000'], 'tax_shipping' => ['sometimes', 'boolean'],
             'shipping_address' => ['required', 'array:firstName,lastName,company,address1,address2,city,provinceCode,countryCode,zip,phone'],
             'shipping_address.firstName' => ['required', 'string', 'max:100'], 'shipping_address.lastName' => ['required', 'string', 'max:100'],
             'shipping_address.address1' => ['required', 'string', 'max:255'], 'shipping_address.address2' => ['nullable', 'string', 'max:255'],
@@ -150,12 +152,15 @@ class SubscriptionBillingAgreementService
         abort_unless(count($months) === 1 && collect($lines)->every(fn ($line) => ! $line['prepaid'] && $line['delivery_months'] === $line['billing_months']), 409, 'Prepaid or mixed schedules require their separate delivery implementation.');
         $subtotal = array_sum(array_map(fn ($line) => $line['quantity'] * $line['unit_price_cents'], $lines));
         $amount = $subtotal + $data['shipping_cents'] + $data['tax_cents'];
+        $taxBase = $subtotal + (! empty($data['tax_shipping']) ? $data['shipping_cents'] : 0);
+        abort_unless((int) round($taxBase * ($data['tax_rate_bps'] ?? 0) / 10000) === $data['tax_cents'], 409, 'Review the exact source tax rate and taxable shipping before preparing billing.');
         abort_unless($amount > 0 && $amount <= 10000000 && $amount === $member->expected_amount_cents, 409, 'Reviewed source amount must exactly match products, shipping and tax.');
         $binding = $this->methodBinding($member, $data['processor'], $data['method_binding']);
         $terms = ['version' => 1, 'member_id' => $member->id, 'shopify_store_id' => $store->id, 'shop_domain' => $store->shop_domain,
             'shopify_customer_id' => $member->shopify_customer_id, 'recharge_customer_id' => $member->recharge_customer_id,
             'lines' => $lines, 'currency' => $member->currency, 'amount_cents' => $amount, 'subtotal_cents' => $subtotal,
             'shipping_cents' => $data['shipping_cents'], 'tax_cents' => $data['tax_cents'], 'shipping_address' => $data['shipping_address'],
+            'tax_rate_bps' => (int) ($data['tax_rate_bps'] ?? 0), 'tax_shipping' => (bool) ($data['tax_shipping'] ?? false),
             'billing_months' => (int) reset($months), 'first_billing_date' => $member->target_date->toDateString(), 'billing_hour' => 9,
             'timezone' => $member->timezone, 'candle_cash_allowed' => false];
         $authorization = ['status' => 'review_required', 'reference' => $data['authorization_reference'],
@@ -173,6 +178,7 @@ class SubscriptionBillingAgreementService
                 'binding.connection_id' => ['required', 'integer', 'min:1'], 'binding.customer_id' => ['required', 'regex:/\A[A-Za-z0-9_-]{1,100}\z/'],
                 'binding.payment_method_token' => ['required', 'regex:/\A[A-Za-z0-9_-]{1,36}\z/'],
                 'binding.source_payment_reference' => ['required', 'regex:/\A[A-Za-z0-9_-]{1,100}\z/']])->validate()['binding'];
+            $data['connection_id'] = (int) $data['connection_id'];
             $connection = IntegrationConnection::query()->forTenant($member->tenant_id)->where('provider', 'braintree')->where('status', 'connected')
                 ->where('metadata->purpose', 'merchant_payment_verification')->lockForUpdate()->findOrFail($data['connection_id']);
             $meta = $connection->metadata;
@@ -188,6 +194,7 @@ class SubscriptionBillingAgreementService
         $data = Validator::make(['binding' => $input], ['binding' => ['array:installation_id,contract_gid,payment_method_gid'],
             'binding.installation_id' => ['required', 'integer', 'min:1'], 'binding.contract_gid' => ['required', 'regex:#\Agid://shopify/SubscriptionContract/[1-9][0-9]*\z#'],
             'binding.payment_method_gid' => ['required', 'regex:#\Agid://shopify/CustomerPaymentMethod/[A-Za-z0-9_-]{1,150}\z#']])->validate()['binding'];
+        $data['installation_id'] = (int) $data['installation_id'];
         $installation = SubscriptionInstallation::query()->forTenantId($member->tenant_id)->where('shopify_store_id', $member->shopify_store_id)
             ->where('status', 'verified')->findOrFail($data['installation_id']);
         abort_unless($installation->shop_domain === $member->details['shop_domain'] && $installation->active_credential_revision_id, 409, 'Verify the original Shopify subscription app first.');
@@ -198,11 +205,6 @@ class SubscriptionBillingAgreementService
 
     private function owner(int $tenantId, User $actor, int $memberId, string $gate): void
     {
-        app(SubscriptionAccessService::class)->assertManager($tenantId, $actor);
-        $membership = $actor->tenants()->whereKey($tenantId)->first();
-        abort_unless($actor->email_verified_at && $membership && in_array(strtolower($membership->pivot->role), ['owner', 'tenant_owner', 'admin'], true), 403, 'An active verified workspace owner or admin is required.');
-        abort_unless(config('subscriptions.replacement_'.$gate.'_enabled') === true
-            && in_array($tenantId, config('subscriptions.replacement_tenant_ids', []), true)
-            && in_array($memberId, config('subscriptions.replacement_member_ids', []), true), 423, 'This member is outside the controlled replacement rollout.');
+        app(SubscriptionReplacementAccess::class)->owner($tenantId, $actor, $memberId, $gate);
     }
 }

@@ -209,8 +209,10 @@ class SubscriptionPilotExecutionService
         $proof = app(SubscriptionPilotSourceGuard::class)->stopped($member, $row->terms['recharge_connection_id'], $row->terms['first_billing_date'], $actor);
 
         return DB::transaction(function () use ($row, $actor, $proof, $member) {
+            SubscriptionPilotMember::query()->forTenantId($row->tenant_id)->whereKey($row->member_id)->lockForUpdate()->firstOrFail();
             $current = $this->locked($row);
             $this->owner($row->tenant_id, $actor->fresh());
+            $this->assertOriginalBillingLane($current);
             abort_unless(in_array($current->status, ['authorized', 'active'], true), 409);
             $current->update(['status' => 'active', 'activated_at' => $current->activated_at ?? now(), 'activated_by' => $actor->id,
                 'next_billing_date' => $current->next_billing_date ?? $current->terms['first_billing_date']]);
@@ -254,8 +256,10 @@ class SubscriptionPilotExecutionService
         $quote = app(SubscriptionPilotShopifyBridge::class)->quote($member);
         abort_unless($quote['shipping_address'] === $terms['shipping_address'], 409, 'The delivery address changed and needs a new quote review.');
         $cycle = DB::transaction(function () use ($row, $actor, $terms, $date, $proof) {
+            SubscriptionPilotMember::query()->forTenantId($row->tenant_id)->whereKey($row->member_id)->lockForUpdate()->firstOrFail();
             $current = $this->locked($row);
             $this->owner($row->tenant_id, $actor->fresh());
+            $this->assertOriginalBillingLane($current);
             abort_unless($current->status === 'active' && $current->next_billing_date?->toDateString() === $date
                 && $current->terms_hash === $row->terms_hash && CarbonImmutable::parse($proof['checked_at'])->gt(now()->subMinutes(1)), 409, 'Billing authorization or source proof changed.');
             if ($current->paused_until && $current->paused_until->toDateString() <= $date) {
