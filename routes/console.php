@@ -331,3 +331,10 @@ Schedule::command('queue:work', [
     '--queue' => (string) config('ses_migration.platform_queue', 'ses-platform'),
     '--stop-when-empty' => true, '--tries' => 0, '--sleep' => 1, '--timeout' => 35,
 ])->everyMinute()->when(fn (): bool => (bool) config('ses_migration.platform_enabled'))->withoutOverlapping(10)->runInBackground();
+
+// Bounds anonymous Facilities voice calls independently of browser teardown.
+Artisan::command('campus-facilities:expire-voice', function () {
+    $count = app(\App\Services\CampusFacilities\LiveVoice::class)->expire(app(\App\Services\CampusFacilities\DemoStore::class));
+    $this->info('Expired demo voice sessions: '.$count);
+})->purpose('Close expired public Facilities demo voice calls');
+Schedule::command('campus-facilities:expire-voice')->everyMinute()->withoutOverlapping(2);

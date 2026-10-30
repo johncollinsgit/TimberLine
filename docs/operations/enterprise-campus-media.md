@@ -51,3 +51,21 @@ identifies only the already-observed Cloudflare edge analytics beacon as an edge
 request; the demo still blocks its RUM connection. No application CSP is relaxed.
 Release follows the protected GitHub-to-Forge process. Verify `/ready` and the
 actual served document and interactions before describing the update as live.
+
+
+## Public link preview (October 30)
+
+The public demo controller adds Open Graph/Twitter metadata for the fixed public
+campus share image `/images/demos/lees-mcrae-share-v1.jpg` (1200×630 JPEG). It uses
+an actual Lees-McRae campus photograph, the official college wordmark and the
+existing transparent Everbranch leaf. The photograph was retrieved from
+https://www.lmc.edu/_images/full-width-impact/about.jpg via the college's About
+page on October 30, 2026. The optimized source and self-contained layout are
+retained under `resources/images/demos/`. Logos and photo belong to their
+respective owners. The PNG favicon is the existing transparent brand mark,
+embedded as a data URL to preserve the public demo's self-contained browser
+network policy and CSP. The old opaque site-wide icon is unchanged for other
+applications. No browser script, fictional state or immutable private edition
+is changed. Social previews require a deployed image accessible without login;
+source/render checks do not prove that Messages has refreshed its cached card.
+Existing sent previews can remain cached by their messaging app.

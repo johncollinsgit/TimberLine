@@ -53,7 +53,7 @@ test('public reviewer route rejects tenant query authority other hosts and opera
 test('sample workflow remains unavailable by default and preserves existing fictional demo', function (): void {
     config(['enterprise.reviewer_demo_enabled' => false]);
     $this->get('https://app.theeverbranch.com/platform/demos/lees-mcrae/workflows')->assertNotFound();
-    $this->get('https://app.theeverbranch.com/platform/demos/lees-mcrae')->assertOk()->assertSee('lees-mcrae-fictional-hosted-v3', false);
+    $this->get('https://app.theeverbranch.com/platform/demos/lees-mcrae/classic')->assertOk()->assertSee('lees-mcrae-fictional-hosted-v3', false);
     Http::assertNothingSent();
 });
 

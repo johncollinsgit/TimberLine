@@ -1,0 +1,74 @@
+[
+  {
+    "id": "alex",
+    "name": "Alex Morgan",
+    "initials": "AM",
+    "role": "staff",
+    "department": "Academics",
+    "team": "Maintenance"
+  },
+  {
+    "id": "jordan",
+    "name": "Jordan Ellis",
+    "initials": "JE",
+    "role": "staff",
+    "department": "Student Affairs",
+    "team": "Maintenance"
+  },
+  {
+    "id": "sam",
+    "name": "Sam Rivera",
+    "initials": "SR",
+    "role": "technician",
+    "department": "Facilities",
+    "team": "Maintenance"
+  },
+  {
+    "id": "casey",
+    "name": "Casey Bennett",
+    "initials": "CB",
+    "role": "technician",
+    "department": "Facilities",
+    "team": "Grounds"
+  },
+  {
+    "id": "riley",
+    "name": "Riley Parker",
+    "initials": "RP",
+    "role": "technician",
+    "department": "Facilities",
+    "team": "Housekeeping"
+  },
+  {
+    "id": "morgan",
+    "name": "Morgan Reed",
+    "initials": "MR",
+    "role": "head",
+    "department": "Facilities",
+    "team": "Maintenance"
+  },
+  {
+    "id": "avery",
+    "name": "Avery Brooks",
+    "initials": "AB",
+    "role": "head",
+    "department": "Facilities",
+    "team": "Grounds"
+  },
+  {
+    "id": "taylor",
+    "name": "Taylor Lane",
+    "initials": "TL",
+    "role": "head",
+    "department": "Facilities",
+    "team": "Housekeeping"
+  },
+  {
+    "id": "admin",
+    "name": "Blaine",
+    "initials": "B",
+    "role": "admin",
+    "department": "Facilities",
+    "team": "Maintenance"
+  }
+]
