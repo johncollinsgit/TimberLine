@@ -1,8 +1,8 @@
 {
-  "build": "18e116acd421d9ce",
+  "build": "63c817420108880c",
   "package": "lees-mcrae-facilities",
   "apiBase": "/platform/demos/lees-mcrae",
   "assetBase": "/campus-facilities",
   "sourceRepository": "johncollinsgit/lees-mcrae-facilities",
-  "sourceCommit": "6cf9f751e3bff92da6ea37c5ff7c428349491edc"
+  "sourceCommit": "18650219cde4891512b4a28045ef1b7b7f1c30f1"
 }
