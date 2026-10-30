@@ -196,11 +196,20 @@ class SubscriptionPilotService
         $clear = $coverage && ($coverage['status'] ?? null) === 'observed_clear'
             && CarbonImmutable::parse($coverage['checked_at'])->gt(now()->subMinutes(15));
         $blockers = [];
+        $replacement = Schema::hasTable('subscription_billing_agreements')
+            ? \App\Models\SubscriptionBillingAgreement::query()->forTenantId($member->tenant_id)->where('member_id', $member->id)->first() : null;
         if ($member->billing_owner === 'recharge') {
             $blockers[] = 'Recharge billing remains primary';
         }
-        if (! $enrollment?->authorized_at) {
+        if ($replacement) {
+            if (! $replacement->method_verified_at) {
+                $blockers[] = ucfirst($replacement->processor).' saved payment method and continuing authorization need verification';
+            }
+            $blockers[] = 'Replacement payment execution and Shopify/customer acceptance are not complete';
+        } elseif ($enrollment && ! $enrollment->authorized_at) {
             $blockers[] = 'Customer Stripe authorization required';
+        } elseif (! $enrollment) {
+            $blockers[] = 'Review existing payment method reuse before requesting new customer authorization';
         }
         if (! $enrollment?->activated_at) {
             $blockers[] = 'Fresh Recharge billing-stop and charge checks required before activation';
@@ -208,7 +217,7 @@ class SubscriptionPilotService
         if ($executionCycle?->last_error_code) {
             $blockers[] = 'Operator review: '.str_replace('_', ' ', $executionCycle->last_error_code);
         }
-        if (! $enrollment?->activated_at) {
+        if ($enrollment && ! $enrollment->activated_at && ! $replacement) {
             $blockers[] = 'Stripe merchant, signed callback and Shopify bridge readiness required';
         }
 
@@ -223,6 +232,7 @@ class SubscriptionPilotService
             'fulfillment_status' => $current->where('kind', 'fulfillment')->where('status', 'fulfilled')->isNotEmpty() ? 'Observed fulfillment' : 'Not verified',
             'duplicate_status' => $possible ? 'Possible duplicate' : ($clear ? 'No additional payment observed at '.CarbonImmutable::parse($coverage['checked_at'])->setTimezone($member->timezone)->format('g:i a T') : 'Not verified'),
             'duplicate_alert' => $possible, 'execution_status' => $enrollment?->status,
+            'replacement_status' => $replacement?->status, 'replacement_processor' => $replacement?->processor,
             'can_review_execution' => config('subscriptions.pilot_setup_enabled') && in_array($member->tenant_id, config('subscriptions.pilot_tenant_ids', []), true),
             'coverage_checked_at' => $coverage['checked_at'] ?? null, 'candle_cash_allowed' => false,
             'activation_blockers' => $blockers,

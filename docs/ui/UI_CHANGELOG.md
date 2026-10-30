@@ -1,3 +1,14 @@
+## 2026-10-30 — Customer gateway badges and replacement preparation (source candidate)
+
+- Everbranch customer purchase history displays locally bundled payment gateway
+  icons with readable labels, multiple badges for split payments and Not recorded
+  for missing evidence. Shop Pay is shown only when explicitly reported.
+- The subscription pilot presents payment-method reuse before optional Stripe
+  setup. Candidate processor preparation is separate from the current billing
+  owner. Neither report nor customer page performs new provider reads.
+- A fictional local gateway preview was inspected in Safari. Hosted acceptance
+  and optional history enrichment remain separate from source preparation.
+
 ## 2026-10-30 — Existing Braintree account verification (source candidate)
 
 - The owner payment-setup page can show a separately gated Braintree account

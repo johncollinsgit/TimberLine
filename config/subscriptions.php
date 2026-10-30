@@ -16,4 +16,9 @@ return [
     'pilot_tenant_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('SUBSCRIPTIONS_PILOT_TENANT_IDS', ''))), fn (int $id) => $id > 0)),
     'pilot_webhook_secret' => env('SUBSCRIPTIONS_PILOT_STRIPE_WEBHOOK_SECRET'),
     'pilot_live_webhooks_verified' => (bool) env('SUBSCRIPTIONS_PILOT_LIVE_WEBHOOKS_VERIFIED', false),
+    // Exact members opt into replacement preparation/servicing, never collection.
+    'replacement_setup_enabled' => (bool) env('SUBSCRIPTIONS_REPLACEMENT_SETUP_ENABLED', false),
+    'replacement_servicing_enabled' => (bool) env('SUBSCRIPTIONS_REPLACEMENT_SERVICING_ENABLED', false),
+    'replacement_tenant_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('SUBSCRIPTIONS_REPLACEMENT_TENANT_IDS', ''))), fn (int $id) => $id > 0)),
+    'replacement_member_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('SUBSCRIPTIONS_REPLACEMENT_MEMBER_IDS', ''))), fn (int $id) => $id > 0)),
 ];

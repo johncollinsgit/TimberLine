@@ -1,3 +1,20 @@
+## Recharge replacement ledger and customer gateway history (October 30; source candidate)
+
+Read `docs/operations/subscriptions-recharge-replacement.md` before continuing.
+Reuse existing subscription entitlement, verified provider reads, source guard,
+Stripe executor and Shopify bridge patterns; do not convert historical intents or
+Stripe-specific fields into new-processor authority. Three additive billing
+tables retain encrypted agreements, immutable cycles and append-only action IDs.
+Exact tenant/member setup and servicing gates default off. Preparation leaves
+Recharge primary; no new collection/activation implementation exists yet.
+
+The customer Orders table uses locally bundled gateway badges. Shopify ingestion
+captures minimal recorded gateway names; `customers:payment-gateways` explicitly
+previews one tenant/customer's bounded owned reads and only `--apply` saves gateway
+metadata. Profiles make no new provider calls. Unknown data stays Not recorded;
+PayPal/Shopify Payments must not be inferred to be Braintree/Shop Pay. No amounts,
+statuses, loyalty, customer identity, fulfillment or provider records are changed.
+
 ## Braintree account verification (October 30; source candidate)
 
 An exact tenant rollout adds Braintree account verification to the existing

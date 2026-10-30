@@ -1,3 +1,20 @@
+## Recharge replacement ledger and customer gateway history (October 30; source candidate)
+
+The owner wants Everbranch to replace Recharge while retaining supported existing
+payment authorizations. The examined baseline and staged acceptance plan are in
+`docs/operations/subscriptions-recharge-replacement.md`. New encrypted agreement,
+cycle and action tables separate processor from billing owner. Preview-first
+commands prepare exact allowed members and change only activated Everbranch
+schedules, retaining the original anchor and original provider attempts. There
+is no replacement activation, collection or new provider worker in this checkpoint.
+
+Everbranch customer purchase history shows icons and text for recorded gateways,
+including split payments. Existing Shopify ingestion captures minimal gateway
+evidence. An explicit bounded owner/manager command can enrich one customer's
+history through original-store reads, rechecking identity and credentials before
+metadata-only persistence. Opening the profile remains offline. Unknown methods
+remain unknown; generic PayPal or Shopify Payments never implies Braintree/Shop Pay.
+
 ## Braintree account verification (October 30; source candidate)
 
 An exact tenant rollout adds Braintree account verification to the existing

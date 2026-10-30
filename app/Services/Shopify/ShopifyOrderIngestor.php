@@ -167,6 +167,8 @@ class ShopifyOrderIngestor
                 is_array($order->attribution_meta ?? null) ? $order->attribution_meta : [],
                 $payloadAttributionMeta
             );
+            $order->attribution_meta = app(\App\Support\Payments\PurchasePaymentGateways::class)
+                ->capture((array) $order->attribution_meta, $orderData);
 
             if (empty($order->status)) {
                 $order->status = 'new';

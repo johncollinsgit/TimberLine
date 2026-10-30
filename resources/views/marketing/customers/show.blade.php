@@ -597,6 +597,7 @@
                         <tr>
                             <th class="px-4 py-3 text-left">Order</th>
                             <th class="px-4 py-3 text-left">Source/Channel</th>
+                            <th class="px-4 py-3 text-left">Payment gateway</th>
                             <th class="px-4 py-3 text-left">Order Date</th>
                             <th class="px-4 py-3 text-left">Customer Snapshot</th>
                             <th class="px-4 py-3 text-right">Operational Detail</th>
@@ -612,6 +613,7 @@
                                 <td class="px-4 py-3 text-zinc-600">
                                     {{ $order->source ?: '—' }} / {{ $order->order_type ?: $order->channel }}
                                 </td>
+                                <td class="px-4 py-3"><x-payment-gateway-badges :gateways="app(\App\Support\Payments\PurchasePaymentGateways::class)->forOrder($order)" /></td>
                                 <td class="px-4 py-3 text-zinc-600">{{ optional($order->ordered_at)->toDateString() ?: '—' }}</td>
                                 <td class="px-4 py-3 text-zinc-600">
                                     {{ $order->customer_name ?: ($order->shipping_name ?: $order->billing_name ?: '—') }}
@@ -628,7 +630,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-4 py-6 text-center text-zinc-500">No linked operational orders available yet.</td>
+                                <td colspan="6" class="px-4 py-6 text-center text-zinc-500">No linked operational orders available yet.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -701,6 +703,7 @@
                     @foreach($squarePayments as $row)
                         <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
                             Payment {{ $row->square_payment_id }} · {{ $row->status ?: '—' }} · {{ $row->amount_money !== null ? '$' . number_format(((int) $row->amount_money) / 100, 2) : '—' }}
+                            <span class="ml-2"><x-payment-gateway-badges :gateways="app(\App\Support\Payments\PurchasePaymentGateways::class)->badges(['square'])" /></span>
                         </div>
                     @endforeach
                 </div>
