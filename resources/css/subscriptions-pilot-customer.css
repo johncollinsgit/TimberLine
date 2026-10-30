@@ -1,0 +1,470 @@
+:root {
+    color-scheme:light;
+    --forest:#243d32;
+    --ink:#273a31;
+    --muted:#637167;
+    --cream:#f7f5ef;
+    --paper:#fffefa;
+    --line:#dedfd4
+}
+* {
+    box-sizing:border-box
+}
+body {
+    margin:0;
+    background:var(--cream);
+    color:var(--ink);
+    font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    line-height:1.55
+}
+button,input {
+    font:inherit
+}
+a {
+    color:inherit
+}
+button {
+    cursor:pointer
+}
+button:disabled {
+    cursor:wait;
+    opacity:.7
+}
+a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible {
+    outline:3px solid #b98031;
+    outline-offset:4px
+}
+h1,h2,h3,p {
+    margin-top:0
+}
+h1,h2 {
+    font-family:Georgia,"Times New Roman",serif;
+    font-weight:400;
+    line-height:1.1;
+    letter-spacing:-.035em
+}
+h2 {
+    font-size:32px;
+    margin-bottom:12px
+}
+h3 {
+    font-size:15px;
+    line-height:1.35
+}
+p {
+    margin-bottom:14px
+}
+.club-wrap {
+    width:min(1120px,calc(100% - 64px));
+    margin-inline:auto
+}
+.club-header {
+    background:var(--forest);
+    color:#fffefa
+}
+.brand-row {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    min-height:110px;
+    gap:20px
+}
+.club-logo {
+    object-fit:contain;
+    width:180px;
+    height:68px
+}
+.merchant-name {
+    font-family:Georgia,serif;
+    font-size:27px
+}
+.header-label {
+    font-size:10px;
+    letter-spacing:.23em;
+    color:#e4e8dd
+}
+.club-intro {
+    max-width:780px;
+    padding:68px 0 46px
+}
+.eyebrow {
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:.17em;
+    color:var(--muted);
+    margin-bottom:14px
+}
+h1 {
+    font-size:clamp(42px,5.3vw,65px);
+    margin-bottom:22px
+}
+.intro-copy {
+    font-size:16px;
+    max-width:620px;
+    color:var(--muted);
+    margin:0
+}
+.club-layout {
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(0,1.03fr);
+    gap:46px;
+    align-items:start
+}
+.club-layout.single-column {
+    grid-template-columns:1fr;
+    max-width:580px
+}
+.subscription-column {
+    display:grid;
+    gap:20px;
+    scroll-margin-top:25px
+}
+.paper-card {
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:28px
+}
+.card-heading {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    margin-bottom:18px
+}
+.card-heading .eyebrow {
+    margin:0
+}
+.member-badge {
+    border-radius:20px;
+    background:#eef0e7;
+    color:var(--forest);
+    padding:5px 10px;
+    font-size:10px;
+    font-weight:600
+}
+.member-greeting {
+    color:var(--muted);
+    font-size:13px;
+    margin-bottom:20px
+}
+.subscription-lines {
+    padding:0;
+    list-style:none;
+    font-size:14px;
+    margin:0 0 17px
+}
+.subscription-lines li+li {
+    margin-top:8px
+}
+.subscription-price {
+    font-size:13px;
+    color:var(--muted);
+    margin:0 0 5px
+}
+.subscription-price span {
+    color:var(--ink);
+    font-size:32px;
+    letter-spacing:-.045em;
+    font-weight:500
+}
+.fine-print {
+    font-size:11px;
+    color:var(--muted);
+    margin:0
+}
+.terms-list {
+    margin:24px 0 20px;
+    padding-top:20px;
+    border-top:1px solid var(--line);
+    font-size:12px
+}
+.terms-list div {
+    display:grid;
+    grid-template-columns:90px 1fr;
+    gap:16px;
+    margin-bottom:14px
+}
+.terms-list dt {
+    color:var(--muted)
+}
+.terms-list dd {
+    margin:0;
+    text-align:right
+}
+.terms-details {
+    padding-top:17px;
+    border-top:1px solid var(--line);
+    font-size:12px;
+    color:var(--muted)
+}
+summary {
+    cursor:pointer;
+    color:var(--ink)
+}
+.terms-details p {
+    margin:12px 0 0
+}
+.authorization-card p {
+    font-size:13px;
+    color:var(--muted)
+}
+.authorization-card .eyebrow {
+    font-size:10px
+}
+.authorization-card h2 {
+    font-size:29px
+}
+.authorization-card strong {
+    color:var(--ink);
+    font-weight:600
+}
+.consent {
+    display:flex;
+    align-items:start;
+    gap:12px;
+    margin:24px 0;
+    font-size:12px;
+    line-height:1.65
+}
+.consent input {
+    margin:5px 0 0;
+    flex:0 0 18px;
+    width:18px;
+    height:18px;
+    accent-color:var(--forest)
+}
+.club-button {
+    display:inline-flex;
+    min-height:48px;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    padding:12px 17px;
+    border-radius:10px;
+    font-size:12px;
+    font-weight:600;
+    border:1px solid var(--forest)
+}
+.primary-button {
+    color:#fffefa;
+    background:var(--forest)
+}
+.primary-button:hover {
+    background:#355745
+}
+.authorization-card>.primary-button {
+    width:100%;
+    justify-content:space-between
+}
+.secondary-button {
+    background:transparent;
+    color:var(--forest)
+}
+.button-row {
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-top:20px
+}
+.authorization-card .secure-note {
+    font-size:10px;
+    text-align:center;
+    margin:10px 0 0
+}
+.coming-soon {
+    padding-top:7px
+}
+.coming-soon-heading {
+    margin-bottom:28px
+}
+.coming-soon-badge {
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    font-size:9px;
+    font-weight:700;
+    letter-spacing:.16em;
+    padding:7px 11px;
+    background:#ebe9da;
+    border-radius:24px;
+    margin-bottom:22px
+}
+.coming-soon-badge span {
+    height:5px;
+    width:5px;
+    background:#8e7b42;
+    border-radius:50%
+}
+.coming-soon h2 {
+    font-size:45px;
+    line-height:1.08;
+    margin-bottom:16px
+}
+.coming-soon-heading>p {
+    max-width:350px;
+    color:var(--muted);
+    font-size:13px
+}
+.feature-grid {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:14px
+}
+.feature-card {
+    padding:20px 18px;
+    background:#efefe5;
+    border:1px solid #e4e5d9;
+    border-radius:14px
+}
+.feature-number {
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:34px;
+    height:34px;
+    margin-bottom:18px;
+    border:1px solid #d9ddce;
+    border-radius:50%;
+    color:#54664d;
+    font-size:10px;
+    letter-spacing:.06em
+}
+.feature-card h3 {
+    margin-bottom:8px;
+    font-weight:600
+}
+.feature-card p {
+    font-size:11px;
+    color:var(--muted);
+    margin:0
+}
+.roadmap-note {
+    font-size:10px;
+    color:var(--muted);
+    padding:0 5px;
+    margin-top:18px;
+    max-width:430px
+}
+.club-footer {
+    border-top:1px solid var(--line);
+    margin-top:58px;
+    padding:25px 0 34px;
+    display:flex;
+    justify-content:space-between;
+    gap:15px;
+    font-size:11px;
+    color:var(--muted)
+}
+.club-footer p {
+    margin:0;
+    font-family:Georgia,serif;
+    font-style:italic;
+    font-size:15px
+}
+.club-footer a {
+    text-underline-offset:4px
+}
+.notice {
+    background:#e9efdf;
+    border:1px solid #cbd9bd;
+    padding:18px 22px;
+    border-radius:12px;
+    font-size:14px;
+    margin-bottom:25px
+}
+.notice-error {
+    background:#fff0dc;
+    border-color:#e8c796
+}
+.payment-history {
+    display:grid;
+    gap:16px;
+    margin-top:40px;
+    max-width:520px
+}
+.payment-history h2 {
+    margin-bottom:0
+}
+.cycle-card h3 {
+    font-size:15px
+}
+.cycle-card p {
+    font-size:12px;
+    color:var(--muted)
+}
+.skip-link {
+    position:absolute;
+    left:16px;
+    top:-100px;
+    background:white;
+    padding:12px;
+    z-index:10
+}
+.skip-link:focus {
+    top:16px
+}
+@media(min-width:1000px) {
+    .coming-soon {
+        position:sticky;
+        top:26px
+    }
+}
+@media(max-width:760px) {
+    .club-wrap {
+        width:min(540px,calc(100% - 36px))
+    }
+    .brand-row {
+        min-height:88px
+    }
+    .club-logo {
+        width:145px;
+        height:57px
+    }
+    .header-label {
+        font-size:8px;
+        letter-spacing:.15em
+    }
+    .club-intro {
+        padding:38px 0 30px
+    }
+    h1 {
+        font-size:43px
+    }
+    .eyebrow {
+        font-size:9px;
+        letter-spacing:.13em
+    }
+    .intro-copy {
+        font-size:14px
+    }
+    .club-layout {
+        grid-template-columns:1fr;
+        gap:36px
+    }
+    .paper-card {
+        padding:24px;
+        border-radius:16px
+    }
+    .coming-soon h2 {
+        font-size:39px
+    }
+    .feature-card {
+        padding:18px 15px
+    }
+    .feature-card h3 {
+        font-size:14px
+    }
+    .club-footer {
+        display:block;
+        margin-top:38px
+    }
+    .club-footer p {
+        margin-bottom:14px
+    }
+}
+@media(prefers-reduced-motion:reduce) {
+    * {
+        scroll-behavior:auto!important
+    }
+}

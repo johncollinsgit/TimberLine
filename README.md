@@ -1,3 +1,11 @@
+## Candle Club member authorization and scent notes (source candidate)
+
+The private Modern Forestry authorization page previews upcoming app features
+while retaining exact recurring terms and setup-only card consent. The paired
+native update adds private, moderated scent notes through the existing API.
+Braintree reuse requires verified merchant/vault access; neither this UI nor a
+saved card switches billing. See the [subscription operations](docs/operations/subscriptions-pilot.md).
+
 ## Local POS simulation foundation (2026-10-21; source only, disabled)
 
 A separate local/testing-only register rehearses native catalog prices, confirmed
