@@ -11,3 +11,23 @@ This public graph remains10operations jobs and6directory entries, including4work
 Retain map selection, keyboard, drag-preview versus explicit save, layers, fit and visibility controls. This public map uses immediate zoom transitions so a rapid perspective change cannot leave the diagnosed delayed zoom callback operating on a removed map; no vendor or global behavior changes. Test rapid switching and keep the zero-error guard. The guided tour uses the same targets/subviews and must not write work. Keep the fictional banner visible. Normal CI adds the portable map-label contract to the existing producer command without removing any test, flag, lane or aggregate guard. Chromium/WebKit desktop/phone local simulation and later hosted/physical-device/provider acceptance are separate states.
 
 Global search, voice/text AI, agreement usage choices, new providers and private publication are outside this follow-up.
+
+## Map hover and building job selection (2026-10-29)
+
+The public demo uses compact work-type icons (technology, facilities, events, academics or mixed work). Hover or keyboard focus
+shows the building name and its currently permitted job titles, department, status and available due dates at readable size.
+Jobs with the same verified building association share one icon; job identifiers and counts appear in hover details and the chooser. Click, Enter or Space opens the existing detail for a single visible job;
+multiple visible jobs open a building-specific chooser in the existing side panel.
+Unknown or edited locations remain separate job markers without inferred grouping.
+This grouping never exposes hidden sibling jobs or changes saved map positions.
+
+Single-job markers retain their existing drag preview and explicit save. Shared
+building markers cannot drag multiple jobs; each job's existing coordinate form
+remains available after choosing it. Phone map controls sit below the markers so
+they do not intercept a building tap. All behavior remains browser-only.
+
+Run `node --test tests/e2e/enterprise-campus-map-building-labels.test.mjs` and
+`node tests/e2e/campus-map-building-hover.browser.mjs` for permission projections,
+grouping, work icons, escaping, hover details and placement, single/multiple job clicks, keyboard access,
+desktop/phone layouts and the no-provider-request/CSP checks. Browser screenshots
+are local viewport evidence; the source has not been deployed by these checks.

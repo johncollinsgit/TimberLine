@@ -705,6 +705,24 @@ svg.leaflet-image-layer.leaflet-interactive path {
     return job.location===association.location?association:null;
   }
   function mapBuildingLabel(job){const association=mapBuildingAssociation(job);return association?association.name+' · public map building '+association.number:'Building not specified';}
+  function mapBuildingGroups(jobs){
+    const groups=new Map();
+    for(const job of jobs){
+      const association=mapBuildingAssociation(job),key=association?'building:'+association.number:'job:'+job.id;
+      if(!groups.has(key))groups.set(key,{association,jobs:[]});
+      groups.get(key).jobs.push(job);
+    }
+    return [...groups.values()].filter(group=>group.jobs.some(job=>Number.isFinite(job.x)&&Number.isFinite(job.y)));
+  }
+  const mapWorkIcons=Object.freeze({
+    technology:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/>',
+    facilities:'<path d="M14 6a5 5 0 0 0-6 6L3 17a3 3 0 0 0 4 4l5-5a5 5 0 0 0 6-6l-3 3-4-4 3-3Z"/>',
+    events:'<path d="M5 21V3m0 1h14l-3 5 3 5H5"/>',
+    academics:'<path d="M12 5C9 3 5 3 2 4v15c3-1 7-1 10 1m0-15c3-2 7-2 10-1v15c-3-1-7-1-10 1V5Z"/>',
+    mixed:'<rect x="4" y="6" width="16" height="15" rx="2"/><path d="M9 6V3h6v3M8 11h8m-8 4h8"/>',
+  });
+  function mapWorkType(job){const types={'Technology Services':'technology',Facilities:'facilities',Events:'events',Academics:'academics'};return Object.hasOwn(types,job.department)?types[job.department]:'mixed';}
+  function mapWorkIcon(group){const types=new Set(group.jobs.map(mapWorkType)),type=types.size===1?[...types][0]:'mixed';return `<svg data-work-icon="${type}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${mapWorkIcons[type]}</svg>`;}
   /* PUBLIC_MAP_BUILDING_LABELS_END */
   globalThis.campusMapDispose=()=>{dispose?.();dispose=null;};
   globalThis.campusMapTemplate=data=>`<section class="campus-map-card" id="campus-map-story"><div class="campus-map-top"><div><h2>Campus map</h2></div><div class="actions"><button class="button" id="map-toggle" aria-expanded="${!mapHidden}">${mapHidden?'View Map':'Hide Map'}</button><label><input type="checkbox" id="layer-jobs" checked> Jobs</label><label><input type="checkbox" id="layer-vans" checked> Simulated vans</label><label><input type="checkbox" id="layer-proposal" ${!['admin','manager','leader'].includes(data.persona)?'disabled':'checked'}> Proposed M8 area</label></div></div><p class="campus-job-building" id="campus-job-building" role="status" aria-live="polite"></p><div class="campus-map-grid ${mapHidden?'map-is-hidden':''}"><aside class="campus-job-info" id="campus-job-info" aria-live="polite"></aside><div class="campus-map-area"><div id="campus-map" aria-label="Official Lees-McRae campus map with fictional job and van overlays"></div><div class="campus-map-actions"><button id="map-north" class="button">North campus</button><button id="map-fit" class="button">Full campus</button></div><div class="map-source">Map: <a href="https://www.lmc.edu/admissions/visit/files/lmc-campus-map.pdf" target="_blank" rel="noreferrer">Lees-McRae College public campus plan</a> · Illustrative overlays · Not a survey</div></div></div><div class="map-footnote">Official campus-plan fallback: Google Maps origin/key permission has not been verified. Campus geography is from the official public map. Job and van positions are fictional map placements, not GPS telemetry. Costs are illustrative estimates; no actual spend, payroll or Bouncie vehicle data is connected. <a target="_blank" rel="noreferrer" href="https://www.google.com/maps?q=Lees-McRae+College,+Banner+Elk,+NC">Open Google campus map ↗</a></div></section>`;
@@ -719,6 +737,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const north=()=>map.fitBounds([[height*.64,width*.30],[height*.985,width*.78]],{padding:[22,22],animate:false});north();
     document.querySelector('#map-north').onclick=north;document.querySelector('#map-fit').onclick=()=>map.fitBounds([[0,0],[height,width]],{padding:[8,8]});
     const markers=new Map();
+    const showBuildingTooltip=marker=>{for(const other of new Set(markers.values()))if(other!==marker)other.closeTooltip();marker.openTooltip();};
     const grid=document.querySelector('.campus-map-grid');document.querySelector('#map-toggle').onclick=e=>{mapHidden=!mapHidden;grid.classList.toggle('map-is-hidden',mapHidden);e.currentTarget.textContent=mapHidden?'View Map':'Hide Map';e.currentTarget.setAttribute('aria-expanded',String(!mapHidden));if(!mapHidden)requestAnimationFrame(()=>map.invalidateSize({pan:false}));};
     const openProposal=()=>{
       if(globalThis.CAMPUS_PROPOSAL_DATA){const bytes=Uint8Array.from(atob(globalThis.CAMPUS_PROPOSAL_DATA),c=>c.charCodeAt(0));const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));window.open(url,'_blank','noopener');setTimeout(()=>URL.revokeObjectURL(url),60000);}
@@ -739,9 +758,31 @@ svg.leaflet-image-layer.leaflet-interactive path {
       panel.querySelector('#job-linked-task').onclick=()=>openTask(job.task_id);
       panel.querySelector('#job-cost-form')?.addEventListener('submit',async e=>{e.preventDefault();if(!job.can_edit)return;const values=Object.fromEntries(new FormData(e.currentTarget));try{await api('job',{id:job.id,expected_version:job.version,x:+values.map_x/100,y:+values.map_y/100,labor_minutes:Math.round(+values.labor_hours*60),labor_rate_cents:Math.round(+values.labor_rate*100),materials:job.materials.map((m,i)=>({id:m.id,quantity_hundredths:Math.round(+values['qty'+i]*100),unit_cost_cents:Math.round(+values['unit'+i]*100)}))});await load();toast('Fictional location and estimate saved. Map and detail totals synchronized.');}catch(error){toast(error.message,true);}});
       panel.querySelector('#job-work-form')?.addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget;try{await api('job-work',{id:job.id,expected_version:job.version,checklist_done:form.elements.checklist_done.checked,logged_minutes:Math.round(+form.elements.hours.value*60)});await load();toast('Assigned demo work update recorded. No payroll or cost write.');}catch(error){toast(error.message,true);}});
-      for(const [key,marker]of markers)marker.getElement()?.classList.toggle('selected-job',key===id);
+      for(const marker of new Set(markers.values()))marker.getElement()?.classList.toggle('selected-job',markers.get(id)===marker);
     }
-    for(const job of jobs){if(!Number.isFinite(job.x)||!Number.isFinite(job.y))continue;const marker=L.marker(point(job),{draggable:job.can_edit,keyboard:true,alt:`${job.id}: ${job.title}`,title:`${job.id}: ${job.title}`,icon:L.divIcon({className:'campus-job-marker',html:`<span class="campus-marker-location">${escape(mapBuildingAssociation(job)?.name||'Building not specified')}<small>Job ${escape(job.id)}</small></span>`,iconSize:[150,48],iconAnchor:[75,44]})}).addTo(jobLayer).bindTooltip(escape(job.id+' · '+mapBuildingLabel(job)),{direction:'top',offset:[0,-28],className:'campus-building-tooltip'}).on('click',()=>detail(job.id));markers.set(job.id,marker);const markerElement=marker.getElement();markerElement?.addEventListener('focus',()=>marker.openTooltip());markerElement?.addEventListener('blur',()=>marker.closeTooltip());markerElement?.addEventListener('keydown',event=>{if(event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||event.repeat||event.isComposing||!['Enter',' '].includes(event.key))return;event.preventDefault();event.stopPropagation();detail(job.id);marker.openTooltip();});marker.on('dragend',()=>{detail(job.id);const p=marker.getLatLng(),form=document.querySelector('#job-cost-form');if(form){form.elements.map_x.value=(p.lng/width*100).toFixed(1);form.elements.map_y.value=((1-p.lat/height)*100).toFixed(1);toast('Location preview moved. Save to persist this fictional change.');}});}
+    function openBuilding(group){
+      if(group.jobs.length===1){detail(group.jobs[0].id);return;}
+      const panel=document.querySelector('#campus-job-info'),name=group.association?.name||'Building not specified';
+      document.querySelector('#campus-job-building').textContent=name+' · '+group.jobs.length+' visible jobs';
+      panel.innerHTML=`<h3 tabindex="-1" id="building-jobs-heading">${escape(name)}</h3><p class="caption">Choose a job in this building.</p><div class="campus-building-jobs">${group.jobs.map(job=>`<button type="button" class="button" data-building-job="${escape(job.id)}"><strong>${escape(job.title)}</strong><small>Job ${escape(job.id)} · ${escape(job.phase||'')}</small></button>`).join('')}</div>`;
+      panel.querySelectorAll('[data-building-job]').forEach(button=>button.onclick=()=>detail(button.dataset.buildingJob));
+      panel.querySelector('#building-jobs-heading')?.focus({preventScroll:true});
+    }
+    for(const group of mapBuildingGroups(jobs)){
+      const job=group.jobs.find(job=>Number.isFinite(job.x)&&Number.isFinite(job.y)),name=group.association?.name||'Building not specified';
+      const label=name+' · '+group.jobs.map(job=>job.id+': '+job.title).join('; ');
+      const tooltip=`<strong>${escape(name)}</strong>${group.jobs.map(job=>`<span class="campus-hover-job"><b>${escape(job.title)}</b><small>${escape(job.id)} · ${escape(job.department||'Workspace work')} · ${escape(job.phase||'Status not set')}</small>${job.projected_completion_on?`<small>Due ${escape(job.projected_completion_on)}</small>`:''}</span>`).join('')}<small class="campus-building-hint">${group.jobs.length===1?'Click to open job':'Click to choose from '+group.jobs.length+' jobs'}</small>`;
+      const marker=L.marker(point(job),{draggable:group.jobs.length===1&&job.can_edit,keyboard:true,alt:label,title:'',icon:L.divIcon({className:'campus-job-marker',html:`<span class="campus-marker-location" aria-hidden="true">${mapWorkIcon(group)}</span>`,iconSize:[38,38],iconAnchor:[19,35]})}).addTo(jobLayer).bindTooltip(tooltip,{opacity:1,direction:'bottom',offset:[0,8],className:'campus-building-tooltip'}).on('click',()=>openBuilding(group));
+      for(const item of group.jobs)markers.set(item.id,marker);
+      const markerElement=marker.getElement();
+      markerElement?.setAttribute('aria-label',label);
+      markerElement?.setAttribute('aria-controls','campus-job-info');
+      marker.on('mouseover',()=>showBuildingTooltip(marker));
+      markerElement?.addEventListener('focus',()=>showBuildingTooltip(marker));
+      markerElement?.addEventListener('blur',()=>marker.closeTooltip());
+      markerElement?.addEventListener('keydown',event=>{if(event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||event.repeat||event.isComposing||!['Enter',' '].includes(event.key))return;event.preventDefault();event.stopPropagation();openBuilding(group);marker.closeTooltip();});
+      if(group.jobs.length===1)marker.on('dragend',()=>{detail(job.id);const p=marker.getLatLng(),form=document.querySelector('#job-cost-form');if(form){form.elements.map_x.value=(p.lng/width*100).toFixed(1);form.elements.map_y.value=((1-p.lat/height)*100).toFixed(1);toast('Location preview moved. Save to persist this fictional change.');}});
+    }
     for(const van of [{id:'V1',name:'Campus work van 1',x:.49,y:.172,color:'#547e94'},{id:'V2',name:'Campus work van 2',x:.42,y:.278,color:'#92769d'}])L.marker(point(van),{alt:van.name+' (simulated)',title:van.name+' (simulated)',icon:L.divIcon({className:'campus-van-marker',html:`<span style="background:${van.color}">${vanSvg}</span>`,iconSize:[36,36],iconAnchor:[18,18]})}).addTo(vanLayer).bindTooltip(van.name+' · SIMULATED',{direction:'top',permanent:true,offset:[0,-15]}).on('click',()=>{toast(van.name+': fictional scenario position. Bouncie disconnected; no live GPS fix or traveled route is claimed.');});
     if(['admin','manager','leader'].includes(data.persona)){L.circle(point({x:.61,y:.425}),{radius:110,color:'#b09142',weight:2,dashArray:'6 5',fillColor:'#d5b45b',fillOpacity:.22}).addTo(proposalLayer).bindTooltip('M8 · Proposed townhomes concept area',{permanent:true,direction:'top'}).on('click',()=>detail('M8'));}
     for(const [id,layer]of [['jobs',jobLayer],['vans',vanLayer],['proposal',proposalLayer]])document.querySelector('#layer-'+id).onchange=e=>e.target.checked?map.addLayer(layer):map.removeLayer(layer);
@@ -1589,9 +1630,9 @@ dialog.public-request-dialog.public-request-side{width:min(780px,calc(100vw - 24
 #assistant-search{display:grid;gap:14px;min-width:0}#assistant-search>.field{min-width:0}#assistant-search input{min-width:0;width:100%;min-height:44px}#assistant-search>.button{justify-self:start;min-height:44px}
 @media(max-width:480px){#assistant-search>.button{width:100%}}
 .tour-panel{bottom:calc(max(16px,env(safe-area-inset-bottom)) + 76px)!important;max-height:calc(100dvh - 110px)!important}
-.campus-job-marker>.campus-marker-location{width:150px;height:auto;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px 7px;border-radius:8px;transform:none;font-size:10px;line-height:1.2;text-align:center;white-space:normal}.campus-marker-location small{font-size:9px;font-weight:400;color:#fff}
+.campus-job-marker>.campus-marker-location{position:relative;width:38px;height:38px;border-radius:50% 50% 50% 5%;font-size:12px;transform:none}.campus-marker-location svg{width:21px;height:21px;display:block}.campus-map-card .leaflet-tooltip.campus-building-tooltip{width:max-content;max-width:min(320px,calc(100vw - 56px));padding:12px 14px;white-space:normal;font-size:13px;line-height:1.45;overflow-wrap:anywhere}.campus-building-tooltip strong{display:block;margin-bottom:6px;font-size:15px;color:#203d31}.campus-building-tooltip .campus-hover-job{display:block;padding-top:8px;margin-top:8px;border-top:1px solid #e5ebe1}.campus-hover-job b{display:block;font-weight:500}.campus-hover-job small{display:block;margin-top:3px}.campus-building-tooltip small{font-size:11px;color:#65746b}.campus-building-tooltip .campus-building-hint{display:block;margin-top:9px}.campus-job-marker:focus-visible{outline:3px solid #203d31;outline-offset:5px;border-radius:50%}.campus-building-jobs{display:grid;gap:10px}.campus-building-jobs .button{text-align:left;white-space:normal;min-height:48px;margin-top:0}.campus-building-jobs small{display:block;font-size:11px;margin-top:5px}
 @media(max-width:800px){.topbar .breadcrumb{order:0;flex:1 1 100%}.topbar .perspective{order:1;flex:1 1 100%;min-width:0}.topbar .campus-global-search{order:2;flex:1 1 100%;max-width:none}.campus-assistant-panel{right:12px}.tour-panel{right:12px!important;max-width:calc(100vw - 24px)!important}}
-@media(max-width:430px){#campus-workspace-tools{right:12px;gap:5px}#campus-workspace-tools .button{font-size:11px;padding:8px 10px}.campus-assistant-body{padding:12px}.campus-assistant-body .job-meta{grid-template-columns:90px minmax(0,1fr)}}
+@media(max-width:430px){#campus-workspace-tools{right:12px;gap:5px}#campus-workspace-tools .button{font-size:11px;padding:8px 10px}.campus-assistant-body{padding:12px}.campus-assistant-body .job-meta{grid-template-columns:90px minmax(0,1fr)}.campus-map-actions{top:auto;bottom:28px}}
 
 </style><!-- EVERBRANCH_SEARCH_BEGIN -->
 <style>.eb-search{--eb-ink:#203d31;--eb-muted:#65746b;--eb-border:#d9e2d9;--eb-surface:#fff;position:relative;width:100%;max-width:560px;min-width:0;color:var(--eb-ink);font:14px/1.45 Inter,system-ui,sans-serif;z-index:80}
