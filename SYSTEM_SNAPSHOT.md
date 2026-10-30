@@ -1,3 +1,18 @@
+## Facilities mobile controls (October 30; source candidate)
+
+The paired public frontend adds whole-card work-order menus, a docked ticket
+comment composer and always-visible live voice at the top of the opened Ask
+Everbranch panel. Menus and photo job cards use the current persona projection;
+AI cards resolve only server-verified ticket IDs. Ticket details and posted
+comments scroll above the composer, with keyboard-viewport handling and retained
+drafts. Voice still starts only by explicit tap and uses the existing cleanup,
+read-only lookup and usage limits. Home Screen standalone launch avoids Safari's
+URL pill; the iOS keyboard accessory controls remain OS-owned. No API, schema,
+provider or release-gate changes are included. This is a source candidate until
+protected release and live verification. Physical installation, acoustic voice,
+camera and received inbox delivery remain outstanding. See
+`docs/operations/campus-facilities-demo.md#mobile-controls-and-photo-job-answers-october30-source-candidate`.
+
 ## Public Facilities app migration (October 30; release candidate)
 
 The public Lees-McRae URL now has a paired standalone React dashboard candidate

@@ -160,3 +160,61 @@ The six-job regression checks total6/open4/closed2, Maintenance4/Grounds1/Housek
 exact IDs, head/technician scope, live status refresh, unknown locations and replay.
 
 A real bounded synthetic voice Ask check called `lookup_jobs`, then accurately read the five-job fixture as total5/open4/closed1 and Maintenance3/Grounds1/Housekeeping1. The provider call was closed and its allowance retained; no microphone was captured and temporary local check pages were removed. A real Responses selector returned the same exact fixture counts.
+
+
+## Mobile controls and photo job answers (October30 source candidate)
+
+The paired frontend source makes each entire statistic card open the same
+accessible photo work-order menu used by the charts. The subtitle “Across this
+demo view” is removed. Counts, menu results and ticket links remain confined to
+the selected demo persona and refresh with the existing board polling. The
+filters deliberately match each card's displayed count:
+
+| Card | Included statuses |
+| --- | --- |
+| Open work orders | All except Completed and Rejected |
+| Awaiting review | Pending approval and Needs details |
+| Work in progress | In progress only |
+| Completed | Completed only |
+
+Loading cards are disabled; zero-count cards open an empty-state menu. Keyboard
+activation, focus restoration and body-scroll locking are shared with the chart
+menu. Opening a job uses the existing ticket detail and explicit workflow actions.
+
+Ticket details, activity, photos and posted comments scroll in their own body
+above a docked comment composer. The composer retains text drafts, attachments,
+mentions, dictation and existing role controls. Bounded textarea/attachment areas,
+upward-opening internally scrolling menus, safe-area padding and visual-viewport
+handling keep its controls reachable when the phone keyboard opens. Dialog focus
+and scroll locks prevent interaction with the page behind it and clean up on close.
+
+Inside the opened Ask Everbranch panel, “Your campus. Just ask.” and explicit
+Start live voice / Cancel connection / End conversation controls remain at the
+top above the scrolling conversation. The former bottom “Talk instead” reveal
+step is removed. Typed entry remains below the conversation; final spoken
+transcripts appear in that scrolling area. Merely opening Ask does not request a
+microphone or create a provider session. Existing five-minute/daily limits,
+read-only job lookup, cancellation and capture/hangup cleanup remain in force.
+
+Job answers in typed and spoken conversations render clickable photo cards with
+recorded title, location and status. Cards resolve the server-returned permitted
+ticket IDs against the current visible board, using the existing attachment,
+building-reference and labelled illustrative-photo catalog. Model prose cannot
+supply a photo URL or create a ticket. Selecting a card opens the shared ticket.
+
+The installation guidance distinguishes an ordinary Safari/text-link launch
+from Home Screen standalone launch: Safari → Share → Add to Home Screen → Open
+as Web App, then launch the new icon. Standalone mode avoids Safari's normal URL
+pill. The separate iOS arrows/checkmark keyboard accessory remains controlled
+by iOS and is not suppressed by unsupported web code. Verify that internal
+navigation remains in the canonical app's manifest scope.
+
+This candidate changes only the packaged frontend and these operating notes;
+no public API, schema, credentials, provider configuration or protected release
+gates change. Local layout/resource-lifecycle QA, final-head CI, protected
+activation and live asset/behavior verification are separate checks. Physical
+iPhone/Android installation, acoustic microphone/speaker, camera and actual
+inbox delivery remain outstanding until tested on the corresponding devices.
+
+
+Source validation for this follow-up: TypeScript/standalone build and 30 focused native/public tests (500 assertions) pass. Browser fixtures cover exact card filters/counts and persona scope; empty/loading states; top voice controls with explicit start, denial, cancellation, failure and close cleanup; late ASR ordering with photo cards; and frozen typed retry ID/history during mixed voice. Composer checks cover long history, photo+mention+error at a 360px keyboard viewport, profile input visibility, retry identity, slow post close/reopen with a newer draft, distinct workflow icons and in-app photo focus. Actual browser portrait/landscape sizes and scoped offline Retry also pass. These fixtures used no microphone/camera, paid provider call or email. Temporary harness pages were removed before packaging. Physical-device and inbox acceptance remain separate.
