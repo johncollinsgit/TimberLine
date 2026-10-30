@@ -1,0 +1,2030 @@
+[
+  {
+    "id": "FM-B13-1",
+    "title": "Adjust a rattling study-room vent",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "Shelton Learning Commons",
+      "room": "Second-floor study area",
+      "issue": "Adjust a rattling study-room vent",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Maintenance"
+    },
+    "status": "Pending approval",
+    "priority": "High",
+    "assignee": null,
+    "createdAt": "2026-10-30T13:00:00Z",
+    "updatedAt": "2026-10-30T13:00:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B13-1",
+        "at": "2026-10-30T13:00:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B13-2",
+    "title": "Clear leaves from the accessible entrance",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Shelton Learning Commons",
+      "room": "Exterior accessible approach",
+      "issue": "Clear leaves from the accessible entrance",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Grounds"
+    },
+    "status": "Assigned",
+    "priority": "Normal",
+    "assignee": "casey",
+    "createdAt": "2026-10-30T12:45:00Z",
+    "updatedAt": "2026-10-30T12:45:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B13-2",
+        "at": "2026-10-30T12:45:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B13-2",
+        "at": "2026-10-30T12:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B13-2",
+        "at": "2026-10-30T12:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Technician assigned",
+        "message": "Casey Bennett",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B13-3",
+    "title": "Clean study-room tables and glass",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "Shelton Learning Commons",
+      "room": "Group study rooms",
+      "issue": "Clean study-room tables and glass",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Housekeeping"
+    },
+    "status": "In progress",
+    "priority": "Normal",
+    "assignee": "riley",
+    "createdAt": "2026-10-30T12:30:00Z",
+    "updatedAt": "2026-10-30T12:30:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B13-3",
+        "at": "2026-10-30T12:30:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B13-3",
+        "at": "2026-10-30T12:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B13-3",
+        "at": "2026-10-30T12:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Technician assigned",
+        "message": "Riley Parker",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B13-3",
+        "at": "2026-10-30T12:30:00Z",
+        "actor": "Riley Parker",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B06-1",
+    "title": "Inspect the entrance door closer",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Cannon Welcome Center",
+      "room": "Main entrance",
+      "issue": "Inspect the entrance door closer",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Maintenance"
+    },
+    "status": "Assigned",
+    "priority": "Normal",
+    "assignee": "sam",
+    "createdAt": "2026-10-30T12:00:00Z",
+    "updatedAt": "2026-10-30T12:00:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B06-1",
+        "at": "2026-10-30T12:00:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B06-1",
+        "at": "2026-10-30T12:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B06-1",
+        "at": "2026-10-30T12:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Technician assigned",
+        "message": "Sam Rivera",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B06-2",
+    "title": "Refresh mulch along the visitor walkway",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "Cannon Welcome Center",
+      "room": "Exterior visitor approach",
+      "issue": "Refresh mulch along the visitor walkway",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Grounds"
+    },
+    "status": "In progress",
+    "priority": "Normal",
+    "assignee": "casey",
+    "createdAt": "2026-10-30T11:45:00Z",
+    "updatedAt": "2026-10-30T11:45:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B06-2",
+        "at": "2026-10-30T11:45:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B06-2",
+        "at": "2026-10-30T11:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B06-2",
+        "at": "2026-10-30T11:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Technician assigned",
+        "message": "Casey Bennett",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B06-2",
+        "at": "2026-10-30T11:45:00Z",
+        "actor": "Casey Bennett",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B06-3",
+    "title": "Clean the Exchange counter and lobby",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Cannon Welcome Center",
+      "room": "The Exchange lobby",
+      "issue": "Clean the Exchange counter and lobby",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Housekeeping"
+    },
+    "status": "Approved",
+    "priority": "Normal",
+    "assignee": null,
+    "createdAt": "2026-10-30T11:30:00Z",
+    "updatedAt": "2026-10-30T11:30:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B06-3",
+        "at": "2026-10-30T11:30:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B06-3",
+        "at": "2026-10-30T11:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B12-1",
+    "title": "Replace a flickering corridor light",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "Chaffee Center",
+      "room": "Ground-floor corridor",
+      "issue": "Replace a flickering corridor light",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Maintenance"
+    },
+    "status": "In progress",
+    "priority": "Normal",
+    "assignee": "sam",
+    "createdAt": "2026-10-30T11:00:00Z",
+    "updatedAt": "2026-10-30T11:00:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B12-1",
+        "at": "2026-10-30T11:00:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B12-1",
+        "at": "2026-10-30T11:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B12-1",
+        "at": "2026-10-30T11:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Technician assigned",
+        "message": "Sam Rivera",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B12-1",
+        "at": "2026-10-30T11:00:00Z",
+        "actor": "Sam Rivera",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B12-2",
+    "title": "Trim planting away from the entrance sign",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Chaffee Center",
+      "room": "Exterior sign and approach",
+      "issue": "Trim planting away from the entrance sign",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Grounds"
+    },
+    "status": "Approved",
+    "priority": "Normal",
+    "assignee": null,
+    "createdAt": "2026-10-30T10:45:00Z",
+    "updatedAt": "2026-10-30T10:45:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B12-2",
+        "at": "2026-10-30T10:45:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B12-2",
+        "at": "2026-10-30T10:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B12-3",
+    "title": "Refresh floors in the shared office corridor",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "Chaffee Center",
+      "room": "Office corridor",
+      "issue": "Refresh floors in the shared office corridor",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Housekeeping"
+    },
+    "status": "Awaiting parts",
+    "priority": "Normal",
+    "assignee": "riley",
+    "createdAt": "2026-10-30T10:30:00Z",
+    "updatedAt": "2026-10-30T10:30:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B12-3",
+        "at": "2026-10-30T10:30:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B12-3",
+        "at": "2026-10-30T10:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B12-3",
+        "at": "2026-10-30T10:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Technician assigned",
+        "message": "Riley Parker",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B12-3",
+        "at": "2026-10-30T10:30:00Z",
+        "actor": "Riley Parker",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      },
+      {
+        "id": "parts-FM-B12-3",
+        "at": "2026-10-30T10:30:00Z",
+        "actor": "Riley Parker",
+        "action": "Awaiting parts",
+        "message": "Waiting for the required replacement supplies in this fictional sample.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B04-1",
+    "title": "Check a sticking side-entrance latch",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Hayes Auditorium",
+      "room": "Side entrance",
+      "issue": "Check a sticking side-entrance latch",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Maintenance"
+    },
+    "status": "Approved",
+    "priority": "Normal",
+    "assignee": null,
+    "createdAt": "2026-10-30T10:00:00Z",
+    "updatedAt": "2026-10-30T10:00:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B04-1",
+        "at": "2026-10-30T10:00:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B04-1",
+        "at": "2026-10-30T10:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B04-2",
+    "title": "Clear the steps and adjacent path",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "Hayes Auditorium",
+      "room": "Exterior entry steps",
+      "issue": "Clear the steps and adjacent path",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Grounds"
+    },
+    "status": "Awaiting parts",
+    "priority": "Normal",
+    "assignee": "casey",
+    "createdAt": "2026-10-30T09:45:00Z",
+    "updatedAt": "2026-10-30T09:45:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B04-2",
+        "at": "2026-10-30T09:45:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B04-2",
+        "at": "2026-10-30T09:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B04-2",
+        "at": "2026-10-30T09:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Technician assigned",
+        "message": "Casey Bennett",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B04-2",
+        "at": "2026-10-30T09:45:00Z",
+        "actor": "Casey Bennett",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      },
+      {
+        "id": "parts-FM-B04-2",
+        "at": "2026-10-30T09:45:00Z",
+        "actor": "Casey Bennett",
+        "action": "Awaiting parts",
+        "message": "Waiting for the required replacement supplies in this fictional sample.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B04-3",
+    "title": "Clean auditorium seating before an event",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Hayes Auditorium",
+      "room": "Audience seating",
+      "issue": "Clean auditorium seating before an event",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Housekeeping"
+    },
+    "status": "Completed",
+    "priority": "Normal",
+    "assignee": "riley",
+    "createdAt": "2026-10-30T09:30:00Z",
+    "updatedAt": "2026-10-30T09:30:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B04-3",
+        "at": "2026-10-30T09:30:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B04-3",
+        "at": "2026-10-30T09:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B04-3",
+        "at": "2026-10-30T09:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Technician assigned",
+        "message": "Riley Parker",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B04-3",
+        "at": "2026-10-30T09:30:00Z",
+        "actor": "Riley Parker",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      },
+      {
+        "id": "complete-FM-B04-3",
+        "at": "2026-10-30T09:30:00Z",
+        "actor": "Riley Parker",
+        "action": "Job completed",
+        "message": "Sample work completed and reviewed.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": [
+      {
+        "summary": "Clean auditorium seating before an event \u2014 sample work completed",
+        "minutes": 30,
+        "materials": "Standard demo supplies",
+        "outcome": "Area checked and ready for normal use",
+        "remaining": "None",
+        "actor": "Riley Parker",
+        "at": "2026-10-30T09:30:00Z"
+      }
+    ]
+  },
+  {
+    "id": "FM-B14-1",
+    "title": "Test the classroom thermostat",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "Bowman Building",
+      "room": "Classroom 202",
+      "issue": "Test the classroom thermostat",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Maintenance"
+    },
+    "status": "Awaiting parts",
+    "priority": "High",
+    "assignee": "sam",
+    "createdAt": "2026-10-30T09:00:00Z",
+    "updatedAt": "2026-10-30T09:00:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B14-1",
+        "at": "2026-10-30T09:00:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B14-1",
+        "at": "2026-10-30T09:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B14-1",
+        "at": "2026-10-30T09:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Technician assigned",
+        "message": "Sam Rivera",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B14-1",
+        "at": "2026-10-30T09:00:00Z",
+        "actor": "Sam Rivera",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      },
+      {
+        "id": "parts-FM-B14-1",
+        "at": "2026-10-30T09:00:00Z",
+        "actor": "Sam Rivera",
+        "action": "Awaiting parts",
+        "message": "Waiting for the required replacement supplies in this fictional sample.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B14-2",
+    "title": "Clear drainage at the rear path",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Bowman Building",
+      "room": "Exterior rear walkway",
+      "issue": "Clear drainage at the rear path",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Grounds"
+    },
+    "status": "Completed",
+    "priority": "Normal",
+    "assignee": "casey",
+    "createdAt": "2026-10-30T08:45:00Z",
+    "updatedAt": "2026-10-30T08:45:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B14-2",
+        "at": "2026-10-30T08:45:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B14-2",
+        "at": "2026-10-30T08:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B14-2",
+        "at": "2026-10-30T08:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Technician assigned",
+        "message": "Casey Bennett",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B14-2",
+        "at": "2026-10-30T08:45:00Z",
+        "actor": "Casey Bennett",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      },
+      {
+        "id": "complete-FM-B14-2",
+        "at": "2026-10-30T08:45:00Z",
+        "actor": "Casey Bennett",
+        "action": "Job completed",
+        "message": "Sample work completed and reviewed.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": [
+      {
+        "summary": "Clear drainage at the rear path \u2014 sample work completed",
+        "minutes": 30,
+        "materials": "Standard demo supplies",
+        "outcome": "Area checked and ready for normal use",
+        "remaining": "None",
+        "actor": "Casey Bennett",
+        "at": "2026-10-30T08:45:00Z"
+      }
+    ]
+  },
+  {
+    "id": "FM-B14-3",
+    "title": "Clean shared classroom surfaces",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "Bowman Building",
+      "room": "Classroom 101",
+      "issue": "Clean shared classroom surfaces",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Housekeeping"
+    },
+    "status": "Pending approval",
+    "priority": "Normal",
+    "assignee": null,
+    "createdAt": "2026-10-30T08:30:00Z",
+    "updatedAt": "2026-10-30T08:30:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B14-3",
+        "at": "2026-10-30T08:30:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B37-1",
+    "title": "Organize and inspect the tool charging station",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Facilities Complex",
+      "room": "Workshop charging area",
+      "issue": "Organize and inspect the tool charging station",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Maintenance"
+    },
+    "status": "Completed",
+    "priority": "Normal",
+    "assignee": "sam",
+    "createdAt": "2026-10-30T08:00:00Z",
+    "updatedAt": "2026-10-30T08:00:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B37-1",
+        "at": "2026-10-30T08:00:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B37-1",
+        "at": "2026-10-30T08:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B37-1",
+        "at": "2026-10-30T08:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Technician assigned",
+        "message": "Sam Rivera",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B37-1",
+        "at": "2026-10-30T08:00:00Z",
+        "actor": "Sam Rivera",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      },
+      {
+        "id": "complete-FM-B37-1",
+        "at": "2026-10-30T08:00:00Z",
+        "actor": "Sam Rivera",
+        "action": "Job completed",
+        "message": "Sample work completed and reviewed.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": [
+      {
+        "summary": "Organize and inspect the tool charging station \u2014 sample work completed",
+        "minutes": 30,
+        "materials": "Standard demo supplies",
+        "outcome": "Area checked and ready for normal use",
+        "remaining": "None",
+        "actor": "Sam Rivera",
+        "at": "2026-10-30T08:00:00Z"
+      }
+    ]
+  },
+  {
+    "id": "FM-B37-2",
+    "title": "Clear debris beside the service yard gate",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "Facilities Complex",
+      "room": "Service yard approach",
+      "issue": "Clear debris beside the service yard gate",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Grounds"
+    },
+    "status": "Pending approval",
+    "priority": "Normal",
+    "assignee": null,
+    "createdAt": "2026-10-30T07:45:00Z",
+    "updatedAt": "2026-10-30T07:45:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B37-2",
+        "at": "2026-10-30T07:45:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B37-3",
+    "title": "Deep clean the staff break area",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Facilities Complex",
+      "room": "Staff break room",
+      "issue": "Deep clean the staff break area",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Housekeeping"
+    },
+    "status": "Assigned",
+    "priority": "Normal",
+    "assignee": "riley",
+    "createdAt": "2026-10-30T07:30:00Z",
+    "updatedAt": "2026-10-30T07:30:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B37-3",
+        "at": "2026-10-30T07:30:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B37-3",
+        "at": "2026-10-30T07:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B37-3",
+        "at": "2026-10-30T07:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Technician assigned",
+        "message": "Riley Parker",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B38-1",
+    "title": "Check the observation-room faucet",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "May Wildlife Rehabilitation Center",
+      "room": "Observation area",
+      "issue": "Check the observation-room faucet",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Maintenance"
+    },
+    "status": "Pending approval",
+    "priority": "Normal",
+    "assignee": null,
+    "createdAt": "2026-10-30T07:00:00Z",
+    "updatedAt": "2026-10-30T07:00:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B38-1",
+        "at": "2026-10-30T07:00:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B38-2",
+    "title": "Clear leaves from the public approach",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "May Wildlife Rehabilitation Center",
+      "room": "Exterior visitor path",
+      "issue": "Clear leaves from the public approach",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Grounds"
+    },
+    "status": "Assigned",
+    "priority": "Normal",
+    "assignee": "casey",
+    "createdAt": "2026-10-30T06:45:00Z",
+    "updatedAt": "2026-10-30T06:45:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B38-2",
+        "at": "2026-10-30T06:45:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B38-2",
+        "at": "2026-10-30T06:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B38-2",
+        "at": "2026-10-30T06:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Technician assigned",
+        "message": "Casey Bennett",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B38-3",
+    "title": "Clean visitor-area windows",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "May Wildlife Rehabilitation Center",
+      "room": "Public observation windows",
+      "issue": "Clean visitor-area windows",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Housekeeping"
+    },
+    "status": "In progress",
+    "priority": "Normal",
+    "assignee": "riley",
+    "createdAt": "2026-10-30T06:30:00Z",
+    "updatedAt": "2026-10-30T06:30:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B38-3",
+        "at": "2026-10-30T06:30:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B38-3",
+        "at": "2026-10-30T06:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B38-3",
+        "at": "2026-10-30T06:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Technician assigned",
+        "message": "Riley Parker",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B38-3",
+        "at": "2026-10-30T06:30:00Z",
+        "actor": "Riley Parker",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B36-1",
+    "title": "Inspect a loose locker-room handle",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Arthur Student Recreation Complex",
+      "room": "Locker-room entrance",
+      "issue": "Inspect a loose locker-room handle",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Maintenance"
+    },
+    "status": "Assigned",
+    "priority": "Normal",
+    "assignee": "sam",
+    "createdAt": "2026-10-30T06:00:00Z",
+    "updatedAt": "2026-10-30T06:00:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B36-1",
+        "at": "2026-10-30T06:00:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B36-1",
+        "at": "2026-10-30T06:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B36-1",
+        "at": "2026-10-30T06:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Technician assigned",
+        "message": "Sam Rivera",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B36-2",
+    "title": "Trim planting along the recreation entrance",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "Arthur Student Recreation Complex",
+      "room": "Exterior entry approach",
+      "issue": "Trim planting along the recreation entrance",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Grounds"
+    },
+    "status": "In progress",
+    "priority": "Normal",
+    "assignee": "casey",
+    "createdAt": "2026-10-30T05:45:00Z",
+    "updatedAt": "2026-10-30T05:45:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B36-2",
+        "at": "2026-10-30T05:45:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B36-2",
+        "at": "2026-10-30T05:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B36-2",
+        "at": "2026-10-30T05:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Technician assigned",
+        "message": "Casey Bennett",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B36-2",
+        "at": "2026-10-30T05:45:00Z",
+        "actor": "Casey Bennett",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B36-3",
+    "title": "Clean exercise-room mirrors and floor",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Arthur Student Recreation Complex",
+      "room": "Exercise room",
+      "issue": "Clean exercise-room mirrors and floor",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Housekeeping"
+    },
+    "status": "Approved",
+    "priority": "Normal",
+    "assignee": null,
+    "createdAt": "2026-10-30T05:30:00Z",
+    "updatedAt": "2026-10-30T05:30:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B36-3",
+        "at": "2026-10-30T05:30:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B36-3",
+        "at": "2026-10-30T05:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B20-1",
+    "title": "Adjust a common-room door hinge",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "Virginia Hall",
+      "room": "Ground-floor common room",
+      "issue": "Adjust a common-room door hinge",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Maintenance"
+    },
+    "status": "In progress",
+    "priority": "High",
+    "assignee": "sam",
+    "createdAt": "2026-10-30T05:00:00Z",
+    "updatedAt": "2026-10-30T05:00:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B20-1",
+        "at": "2026-10-30T05:00:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B20-1",
+        "at": "2026-10-30T05:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B20-1",
+        "at": "2026-10-30T05:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Technician assigned",
+        "message": "Sam Rivera",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B20-1",
+        "at": "2026-10-30T05:00:00Z",
+        "actor": "Sam Rivera",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B20-2",
+    "title": "Clear leaves from the entry steps",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Virginia Hall",
+      "room": "Exterior main steps",
+      "issue": "Clear leaves from the entry steps",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Grounds"
+    },
+    "status": "Approved",
+    "priority": "Normal",
+    "assignee": null,
+    "createdAt": "2026-10-30T04:45:00Z",
+    "updatedAt": "2026-10-30T04:45:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B20-2",
+        "at": "2026-10-30T04:45:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B20-2",
+        "at": "2026-10-30T04:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B20-3",
+    "title": "Clean common-room furniture",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "Virginia Hall",
+      "room": "Shared lounge",
+      "issue": "Clean common-room furniture",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Housekeeping"
+    },
+    "status": "Awaiting parts",
+    "priority": "Normal",
+    "assignee": "riley",
+    "createdAt": "2026-10-30T04:30:00Z",
+    "updatedAt": "2026-10-30T04:30:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B20-3",
+        "at": "2026-10-30T04:30:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B20-3",
+        "at": "2026-10-30T04:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B20-3",
+        "at": "2026-10-30T04:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Technician assigned",
+        "message": "Riley Parker",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B20-3",
+        "at": "2026-10-30T04:30:00Z",
+        "actor": "Riley Parker",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      },
+      {
+        "id": "parts-FM-B20-3",
+        "at": "2026-10-30T04:30:00Z",
+        "actor": "Riley Parker",
+        "action": "Awaiting parts",
+        "message": "Waiting for the required replacement supplies in this fictional sample.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B17-1",
+    "title": "Replace an entrance light cover",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Tennessee Hall",
+      "room": "Entry vestibule",
+      "issue": "Replace an entrance light cover",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Maintenance"
+    },
+    "status": "Approved",
+    "priority": "Normal",
+    "assignee": null,
+    "createdAt": "2026-10-30T04:00:00Z",
+    "updatedAt": "2026-10-30T04:00:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B17-1",
+        "at": "2026-10-30T04:00:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B17-1",
+        "at": "2026-10-30T04:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B17-2",
+    "title": "Tidy planting along the residence entrance",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "Tennessee Hall",
+      "room": "Exterior entrance planting",
+      "issue": "Tidy planting along the residence entrance",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Grounds"
+    },
+    "status": "Awaiting parts",
+    "priority": "Normal",
+    "assignee": "casey",
+    "createdAt": "2026-10-30T03:45:00Z",
+    "updatedAt": "2026-10-30T03:45:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B17-2",
+        "at": "2026-10-30T03:45:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B17-2",
+        "at": "2026-10-30T03:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B17-2",
+        "at": "2026-10-30T03:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Technician assigned",
+        "message": "Casey Bennett",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B17-2",
+        "at": "2026-10-30T03:45:00Z",
+        "actor": "Casey Bennett",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      },
+      {
+        "id": "parts-FM-B17-2",
+        "at": "2026-10-30T03:45:00Z",
+        "actor": "Casey Bennett",
+        "action": "Awaiting parts",
+        "message": "Waiting for the required replacement supplies in this fictional sample.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B17-3",
+    "title": "Refresh the residence lobby floor",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Tennessee Hall",
+      "room": "Main lobby",
+      "issue": "Refresh the residence lobby floor",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Housekeeping"
+    },
+    "status": "Completed",
+    "priority": "Normal",
+    "assignee": "riley",
+    "createdAt": "2026-10-30T03:30:00Z",
+    "updatedAt": "2026-10-30T03:30:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B17-3",
+        "at": "2026-10-30T03:30:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B17-3",
+        "at": "2026-10-30T03:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B17-3",
+        "at": "2026-10-30T03:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Technician assigned",
+        "message": "Riley Parker",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B17-3",
+        "at": "2026-10-30T03:30:00Z",
+        "actor": "Riley Parker",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      },
+      {
+        "id": "complete-FM-B17-3",
+        "at": "2026-10-30T03:30:00Z",
+        "actor": "Riley Parker",
+        "action": "Job completed",
+        "message": "Sample work completed and reviewed.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": [
+      {
+        "summary": "Refresh the residence lobby floor \u2014 sample work completed",
+        "minutes": 30,
+        "materials": "Standard demo supplies",
+        "outcome": "Area checked and ready for normal use",
+        "remaining": "None",
+        "actor": "Riley Parker",
+        "at": "2026-10-30T03:30:00Z"
+      }
+    ]
+  },
+  {
+    "id": "FM-B19-1",
+    "title": "Check a noisy corridor exhaust fan",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "North Carolina Building",
+      "room": "First-floor corridor",
+      "issue": "Check a noisy corridor exhaust fan",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Maintenance"
+    },
+    "status": "Awaiting parts",
+    "priority": "Normal",
+    "assignee": "sam",
+    "createdAt": "2026-10-30T03:00:00Z",
+    "updatedAt": "2026-10-30T03:00:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B19-1",
+        "at": "2026-10-30T03:00:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B19-1",
+        "at": "2026-10-30T03:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B19-1",
+        "at": "2026-10-30T03:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Technician assigned",
+        "message": "Sam Rivera",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B19-1",
+        "at": "2026-10-30T03:00:00Z",
+        "actor": "Sam Rivera",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      },
+      {
+        "id": "parts-FM-B19-1",
+        "at": "2026-10-30T03:00:00Z",
+        "actor": "Sam Rivera",
+        "action": "Awaiting parts",
+        "message": "Waiting for the required replacement supplies in this fictional sample.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B19-2",
+    "title": "Clear the front walkway after grounds work",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "North Carolina Building",
+      "room": "Exterior front walkway",
+      "issue": "Clear the front walkway after grounds work",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Grounds"
+    },
+    "status": "Completed",
+    "priority": "Normal",
+    "assignee": "casey",
+    "createdAt": "2026-10-30T02:45:00Z",
+    "updatedAt": "2026-10-30T02:45:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B19-2",
+        "at": "2026-10-30T02:45:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B19-2",
+        "at": "2026-10-30T02:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B19-2",
+        "at": "2026-10-30T02:45:00Z",
+        "actor": "Avery Brooks",
+        "action": "Technician assigned",
+        "message": "Casey Bennett",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B19-2",
+        "at": "2026-10-30T02:45:00Z",
+        "actor": "Casey Bennett",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      },
+      {
+        "id": "complete-FM-B19-2",
+        "at": "2026-10-30T02:45:00Z",
+        "actor": "Casey Bennett",
+        "action": "Job completed",
+        "message": "Sample work completed and reviewed.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": [
+      {
+        "summary": "Clear the front walkway after grounds work \u2014 sample work completed",
+        "minutes": 30,
+        "materials": "Standard demo supplies",
+        "outcome": "Area checked and ready for normal use",
+        "remaining": "None",
+        "actor": "Casey Bennett",
+        "at": "2026-10-30T02:45:00Z"
+      }
+    ]
+  },
+  {
+    "id": "FM-B19-3",
+    "title": "Clean common-area windows",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "North Carolina Building",
+      "room": "Shared first-floor area",
+      "issue": "Clean common-area windows",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Housekeeping"
+    },
+    "status": "Pending approval",
+    "priority": "Normal",
+    "assignee": null,
+    "createdAt": "2026-10-30T02:30:00Z",
+    "updatedAt": "2026-10-30T02:30:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B19-3",
+        "at": "2026-10-30T02:30:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B15-1",
+    "title": "Inspect a sticking interior door",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Rock House",
+      "room": "Office corridor",
+      "issue": "Inspect a sticking interior door",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Maintenance"
+    },
+    "status": "Completed",
+    "priority": "Normal",
+    "assignee": "sam",
+    "createdAt": "2026-10-30T02:00:00Z",
+    "updatedAt": "2026-10-30T02:00:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B15-1",
+        "at": "2026-10-30T02:00:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B15-1",
+        "at": "2026-10-30T02:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B15-1",
+        "at": "2026-10-30T02:00:00Z",
+        "actor": "Morgan Reed",
+        "action": "Technician assigned",
+        "message": "Sam Rivera",
+        "visibility": "requester"
+      },
+      {
+        "id": "start-FM-B15-1",
+        "at": "2026-10-30T02:00:00Z",
+        "actor": "Sam Rivera",
+        "action": "Work started",
+        "message": "Initial inspection recorded for this fictional sample.",
+        "visibility": "requester"
+      },
+      {
+        "id": "complete-FM-B15-1",
+        "at": "2026-10-30T02:00:00Z",
+        "actor": "Sam Rivera",
+        "action": "Job completed",
+        "message": "Sample work completed and reviewed.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": [
+      {
+        "summary": "Inspect a sticking interior door \u2014 sample work completed",
+        "minutes": 30,
+        "materials": "Standard demo supplies",
+        "outcome": "Area checked and ready for normal use",
+        "remaining": "None",
+        "actor": "Sam Rivera",
+        "at": "2026-10-30T02:00:00Z"
+      }
+    ]
+  },
+  {
+    "id": "FM-B15-2",
+    "title": "Clear the visitor approach of leaves",
+    "fields": {
+      "requester": "Alex Morgan",
+      "requesterId": "alex",
+      "department": "Academics",
+      "contact": "alex@example.com",
+      "location": "Rock House",
+      "room": "Exterior visitor approach",
+      "issue": "Clear the visitor approach of leaves",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Grounds"
+    },
+    "status": "Pending approval",
+    "priority": "Normal",
+    "assignee": null,
+    "createdAt": "2026-10-30T01:45:00Z",
+    "updatedAt": "2026-10-30T01:45:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B15-2",
+        "at": "2026-10-30T01:45:00Z",
+        "actor": "Alex Morgan",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  },
+  {
+    "id": "FM-B15-3",
+    "title": "Clean the entry mat and lobby",
+    "fields": {
+      "requester": "Jordan Ellis",
+      "requesterId": "jordan",
+      "department": "Student Affairs",
+      "contact": "jordan@example.com",
+      "location": "Rock House",
+      "room": "Entrance lobby",
+      "issue": "Clean the entry mat and lobby",
+      "onset": "Noticed during a fictional demo walkthrough",
+      "impact": "People using this shared campus area",
+      "hazards": "No immediate hazard reported in this fictional sample; assess before work",
+      "access": "Coordinate with the requester during normal campus hours",
+      "category": "Housekeeping"
+    },
+    "status": "Assigned",
+    "priority": "Normal",
+    "assignee": "riley",
+    "createdAt": "2026-10-30T01:30:00Z",
+    "updatedAt": "2026-10-30T01:30:00Z",
+    "revision": 1,
+    "photos": [],
+    "events": [
+      {
+        "id": "seed-FM-B15-3",
+        "at": "2026-10-30T01:30:00Z",
+        "actor": "Jordan Ellis",
+        "action": "Request submitted",
+        "message": "Fictional sample job for the Buildings demo. Reference photos do not show this issue.",
+        "visibility": "requester"
+      },
+      {
+        "id": "approval-FM-B15-3",
+        "at": "2026-10-30T01:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Request approved",
+        "message": "Approved for demo scheduling.",
+        "visibility": "requester"
+      },
+      {
+        "id": "assign-FM-B15-3",
+        "at": "2026-10-30T01:30:00Z",
+        "actor": "Taylor Lane",
+        "action": "Technician assigned",
+        "message": "Riley Parker",
+        "visibility": "requester"
+      }
+    ],
+    "workLogs": []
+  }
+]

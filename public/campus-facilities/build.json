@@ -1,1 +1,8 @@
-{"build":"17c3d47f23d2df66","package":"lees-mcrae-facilities","apiBase":"/platform/demos/lees-mcrae","assetBase":"/campus-facilities","source_repository":"johncollinsgit/lees-mcrae-facilities","source_commit":"26004fc1b69891fc824eea7246f493034430003f"}
+{
+  "build": "c07fd4c4b187d9cc",
+  "package": "lees-mcrae-facilities",
+  "apiBase": "/platform/demos/lees-mcrae",
+  "assetBase": "/campus-facilities",
+  "sourceRepository": "johncollinsgit/lees-mcrae-facilities",
+  "sourceCommit": "6310cb6d9d012b3ba4b0885c38224b8593a04831"
+}

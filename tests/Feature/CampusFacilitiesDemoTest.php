@@ -45,7 +45,7 @@ it('persists one shared ticket across clients and requires head approval before 
     $ticket = $this->postJson($this->demoBase.'/api/tickets', $input)->assertOk()->assertJsonPath('status', 'Pending approval')->json();
     $this->postJson($this->demoBase.'/api/tickets', $input)->assertOk()->assertJsonPath('id', $ticket['id']);
     $this->postJson($this->demoBase.'/api/tickets', [...$input, 'fields' => [...$input['fields'], 'issue' => 'A different report.']])->assertConflict();
-    $this->getJson($this->demoBase.'/api/tickets')->assertOk()->assertJsonCount(9);
+    $this->getJson($this->demoBase.'/api/tickets')->assertOk()->assertJsonCount(45);
     $command = ['id' => $ticket['id'], 'revision' => 1, 'role' => 'admin', 'actor' => 'admin', 'action' => 'assign', 'data' => ['assignee' => 'sam']];
     $this->postJson($this->demoBase.'/api/tickets', $command)->assertUnprocessable();
     $this->postJson($this->demoBase.'/api/tickets', [...$command, 'action' => 'start'])->assertUnprocessable();
@@ -162,4 +162,81 @@ it('confirms a self-entered address before mentions and sends one branded email 
     $this->postJson($this->demoBase.'/api/participants', ['name' => 'Demo recipient', 'email' => 'recipient@example.test', 'enabled' => false])->assertOk()->assertJsonPath('me.enabled', false);
     $this->getJson($this->demoBase.'/api/participants')->assertJsonCount(0, 'people');
     expect(count($messages))->toBe(2);
+});
+
+it('adds building samples once while preserving edited shared tickets and attachments', function (): void {
+    $store = app(DemoStore::class);
+    $state = $store->seed();
+    expect(count($state['tickets']))->toBe(44);
+    foreach (['Shelton Learning Commons', 'Virginia Hall', 'May Wildlife Rehabilitation Center'] as $building) {
+        $teams = array_values(array_unique(array_map(fn ($t) => $t['fields']['category'], array_filter($state['tickets'], fn ($t) => $t['fields']['location'] === $building))));
+        sort($teams);
+        expect($teams)->toBe(['Grounds', 'Housekeeping', 'Maintenance']);
+    }
+    unset($state['building_samples']);
+    $state['tickets']['FM-1048']['revision'] = 7;
+    $state['tickets']['FM-1048']['title'] = 'Previously edited shared ticket';
+    $state['tickets']['FM-B13-1']['title'] = 'Previously edited building job';
+    $directory = $store->directory();
+    file_put_contents($directory.'/workspace.json', json_encode($state, JSON_THROW_ON_ERROR));
+    $read = $store->access(fn (&$s) => $s, false);
+    expect(count($read['tickets']))->toBe(44)
+        ->and($read['tickets']['FM-1048']['revision'])->toBe(7)
+        ->and($read['tickets']['FM-1048']['title'])->toBe('Previously edited shared ticket')
+        ->and($read['tickets']['FM-B13-1']['title'])->toBe('Previously edited building job');
+    expect($store->access(fn (&$s) => count($s['tickets']), false))->toBe(44);
+});
+
+it('uses a server-only Realtime key with replay protection and bounded session cleanup', function (): void {
+    config(['campus_facilities.openai_api_key' => 'fictional-test-key', 'campus_facilities.voice_enabled' => true]);
+    \Illuminate\Support\Facades\Cache::put('scheduler:last_heartbeat', now()->toIso8601String());
+    Http::fake([
+        'api.openai.com/v1/realtime/calls' => Http::response("v=0\r\nanswer", 201, ['Location' => '/v1/realtime/calls/rtc_fixture']),
+        'api.openai.com/v1/realtime/calls/*/hangup' => Http::response('', 200),
+    ]);
+    $input = ['sessionId' => (string) Str::uuid(), 'closeToken' => (string) Str::uuid(), 'mode' => 'request', 'fields' => campusDemoDraft(), 'sdp' => "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n"];
+    $this->postJson($this->demoBase.'/api/voice', $input)->assertOk()->assertJsonPath('sdp', "v=0\r\nanswer")->assertDontSee('fictional-test-key');
+    $this->postJson($this->demoBase.'/api/voice', $input)->assertOk();
+    Http::assertSentCount(1);
+    $this->postJson($this->demoBase.'/api/voice', [...$input, 'sessionId' => (string) Str::uuid()])->assertTooManyRequests();
+    $this->postJson($this->demoBase.'/api/voice/close', [...$input, 'closeToken' => (string) Str::uuid()])->assertForbidden();
+    $this->postJson($this->demoBase.'/api/voice/close', $input)->assertOk();
+    Http::assertSentCount(2);
+    $this->postJson($this->demoBase.'/api/voice/close', $input)->assertOk();
+    Http::assertSentCount(2);
+    $this->postJson($this->demoBase.'/api/voice', $input)->assertConflict();
+    $new = [...$input, 'sessionId' => (string) Str::uuid()];
+    $this->postJson($this->demoBase.'/api/voice', $new)->assertOk();
+    app(DemoStore::class)->access(function (&$state) use ($new) {
+        $state['voice_sessions'][$new['sessionId']]['expires'] = time() - 1;
+    });
+    expect(app(\App\Services\CampusFacilities\LiveVoice::class)->expire(app(DemoStore::class)))->toBe(1);
+    Http::assertSentCount(4);
+    $third = [...$input, 'sessionId' => (string) Str::uuid()];
+    $this->postJson($this->demoBase.'/api/voice', $third)->assertOk();
+    $this->postJson($this->demoBase.'/api/voice/close', $third)->assertOk();
+    $this->postJson($this->demoBase.'/api/voice', [...$input, 'sessionId' => (string) Str::uuid()])->assertTooManyRequests();
+});
+
+it('fails voice closed with a stale scheduler and holds unknown creation outcomes', function (): void {
+    config(['campus_facilities.openai_api_key' => 'fictional-test-key', 'campus_facilities.voice_enabled' => true]);
+    $input = ['sessionId' => (string) Str::uuid(), 'closeToken' => (string) Str::uuid(), 'mode' => 'request', 'fields' => campusDemoDraft(), 'sdp' => "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n"];
+    \Illuminate\Support\Facades\Cache::put('scheduler:last_heartbeat', now()->subMinutes(4)->toIso8601String());
+    $this->postJson($this->demoBase.'/api/voice', $input)->assertServiceUnavailable();
+    Http::assertNothingSent();
+    \Illuminate\Support\Facades\Cache::put('scheduler:last_heartbeat', now()->toIso8601String());
+    Http::fake(['api.openai.com/*' => Http::response('', 503)]);
+    $this->postJson($this->demoBase.'/api/voice', $input)->assertServiceUnavailable();
+    $this->postJson($this->demoBase.'/api/voice', [...$input, 'sessionId' => (string) Str::uuid()])->assertTooManyRequests();
+    Http::assertSentCount(1);
+});
+
+it('validates extracted voice fields without saving or changing the requester identity', function (): void {
+    $input = ['mode' => 'request', 'fields' => [...campusDemoDraft(), 'room' => ''], 'update' => ['room' => '203']];
+    $this->postJson($this->demoBase.'/api/voice/draft', $input)->assertOk()->assertJsonPath('draft.room', '203')->assertJsonPath('saved', false);
+    $this->postJson($this->demoBase.'/api/voice/draft', [...$input, 'update' => ['requesterId' => 'admin']])->assertUnprocessable();
+    $this->postJson($this->demoBase.'/api/voice/draft', [...$input, 'update' => ['status' => 'Completed']])->assertUnprocessable();
+    $this->postJson($this->demoBase.'/api/voice/draft', ['mode' => 'work', 'fields' => [], 'update' => ['minutes' => -1]])->assertUnprocessable();
+    expect(count(app(DemoStore::class)->access(fn (&$s) => $s['tickets'], false)))->toBe(44);
+    Http::assertNothingSent();
 });

@@ -112,3 +112,19 @@ view remains usable if mail is unavailable. No arbitrary email address can be
 inserted in a comment payload. A verified participant can disable mentions by
 updating the same owned address without another email. Physical delivery, spam
 folder placement and browser speech recognition require live human acceptance.
+
+## Buildings and expanded samples
+
+The Buildings tab replaces Campus Guide. It uses the official map's 67 locations, canonical display names for featured buildings, plus ticket-specific outdoor locations. Counts, jobs, team filters and galleries follow the selected demo persona. All locations remain browsable; no verified exact photo produces a labelled placeholder. Eighteen selected building reference images have exact source captions and credit in the photo viewer. `docs/BUILDING-PHOTO-SOURCES.json` in the frontend source records all researched provenance and rights notes; publicly hosted college photographs require production reuse review. Reference and stock photos never become incident attachments.
+
+Thirty-six fictional jobs cover Maintenance, Grounds and Housekeeping at 12 featured buildings. `DemoStore` applies the versioned fixture set once, additively, under the workspace lock, leaving all existing tickets, revisions, photos and histories intact. Reset uses all 44 samples. A full workspace remains capped at 200; existing work is never removed to make room for fixtures.
+
+## Facilities-specific live voice
+
+`CAMPUS_FACILITIES_OPENAI_API_KEY` is the newly authorized demo key, in the existing Forge shared `.env` only. Its local origin is the ignored frontend `.env.local`; it is absent from Git and browser assets. The selected key expires after 30 days (created October 30, 2026); renew deliberately before expiry. Do not copy private Enterprise, Collins or Forestry AI credentials.
+
+The browser creates its WebRTC SDP offer and sends it to the fixed-origin native API. The server calls OpenAI Realtime `gpt-realtime-2.1` and returns only the SDP answer. `VoiceDraft` validates extracted fields and cannot persist or transition a ticket. User application controls confirm intake, advance to camera, submit, save work and complete work. Transcript and extracted fields are reviewable. Stop, cancellation, hidden page and unmount close media capture and request provider hangup. Late responses cannot update an abandoned draft.
+
+The demo ledger allows three attempted calls per UTC day globally, one active/creating/unknown call at a time, five-minute expiry and 1,000 output tokens per assistant response. This is a usage bound, not a promised dollar budget. Creation is durably reserved before HTTP; exact retries replay the original answer. Unknown outcomes occupy the slot for manual reconciliation rather than issuing another paid call. Close requires a per-attempt capability; provider call IDs remain server-side. `campus-facilities:expire-voice` runs every minute in the existing Laravel scheduler to hang up expired known calls, retrying uncertain hangups. A scheduler heartbeat older than three minutes blocks new calls. Cleanup may lag expiry by the scheduler interval. Never reset the voice ledger to bypass a held or exhausted allowance.
+
+Validation: the focused native suite checks replay, conflict, scope, comments/email confirmation, decoded uploads, additive samples and voice quotas/cleanup/draft tools with fake providers. A real Realtime SDP offer was accepted and immediately hung up with the new key, with no microphone capture/audio transmission. Actual spoken audio, iPhone/Android installation, camera permissions and received email still require physical-device acceptance. The native secret was installed securely; the normal protected release must load it before live voice appears at the public URL.

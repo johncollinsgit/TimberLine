@@ -8,7 +8,7 @@ storage. Local file locking and revision checks serialize phones; no tenant
 business tables or private proposal workspace are used. Official map/directory
 refresh runs on this server. The old per-tab prototype remains available at
 `/platform/demos/lees-mcrae/classic`. Source, protected release, provider setup
-and actual hosted/mobile acceptance remain separate. Ticket comments have compact role controls, self-entered confirmed email and branded mention mail using the existing verified Everbranch sender; no client provider credentials are copied. See
+and actual hosted/mobile acceptance remain separate. Buildings → Jobs adds 36 fictional cross-team jobs without replacing existing ticket history, verified building reference photos and per-job galleries. Live Realtime uses a dedicated demo server secret, three five-minute sessions/day, one concurrent call and scheduler-driven cleanup; unknown provider outcomes remain held. Ticket comments have compact role controls, self-entered confirmed email and branded mention mail using the existing verified Everbranch sender; no client provider credentials are copied. See
 `docs/operations/campus-facilities-demo.md`. Do not create Cloudflare resources
 or copy Enterprise/Collins/Modern Forestry provider credentials into this demo.
 

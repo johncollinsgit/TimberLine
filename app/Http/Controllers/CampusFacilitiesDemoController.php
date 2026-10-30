@@ -70,7 +70,7 @@ class CampusFacilitiesDemoController extends Controller
                         return $rows;
                     }, false),
                     'campus' => app(CampusReference::class)->read($request->query('refresh') === '1'),
-                    'voice' => ['configured' => false],
+                    'voice' => ['configured' => app(\App\Services\CampusFacilities\LiveVoice::class)->configured(), 'sessionSeconds' => 300, 'dailySessions' => 3],
                     'participants' => $store->access(fn (&$state) => app(Participants::class)->directory($state, $request), false),
                     'messaging/config' => ['channels' => [['channel' => 'email', 'configured' => false, 'credentialsConfigured' => false, 'recipients' => []]], 'subject' => 'Lees-McRae Facilities demo — test notification', 'content' => '[DEMO TEST] A sample work order has an update.'],
                     'messaging/history' => [],
@@ -92,7 +92,9 @@ class CampusFacilitiesDemoController extends Controller
                         return ['reset' => true];
                     }),
                     'photos' => $this->upload($request, $store),
-                    'voice', 'voice/draft' => abort(503, 'Live voice is awaiting an approved Facilities OpenAI connection. Typed entry is available.'),
+                    'voice' => app(\App\Services\CampusFacilities\LiveVoice::class)->start($store, $input),
+                    'voice/close' => app(\App\Services\CampusFacilities\LiveVoice::class)->close($store, $input),
+                    'voice/draft' => app(\App\Services\CampusFacilities\VoiceDraft::class)->update($input),
                     'messaging/test' => abort(503, 'Email testing needs approved server credentials, sender and recipients.'),
                     default => abort(404),
                 };
