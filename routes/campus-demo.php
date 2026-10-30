@@ -27,7 +27,7 @@ Route::get('/platform/demos/lees-mcrae/{file}', [\App\Http\Controllers\CampusFac
 Route::get('/platform/demos/lees-mcrae/api/photos/{id}', [\App\Http\Controllers\CampusFacilitiesDemoController::class, 'photo'])
     ->whereUuid('id')->withoutMiddleware($facilitiesMiddleware);
 Route::match(['GET', 'POST'], '/platform/demos/lees-mcrae/api/{endpoint}', [\App\Http\Controllers\CampusFacilitiesDemoController::class, 'api'])
-    ->where('endpoint', 'tickets|reset|photos|campus|assistant|voice|voice/draft|voice/close|participants|messaging/config|messaging/history|messaging/test')
+    ->where('endpoint', 'tickets|reset|photos|campus|assistant|assistant/lookup|voice|voice/draft|voice/close|participants|messaging/config|messaging/history|messaging/test')
     ->withoutMiddleware($facilitiesMiddleware);
 
 Route::match(['GET', 'POST'], '/platform/demos/lees-mcrae/verify/{id}/{token}', [\App\Http\Controllers\CampusFacilitiesDemoController::class, 'verify'])

@@ -55,7 +55,15 @@ class VoiceDraft
         if ($mode === 'ask') {
             $assistant = app(CampusAssistant::class);
 
-            return ['type' => 'realtime', 'model' => 'gpt-realtime-2.1', 'instructions' => $assistant->instructions().' Read-only current context JSON: '.json_encode($assistant->context($fields), JSON_THROW_ON_ERROR), 'max_output_tokens' => 1000, 'audio' => ['input' => ['transcription' => ['model' => 'gpt-4o-mini-transcribe'], 'turn_detection' => ['type' => 'server_vad', 'silence_duration_ms' => 650]], 'output' => ['voice' => 'marin']]];
+            $context = $assistant->context($fields);
+            $lookup = app(JobLookup::class);
+            $schema = $lookup->schema($context);
+            // Job facts come from a fresh server lookup, never spoken-model arithmetic.
+            unset($context['jobs'], $context['buildingCounts'], $context['statusCounts'], $context['teamCounts']);
+
+            return ['type' => 'realtime', 'model' => 'gpt-realtime-2.1', 'instructions' => $assistant->instructions().' For every question about jobs or workload, call lookup_jobs. It returns current exact counts and ticket fields. Read its answer accurately; do not recalculate, add, omit, reassign or invent facts. If the list is truncated, state showing N of total. For summaries use kind summary and no ticketIds. Details uses explicitly requested IDs only. This tool is read-only. Reference context JSON: '.json_encode($context, JSON_THROW_ON_ERROR), 'max_output_tokens' => 1600,
+                'tools' => [['type' => 'function', 'name' => 'lookup_jobs', 'description' => 'Read current permitted jobs with server-calculated counts. No changes or messages.', 'parameters' => $schema]], 'tool_choice' => 'auto',
+                'audio' => ['input' => ['transcription' => ['model' => 'gpt-4o-mini-transcribe'], 'turn_detection' => ['type' => 'server_vad', 'silence_duration_ms' => 650]], 'output' => ['voice' => 'marin']]];
         }
         $properties = [];
         foreach ($this->rules($mode) as $key => $rule) {
