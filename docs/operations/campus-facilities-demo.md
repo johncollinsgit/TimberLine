@@ -74,12 +74,13 @@ photos are never cached by the worker. Hashed JS/CSS and the build-specific shel
 cache prevent mixed client bundles. Physical iPhone/Android installation,
 microphone, camera and keyboard acceptance remains separate from viewport tests.
 
-Live voice remains unavailable until secure key provisioning and a bounded demo
-usage policy are installed and tested. No Enterprise, Collins or Modern Forestry
-key/sender/provider budget is inherited. General test-email/SMS controls stay unconfigured. Mention mail uses the existing
-Everbranch platform SendGrid connection and verified theeverbranch.com domain;
-no email is sent by migration or fake-provider smoke checks. The user has asked for ticket voice, so
-provider setup is remaining work, not an optional finished feature.
+Live voice uses its separately authorized demo key on the existing Forge server.
+Real Responses and Realtime SDP/data-channel checks passed; the protected October30
+release activated the app, and a labelled shared acceptance ticket passed submission,
+head approval, assignment, note/work log and completion. General test-email/SMS controls
+stay unconfigured. Mention mail uses the existing verified Everbranch SendGrid sender;
+a real sandbox Mail Send returned HTTP200 without sending email. Actual inbox delivery
+and physical-device checks remain outstanding.
 
 ## Validation
 
@@ -125,16 +126,37 @@ Thirty-six fictional jobs cover Maintenance, Grounds and Housekeeping at 12 feat
 
 The browser creates its WebRTC SDP offer and sends it to the fixed-origin native API. The server calls OpenAI Realtime `gpt-realtime-2.1` and returns only the SDP answer. `VoiceDraft` validates extracted fields and cannot persist or transition a ticket. User application controls confirm intake, advance to camera, submit, save work and complete work. Transcript and extracted fields are reviewable. Stop, cancellation, hidden page and unmount close media capture and request provider hangup. Late responses cannot update an abandoned draft.
 
-The demo ledger allows three attempted calls per UTC day globally, one active/creating/unknown call at a time, five-minute expiry and 1,000 output tokens per assistant response. This is a usage bound, not a promised dollar budget. Creation is durably reserved before HTTP; exact retries replay the original answer. Unknown outcomes occupy the slot for manual reconciliation rather than issuing another paid call. Close requires a per-attempt capability; provider call IDs remain server-side. `campus-facilities:expire-voice` runs every minute in the existing Laravel scheduler to hang up expired known calls, retrying uncertain hangups. A scheduler heartbeat older than three minutes blocks new calls. Cleanup may lag expiry by the scheduler interval. Never reset the voice ledger to bypass a held or exhausted allowance.
+The demo ledger allows three attempted calls per UTC day globally, one active/creating/unknown call at a time, five-minute expiry and 1,000 output tokens per intake/work assistant response (1,600 for read-only Ask). This is a usage bound, not a promised dollar budget. Creation is durably reserved before HTTP; exact retries replay the original answer. Unknown outcomes occupy the slot for manual reconciliation rather than issuing another paid call. Close requires a per-attempt capability; provider call IDs remain server-side. `campus-facilities:expire-voice` runs every minute in the existing Laravel scheduler to hang up expired known calls, retrying uncertain hangups. A scheduler heartbeat older than three minutes blocks new calls. Cleanup may lag expiry by the scheduler interval. Never reset the voice ledger to bypass a held or exhausted allowance.
 
-Validation: the focused native suite checks replay, conflict, scope, comments/email confirmation, decoded uploads, additive samples and voice quotas/cleanup/draft tools with fake providers. A real Realtime SDP offer was accepted and immediately hung up with the new key, with no microphone capture/audio transmission. Actual spoken audio, iPhone/Android installation, camera permissions and received email still require physical-device acceptance. The native secret was installed securely; the normal protected release must load it before live voice appears at the public URL.
+Validation: the focused native suite checks replay, conflict, scope, comments/email confirmation, decoded uploads, additive samples and voice quotas/cleanup/draft tools with fake providers. A real Realtime SDP offer was accepted and immediately hung up with the new key, with no microphone capture/audio transmission. Actual spoken audio, iPhone/Android installation, camera permissions and received email still require physical-device acceptance. The native secret was installed securely; the protected release loaded it, and the actual scheduler heartbeat was verified fresh.
 
 ## Ask Everbranch
 
-The bottom-right Ask Everbranch control opens a text chat or live spoken campus conversation. `CampusAssistant` constructs each answer from the selected demo role/person projection, current job status/assignment/location/priority and official building/department references with retrieval/stale timestamps. No native tenant records, email addresses, participant secrets or provider secrets enter the AI context. Returned work-order links are intersected with that projection. Admin context explicitly spans all service teams; the persona's default team does not restrict or label that overview.
+The bottom-right Ask Everbranch control opens a text chat or live spoken campus conversation. `CampusAssistant` constructs each answer from the selected demo role/person projection, current job status/assignment/location/priority and official building/department references with retrieval/stale timestamps. No native tenant records, email addresses, participant secrets or provider secrets enter the AI context. Returned work-order links come only from that projection. Admin context explicitly spans all service teams; the persona's default team does not restrict or label that overview.
 
-Text questions use Responses (`gpt-5.4-mini`, store=false, no tools, 900 output tokens) with a global 50-attempt/day ledger, durable request digest and exact-answer replay. An uncertain request is held rather than automatically reissued. The browser keeps the unfinished question through failure; closing or changing view cannot apply a late response to another person's chat. In-session chat history remains in browser memory and the last ten messages accompany a follow-up. Voice uses `gpt-realtime-2.1` with no draft tools for Ask mode and shares the demo voice allowance/watchdog. Each spoken session uses a timestamped current board snapshot at connection time. Only application ticket controls can change work.
+Text questions use Responses (`gpt-5.4-mini`, store=false, no tools, 900 output tokens) with a global 50-attempt/day ledger, durable request digest and exact-answer replay. An uncertain request is held rather than automatically reissued. The browser keeps the unfinished question through failure; closing or changing view cannot apply a late response to another person's chat. In-session chat history remains in browser memory and the last ten messages accompany a follow-up. Voice uses `gpt-realtime-2.1` with a read-only `lookup_jobs` tool for Ask mode and shares the demo voice allowance/watchdog. Each lookup refreshes the current role-scoped board; the voice model cannot change its role/person or call draft tools. Only application ticket controls can change work.
 
 A real read-only text question about Shelton Learning Commons returned its active and completed sample work orders; no work was changed. Physical spoken conversation remains a separate check. The focused suites now include role-filtered assistant context, verified links, replay, uncertain outcomes and daily limits.
 
 The no-microphone browser regression check now exercised a real WebRTC data channel with a synthetic silent audio track: fictional intake → `update_draft` → native field validation with zero missing fields → full spoken-output transcript/readback → provider hangup HTTP 200. It created no ticket and captured no microphone/camera. The check caught Laravel trimming the final SDP line ending; the native service now restores the required CRLF before creating a call, with a multipart regression assertion. Temporary local fixture pages were removed. Actual acoustic microphone/speaker testing on phones remains outstanding.
+
+### Server-calculated job facts (October30 follow-up)
+
+Live acceptance caught a freeform model summary omitting one completed validation job
+and duplicating a Maintenance job into Housekeeping. Job questions now return a typed
+selection, not model-written facts. `JobLookup` validates building/team/status/assignee/
+priority/search filters against the current permitted snapshot, computes all counts,
+and renders canonical ticket fields and links. Summary selection ignores model IDs;
+explicit-ID details intersect the same projection. Empty, unknown and truncated results
+are labelled. Featured official long map names share the frontend's exact canonical
+building aliases. No inferred prefix matching merges separate buildings.
+
+Text keeps the existing 50/day request receipts and uses the selector's job filters;
+model prose is ignored for jobs. Spoken Ask calls the fixed-origin
+`POST /api/assistant/lookup` with its mounted role/person and read-only filters. It
+returns fresh server-calculated facts without another paid API call or any writes.
+Intake/work draft tools and explicit application workflow actions are unchanged.
+The six-job regression checks total6/open4/closed2, Maintenance4/Grounds1/Housekeeping1,
+exact IDs, head/technician scope, live status refresh, unknown locations and replay.
+
+A real bounded synthetic voice Ask check called `lookup_jobs`, then accurately read the five-job fixture as total5/open4/closed1 and Maintenance3/Grounds1/Housekeeping1. The provider call was closed and its allowance retained; no microphone was captured and temporary local check pages were removed. A real Responses selector returned the same exact fixture counts.

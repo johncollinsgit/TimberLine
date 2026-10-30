@@ -246,10 +246,10 @@ it('answers campus questions from the selected current job projection without ch
     config(['campus_facilities.openai_api_key' => 'fictional-test-key', 'campus_facilities.voice_enabled' => true]);
     $campus = json_decode(file_get_contents(resource_path('data/campus-facilities/campus.json')), true);
     $this->mock(CampusReference::class, fn ($mock) => $mock->shouldReceive('read')->andReturn($campus));
-    Http::fake(['api.openai.com/v1/responses' => Http::response(['status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['answer' => 'FM-1045 is in progress at Bowman Building.', 'ticketIds' => ['FM-1045', 'FM-1048', 'INVENTED']])]]]]])]);
+    Http::fake(['api.openai.com/v1/responses' => Http::response(['status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['topic' => 'jobs', 'answer' => 'Provider prose must never replace recorded job facts.', 'filters' => campusJobFilters(['kind' => 'details', 'ticketIds' => ['FM-1045', 'FM-1048', 'INVENTED']])])]]]]])]);
     $input = ['role' => 'technician', 'actor' => 'sam', 'question' => 'What work is happening?', 'history' => [], 'requestId' => (string) Str::uuid()];
     $before = app(DemoStore::class)->access(fn (&$s) => $s['tickets'], false);
-    $this->postJson($this->demoBase.'/api/assistant', $input)->assertOk()->assertJsonPath('ticketIds', ['FM-1045']);
+    $this->postJson($this->demoBase.'/api/assistant', $input)->assertOk()->assertJsonPath('ticketIds', ['FM-1045'])->assertSee('Bowman Building')->assertDontSee('Provider prose');
     $this->postJson($this->demoBase.'/api/assistant', $input)->assertOk();
     Http::assertSentCount(1);
     Http::assertSent(function ($request) {
@@ -277,4 +277,51 @@ it('holds uncertain chat attempts and enforces the shared daily question allowan
     });
     $this->postJson($this->demoBase.'/api/assistant', [...$input, 'requestId' => (string) Str::uuid()])->assertTooManyRequests();
     Http::assertSentCount(1);
+});
+
+function campusJobFilters(array $overrides = []): array
+{
+    return array_replace(['kind' => 'summary', 'building' => '', 'team' => '', 'statuses' => [], 'assignee' => '', 'priority' => '', 'search' => '', 'groupBy' => ['status', 'team'], 'ticketIds' => []], $overrides);
+}
+
+it('computes building counts and exact ticket facts instead of trusting model arithmetic', function (): void {
+    config(['campus_facilities.openai_api_key' => 'fictional-test-key', 'campus_facilities.voice_enabled' => true]);
+    $campus = json_decode(file_get_contents(resource_path('data/campus-facilities/campus.json')), true);
+    $this->mock(CampusReference::class, fn ($mock) => $mock->shouldReceive('read')->andReturn($campus));
+    app(DemoStore::class)->access(function (&$state) {
+        $extra = $state['tickets']['FM-1042'];
+        $extra['id'] = 'FM-REGRESSION';
+        $state['tickets']['FM-REGRESSION'] = $extra;
+    });
+    Http::fake(['api.openai.com/v1/responses' => Http::response(['status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['topic' => 'jobs', 'answer' => 'Housekeeping has 2, and FM-1042 is Housekeeping.', 'filters' => campusJobFilters(['building' => 'Shelton Learning Commons', 'ticketIds' => ['FM-1042']])])]]]]])]);
+    $input = ['role' => 'admin', 'actor' => 'admin', 'question' => 'Summarize Shelton Learning Commons jobs by status and service team.', 'history' => [], 'requestId' => (string) Str::uuid()];
+    $result = $this->postJson($this->demoBase.'/api/assistant', $input)->assertOk()->assertJsonPath('counts.total', 6)->assertJsonPath('counts.open', 4)->assertJsonPath('counts.closed', 2)->assertJsonPath('counts.status.Completed', 2)->assertJsonPath('counts.team.Maintenance', 4)->assertJsonPath('counts.team.Housekeeping', 1)->assertJsonPath('counts.team.Grounds', 1)->assertJsonCount(6, 'ticketIds')->assertSee('FM-REGRESSION')->assertDontSee('Housekeeping has 2');
+    expect($result->json('answer'))->toContain('Maintenance: 4', 'Housekeeping: 1', 'Completed: 2');
+    $lookup = ['role' => 'head', 'actor' => 'morgan', 'filters' => campusJobFilters(['building' => 'Shelton Learning Commons'])];
+    $this->postJson($this->demoBase.'/api/assistant/lookup', $lookup)->assertOk()->assertJsonPath('counts.total', 4)->assertJsonPath('counts.team.Maintenance', 4)->assertJsonMissingPath('counts.team.Housekeeping');
+    $this->postJson($this->demoBase.'/api/assistant/lookup', [...$lookup, 'filters' => campusJobFilters(['building' => 'Shelton Learning Commons', 'statuses' => ['Open']])])->assertOk()->assertJsonPath('counts.total', 2)->assertJsonPath('counts.closed', 0);
+    $this->postJson($this->demoBase.'/api/assistant/lookup', [...$lookup, 'filters' => campusJobFilters(['kind' => 'details', 'ticketIds' => ['FM-B13-3', 'NOT-A-JOB']])])->assertOk()->assertJsonCount(0, 'ticketIds');
+    $this->postJson($this->demoBase.'/api/assistant/lookup', [...$lookup, 'filters' => campusJobFilters(['building' => 'Unknown secret building'])])->assertUnprocessable();
+    $this->postJson($this->demoBase.'/api/assistant/lookup', [...$lookup, 'filters' => campusJobFilters(['statuses' => ''])])->assertUnprocessable();
+    $official = collect($campus['buildings'])->first(fn ($b) => str_starts_with($b['name'], 'Shelton Learning Commons'))['name'];
+    $this->postJson($this->demoBase.'/api/assistant/lookup', [...$lookup, 'filters' => campusJobFilters(['building' => $official])])->assertOk()->assertJsonPath('counts.total', 4);
+    Http::assertSentCount(1);
+});
+
+it('refreshes spoken lookups without allowing the voice model to change identity or work', function (): void {
+    $campus = json_decode(file_get_contents(resource_path('data/campus-facilities/campus.json')), true);
+    $this->mock(CampusReference::class, fn ($mock) => $mock->shouldReceive('read')->andReturn($campus));
+    $before = app(DemoStore::class)->access(fn (&$s) => $s['tickets'], false);
+    $input = ['role' => 'technician', 'actor' => 'sam', 'filters' => campusJobFilters(['building' => 'Bowman Building', 'assignee' => 'sam', 'statuses' => ['In progress']])];
+    $this->postJson($this->demoBase.'/api/assistant/lookup', $input)->assertOk()->assertJsonPath('readOnly', true)->assertJsonPath('counts.total', 1)->assertJsonPath('ticketIds', ['FM-1045']);
+    app(DemoStore::class)->access(function (&$s) {
+        $s['tickets']['FM-1045']['status'] = 'Awaiting parts';
+    });
+    $this->postJson($this->demoBase.'/api/assistant/lookup', $input)->assertOk()->assertJsonPath('counts.total', 0);
+    $after = app(DemoStore::class)->access(fn (&$s) => $s['tickets'], false);
+    $before['FM-1045']['status'] = 'Awaiting parts';
+    expect($after)->toBe($before);
+    $session = app(\App\Services\CampusFacilities\VoiceDraft::class)->session('ask', ['role' => 'technician', 'actor' => 'sam']);
+    expect($session['tools'][0]['name'])->toBe('lookup_jobs')->and($session['instructions'])->not->toContain('FM-1048', 'alex@example.com');
+    $this->postJson($this->demoBase.'/api/assistant/lookup', [...$input, 'actor' => 'admin'])->assertUnprocessable();
 });
