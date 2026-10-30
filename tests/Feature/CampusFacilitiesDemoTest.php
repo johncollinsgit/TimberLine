@@ -198,6 +198,7 @@ it('uses a server-only Realtime key with replay protection and bounded session c
     $this->postJson($this->demoBase.'/api/voice', $input)->assertOk()->assertJsonPath('sdp', "v=0\r\nanswer")->assertDontSee('fictional-test-key');
     $this->postJson($this->demoBase.'/api/voice', $input)->assertOk();
     Http::assertSentCount(1);
+    Http::assertSent(fn ($request) => str_contains($request->body(), "m=audio 9 UDP/TLS/RTP/SAVPF 111\r\n\r\n--"));
     $this->postJson($this->demoBase.'/api/voice', [...$input, 'sessionId' => (string) Str::uuid()])->assertTooManyRequests();
     $this->postJson($this->demoBase.'/api/voice/close', [...$input, 'closeToken' => (string) Str::uuid()])->assertForbidden();
     $this->postJson($this->demoBase.'/api/voice/close', $input)->assertOk();

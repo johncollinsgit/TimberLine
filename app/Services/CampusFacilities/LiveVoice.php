@@ -21,6 +21,8 @@ class LiveVoice
         $heartbeat = app(SchedulerHeartbeatService::class)->lastHeartbeatAt();
         abort_unless($heartbeat && abs(now()->diffInSeconds($heartbeat)) < 180, 503, 'Voice is temporarily unavailable while its session timer reconnects. Typed entry is available.');
         Validator::make($input, ['sessionId' => 'required|uuid', 'closeToken' => 'required|uuid', 'sdp' => 'required|string|max:20000', 'mode' => 'required|in:request,note,work,complete,ask', 'fields' => 'required|array'])->validate();
+        // TrimStrings removes SDP's final CRLF; the WebRTC parser requires it.
+        $input['sdp'] = rtrim($input['sdp'], "\r\n")."\r\n";
         abort_unless(str_starts_with($input['sdp'], "v=0\r\n") && str_contains($input['sdp'], 'm=audio '), 422, 'The voice offer is invalid.');
         $drafts = app(VoiceDraft::class);
         $fields = $drafts->validate($input['mode'], $input['fields']);
@@ -61,10 +63,11 @@ class LiveVoice
             abort(503, 'The voice provider did not confirm this attempt. The session is held for review; your draft is safe.');
         }
         if (! $response->successful()) {
+
             $store->access(function (&$state) use ($id, $response) {
                 $state['voice_sessions'][$id]['status'] = $response->status() >= 500 ? 'unknown' : 'rejected';
             });
-            abort(503, 'The OpenAI connection could not start voice. Check the demo API funding and access; typed entry is available.');
+            abort(503, 'Live voice could not start. Your draft is preserved; continue by typing.');
         }
         $path = parse_url($response->header('Location'), PHP_URL_PATH);
         $callId = is_string($path) && preg_match('~/v1/realtime/calls/([A-Za-z0-9_-]{5,200})$~D', $path, $matches) ? $matches[1] : null;
