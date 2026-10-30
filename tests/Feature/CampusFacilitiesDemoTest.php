@@ -240,3 +240,40 @@ it('validates extracted voice fields without saving or changing the requester id
     expect(count(app(DemoStore::class)->access(fn (&$s) => $s['tickets'], false)))->toBe(44);
     Http::assertNothingSent();
 });
+
+it('answers campus questions from the selected current job projection without changing work', function (): void {
+    config(['campus_facilities.openai_api_key' => 'fictional-test-key', 'campus_facilities.voice_enabled' => true]);
+    $campus = json_decode(file_get_contents(resource_path('data/campus-facilities/campus.json')), true);
+    $this->mock(CampusReference::class, fn ($mock) => $mock->shouldReceive('read')->andReturn($campus));
+    Http::fake(['api.openai.com/v1/responses' => Http::response(['status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['answer' => 'FM-1045 is in progress at Bowman Building.', 'ticketIds' => ['FM-1045', 'FM-1048', 'INVENTED']])]]]]])]);
+    $input = ['role' => 'technician', 'actor' => 'sam', 'question' => 'What work is happening?', 'history' => [], 'requestId' => (string) Str::uuid()];
+    $before = app(DemoStore::class)->access(fn (&$s) => $s['tickets'], false);
+    $this->postJson($this->demoBase.'/api/assistant', $input)->assertOk()->assertJsonPath('ticketIds', ['FM-1045']);
+    $this->postJson($this->demoBase.'/api/assistant', $input)->assertOk();
+    Http::assertSentCount(1);
+    Http::assertSent(function ($request) {
+        $context = json_decode($request['input'], true)['currentContext'];
+        $ids = array_column($context['jobs'], 'id');
+
+        return $request['store'] === false && in_array('FM-1045', $ids) && ! in_array('FM-1048', $ids) && ! str_contains($request['input'], 'alex@example.com') && count(array_unique(array_column($context['jobs'], 'assignedTo'))) === 1;
+    });
+    expect(app(DemoStore::class)->access(fn (&$s) => $s['tickets'], false))->toBe($before);
+    $this->postJson($this->demoBase.'/api/assistant', [...$input, 'question' => 'Different question'])->assertConflict();
+    $this->postJson($this->demoBase.'/api/voice/draft', ['mode' => 'ask', 'fields' => [], 'update' => ['status' => 'Completed']])->assertUnprocessable();
+});
+
+it('holds uncertain chat attempts and enforces the shared daily question allowance', function (): void {
+    config(['campus_facilities.openai_api_key' => 'fictional-test-key', 'campus_facilities.voice_enabled' => true]);
+    $campus = json_decode(file_get_contents(resource_path('data/campus-facilities/campus.json')), true);
+    $this->mock(CampusReference::class, fn ($mock) => $mock->shouldReceive('read')->andReturn($campus));
+    Http::fake(['api.openai.com/v1/responses' => Http::response('', 503)]);
+    $input = ['role' => 'admin', 'actor' => 'admin', 'question' => 'Which jobs need approval?', 'history' => [], 'requestId' => (string) Str::uuid()];
+    $this->postJson($this->demoBase.'/api/assistant', $input)->assertServiceUnavailable();
+    $this->postJson($this->demoBase.'/api/assistant', $input)->assertConflict();
+    Http::assertSentCount(1);
+    app(DemoStore::class)->access(function (&$s) {
+        $s['assistant_usage'][now()->format('Y-m-d')] = 50;
+    });
+    $this->postJson($this->demoBase.'/api/assistant', [...$input, 'requestId' => (string) Str::uuid()])->assertTooManyRequests();
+    Http::assertSentCount(1);
+});

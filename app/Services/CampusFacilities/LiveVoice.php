@@ -20,10 +20,11 @@ class LiveVoice
         abort_unless($this->configured(), 503, 'Live voice is not configured. You can type every detail.');
         $heartbeat = app(SchedulerHeartbeatService::class)->lastHeartbeatAt();
         abort_unless($heartbeat && abs(now()->diffInSeconds($heartbeat)) < 180, 503, 'Voice is temporarily unavailable while its session timer reconnects. Typed entry is available.');
-        Validator::make($input, ['sessionId' => 'required|uuid', 'closeToken' => 'required|uuid', 'sdp' => 'required|string|max:20000', 'mode' => 'required|in:request,note,work,complete', 'fields' => 'required|array'])->validate();
+        Validator::make($input, ['sessionId' => 'required|uuid', 'closeToken' => 'required|uuid', 'sdp' => 'required|string|max:20000', 'mode' => 'required|in:request,note,work,complete,ask', 'fields' => 'required|array'])->validate();
         abort_unless(str_starts_with($input['sdp'], "v=0\r\n") && str_contains($input['sdp'], 'm=audio '), 422, 'The voice offer is invalid.');
         $drafts = app(VoiceDraft::class);
         $fields = $drafts->validate($input['mode'], $input['fields']);
+        $session = $drafts->session($input['mode'], $fields);
         $id = $input['sessionId'];
         $digest = hash('sha256', json_encode([$input['mode'], $fields, $input['sdp']], JSON_THROW_ON_ERROR));
         $result = $store->access(function (&$state) use ($id, $input, $digest) {
@@ -51,7 +52,7 @@ class LiveVoice
         }
         try {
             $response = Http::withToken(config('campus_facilities.openai_api_key'))->accept('application/sdp')->timeout(35)->connectTimeout(10)
-                ->attach('sdp', $input['sdp'])->attach('session', json_encode($drafts->session($input['mode'], $fields), JSON_THROW_ON_ERROR))
+                ->attach('sdp', $input['sdp'])->attach('session', json_encode($session, JSON_THROW_ON_ERROR))
                 ->post('https://api.openai.com/v1/realtime/calls');
         } catch (Throwable) {
             $store->access(function (&$state) use ($id) {

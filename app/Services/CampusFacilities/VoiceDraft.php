@@ -10,7 +10,10 @@ class VoiceDraft
 {
     public function rules(string $mode): array
     {
-        abort_unless(in_array($mode, ['request', 'note', 'work', 'complete'], true), 422, 'Choose a supported voice task.');
+        abort_unless(in_array($mode, ['request', 'note', 'work', 'complete', 'ask'], true), 422, 'Choose a supported voice task.');
+        if ($mode === 'ask') {
+            return ['role' => ['required', 'in:staff,technician,head,admin'], 'actor' => ['required', 'string', 'max:50']];
+        }
         $keys = $mode === 'request' ? ['requester', 'requesterId', 'department', 'contact', 'location', 'room', 'issue', 'onset', 'impact', 'hazards', 'access', 'category'] : ($mode === 'note' ? ['note'] : ['summary', 'minutes', 'materials', 'outcome', 'remaining']);
         $rules = array_fill_keys($keys, ['sometimes', 'string', 'max:3000']);
         if ($mode === 'request') {
@@ -36,6 +39,7 @@ class VoiceDraft
     public function update(array $input): array
     {
         $mode = $input['mode'] ?? '';
+        abort_if($mode === 'ask', 422, 'The campus conversation is read-only.');
         $fields = $this->validate($mode, $input['fields'] ?? []);
         $update = $this->validate($mode, $input['update'] ?? []);
         abort_if(isset($update['requesterId']) && $update['requesterId'] !== ($fields['requesterId'] ?? null), 422, 'The voice assistant cannot change the demo identity.');
@@ -48,6 +52,11 @@ class VoiceDraft
 
     public function session(string $mode, array $fields): array
     {
+        if ($mode === 'ask') {
+            $assistant = app(CampusAssistant::class);
+
+            return ['type' => 'realtime', 'model' => 'gpt-realtime-2.1', 'instructions' => $assistant->instructions().' Read-only current context JSON: '.json_encode($assistant->context($fields), JSON_THROW_ON_ERROR), 'max_output_tokens' => 1000, 'audio' => ['input' => ['transcription' => ['model' => 'gpt-4o-mini-transcribe'], 'turn_detection' => ['type' => 'server_vad', 'silence_duration_ms' => 650]], 'output' => ['voice' => 'marin']]];
+        }
         $properties = [];
         foreach ($this->rules($mode) as $key => $rule) {
             if ($key !== 'requesterId') {

@@ -92,6 +92,7 @@ class CampusFacilitiesDemoController extends Controller
                         return ['reset' => true];
                     }),
                     'photos' => $this->upload($request, $store),
+                    'assistant' => app(\App\Services\CampusFacilities\CampusAssistant::class)->answer($store, $input),
                     'voice' => app(\App\Services\CampusFacilities\LiveVoice::class)->start($store, $input),
                     'voice/close' => app(\App\Services\CampusFacilities\LiveVoice::class)->close($store, $input),
                     'voice/draft' => app(\App\Services\CampusFacilities\VoiceDraft::class)->update($input),
