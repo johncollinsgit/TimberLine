@@ -56,7 +56,9 @@ class ProcessSubscriptionReplacements extends Command
             }
         }
         if ($this->option('collect') && config('subscriptions.replacement_collection_enabled')) {
-            foreach ((clone $allowed)->where('status', 'active')->whereBetween('next_billing_date', [now()->subDay()->toDateString(), now()->addDay()->toDateString()])
+            foreach ((clone $allowed)->where(fn ($query) => $query->where('status', 'active')
+                ->orWhere(fn ($query) => $query->where('status', 'paused')->whereNotNull('resume_on')))
+                ->whereBetween('next_billing_date', [now()->subDay()->toDateString(), now()->addDay()->toDateString()])
                 ->orderBy('updated_at')->orderBy('id')->limit($limit)->get() as $agreement) {
                 $clock = now($agreement->terms['timezone']);
                 if ($agreement->next_billing_date->toDateString() !== $clock->toDateString() || $clock->hour < $agreement->terms['billing_hour']) {

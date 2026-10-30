@@ -159,6 +159,10 @@ class ModernForestryMobileAccountService
      */
     public function candleClub(ModernForestryMobileCustomerSession $session): array
     {
+        $replacement = app(\App\Services\Subscriptions\SubscriptionReplacementCustomerAccess::class);
+        if ($replacement->agreement($session)) {
+            return $replacement->payload($session, []);
+        }
         $legacy = $this->subscriptions->customerCandleClubPayload($session->profile, ($session->identity['source_type'] ?? '') === 'app_review_demo');
 
         return app(\App\Services\Subscriptions\SubscriptionPilotMobileAccess::class)->payload($session, $legacy);
@@ -170,6 +174,10 @@ class ModernForestryMobileAccountService
      */
     public function candleClubAction(ModernForestryMobileCustomerSession $session, array $payload): array
     {
+        $replacement = app(\App\Services\Subscriptions\SubscriptionReplacementCustomerAccess::class)->action($session, $payload);
+        if ($replacement !== null) {
+            return $replacement;
+        }
         $pilot = app(\App\Services\Subscriptions\SubscriptionPilotMobileAccess::class)->action($session, $payload);
         if ($pilot !== null) {
             return $pilot;

@@ -11,6 +11,7 @@ use App\Models\SubscriptionInstallation;
 use App\Models\SubscriptionPilotEnrollment;
 use App\Models\SubscriptionPilotMember;
 use App\Models\User;
+use App\Services\Mobile\ModernForestryMobileCustomerSession;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -60,33 +61,76 @@ class SubscriptionBillingAgreementService
     public function change(int $tenantId, User $actor, int $agreementId, string $kind, string $requestUuid, int $expectedRevision): SubscriptionBillingAction
     {
         $scope = SubscriptionBillingAgreement::query()->forTenantId($tenantId)->findOrFail($agreementId);
-        $this->owner($tenantId, $actor, $scope->member_id, 'servicing');
+        $authorize = fn ($row) => $this->owner($tenantId, $actor->fresh(), $row->member_id, 'servicing');
+
+        return $this->applyChange($scope, $kind, $requestUuid, $expectedRevision, 'user', (string) $actor->id, [], $authorize);
+    }
+
+    public function customerChange(ModernForestryMobileCustomerSession $session, string $kind, string $requestUuid, int $expectedRevision, array $options = []): SubscriptionBillingAction
+    {
+        $access = app(SubscriptionReplacementCustomerAccess::class);
+        $scope = $access->agreement($session);
+        abort_unless($scope, 404);
+        $authorize = function ($row) use ($access, $session, $kind) {
+            $access->assertOwner($session, $row);
+            abort_unless($access->canChange($row, $kind), 423, 'Subscription changes are temporarily paused. You can still pause or cancel future billing.');
+        };
+
+        return $this->applyChange($scope, $kind, $requestUuid, $expectedRevision, 'shopify_customer',
+            'gid://shopify/Customer/'.$scope->terms['shopify_customer_id'], $options, $authorize);
+    }
+
+    private function applyChange(SubscriptionBillingAgreement $scope, string $kind, string $requestUuid, int $expectedRevision,
+        string $actorType, string $actorReference, array $options, callable $authorize): SubscriptionBillingAction
+    {
+        $authorize($scope);
         abort_unless(in_array($kind, ['pause', 'resume', 'skip', 'cancel'], true) && Str::isUuid($requestUuid) && $expectedRevision >= 1, 422, 'Choose a supported action with a fresh review and request ID.');
+        $options = Validator::make(['options' => $options], ['options' => ['array:duration_months'],
+            'options.duration_months' => ['sometimes', 'integer', 'min:1', 'max:12']])->validate()['options'];
+        if (isset($options['duration_months'])) {
+            $options['duration_months'] = (int) $options['duration_months'];
+        }
+        abort_if($kind !== 'pause' && $options !== [], 422);
         $requestUuid = strtolower($requestUuid);
 
-        return DB::transaction(function () use ($tenantId, $actor, $agreementId, $kind, $requestUuid, $expectedRevision) {
-            $row = SubscriptionBillingAgreement::query()->forTenantId($tenantId)->whereKey($agreementId)->lockForUpdate()->firstOrFail();
-            $this->owner($tenantId, $actor->fresh(), $row->member_id, 'servicing');
-            $member = SubscriptionPilotMember::query()->forTenantId($tenantId)->whereKey($row->member_id)->lockForUpdate()->firstOrFail();
-            $prior = SubscriptionBillingAction::query()->forTenantId($tenantId)->where('agreement_id', $row->id)->where('request_uuid', $requestUuid)->first();
+        return DB::transaction(function () use ($scope, $kind, $requestUuid, $expectedRevision, $actorType, $actorReference, $options, $authorize) {
+            // Same member -> agreement lock order as both collectors and activation.
+            $member = SubscriptionPilotMember::query()->forTenantId($scope->tenant_id)->whereKey($scope->member_id)->lockForUpdate()->firstOrFail();
+            $row = SubscriptionBillingAgreement::query()->forTenantId($scope->tenant_id)->whereKey($scope->id)->lockForUpdate()->firstOrFail();
+            $authorize($row);
+            $prior = SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)->where('request_uuid', $requestUuid)->first();
+            $request = ['kind' => $kind, 'expected_revision' => $expectedRevision] + $options;
             if ($prior) {
-                abort_unless($prior->kind === $kind && $prior->expected_revision === $expectedRevision && $prior->actor_type === 'user' && $prior->actor_reference === (string) $actor->id, 409, 'This request ID belongs to a different action.');
+                abort_unless($prior->kind === $kind && $prior->expected_revision === $expectedRevision && $prior->actor_type === $actorType
+                    && $prior->actor_reference === $actorReference && $prior->request === $request, 409, 'This request ID belongs to a different action.');
 
                 return $prior;
             }
             abort_unless($row->activated_at && $row->method_verified_at && $member->billing_owner === 'everbranch'
                 && in_array($row->status, ['active', 'paused', 'cancelled'], true), 409, 'This agreement has not taken over billing from Recharge.');
             abort_unless($row->revision === $expectedRevision, 409, 'The subscription changed. Review its current state.');
-            $inFlight = SubscriptionBillingCycle::query()->forTenantId($tenantId)->where('agreement_id', $row->id)
+            $inFlight = SubscriptionBillingCycle::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)
                 ->whereIn('payment_status', ['prepared', 'sending', 'unknown', 'processing', 'review'])->exists();
-            abort_if($kind !== 'cancel' && $inFlight, 409, 'An original billing attempt needs reconciliation before a schedule change.');
+            abort_if(! in_array($kind, ['pause', 'cancel'], true) && $inFlight, 409, 'An original billing attempt needs reconciliation before a schedule change.');
             $before = $this->state($row);
             if ($kind === 'cancel') {
                 abort_unless(in_array($row->status, ['active', 'paused'], true), 409, 'Future billing is already cancelled.');
                 $row->fill(['status' => 'cancelled', 'next_billing_date' => null, 'resume_on' => null]);
             } elseif ($kind === 'pause') {
                 abort_unless($row->status === 'active', 409, 'Only an active agreement can be paused.');
-                $row->fill(['status' => 'paused', 'resume_on' => null]);
+                $resume = null;
+                if (isset($options['duration_months'])) {
+                    abort_unless($options['duration_months'] % $row->terms['billing_months'] === 0 && $row->next_billing_date, 422, 'Choose complete billing cycles.');
+                    $date = max(now($row->terms['timezone'])->toDateString(), $row->next_billing_date->toDateString());
+                    $next = $this->nextAnchor($row, $date, true);
+                    $months = (CarbonImmutable::parse($next)->year - $row->billing_anchor_date->year) * 12
+                        + CarbonImmutable::parse($next)->month - $row->billing_anchor_date->month + $options['duration_months'];
+                    $resume = $row->billing_anchor_date->addMonthsNoOverflow($months)->toDateString();
+                }
+                $row->fill(['status' => 'paused', 'resume_on' => $resume]);
+                if ($resume) {
+                    $row->next_billing_date = $resume;
+                }
             } elseif ($kind === 'resume') {
                 abort_unless($row->status === 'paused', 409, 'Only a paused agreement can resume.');
                 $earliest = max(now($row->terms['timezone'])->toDateString(), $row->next_billing_date?->toDateString() ?? '');
@@ -94,23 +138,52 @@ class SubscriptionBillingAgreementService
             } else {
                 abort_unless($row->status === 'active' && $row->next_billing_date
                     && $row->next_billing_date->toDateString() >= now($row->terms['timezone'])->toDateString(), 409, 'Review the next future billing cycle before skipping it.');
+                $clock = now($row->terms['timezone']);
+                abort_if($row->next_billing_date->toDateString() === $clock->toDateString() && $clock->hour >= $row->terms['billing_hour'], 409, 'This billing day has started. Contact support about the current cycle.');
                 $row->next_billing_date = $this->nextAnchor($row, $row->next_billing_date->toDateString(), false);
             }
             $row->revision++;
             $row->save();
             $member->update(['status' => $row->status]);
 
-            return SubscriptionBillingAction::create(['tenant_id' => $tenantId, 'agreement_id' => $row->id,
-                'request_uuid' => $requestUuid, 'kind' => $kind, 'actor_type' => 'user', 'actor_reference' => (string) $actor->id,
-                'expected_revision' => $expectedRevision, 'request' => ['kind' => $kind, 'expected_revision' => $expectedRevision],
+            return SubscriptionBillingAction::create(['tenant_id' => $row->tenant_id, 'agreement_id' => $row->id,
+                'request_uuid' => $requestUuid, 'kind' => $kind, 'actor_type' => $actorType, 'actor_reference' => $actorReference,
+                'expected_revision' => $expectedRevision, 'request' => $request,
                 'before_state' => $before, 'after_state' => $this->state($row) + ['original_payment_requires_review' => $inFlight]]);
+        });
+    }
+
+    /** Only the finite pause already accepted by this customer can resume automatically. */
+    public function resumeScheduled(SubscriptionBillingAgreement $agreement): SubscriptionBillingAgreement
+    {
+        return DB::transaction(function () use ($agreement) {
+            $member = SubscriptionPilotMember::query()->forTenantId($agreement->tenant_id)->whereKey($agreement->member_id)->lockForUpdate()->firstOrFail();
+            $row = SubscriptionBillingAgreement::query()->forTenantId($agreement->tenant_id)->whereKey($agreement->id)->lockForUpdate()->firstOrFail();
+            abort_unless($row->status === 'paused' && $row->activated_at && $row->method_verified_at && $member->billing_owner === 'everbranch'
+                && $row->resume_on && $row->resume_on->toDateString() === now($row->terms['timezone'])->toDateString()
+                && $row->next_billing_date?->toDateString() === $row->resume_on->toDateString()
+                && app(SubscriptionReplacementCustomerAccess::class)->canChange($row, 'resume'), 409);
+            $accepted = SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)
+                ->where('kind', 'pause')->where('actor_type', 'shopify_customer')
+                ->where('actor_reference', 'gid://shopify/Customer/'.$row->terms['shopify_customer_id'])->latest('id')->first();
+            abort_unless($accepted && is_int(data_get($accepted->request, 'duration_months'))
+                && data_get($accepted->after_state, 'revision') === $row->revision
+                && data_get($accepted->after_state, 'resume_on') === $row->resume_on->toDateString(), 409, 'The original accepted pause schedule needs review.');
+            $before = $this->state($row);
+            $row->update(['status' => 'active', 'resume_on' => null, 'revision' => $row->revision + 1]);
+            $member->update(['status' => 'active']);
+            SubscriptionBillingAction::create(['tenant_id' => $row->tenant_id, 'agreement_id' => $row->id, 'request_uuid' => (string) Str::uuid(),
+                'kind' => 'scheduled_resume', 'actor_type' => 'scheduler', 'actor_reference' => 'everbranch', 'expected_revision' => $before['revision'],
+                'request' => ['resume_on' => $before['resume_on']], 'before_state' => $before, 'after_state' => $this->state($row)]);
+
+            return $row->fresh();
         });
     }
 
     public function state(SubscriptionBillingAgreement $row): array
     {
         return ['status' => $row->status, 'revision' => $row->revision, 'processor' => $row->processor,
-            'next_billing_date' => $row->next_billing_date?->toDateString(), 'terms_hash' => $row->terms_hash,
+            'next_billing_date' => $row->next_billing_date?->toDateString(), 'resume_on' => $row->resume_on?->toDateString(), 'terms_hash' => $row->terms_hash,
             'method_verified' => $row->method_verified_at !== null, 'activated' => $row->activated_at !== null];
     }
 

@@ -90,6 +90,10 @@ class SubscriptionBraintreeExecutionService
     public function collect(SubscriptionBillingAgreement $agreement): SubscriptionBillingCycle
     {
         $row = $agreement->fresh();
+        if ($row->status === 'paused' && $row->resume_on?->toDateString() === now($row->terms['timezone'])->toDateString()) {
+            $this->ready($row, User::findOrFail($row->activated_by));
+            $row = app(SubscriptionBillingAgreementService::class)->resumeScheduled($row);
+        }
         abort_unless($row->status === 'active' && $row->activated_at && $row->activated_by && $row->method_verified_at && $row->next_billing_date, 409, 'The replacement agreement is not active.');
         $actor = User::findOrFail($row->activated_by);
         $date = $row->next_billing_date->toDateString();

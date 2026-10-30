@@ -81,7 +81,8 @@ proven. The two testers are acceptance cases, not hard-coded customer rules.
 - [x] Recorded gateway badges in Everbranch customer purchase history, with bounded history enrichment.
 - [x] Source implementation for exact Braintree method/source mapping and gated individual activation.
 - [x] Source implementation for Braintree execution, original-transaction recovery and owned Shopify order/fulfillment reporting.
-- [ ] Customer-facing future-term changes and original-authorization amendment handling.
+- [x] Authenticated customer pause/resume/skip/cancel and private member schedule page, with paired native entry point.
+- [ ] Address/scent future-term changes and original-authorization amendment handling.
 - [ ] Actual Braintree merchant sandbox/live acceptance and original source-stop verification.
 - [ ] Shopify-vaulted contract ownership/migration and billing attempts.
 - [ ] Customer membership/control parity, dunning, refunds and reconciliation.
@@ -126,8 +127,8 @@ billing while retaining an original uncertain payment for reconciliation; it
 does not void/refund that payment. Existing Stripe creation/collection refuses
 an already activated replacement agreement, even if an old ownership flag is stale.
 
-Customer address/scent/payment changes and customer web/app access are not wired
-to these agreements yet. Neither a model status nor an operator schedule action
+Customer address/scent/payment changes are not wired to these agreements yet.
+Customer schedule access now uses the private account path described below. Neither a model status nor an operator schedule action
 is proof that the full replacement is ready.
 
 ## Braintree execution source checkpoint
@@ -216,8 +217,55 @@ webhook. Signed dispute/revocation events remain a later operations requirement.
 
 No provider credentials, real sale, source stop, customer activation, hosted
 fulfillment acceptance or production deployment has been performed by this
-checkpoint. Customer controls, Shopify-vaulted contract adoption, safe dunning,
-refund execution and the two-member acceptance remain outstanding.
+checkpoint. Customer future-term changes and membership parity, Shopify-vaulted
+contract adoption, safe dunning, refund execution and two-member acceptance remain
+outstanding.
+
+## Customer schedule and private account access source
+
+The existing verified Shopify customer session selects the original persisted
+retail store, customer and activated Everbranch agreement. Email, merged CRM
+profile permissions, supplied member IDs and demo identity cannot select it.
+A prepared/Recharge member retains its existing path. Signed-in access can issue
+a random private URL lasting 15 minutes; only its SHA-256 key and original
+identity grant are retained in the protected cache, without the account bearer
+token. Every page/post rechecks original customer/store/agreement and expiry.
+Private pages use the configured application host, CSRF, no-store/no-referrer,
+no-index and denied framing. Existing account login is reused; the page has no
+new payment-authorization step and never requests payment details.
+
+`SubscriptionBillingAgreementService` now shares the same member-then-agreement
+lock order across owner and customer schedule changes. Customer requests require
+an explicit current revision and stable UUID; repeated matching requests return
+the original action, while stale/conflicting requests fail. Actor identity is the
+original Shopify customer, not an impersonated workspace owner. Schedule changes
+retain all immutable cycle requests, payments and placed orders. The cutoff
+prevents skipping a billing day after its reviewed hour. Uncertain payment
+attempts block skip/resume; pause/cancel stop future billing while retaining the
+original attempt for reconciliation. Existing customers retain safe stop access
+when rollout is frozen or the merchant loses the add-on. Resume/skip still require
+the current entitlement and exact servicing rollout.
+
+A pause can be indefinite or a whole number of monthly billing cycles. Finite
+pauses preserve the original month-end anchor and already skipped cycles. Only
+its original customer pause audit/revision/date permits a scheduled resume;
+changing a model date cannot manufacture that permission. The Braintree worker
+resumes only on the accepted billing date, with collection/source/payment checks
+still required. Overdue dates never become catch-up charges.
+
+The paired native source shows Manage subscription only when the server supplies
+an owned Everbranch subscription. It obtains a fresh private link from the fixed
+authenticated account endpoint, accepts only HTTPS private subscription paths at
+the original app host, uses the existing in-app browser and refreshes account
+state when that page closes. Private URL tokens are redacted from browser debug
+logs. Other members retain the existing account menus. No version bump, store
+submission, provider activation or customer distribution is performed.
+
+Address/scents need provider-calculated tax and delivery quotes, explicit review
+of new future terms and retained original authorization/source snapshots. Those
+amendments, membership/vote/comment parity after source cancellation, payment
+updates, operations and real hosted/customer acceptance are still required before
+cutover; this schedule checkpoint alone is not the full customer replacement.
 
 ## Customer purchase history gateway icons
 

@@ -1,3 +1,15 @@
+## Replacement customer schedule access (October 30; source candidate)
+
+Activated Everbranch members now use their original verified Shopify identity for
+pause/resume/skip/cancel and a short private member page. Shared locks, revisioned
+UUID actions, accepted finite-pause resumes and original payment retention keep
+schedule changes separate from collection. Safe stops remain available during a
+merchant freeze/lost entitlement; resumption requires exact current rollout.
+The paired native source opens a fresh original-host private page and refreshes
+on return. No new payment authorization, live activation or distribution occurs.
+Address/scent amendments, membership parity and actual customer acceptance remain
+outstanding. See `docs/operations/subscriptions-recharge-replacement.md`.
+
 ## Recharge replacement ledger and customer gateway history (October 30; source candidate)
 
 Read `docs/operations/subscriptions-recharge-replacement.md` before continuing.
@@ -10,7 +22,7 @@ The Braintree executor separately verifies original saved-method/source mapping,
 individual source stop, merchant acceptance and one durable recurring sale.
 Unknown results reconcile the original attempt and never resubmit. Its generic
 Shopify handoff records one verified external receipt; polling handles card/PayPal
-settlement. Customer controls, Shopify-vaulted adoption and actual two-member
+settlement. Customer address/scent amendments and membership parity, Shopify-vaulted adoption and actual two-member
 acceptance remain outstanding. Do not enable live billing from source tests.
 
 The customer Orders table uses locally bundled gateway badges. Shopify ingestion

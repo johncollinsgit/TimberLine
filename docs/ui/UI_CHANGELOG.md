@@ -1,3 +1,13 @@
+## 2026-10-30 — Private subscription schedule controls (source candidate)
+
+- The exact activated member can review existing terms/history and pause, resume,
+  skip or cancel future billing on a short private page. Modern Forestry branding
+  is scoped to its workspace; existing payment details are never requested.
+- A paired native Manage subscription button opens a fresh authenticated private
+  link and refreshes the account on return. Other members retain existing menus.
+- Address/scent amendments, membership parity and hosted/device acceptance remain
+  outstanding. No billing activation or customer release was performed.
+
 ## 2026-10-30 — Braintree replacement payment and fulfillment readouts (source candidate)
 
 - The pilot dashboard reads the new original Braintree cycle alongside existing
