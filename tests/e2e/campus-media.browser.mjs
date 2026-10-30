@@ -12,13 +12,14 @@ if (!live) await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const url = live || 'http://127.0.0.1:' + server.address().port, origin = new URL(url).origin;
 const evidence = resolve(process.env.CAMPUS_MEDIA_EVIDENCE || '../campus-media-evidence'); mkdirSync(evidence, { recursive: true });
 const browser = await chromium.launch({ headless: true, executablePath: process.env.DEMO_BROWSER_EXECUTABLE || (process.platform === 'win32' ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : undefined) });
-const errors = [], requests = [], violations = []; let checks = 0;
+const errors = [], requests = [], violations = [], requestEntries = new WeakMap(); let checks = 0;
 const check = (ok, name) => { assert.ok(ok, name); console.log('ok ' + ++checks + ' - ' + name); };
 try {
   for (const viewport of [{ width: 1600, height: 1050 }, { width: 390, height: 844 }]) {
     const context = await browser.newContext({ viewport }); const page = await context.newPage(); page.setDefaultTimeout(10000);
     page.on('pageerror', error => errors.push(error.message));
-    page.on('request', request => requests.push({ url: request.url(), method: request.method() }));
+    page.on('request', request => { const entry = { url: request.url(), method: request.method() }; requestEntries.set(request, entry); requests.push(entry); });
+    page.on('requestfailed', request => { const entry = requestEntries.get(request); if (entry) entry.failure = request.failure()?.errorText; });
     await page.addInitScript(() => { globalThis.__mediaViolations = []; document.addEventListener('securitypolicyviolation', event => __mediaViolations.push({ directive: event.violatedDirective, blocked: event.blockedURI, source: event.sourceFile })); });
     check((await page.goto(url)).status() === 200, 'campus document opens at ' + viewport.width);
     const initialPicker = await page.locator('#persona').elementHandle();
@@ -104,5 +105,9 @@ try {
   check(!errors.length, 'no JavaScript errors: ' + errors.join('; '));
   const edge = event => live && event.directive === 'connect-src' && event.blocked.startsWith(origin + '/cdn-cgi/rum') && event.source.startsWith('https://static.cloudflareinsights.com/');
   check(violations.every(edge), 'no product CSP violations; known hosted Cloudflare analytics remains blocked');
-  check(requests.every(request => request.method === 'GET' && (request.url.startsWith(origin) || live && request.url.startsWith('https://static.cloudflareinsights.com/beacon.min.js/'))), 'photos use embedded bytes without image-provider or mutation requests');
+  check(requests.every(request => {
+    const target = new URL(request.url);
+    const blockedEdge = live && request.method === 'POST' && target.origin === origin && target.pathname === '/cdn-cgi/rum' && /^(csp|net::ERR_BLOCKED_BY_CSP)$/i.test(request.failure || '');
+    return blockedEdge || request.method === 'GET' && (target.origin === origin || live && request.url.startsWith('https://static.cloudflareinsights.com/beacon.min.js/'));
+  }), 'photos use embedded bytes; only the known CSP-blocked edge analytics attempt is excluded from mutation checks');
 } finally { await browser.close(); if (!live) await new Promise(resolve => server.close(resolve)); }
