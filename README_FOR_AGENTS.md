@@ -1,3 +1,17 @@
+## Public Facilities app migration (October 30; release candidate)
+
+The public Lees-McRae URL now has a paired standalone React dashboard candidate
+with Blaine default, campus-photo banner, status/team charts, photo cards and
+yellow transparent Everbranch AI controls. Its dedicated Laravel API persists
+public fictional tickets, history, verified photos and separately consented mention profiles in Forge shared
+storage. Local file locking and revision checks serialize phones; no tenant
+business tables or private proposal workspace are used. Official map/directory
+refresh runs on this server. The old per-tab prototype remains available at
+`/platform/demos/lees-mcrae/classic`. Source, protected release, provider setup
+and actual hosted/mobile acceptance remain separate. Ticket comments have compact role controls, self-entered confirmed email and branded mention mail using the existing verified Everbranch sender; no client provider credentials are copied. See
+`docs/operations/campus-facilities-demo.md`. Do not create Cloudflare resources
+or copy Enterprise/Collins/Modern Forestry provider credentials into this demo.
+
 ## Public campus photo galleries (2026-10-29; source candidate)
 
 Follow `docs/operations/enterprise-campus-media.md` when changing public campus

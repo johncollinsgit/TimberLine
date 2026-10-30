@@ -28,6 +28,7 @@ function leesMcRaeDemoCanonicalCounts(): array
 
 beforeEach(function (): void {
     $this->withoutVite();
+    config()->set('campus_facilities.enabled', false);
     Http::preventStrayRequests();
     config()->set(['app.debug' => false, 'app.url' => 'https://app.theeverbranch.com',
         'tenancy.domains.canonical.base_domain' => 'theeverbranch.com', 'tenancy.domains.canonical.public_host' => 'theeverbranch.com',
@@ -197,4 +198,24 @@ it('keeps only the canonical fictional document available in production', functi
     } finally {
         app()->instance('env', 'testing');
     }
+});
+
+it('gives link-preview crawlers a fixed campus photograph and transparent Everbranch icon without changing response isolation', function (): void {
+    $page = $this->withHeader('User-Agent', 'facebookexternalhit/1.1')->get($this->campusDemoUrl)->assertOk();
+    $html = $page->getContent();
+    $image = 'https://app.theeverbranch.com/images/demos/lees-mcrae-share-v1.jpg';
+    $page->assertSee('<meta property="og:image" content="'.$image.'">', false)
+        ->assertSee('<meta property="og:image:width" content="1200">', false)
+        ->assertSee('<meta property="og:image:height" content="630">', false)
+        ->assertSee('<meta property="og:url" content="'.$this->campusDemoUrl.'">', false)
+        ->assertSee('<meta property="og:site_name" content="Everbranch">', false)
+        ->assertSee('<meta name="twitter:card" content="summary_large_image">', false)
+        ->assertSee('<meta name="twitter:image" content="'.$image.'">', false);
+    expect(substr_count($html, 'property="og:image"'))->toBe(1)
+        ->and($page->headers->getCookies())->toBe([])
+        ->and($page->headers->get('Content-Security-Policy'))->toContain("connect-src 'none'", 'img-src data: blob:');
+    $dimensions = getimagesize(public_path('images/demos/lees-mcrae-share-v1.jpg'));
+    expect($dimensions[0])->toBe(1200)->and($dimensions[1])->toBe(630)->and($dimensions['mime'])->toBe('image/jpeg');
+    preg_match('/<link rel="icon"[^>]+href="data:image\/png;base64,([^"]+)"/', $html, $icon);
+    expect(base64_decode($icon[1], true))->toBe(file_get_contents(public_path('brand/everbranch-mark.png')));
 });
