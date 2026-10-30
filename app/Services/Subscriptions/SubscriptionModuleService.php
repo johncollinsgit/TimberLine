@@ -994,31 +994,48 @@ class SubscriptionModuleService
             return ['ok' => false, 'status' => 'scent_not_found', 'message' => 'That Candle Club scent was not found.'];
         }
 
-        $rating = max(1, min(5, (int) ($payload['rating'] ?? 5)));
         $body = $this->nullableString($payload['body'] ?? null);
         if ($body === null) {
             return ['ok' => false, 'status' => 'missing_review_body', 'message' => 'Add a few words before sending feedback.'];
         }
+        $data = Validator::make(array_replace($payload, ['body' => $body, 'rating' => $payload['rating'] ?? 5]), [
+            'request_id' => ['nullable', 'uuid'], 'rating' => ['required', 'integer', 'min:1', 'max:5'],
+            'title' => ['nullable', 'string', 'max:190'], 'body' => ['required', 'string', 'max:2000'],
+        ])->validate();
+        $rating = (int) $data['rating'];
+        $title = $this->nullableString($data['title'] ?? null);
+        $requestId = isset($data['request_id']) ? strtolower($data['request_id']) : null;
 
-        $feedbackId = DB::table('subscription_candle_club_scent_feedback')->insertGetId([
-            'tenant_id' => $tenantId,
-            'subscription_candle_club_monthly_scent_id' => $monthlyScentId,
-            'subscription_contract_id' => (int) ($contract->id ?? 0) > 0 ? (int) $contract->id : null,
-            'marketing_profile_id' => (int) $profile->id,
-            'rating' => $rating,
-            'title' => $this->nullableString($payload['title'] ?? null),
-            'body' => $body,
-            'visibility' => 'candle_club',
-            'status' => 'pending',
-            'metadata' => json_encode([
-                'source' => (string) ($payload['source'] ?? 'mobile_app'),
-                'private_first' => true,
-            ], JSON_THROW_ON_ERROR),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        return DB::transaction(function () use ($tenantId, $profile, $monthlyScentId, $contract, $payload, $body, $title, $rating, $requestId): array {
+            // Serialize retries on the owned scent, without adding a new feedback store.
+            $ownedScent = DB::table('subscription_candle_club_monthly_scents')->where('tenant_id', $tenantId)
+                ->where('id', $monthlyScentId)->lockForUpdate()->first();
+            abort_unless($ownedScent, 404);
+            if ($requestId) {
+                $prior = DB::table('subscription_candle_club_scent_feedback')->where('tenant_id', $tenantId)
+                    ->where('marketing_profile_id', $profile->id)->where('subscription_candle_club_monthly_scent_id', $monthlyScentId)
+                    ->where('metadata->request_id', $requestId)->first();
+                if ($prior) {
+                    if ((int) $prior->rating !== $rating || $prior->title !== $title || $prior->body !== $body) {
+                        return ['ok' => false, 'status' => 'request_conflict', 'message' => 'This feedback request already has different content. Reopen the comment to send a new note.'];
+                    }
 
-        return ['ok' => true, 'status' => 'feedback_recorded', 'id' => $feedbackId, 'message' => 'Thanks for the Candle Club feedback.'];
+                    return ['ok' => true, 'status' => 'feedback_recorded', 'id' => (int) $prior->id, 'message' => 'Thanks! Your scent note was sent to our team for review.'];
+                }
+            }
+            $feedbackId = DB::table('subscription_candle_club_scent_feedback')->insertGetId([
+                'tenant_id' => $tenantId,
+                'subscription_candle_club_monthly_scent_id' => $monthlyScentId,
+                'subscription_contract_id' => (int) ($contract->id ?? 0) > 0 ? (int) $contract->id : null,
+                'marketing_profile_id' => (int) $profile->id,
+                'rating' => $rating, 'title' => $title, 'body' => $body,
+                'visibility' => 'candle_club', 'status' => 'pending',
+                'metadata' => json_encode(['source' => (string) ($payload['source'] ?? 'mobile_app'), 'private_first' => true, 'request_id' => $requestId], JSON_THROW_ON_ERROR),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+
+            return ['ok' => true, 'status' => 'feedback_recorded', 'id' => $feedbackId, 'message' => 'Thanks! Your scent note was sent to our team for review.'];
+        });
     }
 
     /**

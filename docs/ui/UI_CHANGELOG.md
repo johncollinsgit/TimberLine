@@ -1,3 +1,14 @@
+## 2026-10-30 — Candle Club authorization and scent notes
+
+- Modern Forestry's private authorization page has forest/cream styling, the
+  existing brand mark, exact subscription terms, explicit card consent and a
+  separate Coming soon feature preview. Setup still does not charge or activate.
+- The paired native update adds ratings and scent notes with retained text on
+  failure, discard confirmation and one stable identity for unchanged retries.
+  Feedback uses the existing private moderation lane, with tenant/member checks.
+- Existing payment, fulfillment, other-merchant branding and provider gates remain
+  unchanged. Native distribution and actual hosted acceptance are separate.
+
 ## 2026-10-28 — Controlled subscription enrollment
 
 - Added private customer terms and Stripe card setup, separate owner activation,

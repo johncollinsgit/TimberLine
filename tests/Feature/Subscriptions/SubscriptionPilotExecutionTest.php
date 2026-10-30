@@ -580,3 +580,25 @@ test('additional Shopify collection after a Stripe handoff stays flagged in the 
         ->and($report['members'][0]['duplicate_status'])->toBe('Possible duplicate')
         ->and($this->paymentCreates)->toHaveCount(1)->and($this->orderCreates)->toHaveCount(1);
 });
+
+test('private authorization page scopes branding and keeps feature previews separate from consent', function (bool $modernForestry) {
+    $terms = $this->execution->preview($this->tenant->id, $this->actor, $this->member->id, $this->economics);
+    $row = $this->execution->prepare($this->tenant->id, $this->actor, $this->member->id, $this->economics, $terms['terms_hash']);
+    $url = $this->execution->issueAccess($row);
+    if ($modernForestry) {
+        $this->tenant->update(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    }
+    $requests = count(Http::recorded());
+    $response = $this->get($url)->assertOk()->assertHeader('Referrer-Policy', 'no-referrer')
+        ->assertSee('USD 25.00')->assertSee('November 2, 2026')->assertSee('name="accepted"', false)
+        ->assertSee('Saving a card does not activate new billing.');
+    if ($modernForestry) {
+        $response->assertSee('modern-forestry-logo-white.png')->assertSee('COMING SOON')
+            ->assertSee('Share your scent notes')->assertSee('Make room for a skip');
+    } else {
+        $response->assertDontSee('modern-forestry-logo-white.png')->assertDontSee('COMING SOON');
+    }
+    $this->post($url.'/authorize', ['terms_hash' => $row->terms_hash])->assertSessionHasErrors('accepted');
+    expect(count(Http::recorded()))->toBe($requests)
+        ->and($row->fresh()->status)->toBe('draft')->and($this->member->fresh()->billing_owner)->toBe('recharge');
+})->with([true, false]);

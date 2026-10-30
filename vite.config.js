@@ -10,6 +10,7 @@ export default defineConfig(() => ({
       input: [
         'resources/css/app.css',
         'resources/css/marketplace.css',
+        'resources/css/subscriptions-pilot-customer.css',
         'resources/js/marketplace-wallet.js',
         'resources/js/marketplace-management.js',
         'resources/js/app.js',

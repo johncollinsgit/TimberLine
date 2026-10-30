@@ -166,3 +166,72 @@ October 2026. These order records do not prove complete payment-vault history
 or absence of charges in an unconnected Stripe account. Preserve original
 source IDs; legacy Recharge portal order IDs and Shopify rc_charge_id values
 can differ and must not be guessed to be interchangeable.
+
+## Modern Forestry authorization page and native scent notes
+
+The branded private page reuses `pilot-customer`, its hashed opaque member token,
+exact saved terms, server validation and Stripe setup session. Only the exact
+Modern Forestry workspace receives its logo and Coming soon feature cards.
+The roadmap is separate from payment consent and has no release-date promise.
+Other merchants keep their own subscription identity. No customer invitation is
+sent and setup never activates collection, stops Recharge or creates an order.
+
+The paired `modernforestry-build` native source adds a 1–5 star rating and a
+2,000-character scent note to eligible monthly scent cards. Blank notes and
+out-of-range ratings are rejected. Failed submissions retain the note; unchanged
+retries reuse their UUID. Explicitly closing an unsent note asks before discarding.
+The existing API resolves the authenticated profile, ignores supplied ownership,
+checks current membership and the scent's tenant, and saves a private pending
+review. A repeated UUID with different content fails instead of overwriting.
+No public feed or automatic publication is added. Backend release precedes the
+native release because the new request UUID must reach the feedback service.
+
+The existing membership model remains authoritative. This feature does not
+adopt Recharge shadow records, infer membership from email, or add missing
+voting/address/scent servicing to activated Stripe pilot members. Those are
+separate customer-experience prerequisites before a broader cutover.
+
+## Braintree reuse and an optional future Stripe migration
+
+An October 30 read-only production check found no Braintree merchant/public/private
+configuration and no tenant-owned Braintree integration for Modern Forestry.
+Safari reached Braintree's sign-in screen. This does not establish that the
+merchant lacks a Braintree account; it means Everbranch cannot yet verify or use
+its vault. Do not substitute global fallback credentials or paste credentials
+into chat, code, URLs or logs.
+
+The owner's preferred outcome is no customer action where an existing payment
+authorization can be retained. Braintree supports charging a vaulted method by
+its original payment-method token. Verify the original live gateway/merchant,
+exact source-customer/payment mapping, instrument type and continuing recurring
+billing authority before implementing a tenant-owned Braintree execution lane.
+A masked card, Recharge payment label or shared customer email does not prove
+these facts. Jennifer's observed Shop Pay and Rynda's observed PayPal methods
+must be evaluated separately. The current executor supports Stripe cards only;
+its consent and source-stop gates must not be bypassed to simulate Braintree.
+
+If future charges move to Stripe, use an approved provider-to-provider card
+migration and retain the returned identity mappings. Braintree documents selected
+customer exports and an eligibility-gated Forward API integration with Stripe.
+Wallet and PayPal instruments need their own eligibility review; card portability
+is not proof that a PayPal agreement can be used in a card-only Stripe executor.
+The authorization form is the fallback for customers who need or choose a new
+Stripe card. It is not the mechanism for exporting payment credentials.
+
+Existing Braintree proceeds settle through the merchant's payout arrangement.
+Changing future billing providers does not itself transfer an existing balance
+into Stripe. No balance transfer, vault export, new gateway, source cancellation
+or live payment was performed by this work.
+
+For each selected pilot member, a future cutover still requires exact terms and
+customer identity, current permission for the chosen payment rail, fresh proof
+that Recharge and queued charges have stopped, one recorded billing owner and
+one reconciled paid Shopify order. Preserve all other members and verify their
+unchanged routing. Shopify gateway/source metadata may differ even when the
+merchant's shipping workflow remains in Shopify; review dependent automations.
+
+Primary references:
+- [Braintree vaulted-method transactions](https://developer.paypal.com/braintree/docs/reference/request/transaction/sale/node/)
+- [Braintree data exports](https://developer.paypal.com/braintree/articles/get-started/data-migration/exports/)
+- [Braintree Forward API for Stripe](https://developer.paypal.com/braintree/docs/guides/extend/forward-api/stripe/)
+- [Stripe payment-data imports](https://docs.stripe.com/get-started/data-migrations/pan-import)

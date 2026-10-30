@@ -1,3 +1,20 @@
+## Candle Club authorization and scent notes (October 30; source candidate)
+
+The private subscription page uses Modern Forestry branding only for that exact
+workspace, displays immutable recurring terms, and separates Stripe card consent
+from a clearly labelled Coming soon preview of voting, scent choices, scent
+notes, addresses, skips and account management. Other merchants retain their
+own name and do not receive the Modern Forestry roadmap. The page keeps private
+cache/referrer headers, required consent and the original setup-only flow.
+
+The paired native app adds a star rating and scent-note composer for eligible
+members using the existing feedback endpoint. Comments remain private/pending
+for review; request UUIDs make unchanged retries converge without rewriting an
+accepted comment. No schema or billing changes are included. Release the backend
+before the native update and validate the hosted page separately. Braintree vault
+reuse and provider-to-provider Stripe migration are possible design paths, not
+implemented or activated by this source. See `docs/operations/subscriptions-pilot.md`.
+
 ## Facilities mobile controls (October 30; source candidate)
 
 The paired public frontend adds whole-card work-order menus, a docked ticket
