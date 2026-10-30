@@ -1,3 +1,12 @@
+## Public campus photo galleries (2026-10-29; source candidate)
+
+The standalone public sample embeds a reviewed, checksum-pinned stock photo
+catalog with covers, row thumbnails and accessible optional slideshows. Galleries
+read only the current persona projection and preserve existing drafts and DOM
+handlers. Shared search embedding also regenerates the media assets; no native,
+private-edition, storage or provider behavior changes. See
+`docs/operations/enterprise-campus-media.md` for builds, checks and hosted acceptance.
+
 ## Native Teams global search (2026-10-29; source candidate)
 
 Teams has a first-party centered instant search/command palette behind default-off

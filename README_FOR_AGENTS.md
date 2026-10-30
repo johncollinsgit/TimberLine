@@ -1,3 +1,11 @@
+## Public campus photo galleries (2026-10-29; source candidate)
+
+Follow `docs/operations/enterprise-campus-media.md` when changing public campus
+photos. Preserve current-projection lookup, browser-only state, forms and focus.
+Keep photo bytes local and checksum-pinned; captions distinguish stock images
+from actual college work. Re-embed shared search/media after JS, CSS or asset
+changes and run the gallery contracts/browser checks before protected release.
+
 ## Native Teams global search (2026-10-29; source candidate)
 
 Read `docs/operations/teams-global-search.md` before changing search. Preserve
