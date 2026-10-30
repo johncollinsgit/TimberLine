@@ -12,6 +12,7 @@
         "php": "^8.2",
         "aws/aws-php-sns-message-validator": "^1.0",
         "aws/aws-sdk-php": "^3.0",
+        "braintree/braintree_php": "6.33.1",
         "doctrine/dbal": "^4.4",
         "dompdf/dompdf": "^3.1.6",
         "laravel/fortify": "^1.30",

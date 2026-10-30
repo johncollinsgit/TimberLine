@@ -1085,6 +1085,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware(['tenant.access'])->prefix('payments')->name('tenant-payments.')->group(function (): void {
         Route::get('/', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'index'])->name('index');
+        Route::post('/braintree/connect', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'braintreeConnect'])->middleware('throttle:5,1')->name('braintree.connect');
+        Route::post('/braintree/{connection}/refresh', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'braintreeRefresh'])->whereNumber('connection')->middleware('throttle:5,1')->name('braintree.refresh');
         Route::post('/stripe/start', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeStart'])->middleware('throttle:5,1')->name('stripe.start');
         Route::post('/stripe/connect', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeConnect'])->middleware('throttle:5,1')->name('stripe.connect');
         Route::post('/stripe/session', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeSession'])->middleware('throttle:10,1')->name('stripe.session');
