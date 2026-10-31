@@ -29,9 +29,9 @@ GRAPHQL;
     public function originalPayment(SubscriptionBillingAgreement $row, string $orderId, string $transactionId): array
     {
         abort_unless(preg_match('/\A[1-9][0-9]{0,19}\z/', $orderId), 422);
+        $terms = SubscriptionBillingAuthorization::original($row)['terms'];
         $data = $this->read($row, self::SOURCE_QUERY, ['id' => 'gid://shopify/Order/'.$orderId]);
         $order = $data['order'] ?? [];
-        $terms = $row->terms;
         $attributes = collect($order['customAttributes'] ?? [])->pluck('value', 'key')->all();
         $subscriptions = array_values(array_filter(array_map('trim', explode(',', (string) ($attributes['rc_subscription_ids'] ?? '')))));
         $expected = array_values(array_unique(array_column($terms['lines'], 'subscription_id')));
@@ -61,6 +61,7 @@ GRAPHQL;
 
     public function currentTerms(SubscriptionBillingAgreement $row): void
     {
+        SubscriptionBillingAuthorization::assertCurrent($row);
         $terms = $row->terms;
         if ($row->method_binding['environment'] === 'sandbox') {
             $sandbox = $this->read($row, self::SANDBOX_QUERY, []);

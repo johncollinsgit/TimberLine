@@ -117,6 +117,7 @@ GRAPHQL;
 
     private function adoptionAuthority(SubscriptionBillingAgreement $row, array $state): void
     {
+        SubscriptionBillingAuthorization::assertCurrent($row);
         $original = $state['original'] ?? [];
         abort_unless(config('subscriptions.replacement_shopify_adoption_enabled') === true && $row->status === 'prepared' && ! $row->activated_at
             && ($original['terms_hash'] ?? null) === $row->terms_hash && ($original['processor_context'] ?? null) === $this->context($row)

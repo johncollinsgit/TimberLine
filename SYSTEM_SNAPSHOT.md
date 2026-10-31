@@ -1,3 +1,15 @@
+## Original subscription authorization evidence (October 30; source candidate)
+
+New replacement preparations retain an encrypted, immutable snapshot of the
+original reviewed terms, hash and continuing-authorization review. Braintree and
+Shopify historical payment/source checks use that snapshot. Arbitrary current
+terms edits cannot authorize another collection or contract adoption, including
+when an old reviewed hash is retained. Existing attempted cycles still reconcile
+using their immutable terms. Missing/corrupt original snapshots require review;
+they are never reconstructed from current terms or silently backfilled.
+Reviewed address/scent amendment workflows remain outstanding. No DDL, live
+billing or customer rollout changed. See the replacement runbook.
+
 ## Shopify paused-contract adoption (October 30; source candidate)
 
 The replacement Shopify command now has offline planning and separately gated

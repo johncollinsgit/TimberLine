@@ -302,6 +302,7 @@ class SubscriptionBraintreeExecutionService
         $this->access()->owner($row->tenant_id, $actor, $row->member_id, 'collection');
         $this->access()->owner($row->tenant_id, $actor, $row->member_id, 'handoff');
         $this->access()->member($row);
+        SubscriptionBillingAuthorization::assertCurrent($row);
         abort_unless($row->processor === 'braintree' && config('subscriptions.replacement_braintree_collection_enabled') === true, 423, 'Braintree replacement collection is paused.');
         abort_if(SubscriptionPilotEnrollment::query()->forTenantId($row->tenant_id)->where('member_id', $row->member_id)->whereIn('status', ['authorized', 'active', 'paused'])->exists(), 409, 'An existing Stripe authorization needs a reviewed handoff first.');
         $legacy = SubscriptionPilotEnrollment::query()->forTenantId($row->tenant_id)->where('member_id', $row->member_id)->pluck('id');

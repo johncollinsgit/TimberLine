@@ -21,6 +21,7 @@ class SubscriptionShopifyMethodService
         $access->owner($tenantId, $actor, $row->member_id, 'setup');
         $access->member($row);
         abort_unless($row->processor === 'shopify' && $row->status === 'prepared' && ! $row->activated_at, 409);
+        $original = SubscriptionBillingAuthorization::original($row);
         $sourceContext = $this->sourceContext($row);
         $transport = app(SubscriptionShopifyBillingTransport::class);
         $context = $transport->context($row);
@@ -48,7 +49,7 @@ class SubscriptionShopifyMethodService
         $proof = ['provider_verified' => true, 'original_method_accessible' => true, 'reauthorization_required' => null, 'checked_at' => now()->toISOString(),
             'method_type' => $type === 'CustomerShopPayAgreement' ? 'shop_pay' : 'card', 'last_four' => $instrument['lastDigits'],
             'processor_context' => $context, 'source' => $source + ['source_order_id' => $orderId, 'source_updated_at' => $order['updatedAt']],
-            'terms_hash' => $row->terms_hash, 'contract_adopted' => false, 'collection_enabled' => false];
+            'terms_hash' => $row->terms_hash, 'original_terms_hash' => $original['terms_hash'], 'contract_adopted' => false, 'collection_enabled' => false];
         if ($persist) {
             DB::transaction(function () use ($row, $actor, $proof, $context, $source) {
                 $current = SubscriptionBillingAgreement::query()->forTenantId($row->tenant_id)->whereKey($row->id)->lockForUpdate()->firstOrFail();
@@ -73,7 +74,7 @@ class SubscriptionShopifyMethodService
 
     private function order(SubscriptionBillingAgreement $row, array $order, string $id): void
     {
-        $terms = $row->terms;
+        $terms = SubscriptionBillingAuthorization::original($row)['terms'];
         $attributes = collect($order['customAttributes'] ?? [])->pluck('value', 'key');
         $ids = array_filter(array_map('trim', explode(',', (string) $attributes->get('rc_subscription_ids', ''))));
         $expected = array_column($terms['lines'], 'subscription_id');
@@ -99,29 +100,30 @@ class SubscriptionShopifyMethodService
 
     private function source(SubscriptionBillingAgreement $row, array $order): array
     {
+        $terms = SubscriptionBillingAuthorization::original($row)['terms'];
         $context = $this->sourceContext($row);
         $connection = SubscriptionRechargeConnection::query()->forTenantId($row->tenant_id)->findOrFail($context['connection_id']);
         $revision = SubscriptionRechargeCredentialRevision::query()->forTenantId($row->tenant_id)->findOrFail($context['revision_id']);
         $transport = app(SubscriptionRechargeTransport::class);
         $store = $transport->read($connection, $revision, 'store')['store'] ?? [];
-        abort_unless((string) ($store['id'] ?? '') === $connection->provider_store_id && ($store['identifier'] ?? null) === $row->terms['shop_domain']
+        abort_unless((string) ($store['id'] ?? '') === $connection->provider_store_id && ($store['identifier'] ?? null) === $terms['shop_domain']
             && ($store['external_platform'] ?? null) === 'shopify' && ($store['checkout_platform'] ?? null) === 'shopify', 409, 'The original source is not the same Shopify checkout store.');
-        $customer = $transport->read($connection, $revision, 'customer', ['id' => $row->terms['recharge_customer_id']])['customer'] ?? [];
-        abort_unless((string) ($customer['id'] ?? '') === $row->terms['recharge_customer_id']
-            && (string) data_get($customer, 'external_customer_id.ecommerce') === $row->terms['shopify_customer_id']
+        $customer = $transport->read($connection, $revision, 'customer', ['id' => $terms['recharge_customer_id']])['customer'] ?? [];
+        abort_unless((string) ($customer['id'] ?? '') === $terms['recharge_customer_id']
+            && (string) data_get($customer, 'external_customer_id.ecommerce') === $terms['shopify_customer_id']
             && ($customer['has_valid_payment_method'] ?? null) === true, 409, 'The source customer or saved payment assignment needs review.');
         $addressId = null;
-        foreach ($row->terms['lines'] as $line) {
+        foreach ($terms['lines'] as $line) {
             $subscription = $transport->read($connection, $revision, 'subscription', ['id' => $line['subscription_id']])['subscription'] ?? [];
             abort_unless((string) ($subscription['id'] ?? '') === $line['subscription_id']
-                && (string) ($subscription['customer_id'] ?? '') === $row->terms['recharge_customer_id']
+                && (string) ($subscription['customer_id'] ?? '') === $terms['recharge_customer_id']
                 && (string) data_get($subscription, 'external_variant_id.ecommerce') === $line['variant_id']
                 && ($subscription['quantity'] ?? null) === $line['quantity']
                 && SubscriptionPilotShopifyBridge::cents((string) ($subscription['price'] ?? '')) === $line['unit_price_cents']
-                && ($subscription['presentment_currency'] ?? null) === $row->terms['currency']
+                && ($subscription['presentment_currency'] ?? null) === $terms['currency']
                 && ($subscription['order_interval_unit'] ?? null) === 'month'
-                && ($subscription['order_interval_frequency'] ?? null) === $row->terms['billing_months']
-                && ($subscription['charge_interval_frequency'] ?? null) === $row->terms['billing_months']
+                && ($subscription['order_interval_frequency'] ?? null) === $terms['billing_months']
+                && ($subscription['charge_interval_frequency'] ?? null) === $terms['billing_months']
                 && ($subscription['is_prepaid'] ?? null) === false
                 && array_key_exists('expire_after_specific_number_of_charges', $subscription) && $subscription['expire_after_specific_number_of_charges'] === null
                 && array_key_exists('order_day_of_month', $subscription)
@@ -129,30 +131,30 @@ class SubscriptionShopifyMethodService
                 && in_array($subscription['status'] ?? null, ['active', 'cancelled', 'expired'], true), 409, 'The original source subscription terms differ.');
             if ($subscription['status'] === 'active') {
                 abort_unless(is_string($subscription['next_charge_scheduled_at'] ?? null)
-                    && CarbonImmutable::parse($subscription['next_charge_scheduled_at'], $row->terms['timezone'])
-                        ->setTimezone($row->terms['timezone'])->toDateString() === $row->terms['first_billing_date'], 409, 'The original source billing date changed.');
+                    && CarbonImmutable::parse($subscription['next_charge_scheduled_at'], $terms['timezone'])
+                        ->setTimezone($terms['timezone'])->toDateString() === $terms['first_billing_date'], 409, 'The original source billing date changed.');
             }
             $current = SubscriptionRechargeTransport::id($subscription['address_id'] ?? null);
             abort_unless($addressId === null || $addressId === $current, 409, 'Multiple source delivery addresses need separate agreements.');
             $addressId = $current;
         }
         $address = $transport->read($connection, $revision, 'address', ['id' => $addressId])['address'] ?? [];
-        abort_unless((string) ($address['id'] ?? '') === $addressId && (string) ($address['customer_id'] ?? '') === $row->terms['recharge_customer_id']
+        abort_unless((string) ($address['id'] ?? '') === $addressId && (string) ($address['customer_id'] ?? '') === $terms['recharge_customer_id']
             && (string) ($address['payment_method_id'] ?? '') === $row->method_binding['source_payment_method_id'], 409, 'The original source address uses another payment method.');
         foreach (['first_name' => 'firstName', 'last_name' => 'lastName', 'address1' => 'address1', 'address2' => 'address2', 'city' => 'city', 'zip' => 'zip', 'country_code' => 'countryCode'] as $source => $term) {
-            abort_unless(($address[$source] ?? '') === ($row->terms['shipping_address'][$term] ?? ''), 409, 'The source delivery address changed.');
+            abort_unless(($address[$source] ?? '') === ($terms['shipping_address'][$term] ?? ''), 409, 'The source delivery address changed.');
         }
-        abort_unless(in_array($address['province'] ?? null, [$row->terms['shipping_address']['provinceCode'], data_get($order, 'shippingAddress.province')], true), 409);
+        abort_unless(in_array($address['province'] ?? null, [$terms['shipping_address']['provinceCode'], data_get($order, 'shippingAddress.province')], true), 409);
         $payment = $transport->read($connection, $revision, 'payment_method', ['id' => $row->method_binding['source_payment_method_id']])['payment_method'] ?? [];
         abort_unless((string) ($payment['id'] ?? '') === $row->method_binding['source_payment_method_id']
-            && (string) ($payment['customer_id'] ?? '') === $row->terms['recharge_customer_id'] && ($payment['processor_name'] ?? null) === 'shopify_payments'
+            && (string) ($payment['customer_id'] ?? '') === $terms['recharge_customer_id'] && ($payment['processor_name'] ?? null) === 'shopify_payments'
             && array_key_exists('status', $payment) && in_array($payment['status'], ['valid', null], true)
             && is_string($payment['processor_payment_method_token'] ?? null)
             && hash_equals($row->method_binding['payment_method_gid'], $payment['processor_payment_method_token']), 409, 'Source payment mapping is unavailable or identifies a different vaulted method.');
         abort_unless($context === $this->sourceContext($row), 409, 'The original source credential changed during verification.');
 
-        return ['connection_id' => $connection->id, 'customer_id' => $row->terms['recharge_customer_id'], 'address_id' => $addressId,
-            'payment_method_id' => $row->method_binding['source_payment_method_id'], 'subscription_ids' => array_column($row->terms['lines'], 'subscription_id'),
+        return ['connection_id' => $connection->id, 'customer_id' => $terms['recharge_customer_id'], 'address_id' => $addressId,
+            'payment_method_id' => $row->method_binding['source_payment_method_id'], 'subscription_ids' => array_column($terms['lines'], 'subscription_id'),
             'credential_context' => $context, 'checked_at' => now()->toISOString()];
     }
 

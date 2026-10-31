@@ -16,6 +16,19 @@ beforeEach(function () {
     $this->contracts = app(SubscriptionShopifyContractService::class);
 });
 
+test('an unreviewed local address or amount edit cannot start Shopify contract adoption', function () {
+    $s = $this->s;
+    $terms = $s->agreement->terms;
+    $terms['amount_cents'] = $terms['subtotal_cents'] = 3000;
+    $terms['lines'][0]['unit_price_cents'] = 3000;
+    $terms['shipping_address']['address1'] = '456 New Street';
+    $s->agreement->update(['terms' => $terms]);
+    expect(fn () => $this->contracts->calculate($s->tenant->id, $s->actor, $s->agreement->id, $s->agreement->terms_hash, $s->agreement->revision))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect($s->calculates)->toBe(0)->and($s->commits)->toBe(0)->and($s->pauses)->toBe(0)->and($s->dateChanges)->toBe(0);
+    Http::assertSentCount(7); // Only the fixture's original-method reads; no adoption request.
+});
+
 function originalShopifyCalculation($case): array
 {
     $s = $case->s;

@@ -2,6 +2,7 @@
 
 use App\Models\SubscriptionBillingCycle;
 use App\Models\SubscriptionPilotMember;
+use App\Services\Subscriptions\SubscriptionBillingAuthorization;
 use App\Services\Subscriptions\SubscriptionBraintreeExecutionService;
 use App\Services\Subscriptions\SubscriptionBraintreeMethodService;
 use App\Services\Subscriptions\SubscriptionBraintreeTransport;
@@ -19,6 +20,24 @@ beforeEach(function () {
     $this->travelTo(now('America/New_York')->setDate(2027, 1, 15)->setTime(10, 0)->utc());
     $this->scenario = new BraintreeScenario;
     $this->execution = app(SubscriptionBraintreeExecutionService::class);
+});
+
+test('Braintree historical proof retains original amount and address while edited terms cannot collect', function () {
+    $s = $this->scenario;
+    $hash = $s->agreement->terms_hash;
+    $terms = $s->agreement->terms;
+    $terms['amount_cents'] = $terms['subtotal_cents'] = 3000;
+    $terms['lines'][0]['unit_price_cents'] = 3000;
+    $terms['shipping_address']['address1'] = '456 New Street';
+    // Even keeping a previously reviewed hash cannot turn an arbitrary terms edit into authority.
+    $s->agreement->update(['terms' => $terms]);
+    $proof = app(SubscriptionBraintreeMethodService::class)->verify($s->tenant->id, $s->actor, $s->agreement->id, '111');
+    expect($proof['original_terms_hash'])->toBe($hash)->and($proof['source_transaction_id'])->toBe('source_txn')
+        ->and(SubscriptionBillingAuthorization::original($s->agreement->fresh())['terms']['amount_cents'])->toBe(2500);
+    expect(fn () => $this->execution->activate($s->tenant->id, $s->actor, $s->agreement->id, $s->source->id, $hash, $s->agreement->revision))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect($s->sales)->toBe([])->and($s->orderCreates)->toBe([])->and(SubscriptionBillingCycle::count())->toBe(0)
+        ->and(SubscriptionPilotMember::first()->billing_owner)->toBe('recharge');
 });
 
 test('exact original Braintree and Shopify mapping retains a saved method without new customer authorization or payment', function () {
@@ -90,6 +109,28 @@ test('a lost sale response is recovered by original cycle identity without ever 
     $cycle = $this->execution->collect($s->agreement);
     expect($cycle->payment_status)->toBe('succeeded')->and($cycle->handoff_status)->toBe('confirmed')
         ->and($s->sales)->toHaveCount(1)->and(SubscriptionBillingCycle::count())->toBe(1);
+});
+
+test('an edited future agreement does not rewrite or prevent reconciliation of its original attempted cycle', function () {
+    $s = $this->scenario;
+    $s->activate();
+    $s->lostSaleResponse = true;
+    $this->travelTo(now('America/New_York')->setDate(2027, 1, 31)->setTime(10, 0)->utc());
+    $cycle = $this->execution->collect($s->agreement);
+    $originalTerms = $cycle->terms;
+    $terms = $s->agreement->terms;
+    $terms['amount_cents'] = $terms['subtotal_cents'] = 3000;
+    $terms['lines'][0]['unit_price_cents'] = 3000;
+    $terms['shipping_address']['address1'] = '456 New Street';
+    $s->agreement->update(['terms' => $terms]);
+    $cycle = $this->execution->reconcile($cycle);
+    expect($cycle->payment_status)->toBe('succeeded')->and($cycle->handoff_status)->toBe('confirmed')
+        ->and($cycle->amount_cents)->toBe(2500)->and($cycle->terms)->toBe($originalTerms)
+        ->and($s->sales)->toHaveCount(1)->and($s->orderCreates)->toHaveCount(1)
+        ->and($s->orderCreates[0]['order']['shippingAddress']['address1'])->toBe('123 Example Street');
+    $this->travelTo(now('America/New_York')->setDate(2027, 2, 28)->setTime(10, 0)->utc());
+    expect(fn () => $this->execution->collect($s->agreement))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect($s->sales)->toHaveCount(1);
 });
 
 test('a lost Shopify response recovers the original order without another create or Braintree charge', function () {

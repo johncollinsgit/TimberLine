@@ -45,6 +45,7 @@ class SubscriptionBillingAgreementService
             abort_if(SubscriptionPilotEnrollment::query()->forTenantId($tenantId)->where('member_id', $memberId)->whereIn('status', ['authorized', 'active', 'paused'])->exists(), 409, 'A Stripe pilot already has payment authority for this member.');
             $current = SubscriptionBillingAgreement::query()->forTenantId($tenantId)->where('member_id', $memberId)->lockForUpdate()->first();
             if ($current) {
+                SubscriptionBillingAuthorization::assertCurrent($current);
                 abort_unless(SubscriptionEvidence::canonical($current->terms) === SubscriptionEvidence::canonical($candidate['terms'])
                     && SubscriptionEvidence::canonical($current->method_binding) === SubscriptionEvidence::canonical($candidate['method_binding'])
                     && collect($current->authorization_evidence)->only(['reference', 'continuing_authorization_reviewed_by', 'source_terms_reviewed_by'])->all()
@@ -241,6 +242,7 @@ class SubscriptionBillingAgreementService
             'continuing_authorization_reviewed_by' => $actor->id, 'source_terms_reviewed_by' => $actor->id,
             'provider_verified' => false, 'source_stop_verified' => false];
         $hash = SubscriptionEvidence::digest(SubscriptionEvidence::canonical(['terms' => $terms, 'binding' => $binding, 'authorization' => $authorization]));
+        $authorization['original_authorization'] = ['version' => 1, 'terms' => $terms, 'terms_hash' => $hash, 'authorization' => $authorization];
 
         return ['processor' => $data['processor'], 'terms' => $terms, 'method_binding' => $binding, 'authorization_evidence' => $authorization, 'terms_hash' => $hash];
     }

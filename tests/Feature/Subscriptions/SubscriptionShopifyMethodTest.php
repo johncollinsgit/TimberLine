@@ -26,6 +26,20 @@ test('original Shop Pay mapping can be previewed without storing proof or creati
     Http::assertSentCount(7);
 });
 
+test('original Shopify proof uses retained source terms rather than an editable future amount or address', function () {
+    $s = $this->scenario;
+    $terms = $s->agreement->terms;
+    $terms['amount_cents'] = $terms['subtotal_cents'] = 3000;
+    $terms['lines'][0]['unit_price_cents'] = 3000;
+    $terms['shipping_address']['address1'] = '456 New Street';
+    $s->agreement->update(['terms' => $terms]);
+    $proof = app(SubscriptionShopifyMethodService::class)->verify($s->tenant->id, $s->actor, $s->agreement->id, '111');
+    expect($proof['original_terms_hash'])->toBe($s->agreement->terms_hash)->and($proof['original_method_accessible'])->toBeTrue()
+        ->and($proof['collection_enabled'])->toBeFalse()->and(SubscriptionBillingCycle::count())->toBe(0);
+    expect(fn () => \App\Services\Subscriptions\SubscriptionBillingAuthorization::assertCurrent($s->agreement->fresh()))->toThrow(HttpException::class);
+    Http::assertSentCount(7);
+});
+
 test('exact original Shopify card proof stores masked evidence and leaves Recharge primary', function () {
     $s = $this->scenario;
     $s->card = true;

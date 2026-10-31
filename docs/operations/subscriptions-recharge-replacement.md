@@ -7,6 +7,29 @@ access can be verified. Stripe setup is an explicit fallback, not a universal
 migration requirement. The first rollout is the two already prepared members;
 all other members retain Recharge billing until separately reviewed.
 
+## Original authorization evidence (source candidate)
+
+Preparation now freezes `original_authorization` inside encrypted agreement
+evidence: the original reviewed terms, existing reviewed hash and authorization
+reference/reviewers. The model protects this snapshot and review identity against
+replacement, removal or later reconstruction. The original keyed hash is checked
+against those terms, the immutable saved-method binding and original review.
+
+Historical Braintree sale/order checks and Shopify source order/subscription/
+address checks use the retained original terms. Their proof distinguishes the
+original terms hash from the current agreement hash. A future delivery or scent
+change must not make a historical payment appear to have used that new address,
+price or product. Current customer/store/currency/schedule identity also cannot be
+silently replaced by editing JSON.
+
+**Reviewed amendment execution remains outstanding.** Until it is implemented,
+changed current terms cannot collect or adopt a Shopify contract, even if an old
+reviewed hash is left in place. Original attempts still reconcile using their
+frozen cycle terms and original account. Missing/corrupt snapshots fail closed;
+preparation replay never fills them from an existing agreement's current terms.
+Do not backfill original authority from mutable data as an upgrade shortcut.
+This source adds no schema migration, consent request or live billing change.
+
 ## Modern Forestry rewards (owner confirmed October 30)
 
 Members may redeem Candle Cash on other purchases: up to **$5 per in-person
@@ -203,6 +226,7 @@ proven. The two testers are acceptance cases, not hard-coded customer rules.
 - [x] Source implementation for exact Braintree method/source mapping and gated individual activation.
 - [x] Source implementation for Braintree execution, original-transaction recovery and owned Shopify order/fulfillment reporting.
 - [x] Authenticated customer pause/resume/skip/cancel and private member schedule page, with paired native entry point.
+- [x] Immutable original reviewed authorization snapshot, separated historical proof and current collection/adoption guards.
 - [ ] Address/scent future-term changes and original-authorization amendment handling.
 - [ ] Actual Braintree merchant sandbox/live acceptance and original source-stop verification.
 - [ ] Shopify-vaulted contract ownership/migration and billing attempts.

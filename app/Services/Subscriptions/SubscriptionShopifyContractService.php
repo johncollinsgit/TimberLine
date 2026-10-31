@@ -338,6 +338,7 @@ class SubscriptionShopifyContractService
 
     private function mutable(SubscriptionBillingAgreement $row, string $hash, int $revision, bool $allowPastDateForPause = false): void
     {
+        SubscriptionBillingAuthorization::assertCurrent($row);
         abort_unless(config('subscriptions.replacement_shopify_adoption_enabled') === true && $row->status === 'prepared' && ! $row->activated_at
             && $row->terms_hash === $hash && $row->revision === $revision && ($allowPastDateForPause || $row->terms['first_billing_date'] >= now($row->terms['timezone'])->toDateString())
             && ($row->method_binding['environment'] === 'sandbox' || config('subscriptions.replacement_shopify_live_acceptance_verified') === true), 423, 'Review the exact future agreement and isolated merchant acceptance before adoption.');

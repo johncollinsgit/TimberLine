@@ -18,10 +18,12 @@ class SubscriptionBraintreeMethodService
         $access->owner($tenantId, $actor, $row->member_id, 'setup');
         abort_unless($row->processor === 'braintree' && $row->status !== 'cancelled', 409);
         $access->member($row);
+        $original = SubscriptionBillingAuthorization::original($row);
+        $terms = $original['terms'];
         $binding = $row->method_binding;
         $transport = app(SubscriptionBraintreeTransport::class);
         $context = $transport->context($tenantId, $binding);
-        $method = $transport->verifyMethod($tenantId, $binding, $row->terms['currency']);
+        $method = $transport->verifyMethod($tenantId, $binding, $terms['currency']);
         abort_unless(in_array($method['type'] ?? null, ['card', 'paypal'], true)
             && (($method['type'] ?? null) !== 'paypal' || ($method['billing_agreement_present'] ?? null) === true), 409, 'The original reusable payment method or agreement needs review.');
         $transaction = $transport->transaction($tenantId, $binding, $binding['source_payment_reference']);
@@ -29,7 +31,7 @@ class SubscriptionBraintreeMethodService
         abort_unless(count($linked) === 1 && $linked[0] === $transaction && $transaction['id'] === $binding['source_payment_reference']
             && $transaction['customer_id'] === $binding['customer_id'] && $transaction['merchant_account_id'] === $binding['merchant_account_id']
             && $transaction['type'] === 'sale' && $transaction['status'] === 'settled'
-            && $transaction['currency'] === $row->terms['currency'] && SubscriptionPilotShopifyBridge::cents($transaction['amount']) === $row->terms['amount_cents']
+            && $transaction['currency'] === $terms['currency'] && SubscriptionPilotShopifyBridge::cents($transaction['amount']) === $terms['amount_cents']
             && $transaction['refund_ids'] === [] && $transaction['dispute_count'] === 0
             && $transaction['refunded_transaction_id'] === null
             && $transaction['instrument_type'] === ($method['type'] === 'card' ? 'credit_card' : 'paypal_account'), 409, 'The original transaction does not prove this exact vaulted method and recurring amount.');
@@ -38,7 +40,7 @@ class SubscriptionBraintreeMethodService
         $access->owner($tenantId, $actor->fresh(), $row->member_id, 'setup');
         $access->member($row->fresh());
         abort_unless($transport->context($tenantId, $binding) === $context, 409);
-        $proof = ['checked_at' => now()->toISOString(), 'terms_hash' => $row->terms_hash, 'method_type' => $method['type'],
+        $proof = ['checked_at' => now()->toISOString(), 'terms_hash' => $row->terms_hash, 'original_terms_hash' => $original['terms_hash'], 'method_type' => $method['type'],
             'last_four' => $method['last_four'], 'processor_context' => $context, 'source' => $source,
             'source_transaction_id' => $transaction['id'], 'provider_verified' => true, 'reauthorization_required' => false];
         if ($persist) {

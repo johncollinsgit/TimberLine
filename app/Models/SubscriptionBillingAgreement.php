@@ -31,6 +31,11 @@ class SubscriptionBillingAgreement extends Model
                     throw new \LogicException('The original billing agreement and payment binding cannot be replaced.');
                 }
             }
+            foreach (['original_authorization', 'reference', 'continuing_authorization_reviewed_by', 'source_terms_reviewed_by'] as $field) {
+                if (data_get($row->getOriginal('authorization_evidence'), $field) !== data_get($row->authorization_evidence, $field)) {
+                    throw new \LogicException('Retain the original reviewed authorization; never reconstruct it from current terms.');
+                }
+            }
             foreach (['original', 'calculation_id', 'calculate_dispatched_at', 'commit_original', 'commit_dispatch_proof', 'commit_dispatched_at', 'contract_id'] as $field) {
                 $before = data_get($row->getOriginal('authorization_evidence'), 'shopify_adoption.'.$field);
                 if ($before !== null && data_get($row->authorization_evidence, 'shopify_adoption.'.$field) !== $before) {

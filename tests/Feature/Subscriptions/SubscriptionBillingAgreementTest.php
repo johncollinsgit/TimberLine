@@ -10,6 +10,7 @@ use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
 use App\Services\Subscriptions\SubscriptionBillingAgreementService;
+use App\Services\Subscriptions\SubscriptionBillingAuthorization;
 use App\Services\Subscriptions\SubscriptionPilotService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -103,6 +104,70 @@ test('reuse preparation rejects changed quotes and another tenants Braintree con
     expect(fn () => prepareBillingAgreement($this))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
     expect(SubscriptionBillingAgreement::count())->toBe(0);
 });
+
+test('preparation retains encrypted original reviewed terms without changing the reviewed hash', function () {
+    $review = $this->service->review($this->tenant->id, $this->owner, $this->member->id, $this->input);
+    $row = prepareBillingAgreement($this);
+    $original = SubscriptionBillingAuthorization::original($row);
+    expect($original['terms'])->toBe($row->terms)->and($original['terms_hash'])->toBe($review['terms_hash'])
+        ->and($original['authorization']['reference'])->toBe('original-agreement:123')
+        ->and($original['authorization']['source_terms_reviewed_by'])->toBe($this->owner->id)
+        ->and($original['authorization']['provider_verified'])->toBeFalse()
+        ->and(DB::table('subscription_billing_agreements')->value('authorization_evidence'))->not->toContain('123 Example Street', 'original-agreement:123')
+        ->and(json_encode($row))->not->toContain('123 Example Street', 'original-agreement:123');
+    Http::assertNothingSent();
+});
+
+test('original authorization terms hash and review cannot be overwritten removed or retrofitted', function (string $field) {
+    $row = prepareBillingAgreement($this);
+    $evidence = $row->authorization_evidence;
+    if ($field === 'remove') {
+        unset($evidence['original_authorization']);
+    } else {
+        data_set($evidence, $field, 'replacement');
+    }
+    expect(fn () => $row->update(['authorization_evidence' => $evidence]))->toThrow(LogicException::class);
+    expect(SubscriptionBillingAuthorization::original($row->fresh())['terms_hash'])->toBe($row->terms_hash);
+})->with(['original_authorization.terms.amount_cents', 'original_authorization.terms.shipping_address.address1',
+    'original_authorization.terms_hash', 'original_authorization.authorization.reference', 'reference',
+    'continuing_authorization_reviewed_by', 'source_terms_reviewed_by', 'remove']);
+
+test('missing original authorization is never backfilled from an existing agreements current terms', function () {
+    $row = prepareBillingAgreement($this);
+    $evidence = $row->authorization_evidence;
+    unset($evidence['original_authorization']);
+    DB::table('subscription_billing_agreements')->where('id', $row->id)->update([
+        'authorization_evidence' => \Illuminate\Support\Facades\Crypt::encryptString(json_encode($evidence)),
+    ]);
+    $legacy = $row->fresh();
+    expect(fn () => SubscriptionBillingAuthorization::original($legacy))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect(fn () => prepareBillingAgreement($this))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect(fn () => $legacy->update(['authorization_evidence' => $row->authorization_evidence]))->toThrow(LogicException::class);
+    expect(data_get($row->fresh()->authorization_evidence, 'original_authorization'))->toBeNull();
+    Http::assertNothingSent();
+});
+
+test('a corrupted stored original snapshot is rejected even when the encrypted value is readable', function () {
+    $row = prepareBillingAgreement($this);
+    $evidence = $row->authorization_evidence;
+    $evidence['original_authorization']['terms']['amount_cents'] = 3000;
+    DB::table('subscription_billing_agreements')->where('id', $row->id)->update([
+        'authorization_evidence' => \Illuminate\Support\Facades\Crypt::encryptString(json_encode($evidence)),
+    ]);
+    expect(fn () => SubscriptionBillingAuthorization::original($row->fresh()))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    Http::assertNothingSent();
+});
+
+test('a changed current amount address hash or identity cannot acquire billing authority', function (string $field, mixed $value) {
+    $row = prepareBillingAgreement($this);
+    $terms = $row->terms;
+    data_set($terms, $field, $value);
+    $row->update(['terms' => $terms, 'terms_hash' => str_repeat('f', 64)]);
+    expect(fn () => SubscriptionBillingAuthorization::assertCurrent($row->fresh()))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect(data_get($row->fresh()->authorization_evidence, 'original_authorization.terms_hash'))->not->toBe(str_repeat('f', 64));
+    Http::assertNothingSent();
+})->with([['amount_cents', 3000], ['shipping_address.address1', 'New address'], ['currency', 'CAD'],
+    ['billing_months', 2], ['timezone', 'UTC'], ['shopify_customer_id', '999'], ['candle_cash_allowed', true]]);
 
 test('reuse setup requires exact rollout member owner and verified email', function (string $defect) {
     match ($defect) {

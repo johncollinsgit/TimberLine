@@ -1,3 +1,16 @@
+## Original subscription authorization evidence (October 30; source candidate)
+
+`SubscriptionBillingAuthorization` verifies the original HMAC-bound terms,
+payment binding and authorization review saved at preparation. The encrypted
+`original_authorization` snapshot and review reference/actors cannot be replaced,
+removed or retrofitted on an existing agreement. Historical method/source proof
+uses those original terms; current billing/adoption requires unchanged reviewed
+terms until a separate audited amendment workflow exists. Retaining a stale hash
+after editing JSON must not bypass the guard. Reconciliation continues to use
+immutable original cycle terms even if the current agreement later changes.
+Missing/corrupt snapshots require explicit evidence review, never an automatic
+backfill. No schema migration or production activation is included.
+
 ## Shopify paused-contract adoption (October 30; source candidate)
 
 `SubscriptionShopifyContractService` and its fixed protocol extend the original
