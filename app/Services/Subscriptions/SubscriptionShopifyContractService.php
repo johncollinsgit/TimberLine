@@ -103,12 +103,23 @@ class SubscriptionShopifyContractService
             if (isset($state['commit_dispatched_at'])) {
                 return $this->recover($tenantId, $actor, $agreementId);
             }
-            $calculation = $this->transport()->contractRead($row, 'calculation')['subscriptionContractCalculation'] ?? [];
+            $calculation = $this->transport()->contractRead($row, 'reviewed_calculation')['subscriptionContractCalculation'] ?? [];
             $quote = SubscriptionShopifyContractProtocol::quote($row, $calculation, $state['original']['request_uuid']);
-            abort_unless(hash_equals($reviewHash, $quote['review_hash']), 409, 'The original reviewed calculation changed before dispatch.');
+            abort_unless(hash_equals($reviewHash, $quote['review_hash']) && $quote['calculation_id'] === $state['commit_original']['calculation_id'], 409, 'The original reviewed calculation changed before dispatch.');
             $method = $this->method($row, $actor);
             abort_unless($method['processor_context'] === $state['original']['processor_context'], 409);
-            $this->updateState($row, ['commit_send_proof' => $this->sourceStopped($row, $actor)]);
+            $proof = $this->sourceStopped($row, $actor);
+            DB::transaction(function () use ($row, $actor, $state, $quote, $proof) {
+                $current = $this->locked($row);
+                $this->mutable($current, $row->terms_hash, $row->revision);
+                app(SubscriptionReplacementAccess::class)->owner($row->tenant_id, $actor->fresh(), $row->member_id, 'setup');
+                $latest = $this->state($current);
+                abort_unless(($latest['original'] ?? null) === $state['original'] && ($latest['commit_original'] ?? null) === $state['commit_original']
+                    && ! isset($latest['commit_dispatched_at']) && ($latest['terminal_calculation_id'] ?? $quote['calculation_id']) === $quote['calculation_id']
+                    && $this->fresh($proof) && $state['original']['processor_context'] === $this->transport()->context($current), 409, 'The original reviewed adoption changed before dispatch.');
+                // Older prepared intents gain a terminal ID only from this freshly verified original review.
+                $this->saveState($current, array_replace($latest, ['terminal_calculation_id' => $quote['calculation_id'], 'quote' => $quote, 'commit_send_proof' => $proof]));
+            });
 
             return $this->sendCommit($row->fresh(), $actor);
         }
@@ -118,7 +129,8 @@ class SubscriptionShopifyContractService
         abort_unless($state['status'] === 'calculated' && hash_equals($state['quote']['review_hash'], $reviewHash), 409, 'Review the exact current calculated contract before committing.');
         $method = $this->method($row, $actor);
         $proof = $this->sourceStopped($row, $actor);
-        $commit = ['calculation_id' => $state['calculation_id'], 'review_hash' => $reviewHash, 'actor_id' => $actor->id,
+        abort_unless(isset($state['terminal_calculation_id']) && $state['terminal_calculation_id'] === $state['quote']['calculation_id'], 409, 'Verify the successful calculation before adoption.');
+        $commit = ['calculation_id' => $state['terminal_calculation_id'], 'review_hash' => $reviewHash, 'actor_id' => $actor->id,
             'processor_context' => $method['processor_context'], 'source_stop_proof' => $proof, 'prepared_at' => now()->toISOString()];
         DB::transaction(function () use ($row, $actor, $commit) {
             $current = $this->locked($row);
@@ -126,7 +138,7 @@ class SubscriptionShopifyContractService
             $state = $this->state($current);
             app(SubscriptionReplacementAccess::class)->owner($row->tenant_id, $actor->fresh(), $row->member_id, 'setup');
             abort_unless(! isset($state['commit_original']) && $state['status'] === 'calculated' && $state['quote']['review_hash'] === $commit['review_hash']
-                && $state['calculation_id'] === $commit['calculation_id'] && $this->fresh($commit['source_stop_proof'])
+                && $state['terminal_calculation_id'] === $commit['calculation_id'] && $state['quote']['calculation_id'] === $commit['calculation_id'] && $this->fresh($commit['source_stop_proof'])
                 && $commit['processor_context'] === $this->transport()->context($current), 409, 'Original contract or source-stop proof changed before adoption.');
             $this->saveState($current, array_replace($state, ['commit_original' => $commit, 'commit_send_proof' => $commit['source_stop_proof'], 'status' => 'commit_prepared']));
             $this->audit($current, $actor, 'shopify_commit_requested', $commit);
@@ -289,29 +301,33 @@ class SubscriptionShopifyContractService
     private function acceptCalculation(SubscriptionBillingAgreement $row, User $actor, array $calculation): array
     {
         $id = $calculation['id'] ?? null;
-        abort_unless(is_string($id) && preg_match('/\Agid:\/\/shopify\/SubscriptionContractCalculation\/[A-Za-z0-9_-]{1,190}\z/', $id), 409, 'The original calculation result has no usable identity.');
-        $state = $this->state($row);
-        abort_unless(! isset($state['calculation_id']) || $state['calculation_id'] === $id, 409, 'The original calculation reference changed.');
+        abort_unless(SubscriptionShopifyContractProtocol::calculationId($id), 409, 'The original calculation result has no usable identity.');
         $type = $calculation['__typename'] ?? null;
-        $changes = ['calculation_id' => $id, 'checked_at' => now()->toISOString(), 'quote' => null];
-        if ($type === 'SubscriptionContractCalculationPending') {
-            $changes['status'] = 'calculation_pending';
-        } elseif ($type === 'SubscriptionContractCalculationFailure') {
-            $changes += ['status' => 'calculation_failed', 'last_error_code' => 'original_calculation_failed'];
-        } else {
-            try {
-                $changes['quote'] = SubscriptionShopifyContractProtocol::quote($row, $calculation, $state['original']['request_uuid']);
-                $changes += ['status' => 'calculated', 'last_error_code' => null];
-            } catch (\Throwable) {
-                $changes += ['status' => 'calculation_review', 'last_error_code' => 'calculated_terms_or_totals_differ'];
-            }
-        }
-        DB::transaction(function () use ($row, $actor, $changes) {
+        abort_unless(in_array($type, ['SubscriptionContractCalculationPending', 'SubscriptionContractCalculationFailure', 'SubscriptionContractCalculationSuccess'], true), 409, 'The original calculation state is unknown.');
+        DB::transaction(function () use ($row, $actor, $calculation, $id, $type) {
             $current = $this->locked($row);
-            abort_unless($current->terms_hash === $row->terms_hash && $this->state($current)['original'] === $this->state($row)['original'], 409);
+            abort_unless($current->terms_hash === $row->terms_hash && $current->revision === $row->revision
+                && $this->state($current)['original'] === $this->state($row)['original'], 409);
             app(SubscriptionReplacementAccess::class)->owner($row->tenant_id, $actor->fresh(), $row->member_id, 'setup');
             $state = $this->state($current);
             if (! isset($state['commit_original'])) {
+                $initialId = $this->state($row)['calculation_id'] ?? $id;
+                abort_unless(($state['calculation_id'] ?? $initialId) === $initialId, 409, 'The original polling reference changed.');
+                abort_unless(! isset($state['terminal_calculation_id']) || ($type === 'SubscriptionContractCalculationSuccess' && $state['terminal_calculation_id'] === $id), 409, 'The verified successful calculation reference changed.');
+                abort_unless($type !== 'SubscriptionContractCalculationPending' || $id === $initialId, 409, 'The original pending calculation reference changed.');
+                $changes = ['calculation_id' => $initialId, 'checked_at' => now()->toISOString(), 'quote' => null];
+                if ($type === 'SubscriptionContractCalculationPending') {
+                    $changes['status'] = 'calculation_pending';
+                } elseif ($type === 'SubscriptionContractCalculationFailure') {
+                    $changes += ['status' => 'calculation_failed', 'last_error_code' => 'original_calculation_failed'];
+                } else {
+                    try {
+                        $changes['quote'] = SubscriptionShopifyContractProtocol::quote($current, $calculation, $state['original']['request_uuid']);
+                        $changes += ['terminal_calculation_id' => $id, 'status' => 'calculated', 'last_error_code' => null];
+                    } catch (\Throwable) {
+                        $changes += ['status' => 'calculation_review', 'last_error_code' => 'calculated_terms_or_totals_differ'];
+                    }
+                }
                 $this->saveState($current, array_replace($state, $changes));
             }
         });

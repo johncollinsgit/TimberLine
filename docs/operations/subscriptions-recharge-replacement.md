@@ -619,6 +619,22 @@ The agreement freezes the original calculation input/UUID/context and original
 source credential context. Create and commit record write-once dispatch markers
 before HTTP. An uncertain calculation without a returned ID requires provider
 review and is never resent. A known ID is polled until a reviewable result exists.
+The first `calculation_id` stays immutable even when a concrete Pending ID resolves
+to a concrete Success or Failure ID. A successful result must prove the original
+adoption marker, saved method, terms and projected totals before adding immutable
+`terminal_calculation_id`. Commit uses that actual successful ID; the quote, exact
+review hash and immutable commit target must agree. A later different success ID
+cannot redirect the reviewed adoption. Invalid terms/warnings retain the original
+poll handle without granting a terminal commit target. A failed result likewise
+cannot authorize a commit.
+
+An unsent prepared commit rereads the exact successful ID it reviewed. Older
+generic-ID prepared rows may gain terminal evidence only from a fresh verified
+response matching their immutable original commit ID and review hash. Already
+dispatched commits go straight to original-contract recovery, never a new commit.
+No storage migration is required. The guarded MySQL race exercises pending to
+concrete success followed by two workers competing for the same one commit.
+
 Before the one commit, fresh original-method verification, unchanged quote review
 and complete original Recharge stop/charge coverage are required. The commit proof
 and original source revision are rechecked immediately before dispatch.

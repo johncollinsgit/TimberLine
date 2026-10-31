@@ -1,3 +1,15 @@
+## Initial adoption calculation IDs (October 31; source candidate)
+
+The immutable initial `shopify_adoption.calculation_id` remains the polling handle.
+Only a successful response proving original adoption attributes/method and exact
+terms/totals can add immutable `terminal_calculation_id`. Commit intent, quote and
+terminal ID must agree. Never replace the initial handle with a concrete success
+ID, fabricate a provider ID or resend an uncertain commit. An unsent prepared
+commit rereads its exact reviewed result; legacy generic intents gain terminal
+evidence only from a fresh exact original commit-ID/review match. Recovery after
+dispatch is unchanged. No DDL, live mutation or rollout occurred; original outer
+transaction durability, native customer confirmation and provider acceptance remain.
+
 ## Native amended tax preflight (October 31; source candidate)
 
 `SubscriptionShopifyTaxService` is a calculation-only collection lane for accepted

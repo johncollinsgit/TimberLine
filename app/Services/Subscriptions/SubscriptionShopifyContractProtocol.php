@@ -8,6 +8,11 @@ use Carbon\CarbonImmutable;
 /** Version-pinned contract calculation/adoption protocol, separate from historical shadow reads. */
 class SubscriptionShopifyContractProtocol
 {
+    public static function calculationId(mixed $id): bool
+    {
+        return is_string($id) && (bool) preg_match('#\Agid://shopify/SubscriptionContractCalculation(?:Pending|Success|Failure)?/[A-Za-z0-9_-]{1,190}\z#', $id);
+    }
+
     public const TERMS_FIELDS = <<<'GRAPHQL'
 currencyCode customer { id } customerPaymentMethod(showRevoked: true) { id revokedAt }
 customAttributes { key value }
@@ -106,6 +111,7 @@ GRAPHQL;
     public static function quote(SubscriptionBillingAgreement $row, array $calculation, string $requestUuid): array
     {
         abort_unless(($calculation['__typename'] ?? null) === 'SubscriptionContractCalculationSuccess'
+            && self::calculationId($calculation['id'] ?? null)
             && ($calculation['warnings'] ?? null) === [] && ($calculation['withMerchandiseCustomizations'] ?? null) === false, 409, 'Review the pending/failed calculation or provider warnings before adoption.');
         self::assertTerms($row, $calculation['calculatedContract'] ?? [], $requestUuid);
         $totals = $calculation['projectedOrderTotals'] ?? [];

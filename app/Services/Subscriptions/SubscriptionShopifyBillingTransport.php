@@ -217,13 +217,14 @@ GRAPHQL;
         $variables = match ($operation) {
             'capabilities' => [],
             'calculation' => ['id' => $state['calculation_id'] ?? null],
+            'reviewed_calculation' => ['id' => $state['terminal_calculation_id'] ?? $state['commit_original']['calculation_id'] ?? $state['calculation_id'] ?? null],
             'contract' => ['id' => $state['contract_id'] ?? null],
             'customer_contracts' => ['id' => 'gid://shopify/Customer/'.$row->terms['shopify_customer_id']],
             default => throw new \InvalidArgumentException('Unsupported replacement contract read.'),
         };
         abort_unless($operation === 'capabilities' || filled($variables['id']), 409, 'The original contract/calculation reference is not available.');
 
-        return $this->read($row, $operation, $variables);
+        return $this->read($row, $operation === 'reviewed_calculation' ? 'calculation' : $operation, $variables);
     }
 
     /** Fixed original intent only. Create/commit dispatches are claimed durably before HTTP and never resent. */
@@ -291,7 +292,9 @@ GRAPHQL;
         $binding = $row->method_binding;
         $revision = SubscriptionRechargeCredentialRevision::query()->forTenantId($row->tenant_id)->where('connection_id', $binding['source_connection_id'])
             ->where('status', 'active')->findOrFail($binding['source_credential_revision_id']);
-        abort_unless(($state['commit_original']['calculation_id'] ?? null) === ($state['calculation_id'] ?? null)
+        abort_unless(SubscriptionShopifyContractProtocol::calculationId($state['terminal_calculation_id'] ?? null)
+            && ($state['commit_original']['calculation_id'] ?? null) === $state['terminal_calculation_id']
+            && data_get($state, 'quote.calculation_id') === $state['terminal_calculation_id']
             && ($state['commit_original']['review_hash'] ?? null) === data_get($state, 'quote.review_hash')
             && ($proof['connection_id'] ?? null) === $binding['source_connection_id']
             && ($proof['credential_revision_id'] ?? null) === $binding['source_credential_revision_id']

@@ -1,3 +1,17 @@
+## Initial Shopify adoption calculation identity (October 31; source candidate)
+
+Initial adoption retains the first provider calculation ID for polling and a
+separate immutable `terminal_calculation_id` only after a successful result proves
+the original adoption UUID, saved method and exact terms/totals. Concrete pending,
+success and failure IDs are retained as returned; no ID is rewritten or invented.
+One commit targets only the verified successful ID bound to the exact review hash.
+An unsent prepared commit rereads that reviewed ID; older generic intents can gain
+terminal evidence only from a fresh response matching their immutable commit ID
+and review. Already-dispatched commits still recover without resending. Source
+stop, original app/credential and rollout gates remain. No DDL or live change.
+Original adoption/billing enclosing-transaction durability and native customer
+confirmation remain outstanding; see the replacement runbook.
+
 ## Native amended billing tax preflight (October 31; source candidate)
 
 Accepted native delivery terms now collect only after a fresh original-app

@@ -11,7 +11,7 @@ class SubscriptionShopifyUpdateProtocol
 {
     public static function calculationId(mixed $id): bool
     {
-        return is_string($id) && (bool) preg_match('#\Agid://shopify/SubscriptionContractCalculation(?:Pending|Success|Failure)?/[A-Za-z0-9_-]{1,190}\z#', $id);
+        return SubscriptionShopifyContractProtocol::calculationId($id);
     }
 
     public static function document(string $operation): string

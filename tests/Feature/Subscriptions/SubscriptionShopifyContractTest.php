@@ -82,6 +82,112 @@ test('pending calculations are polled by original id without another calculate m
     expect(originalShopifyCalculation($this)['adoption_status'])->toBe('calculated')->and($s->calculates)->toBe(1);
 });
 
+test('concrete pending and success IDs retain the original poll and commit only the verified success', function (bool $pending) {
+    $s = $this->s;
+    $s->concreteCalculationIds = true;
+    $s->pending = $pending;
+    $first = originalShopifyCalculation($this);
+    $initial = $s->calculation()['id'];
+    if ($pending) {
+        expect($first['adoption_status'])->toBe('calculation_pending');
+        $s->pending = false;
+        $first = originalShopifyCalculation($this);
+    }
+    $terminal = $s->calculation()['id'];
+    expect($first['adoption_status'])->toBe('calculated')->and($first['quote']['calculation_id'])->toBe($terminal)
+        ->and(data_get($s->agreement->fresh()->authorization_evidence, 'shopify_adoption.calculation_id'))->toBe($initial)
+        ->and(data_get($s->agreement->fresh()->authorization_evidence, 'shopify_adoption.terminal_calculation_id'))->toBe($terminal);
+    $s->sourceStopped = true;
+    $result = $this->contracts->adopt($s->tenant->id, $s->actor, $s->agreement->id, $first['quote']['review_hash'], 1);
+    expect($result['contract_adopted'])->toBeTrue()->and($s->commitCalculationIds)->toBe([$terminal])
+        ->and($s->calculationReads)->toBe(array_fill(0, $pending ? 2 : 1, $initial))
+        ->and($s->calculates)->toBe(1)->and($s->commits)->toBe(1)->and(SubscriptionBillingCycle::count())->toBe(0);
+})->with([true, false]);
+
+test('a changed terminal ID cannot redirect a verified adoption quote', function () {
+    $s = $this->s;
+    $s->concreteCalculationIds = true;
+    $s->pending = true;
+    originalShopifyCalculation($this);
+    $initial = $s->calculation()['id'];
+    $s->pending = false;
+    $quote = originalShopifyCalculation($this);
+    $terminal = $quote['quote']['calculation_id'];
+    $s->calculationIdOverride = 'gid://shopify/SubscriptionContractCalculationSuccess/unrelated_success';
+    $s->sourceStopped = true;
+    expect(fn () => $this->contracts->adopt($s->tenant->id, $s->actor, $s->agreement->id, $quote['quote']['review_hash'], 1))->toThrow(HttpException::class);
+    expect(data_get($s->agreement->fresh()->authorization_evidence, 'shopify_adoption.calculation_id'))->toBe($initial)
+        ->and(data_get($s->agreement->fresh()->authorization_evidence, 'shopify_adoption.terminal_calculation_id'))->toBe($terminal)
+        ->and($s->commits)->toBe(0)->and($s->calculates)->toBe(1);
+});
+
+test('a concrete success needs original intent and exact economics before becoming a commit target', function (string $defect) {
+    $s = $this->s;
+    $s->concreteCalculationIds = true;
+    $s->pending = true;
+    originalShopifyCalculation($this);
+    $initial = $s->calculation()['id'];
+    $s->pending = false;
+    $s->adoptionDefect = $defect;
+    $result = originalShopifyCalculation($this);
+    expect($result['adoption_status'])->toBe('calculation_review')->and($result['quote'])->toBeNull()
+        ->and(data_get($s->agreement->fresh()->authorization_evidence, 'shopify_adoption.calculation_id'))->toBe($initial)
+        ->and(data_get($s->agreement->fresh()->authorization_evidence, 'shopify_adoption.terminal_calculation_id'))->toBeNull()
+        ->and($s->calculates)->toBe(1)->and($s->commits)->toBe(0);
+})->with(['adoption_marker', 'tax', 'quantity', 'warning']);
+
+test('a concrete failed result retains the original pending handle without authorizing commit', function () {
+    $s = $this->s;
+    $s->concreteCalculationIds = true;
+    $s->pending = true;
+    originalShopifyCalculation($this);
+    $initial = $s->calculation()['id'];
+    $s->pending = false;
+    $s->adoptionDefect = 'calculation_failed';
+    expect(originalShopifyCalculation($this)['adoption_status'])->toBe('calculation_failed')
+        ->and(data_get($s->agreement->fresh()->authorization_evidence, 'shopify_adoption.calculation_id'))->toBe($initial)
+        ->and(data_get($s->agreement->fresh()->authorization_evidence, 'shopify_adoption.terminal_calculation_id'))->toBeNull()
+        ->and($s->calculates)->toBe(1)->and($s->commits)->toBe(0);
+});
+
+test('a pending response cannot change its original polling handle', function () {
+    $s = $this->s;
+    $s->concreteCalculationIds = true;
+    $s->pending = true;
+    originalShopifyCalculation($this);
+    $s->calculationIdOverride = 'gid://shopify/SubscriptionContractCalculationPending/unrelated_pending';
+    expect(fn () => originalShopifyCalculation($this))->toThrow(HttpException::class);
+    expect($s->calculates)->toBe(1)->and($s->commits)->toBe(0);
+});
+
+test('an unsent prepared commit rereads its exact successful result and can enrich an older generic intent', function (bool $legacy) {
+    $s = $this->s;
+    $s->concreteCalculationIds = ! $legacy;
+    $s->pending = true;
+    originalShopifyCalculation($this);
+    $s->pending = false;
+    $quote = originalShopifyCalculation($this);
+    $s->sourceStopped = true;
+    $s->adoptionDefect = 'source_rotated';
+    expect(fn () => $this->contracts->adopt($s->tenant->id, $s->actor, $s->agreement->id, $quote['quote']['review_hash'], 1))->toThrow(HttpException::class);
+    expect($s->commits)->toBe(0)->and(data_get($s->agreement->fresh()->authorization_evidence, 'shopify_adoption.commit_original'))->not->toBeNull();
+    if ($legacy) {
+        // Represent an old prepared row that predates the additive terminal evidence field.
+        $row = $s->agreement->fresh();
+        $evidence = $row->authorization_evidence;
+        unset($evidence['shopify_adoption']['terminal_calculation_id']);
+        $row::withoutEvents(fn () => $row->update(['authorization_evidence' => $evidence]));
+    }
+    $s->source->update(['read_pause_reason' => null]);
+    $s->adoptionDefect = null;
+    $s->calculationReads = [];
+    expect($this->contracts->adopt($s->tenant->id, $s->actor, $s->agreement->id, $quote['quote']['review_hash'], 1)['contract_adopted'])->toBeTrue()
+        ->and($s->calculationReads)->toBe([$quote['quote']['calculation_id']])
+        ->and($s->commitCalculationIds)->toBe([$quote['quote']['calculation_id']])
+        ->and(data_get($s->agreement->fresh()->authorization_evidence, 'shopify_adoption.terminal_calculation_id'))->toBe($quote['quote']['calculation_id'])
+        ->and($s->commits)->toBe(1)->and($s->calculates)->toBe(1);
+})->with([false, true]);
+
 test('actual pinned API capability and write permission are required before any provider mutation', function (string $defect) {
     $this->s->adoptionDefect = $defect;
     expect(fn () => originalShopifyCalculation($this))->toThrow(HttpException::class);
@@ -98,8 +204,9 @@ test('a lost calculation response never creates another calculation or contract'
     expect($this->s->calculates)->toBe(1)->and($this->s->commits)->toBe(0);
 });
 
-test('lost commit response recovers the same original contract and never commits again', function () {
+test('lost commit response recovers the same original contract and never commits again', function (bool $concrete) {
     $s = $this->s;
+    $s->concreteCalculationIds = $concrete;
     $quote = originalShopifyCalculation($this);
     $s->sourceStopped = true;
     $s->adoptionDefect = 'lost_commit';
@@ -109,7 +216,7 @@ test('lost commit response recovers the same original contract and never commits
         ->and($s->commits)->toBe(1)->and($s->pauses)->toBe(1)->and(SubscriptionBillingCycle::count())->toBe(0);
     expect(fn () => app(SubscriptionShopifyBillingTransport::class)->contractMutation($s->agreement->fresh(), 'commit'))->toThrow(HttpException::class);
     expect($s->commits)->toBe(1);
-});
+})->with([false, true]);
 
 test('uncertain missing duplicate or incomplete contract recovery never submits another commit', function (string $defect) {
     $s = $this->s;
@@ -188,7 +295,7 @@ test('original adoption requests dispatch markers references and stop proof cann
     $quote = originalShopifyCalculation($this);
     $s->sourceStopped = true;
     $this->contracts->adopt($s->tenant->id, $s->actor, $s->agreement->id, $quote['quote']['review_hash'], 1);
-    foreach (['original', 'calculation_id', 'calculate_dispatched_at', 'commit_original', 'commit_dispatch_proof', 'commit_dispatched_at', 'contract_id'] as $field) {
+    foreach (['original', 'calculation_id', 'terminal_calculation_id', 'calculate_dispatched_at', 'commit_original', 'commit_dispatch_proof', 'commit_dispatched_at', 'contract_id'] as $field) {
         $row = $s->agreement->fresh();
         $evidence = $row->authorization_evidence;
         unset($evidence['shopify_adoption'][$field]);

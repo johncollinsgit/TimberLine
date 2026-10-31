@@ -24,15 +24,22 @@ test('two independent MySQL workers dispatch one original Shopify adoption opera
     expect(function_exists('pcntl_fork'))->toBeTrue();
     $this->travelTo(CarbonImmutable::parse('2027-01-15T15:00:00Z'));
     $s = new ShopifyAdoptionScenario;
+    $s->concreteCalculationIds = true;
     $transport = app(SubscriptionShopifyBillingTransport::class);
     if ($operation === 'commit') {
+        $s->pending = true;
+        $contracts = app(SubscriptionShopifyContractService::class);
+        expect($contracts->calculate($s->tenant->id, $s->actor, $s->agreement->id, $s->agreement->terms_hash, 1)['adoption_status'])->toBe('calculation_pending');
+        $s->pending = false;
         $quote = app(SubscriptionShopifyContractService::class)->calculate($s->tenant->id, $s->actor, $s->agreement->id, $s->agreement->terms_hash, 1);
         $s->sourceStopped = true;
         $row = $s->agreement->fresh();
         $proof = app(SubscriptionPilotSourceGuard::class)->stopped(app(SubscriptionReplacementAccess::class)->member($row), $s->source->id, '2027-01-31', $s->actor);
         $evidence = $row->authorization_evidence;
         $state = $evidence['shopify_adoption'];
-        $state['commit_original'] = ['calculation_id' => $state['calculation_id'], 'review_hash' => $quote['quote']['review_hash'], 'actor_id' => $s->actor->id,
+        expect($state['calculation_id'])->toBe('gid://shopify/SubscriptionContractCalculationPending/original_calculation')
+            ->and($state['terminal_calculation_id'])->toBe('gid://shopify/SubscriptionContractCalculationSuccess/original_calculation');
+        $state['commit_original'] = ['calculation_id' => $quote['quote']['calculation_id'], 'review_hash' => $quote['quote']['review_hash'], 'actor_id' => $s->actor->id,
             'processor_context' => $transport->context($row), 'source_stop_proof' => $proof, 'prepared_at' => now()->toISOString()];
         $state['commit_send_proof'] = $proof;
     } else {

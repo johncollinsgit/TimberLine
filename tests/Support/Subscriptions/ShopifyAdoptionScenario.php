@@ -14,6 +14,14 @@ class ShopifyAdoptionScenario extends ShopifyReuseScenario
 
     public bool $pending = false;
 
+    public bool $concreteCalculationIds = false;
+
+    public ?string $calculationIdOverride = null;
+
+    public array $calculationReads = [];
+
+    public array $commitCalculationIds = [];
+
     public ?string $adoptionDefect = null;
 
     public int $calculates = 0;
@@ -65,9 +73,13 @@ class ShopifyAdoptionScenario extends ShopifyReuseScenario
 
     public function calculation(): array
     {
-        $id = 'gid://shopify/SubscriptionContractCalculation/original_calculation';
+        $type = $this->pending ? 'Pending' : ($this->adoptionDefect === 'calculation_failed' ? 'Failure' : 'Success');
+        $id = $this->calculationIdOverride ?? 'gid://shopify/SubscriptionContractCalculation'.($this->concreteCalculationIds ? $type : '').'/original_calculation';
         if ($this->pending) {
             return ['__typename' => 'SubscriptionContractCalculationPending', 'id' => $id];
+        }
+        if ($this->adoptionDefect === 'calculation_failed') {
+            return ['__typename' => 'SubscriptionContractCalculationFailure', 'id' => $id, 'errors' => [['code' => 'INVALID', 'field' => ['lines']]]];
         }
         $money = fn ($amount) => ['amount' => $amount, 'currencyCode' => 'USD'];
         $result = ['__typename' => 'SubscriptionContractCalculationSuccess', 'id' => $id, 'withMerchandiseCustomizations' => false,
@@ -77,6 +89,9 @@ class ShopifyAdoptionScenario extends ShopifyReuseScenario
             'calculatedContract' => $this->terms()];
         if ($this->adoptionDefect === 'quantity') {
             $result['calculatedContract']['lines']['nodes'][0]['quantity'] = 2;
+        }
+        if ($this->adoptionDefect === 'adoption_marker') {
+            $result['calculatedContract']['customAttributes'] = [];
         }
 
         return $result;
@@ -131,11 +146,17 @@ class ShopifyAdoptionScenario extends ShopifyReuseScenario
             }
             $data = ['subscriptionContractCreateCalculate' => ['subscriptionContractCalculation' => $this->adoptionDefect === 'missing_calculation_result' ? null : $this->calculation(), 'userErrors' => []]];
         } elseif (str_starts_with($query, 'query ReplacementContractCalculation')) {
+            $this->calculationReads[] = $request['variables']['id'];
+            if (! in_array($request['variables']['id'], array_filter([$state['calculation_id'] ?? null, $state['terminal_calculation_id'] ?? null, $state['commit_original']['calculation_id'] ?? null]), true)) {
+                throw new \RuntimeException('Read only the retained original polling or reviewed calculation ID.');
+            }
             $data = $identity + ['subscriptionContractCalculation' => $this->calculation()];
         } elseif (str_starts_with($query, 'mutation ReplacementCommitContract')) {
-            if (! isset($state['commit_dispatched_at'], $state['commit_dispatch_proof']) || $request['variables']['id'] !== $state['calculation_id']) {
+            if (! isset($state['commit_dispatched_at'], $state['commit_dispatch_proof']) || $request['variables']['id'] !== $state['commit_original']['calculation_id']
+                || $request['variables']['id'] !== $this->calculation()['id']) {
                 throw new \RuntimeException('Original commit/source-stop proof must be durable before dispatch.');
             }
+            $this->commitCalculationIds[] = $request['variables']['id'];
             $this->commits++;
             if ($this->dispatchMarkerPath) {
                 file_put_contents($this->dispatchMarkerPath, "commit\n", FILE_APPEND | LOCK_EX);
