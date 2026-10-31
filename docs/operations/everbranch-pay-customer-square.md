@@ -149,3 +149,40 @@ Do not mark these complete without the real evidence:
    earning once, refund/replay correctness and the real payout/settlement.
 7. Keep normal collection off until that exact build is accepted. Prove a second
    tenant independently before claiming the complete flow has been tested there.
+
+
+## October 31 phone experience and reviewed setup follow-up
+
+The phone UX candidate separates Account & Tap to Pay from customer checkout,
+uses the Modern Forestry paper/evergreen theme, and keeps the selected register
+between presentations. Stored workspace/register IDs are revalidated against
+current membership and device assignments. Changing scope clears customer and
+catalog state. Payment uncertainty still locks the original sale into recovery.
+Live available catalog IDs/prices/quantity limits update the local selling
+surface; unapproved bundle mappings remain blocked.
+
+Subsequent owner setup resolved several earlier evidence gaps above:
+
+- The correct Modern Forestry LLC Square merchant was authorized. The existing
+  active John Collins location was selected, and the account's dashboard showed
+  2.6% plus 15 cents for tap/dip/swipe, with no Everbranch processing markup.
+- Read-only inventory and location permissions were reauthorized. A fresh review
+  returned the existing Easley fulfillment location and 37 eligible ordinary
+  variants under the current strict stock rules. This is not proof of reservation,
+  cancellation, paid-order finalization or inventory acceptance.
+- The existing published rewards policy's event-earning channel was enabled
+  through the audited service and bound to the register; approved earning amounts
+  and online redemption rules were preserved.
+- Georgia's public registry and current account correspondence confirmed the
+  merchant's existing active registration. That registration was added to the
+  existing Shopify Tax configuration. A calculation-only request for taxable
+  $3 and $7 products at 801 Front Ave returned $0.90 tax and $10.90 total, with
+  no order or payment created. This verifies that calculation context only;
+  customer-specific exemptions and actual stock/provider acceptance remain open.
+- The registered phone requested native Square onboarding on build 2026103102.
+  Server authorization is not proof that Apple linking and reader setup finished.
+
+Build 2026103103 is the revised phone interface candidate. Its signed development
+archive is distinct from App Store/TestFlight publishing approval. Installation,
+protected-release checks and actual phone interaction must be recorded separately;
+normal payment collection remains off until the original acceptance gates pass.

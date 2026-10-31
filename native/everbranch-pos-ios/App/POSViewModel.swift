@@ -7,6 +7,7 @@ struct POSCustomerList: Decodable { let customers: [POSCustomer]; let hasMore: B
 struct POSCustomerResponse: Decodable { let customer: POSCustomer }
 struct PendingCustomerCreation: Codable { let workspace: String; let register: String; let requestID: String }
 struct RefundResponse: Decodable { let refundId: String; let state: String; let sale: Sale }
+private struct SavedRegister: Codable { let workspace: String; let register: String }
 struct POSReceipt: Decodable {
     struct Line: Decodable { let title: String; let quantity: Int; let subtotalMinor: Int?; let taxMinor: Int? }
     let receiptNumber: String
@@ -43,7 +44,8 @@ struct POSReceipt: Decodable {
     @Published var message: String?
     @Published var tapReady = false
     @Published var diagnostics = false
-    private let initialBasket: [RegisterBasketLine]
+    private var initialBasket: [RegisterBasketLine]
+    @Published var basketIssue: String?
     @Published var customerQuery = ""
     @Published var customers: [POSCustomer] = []
     @Published var selectedCustomer: POSCustomer?
@@ -68,7 +70,7 @@ struct POSReceipt: Decodable {
             defer { busy = false }
             do { try await action() }
             catch let POSError.unavailable(text) { message = text }
-            catch { message = "The operation is not confirmed. Keep this sale and check its status before trying another payment." }
+            catch { message = pending == nil ? "Couldn’t finish that step. Check your connection and try again." : "The operation is not confirmed. Keep this sale and check its status before trying another payment." }
         }
     }
     func savePending() throws {
@@ -86,11 +88,58 @@ struct POSReceipt: Decodable {
     func loadWorkspaces() async throws {
         let response: WorkspaceList = try await api.request("api/mobile/v1/workspaces")
         workspaces = response.workspaces
+        guard pending == nil else { return }
+        // Restore identifiers only after checking current membership and device assignments.
+        let saved = SecureStore.read("selected-register").flatMap { try? JSONDecoder().decode(SavedRegister.self, from: $0) }
+        let slug = selectedWorkspace?.slug ?? saved?.workspace
+        guard let workspace = workspaces.first(where: { $0.slug == slug }) else {
+            selectedWorkspace = nil; selectedRegister = nil; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; tapReady = false
+            return
+        }
+        selectedWorkspace = workspace
+        let result: RegisterList = try await api.request("api/mobile/v1/workspaces/\(workspace.slug)/pos/registers")
+        registers = result.registers
+        let registerID = selectedRegister?.id ?? saved?.register
+        guard let register = registers.first(where: { $0.id == registerID }) else {
+            selectedRegister = nil; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; tapReady = false
+            return
+        }
+        try await loadRegister(register)
     }
+    func begin(basket: [RegisterBasketLine]) {
+        guard pending == nil, !busy else { return }
+        initialBasket = basket; quantities = [:]; basketIssue = nil; message = nil
+        selectedCustomer = nil; customers = []; customerQuery = ""; invoiceID = ""
+    }
+    private func loadRegister(_ register: Register) async throws {
+        if selectedRegister?.id != register.id {
+            tapReady = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; invoiceID = ""
+        }
+        selectedRegister = register
+        guard let base else { return }
+        let value: CatalogList = try await api.request(base + "/catalog")
+        items = value.items
+        if !initialBasket.isEmpty {
+            guard register.catalogSource == "shopify", initialBasket.allSatisfy({ line in
+                value.items.contains(where: { $0.id == line.variantID && line.quantity <= ($0.availableQuantity ?? 99) })
+            }) else {
+                quantities = [:]
+                basketIssue = "Your basket includes products that this register cannot sell. Return to products or choose from the available items below."
+                return
+            }
+            quantities = Dictionary(uniqueKeysWithValues: initialBasket.map { ($0.variantID, $0.quantity) })
+            initialBasket = []; basketIssue = nil
+        }
+        if register.catalogSource == "native" {
+            let quotes: PrintingQuoteList = try await api.request(base + "/printing-quotes")
+            printingQuotes = quotes.quotes
+        } else { printingQuotes = [] }
+    }
+    func chooseAvailableProducts() { initialBasket = []; basketIssue = nil; quantities = [:] }
     func choose(_ workspace: Workspace) {
         guard pending == nil else { return }
         perform {
-            self.selectedWorkspace = workspace; self.selectedRegister = nil; self.tapReady = false; self.selectedCustomer = nil; self.customers = []
+            self.selectedWorkspace = workspace; self.selectedRegister = nil; self.tapReady = false; self.selectedCustomer = nil; self.customers = []; self.items = []; self.quantities = [:]; self.invoiceID = ""
             let result: RegisterList = try await self.api.request("api/mobile/v1/workspaces/\(workspace.slug)/pos/registers")
             self.registers = result.registers
         }
@@ -98,18 +147,12 @@ struct POSReceipt: Decodable {
     func chooseRegister(_ register: Register) {
         guard pending == nil else { return }
         perform {
-            self.selectedRegister = register; self.tapReady = false; self.quantities = [:]
-            let value: CatalogList = try await self.api.request(self.base! + "/catalog")
-            self.items = value.items
+            self.quantities = [:]
+            try await self.loadRegister(register)
             self.selectedCustomer = nil; self.customers = []
-            if !self.initialBasket.isEmpty {
-                guard register.catalogSource == "shopify", self.initialBasket.allSatisfy({ line in
-                    value.items.contains(where: { $0.id == line.variantID && line.quantity <= ($0.availableQuantity ?? 99) })
-                }) else { throw POSError.unavailable("Some selected products are unavailable at this register. Review the live product list before continuing.") }
-                self.quantities = Dictionary(uniqueKeysWithValues: self.initialBasket.map { ($0.variantID, $0.quantity) })
+            if let workspace = self.selectedWorkspace {
+                try SecureStore.write("selected-register", try JSONEncoder().encode(SavedRegister(workspace: workspace.slug, register: register.id)))
             }
-            let quotes: PrintingQuoteList = try await self.api.request(self.base! + "/printing-quotes")
-            self.printingQuotes = quotes.quotes
         }
     }
     func setup() {
@@ -159,7 +202,7 @@ struct POSReceipt: Decodable {
         }
     }
     func quote() {
-        guard pending == nil, let customer = selectedCustomer, let workspace = selectedWorkspace, let register = selectedRegister, let base else { return }
+        guard pending == nil, basketIssue == nil, let customer = selectedCustomer, let workspace = selectedWorkspace, let register = selectedRegister, let base else { return }
         perform {
             self.pending = PendingSale(workspace: workspace.slug, register: register.id)
             try self.savePending() // Persist the request BEFORE sending it.
@@ -244,7 +287,9 @@ struct POSReceipt: Decodable {
     func logout() {
         perform {
             await self.collector.signOut(); try SecureStore.write("session", nil)
+            try SecureStore.write("selected-register", nil)
             self.api.token = nil; self.signedIn = false; self.tapReady = false
+            self.selectedWorkspace = nil; self.selectedRegister = nil; self.quantities = [:]; self.initialBasket = []; self.basketIssue = nil
             self.workspaces = []; self.registers = []; self.items = []; self.sale = nil; self.receipt = nil; self.selectedCustomer = nil; self.customers = []; self.customerQuery = ""; self.customerFirstName = ""; self.customerLastName = ""; self.customerEmail = ""; self.customerPhone = ""
             // Pending recovery identifiers remain in Keychain; signing out never clears payment uncertainty.
         }

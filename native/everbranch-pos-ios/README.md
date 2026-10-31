@@ -34,3 +34,24 @@ Owner onboarding can run behind its separate exact-build gate while collection
 remains disabled; the server reports collection readiness on each sale.
 See `../../docs/operations/everbranch-pay-customer-square.md`. No successful live
 payment, Apple distribution approval or device acceptance is implied by this source.
+
+## Phone register experience
+
+Setup and customer checkout are separate, merchant-themed native screens. The
+session keeps its selected register in memory and stores only workspace/register
+identifiers in Keychain. Returning sessions recheck membership and current device
+assignments before restoring that selection; changing businesses clears customer,
+product and SDK-readiness state. Pending sale/customer recovery journals remain
+independent and are never discarded by switching screens or signing out.
+
+A connected register supplies the catalog's available product IDs, current prices
+and quantity limits. The local catalog is still a preview before connection;
+server quoting remains authoritative. An unavailable basket must be reviewed
+explicitly, with no silently removed lines. Mix-and-match bundles stay excluded
+from collection until their provider mapping is approved.
+
+The catalog uses a fixed phone frame with a separate scrolling content area,
+16-point inputs and larger controls. Native setup uses inline titles, merchant
+cards, a docked primary action and optional account/device diagnostics. UI tests
+exercise search focus without zoom, pinned navigation, the basket handoff,
+separate setup/checkout entry and returning to the preserved basket.
