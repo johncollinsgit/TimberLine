@@ -57,8 +57,8 @@ test('shopify app config scopes include every runtime oauth requested scope', fu
 test('POS inventory access is requested only for a server-configured store', function (): void {
     config()->set('services.shopify.scopes', 'read_orders,read_products');
     $oauth = app(ShopifyOAuth::class);
-    expect($oauth->requestedScopes(['key' => 'retail', 'pos_inventory' => true]))->toContain('read_inventory');
-    expect($oauth->requestedScopes(['key' => 'wholesale']))->not->toContain('read_inventory');
+    expect($oauth->requestedScopes(['key' => 'retail', 'pos_inventory' => true]))->toContain('read_inventory', 'read_locations');
+    expect($oauth->requestedScopes(['key' => 'wholesale']))->not->toContain('read_inventory', 'read_locations');
 });
 
 test('retail reconnect omits dashboard-rejected names without reducing another app scopes', function (): void {
@@ -83,11 +83,11 @@ test('resolved store metadata carries the reviewed permissions into the owner OA
     $retail = \App\Services\Shopify\ShopifyStores::find('retail', true);
     parse_str(parse_url($oauth->buildAuthUrl($retail, 'https://example.invalid/callback', 'review-state'), PHP_URL_QUERY), $query);
     $requested = explode(',', $query['scope']);
-    expect($requested)->toContain('read_inventory', 'unauthenticated_read_product_listings');
+    expect($requested)->toContain('read_inventory', 'read_locations', 'unauthenticated_read_product_listings');
     foreach (config('services.shopify.stores.retail.excluded_scopes') as $excluded) {
         expect($requested)->not->toContain($excluded);
     }
     $wholesale = \App\Services\Shopify\ShopifyStores::find('wholesale', true);
-    expect($oauth->requestedScopes($wholesale))->not->toContain('read_inventory');
+    expect($oauth->requestedScopes($wholesale))->not->toContain('read_inventory', 'read_locations');
     expect($oauth->requestedScopes($wholesale))->toContain('unauthenticated_read_collection_listings');
 });

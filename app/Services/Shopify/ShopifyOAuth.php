@@ -47,6 +47,7 @@ class ShopifyOAuth
 
         if (($store['pos_inventory'] ?? false) === true) {
             $scopes[] = 'read_inventory';
+            $scopes[] = 'read_locations';
         }
 
         // Metafield customer sync requires Admin customer read scope.
