@@ -27,6 +27,7 @@ class SubscriptionShopifyContractService
         $row = $this->row($tenantId, $actor, $agreementId);
         $this->mutable($row, $expectedHash, $expectedRevision);
         $state = $this->state($row);
+        abort_unless(isset($state['calculation_id']) || DB::transactionLevel() === 0, 409, 'A new Shopify calculation must start outside an enclosing transaction.');
         if ($state !== []) {
             if (isset($state['calculation_id'])) {
                 return $this->refresh($tenantId, $actor, $agreementId);
@@ -98,6 +99,7 @@ class SubscriptionShopifyContractService
         $row = $this->row($tenantId, $actor, $agreementId);
         $this->mutable($row, $row->terms_hash, $expectedRevision);
         $state = $this->state($row);
+        abort_unless(isset($state['commit_dispatched_at']) || DB::transactionLevel() === 0, 409, 'A new Shopify adoption commit must start outside an enclosing transaction.');
         if (isset($state['commit_original'])) {
             abort_unless(hash_equals($state['commit_original']['review_hash'], $reviewHash), 409, 'Recover only the original reviewed contract adoption.');
             if (isset($state['commit_dispatched_at'])) {

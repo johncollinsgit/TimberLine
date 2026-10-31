@@ -16,6 +16,8 @@ use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Support\Subscriptions\AmendmentScenario;
 
+uses(Tests\TestCase::class, Tests\Support\Subscriptions\UsesSubscriptionMySqlRuntime::class);
+
 beforeEach(function () {
     Mail::fake();
     Queue::fake();

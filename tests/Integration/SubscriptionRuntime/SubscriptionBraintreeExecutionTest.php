@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Tests\Support\Subscriptions\BraintreeScenario;
 
+uses(Tests\TestCase::class, Tests\Support\Subscriptions\UsesSubscriptionMySqlRuntime::class);
+
 beforeEach(function () {
     $this->withoutVite();
     Mail::fake();

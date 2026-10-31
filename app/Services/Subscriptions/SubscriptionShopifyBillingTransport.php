@@ -140,6 +140,7 @@ GRAPHQL;
     /** The single payment dispatch is claimed under the same locks as pause/cancel and never replayed. */
     public function bill(SubscriptionBillingCycle $cycle, array $sourceProof): array
     {
+        abort_unless(DB::transactionLevel() === 0, 409, 'A new Shopify payment must start outside an enclosing transaction.');
         $row = $this->cycleAgreement($cycle);
         app(SubscriptionShopifyTaxService::class)->assertCollectEntry($row);
         $this->assertBillingCapabilities($row, 'subscriptionBillingAttemptCreate');
@@ -231,6 +232,7 @@ GRAPHQL;
     public function contractMutation(SubscriptionBillingAgreement $row, string $operation): array
     {
         abort_unless(in_array($operation, ['calculate', 'commit', 'pause', 'first_date'], true), 422);
+        abort_unless(! in_array($operation, ['calculate', 'commit'], true) || DB::transactionLevel() === 0, 409, 'A new Shopify adoption request must start outside an enclosing transaction.');
         $state = data_get($row->authorization_evidence, 'shopify_adoption', []);
         $this->adoptionAuthority($row, $state);
         abort_unless(! in_array($operation, ['pause', 'first_date'], true) || isset($state['contract_id'], $state['commit_dispatched_at']), 409, 'Recover the original created contract before changing its paused schedule.');

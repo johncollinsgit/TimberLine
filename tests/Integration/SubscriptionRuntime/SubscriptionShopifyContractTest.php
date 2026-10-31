@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Http;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Support\Subscriptions\ShopifyAdoptionScenario;
 
+uses(Tests\TestCase::class, Tests\Support\Subscriptions\UsesSubscriptionMySqlRuntime::class);
+
 beforeEach(function () {
     $this->travelTo(CarbonImmutable::parse('2027-01-15T15:00:00Z'));
     $this->s = new ShopifyAdoptionScenario;

@@ -1,3 +1,22 @@
+## Original-provider dispatch transaction boundaries (October 31; source candidate)
+
+New original Shopify adoption calculations/commits and Shopify/Braintree payments
+reject enclosing transactions before provider work. Their one-send markers must
+commit before HTTP/SDK dispatch, including calls directly to the transport.
+Already-dispatched adoption and payment recovery remains available. Braintree
+recovery inside a caller transaction can confirm the original payment but defers
+a new Shopify receipt until a top-level pass; existing receipt recovery stays
+available. The replacement receipt bridge independently guards new sends.
+
+Eight workflow suites now run under `tests/Integration/SubscriptionRuntime` on
+guarded disposable MySQL without RefreshDatabase transactions. Provider replies
+remain fictional; independent connections verify durable adoption/payment/receipt
+markers before dispatch. Current-test created tenant/user IDs scope cleanup.
+MySQL also exposed reordered JSON keys in stored Braintree merchant acceptance;
+canonical comparison now retains exact values/types without depending on key
+order. No DDL or live change. Native customer confirmation and actual merchant/
+source/customer/Shopify/two-tester acceptance remain unfinished.
+
 ## Initial Shopify adoption calculation identity (October 31; source candidate)
 
 Initial adoption retains the first provider calculation ID for polling and a

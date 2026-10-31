@@ -104,6 +104,7 @@ class SubscriptionBraintreeExecutionService
         if ($existing?->payment_started_at) {
             return $this->reconcile($existing);
         }
+        abort_unless(DB::transactionLevel() === 0, 409, 'A new Braintree collection must start outside an enclosing transaction.');
         $this->ready($row, $actor);
         $binding = $row->method_binding;
         $method = app(SubscriptionBraintreeMethodService::class)->verify($row->tenant_id, $actor, $row->id,
@@ -254,7 +255,7 @@ class SubscriptionBraintreeExecutionService
             }
         });
         $current = $cycle->fresh();
-        if ($status === 'succeeded' && $handoff) {
+        if ($status === 'succeeded' && $handoff && (DB::transactionLevel() === 0 || $current->handoff_started_at)) {
             $current = app(SubscriptionPilotShopifyBridge::class)->handoff($current);
         }
 
@@ -318,7 +319,8 @@ class SubscriptionBraintreeExecutionService
             && ($context['environment'] !== 'production' || config('subscriptions.replacement_braintree_live_acceptance_verified') === true), 423, 'Actual merchant acceptance is required before live Braintree collection.');
         if ($context['environment'] === 'production') {
             $connection = IntegrationConnection::query()->forTenant($row->tenant_id)->findOrFail($context['connection_id']);
-            abort_unless(data_get($connection->metadata, 'subscription_acceptance.processor_context') === $context
+            $acceptedContext = data_get($connection->metadata, 'subscription_acceptance.processor_context');
+            abort_unless(is_array($acceptedContext) && SubscriptionEvidence::canonical($acceptedContext) === SubscriptionEvidence::canonical($context)
                 && data_get($connection->metadata, 'subscription_acceptance.reconciliation_mode') === 'transaction_polling'
                 && is_int(data_get($connection->metadata, 'subscription_acceptance.accepted_by')), 423, 'This original merchant needs verified mapping and polling acceptance.');
         }

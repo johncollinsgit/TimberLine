@@ -9,6 +9,8 @@ use Carbon\CarbonImmutable;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Support\Subscriptions\ShopifyExecutionScenario;
 
+uses(Tests\TestCase::class, Tests\Support\Subscriptions\UsesSubscriptionMySqlRuntime::class);
+
 beforeEach(function () {
     $this->travelTo(CarbonImmutable::parse('2027-01-15T15:00:00Z'));
     $this->s = new ShopifyExecutionScenario(production: true); // Fictional production-shaped replies; every request is locally faked.

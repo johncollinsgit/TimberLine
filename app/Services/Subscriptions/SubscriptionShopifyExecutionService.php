@@ -123,6 +123,7 @@ class SubscriptionShopifyExecutionService
         if ($existing?->payment_started_at) {
             return $this->reconcile($existing);
         }
+        abort_unless(DB::transactionLevel() === 0, 409, 'A new Shopify collection must start outside an enclosing transaction.');
         app(SubscriptionShopifyTaxService::class)->assertCollectEntry($row);
         $this->ready($row, $actor, $existing?->id);
         $clock = now($row->terms['timezone']);

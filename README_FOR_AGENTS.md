@@ -1,3 +1,20 @@
+## Original dispatch durability (October 31; source candidate)
+
+Original Shopify adoption calculations/commits and native/Braintree payment entry
+and transport calls require transaction level zero for a new send. Never bypass
+these production guards for tests. Recovery of an already-started original
+adoption/payment remains available. Braintree reconciliation inside a transaction
+defers a new external Shopify receipt; a later top-level pass handles it once.
+The replacement receipt bridge guards direct new sends too.
+
+The eight moved workflow suites and explicit durability cases are in
+`tests/Integration/SubscriptionRuntime`; run them on disposable local test-named
+MySQL without an outer RefreshDatabase transaction. CI includes the directory.
+Cleanup tracks only tenants/users created by the current test. The fixtures still
+fake all provider requests. Stored merchant-acceptance JSON is compared
+canonically because MySQL reorders object keys; changed values/types still fail.
+No DDL/live deployment/rollout. Native customer confirmation and real acceptance remain.
+
 ## Initial adoption calculation IDs (October 31; source candidate)
 
 The immutable initial `shopify_adoption.calculation_id` remains the polling handle.

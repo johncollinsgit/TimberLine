@@ -77,6 +77,7 @@ class SubscriptionBraintreeTransport
 
     public function sale(SubscriptionBillingCycle $cycle): array
     {
+        abort_unless(DB::transactionLevel() === 0, 409, 'A new Braintree payment must start outside an enclosing transaction.');
         abort_unless($cycle->processor === 'braintree' && $cycle->payment_status === 'sending' && $cycle->payment_started_at
             && $cycle->payment_started_at->gt(now()->subMinutes(2)) && ! $cycle->provider_reference, 409, 'The original durable Braintree attempt is required.');
         $expected = self::payload($cycle);

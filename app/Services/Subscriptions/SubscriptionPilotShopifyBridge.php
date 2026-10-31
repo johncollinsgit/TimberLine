@@ -82,6 +82,8 @@ GRAPHQL;
 
     public function handoff(SubscriptionPilotCycle|SubscriptionBillingCycle $cycle): SubscriptionPilotCycle|SubscriptionBillingCycle
     {
+        abort_unless(! $cycle instanceof SubscriptionBillingCycle || $cycle->handoff_started_at || DB::transactionLevel() === 0,
+            409, 'A new replacement Shopify receipt must start outside an enclosing transaction.');
         $mapping = $this->paymentMapping($cycle);
         abort_unless($cycle->payment_status === 'succeeded' && $cycle->paid_at && $mapping['reference'], 409, 'A confirmed original payment is required.');
         if ($cycle instanceof SubscriptionBillingCycle) {

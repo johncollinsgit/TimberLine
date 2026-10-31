@@ -6,6 +6,8 @@ use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Support\Subscriptions\ShopifyExecutionScenario;
 
+uses(Tests\TestCase::class, Tests\Support\Subscriptions\UsesSubscriptionMySqlRuntime::class);
+
 beforeEach(function () {
     $this->travelTo(now('America/New_York')->setDate(2027, 1, 15)->setTime(10, 0)->utc());
     $this->s = new ShopifyExecutionScenario;

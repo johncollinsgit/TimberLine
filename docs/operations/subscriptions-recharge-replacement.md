@@ -587,6 +587,27 @@ disabled pending actual merchant/API acceptance.
 
 ## Paused Shopify contract adoption (source candidate; adoption command does not bill)
 
+**Original-provider dispatch durability:** new original adoption calculate/commit
+and native/Braintree collection/sale entry points reject enclosing transactions
+before provider work. Direct transport calls have the same guard. A savepoint is
+not a durable send claim: run these operations from a top-level command/worker.
+Already-started original adoption/payment recovery remains available without
+another send. Inside a caller transaction, Braintree can confirm its original
+payment while deferring a new external Shopify order receipt to a top-level pass.
+The replacement receipt bridge also rejects direct new sends inside a transaction;
+an already-started receipt can still be recovered by its original marker.
+
+Eight existing provider/customer/amendment workflow suites moved to
+`tests/Integration/SubscriptionRuntime`, where they run on guarded disposable
+local test-named MySQL with no outer test transaction. Provider requests remain
+fictional. Independent connections observe original adoption/payment/receipt
+markers before the corresponding provider calls; outer-transaction rejections,
+lost-response recovery and one later receipt are exercised. CI includes the
+directory. Cleanup tracks only tenant/user IDs created in each test. Stored
+Braintree merchant acceptance compares canonical object values/types because
+MySQL's JSON storage reorders keys; a different original account/credential still
+fails. This adds no migration or live merchant acceptance evidence.
+
 The original-app transport has a fixed calculation/commit protocol following
 Shopify's documented `SubscriptionContractCalculation` API. It retains the exact
 customer and saved method, monthly anchor, quantity, variant, fixed unit pricing,

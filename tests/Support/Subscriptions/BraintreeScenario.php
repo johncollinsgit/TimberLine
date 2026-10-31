@@ -75,6 +75,10 @@ class BraintreeScenario
 
     public ?string $saleMarkerPath = null;
 
+    public ?\Closure $beforeSale = null;
+
+    public ?\Closure $beforeOrderCreate = null;
+
     public ?\Closure $amendmentResponder = null;
 
     public function __construct(public bool $production = false, public bool $candleClub = true)
@@ -187,6 +191,10 @@ class BraintreeScenario
         $transactions = Mockery::mock();
         $transactions->shouldReceive('find')->andReturnUsing(fn ($id) => $id === 'source_txn' ? $this->transaction('source_txn') : $this->transactions[$id]);
         $transactions->shouldReceive('sale')->andReturnUsing(function (array $payload) {
+            if ($hook = $this->beforeSale) {
+                $this->beforeSale = null;
+                $hook();
+            }
             if ($this->saleMarkerPath) {
                 file_put_contents($this->saleMarkerPath, "sale\n", FILE_APPEND | LOCK_EX);
             }
@@ -273,6 +281,10 @@ class BraintreeScenario
         } elseif (str_contains($query, 'PilotOrderRecovery')) {
             $data['orders'] = ['nodes' => $this->savedOrder ? [$this->savedOrder] : [], 'pageInfo' => ['hasNextPage' => false]];
         } elseif (str_contains($query, 'mutation PilotPaidOrder')) {
+            if ($hook = $this->beforeOrderCreate) {
+                $this->beforeOrderCreate = null;
+                $hook();
+            }
             $payload = $request['variables'];
             $this->orderCreates[] = $payload;
             $cycle = SubscriptionBillingCycle::latest('id')->firstOrFail();
