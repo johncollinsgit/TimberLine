@@ -23,8 +23,11 @@ class WebsiteShopperAccountController extends Controller
         $orders = $customer ? WebsiteOrder::query()->withoutPosSimulation()->forTenant($tenant)
             ->where('tenant_site_id', $site->id)->where('website_customer_id', $customer->id)
             ->with('lines', 'shipments')->latest()->paginate(10) : null;
+        $customerCommerce = $customer ? app(\App\Services\Marketing\CustomerCommerceSnapshotService::class)
+            ->forWebsiteCustomer($customer, (int) $tenant->id) : null;
+        $rewardsLabel = app(\App\Services\Tenancy\TenantDisplayLabelResolver::class)->label((int) $tenant->id, 'rewards_label', 'Rewards');
 
-        return view('managed-website.account', compact('site', 'customer', 'orders'));
+        return view('managed-website.account', compact('site', 'customer', 'orders', 'customerCommerce', 'rewardsLabel'));
     }
 
     public function requestLink(Request $request, ManagedWebsiteService $websites): RedirectResponse

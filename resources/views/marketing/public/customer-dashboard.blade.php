@@ -320,6 +320,7 @@
     </section>
 
     @if($profile)
+        <x-customer-commerce :snapshot="$customerCommerce ?? null" :rewards-label="$rewardsLabel" />
         @if($socialShareNotice !== '')
             <section class="forest-card p-4 text-sm font-semibold text-emerald-950">
                 {{ $socialShareNotice }}

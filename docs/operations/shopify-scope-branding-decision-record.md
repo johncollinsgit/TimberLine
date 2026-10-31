@@ -149,6 +149,20 @@ Read-only PR 18 evidence:
 
 ## Scope Decision Status
 
+October 31, 2026 retail POS setup addendum: the owner authorized the Modern
+Forestry Pay pilot and read-only inventory access. The exact existing client ID
+was verified in the owning Modern Forestry Dev Dashboard. Its new-version form
+rejects `read_discounts_allocator_functions`,
+`write_discounts_allocator_functions` and
+`unauthenticated_read_collection_listings`. The retail config and store-scoped
+OAuth reconnect omit these rejected names and add `read_inventory`. Existing
+product/collection listing, discount, customer, pixel, validation, order and
+fulfillment access remains. Shopify's current access-scope reference lists both
+Product and Collection under `unauthenticated_read_product_listings`.
+Wholesale settings and the public app-branding decision remain unchanged.
+The inventory version and merchant reauthorization are not established merely
+by committing this addendum. See `everbranch-pay-customer-square.md`.
+
 Decision: pending for public App Store submission. Approved alpha/internal exception on 2026-06-23: add `write_products` so the Modern Forestry app can attach canonical 4oz, 8oz, 16oz, wood-wick, and wax-melt images to Shopify product variants used by the native mobile product detail page.
 
 Recommendation:

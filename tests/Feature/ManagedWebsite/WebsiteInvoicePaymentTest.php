@@ -588,3 +588,14 @@ it('recovers delayed settlement detail without counting another payment or commi
         ->and($summary['collections'])->toBe(2250)->and($order->payments()->count())->toBe(1)
         ->and($this->variant->fresh()->inventory_quantity)->toBe(3)->and($order->events()->count())->toBe($events);
 });
+
+it('serializes online checkout behind an existing counter claim without opening a Stripe session', function () {
+    $order = ($this->issued)();
+    $details = $order->service_request;
+    $details['invoice']['pos_sale_id'] = str_repeat('a', 32);
+    $order->update(['service_request' => $details]);
+    expect(fn () => $this->invoices->checkout($order, 'full', 'https://'.$this->site->subdomain.'.example.invalid'))
+        ->toThrow(HttpException::class, 'Finish the counter payment');
+    Http::assertNothingSent();
+    expect($order->payments()->count())->toBe(0);
+});

@@ -91,6 +91,9 @@ $catalog = [
     ],
 
     'capabilities' => [
+        'pos.register' => ['display_name' => 'Point of sale', 'module_key' => 'pos'],
+        'pos.locations' => ['display_name' => 'POS locations', 'module_key' => 'pos'],
+        'pos.reports' => ['display_name' => 'POS reports', 'module_key' => 'pos'],
         'ai_branch.chat' => ['display_name' => 'AI Branch chat', 'description' => 'Private, metered workspace assistance.', 'module_key' => 'ai_branch'],
         'trajectory.personal' => ['display_name' => 'Personal trajectory', 'module_key' => 'trajectory'],
         'trajectory.business' => ['display_name' => 'Business trajectory', 'module_key' => 'trajectory'],
@@ -102,6 +105,16 @@ $catalog = [
         'customers.manage' => [
             'display_name' => 'Customer management',
             'description' => 'Manage customer profiles, notes, and identity-linked data.',
+            'module_key' => 'customers',
+        ],
+        'customers.purchase_history' => [
+            'display_name' => 'Customer purchase history',
+            'description' => 'One tenant customer with explicitly linked online and in-person purchase records.',
+            'module_key' => 'customers',
+        ],
+        'customers.rewards_history' => [
+            'display_name' => 'Customer rewards history',
+            'description' => 'Track the customer’s existing rewards balance without creating another wallet.',
             'module_key' => 'customers',
         ],
         'field_service.workspace' => [
@@ -456,6 +469,15 @@ $catalog = [
     ],
 
     'modules' => [
+        'pos' => [
+            'display_name' => 'Point of Sale',
+            'description' => 'Merchant-owned counter and native payment operations with location-scoped staff access.',
+            'status' => 'live', 'market_state' => 'INTERNAL_ONLY', 'channels' => ['both'],
+            'classification' => 'shared-core', 'included_in_plans' => ['base', 'starter', 'growth', 'pro'], 'default_enabled' => false,
+            'default_setup_status' => 'not_started', 'dependencies' => [], 'billing_mode' => 'included',
+            'activation_policy' => 'guided', 'visibility' => ['public_site' => false, 'app_store' => false, 'mobile_store' => false],
+            'cta_routing' => 'none', 'capabilities' => ['pos.register', 'pos.locations', 'pos.reports'],
+        ],
         'dashboard' => [
             'display_name' => 'Overview',
             'description' => 'Baseline overview, shell access, and account context.',
@@ -555,7 +577,7 @@ $catalog = [
         ],
         'customers' => [
             'display_name' => 'Customers',
-            'description' => 'Manage customer profiles, identity, and operator context.',
+            'description' => 'One customer profile with linked online and in-person purchase history and rewards.',
             'status' => 'live',
             'market_state' => 'SAFE_TO_MARKET',
             'channels' => ['both'],
@@ -568,7 +590,7 @@ $catalog = [
             'billing_mode' => 'included',
             'visibility' => ['public_site' => true, 'app_store' => false],
             'cta_routing' => 'none',
-            'capabilities' => ['customers.manage'],
+            'capabilities' => ['customers.manage', 'customers.purchase_history', 'customers.rewards_history'],
             'mobile' => [
                 'status' => 'ready',
                 'display_name' => 'Customers Branch',
@@ -1007,13 +1029,13 @@ $catalog = [
             'channels' => ['both'],
             'shopify_embedded_surfaces' => ['retail'],
             'classification' => 'shared-core',
-            'included_in_plans' => ['growth', 'pro'],
+            'included_in_plans' => ['base', 'starter', 'growth', 'pro'],
             'default_enabled' => false,
             'default_setup_status' => 'configured',
             'dependencies' => ['customers'],
             'billing_mode' => 'included',
             'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
-            'cta_routing' => 'upgrade_plan',
+            'cta_routing' => 'none',
             'buyer_setup' => [
                 'outcome' => 'Give customers a clear loyalty program and keep reward rules in one place.',
                 'best_for' => 'Stores that want repeat customers to earn, redeem, and understand rewards without manual tracking.',
@@ -1021,7 +1043,7 @@ $catalog = [
                     'A decision on how customers earn points or credit.',
                     'A decision on the reward values customers can redeem.',
                 ],
-                'next_step' => 'Review the reward rules you want customers to see, then enable the module on an eligible plan.',
+                'next_step' => 'Included for every tenant. Review your earn and redeem rules and test the customer journey before activating your program.',
                 'setup_steps' => [
                     'Confirm earn and redeem rules.',
                     'Review customer-facing reward language.',
@@ -1947,6 +1969,7 @@ $catalog = [
             'included_modules' => [
                 'work_core',
                 'customers',
+                'rewards',
                 'field_service',
                 'reporting',
                 'uploads',
@@ -1982,6 +2005,7 @@ $catalog = [
                 'wholesale_operations',
                 'work_core',
                 'customers',
+                'rewards',
                 'reviews',
                 'lead_capture',
                 'reporting',

@@ -22,7 +22,7 @@ class ShopifyOAuth
 
     public function buildAuthUrl(array $store, string $redirectUri, string $state): string
     {
-        $scopes = implode(',', $this->requestedScopes());
+        $scopes = implode(',', $this->requestedScopes($store));
 
         $params = http_build_query([
             'client_id' => $store['client_id'],
@@ -37,13 +37,17 @@ class ShopifyOAuth
     /**
      * @return array<int,string>
      */
-    public function requestedScopes(): array
+    public function requestedScopes(?array $store = null): array
     {
         $configured = explode(',', (string) config('services.shopify.scopes', 'read_orders,read_products,read_customers'));
         $scopes = array_values(array_unique(array_filter(array_map(
             static fn (string $scope): string => trim(strtolower($scope)),
             $configured
         ))));
+
+        if (($store['pos_inventory'] ?? false) === true) {
+            $scopes[] = 'read_inventory';
+        }
 
         // Metafield customer sync requires Admin customer read scope.
         if (! in_array('read_customers', $scopes, true) && ! in_array('write_customers', $scopes, true)) {
@@ -56,6 +60,11 @@ class ShopifyOAuth
             }
         }
 
-        return array_values(array_unique($scopes));
+        // Keep a store's reviewed app-version exclusions out of reconnects too.
+        // The retail Dev Dashboard rejects these legacy names; other apps retain
+        // their own declared permission set until separately reviewed.
+        $excluded = $store['excluded_scopes'] ?? [];
+
+        return array_values(array_diff(array_unique($scopes), $excluded));
     }
 }

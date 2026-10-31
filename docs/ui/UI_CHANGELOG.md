@@ -1,3 +1,11 @@
+## 2026-10-31 — Everbranch Pay customer-linked checkout (source candidate)
+
+Modern Forestry's catalog opens native live-basket review and customer selection.
+Assigned owners/admins can create or recover one customer request. Quote recovery
+shows the frozen customer, and receipts distinguish pending/review rewards. Native
+setup has a privacy link. Merchant, Apple, exact-build and physical collection
+gates remain visible and unchanged for charging; unsupported bundles fail closed.
+
 ## 2026-10-28 — Controlled subscription enrollment
 
 - Added private customer terms and Stripe card setup, separate owner activation,
@@ -19,6 +27,15 @@
 - Reused shared Inter, white surfaces and forest accents. Charts have accessible
   data tables and reduced-motion behavior. Customer preparation and report views
   perform no payment, Recharge mutation, notification or automatic API read.
+## 2026-10-24 — Dedicated native Square POS pilot (source candidate, disabled)
+
+Add a separate iPhone register with exact-total review, native Square Tap to Pay,
+approved printing quotes, guest/customer contact, durable original-sale recovery,
+shareable receipts and manager refunds. Add assigned-location inventory/reporting
+and collection pause controls in the explicitly enabled independent Enterprise
+composition. Alpha Printing and Modern Forestry remain the first intended
+merchants; Apple, provider and physical acceptance gates precede activation.
+Offline collection is deferred to a future release. See the live POS runbook.
 
 ## 2026-10-23 — Reviewer AI Coming soon placeholders (source candidate)
 

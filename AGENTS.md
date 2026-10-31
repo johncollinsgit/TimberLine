@@ -1,3 +1,36 @@
+## Shared AI provider and publishing flags (2026-10-24)
+
+- Read `docs/operations/provider-terms-and-publishing.md` when changing Apple
+  app publishing, Tap to Pay, provider-data retrieval or AI memory/training.
+  Flag its applicable requirements and missing evidence in other Everbranch
+  work. Publishing disclosures can remain a later milestone; live pilot
+  entitlement, merchant and signing requirements still apply before collection.
+- Do not repurpose Apple Tap to Pay data for marketing/customer profiling or
+  use Square-derived content (even anonymized) to train or enhance AI. Proposed
+  Square-data context/embedding/memory use requires provider/legal review.
+  Review seller revocation/deletion and record-retention duties together; do not
+  silently delete payment evidence or promise that provider content is permanent.
+- Verify current terms at release. Agreement acceptance, a developer app and
+  passing tests are distinct from legal approval and physical acceptance.
+
+## Universal customer commerce capability (owner direction, 2026-10-30)
+
+- Every tenant must have the included capability to associate confirmed online
+  and in-person purchases and rewards with one tenant-scoped canonical customer.
+  Modern Forestry is the first pilot, not a hardcoded tenant exception. Read
+  `docs/architecture/unified-customer-commerce.md` before customer/POS/rewards work.
+- Reuse MarketingProfile, CanonicalMarketingProfileResolver, explicit source
+  links and the existing Candle Cash ledger. Keep provider/Website customers and
+  orders authoritative in their original domains; an explicit read-only identity
+  association is not a customer merge, order copy, marketing consent or paid sale.
+- Treat shared customer purchase/rewards capability as core for all plans and
+  templates. Merchant program setup and normal payment/permission gates remain
+  necessary. Do not invent earn rates, copy balances or silently publish programs.
+- Acceptance must prove the same customer across online/in-person purchases,
+  replay/refund correctness, customer-facing visibility and tenant isolation.
+  Do not claim live readiness from a catalog preview, source tests or a payment
+  that has not also proved the identity/history/rewards connections.
+
 ## Self-service payment accounts, bank linking and native invoices (2026-10-19)
 
 - New Stripe accounts use full Dashboard access and direct charges; owner-session OAuth can connect an existing Standard account. Frozen request/routing/environment/account context prevents cross-merchant retries. Existing Express reservations and Wren routing stay unchanged. Direct payments require their own connected-event signing secret and live proof gate; new direct attempts use stable platform-account/environment fingerprints across key rotation.

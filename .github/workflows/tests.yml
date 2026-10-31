@@ -16,6 +16,7 @@ on:
       - codex/enterprise-painpoint-demo
       - codex/enterprise-executive-visibility
       - codex/enterprise-voice-finale
+      - 'codex/evergrove-payments-iphone-*'
   workflow_dispatch:
 
 concurrency:
@@ -300,6 +301,24 @@ jobs:
         env:
           POS_DISPOSABLE_MYSQL: '1'
         run: php ./vendor/bin/pest tests/Integration/PointOfSaleMySqlRecoveryTest.php --compact
+
+      - name: Verify payment journal and quote recovery and concurrency
+        env:
+          PAYMENTS_CORE_DISPOSABLE_MYSQL: '1'
+          APP_ENV: testing
+          APP_KEY: 'base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI='
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          MAIL_MAILER: array
+          LOG_CHANNEL: 'null'
+        run: |
+          php ./vendor/bin/pest tests/Integration/PaymentsCoreMySqlRecoveryTest.php tests/Integration/PaymentsCoreQuotesMySqlRecoveryTest.php tests/Integration/PaymentsCoreMySqlConcurrencyTest.php --compact
+          php tests/PaymentsCore/security-mysql-integrity.php
+
+      - name: Verify live POS merchant, stock, Shopify and refund boundaries
+        env:
+          POS_LIVE_DISPOSABLE_MYSQL: '1'
+        run: php ./vendor/bin/pest tests/PosLive tests/Integration/PosLiveMySqlRecoveryTest.php tests/Integration/PosLiveMySqlConcurrencyTest.php --compact
 
       - name: Rehearse prior production schema upgrade
         run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"

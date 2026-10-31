@@ -1,5 +1,17 @@
 <?php
 
+\Illuminate\Support\Facades\Route::middleware(['auth', 'verified', 'throttle:10,1'])->group(function (): void {
+    \Illuminate\Support\Facades\Route::post('/pos/setup/square', [\App\Http\Controllers\PosSquareSetupController::class, 'start'])->name('pos.square.start');
+    \Illuminate\Support\Facades\Route::get('/pos/setup/square/callback', [\App\Http\Controllers\PosSquareSetupController::class, 'callback'])->name('pos.square.callback');
+});
+
+\Illuminate\Support\Facades\Route::prefix('pos/admin')->middleware(['auth', 'verified', \App\Http\Middleware\ResolvePosTenant::class])->name('pos.admin.')->group(function (): void {
+    \Illuminate\Support\Facades\Route::get('/', [\App\Http\Controllers\PosAdminController::class, 'index'])->name('index');
+    \Illuminate\Support\Facades\Route::get('/report', [\App\Http\Controllers\PosAdminController::class, 'report'])->name('report');
+    \Illuminate\Support\Facades\Route::post('/items/{item}/adjust', [\App\Http\Controllers\PosAdminController::class, 'adjust'])->where('item', '[a-f0-9]{32}')->name('stock.adjust');
+    \Illuminate\Support\Facades\Route::post('/pause', [\App\Http\Controllers\PosAdminController::class, 'pause'])->name('pause');
+});
+
 require __DIR__.'/highlevel.php';
 require __DIR__.'/marketing-desk.php';
 require __DIR__.'/marketplace.php';
@@ -1507,6 +1519,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/customers/{marketingProfile}/email-deliveries/export', [MarketingCustomersController::class, 'exportEmailDeliveries'])
                     ->name('customers.email-deliveries.export');
                 Route::patch('/customers/{marketingProfile}', [MarketingCustomersController::class, 'update'])->name('customers.update');
+                Route::post('/customers/{marketingProfile}/commerce-sources', [MarketingCustomersController::class, 'linkCommerceSource'])->name('customers.commerce-sources.store');
                 Route::post('/customers/{marketingProfile}/birthday', [MarketingCustomersController::class, 'updateBirthday'])->name('customers.update-birthday');
                 Route::post('/customers/{marketingProfile}/consent', [MarketingCustomersController::class, 'updateConsent'])->name('customers.update-consent');
                 Route::post('/customers/{marketingProfile}/candle-cash/grant', [MarketingCustomersController::class, 'grantCandleCash'])->name('customers.candle-cash.grant');

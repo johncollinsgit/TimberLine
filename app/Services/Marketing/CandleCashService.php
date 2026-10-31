@@ -15,6 +15,7 @@ use Illuminate\Support\Str;
 class CandleCashService
 {
     public const DEFAULT_LEGACY_POINTS_PER_CANDLE_CASH = 30;
+
     public const CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR = 1;
 
     /**
@@ -24,12 +25,11 @@ class CandleCashService
 
     public function __construct(
         protected TenantMarketingSettingsResolver $marketingSettingsResolver
-    ) {
-    }
+    ) {}
 
     public function programConfig(?int $tenantId = null): array
     {
-        $cacheKey = $tenantId === null ? 'global' : 'tenant:' . $tenantId;
+        $cacheKey = $tenantId === null ? 'global' : 'tenant:'.$tenantId;
         if (array_key_exists($cacheKey, $this->programConfigCache)) {
             return $this->programConfigCache[$cacheKey];
         }
@@ -197,7 +197,7 @@ class CandleCashService
 
     public function formatCurrency(float|int|string $amount): string
     {
-        return '$' . number_format(round((float) $amount, 2), 2);
+        return '$'.number_format(round((float) $amount, 2), 2);
     }
 
     public function formatRewardCurrency(float|int|string $amount): string
@@ -205,19 +205,19 @@ class CandleCashService
         $numeric = round((float) $amount, 2);
         $precision = fmod(abs($numeric), 1.0) === 0.0 ? 0 : 2;
 
-        return '$' . number_format($numeric, $precision);
+        return '$'.number_format($numeric, $precision);
     }
 
     public function formatCandleCash(float|int|string $amount): string
     {
-        return $this->formatRewardCurrency($amount) . ' reward credit';
+        return $this->formatRewardCurrency($amount).' reward credit';
     }
 
     public function signedCurrencyLabel(float|int|string $amount): string
     {
         $numeric = round((float) $amount, 2);
 
-        return ($numeric >= 0 ? '+' : '-') . $this->formatCurrency(abs($numeric));
+        return ($numeric >= 0 ? '+' : '-').$this->formatCurrency(abs($numeric));
     }
 
     public function candleCashAmountLabelFromPoints(float|int|string $points, bool $signed = false): string
@@ -226,7 +226,7 @@ class CandleCashService
         $amount = $this->amountFromPoints(abs($numeric));
 
         if ($signed) {
-            return ($numeric >= 0 ? '+' : '-') . $this->formatCurrency($amount);
+            return ($numeric >= 0 ? '+' : '-').$this->formatCurrency($amount);
         }
 
         return $this->formatCurrency($amount);
@@ -622,8 +622,8 @@ class CandleCashService
 
         return [
             'id' => (int) $reward->id,
-            'name' => 'Redeem ' . $this->formatRewardCurrency($amount) . ' Reward Credit',
-            'description' => 'Apply ' . $this->formatRewardCurrency($amount) . ' off this order. Reward credit is redeemed in $10 increments, with a limit of $10 per order.',
+            'name' => 'Redeem '.$this->formatRewardCurrency($amount).' Reward Credit',
+            'description' => 'Apply '.$this->formatRewardCurrency($amount).' off this order. Reward credit is redeemed in $10 increments, with a limit of $10 per order.',
             'reward_type' => (string) $reward->reward_type,
             'reward_value' => $reward->reward_value !== null ? (string) $reward->reward_value : null,
             'candle_cash_cost' => $amount,
@@ -705,7 +705,19 @@ class CandleCashService
         ?string $description = null,
         array $extraAttributes = []
     ): array {
-        $points = (int) $points;
+        return $this->addRewardAmountIdempotent($profile, $points, $source, $sourceId, $type, $description, $extraAttributes);
+    }
+
+    public function addRewardAmountIdempotent(
+        MarketingProfile $profile,
+        float|int|string $points,
+        string $source,
+        string $sourceId,
+        string $type = 'gift',
+        ?string $description = null,
+        array $extraAttributes = []
+    ): array {
+        $points = CandleCashMeasurement::normalizeStoredAmount($points);
         $source = trim($source);
         $sourceId = trim($sourceId);
 
@@ -760,6 +772,7 @@ class CandleCashService
             $transaction = CandleCashTransaction::query()->create(array_merge([
                 'marketing_profile_id' => $profile->id,
                 'type' => $type,
+                'points' => (int) round($points),
                 'candle_cash_delta' => $points,
                 'source' => $source,
                 'source_id' => $sourceId,
@@ -833,7 +846,7 @@ class CandleCashService
                 'candle_cash_delta' => -$cost,
                 'source' => 'reward',
                 'source_id' => (string) $redemption->id,
-                'description' => 'Redeemed reward: ' . $reward->name,
+                'description' => 'Redeemed reward: '.$reward->name,
             ]);
 
             return [
@@ -1017,7 +1030,7 @@ class CandleCashService
     protected function generateRedemptionCode(): string
     {
         do {
-            $code = 'CC-' . Str::upper(Str::random(10));
+            $code = 'CC-'.Str::upper(Str::random(10));
         } while (CandleCashRedemption::query()->where('redemption_code', $code)->exists());
 
         return $code;

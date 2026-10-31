@@ -64,6 +64,8 @@ class TenantMobileResourceService
     public function customer(int $tenantId, int $customerId): array
     {
         $profile = MarketingProfile::query()->forTenantId($tenantId)->findOrFail($customerId);
+        $profile = app(\App\Services\Marketing\CanonicalMarketingProfileResolver::class)->canonical($profile, $tenantId);
+        abort_unless($profile, 404);
         $jobs = Schema::hasTable('field_service_jobs')
             ? FieldServiceJob::query()->forTenantId($tenantId)->where('marketing_profile_id', $profile->id)
                 ->latest('updated_at')->limit(8)->get()
@@ -106,6 +108,7 @@ class TenantMobileResourceService
                     'email' => $profile->email ? $this->channelState->resolveEmailStatus($tenantId, $profile, $profile->email) : 'unavailable',
                 ],
             ],
+            'customer_commerce' => app(\App\Services\Marketing\CustomerCommerceSnapshotService::class)->forProfile($profile, $tenantId),
             'recent_orders' => $orders->map(fn (Order $order): array => $this->orderSummary($order))->values(),
             'recent_jobs' => $jobs->map(fn (FieldServiceJob $job): array => $this->jobSummary($job))->values(),
             'conversations' => $conversations->map(fn (MessagingConversation $conversation): array => [

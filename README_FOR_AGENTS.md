@@ -1,3 +1,15 @@
+## Everbranch Pay customer-linked Square pilot (October 31; source candidate)
+
+The focused native Square release combines shared customer commerce with a live
+basket handoff, register-scoped canonical customer selection/creation, immutable
+customer/policy terms, exact provider mirror suppression and existing-ledger
+show earning/refund reconciliation. Owner onboarding has an independent default-off
+exact-build gate; commercial collection gates remain required. POS is an included
+capability for every plan, with merchant-specific guided setup and acceptance.
+Production installation, inventory permissions, Apple distribution approval and
+physical payment/settlement acceptance remain separate. Read
+`docs/operations/everbranch-pay-customer-square.md` before activation.
+
 ## Facilities mobile controls (October 30; source candidate)
 
 The paired public frontend adds whole-card work-order menus, a docked ticket
@@ -3291,3 +3303,12 @@ The old native-WebKit wizard gate failed on hidden Next after a click. Two exact
 local unchanged runs passed; an assumed catalog race was not reproduced. No
 speculative product/test workaround is added. The repaired-head WebKit gate must
 pass. No runtime, provider, publication, merge or deployment action occurred.
+## Every-tenant customer commerce requirement (October 30, 2026)
+
+Read `docs/architecture/unified-customer-commerce.md` for the owner's universal
+customer requirement: one tenant-scoped identity, linked confirmed online and
+in-person purchases, and one existing rewards history. Include this capability
+for every plan/template; retain merchant program and payment activation checks.
+Do not create a second customer identity or loyalty ledger, infer linkage from
+a card tap, or label source/UI tests as physical acceptance. Explicit read-only
+source associations preserve the independent Website/Shopify/provider records.
