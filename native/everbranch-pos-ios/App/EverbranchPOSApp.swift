@@ -105,11 +105,11 @@ struct POSView: View {
             .toolbar {
                 if let onClose {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Close", action: onClose).frame(minWidth: 44, minHeight: 44).disabled(model.collector.hasActivePayment)
+                        Button(action: onClose) { Text("Close").lineLimit(1).fixedSize() }.frame(minWidth: 64, minHeight: 44).disabled(model.collector.hasActivePayment)
                     }
                 }
                 if let onAccount {
-                    ToolbarItem(placement: .primaryAction) { Button("Account", action: onAccount).frame(minHeight: 44) }
+                    ToolbarItem(placement: .primaryAction) { Button(action: onAccount) { Text("Account").lineLimit(1).fixedSize() }.frame(minHeight: 44) }
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer(); Button("Done") { inputFocused = false }
