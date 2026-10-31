@@ -62,8 +62,71 @@ tokens are used ephemerally and are not copied into mirrors or reports.
 
 This step proves current method access only. `reauthorization_required` remains
 unknown until supported contract adoption and actual merchant acceptance succeed.
+Finite source charge limits or a conflicting fixed monthly anchor require separate
+review; they cannot silently become an indefinite contract on another billing day.
 No real merchant mapping or no-reauthorization conclusion is established by the
 fictional tests. Shopify-vaulted collection remains unimplemented and disabled.
+
+## Paused Shopify contract adoption (source candidate; no billing execution)
+
+The original-app transport has a fixed calculation/commit protocol following
+Shopify's documented `SubscriptionContractCalculation` API. It retains the exact
+customer and saved method, monthly anchor, quantity, variant, fixed unit pricing,
+address, shipping and currency. Projected subtotal, delivery, tax and total must
+match the reviewed source terms, with no warnings or discounts. **Projected tax
+is an estimate**, not proof of a future collected amount; actual billing receipt
+verification and merchant acceptance remain required before rollout.
+
+Commands require the exact tenant, verified owner, agreement and controlled
+member. `plan` is offline. Without `--apply`, the calculation/adoption/recovery
+commands also return the offline plan and cannot contact the provider.
+
+```
+subscriptions:shopify plan --tenant=SLUG --actor=ID --agreement=ID
+subscriptions:shopify calculate --tenant=SLUG --actor=ID --agreement=ID --terms-hash=HASH --revision=REV --apply
+subscriptions:shopify refresh --tenant=SLUG --actor=ID --agreement=ID --apply
+subscriptions:shopify adopt --tenant=SLUG --actor=ID --agreement=ID --review-hash=QUOTE_HASH --revision=REV --apply
+subscriptions:shopify recover --tenant=SLUG --actor=ID --agreement=ID --apply
+```
+
+`SUBSCRIPTIONS_REPLACEMENT_SHOPIFY_ADOPTION_ENABLED` defaults off. Production also
+requires independent `SUBSCRIPTIONS_REPLACEMENT_SHOPIFY_LIVE_ACCEPTANCE_VERIFIED`;
+enabling neither follows from source tests. Each write requires current
+`write_own_subscription_contracts`, the original installed-app identity and its
+unchanged credential revision. Runtime introspection on the **pinned 2026-10
+endpoint** confirms the calculation/commit/read fields and every supplied input
+field before a dispatch is claimed. Missing capabilities fail without mutation.
+
+The agreement freezes the original calculation input/UUID/context and original
+source credential context. Create and commit record write-once dispatch markers
+before HTTP. An uncertain calculation without a returned ID requires provider
+review and is never resent. A known ID is polled until a reviewable result exists.
+Before the one commit, fresh original-method verification, unchanged quote review
+and complete original Recharge stop/charge coverage are required. The commit proof
+and original source revision are rechecked immediately before dispatch.
+
+A lost commit response recovers only a complete original-customer contract list
+with one matching app/agreement/adoption UUID. Missing, multiple or partial
+results never trigger another commit. Once its ID is known, that exact contract
+is paused before considering adoption ready, and its original first billing
+instant is set and read back. Lost pause/date acknowledgements recover through
+fresh owned reads. Changed terms or an elapsed original billing date remain
+paused for new review. No local activation, member billing-owner change, order
+creation or billing attempt is part of this command.
+
+**API verification limit:** the current official 2026-10 docs and connected schema
+describe these calculation operations, but the bundled offline 2026-10 validator
+snapshot rejects them as missing. The connector validation endpoint skips rather
+than validates. These results are recorded as a validation gap, not as a pass.
+Original-account capability probes plus isolated-store calculate/commit/recovery
+acceptance must be demonstrated before enabling any production adoption. The
+fictional tests and real MySQL dispatcher race prove local authority/recovery
+logic; they do not establish live provider compatibility.
+
+References: [Shopify calculation migration requirements](https://shopify.dev/docs/apps/build/purchase-options/subscriptions/contracts/migrate-to-subscription-calculation-api),
+[contract calculation](https://shopify.dev/docs/api/admin-graphql/2026-10/mutations/subscriptionContractCreateCalculate),
+[commit calculation](https://shopify.dev/docs/api/admin-graphql/2026-10/mutations/subscriptionContractCalculationCommit),
+[Recharge source subscription terms](https://developer.getrecharge.com/2021-11).
 
 ## Existing implementation examined
 

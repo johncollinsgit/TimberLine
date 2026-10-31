@@ -6,6 +6,10 @@ use App\Models\ShopifyStore;
 use App\Models\SubscriptionBillingAgreement;
 use App\Models\SubscriptionCredentialRevision;
 use App\Models\SubscriptionInstallation;
+use App\Models\SubscriptionRechargeConnection;
+use App\Models\SubscriptionRechargeCredentialRevision;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 /** Fixed subscription protocol on the original installation; no arbitrary GraphQL or global token fallback. */
@@ -48,6 +52,98 @@ GRAPHQL;
         return $this->read($row, 'order', ['id' => 'gid://shopify/Order/'.$id]);
     }
 
+    public function contractRead(SubscriptionBillingAgreement $row, string $operation): array
+    {
+        $state = data_get($row->authorization_evidence, 'shopify_adoption', []);
+        $variables = match ($operation) {
+            'capabilities' => [],
+            'calculation' => ['id' => $state['calculation_id'] ?? null],
+            'contract' => ['id' => $state['contract_id'] ?? null],
+            'customer_contracts' => ['id' => 'gid://shopify/Customer/'.$row->terms['shopify_customer_id']],
+            default => throw new \InvalidArgumentException('Unsupported replacement contract read.'),
+        };
+        abort_unless($operation === 'capabilities' || filled($variables['id']), 409, 'The original contract/calculation reference is not available.');
+
+        return $this->read($row, $operation, $variables);
+    }
+
+    /** Fixed original intent only. Create/commit dispatches are claimed durably before HTTP and never resent. */
+    public function contractMutation(SubscriptionBillingAgreement $row, string $operation): array
+    {
+        abort_unless(in_array($operation, ['calculate', 'commit', 'pause', 'first_date'], true), 422);
+        $state = data_get($row->authorization_evidence, 'shopify_adoption', []);
+        $this->adoptionAuthority($row, $state);
+        abort_unless(! in_array($operation, ['pause', 'first_date'], true) || isset($state['contract_id'], $state['commit_dispatched_at']), 409, 'Recover the original created contract before changing its paused schedule.');
+        $capabilities = $this->contractRead($row, 'capabilities');
+        $scopes = collect(data_get($capabilities, 'currentAppInstallation.accessScopes', []))->pluck('handle');
+        abort_unless($scopes->contains('write_own_subscription_contracts'), 423, 'The original subscription app needs its own-contract write permission.');
+        foreach (['mutationType.fields' => ['subscriptionContractCreateCalculate', 'subscriptionContractCalculationCommit', 'subscriptionContractPause', 'subscriptionContractSetNextBillingDate'],
+            'queryType.fields' => ['subscriptionContractCalculation'], 'deliveryPolicyType.fields' => ['multiFulfillment'],
+            'createInputType.inputFields' => array_keys($state['original']['input'])] as $path => $required) {
+            abort_unless(! array_diff($required, collect(data_get($capabilities, $path, []))->pluck('name')->all()), 423, 'The original pinned Shopify API does not expose the reviewed contract calculation protocol.');
+        }
+        if (in_array($operation, ['calculate', 'commit'], true)) {
+            DB::transaction(function () use ($row, $operation) {
+                $current = SubscriptionBillingAgreement::query()->forTenantId($row->tenant_id)->whereKey($row->id)->lockForUpdate()->firstOrFail();
+                $state = data_get($current->authorization_evidence, 'shopify_adoption', []);
+                $this->adoptionAuthority($current, $state);
+                abort_if(isset($state[$operation.'_dispatched_at']), 409, 'Recover the original contract operation; it cannot be submitted again.');
+                abort_unless($operation === 'calculate' || isset($state['commit_original']), 409);
+                if ($operation === 'commit') {
+                    $this->commitAuthority($current, $state);
+                    $state['commit_dispatch_proof'] = $state['commit_send_proof'];
+                }
+                $state[$operation.'_dispatched_at'] = now()->toISOString();
+                $evidence = $current->authorization_evidence;
+                $evidence['shopify_adoption'] = $state;
+                $current->update(['authorization_evidence' => $evidence]);
+            });
+        }
+        $row = $row->fresh();
+        $state = data_get($row->authorization_evidence, 'shopify_adoption');
+        $this->adoptionAuthority($row, $state);
+        if ($operation === 'commit') {
+            $this->commitAuthority($row, $state);
+        }
+        $variables = match ($operation) {
+            'calculate' => ['input' => $state['original']['input']],
+            'commit' => ['id' => $state['commit_original']['calculation_id']],
+            'pause' => ['id' => $state['contract_id']],
+            'first_date' => ['id' => $state['contract_id'], 'date' => SubscriptionShopifyContractProtocol::firstBillingInstant($row)],
+        };
+
+        return $this->request($row, SubscriptionShopifyContractProtocol::document($operation), $variables, false);
+    }
+
+    private function adoptionAuthority(SubscriptionBillingAgreement $row, array $state): void
+    {
+        $original = $state['original'] ?? [];
+        abort_unless(config('subscriptions.replacement_shopify_adoption_enabled') === true && $row->status === 'prepared' && ! $row->activated_at
+            && ($original['terms_hash'] ?? null) === $row->terms_hash && ($original['processor_context'] ?? null) === $this->context($row)
+            && ($original['input'] ?? null) === SubscriptionShopifyContractProtocol::input($row, $original['request_uuid'] ?? ''), 423, 'Review the original disabled or changed contract adoption intent.');
+        app(SubscriptionReplacementAccess::class)->owner($row->tenant_id, User::findOrFail($original['actor_id'] ?? null), $row->member_id, 'setup');
+        abort_unless($row->method_binding['environment'] === 'sandbox' || config('subscriptions.replacement_shopify_live_acceptance_verified') === true, 423, 'Original-account Shopify live acceptance is required.');
+    }
+
+    private function commitAuthority(SubscriptionBillingAgreement $row, array $state): void
+    {
+        $proof = $state['commit_dispatch_proof'] ?? $state['commit_send_proof'] ?? [];
+        $binding = $row->method_binding;
+        $revision = SubscriptionRechargeCredentialRevision::query()->forTenantId($row->tenant_id)->where('connection_id', $binding['source_connection_id'])
+            ->where('status', 'active')->findOrFail($binding['source_credential_revision_id']);
+        abort_unless(($state['commit_original']['calculation_id'] ?? null) === ($state['calculation_id'] ?? null)
+            && ($state['commit_original']['review_hash'] ?? null) === data_get($state, 'quote.review_hash')
+            && ($proof['connection_id'] ?? null) === $binding['source_connection_id']
+            && ($proof['credential_revision_id'] ?? null) === $binding['source_credential_revision_id']
+            && ($proof['source_customer_id'] ?? null) === $row->terms['recharge_customer_id']
+            && SubscriptionRechargeOperationService::enabled($row->tenant_id) && $revision->verified_at && ! $revision->revoked_at && ! $revision->expires_at?->isPast()
+            && data_get($state, 'original.source_context.credential_fingerprint') === SubscriptionEvidence::digest((string) ($revision->credentials['access_token'] ?? ''))
+            && is_string($proof['checked_at'] ?? null) && \Carbon\CarbonImmutable::parse($proof['checked_at'])->betweenIncluded(now()->subMinute(), now()->addSeconds(5))
+            && SubscriptionRechargeConnection::query()->forTenantId($row->tenant_id)->whereKey($binding['source_connection_id'])->where('status', 'verified')
+                ->where('active_credential_revision_id', $binding['source_credential_revision_id'])->whereNull('read_pause_reason')->exists(), 409, 'Fresh original source-stop proof is required before the single contract commit.');
+        app(SubscriptionReplacementAccess::class)->owner($row->tenant_id, User::findOrFail($state['commit_original']['actor_id']), $row->member_id, 'setup');
+    }
+
     public static function document(string $operation): string
     {
         return match ($operation) {
@@ -59,12 +155,19 @@ GRAPHQL;
 
     private function read(SubscriptionBillingAgreement $row, string $operation, array $variables): array
     {
+        $document = in_array($operation, ['method', 'order'], true) ? self::document($operation) : SubscriptionShopifyContractProtocol::document($operation);
+
+        return $this->request($row, $document, $variables, true);
+    }
+
+    private function request(SubscriptionBillingAgreement $row, string $document, array $variables, bool $checkIdentity): array
+    {
         [$installation, $revision] = $this->resolve($row);
         $context = $this->context($row);
         try {
             $response = Http::withHeaders(['X-Shopify-Access-Token' => $revision->credentials['access_token'], 'Accept' => 'application/json'])
                 ->withoutRedirecting()->connectTimeout(3)->timeout(12)->post('https://'.$installation->shop_domain.'/admin/api/'.SubscriptionAccessService::API_VERSION.'/graphql.json',
-                    ['query' => self::document($operation), 'variables' => $variables]);
+                    ['query' => $document, 'variables' => $variables]);
             abort_unless($response->successful() && $response->header('X-Shopify-API-Version') === SubscriptionAccessService::API_VERSION
                 && strlen($response->body()) <= 1048576, 502);
             $body = json_decode($response->body(), true, 64, JSON_BIGINT_AS_STRING | JSON_THROW_ON_ERROR);
@@ -73,7 +176,9 @@ GRAPHQL;
             abort(502, 'The original Shopify subscription evidence could not be verified.');
         }
         abort_unless($this->context($row->fresh()) === $context, 409, 'The original subscription installation or credential changed.');
-        $this->identity($row, $installation, $body['data']);
+        if ($checkIdentity) {
+            $this->identity($row, $installation, $body['data']);
+        }
 
         return $body['data'];
     }

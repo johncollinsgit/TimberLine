@@ -1,3 +1,17 @@
+## Shopify paused-contract adoption (October 30; source candidate)
+
+The replacement Shopify command now has offline planning and separately gated
+calculation/adoption/recovery steps. It verifies original saved-method/source
+mapping, exact calculated terms/totals, current original-app write permission and
+the pinned account's actual calculation API capabilities before writing. Source
+billing must be verified stopped before one durable contract commit. Lost results
+recover only the original app/customer/adoption UUID; empty, duplicate or partial
+reads never authorize another commit. The created contract is paused and its first
+billing instant is confirmed. Local activation, billing ownership and collection
+remain unchanged. Actual store/provider acceptance and billing execution remain
+outstanding. The bundled offline schema lacks documented calculation fields, so
+this source is not considered API-accepted from local tests alone. See the runbook.
+
 ## Modern Forestry reward channel limits (October 30; source candidate)
 
 New Modern Forestry staff-issued Square Candle Cash codes debit $5; online codes

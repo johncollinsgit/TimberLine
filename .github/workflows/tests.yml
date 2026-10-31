@@ -311,8 +311,8 @@ jobs:
       - name: Verify committed MySQL schema baseline
         run: scripts/ci/verify-mysql-schema-baseline.sh
 
-      - name: Verify original subscription payment dispatch concurrency
-        run: php ./vendor/bin/pest tests/Integration/SubscriptionBraintreeDispatchConcurrencyTest.php --compact
+      - name: Verify original subscription provider dispatch concurrency
+        run: php ./vendor/bin/pest tests/Integration/SubscriptionBraintreeDispatchConcurrencyTest.php tests/Integration/SubscriptionShopifyAdoptionConcurrencyTest.php --compact
 
       - name: Verify POS register and shared-stock concurrency
         env:

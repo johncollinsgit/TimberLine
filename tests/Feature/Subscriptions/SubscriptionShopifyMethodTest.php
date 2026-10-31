@@ -45,7 +45,7 @@ test('Shopify saved method verification rejects changed source identity ownershi
     expect(fn () => app(SubscriptionShopifyMethodService::class)->verify($s->tenant->id, $s->actor, $s->agreement->id, '111'))
         ->toThrow($defect === 'rotated' ? \Illuminate\Database\Eloquent\ModelNotFoundException::class : HttpException::class);
     expect($s->agreement->fresh()->method_verified_at)->toBeNull()->and(SubscriptionBillingCycle::count())->toBe(0);
-})->with(['customer', 'revoked', 'inactive', 'expired', 'scope', 'app', 'production_store', 'refunded_order', 'rotated', 'quantity', 'price', 'date', 'address_method', 'token']);
+})->with(['customer', 'revoked', 'inactive', 'expired', 'scope', 'app', 'production_store', 'refunded_order', 'rotated', 'quantity', 'price', 'date', 'address_method', 'token', 'finite_term', 'anchor']);
 
 test('source permissions and rollout fail before requests and unrelated owners cannot inspect methods', function () {
     $s = $this->scenario;

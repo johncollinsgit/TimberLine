@@ -123,6 +123,9 @@ class SubscriptionShopifyMethodService
                 && ($subscription['order_interval_frequency'] ?? null) === $row->terms['billing_months']
                 && ($subscription['charge_interval_frequency'] ?? null) === $row->terms['billing_months']
                 && ($subscription['is_prepaid'] ?? null) === false
+                && array_key_exists('expire_after_specific_number_of_charges', $subscription) && $subscription['expire_after_specific_number_of_charges'] === null
+                && array_key_exists('order_day_of_month', $subscription)
+                && in_array($subscription['order_day_of_month'], [null, 0, $row->billing_anchor_date->day], true)
                 && in_array($subscription['status'] ?? null, ['active', 'cancelled', 'expired'], true), 409, 'The original source subscription terms differ.');
             if ($subscription['status'] === 'active') {
                 abort_unless(is_string($subscription['next_charge_scheduled_at'] ?? null)

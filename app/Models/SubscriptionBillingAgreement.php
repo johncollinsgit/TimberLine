@@ -31,6 +31,12 @@ class SubscriptionBillingAgreement extends Model
                     throw new \LogicException('The original billing agreement and payment binding cannot be replaced.');
                 }
             }
+            foreach (['original', 'calculation_id', 'calculate_dispatched_at', 'commit_original', 'commit_dispatch_proof', 'commit_dispatched_at', 'contract_id'] as $field) {
+                $before = data_get($row->getOriginal('authorization_evidence'), 'shopify_adoption.'.$field);
+                if ($before !== null && data_get($row->authorization_evidence, 'shopify_adoption.'.$field) !== $before) {
+                    throw new \LogicException('Retain the original Shopify adoption request, dispatch and provider references.');
+                }
+            }
         });
         static::deleting(fn () => throw new \LogicException('Retain subscription authorization history.'));
     }

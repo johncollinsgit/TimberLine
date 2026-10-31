@@ -1,3 +1,24 @@
+## Shopify paused-contract adoption (October 30; source candidate)
+
+`SubscriptionShopifyContractService` and its fixed protocol extend the original
+subscription-app transport; historical shadow operations remain read-only. The
+new adoption and production-acceptance gates default off. Original request,
+calculation ID, commit proof/dispatch and contract ID are write-once encrypted
+agreement evidence, with append-only actions. Create/commit dispatches claim the
+agreement row before HTTP; real MySQL workers prove one provider submission.
+Commit requires exact current quote review and fresh pinned Recharge stop proof.
+Recovery uses the original owned customer and UUID, never another create/commit.
+Schedule repairs only pause that original contract and restore its reviewed first
+date; ambiguous/changed/overdue results remain paused for review. They never
+activate local billing, advance a cycle, create an order or submit a charge.
+
+The bundled 2026-10 validator snapshot is missing calculation fields present in
+the current official 2026-10 docs/schema tool. Record that failure; do not claim
+full API validation from fictional fixtures. Every adoption write probes the
+original account's exact pinned schema and permissions. Real isolated-store API
+acceptance remains mandatory before a production gate is enabled. See
+`docs/operations/subscriptions-recharge-replacement.md`.
+
 ## Modern Forestry reward channel limits and Shopify method proof (October 30; source candidate)
 
 `CandleCashChannelPolicy` resolves the persisted profile tenant's explicit config:

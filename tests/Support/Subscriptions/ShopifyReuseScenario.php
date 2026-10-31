@@ -93,7 +93,7 @@ class ShopifyReuseScenario
             'provinceCode' => 'SC', 'countryCode' => 'US', 'zip' => '29601'];
     }
 
-    private function shopify($request)
+    protected function shopify($request)
     {
         if ($request->url() !== 'https://'.$this->store->shop_domain.'/admin/api/2026-10/graphql.json' || $request->method() !== 'POST'
             || $request->header('X-Shopify-Access-Token') !== ['ORIGINAL_SUBSCRIPTION_TOKEN'] || ! str_starts_with($request['query'], 'query Replacement')) {
@@ -131,7 +131,7 @@ class ShopifyReuseScenario
         return Http::response(['data' => $data], 200, ['X-Shopify-API-Version' => '2026-10']);
     }
 
-    private function recharge($request)
+    protected function recharge($request)
     {
         if ($request->method() !== 'GET' || $request->header('X-Recharge-Access-Token') !== ['ORIGINAL_RECHARGE_TOKEN']) {
             throw new \RuntimeException('Unexpected fictional source request.');
@@ -143,6 +143,8 @@ class ShopifyReuseScenario
                 'external_variant_id' => ['ecommerce' => '999'], 'quantity' => $this->defect === 'quantity' ? 1.9 : 1,
                 'price' => $this->defect === 'price' ? '30.00' : '25.00', 'presentment_currency' => 'USD',
                 'order_interval_unit' => 'month', 'order_interval_frequency' => 1, 'charge_interval_frequency' => 1, 'is_prepaid' => false,
+                'expire_after_specific_number_of_charges' => $this->defect === 'finite_term' ? 6 : null,
+                'order_day_of_month' => $this->defect === 'anchor' ? 15 : null,
                 'next_charge_scheduled_at' => $this->defect === 'date' ? '2027-02-01T09:00:00-05:00' : '2027-01-31T09:00:00-05:00']],
             '/addresses/222' => ['address' => ['id' => 222, 'customer_id' => 123, 'payment_method_id' => $this->defect === 'address_method' ? 999 : 321,
                 'first_name' => 'Fictional', 'last_name' => 'Member', 'address1' => '123 Example Street', 'city' => 'Greenville', 'province' => 'South Carolina', 'zip' => '29601', 'country_code' => 'US']],
