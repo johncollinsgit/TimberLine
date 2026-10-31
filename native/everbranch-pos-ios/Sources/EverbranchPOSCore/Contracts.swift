@@ -1,7 +1,7 @@
 import Foundation
 
 public enum POSError: Error, Equatable, Sendable {
-    case invalidOrigin, invalidDescriptor, recoveryRequired, unavailable(String)
+    case invalidOrigin, invalidDescriptor, recoveryRequired, signInRequired, unavailable(String)
 }
 
 public struct Workspace: Decodable, Identifiable, Sendable {
@@ -10,6 +10,20 @@ public struct Workspace: Decodable, Identifiable, Sendable {
     public let slug: String
 }
 public struct WorkspaceList: Decodable, Sendable { public let workspaces: [Workspace] }
+public enum POSSignInMethod: String, Sendable { case email, google }
+public enum POSAuthorization {
+    public static func url(origin: URL, method: POSSignInMethod, challenge: String, state: String) throws -> URL {
+        try POSOrigin.validate(origin)
+        guard challenge.range(of: #"^[A-Za-z0-9_-]{43}$"#, options: .regularExpression) != nil,
+              state.range(of: #"^[A-Za-z0-9._~-]{16,255}$"#, options: .regularExpression) != nil else { throw POSError.invalidDescriptor }
+        var url = URLComponents(url: origin.appendingPathComponent("mobile/authorize"), resolvingAgainstBaseURL: false)!
+        url.queryItems = ["client_id": "everbranch-pos-ios", "redirect_uri": "everbranchpos://auth/callback", "auth_method": method.rawValue,
+            "code_challenge": challenge, "code_challenge_method": "S256", "state": state, "device_name": "Everbranch Pay iPhone"]
+            .sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) }
+        guard let result = url.url else { throw POSError.invalidOrigin }
+        return result
+    }
+}
 public struct Register: Decodable, Identifiable, Sendable {
     public let id: String
     public let name: String

@@ -1,27 +1,50 @@
 import SwiftUI
 import WebKit
 
-struct ModernForestryRegisterView: View {
+struct EverbranchRegisterView: View {
     @State private var showingRegister = false
-    @State private var basket: [RegisterBasketLine] = []
+    @State private var screen: POSScreen = .setup
+    @State private var catalogOpened = SecureStore.read("selected-register") != nil
+    @StateObject private var model = POSViewModel()
+
+    private var catalogTestMode: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--pos-catalog-ui-tests")
+        #else
+        false
+        #endif
+    }
 
     var body: some View {
-        ModernForestryCatalog { selections in
-            basket = selections
-            showingRegister = true
+        Group {
+            if catalogTestMode || (model.signedIn && model.registerLoaded && catalogOpened && model.selectedWorkspace?.slug == "modern-forestry") {
+                ModernForestryCatalog(items: model.selectedRegister == nil ? nil : model.items,
+                                      registerName: model.selectedRegister?.name,
+                                      completedSaleGeneration: model.completedSaleGeneration) { selections in
+                    guard !model.busy else { return }
+                    screen = selections.isEmpty ? .setup : .checkout
+                    model.begin(basket: selections)
+                    showingRegister = true
+                }
+                .ignoresSafeArea(edges: .bottom)
+            } else if model.signedIn && model.registerLoaded && catalogOpened {
+                POSView(onAccount: { screen = .setup; showingRegister = true }, screen: .checkout, model: model)
+            } else {
+                POSView(onOpenRegister: { catalogOpened = true }, screen: .setup, model: model)
+            }
         }
         .background(Color(red: 0.96, green: 0.95, blue: 0.90))
-        .ignoresSafeArea(edges: .bottom)
         .sheet(isPresented: $showingRegister) {
-            POSView(onClose: { showingRegister = false }, basket: basket)
+            POSView(onClose: { showingRegister = false }, onOpenRegister: { catalogOpened = true; showingRegister = false }, screen: screen, model: model)
         }
-        .onAppear {
-            if SecureStore.read("pending-sale") != nil { showingRegister = true }
-        }
+        .onChange(of: model.signedIn) { _, signedIn in if !signedIn { catalogOpened = false; showingRegister = false } }
     }
 }
 
 private struct ModernForestryCatalog: UIViewRepresentable {
+    let items: [CatalogItem]?
+    let registerName: String?
+    let completedSaleGeneration: Int
     let openRegister: ([RegisterBasketLine]) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(openRegister: openRegister) }
@@ -34,6 +57,9 @@ private struct ModernForestryCatalog: UIViewRepresentable {
         web.navigationDelegate = context.coordinator
         web.isOpaque = false
         web.backgroundColor = .clear
+        web.scrollView.bounces = false
+        web.scrollView.contentInsetAdjustmentBehavior = .never
+        web.scrollView.keyboardDismissMode = .onDrag
         if let page = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "RegisterDemo") {
             context.coordinator.pageURL = page.standardizedFileURL
             web.loadFileURL(page, allowingReadAccessTo: page.deletingLastPathComponent())
@@ -41,7 +67,11 @@ private struct ModernForestryCatalog: UIViewRepresentable {
         return web
     }
 
-    func updateUIView(_ web: WKWebView, context: Context) { context.coordinator.openRegister = openRegister }
+    func updateUIView(_ web: WKWebView, context: Context) {
+        context.coordinator.openRegister = openRegister
+        context.coordinator.updateCatalog(items, registerName: registerName, web: web)
+        context.coordinator.completeSale(completedSaleGeneration, web: web)
+    }
 
     static func dismantleUIView(_ web: WKWebView, coordinator: Coordinator) {
         web.configuration.userContentController.removeScriptMessageHandler(forName: "register")
@@ -51,7 +81,39 @@ private struct ModernForestryCatalog: UIViewRepresentable {
     final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         var openRegister: ([RegisterBasketLine]) -> Void
         var pageURL: URL?
+        private var catalogJSON = "null"
+        private var sentCatalogJSON: String?
+        private var completedSaleGeneration = 0
         init(openRegister: @escaping ([RegisterBasketLine]) -> Void) { self.openRegister = openRegister }
+
+        func updateCatalog(_ items: [CatalogItem]?, registerName: String?, web: WKWebView) {
+            if let items, let data = try? JSONSerialization.data(withJSONObject: [
+                "register": registerName ?? "Your register",
+                "items": items.map { ["id": $0.id, "price": $0.unitAmountMinor, "quantity": $0.availableQuantity ?? 99] as [String: Any] }
+            ]), let json = String(data: data, encoding: .utf8) { catalogJSON = json }
+            else { catalogJSON = "null" }
+            sendCatalog(web)
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            sentCatalogJSON = nil
+            sendCatalog(webView)
+        }
+
+        private func sendCatalog(_ web: WKWebView) {
+            guard !web.isLoading, sentCatalogJSON != catalogJSON else { return }
+            let snapshot = catalogJSON
+            web.evaluateJavaScript("window.updateLiveCatalog && window.updateLiveCatalog(\(snapshot))") { [weak self] _, error in
+                if error == nil { self?.sentCatalogJSON = snapshot }
+            }
+        }
+
+        func completeSale(_ generation: Int, web: WKWebView) {
+            guard generation > completedSaleGeneration else { return }
+            web.evaluateJavaScript("window.completeNativeSale && window.completeNativeSale()") { [weak self] _, error in
+                if error == nil { self?.completedSaleGeneration = generation }
+            }
+        }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
             guard message.name == "register", message.frameInfo.isMainFrame,

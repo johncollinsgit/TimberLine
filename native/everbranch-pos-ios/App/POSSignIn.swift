@@ -9,18 +9,16 @@ struct TokenResponse: Decodable { let accessToken: String }
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first(where: \.isKeyWindow) ?? ASPresentationAnchor()
     }
-    func signIn(api: POSAPI) async throws {
+    func signIn(api: POSAPI, method: POSSignInMethod = .email) async throws {
         try POSOrigin.validate(api.origin)
         var random = [UInt8](repeating: 0, count: 32)
         guard SecRandomCopyBytes(kSecRandomDefault, random.count, &random) == errSecSuccess else { throw POSError.unavailable("Secure sign-in is unavailable.") }
         func base64(_ data: Data) -> String { data.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "") }
         let verifier = base64(Data(random)); let state = UUID().uuidString
         let challenge = base64(Data(SHA256.hash(data: Data(verifier.utf8))))
-        var url = URLComponents(url: api.origin.appendingPathComponent("mobile/authorize"), resolvingAgainstBaseURL: false)!
-        url.queryItems = ["client_id": "everbranch-pos-ios", "redirect_uri": "everbranchpos://auth/callback", "auth_method": "email",
-            "code_challenge": challenge, "code_challenge_method": "S256", "state": state, "device_name": "Everbranch POS iPhone"].map { URLQueryItem(name: $0.key, value: $0.value) }
+        let url = try POSAuthorization.url(origin: api.origin, method: method, challenge: challenge, state: state)
         let returned: URL = try await withCheckedThrowingContinuation { continuation in
-            webSession = ASWebAuthenticationSession(url: url.url!, callbackURLScheme: "everbranchpos") { returned, error in
+            webSession = ASWebAuthenticationSession(url: url, callbackURLScheme: "everbranchpos") { returned, error in
                 if let returned { continuation.resume(returning: returned) }
                 else { continuation.resume(throwing: error ?? POSError.unavailable("Sign-in cancelled.")) }
             }
