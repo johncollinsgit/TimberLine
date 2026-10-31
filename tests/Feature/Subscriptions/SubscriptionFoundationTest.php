@@ -251,6 +251,29 @@ test('future address intent is encrypted and leaves existing contract and order 
     Http::assertNothingSent();
 });
 
+test('binding accepts database JSON key ordering without accepting changed identity types', function (bool $changeType): void {
+    $access = app(SubscriptionAccessService::class);
+    $original = $access->binding((int) $this->tenant->id);
+    $stored = array_reverse($original, true);
+    if ($changeType) {
+        $stored['tenant_id'] = (string) $stored['tenant_id'];
+    }
+    $metadata = DB::table('subscription_module_settings')->where('tenant_id', $this->tenant->id)->value('metadata');
+    $metadata = json_decode($metadata, true);
+    $metadata['provider_binding'] = $stored;
+    DB::table('subscription_module_settings')->where('tenant_id', $this->tenant->id)->update(['metadata' => json_encode($metadata)]);
+    $events = DB::table('subscription_lifecycle_events')->count();
+    if ($changeType) {
+        expect(fn () => $access->assertBinding((int) $this->tenant->id))->toThrow(HttpException::class);
+        expect(fn () => $access->bindStore((int) $this->tenant->id, ShopifyStores::find('retail', true), $this->actor))->toThrow(HttpException::class);
+    } else {
+        expect($access->assertBinding((int) $this->tenant->id))->toEqual($original);
+        expect($access->bindStore((int) $this->tenant->id, ShopifyStores::find('retail', true), $this->actor))->toEqual($original);
+    }
+    expect(DB::table('subscription_lifecycle_events')->count())->toBe($events);
+    Http::assertNothingSent();
+})->with(['database reorders keys' => false, 'changed identity type' => true]);
+
 test('binding rejects cross-tenant store app rotation and client replacement while surviving setup review', function (): void {
     $access = app(SubscriptionAccessService::class);
     $original = $access->binding((int) $this->tenant->id);

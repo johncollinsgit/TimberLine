@@ -73,7 +73,7 @@ class BraintreeScenario
 
     public ?string $saleMarkerPath = null;
 
-    public function __construct(public bool $production = false)
+    public function __construct(public bool $production = false, public bool $candleClub = true)
     {
         Http::preventStrayRequests();
         $this->tenant = Tenant::create(['name' => 'Fictional Braintree subscriptions', 'slug' => 'braintree-execution-'.Str::lower(Str::random(8))]);
@@ -106,7 +106,11 @@ class BraintreeScenario
         config()->set('subscriptions.replacement_member_ids', [$member->id]);
         $input = ['processor' => 'braintree', 'shipping_cents' => 0, 'tax_cents' => 0, 'shipping_address' => $this->address(),
             'method_binding' => ['connection_id' => $this->connection->id, 'customer_id' => 'customer123', 'payment_method_token' => 'private_method_token', 'source_payment_reference' => 'source_txn'],
+            'membership_program' => 'candle_club', 'membership_reference' => 'original-club:789', 'source_membership_reviewed' => true,
             'authorization_reference' => 'original-agreement:123', 'source_terms_reviewed' => true, 'continuing_authorization_reviewed' => true];
+        if (! $candleClub) {
+            unset($input['membership_program'], $input['membership_reference'], $input['source_membership_reviewed']);
+        }
         $this->preparation = $input;
         $service = app(SubscriptionBillingAgreementService::class);
         $review = $service->review($this->tenant->id, $this->actor, $member->id, $input);

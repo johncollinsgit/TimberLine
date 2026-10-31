@@ -1,3 +1,28 @@
+## Candle Club membership after cutover (October 31; source candidate)
+
+Reviewed Candle Club membership now retains polls, voting history, chosen/monthly
+scents and private scent notes after the imported source contract is cancelled.
+It uses the original authenticated customer and activated Everbranch agreement,
+with an explicit original membership review; a saved payment method or matching
+email alone grants no club benefits. New ballots use a separate processor-neutral
+table, with one ballot per member/poll, encrypted source evidence and shared
+totals. Exact source subscription/customer IDs retain legacy ballots without
+rewriting mirrors or fabricating Shopify contract IDs. Ambiguous history requires
+review. Locking reads prevent duplicate ballots and honor a pause committed after
+an initial membership read. Poll closure also uses a current locking read; scent
+note retries retain one record across concurrent requests. Legacy requests lock
+the original membership before the poll, rejecting cutover after an older read.
+Existing pending comments survive unchanged retries
+across cutover. Reads/writes create no payment, provider mutation or message.
+The additive table has real MySQL recovery/concurrency and a regenerated verified
+data-free schema baseline. Broader member/commitment/operator parity, future-term
+amendments and actual two-tester acceptance remain outstanding.
+
+The original store binding compares canonical typed content: MySQL's JSON key
+ordering no longer rejects an unchanged installation. Changed identity types,
+store/app values and cross-tenant routing still require review; replay adds no
+binding event or provider call.
+
 ## Native Shopify subscription billing (October 30; source candidate)
 
 The replacement now includes original-account Shopify activation, current-day

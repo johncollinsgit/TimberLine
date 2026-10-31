@@ -80,6 +80,7 @@ class ShopifyReuseScenario
         $input = ['processor' => 'shopify', 'shipping_cents' => 0, 'tax_cents' => 0, 'shipping_address' => $this->address(),
             'method_binding' => ['installation_id' => $this->installation->id, 'payment_method_gid' => 'gid://shopify/CustomerPaymentMethod/original_method',
                 'source_connection_id' => $this->source->id, 'source_payment_method_id' => '321', 'environment' => $this->production ? 'production' : 'sandbox'],
+            'membership_program' => 'candle_club', 'membership_reference' => 'original-club:789', 'source_membership_reviewed' => true,
             'authorization_reference' => 'original-source:123', 'source_terms_reviewed' => true, 'continuing_authorization_reviewed' => true];
         $service = app(SubscriptionBillingAgreementService::class);
         $review = $service->review($this->tenant->id, $this->actor, $member->id, $input);

@@ -201,6 +201,9 @@ class ModernForestryMobileAccountService
         if (($session->identity['source_type'] ?? '') === 'app_review_demo') {
             return ['ok' => true, 'status' => 'preview_recorded', 'message' => 'Demo feedback only. No live review was saved.'];
         }
+        if (app(\App\Services\Subscriptions\SubscriptionReplacementCustomerAccess::class)->agreement($session)) {
+            return $this->subscriptions->submitReplacementScentFeedback($session, $monthlyScentId, $payload);
+        }
 
         return $this->subscriptions->submitCandleClubScentFeedback($session->profile, $monthlyScentId, $payload);
     }

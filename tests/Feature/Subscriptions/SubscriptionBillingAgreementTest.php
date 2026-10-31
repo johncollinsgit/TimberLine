@@ -304,3 +304,34 @@ test('pilot readout shows Braintree reuse review without demanding a new Stripe 
         ->and($report['members'][0]['activation_blockers'])->toContain('Braintree saved payment method and continuing authorization need verification')
         ->not->toContain('Customer Stripe authorization required');
 });
+
+test('Candle Club benefits require their own explicit original membership review', function (string $defect) {
+    $input = $this->input + ['membership_program' => 'candle_club', 'membership_reference' => 'original-club:789', 'source_membership_reviewed' => true];
+    if ($defect === 'missing_review') {
+        unset($input['source_membership_reviewed']);
+    } elseif ($defect === 'unaccepted') {
+        $input['source_membership_reviewed'] = false;
+    } elseif ($defect === 'reference') {
+        unset($input['membership_reference']);
+    } else {
+        $input['membership_program'] = 'unreviewed-benefits';
+    }
+    expect(fn () => $this->service->review($this->tenant->id, $this->owner, $this->member->id, $input))->toThrow(\Illuminate\Validation\ValidationException::class);
+    expect(SubscriptionBillingAgreement::count())->toBe(0);
+    Http::assertNothingSent();
+})->with(['missing_review', 'unaccepted', 'reference', 'program']);
+
+test('the original membership review is retained without changing money or granting collection', function () {
+    $this->input += ['membership_program' => 'candle_club', 'membership_reference' => 'original-club:789', 'source_membership_reviewed' => true];
+    $review = $this->service->review($this->tenant->id, $this->owner, $this->member->id, $this->input);
+    expect($review['membership_program'])->toBe('candle_club')->and($review['membership_reviewed'])->toBeTrue();
+    $row = prepareBillingAgreement($this);
+    $original = SubscriptionBillingAuthorization::original($row);
+    expect($original['terms']['membership_program'])->toBe('candle_club')
+        ->and($original['authorization']['membership_review'])->toBe(['reference' => 'original-club:789', 'reviewed_by' => $this->owner->id])
+        ->and($row->terms['amount_cents'])->toBe(2500)->and($row->activated_at)->toBeNull()->and($this->member->fresh()->billing_owner)->toBe('recharge');
+    $changed = array_replace($this->input, ['membership_reference' => 'different-club:789']);
+    $review = $this->service->review($this->tenant->id, $this->owner, $this->member->id, $changed);
+    expect(fn () => $this->service->prepare($this->tenant->id, $this->owner, $this->member->id, $changed, $review['terms_hash']))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    Http::assertNothingSent();
+});

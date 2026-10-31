@@ -294,7 +294,7 @@ jobs:
         run: php ./vendor/bin/pest tests/Integration/TeamSearchMySqlRecoveryTest.php --compact
 
       - name: Verify subscription pilot evidence partial-DDL recovery
-        run: php ./vendor/bin/pest tests/Integration/BirthdayClubMySqlRecoveryTest.php tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php tests/Integration/SubscriptionBillingLedgerMySqlRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/BirthdayClubMySqlRecoveryTest.php tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php tests/Integration/SubscriptionBillingLedgerMySqlRecoveryTest.php tests/Integration/SubscriptionMemberVotesMySqlRecoveryTest.php --compact
 
       - name: Verify POS simulation partial-DDL recovery
         env:
@@ -313,6 +313,9 @@ jobs:
 
       - name: Verify original subscription provider dispatch concurrency
         run: php ./vendor/bin/pest tests/Integration/SubscriptionBraintreeDispatchConcurrencyTest.php tests/Integration/SubscriptionShopifyAdoptionConcurrencyTest.php tests/Integration/SubscriptionShopifyBillingConcurrencyTest.php --compact
+
+      - name: Verify Candle Club voting and note concurrency
+        run: php ./vendor/bin/pest tests/Integration/SubscriptionMemberVotingConcurrencyTest.php --compact
 
       - name: Verify POS register and shared-stock concurrency
         env:

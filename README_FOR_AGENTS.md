@@ -1,3 +1,34 @@
+## Candle Club membership after cutover (October 31; source candidate)
+
+`SubscriptionReplacementCommunityService` resolves benefits only from the exact
+authenticated customer, activated Everbranch agreement and original reviewed
+`membership_program=candle_club`. Preparation requires explicit source membership
+review/reference when that program is selected; generic billing grants no club
+benefits. Never retrofit the immutable original authorization from current data.
+New member votes use `subscription_member_votes`, not synthetic Shopify GIDs or
+billing attempts. Shared poll/member locks and current locking reads preserve one
+ballot and reject a pause or poll closure committed after a repeatable-read
+snapshot. Legacy writes acquire member/agreement locks before the poll and
+recheck conversion against current rows. Comment replay uses a current locking
+read after membership/scent locks. Old ballots
+link through exact retained source subscription/customer IDs; stale source mirrors
+cannot cast again for a converted membership. Ambiguous identity blocks a new
+ballot. Legacy nontester voting remains in its existing lane.
+
+The existing native endpoints retain polls/scents/history and write private pending
+feedback to the existing review store. Unchanged old comment retries preserve the
+accepted row; neutral membership metadata never rewrites an old contract link.
+Member views do not fetch/enrich missing stock photos. No provider, payment,
+message or reward issuance follows from voting or feedback. The one additive
+table has named recoverable constraints, registered real MySQL partial-DDL tests,
+concurrent voting/pause evidence and a verified regenerated schema baseline.
+Future-term changes, commitment/gift/operator overview parity and real customer
+acceptance are still required before broad rollout.
+
+Subscription store binding equality uses canonical typed JSON content, preserving
+exact original identity while tolerating MySQL JSON key reordering. Do not replace
+it with loose equality or mutate original routing when a replay differs.
+
 ## Native Shopify subscription billing (October 30; source candidate)
 
 `SubscriptionShopifyExecutionService` and the fixed billing protocol extend only

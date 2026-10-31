@@ -7,6 +7,69 @@ access can be verified. Stripe setup is an explicit fallback, not a universal
 migration requirement. The first rollout is the two already prepared members;
 all other members retain Recharge billing until separately reviewed.
 
+## Candle Club membership after source stop (source candidate)
+
+An activated replacement membership now retains the app's current poll, exact
+voting history, previously chosen scents, monthly scent cards and private scent
+notes even when the imported source contract is cancelled. It uses the existing
+authenticated customer session; this does not request new payment authorization
+or create a new customer account. Reads do not call a provider or enrich stock
+photos. Voting/comments send no message and issue no reward or payment.
+
+Club membership is separate from having a saved payment method. When preparing a
+Candle Club agreement, the owner-reviewed private input must include:
+
+```json
+{
+  "membership_program": "candle_club",
+  "membership_reference": "original-club:SOURCE_SUBSCRIPTION_ID",
+  "source_membership_reviewed": true
+}
+```
+
+These fields enter the original reviewed hash and encrypted authorization
+snapshot. Generic subscriptions grant no club benefits, and client-supplied
+program/profile/tenant values cannot grant access. Do not edit an existing
+authorization to add these fields. Existing agreements without original club
+review need a separately reviewed membership supplement before benefits can be
+enabled; that supplement workflow remains outstanding. Verify the two testers'
+original membership evidence as part of preparation/cutover acceptance.
+
+New ballots use `subscription_member_votes`, keyed to the original member and
+agreement rather than a fabricated Shopify contract. The unique member/poll
+constraint, current member/agreement/poll locking reads and shared legacy vote
+mutex prevent duplicate or post-pause acceptance. Poll timing and option ownership
+are rechecked. Shared poll totals include the neutral ballots. Existing ballots
+remain unchanged and count once: their original Recharge subscription and full
+Shopify customer IDs link the history. Matching email/profile is insufficient;
+unmapped prior votes block another ballot for review. Converted source mirrors
+cannot provide an alternative voting/comment authority, even if stale as active.
+
+Scent notes continue to use the existing private/pending feedback store. The new
+record retains its neutral agreement/member context. An unchanged request already
+accepted before cutover returns the original comment without replacing its old
+contract link. Paused/cancelled memberships and servicing freezes block new votes
+and notes; historical reading and safe billing stops remain available.
+
+The additive migration is registered for real MySQL partial-DDL recovery and
+retains accepted ballots on code rollback. Composite agreement/member tenant
+constraints, incompatible-index refusal, regenerated dump/fingerprint and
+prior-base upgrade/dump-boot checks accompany it. Real workers test competing
+ballots, a pause and poll closure committed after the initial repeatable-read
+snapshot, concurrent unchanged scent-note retries, and an original legacy vote
+request whose snapshot predates cutover. Each rejected request leaves no ballot;
+the retried note returns one original ID. Legacy mutation locks follow the same
+member/agreement-before-poll order. A reproduced poll-closure race was corrected
+by validating the current locking row rather than re-reading an older snapshot.
+
+Real MySQL also exposed JSON object-key reordering in the existing store binding.
+Its comparisons now use canonical typed content for unchanged installation
+validation/replay; identity types and values must still match exactly. Replaying
+setup adds no lifecycle event and does not contact a provider.
+Broader commitment/gift/member/operator overview parity and customer acceptance
+remain outstanding. Existing public OTP delivery is still not configured in
+production; this source enables no email/SMS sends.
+
 ## Native Shopify billing (source candidate; production remains disabled)
 
 The original-app transport now supports separately gated activation, one durable
@@ -300,6 +363,7 @@ proven. The two testers are acceptance cases, not hard-coded customer rules.
 - [x] Source implementation for Braintree execution, original-transaction recovery and owned Shopify order/fulfillment reporting.
 - [x] Authenticated customer pause/resume/skip/cancel and private member schedule page, with paired native entry point.
 - [x] Immutable original reviewed authorization snapshot, separated historical proof and current collection/adoption guards.
+- [x] Source implementation for authenticated member polls/scents/history and private feedback after source cancellation, with neutral ballots and exact legacy vote continuity.
 - [ ] Address/scent future-term changes and original-authorization amendment handling.
 - [ ] Actual Braintree merchant sandbox/live acceptance and original source-stop verification.
 - [x] Source implementation for Shopify-vaulted paused adoption, activation, billing attempts and native receipt reconciliation.

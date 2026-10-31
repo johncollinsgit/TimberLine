@@ -60,15 +60,15 @@ class SubscriptionReplacementCustomerAccess
             return $legacy;
         }
         $terms = $row->terms;
+        $community = app(SubscriptionReplacementCommunityService::class)->payload($session);
 
-        return array_replace($legacy, ['eligible' => $row->status === 'active', 'status' => $row->status,
+        return array_replace($legacy, collect($community)->except('can_vote')->all(), ['eligible' => $community['eligible'], 'status' => $row->status,
             'message' => $row->status === 'cancelled' ? 'Future subscription billing is cancelled.'
                 : ($row->status === 'paused' ? 'Your subscription is paused.' : $terms['currency'].' '.SubscriptionPilotShopifyBridge::decimal($terms['amount_cents']).' every '.$terms['billing_months'].' month(s).'),
             'contract' => null, 'commitment' => null, 'payment_method' => null, 'action_mode' => 'everbranch_replacement',
-            'active_poll' => null, 'vote_history' => [], 'previous_chosen_scents' => [], 'monthly_scents' => [],
             'action_menus' => ['swap_options' => [], 'pause_duration_options' => [$terms['billing_months'], 2 * $terms['billing_months']]],
             'cancel_prompt' => 'Cancel future subscription billing. Payments or orders already started may need support review.',
-            'actions' => ['can_vote' => false, 'can_pause' => false, 'can_cancel' => false, 'can_update_address' => false,
+            'actions' => ['can_vote' => $community['can_vote'], 'can_pause' => false, 'can_cancel' => false, 'can_update_address' => false,
                 'can_update_card' => false, 'can_swap_to_active_16oz_scent' => false, 'can_manage_subscription' => true],
             'shipping_address' => ['first_name' => $terms['shipping_address']['firstName'], 'last_name' => $terms['shipping_address']['lastName'],
                 'address1' => $terms['shipping_address']['address1'], 'address2' => $terms['shipping_address']['address2'] ?? null,
@@ -85,6 +85,9 @@ class SubscriptionReplacementCustomerAccess
     {
         if (! $this->agreement($session)) {
             return null;
+        }
+        if (in_array($input['action'] ?? null, ['vote', 'vote_for_next_month', 'cast_vote'], true)) {
+            return app(SubscriptionReplacementCommunityService::class)->vote($session, $input);
         }
         $data = \Illuminate\Support\Facades\Validator::make($input, ['action' => ['required', 'in:pause,resume,skip,cancel'],
             'request_id' => ['required', 'uuid'], 'revision' => ['required', 'integer', 'min:1'],

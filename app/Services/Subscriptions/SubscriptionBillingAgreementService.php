@@ -27,6 +27,8 @@ class SubscriptionBillingAgreementService
 
         return ['terms_hash' => $candidate['terms_hash'], 'processor' => $candidate['processor'],
             'amount_cents' => $candidate['terms']['amount_cents'], 'currency' => $candidate['terms']['currency'],
+            'membership_program' => $candidate['terms']['membership_program'] ?? null,
+            'membership_reviewed' => isset($candidate['authorization_evidence']['membership_review']),
             'first_billing_date' => $candidate['terms']['first_billing_date'], 'method_verified' => false,
             'reauthorization_required' => null, 'billing_owner' => 'recharge', 'collection_enabled' => false];
     }
@@ -46,7 +48,8 @@ class SubscriptionBillingAgreementService
             $current = SubscriptionBillingAgreement::query()->forTenantId($tenantId)->where('member_id', $memberId)->lockForUpdate()->first();
             if ($current) {
                 SubscriptionBillingAuthorization::assertCurrent($current);
-                abort_unless(SubscriptionEvidence::canonical($current->terms) === SubscriptionEvidence::canonical($candidate['terms'])
+                abort_unless(hash_equals($current->terms_hash, $candidate['terms_hash'])
+                    && SubscriptionEvidence::canonical($current->terms) === SubscriptionEvidence::canonical($candidate['terms'])
                     && SubscriptionEvidence::canonical($current->method_binding) === SubscriptionEvidence::canonical($candidate['method_binding'])
                     && collect($current->authorization_evidence)->only(['reference', 'continuing_authorization_reviewed_by', 'source_terms_reviewed_by'])->all()
                         === collect($candidate['authorization_evidence'])->only(['reference', 'continuing_authorization_reviewed_by', 'source_terms_reviewed_by'])->all(), 409, 'The retained agreement differs from this preparation.');
@@ -217,6 +220,9 @@ class SubscriptionBillingAgreementService
             'shipping_address.company' => ['nullable', 'string', 'max:255'], 'shipping_address.phone' => ['nullable', 'string', 'max:30'],
             'authorization_reference' => ['required', 'string', 'regex:/\A[A-Za-z0-9_.:\/-]{1,190}\z/'],
             'continuing_authorization_reviewed' => ['required', 'accepted'], 'source_terms_reviewed' => ['required', 'accepted'],
+            'membership_program' => ['sometimes', 'in:candle_club'],
+            'membership_reference' => ['required_with:membership_program', 'string', 'regex:/\A[A-Za-z0-9_.:\/-]{1,190}\z/'],
+            'source_membership_reviewed' => isset($input['membership_program']) ? ['required', 'accepted'] : ['sometimes', 'accepted'],
         ])->validate();
         $store = ShopifyStore::query()->forTenantId($tenantId)->findOrFail($member->shopify_store_id);
         abort_unless($member->billing_owner === 'recharge' && $member->status === 'prepared'
@@ -241,6 +247,10 @@ class SubscriptionBillingAgreementService
         $authorization = ['status' => 'review_required', 'reference' => $data['authorization_reference'],
             'continuing_authorization_reviewed_by' => $actor->id, 'source_terms_reviewed_by' => $actor->id,
             'provider_verified' => false, 'source_stop_verified' => false];
+        if (isset($data['membership_program'])) {
+            $terms['membership_program'] = $data['membership_program'];
+            $authorization['membership_review'] = ['reference' => $data['membership_reference'], 'reviewed_by' => $actor->id];
+        }
         $hash = SubscriptionEvidence::digest(SubscriptionEvidence::canonical(['terms' => $terms, 'binding' => $binding, 'authorization' => $authorization]));
         $authorization['original_authorization'] = ['version' => 1, 'terms' => $terms, 'terms_hash' => $hash, 'authorization' => $authorization];
 
