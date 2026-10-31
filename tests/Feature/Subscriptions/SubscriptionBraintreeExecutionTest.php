@@ -62,6 +62,34 @@ test('wrong original customer token revoked method missing agreement or source r
     expect($s->agreement->fresh()->method_verified_at)->toBeNull()->and($s->sales)->toBe([]);
 })->with(['original_customer', 'wrong_token', 'revoked', 'no_agreement', 'source_reference']);
 
+test('recent original orders do not authorize Braintree reuse without continuing historical order access', function (array $scopes) {
+    $s = $this->scenario;
+    $s->historicalOrderScopes = $scopes;
+    expect(fn () => app(SubscriptionBraintreeMethodService::class)->verify($s->tenant->id, $s->actor, $s->agreement->id, '111'))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class, 'historical order access');
+    expect($s->agreement->fresh()->method_verified_at)->toBeNull()->and($s->sales)->toBe([])
+        ->and($s->orderCreates)->toBe([])->and(SubscriptionBillingCycle::count())->toBe(0)
+        ->and(SubscriptionPilotMember::first()->billing_owner)->toBe('recharge');
+})->with([['scopes' => ['read_orders']], ['scopes' => ['write_orders']], ['scopes' => ['read_all_orders']]]);
+
+test('revoked historical order access blocks an activated Braintree collection before a payment or cycle', function () {
+    $s = $this->scenario;
+    $s->activate();
+    $s->historicalOrderScopes = ['write_orders'];
+    $this->travelTo(now('America/New_York')->setDate(2027, 1, 31)->setTime(10, 0)->utc());
+    expect(fn () => $this->execution->collect($s->agreement->fresh()))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class, 'historical order access');
+    expect($s->sales)->toBe([])->and($s->orderCreates)->toBe([])->and(SubscriptionBillingCycle::count())->toBe(0)
+        ->and($s->agreement->fresh()->next_billing_date->toDateString())->toBe('2027-01-31');
+});
+
+test('original order write permission plus historical access supports exact Braintree method verification', function () {
+    $s = $this->scenario;
+    $s->historicalOrderScopes = ['write_orders', 'read_all_orders'];
+    $proof = app(SubscriptionBraintreeMethodService::class)->verify($s->tenant->id, $s->actor, $s->agreement->id, '111');
+    expect($proof['provider_verified'])->toBeTrue()->and($s->sales)->toBe([])->and($s->orderCreates)->toBe([]);
+});
+
 test('an existing unexpired card uses the same saved-method recurring path without card collection', function () {
     $s = $this->scenario;
     $s->card = true;

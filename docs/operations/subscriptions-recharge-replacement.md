@@ -7,6 +7,48 @@ access can be verified. Stripe setup is an explicit fallback, not a universal
 migration requirement. The first rollout is the two already prepared members;
 all other members retain Recharge billing until separately reviewed.
 
+## Original-store historical access and fresh deployment check (October 31)
+
+The Braintree original-payment read now requests the current original app's
+scopes alongside the original paid Shopify order. Every method verification,
+merchant acceptance, activation and fresh collection requires `read_all_orders`
+plus `read_orders` or `write_orders`. A recent accessible source order does not
+prove that continuing verification can read it after the default 60-day window.
+Missing or revoked access rejects the proof before activation/new collection;
+the customer is not charged and no replacement cycle or Shopify order is created.
+The existing native Shopify acceptance already checks historical access.
+See [Shopify's order-history requirements](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/Order).
+
+Read-only checks at approximately 05:25 UTC on October 31 found:
+
+- The current production application has exactly two prepared members, both
+  Recharge-owned, targeting November 2 at $25 and $30. Pilot enrollments and
+  cycles remain zero. Replacement agreement/cycle tables are absent; the new
+  replacement config fields are unavailable in this undeployed source candidate.
+- No Modern Forestry Braintree API connection was configured. Browser vault
+  inspection and historical mapping do not connect the original merchant API.
+- The original retail credential read `modernforestry.myshopify.com` through
+  pinned `2026-10`, with `read_all_orders`, order/customer/product access,
+  `write_draft_orders`, own-subscription-contract and saved-method read scopes.
+  This proves the observed scopes, not capability/commit or reusable-method
+  acceptance, current vault access or existing-contract control.
+- Connected Shopify reads confirmed Rynda's #33195 has the exact expected
+  Recharge subscription and payment-reference attribute keys. Jennifer's #33186
+  has Recharge subscription linkage and a successful Shopify Payments sale,
+  without the Braintree payment-reference attribute. Her path remains separate.
+  These are historical paid/fulfilled October orders, not proof of current
+  source-stop coverage or the upcoming November charge state.
+- `/ready` returned `status: ok` and `release: unknown`; that response does not
+  establish a deployed Git commit. The resolved Forge release directory was
+  `81725293`. No deployment, provider setup, source cancellation, activation,
+  customer notice, charge, order edit or credential change was performed.
+
+The saved check contains no credentials, raw provider receipts or payment-method
+tokens. The two testers still need actual original-account/API and continuing
+authority acceptance. Everyone else stays with Recharge until individually
+accepted. Customer address/scent confirmation, native Shopify amendments and
+customer/backend parity remain outstanding; this health check is not cutover.
+
 ## Accepted Braintree future terms (October 31; source candidate)
 
 `subscriptions:amend` now separately accepts an owner-reviewed delivery/scents

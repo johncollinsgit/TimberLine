@@ -49,6 +49,8 @@ class BraintreeScenario
 
     public array $preparation = [];
 
+    public array $historicalOrderScopes = ['read_orders', 'read_all_orders'];
+
     public ?array $savedOrder = null;
 
     public ?string $defect = null;
@@ -252,6 +254,7 @@ class BraintreeScenario
         }
         $data = ['shop' => ['myshopifyDomain' => $this->store->shop_domain, 'currencyCode' => 'USD', 'plan' => ['partnerDevelopment' => $this->defect !== 'production_store']]];
         if ($query === SubscriptionBillingShopifySource::SOURCE_QUERY) {
+            $data['currentAppInstallation'] = ['accessScopes' => array_map(fn ($scope) => ['handle' => $scope], $this->historicalOrderScopes)];
             $address = $this->address();
             $address['countryCodeV2'] = $address['countryCode'];
             unset($address['countryCode']);

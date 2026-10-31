@@ -14,6 +14,7 @@ class SubscriptionBillingShopifySource
     public const SOURCE_QUERY = <<<'GRAPHQL'
 query OriginalSubscriptionPayment($id: ID!) {
   shop { myshopifyDomain }
+  currentAppInstallation { accessScopes { handle } }
   order(id: $id) {
     id updatedAt processedAt createdAt test cancelledAt displayFinancialStatus customer { id }
     customAttributes { key value }
@@ -31,6 +32,11 @@ GRAPHQL;
         abort_unless(preg_match('/\A[1-9][0-9]{0,19}\z/', $orderId), 422);
         $terms = SubscriptionBillingAuthorization::original($row)['terms'];
         $data = $this->read($row, self::SOURCE_QUERY, ['id' => 'gid://shopify/Order/'.$orderId]);
+        $scopes = collect(data_get($data, 'currentAppInstallation.accessScopes', []))->pluck('handle');
+        // The original payment proof must remain readable after Shopify's default
+        // order-history window, including when a future cycle needs reconciliation.
+        abort_unless($scopes->contains('read_all_orders') && $scopes->intersect(['read_orders', 'write_orders'])->isNotEmpty(),
+            423, 'The original app needs order read permission and historical order access before Braintree subscription reuse.');
         $order = $data['order'] ?? [];
         $attributes = collect($order['customAttributes'] ?? [])->pluck('value', 'key')->all();
         $subscriptions = array_values(array_filter(array_map('trim', explode(',', (string) ($attributes['rc_subscription_ids'] ?? '')))));

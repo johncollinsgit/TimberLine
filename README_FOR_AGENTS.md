@@ -1,3 +1,17 @@
+## Historical source access and live-state evidence (October 31)
+
+`SubscriptionBillingShopifySource::originalPayment` checks `read_all_orders` and
+order read/write permission alongside every original order read. Do not remove
+this because an original order is currently recent: continuing verification must
+still work after Shopify's default history window. Verification/activation and
+fresh collection all use this path; missing scope accepts no method proof and
+claims no new payment cycle. The original store has these scopes in the latest
+read-only check, but no Braintree API connection or replacement deployment exists.
+Both prepared testers remain Recharge-owned with zero pilot enrollments/cycles.
+Real October order linkage is observed, not real reusable-method acceptance.
+Retain customer confirmation/native amendments and actual hosted/provider tests
+as outstanding work. See `docs/operations/subscriptions-recharge-replacement.md`.
+
 ## Accepted Braintree future terms (October 31; source candidate)
 
 `SubscriptionBillingAmendmentService` accepts a fresh exact quote and explicit

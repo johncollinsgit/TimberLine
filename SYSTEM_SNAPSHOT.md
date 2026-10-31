@@ -1,3 +1,21 @@
+## Original-store history and actual rollout check (October 31)
+
+Braintree method verification, merchant acceptance, activation and collection now
+require the original Shopify app's `read_all_orders` plus order read/write scope
+in the same response as the original order proof. A readable recent order alone
+cannot establish continuing historical access. Missing/revoked scope stops before
+method evidence is accepted or a new cycle/payment/order is created.
+
+A fresh read-only production check found two prepared Recharge-owned testers,
+zero pilot enrollments/cycles, no replacement billing tables and no Braintree API
+connection. The original retail Shopify credential successfully read pinned
+2026-10 permissions, including historical orders, own contracts and saved methods.
+Connected Shopify reads confirmed the expected Braintree reference/subscription
+attributes on Rynda's October order and Shopify Payments/subscription linkage on
+Jennifer's. These facts do not prove vault reuse, source-stop coverage, actual
+customer/backend parity or rollout acceptance. No production write occurred.
+The source candidate remains undeployed. See the replacement runbook.
+
 ## Accepted Braintree future terms (October 31; source candidate)
 
 The preview-first `subscriptions:amend` CLI can separately accept a freshly quoted
