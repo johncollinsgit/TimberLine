@@ -68,8 +68,9 @@ test('front yard foods preparation is idempotent and creates tenant four demo ac
         ->and(data_get($resolved, 'modules.field_service.enabled'))->toBeFalse()
         ->and(data_get($resolved, 'modules.field_service.reason'))->toBe('disabled_by_override');
 
+    $calendarClass = ScheduledClass::query()->forTenantId($tenant->id)->where('slug', 'sourdough-basics')->firstOrFail();
     $this->actingAs($john)
-        ->get(route('class-scheduling.index', ['tenant' => $tenant->slug]))
+        ->get(route('class-scheduling.index', ['tenant' => $tenant->slug, 'month' => $calendarClass->starts_at->format('Y-m')]))
         ->assertOk()
         ->assertSeeText('Sourdough Basics')
         ->assertSeeText('Events & Classes')
@@ -405,7 +406,7 @@ test('mobile scheduling exposes clickable classes and reminders while field serv
     $enrollment = ClassEnrollment::query()->forTenantId($tenant->id)->where('scheduled_class_id', $class->id)->firstOrFail();
     Sanctum::actingAs($john, ['mobile:read', 'mobile:write']);
 
-    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/class-scheduling')
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/class-scheduling?month='.$class->starts_at->format('Y-m'))
         ->assertOk()
         ->assertJsonPath('classes.0.destination.kind', 'scheduled_class')
         ->assertJsonFragment(['title' => 'Sourdough Basics']);

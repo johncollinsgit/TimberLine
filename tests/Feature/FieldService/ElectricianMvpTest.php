@@ -157,7 +157,7 @@ test('electrician field service captures lock box notes calendar and searchable 
         ->assertSeeText('loose neutral');
 
     $this->actingAs($user)
-        ->get(route('field-service.calendar', ['tenant' => $tenant->slug]))
+        ->get(route('field-service.calendar', ['tenant' => $tenant->slug, 'month' => $job->scheduled_for->format('Y-m')]))
         ->assertOk()
         ->assertSeeText('Garage subpanel inspection');
 
@@ -252,7 +252,7 @@ test('collins team members can use operational reporting without mobile financia
         'email_verified_at' => now(),
     ]);
     $member->tenants()->attach($tenant->id, ['role' => 'member']);
-    FieldServiceJob::query()->create([
+    $memberJob = FieldServiceJob::query()->create([
         'tenant_id' => $tenant->id,
         'assigned_user_id' => $member->id,
         'title' => 'Member-visible service call',
@@ -261,7 +261,7 @@ test('collins team members can use operational reporting without mobile financia
     ]);
 
     $this->actingAs($member)
-        ->get(route('field-service.calendar', ['tenant' => $tenant->slug]))
+        ->get(route('field-service.calendar', ['tenant' => $tenant->slug, 'month' => $memberJob->scheduled_for->format('Y-m')]))
         ->assertOk()
         ->assertSeeText('Member-visible service call');
 
