@@ -23,43 +23,35 @@ paid status. The original field application remains independent.
 Future release: offline collection and explicit provider-level idempotency for
 queued submission/retries. Current online duplicate-payment safeguards stay in place.
 
-## Customer-linked Modern Forestry pilot
+## Native register and inventory-owned checkout
 
-The merchant catalog hands only variant IDs and quantities to native checkout.
-The server supplies live prices/tax/stock and freezes a selected canonical customer
-and reviewed rewards policy. New customer requests retain only recovery IDs in
-Keychain, with explicit owner/admin creation and no marketing enrollment. Bundles
-are blocked from live checkout pending their provider pricing/stock mapping.
-Owner onboarding can run behind its separate exact-build gate while collection
-remains disabled; the server reports collection readiness on each sale.
-See `../../docs/operations/everbranch-pay-customer-square.md`. No successful live
-payment, Apple distribution approval or device acceptance is implied by this source.
+The shared native Products/Favorites/Keypad register loads the selected merchant's
+complete live photo catalog. Simple products add in one tap; variants use one
+options sheet; reviewed mix-and-match bundles use one component sheet. Large
+labeled pills provide basket, payment and next-sale actions. Search does not zoom
+and the basket dock stays out of the keyboard's way. `App/RegisterDemo` is retained
+as a legacy reference and excluded from application resources (57 MB removed).
 
-## Phone register experience
+For explicitly configured `everbranch_inventory_v1` registers, the server prices
+and taxes the basket, reserves counted Everbranch stock and persists the original
+attempt before Square collection. New in-person sales never create Shopify
+orders. Guest checkout precedes optional phone/name/email customer lookup and an
+audited association. Receipt contact does not verify account identity. Frozen
+eligible rewards use the existing ledger; historical ambiguity requires owner
+review. Other tenants use the same register with their own merchant and program.
 
-Setup and customer checkout are separate, merchant-themed native screens. The
-session keeps its selected register in memory and stores only workspace/register
-identifiers in Keychain. Returning sessions recheck membership and current device
-assignments before restoring that selection; changing businesses clears customer,
-product and SDK-readiness state. Pending sale/customer recovery journals remain
-independent and are never discarded by switching screens or signing out.
+Existing attempts and the independent Enterprise/native Website domains retain
+their original adapters. Pending sale/customer identifiers survive logout;
+current memberships and device assignments are rechecked before restoration.
+Callbacks never prove payment: fresh original-account Square retrieval does.
+The phone checks capture, actual Tap to Pay reader readiness and its visible
+presentation controller before collection; unknown outcomes cannot start a
+replacement payment. Stop Mirroring for actual card entry.
 
-A connected register supplies the catalog's available product IDs, current prices
-and quantity limits. The local catalog is still a preview before connection;
-server quoting remains authoritative. An unavailable basket must be reviewed
-explicitly, with no silently removed lines. Mix-and-match bundles stay excluded
-from collection until their provider mapping is approved.
-
-The catalog uses a fixed phone frame with a separate scrolling content area,
-16-point inputs and larger controls. Native setup uses inline titles, merchant
-cards, a docked primary action and optional account/device diagnostics. UI tests
-exercise search focus without zoom, pinned navigation, the basket handoff,
-separate setup/checkout entry and returning to the preserved basket. A completed
-sale clears that basket before returning to products for the next customer. The
-current register is native SwiftUI, with live catalog metadata and variant/bundle
-sheets covered by the core and UI tests. `App/RegisterDemo` is a retained legacy
-reference and is excluded from the application resources; it cannot collect.
-
+Read [the inventory-owned runbook](../../docs/operations/everbranch-pay-owned-inventory.md)
+for counted event stock, default-off inventory/collection gates, exact signing,
+original-attempt cleanup and physical acceptance. No successful live payment,
+settlement or Apple distribution approval is implied by this source.
 
 ## Identity before business selection
 
@@ -70,9 +62,8 @@ supplies only active business memberships. Register lists remain device-assigned
 selecting a business does not activate its processor or grant collection rights.
 
 A saved business/register is restored only after fresh membership and assignment
-checks. New sign-ins choose their business and register. Modern Forestry's photo
-catalog appears only in its selected workspace; other businesses use the shared
-native customer/basket view against their own register catalog. The app's name is
+checks. New sign-ins choose their business and register. Each business's photo catalog appears only in its selected workspace; all
+businesses use the same native register against their own authorized catalog. The app's name is
 Everbranch Pay; the selected merchant supplies the business identity inside it.
 
 Catalog-only UI tests use a Debug-only launch argument. That preview path is
