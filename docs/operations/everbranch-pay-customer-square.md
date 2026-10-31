@@ -83,9 +83,13 @@ other merchants still need their own account, program, device and acceptance.
 - Production OAuth callback is now
   `https://app.theeverbranch.com/pos/setup/square/callback`.
 - Created the production payment/refund webhook subscription at
-  `https://app.theeverbranch.com/api/pos/square/webhook`. Signed delivery is not
-  verified merely by creating it; leave `POS_WEBHOOKS_VERIFIED=false` until tested.
-- The live backend was still release `3cded37c` and had no POS schema when checked.
+  `https://app.theeverbranch.com/api/pos/square/webhook`. Square Console signed
+  `payment.created` and `payment.updated` test deliveries each returned 200 after
+  the protected backend deployment; `POS_WEBHOOKS_VERIFIED` is now true. These
+  synthetic deliveries are not real-payment or refund acceptance evidence.
+- Backend PR #534 passed all 31 checks and deployed through Forge as
+  `89edf6ab84e0c4ee9fbff9cf422e26206de92467`, verified at `/ready`; the POS schema
+  is present. Commercial collection, servicing and distribution remain disabled.
 - Modern Forestry tenant 1 has its own published program: second-order $10,
   existing 2x Candle Club multiplier, no first/third-order amount, no spend tiers,
   and no wallet cap. Its show channel is selected but event earning was off.
@@ -98,16 +102,18 @@ other merchants still need their own account, program, device and acceptance.
   and the narrower location permission `read_locations`, followed by merchant
   reauthorization before live stock/location review. The general Location type's
   alternative-scope listing did not establish access to every selected field.
-  Wholesale connection settings are unchanged.
+  The targeted `everbranch-pay-locations-20261031` app version is active; the
+  location grant and successful live lookup still need verification. Wholesale
+  connection settings are unchanged.
 - The owning Modern Forestry Dev Dashboard was reached and the exact client ID
   confirmed. Its version form rejects three existing scope names:
   `read_discounts_allocator_functions`, `write_discounts_allocator_functions`
   and `unauthenticated_read_collection_listings`. The retail candidate and its
   reconnect requests omit only those rejected names while adding read-only
-  inventory. Current Storefront documentation grants Collection access through
+  inventory and location access. Current Storefront documentation grants Collection access through
   the retained `unauthenticated_read_product_listings`; discount access remains
-  `read_discounts` / `write_discounts`. Publish the reviewed app version and
-  reauthorize only after this backend reaches production. Do not redeploy all
+  `read_discounts` / `write_discounts`. Reauthorize the matching permission set
+  after this backend reaches production. Do not redeploy all
   extensions or change the wholesale app as part of this repair.
 - The organizer's Columbus setup letter confirms October 30-November 1 at
   801 Front Ave, Columbus, GA 31901. It lists 9% tax; Georgia DOR's general chart
