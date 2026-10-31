@@ -339,6 +339,9 @@ class SubscriptionShopifyExecutionService
         $access->owner($row->tenant_id, $actor, $row->member_id, 'handoff');
         $access->member($row);
         SubscriptionBillingAuthorization::assertCurrent($row);
+        app(SubscriptionShopifyUpdateService::class)->assertNoPendingCommit($row);
+        abort_if(SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)->where('kind', 'terms_amended')->exists(),
+            423, 'Fresh native amended-tax collection preflight must be connected before billing these accepted delivery terms.');
         abort_unless($row->processor === 'shopify' && config('subscriptions.replacement_shopify_collection_enabled') === true, 423, 'Shopify replacement collection is paused.');
         $context = $this->transport()->context($row);
         abort_unless($row->method_binding['environment'] === 'sandbox' || config('subscriptions.replacement_shopify_live_acceptance_verified') === true, 423, 'Actual original Shopify merchant acceptance is required.');
@@ -381,11 +384,11 @@ class SubscriptionShopifyExecutionService
         }
     }
 
-    private function sourceFresh(SubscriptionBillingAgreement $row, array $proof): bool
+    private function sourceFresh(SubscriptionBillingAgreement $row, array $proof, bool $currentRead = false): bool
     {
         $binding = $row->method_binding;
         $revision = SubscriptionRechargeCredentialRevision::query()->forTenantId($row->tenant_id)->where('connection_id', $binding['source_connection_id'])
-            ->whereKey($binding['source_credential_revision_id'])->first();
+            ->whereKey($binding['source_credential_revision_id'])->when($currentRead, fn ($q) => $q->lockForUpdate())->first();
 
         return ($proof['connection_id'] ?? null) === $binding['source_connection_id'] && ($proof['credential_revision_id'] ?? null) === $binding['source_credential_revision_id']
             && ($proof['source_customer_id'] ?? null) === $row->terms['recharge_customer_id'] && ($proof['pending_charges'] ?? null) === 0
@@ -395,7 +398,8 @@ class SubscriptionShopifyExecutionService
             && ! array_diff(['read_store', 'read_customers', 'read_subscriptions', 'read_orders'], $revision->scopes ?? [])
             && data_get($row->authorization_evidence, 'shopify_adoption.original.source_context.credential_fingerprint') === SubscriptionEvidence::digest((string) ($revision->credentials['access_token'] ?? ''))
             && SubscriptionRechargeConnection::query()->forTenantId($row->tenant_id)->whereKey($binding['source_connection_id'])->where('status', 'verified')
-                ->where('active_credential_revision_id', $binding['source_credential_revision_id'])->whereNull('read_pause_reason')->exists();
+                ->where('active_credential_revision_id', $binding['source_credential_revision_id'])->whereNull('read_pause_reason')
+                ->when($currentRead, fn ($q) => $q->lockForUpdate())->first() !== null;
     }
 
     private function source(SubscriptionBillingAgreement $row, string $date, User $actor, ?SubscriptionBillingCycle $cycle = null): array
@@ -411,7 +415,7 @@ class SubscriptionShopifyExecutionService
         $contract = $this->transport()->contractRead($row, 'contract')['subscriptionContract'] ?? [];
         SubscriptionShopifyBillingProtocol::owned($row, $contract);
         if ($terms) {
-            SubscriptionShopifyContractProtocol::assertTerms($row, $contract, data_get($row->authorization_evidence, 'shopify_adoption.original.request_uuid', ''));
+            SubscriptionShopifyContractProtocol::assertTerms($row, $contract, data_get($row->authorization_evidence, 'shopify_adoption.original.request_uuid', ''), SubscriptionShopifyUpdateHistory::attributes($row));
         }
 
         return $contract;
@@ -423,6 +427,24 @@ class SubscriptionShopifyExecutionService
         abort_unless($row->method_verified_at && is_string($order), 409);
 
         return app(SubscriptionShopifyMethodService::class)->verify($row->tenant_id, $actor, $row->id, $order, false);
+    }
+
+    public function amendmentAuthority(SubscriptionBillingAgreement $row, User $actor): array
+    {
+        abort_unless($row->next_billing_date, 409);
+
+        return ['method' => $this->method($row, $actor), 'source_stop_proof' => $this->source($row, $row->next_billing_date->toDateString(), $actor)];
+    }
+
+    public function assertAmendmentAuthority(SubscriptionBillingAgreement $row, array $proof): void
+    {
+        $method = $proof['method'] ?? [];
+        abort_unless($this->sourceFresh($row, $proof['source_stop_proof'] ?? [], true)
+            && ($method['provider_verified'] ?? null) === true && ($method['original_method_accessible'] ?? null) === true
+            && ($method['original_terms_hash'] ?? null) === SubscriptionBillingAuthorization::original($row)['terms_hash']
+            && ($method['processor_context'] ?? null) === $this->transport()->context($row, true)
+            && is_string($method['checked_at'] ?? null) && CarbonImmutable::parse($method['checked_at'])->betweenIncluded(now()->subMinute(), now()->addSeconds(5)),
+            409, 'Fresh original method and complete source-stop evidence is required before native update dispatch.');
     }
 
     private function patch(SubscriptionBillingAgreement $row, User $actor, string $operation): void

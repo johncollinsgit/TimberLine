@@ -1,3 +1,32 @@
+## Native update approval, commit and term history (October 31; source candidate)
+
+The preview-first `subscriptions:shopify-amend` CLI now supports original-owner
+calculation, exact quote/continuing-authority approval, one contract commit,
+reconciliation and explicit pre-commit closure. General/native amendment and
+apply gates remain default-off. Current provider version/calculation, original
+saved method and complete fresh Recharge stop coverage precede one signed commit
+claim committed before HTTP. Enclosing transactions are rejected. A lost result
+is never resent; recovery reads only the owned contract and checks its unique
+amendment marker, original line IDs, prices, method, policies and note. Concrete
+calculation IDs from Shopify's documented state types are retained as returned;
+the initial poll ID stays immutable and a terminal success must prove the intent.
+
+Signed native term history links original authority, exact approval, send/result
+and intervening signed stops. Application advances the current revision while
+preserving newer status/date/resume state; old retries do not restore old terms.
+Historical validation is local even after credentials are withdrawn. Pending
+approval/commit blocks resume/skip/new collection, with owned-contract pause and
+cancellation still available. Finite customer pauses survive only an unbroken
+signed terms-only revision chain, for Braintree and native agreements. The
+reconciliation worker can finish an already approved native update without
+submitting another commit. No source mandate or old cycle/order is rewritten.
+
+Native amended collection/positive provider synchronization remains blocked until
+the fresh native tax preflight is connected. Native authenticated customer
+confirmation and actual original-method/provider/customer/Shopify/two-tester
+acceptance remain unfinished. No DDL, live provider mutation, charge, source
+cancellation, deployment, notification or rollout occurred. See the runbook.
+
 ## Durable native update calculations (October 31; source candidate)
 
 `SubscriptionShopifyUpdateService` now prepares and dispatches an original-contract
@@ -12,12 +41,10 @@ quote validation, so warnings, user errors and stale reviews retain recovery
 evidence. Pre-commit closure is explicit and audited. A finite local pause may
 retain an older valid paused provider date without changing either schedule.
 
-Only internal owner calculation/reconciliation/closure methods exist. Reconciliation
-after an editing freeze preserves later pause/cancel/revision/date state. No
-contract commit, signed native term application, collection tax preflight, worker
-or customer confirmation is connected yet. Real MySQL durability/worker races
-exercise the path; no DDL, provider mutation, deployment or rollout occurred.
-See the replacement runbook.
+The owner commit/history/CLI and reconciliation worker are described above.
+Reconciliation after an editing freeze preserves later status/date/revision state.
+Fresh collection tax preflight and native customer confirmation remain pending.
+Real MySQL durability/worker races exercise the path; no live mutation occurred.
 
 ## Original-app schema and native update builder (October 31; source candidate)
 
@@ -37,9 +64,9 @@ selling-plan metadata, original note/method/anchors and source IDs. Address-only
 updates omit lines; scent-only updates omit delivery replacement. Ambiguous line
 binding, repricing, warnings, method/date/status or retained-evidence drift fail
 closed. The protocol class remains pure; the calculation journal described above
-now retains durable dispatch and calculation recovery. Commit dispatch/recovery,
-native signed future-term application, worker and customer confirmation are still
-required before native updates can be enabled. No live provider mutation or
+now retains durable dispatch/calculation and commit recovery with signed future
+terms. Fresh collection tax preflight and native customer confirmation are still
+required before native customer updates can launch. No live provider mutation or
 rollout occurred. See the replacement runbook.
 
 ## Authenticated customer future delivery (October 31; source candidate)

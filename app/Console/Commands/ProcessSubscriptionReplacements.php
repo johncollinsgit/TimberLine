@@ -4,8 +4,10 @@ namespace App\Console\Commands;
 
 use App\Models\SubscriptionBillingAgreement;
 use App\Models\SubscriptionBillingCycle;
+use App\Models\User;
 use App\Services\Subscriptions\SubscriptionBraintreeExecutionService;
 use App\Services\Subscriptions\SubscriptionShopifyExecutionService;
+use App\Services\Subscriptions\SubscriptionShopifyUpdateService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Schema;
 
@@ -57,7 +59,16 @@ class ProcessSubscriptionReplacements extends Command
             }
             foreach ((clone $allowed)->where('processor', 'shopify')->whereNotNull('activated_at')->orderBy('updated_at')->orderBy('id')->limit($limit)->get() as $agreement) {
                 try {
-                    $shopify->syncSchedule($agreement);
+                    $updates = app(SubscriptionShopifyUpdateService::class);
+                    if ($uuid = $updates->pendingCommitUuid($agreement)) {
+                        $result = $updates->reconcile($agreement->tenant_id, User::findOrFail($agreement->activated_by), $agreement->id, $uuid);
+                        $counts[$result['status'] === 'applied' ? 'reconciled' : 'review_required']++;
+                    }
+                } catch (\Throwable) {
+                    $counts['review_required']++;
+                }
+                try {
+                    $shopify->syncSchedule($agreement->fresh());
                     $counts['schedules_synced']++;
                 } catch (\Throwable) {
                     $counts['review_required']++;

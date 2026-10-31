@@ -1,9 +1,34 @@
+## Native update approval and recovery (October 31; source candidate)
+
+Use preview-first `subscriptions:shopify-amend` for owned native delivery/scents
+reviews. All stateful actions require `--apply`; change and approval inputs use
+separate private 0600 JSON files. Commit requires the original UUID/revision,
+exact fresh quote hash, explicit owner review, unchanged provider version and
+fresh original method/complete source-stop proof. Native/general amendment and
+apply gates all remain default-off; do not enable collection based on this CLI.
+Uncertain commit returns a nonzero CLI exit and retains the original send. A
+retry/reconciliation reads the owned contract and never sends another commit.
+
+`SubscriptionShopifyUpdateHistory` validates original intent/quote/approval,
+single send/result and intervening signed stops without live access. It derives
+accepted current contract attributes only from signed terms history. Never
+restore an older local schedule/revision or fabricate native tax line/rate data.
+Pending commit authority blocks positive actions and new collection even if a
+parent approval is missing; safe stops and original-attempt recovery remain.
+Finite customer pauses allow only the validated contiguous terms-amendment
+revisions that preserved their schedule. The reconciliation worker finishes only
+previously approved native work; it does not approve or send a fresh commit.
+Native amended collection/positive provider sync is still explicitly blocked
+pending fresh native tax preflight. Customer native confirmation and real
+provider/customer/backend/two-tester acceptance remain required. See the runbook.
+
 ## Native update calculation journal (October 31; source candidate)
 
-Use `SubscriptionShopifyUpdateService` only for internal owner calculation,
-reconciliation or explicit pre-commit closure. The independent
-`replacement_shopify_amendments_enabled` gate defaults off. It does not enable
-contract commits or customer edits. Immutable signed actions are authoritative;
+`SubscriptionShopifyUpdateService` provides owner calculation, approval/commit,
+reconciliation and explicit pre-commit closure. The independent
+`replacement_shopify_amendments_enabled` gate defaults off; commit also requires
+the general apply gate and original authority. Customer edits remain separate.
+Immutable signed actions are authoritative;
 never clear a mutable marker or regenerate an unknown calculation. Top-level
 transactions are required so the send claim commits before HTTP. The bounded
 send rechecks current owner/pivot and original credential under locks shared with
@@ -13,8 +38,8 @@ MySQL durability suite runs without RefreshDatabase transactions against a
 guarded disposable local database and verifies marker visibility through an
 independent connection, competing workers, revoked credentials beyond an older
 snapshot, and freeze/stop replay. Do not bypass its transaction guard for tests.
-Signed native term application/commit recovery, pending-commit positive-action
-guards, fresh tax preflight, worker and customer integration remain outstanding.
+Commit/history/positive-action guards and worker recovery are described above;
+fresh tax preflight and native customer integration remain outstanding.
 No live update or source change occurred. See the runbook.
 
 ## Actual Shopify schema and native update protocol (October 31)
@@ -33,9 +58,8 @@ fixed price/pricing-policy and selling-plan fields when replacing lines. Omit
 unchanged delivery/line fields; never infer line IDs from source IDs or silently
 reprice from the catalog. Accepted prior attributes must come from signed retained
 provider evidence, never a client or an unchecked response. The calculation
-journal is described above; native commit dispatch/recovery, signed term
-application, stop precedence, fresh tax collection
-preflight and customer confirmation remain to be integrated. No live update was
+journal/commit/history are described above; fresh tax collection preflight and
+native customer confirmation remain to be integrated. No live update was
 attempted. The latest method read sees Jennifer's active Shop Pay agreement;
 source mapping and merchant acceptance remain required. See the runbook.
 

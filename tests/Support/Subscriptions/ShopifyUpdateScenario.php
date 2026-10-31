@@ -22,7 +22,25 @@ class ShopifyUpdateScenario extends ShopifyExecutionScenario
 
     public bool $updateFailure = false;
 
+    public bool $concreteCalculationIds = false;
+
+    public bool $wrongUpdateMarker = false;
+
     public int $updatePolls = 0;
+
+    public int $updateCommits = 0;
+
+    public bool $loseUpdateCommitResponse = false;
+
+    public ?string $updateCommitError = null;
+
+    public bool $updateCommitDeferred = false;
+
+    public ?array $deferredUpdateContract = null;
+
+    public ?\Closure $afterUpdateCommit = null;
+
+    public ?\Closure $beforeUpdateCalculationRead = null;
 
     public ?\Closure $beforeUpdateCatalog = null;
 
@@ -31,6 +49,8 @@ class ShopifyUpdateScenario extends ShopifyExecutionScenario
     public ?\Closure $beforeUpdatePoll = null;
 
     public ?string $updateMarkerPath = null;
+
+    public ?array $proposedChange = null;
 
     public function __construct()
     {
@@ -45,6 +65,9 @@ class ShopifyUpdateScenario extends ShopifyExecutionScenario
 
     public function change(): array
     {
+        if ($this->proposedChange) {
+            return $this->proposedChange;
+        }
         $address = $this->address();
         $address['address1'] = '456 New Example Road';
 
@@ -54,7 +77,8 @@ class ShopifyUpdateScenario extends ShopifyExecutionScenario
 
     public function updateCalculation(): array
     {
-        $id = 'gid://shopify/SubscriptionContractCalculation/original_update'.(count($this->updateInputs) > 1 ? '_'.count($this->updateInputs) : '');
+        $type = $this->concreteCalculationIds ? ($this->updatePending ? 'Pending' : ($this->updateFailure ? 'Failure' : 'Success')) : '';
+        $id = 'gid://shopify/SubscriptionContractCalculation'.$type.'/original_update'.(count($this->updateInputs) > 1 ? '_'.count($this->updateInputs) : '');
         if ($this->updatePending) {
             return ['__typename' => 'SubscriptionContractCalculationPending', 'id' => $id];
         }
@@ -64,6 +88,10 @@ class ShopifyUpdateScenario extends ShopifyExecutionScenario
         $input = $this->updateInputs[array_key_last($this->updateInputs)]['input'];
         $contract = $this->contract;
         $contract['customAttributes'] = $input['customAttributes'];
+        if ($this->wrongUpdateMarker) {
+            $contract['customAttributes'] = array_map(fn ($attribute) => $attribute['key'] === 'everbranch_amendment'
+                ? ['key' => 'everbranch_amendment', 'value' => 'another-original-request'] : $attribute, $contract['customAttributes']);
+        }
         $contract['deliveryMethod']['address'] = $input['deliveryMethod']['shipping']['address'];
         $contract['deliveryMethod']['address']['countryCodeV2'] = $contract['deliveryMethod']['address']['countryCode'];
         unset($contract['deliveryMethod']['address']['countryCode']);
@@ -79,7 +107,7 @@ class ShopifyUpdateScenario extends ShopifyExecutionScenario
     protected function shopify($request)
     {
         $query = $request['query'];
-        if (! preg_match('/Replacement(Update|CalculateUpdate)/', $query)) {
+        if (! preg_match('/Replacement(Update|CalculateUpdate|CommitUpdate)/', $query)) {
             return parent::shopify($request);
         }
         if ($request->url() !== 'https://'.$this->store->shop_domain.'/admin/api/2026-10/graphql.json'
@@ -103,7 +131,7 @@ class ShopifyUpdateScenario extends ShopifyExecutionScenario
                 $this->beforeUpdateCatalog = null;
                 $hook();
             }
-            $data = $identity + ['customer' => ['id' => 'gid://shopify/Customer/456'], 'nodes' => [['id' => 'gid://shopify/ProductVariant/888',
+            $data = $identity + ['customer' => ['id' => 'gid://shopify/Customer/456'], 'nodes' => [['id' => $request['variables']['variants'][0],
                 'title' => '16oz', 'product' => ['title' => 'Forest Rain', 'status' => 'ACTIVE'], 'inventoryItem' => ['requiresShipping' => true]]]];
         } elseif (str_starts_with($query, 'mutation ReplacementCalculateUpdate')) {
             $sent = SubscriptionBillingAction::query()->where('agreement_id', $this->agreement->id)->where('kind', 'shopify_update_calculate_sent')->firstOrFail();
@@ -130,13 +158,56 @@ class ShopifyUpdateScenario extends ShopifyExecutionScenario
             }
             $data = ['subscriptionContractUpdateCalculate' => ['subscriptionContractCalculation' => $this->updateCalculation(),
                 'userErrors' => $this->updateUserError ? [['code' => 'INVALID', 'field' => ['contractId']]] : []]];
+        } elseif (str_starts_with($query, 'mutation ReplacementCommitUpdate')) {
+            $sent = SubscriptionBillingAction::query()->where('agreement_id', $this->agreement->id)->where('kind', 'shopify_update_commit_sent')->firstOrFail();
+            $name = 'native_update_commit_observer';
+            config()->set('database.connections.'.$name, config('database.connections.'.DB::getDefaultConnection()));
+            try {
+                if (! DB::connection($name)->table('subscription_billing_actions')->where('id', $sent->id)->exists()) {
+                    throw new \RuntimeException('The native commit marker was not committed before HTTP.');
+                }
+            } finally {
+                DB::purge($name);
+            }
+            if ($request['variables']['id'] !== $this->updateCalculation()['id']) {
+                throw new \RuntimeException('Commit only the originally reviewed update calculation.');
+            }
+            $this->updateCommits++;
+            if ($this->updateMarkerPath) {
+                file_put_contents($this->updateMarkerPath, 'commit:'.$sent->request_uuid."\n", FILE_APPEND | LOCK_EX);
+            }
+            if ($this->updateCommitError) {
+                return Http::response(['data' => ['subscriptionContractCalculationCommit' => ['contract' => null,
+                    'userErrors' => [['code' => $this->updateCommitError, 'field' => ['id']]]]]], 200, ['X-Shopify-API-Version' => '2026-10']);
+            }
+            $applied = $this->updateCalculation()['calculatedContract'];
+            $applied['updatedAt'] = now()->toISOString();
+            $this->deferredUpdateContract = $applied;
+            if (! $this->updateCommitDeferred) {
+                $this->contract = $applied;
+            }
+            if ($hook = $this->afterUpdateCommit) {
+                $this->afterUpdateCommit = null;
+                $hook();
+            }
+            if ($this->loseUpdateCommitResponse || $this->updateCommitDeferred) {
+                throw new ConnectionException('Fictional native commit response lost.');
+            }
+            $data = ['subscriptionContractCalculationCommit' => ['contract' => $applied, 'userErrors' => []]];
         } elseif (str_starts_with($query, 'query ReplacementUpdateCalculation')) {
             $this->updatePolls++;
+            if ($hook = $this->beforeUpdateCalculationRead) {
+                $this->beforeUpdateCalculationRead = null;
+                $hook();
+            }
             if ($hook = $this->beforeUpdatePoll) {
                 $this->beforeUpdatePoll = null;
                 $hook();
             }
-            if ($request['variables']['id'] !== 'gid://shopify/SubscriptionContractCalculation/original_update') {
+            $expected = $this->updateCalculation()['id'];
+            $initialPending = str_replace('SubscriptionContractCalculationSuccess/', 'SubscriptionContractCalculationPending/', $expected);
+            $initialPending = str_replace('SubscriptionContractCalculationFailure/', 'SubscriptionContractCalculationPending/', $initialPending);
+            if (! in_array($request['variables']['id'], [$expected, $initialPending], true)) {
                 throw new \RuntimeException('Poll only the originally retained calculation ID.');
             }
             $data = $identity + ['subscriptionContractCalculation' => $this->updateCalculation()];

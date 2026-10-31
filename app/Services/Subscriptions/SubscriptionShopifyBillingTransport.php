@@ -59,17 +59,23 @@ GRAPHQL;
         };
         abort_unless(! in_array($operation, ['contract', 'calculation'], true) || filled($variables['id']), 409);
         if ($operation === 'calculation') {
-            abort_unless(preg_match('#\Agid://shopify/SubscriptionContractCalculation/[A-Za-z0-9_-]{1,190}\z#', $calculationId ?? ''), 422);
+            abort_unless(SubscriptionShopifyUpdateProtocol::calculationId($calculationId), 422);
         }
 
         return $this->request($row, SubscriptionShopifyUpdateProtocol::document($operation), $variables, true);
     }
 
-    /** Only the immutable original calculation can be sent; this transport exposes no update commit. */
+    /** Only the immutable original calculation can be sent. */
     public function updateCalculate(SubscriptionBillingAgreement $row, string $uuid): array
     {
         return app(SubscriptionShopifyUpdateService::class)->dispatchCalculate($row, $uuid,
             fn ($current, $intent) => $this->request($current, SubscriptionShopifyUpdateProtocol::document('calculate'), $intent['variables'], false, true));
+    }
+
+    public function updateCommit(SubscriptionBillingAgreement $row, string $uuid, array $authority): array
+    {
+        return app(SubscriptionShopifyUpdateService::class)->dispatchCommit($row, $uuid, $authority,
+            fn ($current, $quote) => $this->request($current, SubscriptionShopifyUpdateProtocol::document('commit'), ['id' => $quote['calculation_id']], false, true));
     }
 
     public function originalOrder(SubscriptionBillingAgreement $row, string $id): array
@@ -133,7 +139,7 @@ GRAPHQL;
         SubscriptionShopifyBillingProtocol::unbilled($row, $providerCycle['subscriptionBillingCycle'] ?? [], $cycle->cycle_date->toDateString());
         $contract = $this->contractRead($row, 'contract')['subscriptionContract'] ?? [];
         SubscriptionShopifyBillingProtocol::owned($row, $contract);
-        SubscriptionShopifyContractProtocol::assertTerms($row, $contract, data_get($row->authorization_evidence, 'shopify_adoption.original.request_uuid', ''));
+        SubscriptionShopifyContractProtocol::assertTerms($row, $contract, data_get($row->authorization_evidence, 'shopify_adoption.original.request_uuid', ''), SubscriptionShopifyUpdateHistory::attributes($row));
         abort_unless(($contract['status'] ?? null) === 'ACTIVE' && SubscriptionShopifyBillingProtocol::sameInstant($contract['nextBillingDate'] ?? null,
             SubscriptionShopifyBillingProtocol::instant($cycle->terms, $cycle->cycle_date->toDateString())), 409, 'The original Shopify contract is not active on this reviewed billing instant.');
         DB::transaction(function () use ($row, $cycle, $sourceProof) {

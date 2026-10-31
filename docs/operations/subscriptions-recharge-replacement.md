@@ -68,14 +68,10 @@ catalog. It has no HTTP, commit, local-term save or billing side effect. It:
 
 The protocol class is a **pure builder**. The calculation journal described
 below now durably retains intent before calculate and polls only the original ID.
-Completed native amendment servicing still requires exact quote/total confirmation, one
-commit before HTTP and recover an unknown result only through the original
-owned contract, amendment marker and exact line state. Retain pending/unknown/
-stale-contract outcomes; never issue a replacement commit from a missing result.
-Local pause/cancel must win over a later result, and already-started cycles must
-remain reconcilable. Native signed future-term history/application, a fresh native
-tax check before amended billing, worker processing and the authenticated customer
-flow are still required. Existing original-term billing and gates are unchanged.
+The owner commit/history/recovery path below now retains exact approval and one
+committed send claim before HTTP. Native fresh tax checks before amended billing
+and authenticated customer confirmation remain required. Existing original-term
+billing retains its separate gates and already-started attempts remain reconcilable.
 No DDL, contract update, charge, source stop, activation or deployment occurred.
 
 ## Customer future delivery and scent confirmation (October 31; source candidate)
@@ -921,7 +917,8 @@ alone is not the full customer replacement.
 `SubscriptionShopifyUpdateService` connects the validated native update protocol
 to encrypted signed append-only `SubscriptionBillingAction` stages. The internal
 owner methods calculate, reconcile or explicitly close an uncommitted review.
-There is no update commit transport, customer endpoint, CLI or scheduled worker.
+Owner commit/CLI/history and worker recovery are described next; native customer
+confirmation and amended-tax collection preflight are not connected yet.
 `SUBSCRIPTIONS_REPLACEMENT_SHOPIFY_AMENDMENTS_ENABLED=false` is independent of
 the general amendment and existing exact-member servicing gates. Enabling it
 alone cannot change a contract or charge a customer.
@@ -955,12 +952,79 @@ visibility, no-resend recovery, immutable evidence tampering, stale review/curre
 owner revocation, credential revocation beyond an older consistent snapshot,
 terminal failure, close/replay and two independent workers.
 
-This remains a calculation workflow. Native signed future-term history and
-application, commit dispatch/unknown recovery with later-stop precedence,
-positive-action/collection guards, fresh native tax preflight, customer
-confirmation and worker integration are required before native edits can launch.
+The owner commit/history/recovery extension follows. Fresh native tax preflight
+and authenticated customer confirmation remain required before native edits launch.
 Original source-method association and real merchant/provider/two-tester hosted
 acceptance remain unproven. No live contract, source, order or charge changed.
+
+## Owner native update commit and recovery (source candidate; disabled)
+
+`subscriptions:shopify-amend --tenant=WORKSPACE --actor=ID --agreement=ID` is an
+offline preview of the exact owned member. No file, provider request or gate
+change occurs. Every stateful action below additionally requires `--apply`.
+
+1. `--action=calculate --file=/PRIVATE/change.json --request-id=UUID --revision=N`
+   accepts only a top-level `change` object with the reviewed address/scents,
+   fixed-shipping review and policy reference. The file must be a regular 0600
+   JSON file of at most 64 KiB. Retain the returned quote hash, exact total,
+   original UUID and reviewed revision. Pending calculations poll only their
+   original ID; unknown initial outcomes are never regenerated.
+2. `--action=commit --file=/PRIVATE/approval.json --request-id=UUID --revision=N
+   --reviewed-hash=HASH` accepts only an `approval` object containing `reference`,
+   `quoted_total_reviewed` and `continuing_authorization_reviewed`. Both reviews
+   must actually be completed by the active verified owner/admin before setting
+   them true. No software/CLI action fabricates those reviews. The quote expires
+   after ten minutes. The service rechecks the original contract/version and
+   calculation, original saved method and complete fresh Recharge stop coverage.
+   Original method/source scope and native/general amendment/apply gates remain
+   required. This commits contract terms and never charges or changes source billing.
+3. `--action=reconcile --request-id=UUID` recovers a dispatched commit only from
+   the original owned contract, unique amendment attribute, exact line IDs and
+   reviewed price/policy/method/note state. It never sends another commit. An
+   uncertain result remains blocked for review and the CLI exits nonzero. A
+   definite provider rejection or a proven failure before HTTP can be closed;
+   an ambiguous dispatched operation cannot be erased or closed as unsuccessful.
+4. `--action=abort --request-id=UUID` explicitly closes a pre-commit review or a
+   definitively rejected/unsent commit. It preserves signed original evidence.
+   A separately reviewed new request uses a fresh UUID. Do not clear journal rows.
+
+Shopify's documented calculation IDs include concrete state types such as
+`SubscriptionContractCalculationSuccess`. Keep full returned IDs as opaque
+references. A fixed original-ID poll can return a terminal concrete ID; the
+original poll handle stays immutable, and a success still must prove the unique
+request marker plus exact original intent before it can become a quote/commit.
+No ID is fabricated from a customer, source subscription or line ID. See
+[Shopify's calculation query](https://shopify.dev/docs/api/admin-graphql/2026-10/queries/subscriptionContractCalculation)
+and [commit mutation](https://shopify.dev/docs/api/admin-graphql/2026-10/mutations/subscriptionContractCalculationCommit).
+
+Commit approval/send/result actions are encrypted, append-only and signed. The
+send claim commits before bounded HTTP; a second transaction holds current
+member/agreement/owner/pivot/original credential authority through the send.
+Outer transactions are rejected before dispatch. A missing parent approval cannot
+hide a retained send claim and reopen collection. No retry of an uncertain
+commit is allowed. `subscriptions:replacement-process --reconcile` can apply an
+already approved result before schedule synchronization; it does not approve or
+send another contract update. Already-attempted payments retain their own recovery.
+
+Native signed future-term history retains original authorization, the exact
+quote/approval, send authority, confirmed contract and any later signed pause/
+cancel chain. Application increments the actual current revision and preserves
+current status, next date and resume date. Historical checks require no live
+provider access and remain valid after later freezes or credential withdrawal.
+Current contract attributes come only from this history. Native projected tax
+is aggregate estimated evidence; no itemized lines or new tax rate is fabricated.
+Unresolved approval/commit blocks resume/skip/new collection while owned-contract
+pause/cancellation remain possible. Finite customer pauses survive contiguous
+validated terms-only amendments for both Braintree and native agreements; a
+missing revision, new schedule or changed accepted resume date requires review.
+
+Fresh native amended-tax collection preflight and native authenticated customer
+confirmation remain incomplete. New native amended collection and positive
+provider synchronization are explicitly blocked until that preflight is added.
+The owner CLI is not evidence of production acceptance. Actual saved-method/source
+association, merchant/API, customer view, Shopify fulfillment/backend and exact
+two-tester acceptance remain required. No deployment, live contract/source/order/
+charge, customer notification or rollout was performed.
 
 ## Customer purchase history gateway icons
 

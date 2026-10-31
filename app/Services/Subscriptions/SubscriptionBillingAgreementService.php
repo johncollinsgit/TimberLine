@@ -14,6 +14,7 @@ use App\Models\SubscriptionRechargeConnection;
 use App\Models\User;
 use App\Services\Mobile\ModernForestryMobileCustomerSession;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -111,9 +112,15 @@ class SubscriptionBillingAgreementService
 
                 return $prior;
             }
+            abort_if(SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)
+                ->where('request_uuid', SubscriptionShopifyUpdateHistory::key($row, $requestUuid, 'requested'))->lockForUpdate()->first(),
+                409, 'This request ID belongs to an existing native delivery review. Use a fresh schedule request ID.');
             abort_unless($row->activated_at && $row->method_verified_at && $member->billing_owner === 'everbranch'
                 && in_array($row->status, ['active', 'paused', 'cancelled'], true), 409, 'This agreement has not taken over billing from Recharge.');
             abort_unless($row->revision === $expectedRevision, 409, 'The subscription changed. Review its current state.');
+            if (! in_array($kind, ['pause', 'cancel'], true)) {
+                app(SubscriptionShopifyUpdateService::class)->assertNoPendingCommit($row, true);
+            }
             $inFlight = SubscriptionBillingCycle::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)
                 ->whereIn('payment_status', ['prepared', 'sending', 'unknown', 'processing', 'requires_action', 'review'])->exists();
             abort_if(! in_array($kind, ['pause', 'cancel'], true) && $inFlight, 409, 'An original billing attempt needs reconciliation before a schedule change.');
@@ -151,10 +158,16 @@ class SubscriptionBillingAgreementService
             $row->save();
             $member->update(['status' => $row->status]);
 
-            return SubscriptionBillingAction::create(['tenant_id' => $row->tenant_id, 'agreement_id' => $row->id,
+            $action = new SubscriptionBillingAction(['tenant_id' => $row->tenant_id, 'agreement_id' => $row->id,
                 'request_uuid' => $requestUuid, 'kind' => $kind, 'actor_type' => $actorType, 'actor_reference' => $actorReference,
                 'expected_revision' => $expectedRevision, 'request' => $request,
                 'before_state' => $before, 'after_state' => $this->state($row) + ['original_payment_requires_review' => $inFlight]]);
+            if ($row->processor === 'shopify') {
+                $action->after_state = $action->after_state + ['authorization_hash' => SubscriptionBillingTermsHistory::seal($action)];
+            }
+            $action->save();
+
+            return $action;
         });
     }
 
@@ -164,15 +177,17 @@ class SubscriptionBillingAgreementService
         return DB::transaction(function () use ($agreement) {
             $member = SubscriptionPilotMember::query()->forTenantId($agreement->tenant_id)->whereKey($agreement->member_id)->lockForUpdate()->firstOrFail();
             $row = SubscriptionBillingAgreement::query()->forTenantId($agreement->tenant_id)->whereKey($agreement->id)->lockForUpdate()->firstOrFail();
+            app(SubscriptionShopifyUpdateService::class)->assertNoPendingCommit($row, true);
             abort_unless($row->status === 'paused' && $row->activated_at && $row->method_verified_at && $member->billing_owner === 'everbranch'
                 && $row->resume_on && $row->resume_on->toDateString() === now($row->terms['timezone'])->toDateString()
                 && $row->next_billing_date?->toDateString() === $row->resume_on->toDateString()
                 && app(SubscriptionReplacementCustomerAccess::class)->canChange($row, 'resume'), 409);
             $accepted = SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)
                 ->where('kind', 'pause')->where('actor_type', 'shopify_customer')
-                ->where('actor_reference', 'gid://shopify/Customer/'.$row->terms['shopify_customer_id'])->latest('id')->first();
+                ->where('actor_reference', 'gid://shopify/Customer/'.$row->terms['shopify_customer_id'])->latest('id')->lockForUpdate()->first();
             abort_unless($accepted && is_int(data_get($accepted->request, 'duration_months'))
-                && data_get($accepted->after_state, 'revision') === $row->revision
+                && (data_get($accepted->after_state, 'revision') === $row->revision
+                    || $this->pauseTermsCurrent($row, $accepted))
                 && data_get($accepted->after_state, 'resume_on') === $row->resume_on->toDateString(), 409, 'The original accepted pause schedule needs review.');
             $before = $this->state($row);
             $row->update(['status' => 'active', 'resume_on' => null, 'revision' => $row->revision + 1]);
@@ -190,6 +205,31 @@ class SubscriptionBillingAgreementService
         return ['status' => $row->status, 'revision' => $row->revision, 'processor' => $row->processor,
             'next_billing_date' => $row->next_billing_date?->toDateString(), 'resume_on' => $row->resume_on?->toDateString(), 'terms_hash' => $row->terms_hash,
             'method_verified' => $row->method_verified_at !== null, 'activated' => $row->activated_at !== null];
+    }
+
+    private function pauseTermsCurrent(SubscriptionBillingAgreement $row, SubscriptionBillingAction $pause): bool
+    {
+        SubscriptionBillingAuthorization::assertCurrent($row, true);
+        $hash = $pause->after_state['authorization_hash'] ?? null;
+        if ($row->processor === 'shopify' && (! is_string($hash) || ! hash_equals(SubscriptionBillingTermsHistory::seal($pause), $hash))) {
+            return false;
+        }
+        $state = Arr::only($pause->after_state, array_keys($this->state($row)));
+        foreach (SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)->where('kind', 'terms_amended')
+            ->where('expected_revision', '>=', $state['revision'])->where('expected_revision', '<', $row->revision)->orderBy('id')->lockForUpdate()->get() as $amendment) {
+            $sameSchedule = $row->processor === 'shopify'
+                ? SubscriptionEvidence::canonical(data_get($amendment->request, 'native_update.state_before_application', [])) === SubscriptionEvidence::canonical($state)
+                : ($row->processor === 'braintree' && ($amendment->after_state['effective_after_resume'] ?? null) === true
+                    && array_key_exists('effective_from', $amendment->after_state) && $amendment->after_state['effective_from'] === null
+                    && ($amendment->before_state['terms_hash'] ?? null) === $state['terms_hash']);
+            if ($amendment->expected_revision !== $state['revision'] || ! $sameSchedule) {
+                return false;
+            }
+            $state['revision'] = $amendment->after_state['revision'];
+            $state['terms_hash'] = $amendment->after_state['terms_hash'];
+        }
+
+        return SubscriptionEvidence::canonical($state) === SubscriptionEvidence::canonical($this->state($row));
     }
 
     private function nextAnchor(SubscriptionBillingAgreement $row, string $after, bool $allowToday): string

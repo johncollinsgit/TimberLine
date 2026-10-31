@@ -39,6 +39,30 @@ function applyReviewedAmendment($case): SubscriptionBillingAction
         $case->change, $case->approval, $case->quote['quote_hash'], $case->uuid, $case->quote['subject']['revision']);
 }
 
+test('a reviewed Braintree delivery amendment preserves the original finite customer pause through only its signed terms revisions', function (bool $unexplainedRevision) {
+    $this->s->store->update(['store_key' => 'retail']);
+    $profile = App\Models\MarketingProfile::factory()->create(['tenant_id' => $this->s->tenant->id]);
+    $customer = new App\Services\Mobile\ModernForestryMobileCustomerSession($profile, 'fictional-original-customer',
+        ['source_type' => 'shopify_customer', 'shopify_customer_id' => 'gid://shopify/Customer/456']);
+    app(SubscriptionBillingAgreementService::class)->customerChange($customer, 'pause', (string) Str::uuid(), $this->row->revision, ['duration_months' => 1]);
+    $this->row = $this->row->fresh();
+    $this->quote = app(SubscriptionAmendmentQuote::class)->calculate($this->row, $this->change, $this->s->actor);
+    applyReviewedAmendment($this);
+    expect($this->row->fresh()->resume_on->toDateString())->toBe('2027-02-28');
+    if ($unexplainedRevision) {
+        DB::table('subscription_billing_agreements')->where('id', $this->row->id)->increment('revision');
+    }
+    $this->travelTo(now('America/New_York')->setDate(2027, 2, 28)->setTime(10, 0)->utc());
+    if ($unexplainedRevision) {
+        expect(fn () => app(SubscriptionBillingAgreementService::class)->resumeScheduled($this->row->fresh()))->toThrow(HttpException::class);
+        expect($this->row->fresh()->status)->toBe('paused');
+    } else {
+        $resumed = app(SubscriptionBillingAgreementService::class)->resumeScheduled($this->row->fresh());
+        expect($resumed->status)->toBe('active')->and($resumed->resume_on)->toBeNull()->and($resumed->next_billing_date->toDateString())->toBe('2027-02-28');
+    }
+    expect($this->s->sales)->toBe([])->and($this->s->orderCreates)->toBe([]);
+})->with([false, true]);
+
 test('accepted future terms retain original authorization payment binding billing anchor and historical member evidence', function () {
     $original = SubscriptionBillingAuthorization::original($this->row);
     $evidence = $this->row->authorization_evidence;

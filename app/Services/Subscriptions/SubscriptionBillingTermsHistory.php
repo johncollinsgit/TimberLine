@@ -22,7 +22,8 @@ class SubscriptionBillingTermsHistory
             unset($after['authorization_hash']);
             $owner = $action->actor_type === 'user' && ctype_digit($action->actor_reference) && ($request['accepted_by'] ?? null) === (int) $action->actor_reference;
             $customer = $action->actor_type === 'shopify_customer';
-            abort_unless($row->processor === 'braintree' && ($owner || $customer)
+            $native = $row->processor === 'shopify';
+            abort_unless(($row->processor === 'braintree' && ($owner || $customer) || $native && $owner)
                 && $action->expected_revision >= 1 && $action->expected_revision >= $revision && ($after['revision'] ?? null) === $action->expected_revision + 1
                 && ($request['version'] ?? null) === 1 && ($request['original_terms_hash'] ?? null) === $original['terms_hash']
                 && ($request['agreement_public_id'] ?? null) === $row->public_id && ($request['member_id'] ?? null) === $row->member_id
@@ -37,7 +38,10 @@ class SubscriptionBillingTermsHistory
             if ($customer) {
                 app(SubscriptionCustomerAmendmentService::class)->assertHistory($row, $action, $currentRead);
             }
-            self::allowed($original['terms'], $after['terms']);
+            if ($native) {
+                SubscriptionShopifyUpdateHistory::assert($row, $action);
+            }
+            self::allowed($original['terms'], $after['terms'], $native);
             $terms = $after['terms'];
             $hash = $after['terms_hash'];
             $revision = $after['revision'];
@@ -65,7 +69,7 @@ class SubscriptionBillingTermsHistory
             'request' => $action->request, 'before_state' => $action->before_state, 'after_state' => $after]));
     }
 
-    public static function allowed(array $original, array $terms): void
+    public static function allowed(array $original, array $terms, bool $native = false): void
     {
         $mutable = ['shipping_address', 'lines', 'amount_cents', 'tax_cents', 'tax_lines'];
         abort_unless(SubscriptionEvidence::canonical(Arr::except($original, $mutable)) === SubscriptionEvidence::canonical(Arr::except($terms, $mutable))
@@ -78,9 +82,14 @@ class SubscriptionBillingTermsHistory
         }
         app(SubscriptionAmendmentProposal::class)->normalize(['shipping_address' => $terms['shipping_address'] ?? [],
             'fixed_shipping_reviewed' => true, 'policy_reference' => 'retained-amendment']);
-        abort_unless(is_int($terms['tax_cents'] ?? null) && $terms['tax_cents'] >= 0 && is_array($terms['tax_lines'] ?? null)
-            && count($terms['tax_lines']) <= 25 && is_int($terms['amount_cents'] ?? null) && $terms['amount_cents'] > 0
+        abort_unless(is_int($terms['tax_cents'] ?? null) && $terms['tax_cents'] >= 0 && is_int($terms['amount_cents'] ?? null) && $terms['amount_cents'] > 0
             && $terms['amount_cents'] <= 10000000 && $terms['amount_cents'] === $terms['subtotal_cents'] + $terms['shipping_cents'] + $terms['tax_cents'], 409, 'Accepted tax and total evidence is incomplete.');
+        if ($native) {
+            abort_if(array_key_exists('tax_lines', $terms), 409, 'Native projected tax must not fabricate an itemized breakdown.');
+
+            return;
+        }
+        abort_unless(is_array($terms['tax_lines'] ?? null) && count($terms['tax_lines']) <= 25, 409, 'Retain the accepted tax breakdown.');
         foreach ($terms['tax_lines'] as $tax) {
             abort_unless(is_string($tax['title'] ?? null) && strlen($tax['title']) <= 255 && is_int($tax['price_cents'] ?? null) && $tax['price_cents'] >= 0
                 && (is_int($tax['rate'] ?? null) || is_float($tax['rate'] ?? null)) && $tax['rate'] >= 0 && $tax['rate'] <= 1, 409, 'Retain the accepted tax breakdown.');

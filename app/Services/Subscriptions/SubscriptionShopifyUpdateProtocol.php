@@ -9,6 +9,11 @@ use Illuminate\Support\Str;
 /** Pure native update intent/quote validation. This class never dispatches, commits or changes local billing. */
 class SubscriptionShopifyUpdateProtocol
 {
+    public static function calculationId(mixed $id): bool
+    {
+        return is_string($id) && (bool) preg_match('#\Agid://shopify/SubscriptionContractCalculation(?:Pending|Success|Failure)?/[A-Za-z0-9_-]{1,190}\z#', $id);
+    }
+
     public static function document(string $operation): string
     {
         $identity = SubscriptionShopifyBillingTransport::IDENTITY_FIELDS;
@@ -37,6 +42,7 @@ class SubscriptionShopifyUpdateProtocol
         abort_unless($row->processor === 'shopify' && $row->activated_at && $row->method_verified_at && $member->billing_owner === 'everbranch'
             && in_array($row->status, ['active', 'paused'], true) && Str::isUuid($uuid) && in_array($actor, ['MERCHANT', 'CUSTOMER'], true), 409, 'Review the individually activated original Shopify membership.');
         SubscriptionShopifyBillingProtocol::owned($row, $before);
+        $acceptedAttributes ??= SubscriptionShopifyUpdateHistory::attributes($row);
         SubscriptionShopifyContractProtocol::assertTerms($row, $before, data_get($row->authorization_evidence, 'shopify_adoption.original.request_uuid', ''), $acceptedAttributes);
         abort_unless(array_key_exists('note', $before) && is_string($before['updatedAt'] ?? null)
             && in_array($before['status'] ?? null, ['ACTIVE', 'PAUSED'], true)
@@ -87,6 +93,7 @@ class SubscriptionShopifyUpdateProtocol
             }, $lines);
         }
         $intent = ['version' => 1, 'subject' => $proposal['subject'], 'context' => $context, 'method_binding_hash' => SubscriptionEvidence::digest(SubscriptionEvidence::canonical($row->method_binding)),
+            'local_state' => app(SubscriptionBillingAgreementService::class)->state($row),
             'before' => $before, 'proposal' => $proposal, 'line_bindings' => $bindings,
             'variables' => ['id' => $before['id'], 'actor' => $actor, 'input' => $input], 'request_uuid' => strtolower($uuid)];
         $intent['intent_hash'] = $this->hash($intent, 'intent_hash');
@@ -97,9 +104,17 @@ class SubscriptionShopifyUpdateProtocol
     public function quote(SubscriptionBillingAgreement $row, array $intent, array $calculation): array
     {
         $this->assertIntent($row, $intent);
+
+        return $this->retainedQuote($row, $intent, $calculation);
+    }
+
+    /** Historical validation uses frozen before-terms and signed evidence, without live access or recursive history checks. */
+    public function retainedQuote(SubscriptionBillingAgreement $row, array $intent, array $calculation): array
+    {
+        $this->assertRetainedIntent($row, $intent);
         abort_unless(($calculation['__typename'] ?? null) === 'SubscriptionContractCalculationSuccess' && ($calculation['warnings'] ?? null) === []
             && ($calculation['withMerchandiseCustomizations'] ?? null) === false
-            && preg_match('#\Agid://shopify/SubscriptionContractCalculation/[A-Za-z0-9_-]{1,190}\z#', (string) ($calculation['id'] ?? '')),
+            && self::calculationId($calculation['id'] ?? null),
             409, 'Review the original update intent, pending calculation or provider warnings.');
         $terms = $intent['proposal']['terms'];
         $totals = $calculation['projectedOrderTotals'] ?? [];
@@ -110,6 +125,7 @@ class SubscriptionShopifyUpdateProtocol
             SubscriptionShopifyContractProtocol::money($totals[$field] ?? [], $terms['currency'], 0);
         }
         $terms['tax_cents'] = SubscriptionShopifyContractProtocol::money($totals['totalTax'] ?? [], $terms['currency']);
+        unset($terms['tax_lines']); // Projected aggregate tax is not an itemized tax breakdown.
         $terms['amount_cents'] = $terms['subtotal_cents'] + $terms['shipping_cents'] + $terms['tax_cents'];
         abort_unless($terms['amount_cents'] > 0 && $terms['amount_cents'] <= 10000000, 409);
         SubscriptionShopifyContractProtocol::money($totals['total'] ?? [], $terms['currency'], $terms['amount_cents']);
@@ -124,14 +140,32 @@ class SubscriptionShopifyUpdateProtocol
     public function assertApplied(SubscriptionBillingAgreement $row, array $intent, array $quote, array $contract): void
     {
         $this->assertIntent($row, $intent);
+        $this->assertRetainedApplied($row, $intent, $quote, $contract, [$intent['before']['status']]);
+    }
+
+    public function assertRetainedApplied(SubscriptionBillingAgreement $row, array $intent, array $quote, array $contract, array $allowedStatuses): void
+    {
+        $this->assertRetainedIntent($row, $intent);
         abort_unless(($quote['intent_hash'] ?? null) === ($intent['intent_hash'] ?? null) && is_string($quote['review_hash'] ?? null)
             && hash_equals($this->hash($quote, 'review_hash'), $quote['review_hash']), 409, 'Retain the exact accepted update quote.');
         SubscriptionShopifyBillingProtocol::owned($row, $contract);
         $this->result($row, $intent, $quote['terms'], $contract);
-        abort_unless(($contract['status'] ?? null) === $intent['before']['status']
-            && SubscriptionShopifyBillingProtocol::sameInstant($contract['nextBillingDate'] ?? null, $intent['before']['nextBillingDate'])
+        abort_unless(in_array($contract['status'] ?? null, $allowedStatuses, true)
+            && (SubscriptionShopifyBillingProtocol::sameInstant($contract['nextBillingDate'] ?? null, $intent['before']['nextBillingDate'])
+                || (($contract['status'] ?? null) === 'CANCELLED' && array_key_exists('nextBillingDate', $contract) && $contract['nextBillingDate'] === null))
             && is_string($contract['updatedAt'] ?? null) && CarbonImmutable::parse($contract['updatedAt'])->gte(CarbonImmutable::parse($intent['before']['updatedAt'])),
             409, 'The provider schedule or contract version changed. Preserve later stops and reconcile the original update.');
+    }
+
+    private function assertRetainedIntent(SubscriptionBillingAgreement $row, array $intent): void
+    {
+        abort_unless(($intent['version'] ?? null) === 1 && is_string($intent['intent_hash'] ?? null)
+            && hash_equals($this->hash($intent, 'intent_hash'), $intent['intent_hash'])
+            && SubscriptionEvidence::canonical($intent['subject'] ?? []) === SubscriptionEvidence::canonical(app(SubscriptionAmendmentProposal::class)->subject($row))
+            && ($intent['method_binding_hash'] ?? null) === SubscriptionEvidence::digest(SubscriptionEvidence::canonical($row->method_binding))
+            && ($intent['variables']['id'] ?? null) === data_get($row->authorization_evidence, 'shopify_adoption.contract_id')
+            && ($intent['local_state']['revision'] ?? null) === $row->revision && ($intent['local_state']['terms_hash'] ?? null) === $row->terms_hash,
+            409, 'Retain the signed original native update intent and its frozen before-terms.');
     }
 
     private function result(SubscriptionBillingAgreement $row, array $intent, array $terms, array $contract): void
