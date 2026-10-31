@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Cache;
 /** An operator records reviewed facts; this does not create provider or Apple permissions. */
 final class PosActivateCommand extends Command
 {
-    protected $signature = 'pos:activate {tenant} {register} {--actor=} {--review=} {--build=} {--acceptance-device=} {--acceptance-minutes=60} {--acceptance-cap=500} {--development-review=} {--apply}';
+    protected $signature = 'pos:activate {tenant} {register} {--actor=} {--review=} {--build=} {--acceptance-device=} {--acceptance-minutes=60} {--acceptance-cap=500} {--development-review=} {--registered-owner : Remove Everbranch rehearsal amount, duration and single-sale limits on the exactly reviewed owner device} {--apply}';
 
     protected $description = 'Preview/activate one reviewed register or a bounded named-device acceptance session';
 
@@ -58,6 +58,10 @@ final class PosActivateCommand extends Command
         $settings = $store->decrypt($register->configuration);
         $developmentPath = $this->option('development-review');
         $development = is_string($developmentPath) && $developmentPath !== '';
+        $ownerRequested = $this->option('registered-owner') === true;
+        if ($ownerRequested && (! $development || ! $this->option('acceptance-device'))) {
+            throw new PosException('reviewed_registered_owner_device_required');
+        }
         $build = $this->option('build');
         if (! is_string($build) || ! preg_match('/^[A-Za-z0-9._-]{1,100}$/D', $build)) {
             throw new PosException('exact_build_required');
@@ -73,18 +77,37 @@ final class PosActivateCommand extends Command
             $acceptance = ['actor_id' => $actor->id, 'device_id' => $device, 'build' => $build,
                 'expires_at' => now()->addMinutes($minutes)->toIso8601String(), 'max_amount_minor' => $cap];
             if ($development) {
+                $claimed = $settings['development_acceptance']['sale_id'] ?? null;
+                $completedOwnerUpgrade = false;
+                if ($ownerRequested && is_string($claimed)) {
+                    $original = $store->rows('sales', $tenant)->where('id', $claimed)->where('register_id', $register->id)->first();
+                    if ($original?->attempt_id && in_array($original->state, ['succeeded', 'failed', 'cancelled'], true)) {
+                        $originalPayment = app(\App\Services\PaymentsCore\PaymentJournal::class)->get($tenant, $original->attempt_id);
+                        $completedOwnerUpgrade = $originalPayment['state'] === $original->state;
+                    }
+                }
                 if (config('pos_live.development_acceptance_enabled') !== true || config('pos_live.collection_enabled') !== false
                     || ! is_file($developmentPath) || is_link($developmentPath) || filesize($developmentPath) > 65536
-                    || (fileperms($developmentPath) & 0077) !== 0 || isset($settings['development_acceptance']['sale_id'])) {
+                    || (fileperms($developmentPath) & 0077) !== 0 || ($claimed !== null && ! $completedOwnerUpgrade)) {
                     throw new PosException('private_unused_development_review_required');
                 }
                 $evidence = json_decode(file_get_contents($developmentPath), true, 32, JSON_THROW_ON_ERROR);
                 if (! is_array($evidence) || ! app(PosDevelopmentAcceptance::class)->reviewMatches($evidence, $register, $connection, $build, $device)) {
                     throw new PosException('development_review_binding_mismatch');
                 }
+                if ($ownerRequested && ! app(PosDevelopmentAcceptance::class)->ownerRequested([
+                    'owner_requested' => true, 'actor_id' => $actor->id, 'evidence' => $evidence,
+                ])) {
+                    throw new PosException('explicit_owner_operation_review_required');
+                }
                 $settings['development_acceptance'] = [...$acceptance, 'id' => bin2hex(random_bytes(16)),
                     'issued_at' => now()->toIso8601String(), 'evidence' => $evidence,
                     'document_hash' => hash_file('sha256', $developmentPath)];
+                if ($ownerRequested) {
+                    $settings['development_acceptance']['owner_requested'] = true;
+                    $settings['development_acceptance']['max_amount_minor'] = null;
+                    $settings['development_acceptance']['expires_at'] = $evidence['profile_expires_at'];
+                }
                 unset($settings['acceptance']);
             } else {
                 $settings['acceptance'] = $acceptance;

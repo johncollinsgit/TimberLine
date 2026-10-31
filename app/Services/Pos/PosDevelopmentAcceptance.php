@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Pos;
 
-/** Registered-device development testing, never a commercial/publishing grant. */
+/** Reviewed registered devices only; never a publishing or additional-device grant. */
 final class PosDevelopmentAcceptance
 {
     public function __construct(private PosStore $store) {}
@@ -13,12 +13,14 @@ final class PosDevelopmentAcceptance
     {
         $test = $this->store->decrypt($register->configuration)['development_acceptance'] ?? [];
         $evidence = $test['evidence'] ?? [];
+        $ownerRequested = $this->ownerRequested($test);
         if (! is_array($evidence) || config('pos_live.development_acceptance_enabled') !== true || $connection->environment !== 'production'
             || ! is_string($test['id'] ?? null) || ! preg_match('/^[a-f0-9]{32}$/D', $test['id'])
-            || ! is_int($test['max_amount_minor'] ?? null) || $test['max_amount_minor'] < 1 || $test['max_amount_minor'] > 1000
+            || (! $ownerRequested && (! is_int($test['max_amount_minor'] ?? null) || $test['max_amount_minor'] < 1 || $test['max_amount_minor'] > 1000))
+            || ($ownerRequested && ($test['max_amount_minor'] ?? null) !== null)
             || ! is_string($test['issued_at'] ?? null) || ! is_string($test['expires_at'] ?? null)
             || strtotime($test['issued_at']) > time() || strtotime($test['expires_at']) <= time()
-            || strtotime($test['expires_at']) > strtotime($test['issued_at']) + 7200
+            || (! $ownerRequested && strtotime($test['expires_at']) > strtotime($test['issued_at']) + 7200)
             || ! is_int($test['actor_id'] ?? null) || ! is_string($test['device_id'] ?? null)
             || ! is_string($test['build'] ?? null) || $test['build'] !== config('pos_live.onboarding_build')
             || ! $this->reviewMatches($evidence, $register, $connection, $test['build'], $test['device_id'])
@@ -36,6 +38,18 @@ final class PosDevelopmentAcceptance
         }
 
         return $test;
+    }
+
+    /** The owner can remove our rehearsal budget without widening the reviewed device scope. */
+    public function ownerRequested(array $session): bool
+    {
+        $review = $session['evidence'] ?? [];
+
+        return is_array($review) && ($session['owner_requested'] ?? false) === true
+            && ($review['owner_requested_unrestricted_collection'] ?? false) === true
+            && ($review['owner_actor_id'] ?? null) === ($session['actor_id'] ?? null)
+            && is_string($review['owner_request_sha256'] ?? null)
+            && preg_match('/^[a-f0-9]{64}$/D', $review['owner_request_sha256']) === 1;
     }
 
     /** Evidence is operator-reviewed, private and audited; this does not request Apple permissions. */
@@ -73,8 +87,15 @@ final class PosDevelopmentAcceptance
         $test = $this->session($scope['register'], $scope['connection'], $scope);
         if (! $test || ($snapshot['development_acceptance_id'] ?? null) !== $test['id']
             || $snapshot['build'] !== $test['build'] || $snapshot['device_id'] !== $test['device_id']
-            || (int) $sale->actor_id !== $test['actor_id'] || (int) $sale->amount_minor > $test['max_amount_minor']) {
+            || (int) $sale->actor_id !== $test['actor_id']
+            || (! $this->ownerRequested($test) && (int) $sale->amount_minor > $test['max_amount_minor'])) {
             throw new PosException('development_acceptance_not_ready', 503);
+        }
+        if ($this->ownerRequested($test)) {
+            $this->store->event($scope['tenant_id'], $sale->id, 'registered_owner_collection',
+                ['session_id' => $test['id'], 'actor_id' => $test['actor_id'], 'build' => $test['build']]);
+
+            return;
         }
         if (isset($test['sale_id']) && $test['sale_id'] !== $sale->id) {
             throw new PosException('development_acceptance_single_sale_only', 409);

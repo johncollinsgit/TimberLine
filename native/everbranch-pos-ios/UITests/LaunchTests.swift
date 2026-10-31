@@ -46,7 +46,7 @@ final class LaunchTests: XCTestCase {
     }
 
     func testMixAndMatchUsesOneSheetAndRequiresTheExactBundleQuantity() {
-        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests"]; app.launch()
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-untracked-bundle-ui-tests"]; app.launch()
         let search = app.textFields["Search products"]; XCTAssertTrue(search.waitForExistence(timeout: 10))
         search.tap(); search.typeText("trio")
         app.buttons["Add Fictional trio to basket"].tap()
@@ -58,6 +58,22 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(add.isEnabled); attach(app, name: "One mix and match sheet")
         add.tap()
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.isEnabled)
+    }
+
+    func testKeypadRespondsAcrossTheWholePillAndAddsTheTypedAmount() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests"]; app.launch()
+        XCTAssertTrue(app.segmentedControls.buttons["Keypad"].waitForExistence(timeout: 10))
+        app.segmentedControls.buttons["Keypad"].tap()
+        for key in ["7", "0", "0"] {
+            let button = app.buttons["keypad-" + key]
+            XCTAssertTrue(button.exists)
+            button.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5)).tap()
+        }
+        let add = app.buttons["Add $7.00"]
+        XCTAssertTrue(add.waitForExistence(timeout: 2)); XCTAssertTrue(add.isEnabled)
+        attach(app, name: "Mountain banner and responsive keypad pills")
+        add.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.5)).tap()
+        XCTAssertTrue(app.navigationBars["Sign in to checkout"].waitForExistence(timeout: 5))
     }
 
     private func attach(_ app: XCUIApplication, name: String) {
