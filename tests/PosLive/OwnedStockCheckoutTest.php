@@ -110,6 +110,21 @@ it('quotes guests, reserves event stock once and hands off without creating a Sh
         ->and($this->stock->rows('reservations', $this->tenant->id)->whereNotNull('collection_locked_at')->count())->toBe(1);
 });
 
+it('shows and sells only the reviewed event selection without changing another register catalog', function (): void {
+    $hidden = bin2hex(random_bytes(16));
+    $this->stock->rows('items', $this->tenant->id)->insert(['id' => $hidden, 'tenant_id' => $this->tenant->id,
+        'sku' => 'NOT-AT-THIS-SHOW', 'title' => 'Fictional mug', 'product_key' => $hidden, 'unit_amount_minor' => 1500,
+        'tracked' => false, 'revision' => str_repeat('e', 64)]);
+    $settings = $this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration);
+    $settings['catalog_item_ids'] = [$this->item];
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    $this->getJson($this->base.'/catalog')->assertOk()->assertJsonCount(1, 'items')->assertJsonPath('items.0.item_id', $this->item);
+    $this->postJson($this->base.'/quotes', ['request_id' => (string) Str::uuid(), 'items' => [
+        ['item_id' => $hidden, 'quantity' => 1, 'revision' => str_repeat('e', 64)]]])->assertConflict()->assertJsonPath('error.code', 'catalog_changed');
+    expect($this->stock->item($this->tenant->id, $hidden)->active)->toBe(1);
+    $this->postJson($this->base.'/quotes', $this->selection)->assertOk();
+});
+
 it('requires shared stock publication acknowledgment before collection without a network call in handoff', function (): void {
     ownedStockOnlineBinding($this);
     $quote = $this->postJson($this->base.'/quotes', $this->selection)->assertOk()->assertJsonPath('collection_ready', false)->json();
@@ -265,6 +280,30 @@ it('allocates online stock once, ignores reordered events and restocks only expl
     $cancel['id'] = 902;
     $cancel['cancelled_at'] = $time->toIso8601String();
     expect(fn () => $service->ingest($this->tenant->id, $this->shopKey, $cancel))->toThrow(\App\Services\Inventory\StockException::class, 'stock_cancellation_restock_evidence_required');
+});
+
+it('sells reviewed bundles with explicitly untracked components while retaining limits on counted components', function (): void {
+    $parent = bin2hex(random_bytes(16));
+    $unknown = bin2hex(random_bytes(16));
+    foreach ([$parent => ['Show trio', 1800], $unknown => ['Uncounted show scent', 700]] as $id => [$title, $price]) {
+        $this->stock->rows('items', $this->tenant->id)->insert(['id' => $id, 'tenant_id' => $this->tenant->id,
+            'title' => $title, 'sku' => $id, 'product_key' => $id, 'unit_amount_minor' => $price, 'tracked' => false, 'revision' => str_repeat('e', 64)]);
+    }
+    app(\App\Services\Inventory\StockBundles::class)->review($this->tenant->id, 'untracked-bundle', $this->actor->id,
+        $parent, 3, [$this->item, $unknown], str_repeat('e', 64));
+    $catalog = collect($this->getJson($this->base.'/catalog')->assertOk()->json('items'))->keyBy('item_id');
+    expect($catalog[$parent]['available_quantity'])->toBeNull()->and($catalog[$parent]['availability'])->toBe('available');
+    $choice = ['item_id' => $parent, 'quantity' => 1, 'revision' => $catalog[$parent]['revision'], 'components' => [
+        ['item_id' => $this->item, 'quantity' => 3, 'revision' => $catalog[$this->item]['revision']]]];
+    $this->postJson($this->base.'/quotes', ['request_id' => (string) Str::uuid(), 'items' => [$choice]])
+        ->assertConflict()->assertJsonPath('error.code', 'stock_bundle_choices_changed');
+    $choice['components'] = [['item_id' => $unknown, 'quantity' => 3, 'revision' => $catalog[$unknown]['revision']]];
+    $quote = $this->postJson($this->base.'/quotes', ['request_id' => (string) Str::uuid(), 'items' => [$choice]])
+        ->assertOk()->assertJsonPath('amount_minor', 1926)->json();
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk()->assertJsonPath('collection.amount_minor', 1926);
+    expect($this->stock->rows('balances', $this->tenant->id)->where('item_id', $unknown)->exists())->toBeFalse()
+        ->and($this->stock->rows('reservations', $this->tenant->id)->where('item_id', $unknown)->exists())->toBeFalse();
+    Http::assertNothingSent();
 });
 
 it('previews opening stock without writes and seeds old commitments without deducting past shipments twice', function (): void {

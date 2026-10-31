@@ -128,7 +128,8 @@ final class PosReadiness
         if (! $development && ! $stockCore && $register->catalog_source === 'shopify' && ($settings['shopify_acceptance_verified'] ?? false) !== true) {
             $blockers[] = 'shopify_acceptance_missing';
         }
-        if ($development && $amount !== null && $amount > $development['max_amount_minor']) {
+        if ($development && ! app(PosDevelopmentAcceptance::class)->ownerRequested($development)
+            && $amount !== null && $amount > $development['max_amount_minor']) {
             $blockers[] = 'development_acceptance_amount_exceeded';
         }
 

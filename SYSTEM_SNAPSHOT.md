@@ -1,5 +1,19 @@
 ## Everbranch Pay: finished goods and guest checkout (October 31; source candidate)
 
+The owner follow-up preserves the original mountain/photo styling, completes
+keypad and mix-and-match selling, and scopes Columbus to the pictured scents in
+8oz/16oz cotton wick and wax melts plus their reviewed bundles. No mugs, wood
+wicks or 4oz variants belong in that register. Explicitly untracked stock keeps
+remaining balances unknown; original packing boxes do not establish today's
+stock. Per-register `catalog_item_ids` does not deactivate the full tenant catalog.
+
+The owner explicitly requested removal of Everbranch rehearsal dollar/time and
+single-sale limits on the exact registered phone. `pos:activate --registered-owner`
+requires private owner-request evidence in addition to the unchanged installed
+build, signing, merchant, membership and device checks. Apple publishing approval
+remains unverified and no extra devices are authorized. Read the follow-up section
+in `docs/operations/everbranch-pay-owned-inventory.md` before changing these gates.
+
 The new explicitly assigned `everbranch_inventory_v1` lane keeps finished-goods
 stock, in-person sales and receipts in Everbranch, with Square financial authority
 and no new Shopify order mirror. The native register uses Products/Favorites/

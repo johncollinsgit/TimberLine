@@ -40,6 +40,13 @@ final class StockPosCommerce
     {
         $settings = $this->settings($scope);
         $items = $this->stock->listing($scope['tenant_id'], $settings['inventory_pool_id']);
+        if (isset($settings['catalog_item_ids'])) {
+            if (! is_array($settings['catalog_item_ids']) || count($settings['catalog_item_ids']) > 1000
+                || count(array_filter($settings['catalog_item_ids'], fn ($id) => is_string($id) && preg_match('/^[a-f0-9]{32}$/D', $id))) !== count($settings['catalog_item_ids'])) {
+                throw new PosException('register_catalog_selection_invalid', 503);
+            }
+            $items = array_values(array_filter($items, fn ($item) => in_array($item['item_id'], $settings['catalog_item_ids'], true)));
+        }
         if ($scope['register']->catalog_source === 'shopify') {
             $mapping = $this->stock->rows('provider_items', $scope['tenant_id'])->where('store_id', $settings['shopify']['store_id'])
                 ->where('active', true)->get()->keyBy('item_id');

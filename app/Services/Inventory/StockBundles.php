@@ -28,7 +28,7 @@ final class StockBundles
             }
             foreach ($eligible as $id) {
                 $item = $this->stock->item($tenant, $id);
-                if ($id === $parentId || ! $item->tracked || (json_decode($item->metadata ?? '{}', true)['requires_components'] ?? false)) {
+                if ($id === $parentId || (json_decode($item->metadata ?? '{}', true)['requires_components'] ?? false)) {
                     throw new StockException('stock_bundle_components_invalid');
                 }
             }
@@ -57,21 +57,26 @@ final class StockBundles
             $eligible = json_decode($definition->eligible_items, true, 64, JSON_THROW_ON_ERROR);
             $components = [];
             $available = 0;
+            $hasUntracked = false;
             $valid = true;
             foreach ($eligible as $id) {
-                if (! isset($byId[$id]) || $byId[$id]['kind'] !== 'merchandise' || $byId[$id]['available_quantity'] === null) {
+                if (! isset($byId[$id]) || $byId[$id]['kind'] !== 'merchandise') {
                     $valid = false;
                     break;
                 }
                 $components[] = $byId[$id];
-                $available += $byId[$id]['available_quantity'];
+                if ($byId[$id]['available_quantity'] === null) {
+                    $hasUntracked = true;
+                } else {
+                    $available += $byId[$id]['available_quantity'];
+                }
             }
             $item['kind'] = 'bundle';
             $item['revision'] = Contract::hash([$item['revision'], $definition->revision]);
             $item['bundle_quantity'] = (int) $definition->required_quantity;
             $item['bundle_items'] = $components;
-            $item['available_quantity'] = $valid ? intdiv($available, (int) $definition->required_quantity) : 0;
-            $item['availability'] = ! $valid ? 'review_required' : ($item['available_quantity'] > 0 ? 'available' : 'components_count_required');
+            $item['available_quantity'] = ! $valid ? 0 : ($hasUntracked ? null : intdiv($available, (int) $definition->required_quantity));
+            $item['availability'] = ! $valid ? 'review_required' : ($hasUntracked || $item['available_quantity'] > 0 ? 'available' : 'components_count_required');
         }
 
         return $catalog;
@@ -89,7 +94,7 @@ final class StockBundles
         foreach ($selection['components'] as $part) {
             $item = $eligible[$part['item_id']] ?? null;
             if (! $item || isset($stock[$part['item_id']]) || $item['revision'] !== $part['revision'] || $part['quantity'] < 1
-                || $item['available_quantity'] < $part['quantity']) {
+                || ($item['available_quantity'] !== null && $item['available_quantity'] < $part['quantity'])) {
                 throw new StockException('stock_bundle_choices_changed');
             }
             $stock[$part['item_id']] = $part['quantity'];

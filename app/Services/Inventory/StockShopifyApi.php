@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Http;
 /** Catalog, calculation and stock publication only. This adapter cannot create orders. */
 final class StockShopifyApi
 {
-    public const CATALOG = 'query StockCatalog($cursor:String,$location:ID!){shop{id currencyCode} productVariants(first:100,after:$cursor){pageInfo{hasNextPage endCursor} nodes{id title sku price updatedAt taxable inventoryPolicy requiresComponents product{id title status isGiftCard featuredMedia{preview{image{url}}}} inventoryItem{id tracked inventoryLevel(locationId:$location){quantities(names:["available","committed"]){name quantity}}}}}}';
+    public const CATALOG = 'query StockCatalog($cursor:String,$location:ID!){shop{id currencyCode} productVariants(first:100,after:$cursor){pageInfo{hasNextPage endCursor} nodes{id title sku price updatedAt taxable inventoryPolicy requiresComponents product{id title status isGiftCard featuredMedia{preview{image{url(transform:{maxWidth:400,preferredContentType:JPG})}}}} inventoryItem{id tracked inventoryLevel(locationId:$location){quantities(names:["available","committed"]){name quantity}}}}}}';
 
     public const CALCULATE = 'mutation StockCalculate($input:DraftOrderInput!){draftOrderCalculate(input:$input){calculatedDraftOrder{taxesIncluded totalPriceSet{shopMoney{amount currencyCode}} totalTaxSet{shopMoney{amount currencyCode}} taxLines{title rate priceSet{shopMoney{amount currencyCode}}} lineItems{variant{id} quantity originalUnitPriceSet{shopMoney{amount currencyCode}}}} userErrors{field message}}}';
 
