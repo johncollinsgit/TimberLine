@@ -110,3 +110,20 @@ and embeds local CSS/JS/catalog assets. The pinned v3 `build-campus-hosted.php` 
 uses it and includes a legacy shell adapter. No CDN, external script or provider
 permission is added. Verify the reviewed diff and exact deployed release before
 describing either the source changes or demo URL as live.
+
+
+## Prepared matcher hot path (October 31; source candidate)
+
+Repeated warm searches compare individual source strings before rebuilding a
+combined signature. Normalized combined text and compact identifiers are cached
+per document, and compact query text is prepared once per query. Source-field
+changes, including mutable values with string conversion, still invalidate the
+prepared document; caller-parsed query objects remain supported. Ranking,
+filters, typo rules and the existing 50ms p95 budget are unchanged.
+
+The unchanged synthetic 10,000-document benchmark blocked the Pay release on
+Forge at 50.4ms and 55.0ms. This candidate passed all 14 matcher checks at 44.3ms
+in a private synthetic test directory on that same host; no live application
+source or business records were changed for the measurement. The shared campus
+copy was regenerated through the existing embed command. Protected release and
+served-artifact verification still precede any live-performance claim.

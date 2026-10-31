@@ -21,7 +21,7 @@ struct EverbranchRegisterView: View {
                 POSView(screen: .checkout, model: model)
             }
             else if fixture || (model.signedIn && model.registerLoaded) {
-                NativeRegister(model: model, onBasket: { showRecovery = true; basket = true }, onAccount: { account = true })
+                NativeRegister(model: model, onBasket: { showRecovery = false; basket = true }, onAccount: { account = true })
             } else { POSView(screen: .setup, model: model) }
         }
         .background(PayTheme.paper)
