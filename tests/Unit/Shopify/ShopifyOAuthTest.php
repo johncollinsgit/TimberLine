@@ -53,3 +53,10 @@ test('shopify app config scopes include every runtime oauth requested scope', fu
         expect($tomlScopes)->toContain($scope);
     }
 });
+
+test('POS inventory access is requested only for a server-configured store', function (): void {
+    config()->set('services.shopify.scopes', 'read_orders,read_products');
+    $oauth = app(ShopifyOAuth::class);
+    expect($oauth->requestedScopes(['key' => 'retail', 'pos_inventory' => true]))->toContain('read_inventory');
+    expect($oauth->requestedScopes(['key' => 'wholesale']))->not->toContain('read_inventory');
+});
