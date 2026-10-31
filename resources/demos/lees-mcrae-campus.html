@@ -1662,7 +1662,8 @@ dialog.public-request-dialog.public-request-side{width:min(780px,calc(100vw - 24
     const raw = String(value || '').trim().slice(0, 500), commandsOnly = raw.startsWith('>');
     const text = commandsOnly ? raw.slice(1).trim() : raw;
     const phrases = [...text.matchAll(/"([^"]+)"/g)].map(match => normalize(match[1])).filter(Boolean);
-    return { text: normalize(text.replace(/"([^"]+)"/g, '$1')), terms: words(text), phrases, commandsOnly };
+    const normalized = normalize(text.replace(/"([^"]+)"/g, '$1'));
+    return { text: normalized, compactText: normalized.replace(/ /g, ''), terms: words(text), phrases, commandsOnly };
   }
   function distance(a, b, max) {
     a = [...a]; b = [...b];
@@ -1680,11 +1681,14 @@ dialog.public-request-dialog.public-request-side{width:min(780px,calc(100vw - 24
   }
   const prepared = new WeakMap();
   function prepare(document) {
-    const signature = [document.title, document.body, document.identifier, document.id, document.updated_at].join('\u0000');
+    // Compare source strings before allocating a combined signature on every keystroke.
+    // String conversion also observes in-place changes to non-string input values.
+    const sourceTitle = String(document.title ?? ''), sourceBody = String(document.body ?? ''), sourceIdentifier = String(document.identifier ?? ''), sourceId = String(document.id ?? ''), sourceUpdated = String(document.updated_at ?? ''), effectiveId = String(document.identifier || document.id || '');
     let cached = prepared.get(document);
-    if (!cached || cached.signature !== signature) {
-      const title = normalize(document.title), body = normalize(document.body), id = normalize(document.identifier || document.id);
-      cached = { signature, title, body, id, titleWords: title.split(' ').filter(Boolean), allWords: (title + ' ' + body).split(' ').filter(Boolean), idWords: id.split(' ').filter(Boolean), updated: -(Date.parse(document.updated_at || '') || 0) };
+    if (!cached || cached.sourceTitle !== sourceTitle || cached.sourceBody !== sourceBody || cached.sourceIdentifier !== sourceIdentifier || cached.sourceId !== sourceId || cached.sourceUpdated !== sourceUpdated || cached.effectiveId !== effectiveId) {
+      const title = normalize(sourceTitle), body = normalize(sourceBody), id = normalize(document.identifier || document.id);
+      const combined = title + ' ' + body;
+      cached = { signature: [sourceTitle, sourceBody, sourceIdentifier, sourceId, sourceUpdated].join('\u0000'), sourceTitle, sourceBody, sourceIdentifier, sourceId, sourceUpdated, effectiveId, title, body, id, compactId: id.replace(/ /g, ''), combined, titleWords: title.split(' ').filter(Boolean), allWords: combined.split(' ').filter(Boolean), idWords: id.split(' ').filter(Boolean), updated: -(Date.parse(document.updated_at || '') || 0) };
       prepared.set(document, cached);
     }
     return cached;
@@ -1692,9 +1696,8 @@ dialog.public-request-dialog.public-request-side{width:min(780px,calc(100vw - 24
   function score(document, input) {
     const query = typeof input === 'string' ? parse(input) : input;
     if (query.commandsOnly && document.type !== 'command') return null;
-    const { title, body, id, titleWords, allWords, idWords, updated } = prepare(document);
-    const combined = title + ' ' + body;
-    const compactId = id.replace(/ /g, ''), compactQuery = query.text.replace(/ /g, '');
+    const { title, compactId, combined, titleWords, allWords, idWords, updated } = prepare(document);
+    const compactQuery = query.compactText ?? query.text.replace(/ /g, '');
     if (compactQuery && compactId === compactQuery) return [0, 0, document.completed || document.archived ? 1 : 0, updated, String(document.id)];
     if (!query.phrases.every(phrase => combined.includes(phrase))) return null;
     if (!query.terms.length) return [0, 0, 0, 0, String(document.id)];
@@ -1716,8 +1719,7 @@ dialog.public-request-dialog.public-request-side{width:min(780px,calc(100vw - 24
       if (best > allowed) return null;
       typos += best; if (!inTitle) bodyMatches++;
     }
-    const compact = text => text.replace(/ /g, '');
-    const tier = compact(id) === compact(query.text) ? 0 : title === query.text ? 1 : title.startsWith(query.text) ? 2 : !bodyMatches ? 3 : 4;
+    const tier = compactId === compactQuery ? 0 : title === query.text ? 1 : title.startsWith(query.text) ? 2 : !bodyMatches ? 3 : 4;
     return [tier, typos, document.completed || document.archived ? 1 : 0, updated, String(document.id)];
   }
   const compare = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1; } return 0; };
