@@ -21,9 +21,9 @@ account/build before release; dated notes do not establish continuing approval.
   disclosures, reviewed retention/deletion instructions, accurate permission
   descriptions and the required SDK/privacy reports. Include actual Square,
   Shopify, device/location, optional customer-contact and diagnostic behavior.
-  The current POS source lacks the in-app policy link; the existing general
-  notice has not received a POS-specific completeness review. Keep these open
-  on the publishing checklist rather than claiming they are finished.
+  The POS candidate now includes the in-app policy link; the existing general
+  notice still needs a POS-specific completeness review. Keep disclosure review
+  open on the publishing checklist rather than claiming it is finished.
 
 Sources: [Apple program agreement](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/)
 and [App Review Guidelines, 3.1.3(e) and 5.1](https://developer.apple.com/app-store/review/guidelines/).
@@ -50,7 +50,8 @@ and [Square iPhone Tap to Pay requirements and merchant linking](https://develop
   Intermediaries must not repurpose it for advertising or customer profiling.
   Do not decrypt protected card payloads or copy card details into prompts,
   memory, logs or fixtures.
-- Square's Developer Terms reviewed here were updated September 10, 2026.
+- Square's Developer Terms were rechecked October 31, 2026; the current page is
+  dated October 27, 2026.
   They prohibit using Square-derived content, including anonymized content,
   to train or otherwise enhance an AI system. Flag proposed Square-data
   retrieval, embeddings, assistant memory, learning or model-input changes for
