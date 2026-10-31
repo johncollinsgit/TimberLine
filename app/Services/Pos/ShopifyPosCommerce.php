@@ -49,6 +49,9 @@ final class ShopifyPosCommerce
         $catalog = array_column($this->catalog($scope), null, 'item_id');
         $settings = $this->settings($scope);
         $input = ['lineItems' => [], 'shippingAddress' => $settings['tax_address'], 'acceptAutomaticDiscounts' => false];
+        if (! empty($scope['customer']['shopify_customer_id'])) {
+            $input['purchasingEntity'] = ['customerId' => $scope['customer']['shopify_customer_id']];
+        }
         $display = [];
         foreach ($selections as $selection) {
             $item = $catalog[$selection['item_id']] ?? null;
@@ -92,6 +95,7 @@ final class ShopifyPosCommerce
 
     public function prepare(array $scope, object $sale, array $snapshot): void
     {
+        $scope['customer'] = $snapshot['customer'] ?? null;
         $reference = $this->reference($sale);
         $tag = 'EverbranchPOS-'.$sale->id;
         $order = null;

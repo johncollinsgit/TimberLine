@@ -103,9 +103,6 @@ final class PosService
 
             return $this->projection($old);
         }
-        $terms = $this->catalog->terms($scope, $input);
-        $id = bin2hex(random_bytes(16));
-        $sale = new SaleSnapshot($id, 'usd', $terms['lines']);
         $settings = $this->store->decrypt($scope['register']->configuration);
         if (empty($settings['tax_valid_until']) || strtotime($settings['tax_valid_until']) <= time()) {
             throw new PosException('tax_review_expired', 503);
@@ -115,6 +112,10 @@ final class PosService
         }
         $customer = isset($input['customer_profile_id']) ? $this->customers->freeze($scope, $input['customer_profile_id']) : null;
         $rewards = $customer ? $this->rewards->freeze($scope, $customer) : ['enabled' => false];
+        $scope['customer'] = $customer;
+        $terms = $this->catalog->terms($scope, $input);
+        $id = bin2hex(random_bytes(16));
+        $sale = new SaleSnapshot($id, 'usd', $terms['lines']);
         $snapshot = ['binding' => $binding->snapshot(), 'connection_id' => $scope['connection']->id,
             'build' => $scope['build'], 'device_id' => $scope['device_id'], 'input_hash' => $hash, 'terms' => $terms, 'customer' => $customer ?? ($input['customer'] ?? null), 'customer_rewards' => $rewards,
             'register_name' => $scope['register']->name, 'location_name' => $scope['register']->location_name,
@@ -308,7 +309,8 @@ final class PosService
             throw new PosException('sale_finalization_required');
         }
         $this->provider->audit($this->journal->get($scope['tenant_id'], $sale->attempt_id));
-        if ($input['amount_minor'] > (int) $sale->amount_minor - app(PosCustomerPurchases::class)->confirmedRefunds($sale)) {
+        $originalRequest = $this->journal->findByRequest($scope['tenant_id'], $input['request_id']);
+        if (! $originalRequest && $input['amount_minor'] > (int) $sale->amount_minor - app(PosCustomerPurchases::class)->confirmedRefunds($sale)) {
             throw new PosException('refund_exceeds_remaining_payment');
         }
         $row = $this->core()->refund(MerchantBinding::restore($snapshot['binding']), $sale->attempt_id,

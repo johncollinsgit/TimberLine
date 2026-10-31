@@ -55,7 +55,7 @@ class ShopifyAuthController extends Controller
         Log::info('shopify oauth auth redirect', [
             'store_key' => $config['key'],
             'shop' => $config['shop'] ?? null,
-            'requested_scopes' => implode(',', $oauth->requestedScopes()),
+            'requested_scopes' => implode(',', $oauth->requestedScopes($config)),
             'redirect_uri' => $redirectUri,
         ]);
 
@@ -137,7 +137,7 @@ class ShopifyAuthController extends Controller
             ? implode(',', $grantedScopes)
             : implode(',', $payloadScopes);
 
-        $requestedScopes = $oauth->requestedScopes();
+        $requestedScopes = $oauth->requestedScopes($config);
         $missingRequestedScopes = array_values(array_diff($requestedScopes, $grantedScopes !== [] ? $grantedScopes : $payloadScopes));
 
         $shopifyStore = ShopifyStore::updateOrCreate(

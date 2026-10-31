@@ -507,3 +507,19 @@ it('associates only the explicitly linked Shopify customer and leaves marketing 
         && ! array_key_exists('buyerAcceptsMarketing', data_get($r->data(), 'variables.order', []))
         && ! array_key_exists('toUpsert', data_get($r->data(), 'variables.order.customer', [])));
 });
+
+it('recovers the same full refund request after its remaining payment budget reaches zero', function (): void {
+    $id = posFixtureQuote($this)['sale_id'];
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk();
+    posFixtureSquarePayment($this, $id);
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk();
+    $request = (string) Str::uuid();
+    $value = ['id' => 'full_refund', 'payment_id' => 'fixture_payment', 'location_id' => 'fixture_location',
+        'reason' => 'Everbranch '.$request, 'amount_money' => ['amount' => 1070, 'currency' => 'USD'], 'status' => 'COMPLETED'];
+    Http::fake(['*/v2/refunds*' => fn ($r) => Http::response($r->method() === 'POST' ? ['refund' => ['id' => 'full_refund']]
+        : (str_contains($r->url(), '/full_refund') ? ['refund' => $value] : ['refunds' => [$value]]))]);
+    $body = ['request_id' => $request, 'amount_minor' => 1070, 'reason' => 'requested_by_customer'];
+    $this->postJson($this->base.'/sales/'.$id.'/refunds', $body)->assertOk()->assertJsonPath('state', 'succeeded');
+    $this->postJson($this->base.'/sales/'.$id.'/refunds', $body)->assertOk()->assertJsonPath('state', 'succeeded');
+    Http::assertSentCount(5);
+});
