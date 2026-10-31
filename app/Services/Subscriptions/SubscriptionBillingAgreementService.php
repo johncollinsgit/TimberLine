@@ -10,6 +10,7 @@ use App\Models\SubscriptionBillingCycle;
 use App\Models\SubscriptionInstallation;
 use App\Models\SubscriptionPilotEnrollment;
 use App\Models\SubscriptionPilotMember;
+use App\Models\SubscriptionRechargeConnection;
 use App\Models\User;
 use App\Services\Mobile\ModernForestryMobileCustomerSession;
 use Carbon\CarbonImmutable;
@@ -264,16 +265,22 @@ class SubscriptionBillingAgreementService
             return $data + ['processor' => 'braintree', 'credential_revision' => $meta['credential_revision'], 'environment' => $meta['environment'],
                 'merchant_id' => $meta['merchant_id'], 'merchant_account_id' => $meta['merchant_account_id']];
         }
-        $data = Validator::make(['binding' => $input], ['binding' => ['array:installation_id,contract_gid,payment_method_gid'],
-            'binding.installation_id' => ['required', 'integer', 'min:1'], 'binding.contract_gid' => ['required', 'regex:#\Agid://shopify/SubscriptionContract/[1-9][0-9]*\z#'],
-            'binding.payment_method_gid' => ['required', 'regex:#\Agid://shopify/CustomerPaymentMethod/[A-Za-z0-9_-]{1,150}\z#']])->validate()['binding'];
+        $data = Validator::make(['binding' => $input], ['binding' => ['array:installation_id,contract_gid,payment_method_gid,source_connection_id,source_payment_method_id,environment'],
+            'binding.installation_id' => ['required', 'integer', 'min:1'], 'binding.contract_gid' => ['sometimes', 'regex:#\Agid://shopify/SubscriptionContract/[1-9][0-9]*\z#'],
+            'binding.payment_method_gid' => ['required', 'regex:#\Agid://shopify/CustomerPaymentMethod/[A-Za-z0-9_-]{1,150}\z#'],
+            'binding.source_connection_id' => ['required', 'integer', 'min:1'], 'binding.source_payment_method_id' => ['required', 'regex:/\A[1-9][0-9]{0,19}\z/'],
+            'binding.environment' => ['required', 'in:sandbox,production']])->validate()['binding'];
         $data['installation_id'] = (int) $data['installation_id'];
+        $data['source_connection_id'] = (int) $data['source_connection_id'];
         $installation = SubscriptionInstallation::query()->forTenantId($member->tenant_id)->where('shopify_store_id', $member->shopify_store_id)
             ->where('status', 'verified')->findOrFail($data['installation_id']);
         abort_unless($installation->shop_domain === $member->details['shop_domain'] && $installation->active_credential_revision_id, 409, 'Verify the original Shopify subscription app first.');
+        $source = SubscriptionRechargeConnection::query()->forTenantId($member->tenant_id)->where('platform', 'shopify')
+            ->where('identifier', $installation->shop_domain)->where('status', 'verified')->findOrFail($data['source_connection_id']);
+        abort_unless($source->active_credential_revision_id, 409, 'Verify the original source read credential first.');
 
         return $data + ['processor' => 'shopify', 'credential_revision_id' => $installation->active_credential_revision_id,
-            'shop_domain' => $installation->shop_domain, 'app_gid' => $installation->app_gid];
+            'source_credential_revision_id' => $source->active_credential_revision_id, 'shop_domain' => $installation->shop_domain, 'app_gid' => $installation->app_gid];
     }
 
     private function owner(int $tenantId, User $actor, int $memberId, string $gate): void
