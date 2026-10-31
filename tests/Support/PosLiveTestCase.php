@@ -15,6 +15,7 @@ class PosLiveTestCase extends \Tests\TestCase
                 throw new \RuntimeException('Refusing POS fixtures outside local disposable MySQL.');
             }
             \App\Services\Pos\PosSchema::install();
+            \App\Services\Inventory\StockSchema::install();
             foreach (['events', 'outbox', 'holds', 'sales', 'items', 'assignments', 'registers', 'connections', 'merchants'] as $name) {
                 $db->table('pos_live_'.$name)->delete();
             }

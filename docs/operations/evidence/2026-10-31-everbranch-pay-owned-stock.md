@@ -2,12 +2,17 @@
 
 October 31, 2026; this is engineering evidence, not a live readiness certificate.
 
-- Disposable MySQL POS/finished-goods/provider/recovery/concurrency run: **101
-  tests, 696 assertions passed**. This includes guest checkout, fresh Square
+- Disposable MySQL POS/finished-goods/provider/recovery/concurrency run: **105
+  tests, 782 assertions passed**. This includes guest checkout, fresh Square
   confirmation, no new Shopify order, exact bundle components, post-purchase
   contact/profile separation, historical reward review/one earning, full/partial
   financial refunds without restocking, duplicate/reordered online events,
   opening-preview rollback, publication uncertainty and last-unit contention.
+- Real MySQL refund tests cover association before and after refund, already-spent
+  credits and a second purchase by the same customer. These caught a committed-
+  journal boundary defect: financial evidence is now verified before wallet writes
+  and fenced against concurrent changes. Historical lookup also precedes the
+  association transaction. Refunds succeed while shortfalls remain for review.
 - The final opening-mapping concurrency fence was then checked with its targeted
   opening preview/apply/retry test: **1 test, 6 assertions passed**.
 - MySQL clean schema and committed dump both match the approved fingerprint;

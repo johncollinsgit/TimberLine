@@ -101,7 +101,14 @@ final class PosCustomerRewards
             || $refund['original_id'] !== $sale->attempt_id || $refund['original_provider_id'] !== $payment['provider_id'])) {
             throw new PosException('confirmed_refund_required');
         }
-        $review = $this->store->db->transaction(function () use ($sale, $snapshot, $refund): bool {
+        // Journal verification owns its committed boundary. Never call it from the wallet transaction.
+        $purchases = app(PosCustomerPurchases::class);
+        $refundRevision = $purchases->refundRevision($sale);
+        $refunded = $purchases->confirmedRefunds($sale, $refund);
+        if (! hash_equals($refundRevision, $purchases->refundRevision($sale))) {
+            throw new PosException('customer_refund_evidence_changed');
+        }
+        $review = $this->store->db->transaction(function () use ($sale, $snapshot, $refund, $refunded, $refundRevision, $purchases): bool {
             $tenant = (int) $sale->tenant_id;
             $id = (int) $snapshot['customer']['id'];
             MarketingProfile::query()->forTenantId($tenant)->whereKey($id)->lockForUpdate()->firstOrFail();
@@ -109,6 +116,9 @@ final class PosCustomerRewards
                 throw new PosException('customer_identity_review_required');
             }
             $sale = $this->store->rows('sales', $tenant)->where('id', $sale->id)->lockForUpdate()->firstOrFail();
+            if (! hash_equals($refundRevision, $purchases->refundRevision($sale))) {
+                throw new PosException('customer_refund_evidence_changed');
+            }
             if ($refund) {
                 $seen = $this->store->rows('events', $tenant)->where('sale_id', $sale->id)->where('code', 'customer_refund_confirmed')
                     ->get()->contains(fn ($e) => $this->store->decrypt($e->details)['operation_id'] === $refund['id']);
@@ -120,7 +130,6 @@ final class PosCustomerRewards
             if (! $terms['enabled']) {
                 return false;
             }
-            $refunded = app(PosCustomerPurchases::class)->confirmedRefunds($sale);
             $subtotal = $snapshot['terms']['rewardable_subtotal_minor'] ?? array_sum(array_map(fn ($line) => $line['unit_amount_minor'] * $line['quantity'], $snapshot['sale']['lines']));
             $remaining = intdiv($subtotal * ((int) $sale->amount_minor - $refunded), (int) $sale->amount_minor);
             $rules = $terms['rules'];

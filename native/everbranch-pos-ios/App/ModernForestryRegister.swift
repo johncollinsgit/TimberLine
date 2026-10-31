@@ -15,6 +15,10 @@ struct EverbranchRegisterView: View {
     var body: some View {
         Group {
             if model.pending != nil && !basket { POSView(screen: .checkout, model: model) }
+            else if model.signedIn && model.registerLoaded && model.selectedRegister?.catalogSource == "native" && model.selectedRegister?.guestCheckout != true {
+                // Retain the original service/invoice lane until its merchant activates the stock adapter.
+                POSView(screen: .checkout, model: model)
+            }
             else if fixture || (model.signedIn && model.registerLoaded) {
                 NativeRegister(model: model, onBasket: { basket = true }, onAccount: { account = true })
             } else { POSView(screen: .setup, model: model) }

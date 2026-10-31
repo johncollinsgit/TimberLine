@@ -61,8 +61,14 @@ final class PosReceiptCustomers
         if ($review && ! in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true)) {
             throw new PosException('reward_owner_review_required', 403);
         }
+        // Customer history can verify original payment journals, which must run before this transaction.
+        $priorLink = $this->association($sale);
+        $claimProfile = $customer['id'] ?? $priorLink?->customer_profile_id ?? ($snapshot['customer']['id'] ?? null);
+        $unclaimed = $priorLink?->reward_context ? $this->store->decrypt($priorLink->reward_context) : ($snapshot['customer_rewards'] ?? ['enabled' => false]);
+        $claim = $claimProfile && ($unclaimed['anonymous'] ?? false)
+            ? $this->claimTerms($scope['tenant_id'], (int) $claimProfile, $sale, $unclaimed, $review, $scope['actor_id']) : null;
         $result = $this->stock->operation($scope['tenant_id'], 'receipt:'.$this->store->runtime().':'.$input['request_id'], 'receipt_customer', $scope['actor_id'],
-            [$sale->id, $input], function ($key) use ($scope, $sale, $snapshot, $customer, $contact, $review, $input): array {
+            [$sale->id, $input], function ($key) use ($scope, $sale, $snapshot, $customer, $contact, $review, $input, $claim, $claimProfile, $unclaimed): array {
                 $current = $this->association($sale);
                 $contact = [...($current ? $this->store->decrypt($current->contact) : []), ...$contact];
                 $selected = $current?->customer_profile_id ?? ($snapshot['customer']['id'] ?? null);
@@ -72,7 +78,10 @@ final class PosReceiptCustomers
                 $profileId = $customer['id'] ?? $selected;
                 $reward = $current?->reward_context ? $this->store->decrypt($current->reward_context) : ($snapshot['customer_rewards'] ?? ['enabled' => false]);
                 if ($profileId && ($reward['anonymous'] ?? false)) {
-                    $reward = $this->claimTerms($scope['tenant_id'], (int) $profileId, $sale, $reward, $review, $scope['actor_id']);
+                    if (! $claim || (int) $claimProfile !== (int) $profileId || \App\Services\PaymentsCore\Contract::hash($reward) !== \App\Services\PaymentsCore\Contract::hash($unclaimed)) {
+                        throw new PosException('receipt_association_changed_retry');
+                    }
+                    $reward = $claim;
                 }
                 $values = ['tenant_id' => $scope['tenant_id'], 'runtime_id' => $this->store->runtime(), 'sale_id' => $sale->id,
                     'customer_profile_id' => $profileId, 'actor_id' => $scope['actor_id'], 'request_hash' => $key,
@@ -114,6 +123,8 @@ final class PosReceiptCustomers
         $purchases = collect($history['purchases']);
         $ambiguous = count($history['issues'] ?? []) > 0 || $purchases->count() >= 100
             || ($terms['rules']['candle_club_multiplier_enabled'] ?? false)
+            // These summaries do not establish whether an older refund preceded this purchase.
+            || $purchases->contains(fn ($p) => $p['confirmed'] && ($p['refunded_minor'] ?? 0) > 0 && ($p['source_id'] ?? null) !== $sale->id)
             || $purchases->contains(fn ($p) => $p['confirmed'] && empty($p['occurred_at']));
         if ($ambiguous) {
             return [...$terms, 'historical_review_required' => true];

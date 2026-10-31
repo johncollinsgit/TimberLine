@@ -146,19 +146,19 @@ it('releases guest quote stock on explicit discard without a Shopify order or im
     Http::assertNothingSent();
 });
 
-function ownedStockComplete($test, ?array $existing = null): array
+function ownedStockComplete($test, ?array $existing = null, string $paymentId = 'fixture_payment'): array
 {
     $quote = $existing ?? $test->postJson($test->base.'/quotes', $test->selection)->assertOk()->json();
     if ($existing === null) {
         $test->postJson($test->base.'/sales/'.$quote['sale_id'].'/collect', [])->assertOk();
     }
     $sale = $test->store->rows('sales', $test->tenant->id)->where('id', $quote['sale_id'])->first();
-    Http::fake(['*/v2/payments/fixture_payment' => Http::response(['payment' => ['id' => 'fixture_payment', 'status' => 'COMPLETED',
+    Http::fake(['*/v2/payments/'.$paymentId => Http::response(['payment' => ['id' => $paymentId, 'status' => 'COMPLETED',
         'reference_id' => $sale->payment_request_id, 'location_id' => 'fixture_location', 'source_type' => 'CARD',
         'amount_money' => ['amount' => 1070, 'currency' => 'USD'], 'total_money' => ['amount' => 1070, 'currency' => 'USD'],
         'card_details' => ['card' => ['card_brand' => 'VISA', 'last_4' => '1111', 'cardholder_name' => 'Card Receipt Name', 'fingerprint' => 'MUST_NOT_SAVE'],
             'entry_method' => 'CONTACTLESS', 'application_name' => 'VISA CREDIT', 'application_identifier' => 'A0000000031010']]])]);
-    $test->postJson($test->base.'/sales/'.$sale->id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()->assertJsonPath('canonical_confirmation', true)->assertJsonPath('receipt_available', true);
+    $test->postJson($test->base.'/sales/'.$sale->id.'/reconcile', ['payment_id' => $paymentId])->assertOk()->assertJsonPath('canonical_confirmation', true)->assertJsonPath('receipt_available', true);
 
     return $quote;
 }
@@ -323,11 +323,44 @@ it('never restores missing online commitments and retains the original inventory
         ->and($this->stock->rows('publications', $this->tenant->id)->where('state', 'completed')->count())->toBe(1);
 });
 
-it('confirms partial and full Square refunds without returning merchandise to stock', function (): void {
+// Fictional live-mode fixtures exercise financial gates without provider traffic.
+function ownedStockRewardsProgram($test, bool $multipliers = false): void
+{
+    config(['pos_live.square_environment' => 'production', 'pos_live.apple_team_id' => 'FICTIONALTEAM',
+        'pos_live.distribution_verified' => true, 'pos_live.tap_entitlement_verified' => true,
+        'pos_live.square_signature_verified' => true, 'pos_live.webhooks_verified' => true, 'cache.default' => 'database']);
+    $test->withHeader('X-Pos-Build', 'fixture_build');
+    $test->store->rows('connections', $test->tenant->id)->update(['environment' => 'production', 'acceptance_at' => now(), 'acceptance_build' => 'fixture_build']);
+    $rules = ['first_order_reward_amount' => 3.50, 'event_rewards_enabled' => true, 'enable_milestone_rewards' => true,
+        'enable_order_based_earning' => true, 'rewardable_channels' => 'show_issued_online_redeemed',
+        'candle_club_multiplier_enabled' => $multipliers, 'candle_club_multiplier_value' => 2];
+    foreach (['candle_cash_program_config' => ['redeem_increment_dollars' => 10, 'second_order_reward_amount' => 1.25], 'candle_cash_policy_config' => ['earning_rules' => $rules]] as $key => $value) {
+        \App\Models\TenantMarketingSetting::create(['tenant_id' => $test->tenant->id, 'key' => $key, 'value' => $value]);
+    }
+    $settings = $test->store->decrypt($test->store->rows('registers', $test->tenant->id)->first()->configuration);
+    $settings['merchant_review'] = ['document_hash' => str_repeat('a', 64), 'markup_minor' => 0];
+    $settings['customer_rewards'] = ['enabled' => true, 'threshold_mode' => 'highest_per_purchase',
+        'policy_version' => app(\App\Services\Pos\PosCustomerRewards::class)->policy($test->tenant->id)['version']];
+    $test->store->rows('registers', $test->tenant->id)->update(['configuration' => $test->store->encrypt($settings)]);
+}
+
+it('confirms partial and full Square refunds without returning merchandise to stock', function (string $association): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('Durable refund journal requires disposable MySQL.');
     }
+    if ($association !== 'unassociated') {
+        ownedStockRewardsProgram($this);
+    }
     $quote = ownedStockComplete($this);
+    $associationUrl = $this->base.'/sales/'.$quote['sale_id'].'/receipt/customer';
+    $customer = ['request_id' => (string) Str::uuid(), 'customer_profile_id' => $this->profile->id];
+    if (in_array($association, ['before', 'spent'], true)) {
+        $this->postJson($associationUrl, $customer)->assertOk()->assertJsonPath('receipt.customer_rewards_status', 'processed');
+        expect(\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->first()->balance)->toBe(3.50);
+        if ($association === 'spent') {
+            \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->update(['balance' => 0]);
+        }
+    }
     $refunds = [];
     Http::fake(['*/v2/refunds*' => function ($r) use (&$refunds) {
         if ($r->method() === 'POST') {
@@ -349,26 +382,22 @@ it('confirms partial and full Square refunds without returning merchandise to st
     $this->getJson($this->base.'/sales/'.$quote['sale_id'].'/receipt')->assertOk()->assertJsonPath('refunded_minor', 1070);
     expect($refunds)->toHaveCount(2)->and($this->stock->listing($this->tenant->id, $this->pool)[0]['on_hand'])->toBe(1)
         ->and($this->stock->rows('movements', $this->tenant->id)->where('reason', 'sale')->count())->toBe(1);
+    if ($association === 'after') {
+        $this->postJson($associationUrl, $customer)->assertOk()->assertJsonPath('receipt.customer_rewards_status', 'processed');
+    }
+    if ($association !== 'unassociated') {
+        expect(\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->first()->balance)->toBe(0.0);
+        $expected = ['before' => 2, 'after' => 0, 'spent' => 1][$association];
+        expect(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe($expected);
+    }
+    if ($association === 'spent') {
+        $this->getJson($this->base.'/sales/'.$quote['sale_id'].'/receipt')->assertOk()->assertJsonPath('customer_rewards_status', 'review_required');
+    }
     Http::assertNotSent(fn ($r) => str_contains($r->url(), 'myshopify.com'));
-});
+})->with(['unassociated', 'before', 'after', 'spent']);
 
 it('awards a guest purchase once after association and lets an owner resolve original-time eligibility review', function (): void {
-    config(['pos_live.square_environment' => 'production', 'pos_live.apple_team_id' => 'FICTIONALTEAM',
-        'pos_live.distribution_verified' => true, 'pos_live.tap_entitlement_verified' => true,
-        'pos_live.square_signature_verified' => true, 'pos_live.webhooks_verified' => true, 'cache.default' => 'database']);
-    $this->withHeader('X-Pos-Build', 'fixture_build');
-    $this->store->rows('connections', $this->tenant->id)->update(['environment' => 'production', 'acceptance_at' => now(), 'acceptance_build' => 'fixture_build']);
-    $rules = ['first_order_reward_amount' => 3.50, 'event_rewards_enabled' => true, 'enable_milestone_rewards' => true,
-        'enable_order_based_earning' => true, 'rewardable_channels' => 'show_issued_online_redeemed',
-        'candle_club_multiplier_enabled' => true, 'candle_club_multiplier_value' => 2];
-    foreach (['candle_cash_program_config' => ['redeem_increment_dollars' => 10], 'candle_cash_policy_config' => ['earning_rules' => $rules]] as $key => $value) {
-        \App\Models\TenantMarketingSetting::create(['tenant_id' => $this->tenant->id, 'key' => $key, 'value' => $value]);
-    }
-    $settings = $this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration);
-    $settings['merchant_review'] = ['document_hash' => str_repeat('a', 64), 'markup_minor' => 0];
-    $settings['customer_rewards'] = ['enabled' => true, 'threshold_mode' => 'highest_per_purchase',
-        'policy_version' => app(\App\Services\Pos\PosCustomerRewards::class)->policy($this->tenant->id)['version']];
-    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    ownedStockRewardsProgram($this, true);
     $quote = ownedStockComplete($this);
     $url = $this->base.'/sales/'.$quote['sale_id'].'/receipt/customer';
     $input = ['request_id' => (string) Str::uuid(), 'customer_profile_id' => $this->profile->id];
@@ -382,4 +411,22 @@ it('awards a guest purchase once after association and lets an owner resolve ori
         ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(1);
     $view = app(\App\Services\Marketing\CustomerCommerceSnapshotService::class)->forProfile($this->profile, $this->tenant->id);
     expect(collect($view['purchases'])->where('channel', 'in_person'))->toHaveCount(1);
+});
+
+it('verifies prior in-person history before associating the next guest purchase and earns the second milestone once', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This regression exercises committed MySQL journal boundaries.');
+    }
+    ownedStockRewardsProgram($this);
+    $first = ownedStockComplete($this);
+    $input = ['request_id' => (string) Str::uuid(), 'customer_profile_id' => $this->profile->id];
+    $this->postJson($this->base.'/sales/'.$first['sale_id'].'/receipt/customer', $input)->assertOk()->assertJsonPath('receipt.customer_rewards_status', 'processed');
+    $this->travel(2)->seconds();
+    $this->selection['request_id'] = (string) Str::uuid();
+    $second = ownedStockComplete($this, null, 'fixture_second_payment');
+    $input['request_id'] = (string) Str::uuid();
+    $this->postJson($this->base.'/sales/'.$second['sale_id'].'/receipt/customer', $input)->assertOk()->assertJsonPath('receipt.customer_rewards_status', 'processed');
+    $this->postJson($this->base.'/sales/'.$second['sale_id'].'/receipt/customer', $input)->assertOk();
+    expect(\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->first()->balance)->toBe(4.75)
+        ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(2);
 });

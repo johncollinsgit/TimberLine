@@ -68,7 +68,9 @@ projection batches; inventory delays never authorize another charge.
 `PosReceiptCustomers` holds encrypted receipt contact and audited canonical
 customer association separately from the financial snapshot. Association and
 refund effects use the existing rewards ledger, frozen program terms and original
-time. Ambiguous historical eligibility requires explicit owner evidence. Provider
+time. Ambiguous historical eligibility requires explicit owner evidence. Journal
+verification precedes wallet/association transactions; a current locked refund
+revision prevents older evidence from overwriting a concurrent refund adjustment. Provider
 card names may be confirmed for receipt contact, never used for automatic identity
 merging or marketing profiling. Existing unified customer projections connect
 explicitly linked purchases without duplicating provider/mirror revenue.

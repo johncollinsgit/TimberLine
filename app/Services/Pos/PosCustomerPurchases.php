@@ -146,7 +146,19 @@ final class PosCustomerPurchases
         return false;
     }
 
-    public function confirmedRefunds(object $sale): int
+    /** A change detector only, never financial evidence. Lock current rows during a wallet write. */
+    public function refundRevision(object $sale): string
+    {
+        $lock = $this->store->db->transactionLevel() > 0;
+        $operations = $this->store->db->table('payment_core_operations')->where('tenant_id', $sale->tenant_id)
+            ->where('original_id', $sale->attempt_id)->where('kind', 'refund')->orderBy('id')->when($lock, fn ($q) => $q->lockForUpdate())->get();
+        $events = $this->store->rows('events', (int) $sale->tenant_id)->where('sale_id', $sale->id)
+            ->whereIn('code', ['customer_refund_confirmed', 'square_refund_observed'])->orderBy('id')->when($lock, fn ($q) => $q->lockForUpdate())->get();
+
+        return \App\Services\PaymentsCore\Contract::hash([$operations->all(), $events->all()]);
+    }
+
+    public function confirmedRefunds(object $sale, ?array $additionalVerifiedRefund = null): int
     {
         $operations = [];
         foreach ($this->store->db->table('payment_core_operations')->where('tenant_id', $sale->tenant_id)->where('original_id', $sale->attempt_id)->where('kind', 'refund')->where('state', 'succeeded')->pluck('id') as $id) {
@@ -170,6 +182,12 @@ final class PosCustomerPurchases
             if ($payment['provider_id'] === $details['payment_id']) {
                 $operations[$details['refund_id']] = (int) $details['amount_minor'];
             }
+        }
+        if ($additionalVerifiedRefund) {
+            if ($additionalVerifiedRefund['state'] !== 'succeeded' || $additionalVerifiedRefund['kind'] !== 'refund' || $additionalVerifiedRefund['original_id'] !== $sale->attempt_id) {
+                throw new PosException('confirmed_refund_required');
+            }
+            $operations[$additionalVerifiedRefund['provider_id'] ?? ('operation:'.$additionalVerifiedRefund['id'])] = (int) $additionalVerifiedRefund['amount_minor'];
         }
         if (array_sum($operations) > (int) $sale->amount_minor) {
             throw new PosException('square_refund_coverage_requires_review');
