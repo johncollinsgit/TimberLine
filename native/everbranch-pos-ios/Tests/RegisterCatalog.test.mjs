@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 
-// Exercise the actual bundled page. Native UI tests cover layout/focus; this
+// Retained legacy gallery reference only; this page is no longer packaged or
+// used by Everbranch Pay. Native UI tests cover the current register. This
 // small DOM records catalog output and the identifiers sent over the bridge.
 function page() {
     const elements = new Map();

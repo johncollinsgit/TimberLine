@@ -56,7 +56,9 @@ cards, a docked primary action and optional account/device diagnostics. UI tests
 exercise search focus without zoom, pinned navigation, the basket handoff,
 separate setup/checkout entry and returning to the preserved basket. A completed
 sale clears that basket before returning to products for the next customer. The
-connected-catalog contract tests run with `node --test Tests/RegisterCatalog.test.mjs`.
+current register is native SwiftUI, with live catalog metadata and variant/bundle
+sheets covered by the core and UI tests. `App/RegisterDemo` is a retained legacy
+reference and is excluded from the application resources; it cannot collect.
 
 
 ## Identity before business selection

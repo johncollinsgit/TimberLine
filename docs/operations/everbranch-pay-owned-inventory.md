@@ -68,7 +68,9 @@ reviewed mix-and-match bundles use one component sheet. Labeled pills replace
 small navigation arrows. Search must not zoom or allow the basket dock to cover
 product controls while the keyboard is open.
 
-Catalog import paginates the complete active catalog and images. It imports
+The unused 57 MB bundled photo demo is excluded from application resources;
+the installed register loads live catalog images. Catalog import paginates the
+complete active catalog and images. It imports
 **no physical quantities**. Exact variant/store revisions price the basket on the
 server. Modern Forestry's October 31 read-only audit found 374 active non-gift
 variants with images: Laurel & Fig Wax Melt is $3, most melts $7, three 16oz
