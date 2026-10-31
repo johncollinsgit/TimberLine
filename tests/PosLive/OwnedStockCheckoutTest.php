@@ -397,6 +397,9 @@ it('confirms partial and full Square refunds without returning merchandise to st
 })->with(['unassociated', 'before', 'after', 'spent']);
 
 it('awards a guest purchase once after association and lets an owner resolve original-time eligibility review', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('The reference SQLite journal deliberately rejects live-mode collection; this integration runs in the MySQL gate.');
+    }
     ownedStockRewardsProgram($this, true);
     $quote = ownedStockComplete($this);
     $url = $this->base.'/sales/'.$quote['sale_id'].'/receipt/customer';
