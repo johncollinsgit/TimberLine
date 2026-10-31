@@ -1,3 +1,24 @@
+## Durable native update calculations (October 31; source candidate)
+
+`SubscriptionShopifyUpdateService` now prepares and dispatches an original-contract
+update calculation behind separate default-off native amendment and existing
+servicing/rollout gates. Encrypted signed append-only actions retain the immutable
+intent, one send claim, provider ID and calculated quote. Enclosing transactions
+are rejected: the send record commits before a second member/agreement/current
+owner/credential locking transaction holds authority through bounded HTTP. No
+mutable agreement pointer can erase that claim. A response lost without an ID
+stays unknown and is never resubmitted; known IDs are polled. IDs commit before
+quote validation, so warnings, user errors and stale reviews retain recovery
+evidence. Pre-commit closure is explicit and audited. A finite local pause may
+retain an older valid paused provider date without changing either schedule.
+
+Only internal owner calculation/reconciliation/closure methods exist. Reconciliation
+after an editing freeze preserves later pause/cancel/revision/date state. No
+contract commit, signed native term application, collection tax preflight, worker
+or customer confirmation is connected yet. Real MySQL durability/worker races
+exercise the path; no DDL, provider mutation, deployment or rollout occurred.
+See the replacement runbook.
+
 ## Original-app schema and native update builder (October 31; source candidate)
 
 A read-only original retail app probe returned pinned Shopify 2026-10 with the
@@ -15,10 +36,11 @@ It retains actual provider line IDs, fixed member prices, pricing policies,
 selling-plan metadata, original note/method/anchors and source IDs. Address-only
 updates omit lines; scent-only updates omit delivery replacement. Ambiguous line
 binding, repricing, warnings, method/date/status or retained-evidence drift fail
-closed. This is a pure protocol builder: durable dispatch/unknown-result recovery,
+closed. The protocol class remains pure; the calculation journal described above
+now retains durable dispatch and calculation recovery. Commit dispatch/recovery,
 native signed future-term application, worker and customer confirmation are still
-required before native updates can be enabled. No provider mutation or rollout
-occurred. See the replacement runbook.
+required before native updates can be enabled. No live provider mutation or
+rollout occurred. See the replacement runbook.
 
 ## Authenticated customer future delivery (October 31; source candidate)
 

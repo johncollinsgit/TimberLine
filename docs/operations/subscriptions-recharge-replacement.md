@@ -66,9 +66,9 @@ catalog. It has no HTTP, commit, local-term save or billing side effect. It:
   note, saved method, line bindings and original schedule. A changed date/status
   fails for reconciliation; this helper never restores a prior schedule.
 
-This phase is a **pure protocol builder**, not completed native amendment
-servicing. Next integration must durably retain original intent before calculate,
-poll only the original ID, collect exact quote/total confirmation, claim one
+The protocol class is a **pure builder**. The calculation journal described
+below now durably retains intent before calculate and polls only the original ID.
+Completed native amendment servicing still requires exact quote/total confirmation, one
 commit before HTTP and recover an unknown result only through the original
 owned contract, amendment marker and exact line state. Retain pending/unknown/
 stale-contract outcomes; never issue a replacement commit from a missing result.
@@ -915,6 +915,52 @@ membership/vote/comment continuity after cancellation. Customer address/scents
 confirmation, native Shopify contract amendments, payment updates, operations
 and real hosted/customer acceptance remain required; this schedule checkpoint
 alone is not the full customer replacement.
+
+## Native Shopify update calculation journal (source candidate; disabled)
+
+`SubscriptionShopifyUpdateService` connects the validated native update protocol
+to encrypted signed append-only `SubscriptionBillingAction` stages. The internal
+owner methods calculate, reconcile or explicitly close an uncommitted review.
+There is no update commit transport, customer endpoint, CLI or scheduled worker.
+`SUBSCRIPTIONS_REPLACEMENT_SHOPIFY_AMENDMENTS_ENABLED=false` is independent of
+the general amendment and existing exact-member servicing gates. Enabling it
+alone cannot change a contract or charge a customer.
+
+Preparation retains normalized merchant-reviewed shipping/scents, the exact
+original contract/version/line IDs, provider context, revision/hash and UUID.
+Current member/agreement/owner/pivot and original installation/credential/store
+checks precede the send. The signed send action commits first. A second locking
+transaction holds the servicing authority through bounded fixed-operation HTTP;
+an outer caller transaction is rejected before any provider request so that the
+send marker cannot remain uncommitted. An independent MySQL observer verifies
+durability in the test fixture. The journal, not mutable agreement metadata,
+prevents duplicate dispatch after a process failure or concurrent request.
+
+If the initial response is lost without a calculation ID, retain
+`calculation_unknown`; never invent an ID or submit another calculation for the
+same review. A known ID is retained in its own committed action before warnings,
+user errors, totals or current revision are evaluated. Reconciliation only polls
+that original ID. Provider failure is terminal for that review. A pending result
+completed after a local pause/cancel returns `review_stale`; an already retained
+quote can be replayed after a freeze without changing status, revision or dates.
+Pre-commit closure adds a signed aborted action and permits a separately reviewed
+new request; it does not cancel a contract or erase the original send evidence.
+A finite pause may legitimately leave an older valid paused provider billing date;
+calculation preserves it and the newer local pause date.
+
+The calculation catalog now requests the complete original transport identity.
+All 21 documents are still checked against the original-app pinned 2026-10 schema
+capture and its CI projection. MySQL tests cover separate-connection send-marker
+visibility, no-resend recovery, immutable evidence tampering, stale review/current
+owner revocation, credential revocation beyond an older consistent snapshot,
+terminal failure, close/replay and two independent workers.
+
+This remains a calculation workflow. Native signed future-term history and
+application, commit dispatch/unknown recovery with later-stop precedence,
+positive-action/collection guards, fresh native tax preflight, customer
+confirmation and worker integration are required before native edits can launch.
+Original source-method association and real merchant/provider/two-tester hosted
+acceptance remain unproven. No live contract, source, order or charge changed.
 
 ## Customer purchase history gateway icons
 

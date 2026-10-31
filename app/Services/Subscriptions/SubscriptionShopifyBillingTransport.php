@@ -31,9 +31,9 @@ shippingAddress { firstName lastName company address1 address2 city province pro
 lineItems(first: 25) { nodes { variant { id } quantity originalUnitPriceSet { shopMoney { amount currencyCode } } } pageInfo { hasNextPage } }
 GRAPHQL;
 
-    public function context(SubscriptionBillingAgreement $row): array
+    public function context(SubscriptionBillingAgreement $row, bool $currentRead = false): array
     {
-        [$installation, $revision] = $this->resolve($row);
+        [$installation, $revision] = $this->resolve($row, $currentRead);
 
         return ['installation_id' => $installation->id, 'credential_revision_id' => $revision->id,
             'credential_fingerprint' => SubscriptionEvidence::digest($revision->credentials['access_token']),
@@ -45,6 +45,31 @@ GRAPHQL;
     public function method(SubscriptionBillingAgreement $row): array
     {
         return $this->read($row, 'method', ['id' => $row->method_binding['payment_method_gid']]);
+    }
+
+    public function updateRead(SubscriptionBillingAgreement $row, string $operation, ?string $calculationId = null, ?array $terms = null): array
+    {
+        $variables = match ($operation) {
+            'capabilities' => [],
+            'contract' => ['id' => data_get($row->authorization_evidence, 'shopify_adoption.contract_id')],
+            'calculation' => ['id' => $calculationId],
+            'catalog' => ['customer' => 'gid://shopify/Customer/'.$row->terms['shopify_customer_id'],
+                'variants' => array_map(fn ($line) => 'gid://shopify/ProductVariant/'.$line['variant_id'], ($terms ?? $row->terms)['lines'])],
+            default => throw new \InvalidArgumentException('Unsupported original native update read.'),
+        };
+        abort_unless(! in_array($operation, ['contract', 'calculation'], true) || filled($variables['id']), 409);
+        if ($operation === 'calculation') {
+            abort_unless(preg_match('#\Agid://shopify/SubscriptionContractCalculation/[A-Za-z0-9_-]{1,190}\z#', $calculationId ?? ''), 422);
+        }
+
+        return $this->request($row, SubscriptionShopifyUpdateProtocol::document($operation), $variables, true);
+    }
+
+    /** Only the immutable original calculation can be sent; this transport exposes no update commit. */
+    public function updateCalculate(SubscriptionBillingAgreement $row, string $uuid): array
+    {
+        return app(SubscriptionShopifyUpdateService::class)->dispatchCalculate($row, $uuid,
+            fn ($current, $intent) => $this->request($current, SubscriptionShopifyUpdateProtocol::document('calculate'), $intent['variables'], false, true));
     }
 
     public function originalOrder(SubscriptionBillingAgreement $row, string $id): array
@@ -278,10 +303,10 @@ GRAPHQL;
         return $this->request($row, $document, $variables, true);
     }
 
-    private function request(SubscriptionBillingAgreement $row, string $document, array $variables, bool $checkIdentity): array
+    private function request(SubscriptionBillingAgreement $row, string $document, array $variables, bool $checkIdentity, bool $currentRead = false): array
     {
-        [$installation, $revision] = $this->resolve($row);
-        $context = $this->context($row);
+        [$installation, $revision] = $this->resolve($row, $currentRead);
+        $context = $this->context($row, $currentRead);
         try {
             $response = Http::withHeaders(['X-Shopify-Access-Token' => $revision->credentials['access_token'], 'Accept' => 'application/json'])
                 ->withoutRedirecting()->connectTimeout(3)->timeout(12)->post('https://'.$installation->shop_domain.'/admin/api/'.SubscriptionAccessService::API_VERSION.'/graphql.json',
@@ -293,7 +318,7 @@ GRAPHQL;
         } catch (\Throwable) {
             abort(502, 'The original Shopify subscription evidence could not be verified.');
         }
-        abort_unless($this->context($row->fresh()) === $context, 409, 'The original subscription installation or credential changed.');
+        abort_unless($this->context($row->fresh(), $currentRead) === $context, 409, 'The original subscription installation or credential changed.');
         if ($checkIdentity) {
             $this->identity($row, $installation, $body['data']);
         }
@@ -318,7 +343,7 @@ GRAPHQL;
         abort_unless(is_bool($development) && $development === ($row->method_binding['environment'] === 'sandbox'), 423, 'Sandbox subscription setup requires an isolated Shopify development store.');
     }
 
-    private function resolve(SubscriptionBillingAgreement $row): array
+    private function resolve(SubscriptionBillingAgreement $row, bool $currentRead = false): array
     {
         abort_unless(SubscriptionEvidence::readsEnabled($row->tenant_id), 423, 'Subscription provider reads are paused.');
         $binding = $row->method_binding;
@@ -327,18 +352,18 @@ GRAPHQL;
             && is_int($binding['installation_id'] ?? null) && is_int($binding['credential_revision_id'] ?? null), 409);
         app(SubscriptionReplacementAccess::class)->member($row);
         $installation = SubscriptionInstallation::query()->forTenantId($row->tenant_id)->where('shopify_store_id', $row->terms['shopify_store_id'])
-            ->where('status', 'verified')->findOrFail($binding['installation_id']);
+            ->where('status', 'verified')->when($currentRead, fn ($q) => $q->lockForUpdate())->findOrFail($binding['installation_id']);
         abort_unless($installation->verified_at && ! $installation->read_pause_reason
             && $installation->shop_domain === $binding['shop_domain'] && $installation->app_gid === $binding['app_gid']
             && $installation->active_credential_revision_id === $binding['credential_revision_id']
             && $installation->api_version === SubscriptionAccessService::API_VERSION, 409, 'The original verified Shopify subscription installation is unavailable.');
         $revision = SubscriptionCredentialRevision::query()->forTenantId($row->tenant_id)->where('installation_id', $installation->id)
-            ->where('status', 'active')->findOrFail($binding['credential_revision_id']);
+            ->where('status', 'active')->when($currentRead, fn ($q) => $q->lockForUpdate())->findOrFail($binding['credential_revision_id']);
         abort_unless($revision->verified_at && ! $revision->revoked_at && ! $revision->expires_at?->isPast(), 409, 'The original Shopify subscription credential is unavailable.');
         $token = $revision->credentials['access_token'] ?? null;
         abort_unless(is_string($token) && $token !== '' && strlen($token) <= 4096 && ! preg_match('/[\r\n]/', $token), 409);
         abort_unless(ShopifyStore::query()->forTenantId($row->tenant_id)->whereKey($installation->shopify_store_id)
-            ->where('shop_domain', $installation->shop_domain)->exists(), 409);
+            ->where('shop_domain', $installation->shop_domain)->when($currentRead, fn ($q) => $q->lockForUpdate())->first(), 409);
 
         return [$installation, $revision];
     }

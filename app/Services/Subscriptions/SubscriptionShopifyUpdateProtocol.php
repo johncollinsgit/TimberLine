@@ -19,7 +19,7 @@ class SubscriptionShopifyUpdateProtocol
 
         return match ($operation) {
             'capabilities' => 'query ReplacementUpdateCapabilities { '.$identity.' mutationType: __type(name: "Mutation") { fields { name } } queryType: __type(name: "QueryRoot") { fields { name } } updateInputType: __type(name: "SubscriptionContractCalculationContractUpdateInput") { inputFields { name } } lineInputType: __type(name: "SubscriptionContractCalculationProductVariantLineInput") { inputFields { name } } }',
-            'catalog' => SubscriptionAmendmentQuote::CATALOG,
+            'catalog' => 'query ReplacementUpdateCatalog($customer: ID!, $variants: [ID!]!) { '.$identity.' customer(id: $customer) { id } nodes(ids: $variants) { ... on ProductVariant { id title product { title status } inventoryItem { requiresShipping } } } }',
             'contract' => 'query ReplacementUpdateOriginalContract($id: ID!) { '.$identity.' subscriptionContract(id: $id) { '.$contract.' } }',
             'calculate' => 'mutation ReplacementCalculateUpdate($id: ID!, $actor: SubscriptionActor!, $input: SubscriptionContractCalculationContractUpdateInput!) { subscriptionContractUpdateCalculate(contractId: $id, actor: $actor, contractUpdateInput: $input) { subscriptionContractCalculation { '.$calculation.' } userErrors { code field } } }',
             'calculation' => 'query ReplacementUpdateCalculation($id: ID!) { '.$identity.' subscriptionContractCalculation(id: $id) { '.$calculation.' } }',
@@ -41,8 +41,11 @@ class SubscriptionShopifyUpdateProtocol
         abort_unless(array_key_exists('note', $before) && is_string($before['updatedAt'] ?? null)
             && in_array($before['status'] ?? null, ['ACTIVE', 'PAUSED'], true)
             && (($row->status === 'paused') === ($before['status'] === 'PAUSED'))
-            && SubscriptionShopifyBillingProtocol::sameInstant($before['nextBillingDate'] ?? null,
-                SubscriptionShopifyBillingProtocol::instant($row->terms, $row->next_billing_date->toDateString())), 409, 'The original provider schedule, note or version needs review.');
+            && is_string($before['nextBillingDate'] ?? null)
+            && ($row->status === 'paused' || SubscriptionShopifyBillingProtocol::sameInstant($before['nextBillingDate'],
+                SubscriptionShopifyBillingProtocol::instant($row->terms, $row->next_billing_date->toDateString()))), 409, 'The original provider schedule, note or version needs review.');
+        abort_unless(preg_match('/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})\z/', $before['nextBillingDate'])
+            && CarbonImmutable::parse($before['nextBillingDate'])->format('Y-m-d\\TH:i:s') === substr($before['nextBillingDate'], 0, 19), 409, 'Retain a valid provider billing date.');
         $proposal = app(SubscriptionAmendmentProposal::class)->review($row, $change);
         $terms = $proposal['terms'];
         $context = app(SubscriptionShopifyBillingTransport::class)->context($row);

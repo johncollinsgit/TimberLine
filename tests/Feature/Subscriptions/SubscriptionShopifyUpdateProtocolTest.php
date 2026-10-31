@@ -92,6 +92,22 @@ test('native update quote verifies original line ids and exact projected totals 
     $this->protocol->assertApplied($this->row, $intent, $quote, $applied);
 });
 
+test('a paused native update retains the provider date even when a finite local pause moved the next date', function () {
+    $this->row->update(['status' => 'paused', 'next_billing_date' => '2027-03-31', 'resume_on' => '2027-03-31']);
+    $this->before['status'] = 'PAUSED';
+    $originalDate = $this->before['nextBillingDate'];
+    $intent = nativeUpdateIntent($this);
+    expect($intent['before']['nextBillingDate'])->toBe($originalDate)->and($intent['variables']['input'])->not->toHaveKeys(['nextBillingDate', 'status'])
+        ->and($this->row->fresh()->next_billing_date->toDateString())->toBe('2027-03-31')->and($this->row->fresh()->status)->toBe('paused');
+});
+
+test('a paused native update refuses a malformed provider billing date', function () {
+    $this->row->update(['status' => 'paused']);
+    $this->before['status'] = 'PAUSED';
+    $this->before['nextBillingDate'] = '2027-02-31T15:00:00Z';
+    expect(fn () => nativeUpdateIntent($this))->toThrow(HttpException::class);
+});
+
 test('native update refuses missing line identity changed original metadata schedule or unrelated catalog', function (string $defect) {
     if ($defect === 'line_id') {
         unset($this->before['lines']['nodes'][0]['id']);
