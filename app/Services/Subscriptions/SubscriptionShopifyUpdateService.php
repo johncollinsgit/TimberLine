@@ -6,6 +6,7 @@ use App\Models\SubscriptionBillingAction;
 use App\Models\SubscriptionBillingAgreement;
 use App\Models\SubscriptionPilotMember;
 use App\Models\User;
+use App\Services\Mobile\ModernForestryMobileCustomerSession;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -14,6 +15,53 @@ use Illuminate\Support\Str;
 /** Durable native calculation, exact approval and one commit; never collects or restores a prior schedule. */
 class SubscriptionShopifyUpdateService
 {
+    public function calculateCustomer(ModernForestryMobileCustomerSession $session, array $change, string $uuid, int $revision): array
+    {
+        $row = app(SubscriptionReplacementCustomerAccess::class)->agreement($session);
+        abort_unless($row && $row->processor === 'shopify', 404);
+        Validator::make(['change' => $change], ['change' => ['required', 'array:shipping_address,swaps']])->validate();
+        $actor = SubscriptionShopifyCustomerActor::fromSession($row, $session);
+
+        return $this->calculate($row->tenant_id, $actor, $row->id,
+            $change + ['fixed_shipping_reviewed' => true, 'policy_reference' => 'delivery-policy:'.$actor->proof['policy_uuid']], $uuid, $revision);
+    }
+
+    public function confirmCustomer(ModernForestryMobileCustomerSession $session, string $uuid, int $revision, string $hash, bool $confirmed): array
+    {
+        abort_unless($confirmed, 422, 'Confirm the exact future delivery and total.');
+        [$row, $actor] = $this->customerRequest($session, $uuid);
+
+        return $this->commit($row->tenant_id, $actor, $row->id, $uuid, $revision, $hash,
+            ['reference' => 'delivery-policy:'.$actor->proof['policy_uuid'], 'quoted_total_reviewed' => true, 'continuing_authorization_reviewed' => true]);
+    }
+
+    public function reconcileCustomer(ModernForestryMobileCustomerSession $session, string $uuid): array
+    {
+        [$row, $actor] = $this->customerRequest($session, $uuid);
+        if (! $this->action($row, strtolower($uuid), 'calculate_sent')) {
+            return ['status' => 'calculation_prepared', 'request_uuid' => strtolower($uuid), 'charges_customer' => false, 'changes_contract' => false];
+        }
+
+        return $this->reconcile($row->tenant_id, $actor, $row->id, $uuid);
+    }
+
+    public function abortCustomer(ModernForestryMobileCustomerSession $session, string $uuid): array
+    {
+        [$row, $actor] = $this->customerRequest($session, $uuid);
+
+        return $this->abort($row->tenant_id, $actor, $row->id, $uuid);
+    }
+
+    private function customerRequest(ModernForestryMobileCustomerSession $session, string $uuid): array
+    {
+        abort_unless(Str::isUuid($uuid), 422);
+        $row = app(SubscriptionReplacementCustomerAccess::class)->agreement($session);
+        abort_unless($row && $row->processor === 'shopify', 404);
+        $request = $this->required($row, strtolower($uuid), 'requested');
+
+        return [$row, SubscriptionShopifyCustomerActor::forRequest($row, $session, $request)];
+    }
+
     public function preview(int $tenantId, User $actor, int $agreementId): array
     {
         $row = SubscriptionBillingAgreement::query()->forTenantId($tenantId)->findOrFail($agreementId);
@@ -27,9 +75,10 @@ class SubscriptionShopifyUpdateService
             'apply_enabled' => config('subscriptions.replacement_amendment_apply_enabled') === true];
     }
 
-    public function calculate(int $tenantId, User $actor, int $agreementId, array $input, string $uuid, int $revision): array
+    public function calculate(int $tenantId, User|SubscriptionShopifyCustomerActor $actor, int $agreementId, array $input, string $uuid, int $revision): array
     {
         $this->outsideTransaction();
+        abort_unless(! $actor instanceof SubscriptionShopifyCustomerActor || $actor->interactive, 403, 'Start a new review from your authenticated account.');
         abort_unless(Str::isUuid($uuid) && $revision >= 1, 422);
         $uuid = strtolower($uuid);
         $input = app(SubscriptionAmendmentProposal::class)->normalize($input);
@@ -41,6 +90,9 @@ class SubscriptionShopifyUpdateService
             return $this->reconcile($tenantId, $actor, $agreementId, $uuid);
         }
         $this->authorize($row, $actor, true, false);
+        if ($actor instanceof SubscriptionShopifyCustomerActor) {
+            $actor->permits($row, $input, false);
+        }
         abort_unless($row->revision === $revision, 409, 'Review the current agreement revision.');
         app(SubscriptionBillingAmendmentService::class)->assertFuture($row);
         $transport = app(SubscriptionShopifyBillingTransport::class);
@@ -48,7 +100,8 @@ class SubscriptionShopifyUpdateService
         $before = $transport->updateRead($row, 'contract')['subscriptionContract'] ?? [];
         $proposal = app(SubscriptionAmendmentProposal::class)->review($row, $input);
         $catalog = $transport->updateRead($row, 'catalog', null, $proposal['terms']);
-        $intent = app(SubscriptionShopifyUpdateProtocol::class)->intent($row, $before, $input, $catalog, $uuid);
+        $intent = app(SubscriptionShopifyUpdateProtocol::class)->intent($row, $before, $input, $catalog, $uuid,
+            $actor instanceof SubscriptionShopifyCustomerActor ? 'CUSTOMER' : 'MERCHANT');
         $this->capabilities($capabilities, $intent);
         $this->locked($row, function ($current) use ($actor, $input, $revision, $uuid, $intent) {
             $this->authorize($current, $actor, true, true);
@@ -70,7 +123,8 @@ class SubscriptionShopifyUpdateService
             }
             abort_if(SubscriptionBillingAction::query()->forTenantId($current->tenant_id)->where('agreement_id', $current->id)
                 ->where('request_uuid', $uuid)->lockForUpdate()->first(), 409, 'This request ID belongs to another subscription action.');
-            $this->append($current, $uuid, 'requested', $actor, $revision, ['request_uuid' => $uuid, 'input' => $input, 'intent' => $intent],
+            $this->append($current, $uuid, 'requested', $actor, $revision, ['request_uuid' => $uuid, 'input' => $input, 'intent' => $intent]
+                + ($actor instanceof SubscriptionShopifyCustomerActor ? ['customer_actor' => $actor->proof] : []),
                 ['terms' => $current->terms, 'terms_hash' => $current->terms_hash], ['prepared_at' => now()->toISOString()]);
         });
 
@@ -78,7 +132,7 @@ class SubscriptionShopifyUpdateService
     }
 
     /** Polls only the retained calculation ID. A lost initial response never creates a second calculation. */
-    public function reconcile(int $tenantId, User $actor, int $agreementId, string $uuid): array
+    public function reconcile(int $tenantId, User|SubscriptionShopifyCustomerActor $actor, int $agreementId, string $uuid): array
     {
         $this->outsideTransaction();
         abort_unless(Str::isUuid($uuid), 422);
@@ -128,8 +182,9 @@ class SubscriptionShopifyUpdateService
     }
 
     /** A pre-commit calculation cannot change a contract, including when its response was lost. */
-    public function abort(int $tenantId, User $actor, int $agreementId, string $uuid): array
+    public function abort(int $tenantId, User|SubscriptionShopifyCustomerActor $actor, int $agreementId, string $uuid): array
     {
+        abort_unless(! $actor instanceof SubscriptionShopifyCustomerActor || $actor->interactive, 403);
         $this->outsideTransaction();
         abort_unless(Str::isUuid($uuid), 422);
         $uuid = strtolower($uuid);
@@ -156,7 +211,7 @@ class SubscriptionShopifyUpdateService
         $this->outsideTransaction();
         $this->locked($row, function ($current) use ($uuid) {
             $request = $this->required($current, $uuid, 'requested', true);
-            $actor = User::findOrFail((int) $request->actor_reference);
+            $actor = $this->actor($current, $request);
             $this->assertSendable($current, $request, $actor);
             abort_if($this->action($current, $uuid, 'calculate_sent', true), 409, 'The original calculation was already dispatched; reconcile it without resending.');
             $this->append($current, $uuid, 'calculate_sent', $actor, $current->revision,
@@ -166,15 +221,16 @@ class SubscriptionShopifyUpdateService
         return $this->locked($row, function ($current) use ($uuid, $send) {
             $request = $this->required($current, $uuid, 'requested', true);
             $this->required($current, $uuid, 'calculate_sent', true);
-            $this->assertSendable($current, $request, User::findOrFail((int) $request->actor_reference));
+            $this->assertSendable($current, $request, $this->actor($current, $request));
 
             return $send($current, $request->request['intent']);
         });
     }
 
-    public function commit(int $tenantId, User $actor, int $agreementId, string $uuid, int $revision, string $hash, array $approval): array
+    public function commit(int $tenantId, User|SubscriptionShopifyCustomerActor $actor, int $agreementId, string $uuid, int $revision, string $hash, array $approval): array
     {
         $this->outsideTransaction();
+        abort_unless(! $actor instanceof SubscriptionShopifyCustomerActor || $actor->interactive, 403, 'Confirm from your authenticated account.');
         abort_unless(Str::isUuid($uuid) && $revision >= 1 && preg_match('/\A[a-f0-9]{64}\z/', $hash), 422);
         $uuid = strtolower($uuid);
         $approval = Validator::make(['approval' => $approval], ['approval' => ['required', 'array:reference,quoted_total_reviewed,continuing_authorization_reviewed'],
@@ -188,6 +244,13 @@ class SubscriptionShopifyUpdateService
         abort_unless($request->actor_reference === (string) $actor->id && $request->expected_revision === $revision
             && hash_equals($quoted->after_state['quote']['review_hash'], $hash), 409, 'Accept the exact original actor, request, revision and quote.');
         $review = ['request_uuid' => $uuid, 'approval' => $approval, 'quote_hash' => $hash, 'review_revision' => $revision];
+        if ($actor instanceof SubscriptionShopifyCustomerActor) {
+            abort_unless($approval['reference'] === 'delivery-policy:'.$actor->proof['policy_uuid']
+                && SubscriptionEvidence::canonical($request->request['customer_actor'] ?? []) === SubscriptionEvidence::canonical($actor->proof), 409, 'Confirm your original policy and delivery review.');
+            $review['customer_confirmation'] = $actor->proof + ['request_uuid' => $uuid, 'revision' => $revision,
+                'quote_hash' => $hash, 'quoted_terms_hash' => SubscriptionEvidence::digest(SubscriptionEvidence::canonical($quoted->after_state['quote']['terms'])),
+                'confirmed_total_cents' => $quoted->after_state['quote']['terms']['amount_cents'], 'confirmed' => true];
+        }
         if ($prior = $this->action($row, $uuid, 'commit_requested')) {
             abort_unless($prior->request === $review, 409, 'This native approval already records a different review.');
             if ($this->action($row, $uuid, 'commit_sent') || $this->appliedAction($row, $uuid)) {
@@ -201,7 +264,8 @@ class SubscriptionShopifyUpdateService
         abort_unless(SubscriptionEvidence::canonical($quote) === SubscriptionEvidence::canonical($quoted->after_state['quote'])
             && SubscriptionEvidence::canonical($transport->updateRead($row, 'contract')['subscriptionContract'] ?? []) === SubscriptionEvidence::canonical($request->request['intent']['before']),
             409, 'Review the changed original contract or calculation before committing.');
-        $authority = app(SubscriptionShopifyExecutionService::class)->amendmentAuthority($row, $actor);
+        $authority = app(SubscriptionShopifyExecutionService::class)->amendmentAuthority($row,
+            $actor instanceof SubscriptionShopifyCustomerActor ? User::findOrFail($actor->proof['merchant_reviewer_id']) : $actor);
         $this->locked($row, function ($current) use ($uuid, $actor, $review, $revision) {
             $this->assertCommitReady($current, $uuid, $actor, true);
             if ($prior = $this->action($current, $uuid, 'commit_requested', true)) {
@@ -225,7 +289,7 @@ class SubscriptionShopifyUpdateService
         $payload = $data['subscriptionContractCalculationCommit'] ?? [];
         $this->locked($row, function ($current) use ($uuid, $payload) {
             $request = $this->required($current, $uuid, 'requested', true);
-            $actor = User::findOrFail((int) $request->actor_reference);
+            $actor = $this->actor($current, $request);
             if (! $this->action($current, $uuid, 'commit_response', true)) {
                 $this->append($current, $uuid, 'commit_response', $actor, $request->expected_revision, [], [], ['payload' => $payload]);
             }
@@ -251,7 +315,7 @@ class SubscriptionShopifyUpdateService
         $this->outsideTransaction();
         $this->locked($row, function ($current) use ($uuid, $authority) {
             $request = $this->required($current, $uuid, 'requested', true);
-            $actor = User::findOrFail((int) $request->actor_reference);
+            $actor = $this->actor($current, $request);
             $this->assertCommitReady($current, $uuid, $actor, true);
             $this->required($current, $uuid, 'commit_requested', true);
             abort_if($this->action($current, $uuid, 'commit_sent', true), 409, 'The original commit cannot be sent twice.');
@@ -264,7 +328,7 @@ class SubscriptionShopifyUpdateService
         try {
             return $this->locked($row, function ($current) use ($uuid, $send, &$invoked) {
                 $request = $this->required($current, $uuid, 'requested', true);
-                $this->assertCommitReady($current, $uuid, User::findOrFail((int) $request->actor_reference), true);
+                $this->assertCommitReady($current, $uuid, $this->actor($current, $request), true);
                 $sent = $this->required($current, $uuid, 'commit_sent', true);
                 app(SubscriptionShopifyExecutionService::class)->assertAmendmentAuthority($current, $sent->after_state['authority']);
                 $invoked = true;
@@ -276,7 +340,7 @@ class SubscriptionShopifyUpdateService
                 $this->locked($row, function ($current) use ($uuid) {
                     $request = $this->required($current, $uuid, 'requested', true);
                     if (! $this->action($current, $uuid, 'commit_not_sent', true)) {
-                        $this->append($current, $uuid, 'commit_not_sent', User::findOrFail((int) $request->actor_reference), $request->expected_revision, [], [], ['checked_at' => now()->toISOString()]);
+                        $this->append($current, $uuid, 'commit_not_sent', $this->actor($current, $request), $request->expected_revision, [], [], ['checked_at' => now()->toISOString()]);
                     }
                 });
             }
@@ -284,7 +348,7 @@ class SubscriptionShopifyUpdateService
         }
     }
 
-    private function assertCommitReady(SubscriptionBillingAgreement $row, string $uuid, User $actor, bool $currentRead): void
+    private function assertCommitReady(SubscriptionBillingAgreement $row, string $uuid, User|SubscriptionShopifyCustomerActor $actor, bool $currentRead): void
     {
         $this->assertSendable($row, $this->required($row, $uuid, 'requested', $currentRead), $actor);
         abort_unless(config('subscriptions.replacement_amendment_apply_enabled') === true
@@ -324,20 +388,24 @@ class SubscriptionShopifyUpdateService
                     $statuses[] = $stop['kind'] === 'pause' ? 'PAUSED' : 'CANCELLED';
                 }
                 app(SubscriptionShopifyUpdateProtocol::class)->assertRetainedApplied($frozen, $intent, $quoted->after_state['quote'], $contract, $statuses);
-                $actor = User::findOrFail((int) $request->actor_reference);
+                $actor = $this->actor($current, $request);
                 $result = $this->append($current, $uuid, 'commit_result', $actor, $request->expected_revision,
                     ['intent_hash' => $intent['intent_hash'], 'quote_hash' => $quoted->after_state['quote']['review_hash']], [], ['contract' => $contract, 'user_errors' => [], 'confirmed_at' => now()->toISOString()]);
                 $terms = $quoted->after_state['quote']['terms'];
                 $hash = SubscriptionBillingTermsHistory::termsHash($current, $terms, $uuid);
                 $action = new SubscriptionBillingAction(['tenant_id' => $current->tenant_id, 'agreement_id' => $current->id, 'request_uuid' => $uuid,
-                    'kind' => 'terms_amended', 'actor_type' => 'user', 'actor_reference' => $request->actor_reference, 'expected_revision' => $current->revision,
+                    'kind' => 'terms_amended', 'actor_type' => $request->actor_type, 'actor_reference' => $request->actor_reference, 'expected_revision' => $current->revision,
                     'request' => ['version' => 1, 'agreement_public_id' => $current->public_id, 'member_id' => $current->member_id,
                         'original_terms_hash' => SubscriptionBillingAuthorization::original($current)['terms_hash'], 'accepted_by' => $actor->id, 'approval' => $approval->request['approval'],
+                        ...($actor instanceof SubscriptionShopifyCustomerActor ? ['customer_confirmation' => $approval->request['customer_confirmation'],
+                            'continuing_authorization_reviewed_by' => $actor->proof['merchant_reviewer_id']] : []),
                         'native_update' => ['requested' => SubscriptionShopifyUpdateHistory::snapshot($request), 'quoted' => SubscriptionShopifyUpdateHistory::snapshot($quoted),
                             'commit_requested' => SubscriptionShopifyUpdateHistory::snapshot($approval), 'commit_sent' => SubscriptionShopifyUpdateHistory::snapshot($sent),
                             'commit_result' => SubscriptionShopifyUpdateHistory::snapshot($result), 'stops' => $stops['actions'], 'state_before_application' => $state]],
                     'before_state' => ['terms' => $current->terms, 'terms_hash' => $current->terms_hash],
-                    'after_state' => ['terms' => $terms, 'terms_hash' => $hash, 'revision' => $current->revision + 1]]);
+                    'after_state' => ['terms' => $terms, 'terms_hash' => $hash, 'revision' => $current->revision + 1,
+                        'effective_after_resume' => $current->status === 'paused',
+                        'effective_from' => $current->status === 'paused' ? null : $current->next_billing_date?->toDateString()]]);
                 $action->after_state = $action->after_state + ['authorization_hash' => SubscriptionBillingTermsHistory::seal($action)];
                 $action->save();
                 $current->update(['terms' => $terms, 'terms_hash' => $hash, 'revision' => $current->revision + 1]);
@@ -401,7 +469,7 @@ class SubscriptionShopifyUpdateService
         return ['status' => 'commit_unknown', 'request_uuid' => $uuid, 'charges_customer' => false, 'resend_allowed' => false];
     }
 
-    private function execute(SubscriptionBillingAgreement $row, User $actor, string $uuid): array
+    private function execute(SubscriptionBillingAgreement $row, User|SubscriptionShopifyCustomerActor $actor, string $uuid): array
     {
         if ($this->action($row, $uuid, 'calculate_sent')) {
             return $this->reconcile($row->tenant_id, $actor, $row->id, $uuid);
@@ -428,7 +496,7 @@ class SubscriptionShopifyUpdateService
             $this->required($current, $uuid, 'calculate_sent', true);
             abort_unless(in_array($calculation['__typename'] ?? null, ['SubscriptionContractCalculationPending', 'SubscriptionContractCalculationSuccess', 'SubscriptionContractCalculationFailure'], true)
                 && SubscriptionShopifyUpdateProtocol::calculationId($calculation['id'] ?? null), 409, 'Retain the original calculation reference; do not submit another update.');
-            $actor = User::findOrFail((int) $request->actor_reference);
+            $actor = $this->actor($current, $request);
             $received = $this->action($current, $uuid, 'received', true);
             // A result of the fixed original-ID poll can become a terminal concrete type/ID. Keep the initial ID immutable.
             // A success must still prove the unique amendment marker and exact original contract/line/price/method intent below.
@@ -446,7 +514,7 @@ class SubscriptionShopifyUpdateService
         return $this->locked($row, function ($current) use ($uuid, $calculation, $errors) {
             $request = $this->required($current, $uuid, 'requested', true);
             $received = $this->required($current, $uuid, 'received', true);
-            $actor = User::findOrFail((int) $request->actor_reference);
+            $actor = $this->actor($current, $request);
             if ($this->action($current, $uuid, 'aborted', true)) {
                 return ['status' => 'aborted', 'request_uuid' => $uuid, 'charges_customer' => false, 'changes_contract' => false];
             }
@@ -475,9 +543,13 @@ class SubscriptionShopifyUpdateService
         });
     }
 
-    private function assertSendable(SubscriptionBillingAgreement $row, SubscriptionBillingAction $request, User $actor): void
+    private function assertSendable(SubscriptionBillingAgreement $row, SubscriptionBillingAction $request, User|SubscriptionShopifyCustomerActor $actor): void
     {
+        $this->sameRequest($request, $actor, $request->request['input'], $request->expected_revision);
         $this->authorize($row, $actor, true, true);
+        if ($actor instanceof SubscriptionShopifyCustomerActor) {
+            $actor->permits($row, $request->request['input'], true);
+        }
         SubscriptionBillingAuthorization::assertCurrent($row, true);
         app(SubscriptionBillingAmendmentService::class)->assertFuture($row, true);
         $intent = $request->request['intent'];
@@ -487,8 +559,13 @@ class SubscriptionShopifyUpdateService
             && ! $this->action($row, $request->request['request_uuid'], 'aborted', true), 409, 'The original review or provider authority changed before dispatch.');
     }
 
-    private function authorize(SubscriptionBillingAgreement $row, User $actor, bool $edit, bool $currentRead): void
+    private function authorize(SubscriptionBillingAgreement $row, User|SubscriptionShopifyCustomerActor $actor, bool $edit, bool $currentRead): void
     {
+        if ($actor instanceof SubscriptionShopifyCustomerActor) {
+            $actor->assertCurrent($row, $edit, $currentRead);
+
+            return;
+        }
         $actor = User::query()->whereKey($actor->id)->when($currentRead, fn ($q) => $q->lockForUpdate())->firstOrFail();
         $membership = DB::table('tenant_user')->where('tenant_id', $row->tenant_id)->where('user_id', $actor->id)
             ->when($currentRead, fn ($q) => $q->lockForUpdate())->first();
@@ -561,10 +638,11 @@ class SubscriptionShopifyUpdateService
         abort_unless(is_string($hash) && hash_equals(SubscriptionBillingTermsHistory::seal($action), $hash), 409, 'The retained native update evidence changed.');
     }
 
-    private function append(SubscriptionBillingAgreement $row, string $uuid, string $phase, User $actor, int $revision, array $request, array $before, array $after): SubscriptionBillingAction
+    private function append(SubscriptionBillingAgreement $row, string $uuid, string $phase, User|SubscriptionShopifyCustomerActor $actor, int $revision, array $request, array $before, array $after): SubscriptionBillingAction
     {
         $action = new SubscriptionBillingAction(['tenant_id' => $row->tenant_id, 'agreement_id' => $row->id,
-            'request_uuid' => $this->key($row, $uuid, $phase), 'kind' => 'shopify_update_'.$phase, 'actor_type' => 'user', 'actor_reference' => (string) $actor->id,
+            'request_uuid' => $this->key($row, $uuid, $phase), 'kind' => 'shopify_update_'.$phase,
+            'actor_type' => $actor instanceof SubscriptionShopifyCustomerActor ? 'shopify_customer' : 'user', 'actor_reference' => (string) $actor->id,
             'expected_revision' => $revision, 'request' => $request, 'before_state' => $before, 'after_state' => $after]);
         $after['authorization_hash'] = SubscriptionBillingTermsHistory::seal($action);
         $action->after_state = $after;
@@ -573,9 +651,11 @@ class SubscriptionShopifyUpdateService
         return $action;
     }
 
-    private function sameRequest(SubscriptionBillingAction $prior, User $actor, array $input, int $revision): void
+    private function sameRequest(SubscriptionBillingAction $prior, User|SubscriptionShopifyCustomerActor $actor, array $input, int $revision): void
     {
-        abort_unless($prior->actor_type === 'user' && $prior->actor_reference === (string) $actor->id && $prior->expected_revision === $revision
+        abort_unless($prior->actor_type === ($actor instanceof SubscriptionShopifyCustomerActor ? 'shopify_customer' : 'user')
+            && $prior->actor_reference === (string) $actor->id && $prior->expected_revision === $revision
+            && (! $actor instanceof SubscriptionShopifyCustomerActor || SubscriptionEvidence::canonical($prior->request['customer_actor'] ?? []) === SubscriptionEvidence::canonical($actor->proof))
             && SubscriptionEvidence::canonical($prior->request['input']) === SubscriptionEvidence::canonical($input), 409, 'This request ID belongs to another native update review.');
     }
 
@@ -589,5 +669,18 @@ class SubscriptionShopifyUpdateService
     private function unknown(string $uuid): array
     {
         return ['status' => 'calculation_unknown', 'request_uuid' => $uuid, 'charges_customer' => false, 'changes_contract' => false, 'resend_allowed' => false];
+    }
+
+    public function authorizePolicy(SubscriptionBillingAgreement $row, User $actor, bool $currentRead = false): void
+    {
+        $this->authorize($row, $actor, true, $currentRead);
+        abort_unless(config('subscriptions.replacement_amendment_apply_enabled') === true, 423, 'Customer delivery policy requires reviewed native apply authority.');
+    }
+
+    private function actor(SubscriptionBillingAgreement $row, SubscriptionBillingAction $request): User|SubscriptionShopifyCustomerActor
+    {
+        return $request->actor_type === 'shopify_customer'
+            ? SubscriptionShopifyCustomerActor::fromJournal($row, $request)
+            : User::findOrFail((int) $request->actor_reference);
     }
 }

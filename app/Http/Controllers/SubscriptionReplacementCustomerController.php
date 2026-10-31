@@ -46,9 +46,7 @@ class SubscriptionReplacementCustomerController extends Controller
             $change = ['shipping_address' => $data['shipping_address']] + ($swaps ? ['swaps' => $swaps] : []);
             $review = $delivery->review($session, $change, $data['request_id'], (int) $data['revision']);
 
-            return $this->private(response()->view('subscriptions.replacement-delivery-review', [
-                'agreement' => $row->fresh(), 'tenant' => Tenant::findOrFail($row->tenant_id), 'token' => $token, 'review' => $review,
-            ]));
+            return $this->deliveryReviewResponse($row->fresh(), $token, $review);
         } catch (\Illuminate\Validation\ValidationException $error) {
             return $this->private(redirect()->route('subscriptions.replacement.customer', ['token' => $token])->withErrors($error->errors())->withInput($request->only('shipping_address', 'swaps')));
         } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
@@ -64,6 +62,9 @@ class SubscriptionReplacementCustomerController extends Controller
             $data = $request->validate(['request_id' => ['required', 'uuid'], 'revision' => ['required', 'integer', 'min:1'],
                 'review_hash' => ['required', 'string', 'regex:/\A[a-f0-9]{64}\z/'], 'confirm_future_delivery' => ['required', 'accepted']]);
             $action = $delivery->apply($session, $data['request_id'], (int) $data['revision'], $data['review_hash'], true);
+            if (is_array($action)) {
+                return $this->deliveryReviewResponse($access->agreement($session), $token, $action);
+            }
             $state = $action->after_state;
             $message = $state['effective_after_resume'] ? 'Your future delivery is saved. Your subscription stays paused until it resumes.'
                 : 'Your future delivery is saved, starting with the cycle scheduled for '.$state['effective_from'].'.';
@@ -86,6 +87,45 @@ class SubscriptionReplacementCustomerController extends Controller
         }
 
         return $this->private(redirect()->route('subscriptions.replacement.customer', ['token' => $token])->withErrors(['subscription' => $error->getMessage()]));
+    }
+
+    public function deliveryStatus(Request $request, string $token, string $requestId, SubscriptionReplacementCustomerAccess $access, SubscriptionCustomerAmendmentService $delivery)
+    {
+        $this->host($request);
+        $session = $access->session($token);
+        try {
+            return $this->deliveryReviewResponse($access->agreement($session), $token, $delivery->status($session, $requestId));
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+            return $this->deliveryError($error, $token);
+        }
+    }
+
+    public function discardDelivery(Request $request, string $token, string $requestId, SubscriptionReplacementCustomerAccess $access, SubscriptionCustomerAmendmentService $delivery)
+    {
+        $this->host($request);
+        $session = $access->session($token);
+        try {
+            $delivery->discard($session, $requestId);
+
+            return $this->private(redirect()->route('subscriptions.replacement.customer', ['token' => $token])
+                ->with('subscription_status', 'That delivery review is closed. You can start a new review.'));
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+            return $this->deliveryError($error, $token);
+        }
+    }
+
+    private function deliveryReviewResponse($row, string $token, array $review)
+    {
+        abort_unless($row, 404);
+        $status = $review['native_status'] ?? 'quote_ready';
+        if (in_array($status, ['applied', 'aborted'], true)) {
+            return $this->private(redirect()->route('subscriptions.replacement.customer', ['token' => $token])
+                ->with('subscription_status', $status === 'applied' ? 'Your delivery change is saved. Your current membership details are shown below.' : 'That delivery review is closed.'));
+        }
+
+        return $this->private(response()->view($status === 'quote_ready' ? 'subscriptions.replacement-delivery-review' : 'subscriptions.replacement-delivery-pending', [
+            'agreement' => $row, 'tenant' => Tenant::findOrFail($row->tenant_id), 'token' => $token, 'review' => $review,
+        ]));
     }
 
     public function change(Request $request, string $token, SubscriptionReplacementCustomerAccess $access, SubscriptionBillingAgreementService $service)

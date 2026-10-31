@@ -19,7 +19,7 @@ class SubscriptionDeliveryPolicyService
     public function preview(int $tenantId, User $actor, int $agreementId, array $input): array
     {
         $row = SubscriptionBillingAgreement::query()->forTenantId($tenantId)->findOrFail($agreementId);
-        app(SubscriptionBillingAmendmentService::class)->authorize($row, $actor);
+        $this->authorize($row, $actor);
         SubscriptionBillingAuthorization::assertCurrent($row);
         $request = $this->candidate($row, $actor, $input);
 
@@ -32,7 +32,7 @@ class SubscriptionDeliveryPolicyService
     public function record(int $tenantId, User $actor, int $agreementId, array $input, string $hash, string $uuid, int $revision): SubscriptionBillingAction
     {
         $scope = SubscriptionBillingAgreement::query()->forTenantId($tenantId)->findOrFail($agreementId);
-        app(SubscriptionBillingAmendmentService::class)->authorize($scope, $actor);
+        $this->authorize($scope, $actor);
         $policy = $this->normalize($input);
         abort_unless(Str::isUuid($uuid) && $revision >= 1 && preg_match('/\A[a-f0-9]{64}\z/', $hash), 422);
         $uuid = strtolower($uuid);
@@ -40,7 +40,7 @@ class SubscriptionDeliveryPolicyService
         return DB::transaction(function () use ($scope, $actor, $policy, $hash, $uuid, $revision) {
             SubscriptionPilotMember::query()->forTenantId($scope->tenant_id)->whereKey($scope->member_id)->lockForUpdate()->firstOrFail();
             $row = SubscriptionBillingAgreement::query()->forTenantId($scope->tenant_id)->whereKey($scope->id)->lockForUpdate()->firstOrFail();
-            app(SubscriptionBillingAmendmentService::class)->authorize($row, $actor, true);
+            $this->authorize($row, $actor, true);
             SubscriptionBillingAuthorization::assertCurrent($row, true);
             $prior = SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)->where('request_uuid', $uuid)->lockForUpdate()->first();
             if ($prior) {
@@ -79,6 +79,16 @@ class SubscriptionDeliveryPolicyService
         $this->evidence($row, $action);
 
         return $action;
+    }
+
+    public function authorize(SubscriptionBillingAgreement $row, User $actor, bool $currentRead = false): void
+    {
+        if ($row->processor === 'shopify') {
+            app(SubscriptionShopifyUpdateService::class)->authorizePolicy($row, $actor, $currentRead);
+
+            return;
+        }
+        app(SubscriptionBillingAmendmentService::class)->authorize($row, $actor, $currentRead);
     }
 
     public function evidence(SubscriptionBillingAgreement $row, SubscriptionBillingAction $action): void

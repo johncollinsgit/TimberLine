@@ -1,3 +1,24 @@
+## Native authenticated customer delivery (October 31; source candidate)
+
+The branded private portal now supports original Shopify delivery/scents reviews
+through the native update journal. `SubscriptionShopifyCustomerActor` binds the
+authenticated customer/profile and separately signed merchant policy. Native
+calculate sends `CUSTOMER`; requested/quoted/approval/send/result and accepted
+terms retain `shopify_customer`, original method and exact quoted total. Current
+profile, policy, owner/reviewer, credentials, future-cycle and editing/apply gates
+are rechecked before one commit. Signed dispatch evidence cannot start a new
+interactive request. Original merchant commands retain their `MERCHANT` path.
+
+Known pending calculations have a private status view and bounded auto-refresh;
+status GET never starts a new calculation or commit. Exact review has a required
+customer checkbox and no payment entry. Unfinished reviews can be explicitly
+closed; an uncertain dispatched commit can only recover. Customer ownership and
+original profile bind every status/confirmation/discard route. Later pauses and
+editing withdrawal survive original commit recovery, and signed historical policy
+validation needs no current editing authority. Native future collection still
+requires its fresh accepted-total tax check. No DDL, live mutation or rollout.
+Actual original-method/source/merchant/customer/Shopify/two-tester acceptance remains.
+
 ## Original-provider dispatch transaction boundaries (October 31; source candidate)
 
 New original Shopify adoption calculations/commits and Shopify/Braintree payments
@@ -14,8 +35,7 @@ remain fictional; independent connections verify durable adoption/payment/receip
 markers before dispatch. Current-test created tenant/user IDs scope cleanup.
 MySQL also exposed reordered JSON keys in stored Braintree merchant acceptance;
 canonical comparison now retains exact values/types without depending on key
-order. No DDL or live change. Native customer confirmation and actual merchant/
-source/customer/Shopify/two-tester acceptance remain unfinished.
+order. No DDL or live change. Actual merchant/source/customer/Shopify/two-tester acceptance remains unfinished.
 
 ## Initial Shopify adoption calculation identity (October 31; source candidate)
 
@@ -28,8 +48,8 @@ An unsent prepared commit rereads that reviewed ID; older generic intents can ga
 terminal evidence only from a fresh response matching their immutable commit ID
 and review. Already-dispatched commits still recover without resending. Source
 stop, original app/credential and rollout gates remain. No DDL or live change.
-Original adoption/billing enclosing-transaction durability and native customer
-confirmation remain outstanding; see the replacement runbook.
+Original dispatch boundaries and native customer confirmation are implemented
+above; actual acceptance remains outstanding. See the replacement runbook.
 
 ## Native amended billing tax preflight (October 31; source candidate)
 
@@ -79,9 +99,7 @@ reconciliation worker can finish an already approved native update without
 submitting another commit. No source mandate or old cycle/order is rewritten.
 
 Native amended collection now uses the fresh tax preflight described above;
-positive provider synchronization retains its separate authority gates. Native authenticated customer
-confirmation and actual original-method/provider/customer/Shopify/two-tester
-acceptance remain unfinished. No DDL, live provider mutation, charge, source
+positive provider synchronization retains its separate authority gates. Native authenticated customer confirmation is implemented above; actual original-method/provider/customer/Shopify/two-tester acceptance remains unfinished. No DDL, live provider mutation, charge, source
 cancellation, deployment, notification or rollout occurred. See the runbook.
 
 ## Durable native update calculations (October 31; source candidate)
@@ -100,7 +118,7 @@ retain an older valid paused provider date without changing either schedule.
 
 The owner commit/history/CLI and reconciliation worker are described above.
 Reconciliation after an editing freeze preserves later status/date/revision state.
-Fresh collection tax preflight is described above; native customer confirmation remains pending.
+Fresh collection tax preflight and native customer confirmation are described above; actual acceptance remains pending.
 Real MySQL durability/worker races exercise the path; no live mutation occurred.
 
 ## Original-app schema and native update builder (October 31; source candidate)
@@ -122,8 +140,7 @@ updates omit lines; scent-only updates omit delivery replacement. Ambiguous line
 binding, repricing, warnings, method/date/status or retained-evidence drift fail
 closed. The protocol class remains pure; the calculation journal described above
 now retains durable dispatch/calculation and commit recovery with signed future
-terms. Fresh collection tax preflight is now connected; native customer confirmation is still
-required before native customer updates can launch. No live provider mutation or
+terms. Fresh collection tax preflight and native customer confirmation are now connected in source; actual acceptance still gates launch. No live provider mutation or
 rollout occurred. See the replacement runbook.
 
 ## Authenticated customer future delivery (October 31; source candidate)

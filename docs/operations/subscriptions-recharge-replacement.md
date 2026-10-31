@@ -70,7 +70,7 @@ The protocol class is a **pure builder**. The calculation journal described
 below now durably retains intent before calculate and polls only the original ID.
 The owner commit/history/recovery path below now retains exact approval and one
 committed send claim before HTTP. Native fresh tax preflight is now connected as
-described below; authenticated native customer confirmation remains required. Existing original-term
+described below; authenticated native customer confirmation is implemented in the dedicated section below; actual acceptance remains required. Existing original-term
 billing retains its separate gates and already-started attempts remain reconcilable.
 No DDL, contract update, charge, source stop, activation or deployment occurred.
 
@@ -585,6 +585,45 @@ No real merchant mapping or no-reauthorization conclusion is established by the
 fictional tests. Separate native billing source is described above and remains
 disabled pending actual merchant/API acceptance.
 
+## Native customer delivery review and confirmation (source candidate; disabled by rollout gates)
+
+The same branded private membership portal supports native Shopify address/scents
+reviews. The original authenticated customer/profile and signed merchant delivery
+policy become a `SubscriptionShopifyCustomerActor`; its native calculation uses
+[`CUSTOMER`](https://shopify.dev/docs/api/admin-graphql/2026-10/enums/SubscriptionActor),
+and the signed journal/accepted terms retain the true `shopify_customer` actor.
+The merchant policy reviewer remains separate from the customer's exact total
+confirmation. No saved payment method is replaced or entered in this flow.
+
+The ten-minute exact quote binds the original native contract/version, line IDs,
+prices, method, policies, proposed address/scents, accepted shipping policy and
+projected tax/total. Confirmation requires the real customer's checkbox and the
+same UUID/revision/hash. Profile, original customer, current policy, tenant/member
+rollout, current owner/reviewer, native/general apply gates and original fresh
+method/source authority are rechecked before one durable commit. Another profile,
+customer, merchant confirmation, client-supplied merchant review flags, unoffered
+region/scent or changed/expired quote cannot approve it. Retained signed dispatch
+evidence can recover its original operation but cannot create new interactive work.
+
+Private status GET polls known calculations or reconciles an already-sent commit;
+it never starts a new calculation or commit. A pending view refreshes only for ten
+minutes and offers a manual check. Exact review reuses the existing branded
+address/scents/total/required-checkbox page. A saved draft can be reopened from
+the membership page. Explicit POST closure allows a new review after expiry or
+editing withdrawal. A sent uncertain commit cannot be discarded or resent.
+After later pauses, original recovery applies only its accepted terms while
+retaining the newer status/date/resume state. Signed customer confirmation and
+historical merchant policy validate without current editing authority or provider
+reads. Native future billing retains its separately fresh exact-total tax preflight.
+
+The two added routes are `/subscriptions/member/{token}/delivery/{requestId}` and
+its `/discard` POST. They retain host, private token/profile/customer scope,
+throttling, CSRF on POST, no-store/referrer/noindex/frame protections. The existing
+review/confirm POSTs choose the native or Braintree path from the owned agreement,
+not client identifiers. Owner CLI actions retain their original merchant actor.
+No migration, live contract/source/order/payment/notification or rollout occurred.
+Actual merchant/method/source and customer/Shopify/two-tester acceptance is still required.
+
 ## Paused Shopify contract adoption (source candidate; adoption command does not bill)
 
 **Original-provider dispatch durability:** new original adoption calculate/commit
@@ -954,8 +993,8 @@ alone is not the full customer replacement.
 `SubscriptionShopifyUpdateService` connects the validated native update protocol
 to encrypted signed append-only `SubscriptionBillingAction` stages. The internal
 owner methods calculate, reconcile or explicitly close an uncommitted review.
-Owner commit/CLI/history and worker recovery are described next; native customer
-confirmation remains outstanding; the amended-tax collection lane is described below.
+Owner commit/CLI/history and worker recovery are described next. Native customer
+confirmation is described above; the amended-tax collection lane is described below.
 `SUBSCRIPTIONS_REPLACEMENT_SHOPIFY_AMENDMENTS_ENABLED=false` is independent of
 the general amendment and existing exact-member servicing gates. Enabling it
 alone cannot change a contract or charge a customer.
@@ -990,7 +1029,7 @@ owner revocation, credential revocation beyond an older consistent snapshot,
 terminal failure, close/replay and two independent workers.
 
 The owner commit/history/recovery and fresh native tax extensions follow.
-Authenticated native customer confirmation remains required before customer edits launch.
+Native customer confirmation is implemented above; actual merchant/method/customer acceptance still gates customer edits.
 Original source-method association and real merchant/provider/two-tester hosted
 acceptance remain unproven. No live contract, source, order or charge changed.
 
@@ -1112,8 +1151,8 @@ across competing workers, delayed minute/five-minute schedules, same-handle
 pending recovery, expired/unknown generation renewal, changed tax/version/owner,
 warnings/errors/revocation, immutable dispatch proof and frozen-cycle refresh.
 This is local source evidence, not actual merchant/provider/customer/Shopify
-acceptance. Native customer confirmation, original adoption ID/outer-transaction
-audits and the real two-tester rollout remain required. No DDL, deployment, live
+acceptance. Actual merchant/method/customer verification, broader operator parity
+and the real two-tester rollout remain required. No DDL, deployment, live
 provider contract/order/charge/source change or customer notification occurred.
 
 ## Customer purchase history gateway icons

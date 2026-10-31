@@ -1,3 +1,22 @@
+## Native customer confirmation (October 31; source candidate)
+
+The private delivery portal now uses the original native update journal for
+Shopify members, with `CUSTOMER` provider actor and signed `shopify_customer`
+request/confirmation/accepted history. `SubscriptionShopifyCustomerActor` separates
+the authenticated customer/profile from the recorded merchant shipping/scents
+and continuing-authority reviewer. Current gates/profile/policy/owner/method/source
+and exact fresh quote guard one commit. Retained signed dispatch actors cannot
+start new interactive work. Owner CLI requests remain merchant actions.
+
+Pending/status/close routes retain the private token, original profile and member
+scope. Status GET polls/reconciles only and never starts a new calculation/commit.
+Auto-refresh is bounded; unapproved/stale reviews can be explicitly closed, while
+sent unknown commits cannot be discarded or resent. Recovery and accepted retries
+preserve later pauses after editing withdrawal. Historical signatures and original
+policy remain independently verifiable. Braintree keeps its existing portal path.
+No DDL/live rollout; actual original-method/source/provider/customer/backend and
+two-member acceptance remain required. See the replacement runbook.
+
 ## Original dispatch durability (October 31; source candidate)
 
 Original Shopify adoption calculations/commits and native/Braintree payment entry
@@ -13,7 +32,7 @@ MySQL without an outer RefreshDatabase transaction. CI includes the directory.
 Cleanup tracks only tenants/users created by the current test. The fixtures still
 fake all provider requests. Stored merchant-acceptance JSON is compared
 canonically because MySQL reorders object keys; changed values/types still fail.
-No DDL/live deployment/rollout. Native customer confirmation and real acceptance remain.
+No DDL/live deployment/rollout. Native customer confirmation is implemented above; real acceptance remains.
 
 ## Initial adoption calculation IDs (October 31; source candidate)
 
@@ -24,8 +43,9 @@ terminal ID must agree. Never replace the initial handle with a concrete success
 ID, fabricate a provider ID or resend an uncertain commit. An unsent prepared
 commit rereads its exact reviewed result; legacy generic intents gain terminal
 evidence only from a fresh exact original commit-ID/review match. Recovery after
-dispatch is unchanged. No DDL, live mutation or rollout occurred; original outer
-transaction durability, native customer confirmation and provider acceptance remain.
+dispatch is unchanged. Original transaction durability and native customer
+confirmation are implemented above; actual provider acceptance remains.
+No DDL, live mutation or rollout occurred.
 
 ## Native amended tax preflight (October 31; source candidate)
 
@@ -70,8 +90,7 @@ parent approval is missing; safe stops and original-attempt recovery remain.
 Finite customer pauses allow only the validated contiguous terms-amendment
 revisions that preserved their schedule. The reconciliation worker finishes only
 previously approved native work; it does not approve or send a fresh commit.
-Native amended collection now requires the fresh tax preflight above. Customer native confirmation and real
-provider/customer/backend/two-tester acceptance remain required. See the runbook.
+Native amended collection now requires the fresh tax preflight above. Customer native confirmation is implemented above; real provider/customer/backend/two-tester acceptance remains required. See the runbook.
 
 ## Native update calculation journal (October 31; source candidate)
 
@@ -90,7 +109,7 @@ guarded disposable local database and verifies marker visibility through an
 independent connection, competing workers, revoked credentials beyond an older
 snapshot, and freeze/stop replay. Do not bypass its transaction guard for tests.
 Commit/history/positive-action guards and worker recovery are described above;
-fresh tax preflight is described above; native customer integration remains outstanding.
+Fresh tax preflight and native customer integration are described above; real acceptance remains outstanding.
 No live update or source change occurred. See the runbook.
 
 ## Actual Shopify schema and native update protocol (October 31)
@@ -110,7 +129,7 @@ unchanged delivery/line fields; never infer line IDs from source IDs or silently
 reprice from the catalog. Accepted prior attributes must come from signed retained
 provider evidence, never a client or an unchecked response. The calculation
 journal/commit/history and fresh tax collection preflight are described above;
-native customer confirmation remains to be integrated. No live update was
+native customer confirmation is integrated above; real provider/customer acceptance remains. No live update was
 attempted. The latest method read sees Jennifer's active Shop Pay agreement;
 source mapping and merchant acceptance remain required. See the runbook.
 

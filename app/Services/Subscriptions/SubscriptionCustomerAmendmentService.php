@@ -28,8 +28,21 @@ class SubscriptionCustomerAmendmentService
             $policy = $this->policy($row, $session);
             app(SubscriptionBillingAmendmentService::class)->assertFuture($row);
 
-            return ['provinces' => $policy->request['policy']['provinces'],
+            $options = ['provinces' => $policy->request['policy']['provinces'],
                 'scents' => $policy->request['policy']['allow_scent_swaps'] ? $policy->request['policy']['scents'] : []];
+            if ($row->processor === 'shopify') {
+                $draft = SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)
+                    ->where('kind', 'shopify_update_requested')->latest('id')->first();
+                if ($draft && ! $this->nativeClosed($row, $draft->request['request_uuid'])) {
+                    if ($draft->actor_type !== 'shopify_customer' || data_get($draft->request, 'customer_actor.profile_id') !== $session->profile->id) {
+                        return null;
+                    }
+                    SubscriptionShopifyCustomerActor::forRequest($row, $session, $draft);
+                    $options['pending_review_uuid'] = $draft->request['request_uuid'];
+                }
+            }
+
+            return $options;
         } catch (HttpException|\Illuminate\Validation\ValidationException|\Illuminate\Database\Eloquent\ModelNotFoundException $error) {
             if ($error instanceof HttpException && ! in_array($error->getStatusCode(), [403, 409, 423], true)) {
                 throw $error;
@@ -45,6 +58,11 @@ class SubscriptionCustomerAmendmentService
         $uuid = strtolower($uuid);
         $row = app(SubscriptionReplacementCustomerAccess::class)->agreement($session);
         abort_unless($row, 404);
+        if ($row->processor === 'shopify') {
+            $result = app(SubscriptionShopifyUpdateService::class)->calculateCustomer($session, $change, $uuid, $revision);
+
+            return $this->nativeReview($session, $row->fresh(), $result);
+        }
         $policy = $this->policy($row, $session);
         abort_unless($row->revision === $revision, 409, 'Your subscription changed. Review its current delivery first.');
         app(SubscriptionBillingAmendmentService::class)->assertFuture($row);
@@ -87,10 +105,23 @@ class SubscriptionCustomerAmendmentService
         return $review;
     }
 
-    public function apply(ModernForestryMobileCustomerSession $session, string $uuid, int $revision, string $hash, bool $confirmed): SubscriptionBillingAction
+    public function apply(ModernForestryMobileCustomerSession $session, string $uuid, int $revision, string $hash, bool $confirmed): SubscriptionBillingAction|array
     {
         abort_unless($confirmed && Str::isUuid($uuid) && $revision >= 1 && preg_match('/\A[a-f0-9]{64}\z/', $hash), 422, 'Confirm the reviewed future delivery and total.');
         $uuid = strtolower($uuid);
+        $owned = app(SubscriptionReplacementCustomerAccess::class)->agreement($session);
+        if ($owned?->processor === 'shopify') {
+            $prior = SubscriptionBillingAction::query()->forTenantId($owned->tenant_id)->where('agreement_id', $owned->id)->where('request_uuid', $uuid)->exists();
+            $result = app(SubscriptionShopifyUpdateService::class)->confirmCustomer($session, $uuid, $revision, $hash, true);
+            if ($result['status'] === 'applied') {
+                $action = SubscriptionBillingAction::query()->forTenantId($owned->tenant_id)->where('agreement_id', $owned->id)->where('request_uuid', $uuid)->where('kind', 'terms_amended')->firstOrFail();
+                $action->wasRecentlyCreated = ! $prior;
+
+                return $action;
+            }
+
+            return $this->nativeReview($session, $owned->fresh(), $result);
+        }
         $billing = app(SubscriptionBillingAmendmentService::class);
         if ($prior = $billing->customerReplay($session, $uuid, $revision, $hash)) {
             return $prior;
@@ -123,23 +154,84 @@ class SubscriptionCustomerAmendmentService
         abort_unless(config('subscriptions.replacement_customer_delivery_enabled') === true, 423, 'Delivery changes are temporarily unavailable.');
         $policy = app(SubscriptionDeliveryPolicyService::class)->latest($row, $currentRead);
         abort_unless($policy && $policy->request['policy']['enabled'], 423, 'Our team needs to review delivery options for this membership.');
-        app(SubscriptionBillingAmendmentService::class)->authorize($row, User::findOrFail((int) $policy->actor_reference), $currentRead);
+        app(SubscriptionDeliveryPolicyService::class)->authorize($row, User::findOrFail((int) $policy->actor_reference), $currentRead);
         SubscriptionBillingAuthorization::assertCurrent($row, $currentRead);
 
         return $policy;
     }
 
+    public function status(ModernForestryMobileCustomerSession $session, string $uuid): array
+    {
+        $result = app(SubscriptionShopifyUpdateService::class)->reconcileCustomer($session, $uuid);
+        $row = app(SubscriptionReplacementCustomerAccess::class)->agreement($session);
+        abort_unless($row, 404);
+
+        return $this->nativeReview($session, $row, $result);
+    }
+
+    public function discard(ModernForestryMobileCustomerSession $session, string $uuid): void
+    {
+        app(SubscriptionShopifyUpdateService::class)->abortCustomer($session, $uuid);
+    }
+
+    private function nativeReview(ModernForestryMobileCustomerSession $session, SubscriptionBillingAgreement $row, array $result): array
+    {
+        $uuid = $result['request_uuid'];
+        $request = SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)
+            ->where('request_uuid', SubscriptionShopifyUpdateHistory::key($row, $uuid, 'requested'))->firstOrFail();
+        $actor = SubscriptionShopifyCustomerActor::forRequest($row, $session, $request);
+        $sent = $this->nativeStage($row, $uuid, 'commit_sent');
+        $discard = ! $sent || $this->nativeStage($row, $uuid, 'commit_not_sent') || $this->nativeStage($row, $uuid, 'commit_rejected');
+        $pending = ['native_status' => $result['status'], 'request_uuid' => $uuid, 'can_discard' => $discard && ! $this->nativeClosed($row, $uuid),
+            'refreshable' => in_array($result['status'], ['calculation_pending', 'commit_unknown'], true) && $request->created_at->gt(now()->subMinutes(10))];
+        if ($result['status'] !== 'quote_ready') {
+            return $pending;
+        }
+        $until = \Carbon\CarbonImmutable::parse($result['quoted_at'])->addMinutes(10)->timestamp;
+        try {
+            $actor->permits($row, $request->request['input'], false);
+            abort_unless($row->revision === $request->expected_revision && $until > now()->timestamp, 409);
+        } catch (HttpException $error) {
+            if (! in_array($error->getStatusCode(), [403, 409, 423], true)) {
+                throw $error;
+            }
+
+            return array_replace($pending, ['native_status' => 'review_stale']);
+        }
+
+        return $pending + ['quote' => $result['quote'], 'evidence' => ['request_uuid' => $uuid, 'revision' => $request->expected_revision,
+            'review_hash' => $result['quote']['review_hash'], 'valid_until' => $until]];
+    }
+
+    private function nativeClosed(SubscriptionBillingAgreement $row, string $uuid): bool
+    {
+        return $this->nativeStage($row, $uuid, 'aborted') || SubscriptionBillingAction::query()->forTenantId($row->tenant_id)
+            ->where('agreement_id', $row->id)->where('request_uuid', $uuid)->where('kind', 'terms_amended')->exists();
+    }
+
+    private function nativeStage(SubscriptionBillingAgreement $row, string $uuid, string $phase): bool
+    {
+        return SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)
+            ->where('request_uuid', SubscriptionShopifyUpdateHistory::key($row, $uuid, $phase))->where('kind', 'shopify_update_'.$phase)->exists();
+    }
+
     public function assertIdentity(SubscriptionBillingAgreement $row, ModernForestryMobileCustomerSession $session, bool $currentRead = false): void
     {
-        $profile = MarketingProfile::query()->where('tenant_id', $row->tenant_id)->whereKey($session->profile->id)
+        abort_unless($session->profile->tenant_id === $row->tenant_id, 404);
+        $this->assertSubject($row, $session->profile->id, $this->reference($session), $currentRead);
+    }
+
+    public function assertSubject(SubscriptionBillingAgreement $row, int $profileId, string $customerGid, bool $currentRead = false): void
+    {
+        $profile = MarketingProfile::query()->where('tenant_id', $row->tenant_id)->whereKey($profileId)
             ->when($currentRead, fn ($q) => $q->lockForUpdate())->first();
         $store = ShopifyStore::query()->forTenantId($row->tenant_id)->whereKey($row->terms['shopify_store_id'])
             ->when($currentRead, fn ($q) => $q->lockForUpdate())->first();
         $member = SubscriptionPilotMember::query()->forTenantId($row->tenant_id)->whereKey($row->member_id)
             ->when($currentRead, fn ($q) => $q->lockForUpdate())->first();
-        abort_unless($profile && $session->profile->tenant_id === $row->tenant_id && $store && $store->store_key === 'retail'
+        abort_unless($profile && $store && $store->store_key === 'retail'
             && $store->shop_domain === $row->terms['shop_domain'] && $member && $member->billing_owner === 'everbranch'
-            && $this->reference($session) === 'gid://shopify/Customer/'.$row->terms['shopify_customer_id']
+            && $customerGid === 'gid://shopify/Customer/'.$row->terms['shopify_customer_id']
             && $row->activated_at && $row->method_verified_at, 404);
         app(SubscriptionReplacementAccess::class)->member($row);
     }

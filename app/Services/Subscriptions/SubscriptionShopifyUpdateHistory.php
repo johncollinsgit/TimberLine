@@ -27,7 +27,8 @@ class SubscriptionShopifyUpdateHistory
         $hash = $action->after_state['authorization_hash'] ?? null;
         abort_unless($action->tenant_id === $row->tenant_id && $action->agreement_id === $row->id
             && $action->request_uuid === self::key($row, $uuid, $phase) && $action->kind === 'shopify_update_'.$phase
-            && $action->actor_type === 'user' && ctype_digit($action->actor_reference)
+            && ($action->actor_type === 'user' && ctype_digit($action->actor_reference)
+                || $action->actor_type === 'shopify_customer' && $action->actor_reference === 'gid://shopify/Customer/'.SubscriptionBillingAuthorization::original($row)['terms']['shopify_customer_id'])
             && is_string($hash) && hash_equals(SubscriptionBillingTermsHistory::seal($action), $hash), 409, 'Retain the signed original native update journal.');
 
         return $action;
@@ -82,16 +83,31 @@ class SubscriptionShopifyUpdateHistory
         $intent = $request->request['intent'];
         $quote = $quoted->after_state['quote'];
         foreach ([$request, $quoted, $approval, $sent, $result] as $record) {
-            abort_unless($record->actor_reference === $action->actor_reference && $record->expected_revision === $request->expected_revision, 409);
+            abort_unless($record->actor_type === $action->actor_type && $record->actor_reference === $action->actor_reference && $record->expected_revision === $request->expected_revision, 409);
         }
         abort_unless($request->request['request_uuid'] === $uuid && $intent['request_uuid'] === $uuid
             && SubscriptionEvidence::canonical($request->before_state) === SubscriptionEvidence::canonical($action->before_state)
-            && $request->expected_revision === $intent['subject']['revision'] && ($intent['variables']['actor'] ?? null) === 'MERCHANT'
+            && $request->expected_revision === $intent['subject']['revision']
+            && ($intent['variables']['actor'] ?? null) === ($action->actor_type === 'shopify_customer' ? 'CUSTOMER' : 'MERCHANT')
             && $approval->request['approval'] === $action->request['approval']
             && $approval->request['quote_hash'] === $quote['review_hash'] && $approval->request['review_revision'] === $request->expected_revision
             && $sent->request['request_uuid'] === $uuid && $sent->request['intent_hash'] === $intent['intent_hash'] && $sent->request['quote_hash'] === $quote['review_hash']
             && $result->request['intent_hash'] === $intent['intent_hash'] && $result->request['quote_hash'] === $quote['review_hash']
             && $result->after_state['user_errors'] === [], 409, 'The accepted native update differs from its original approval or commit.');
+        if ($action->actor_type === 'shopify_customer') {
+            $customer = SubscriptionShopifyCustomerActor::fromJournal($row, $request);
+            $confirmation = $customer->proof + ['request_uuid' => $uuid, 'revision' => $request->expected_revision,
+                'quote_hash' => $quote['review_hash'], 'quoted_terms_hash' => SubscriptionEvidence::digest(SubscriptionEvidence::canonical($quote['terms'])),
+                'confirmed_total_cents' => $quote['terms']['amount_cents'], 'confirmed' => true];
+            $policy = SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)->findOrFail($customer->proof['policy_action_id']);
+            abort_unless(SubscriptionEvidence::canonical($approval->request['customer_confirmation'] ?? []) === SubscriptionEvidence::canonical($confirmation)
+                && SubscriptionEvidence::canonical($action->request['customer_confirmation'] ?? []) === SubscriptionEvidence::canonical($confirmation)
+                && ($action->request['continuing_authorization_reviewed_by'] ?? null) === $customer->proof['merchant_reviewer_id']
+                && (int) $policy->actor_reference === $customer->proof['merchant_reviewer_id'] && $policy->request_uuid === $customer->proof['policy_uuid']
+                && $policy->request['reviewed_hash'] === $customer->proof['policy_hash']
+                && $action->request['approval']['reference'] === 'delivery-policy:'.$policy->request_uuid, 409, 'Retain the exact original customer confirmation and merchant policy.');
+            app(SubscriptionDeliveryPolicyService::class)->permits($row, $policy, $request->request['input']);
+        }
         $before = clone $row;
         $before->terms = $action->before_state['terms'];
         $before->terms_hash = $action->before_state['terms_hash'];

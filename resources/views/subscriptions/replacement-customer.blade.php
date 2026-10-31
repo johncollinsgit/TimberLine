@@ -32,7 +32,11 @@
 <div><dt>Payment method</dt><dd>Your existing saved payment method</dd></div>
 </dl></section>
 @if($deliveryOptions ?? null)
+@if($deliveryOptions['pending_review_uuid'] ?? null)
+<section class="paper-card"><p class="eyebrow">YOUR DELIVERY REVIEW</p><h2>Pick up where you left off</h2><p>Your delivery review is ready to check.</p><a class="club-button primary-button" href="{{ route('subscriptions.replacement.customer.delivery.status', ['token' => $token, 'requestId' => $deliveryOptions['pending_review_uuid']]) }}">Open delivery review</a></section>
+@else
 @include('subscriptions.replacement-delivery-form')
+@endif
 @endif
 @if(in_array($agreement->status, ['active','paused'], true))
 <section class="paper-card authorization-card" aria-labelledby="manage-title"><p class="eyebrow">A LITTLE FLEXIBILITY</p><h2 id="manage-title">Manage future billing</h2>
