@@ -141,6 +141,8 @@ class ShopifyStores
         return [
             'retail' => [
                 'key' => 'retail',
+                'pos_inventory' => (bool) config('services.shopify.stores.retail.pos_inventory', false),
+                'excluded_scopes' => (array) config('services.shopify.stores.retail.excluded_scopes', []),
                 'shop' => $retailShop,
                 'legacy_token' => $retailLegacyToken,
                 'source' => 'shopify_retail',
@@ -272,6 +274,8 @@ class ShopifyStores
                 'token_source' => $tokenSource,
                 'storefront_widget_settings' => $record?->storefront_widget_settings,
                 'storefront_access_token' => $base['storefront_access_token'] ?? null,
+                'pos_inventory' => $base['pos_inventory'] ?? false,
+                'excluded_scopes' => $base['excluded_scopes'] ?? [],
             ];
         }
 

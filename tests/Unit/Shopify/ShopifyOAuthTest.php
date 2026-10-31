@@ -73,3 +73,21 @@ test('retail reconnect omits dashboard-rejected names without reducing another a
     }
     expect($retailScopes)->toContain('read_inventory', 'read_products', 'write_discounts', 'read_orders', 'read_validations', 'write_validations', 'unauthenticated_read_product_listings');
 });
+
+test('resolved store metadata carries the reviewed permissions into the owner OAuth URL', function (): void {
+    config()->set('services.shopify.stores.retail.shop', 'retail-scope-test.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'retail-scope-client');
+    config()->set('services.shopify.stores.wholesale.shop', 'wholesale-scope-test.myshopify.com');
+    config()->set('services.shopify.stores.wholesale.client_id', 'wholesale-scope-client');
+    $oauth = app(ShopifyOAuth::class);
+    $retail = \App\Services\Shopify\ShopifyStores::find('retail', true);
+    parse_str(parse_url($oauth->buildAuthUrl($retail, 'https://example.invalid/callback', 'review-state'), PHP_URL_QUERY), $query);
+    $requested = explode(',', $query['scope']);
+    expect($requested)->toContain('read_inventory', 'unauthenticated_read_product_listings');
+    foreach (config('services.shopify.stores.retail.excluded_scopes') as $excluded) {
+        expect($requested)->not->toContain($excluded);
+    }
+    $wholesale = \App\Services\Shopify\ShopifyStores::find('wholesale', true);
+    expect($oauth->requestedScopes($wholesale))->not->toContain('read_inventory');
+    expect($oauth->requestedScopes($wholesale))->toContain('unauthenticated_read_collection_listings');
+});
