@@ -92,16 +92,20 @@ final class PosAccess implements PaymentAccess
         }
         if ($operation === 'collect' && $scope['connection']->environment === 'production') {
             $settings = $this->store->decrypt($scope['register']->configuration);
-            $acceptedBuild = $scope['connection']->acceptance_build ?: ($settings['acceptance']['build'] ?? null);
+            $development = app(PosDevelopmentAcceptance::class)->session($scope['register'], $scope['connection'], $scope);
+            if (isset($settings['development_acceptance']) && ! $development) {
+                throw new PosException('development_acceptance_not_ready', 503);
+            }
+            $acceptedBuild = $development['build'] ?? ($scope['connection']->acceptance_build ?: ($settings['acceptance']['build'] ?? null));
             if (! is_string($acceptedBuild) || ! hash_equals($acceptedBuild, $this->request->header('X-Pos-Build', ''))) {
                 throw new PosException('accepted_build_required', 403);
             }
-            if (! $scope['connection']->acceptance_at && (($settings['acceptance']['actor_id'] ?? null) !== $scope['actor_id']
+            if (! $development && ! $scope['connection']->acceptance_at && (($settings['acceptance']['actor_id'] ?? null) !== $scope['actor_id']
                 || ($settings['acceptance']['device_id'] ?? null) !== $this->request->header('X-Pos-Device'))) {
                 throw new PosException('acceptance_device_required', 403);
             }
         }
-        if ($operation === 'collect' && $this->readiness->blockers($scope['register'], $scope['connection']) !== []) {
+        if ($operation === 'collect' && $this->readiness->blockers($scope['register'], $scope['connection'], null, $scope) !== []) {
             throw new PosException('collection_not_ready', 503);
         }
     }

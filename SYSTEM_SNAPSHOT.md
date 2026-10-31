@@ -1,5 +1,12 @@
 ## Everbranch Pay customer-linked Square pilot (October 31; source candidate)
 
+Registered-device development acceptance has a separate default-off gate,
+private Apple grant/signing/installation evidence, exact merchant/owner/device/build
+binding, at most two hours and $10, and one claimed original sale. It leaves
+commercial collection, publishing and physical/inventory acceptance flags false.
+Recovery/refunds retain their separate servicing controls after the test expires.
+See the registered-device section in the Pay runbook before enabling it.
+
 The focused native Square release combines shared customer commerce with a live
 basket handoff, register-scoped canonical customer selection/creation, immutable
 customer/policy terms, exact provider mirror suppression and existing-ledger

@@ -30,6 +30,20 @@ and [App Review Guidelines, 3.1.3(e) and 5.1](https://developer.apple.com/app-st
 
 ## Before live Tap to Pay collection, including pilots
 
+Registered-device development testing is distinct from publishing. Apple's case
+23096691 grants development distribution to registered test devices; it does not
+grant TestFlight/App Store publishing. Square's current iOS SDK guide explicitly
+documents production payments from debug builds with their own registered
+application signature. A bounded registered-device acceptance session may use
+that development route after exact grant/profile/device/build and merchant
+verification; never record it as publishing approval or normal commercial launch.
+The Pay runbook describes its separate default-off, one-sale controls. This
+interpretation is limited to testing the verified development build on its
+registered phone; broader distribution remains unapproved.
+
+Source: [Square application signatures and debug production payments](https://developer.squareup.com/docs/mobile-payments-sdk/ios#application-signature)
+and Apple's October 24 grant for case 23096691 (owner's email).
+
 - Obtain the applicable Apple managed entitlement, provisioning/signing and
   distribution approval for the exact bundle. A source entitlement, accepted
   developer agreement or Square app registration is not that approval.
