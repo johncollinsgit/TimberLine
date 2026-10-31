@@ -159,6 +159,9 @@ GRAPHQL;
             'priceSet' => $money($line['unit_price_cents']), 'requiresShipping' => true], $terms['lines']);
         $rate = $terms['tax_rate_bps'] / 10000;
         $tax = $terms['tax_cents'] > 0 ? [['title' => 'Sales tax', 'rate' => $rate, 'priceSet' => $money($terms['tax_cents'])]] : [];
+        if (array_key_exists('tax_lines', $terms)) {
+            $tax = array_map(fn ($line) => ['title' => $line['title'], 'rate' => $line['rate'], 'priceSet' => $money($line['price_cents'])], $terms['tax_lines']);
+        }
 
         return ['order' => ['currency' => $cycle->currency, 'customer' => ['toAssociate' => ['id' => 'gid://shopify/Customer/'.$terms['shopify_customer_id']]],
             'lineItems' => $lines, 'shippingAddress' => $terms['shipping_address'], 'shippingLines' => [['title' => 'Subscription shipping', 'priceSet' => $money($terms['shipping_cents'])]],

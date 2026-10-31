@@ -47,6 +47,25 @@ GRAPHQL;
     {
         $this->available($row, $actor);
         $proposal = app(SubscriptionAmendmentProposal::class)->review($row, $input);
+
+        return $this->calculateProposal($row, $proposal, $actor);
+    }
+
+    public function verifyCurrent(SubscriptionBillingAgreement $row, User $actor): void
+    {
+        SubscriptionBillingAuthorization::assertCurrent($row);
+        $action = \App\Models\SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)
+            ->where('kind', 'terms_amended')->latest('id')->firstOrFail();
+        $proposal = ['terms' => $row->terms, 'subject' => app(SubscriptionAmendmentProposal::class)->subject($row),
+            'policy_review' => $action->request['quote']['policy_review']];
+        $quote = $this->calculateProposal($row, $proposal, $actor, true);
+        abort_unless(SubscriptionEvidence::canonical($quote['terms']) === SubscriptionEvidence::canonical($row->terms),
+            409, 'Current tax or delivery totals differ from the accepted future terms. Review a fresh amendment before collection.');
+    }
+
+    private function calculateProposal(SubscriptionBillingAgreement $row, array $proposal, User $actor, bool $forCollection = false): array
+    {
+        $this->available($row, $actor, $forCollection);
         $terms = $proposal['terms'];
         $store = ShopifyStore::query()->forTenantId($row->tenant_id)->findOrFail($row->terms['shopify_store_id']);
         abort_unless($store->shop_domain === $row->terms['shop_domain'] && preg_match('/\A[a-z0-9-]+\.myshopify\.com\z/', $store->shop_domain)
@@ -54,7 +73,7 @@ GRAPHQL;
         $context = ['shopify_store_id' => $store->id, 'shop_domain' => $store->shop_domain,
             'credential_fingerprint' => SubscriptionEvidence::digest((string) $store->access_token), 'api_version' => SubscriptionAccessService::API_VERSION];
         $data = $this->request($row, $store, self::CATALOG, ['customer' => 'gid://shopify/Customer/'.$row->terms['shopify_customer_id'],
-            'variants' => array_map(fn ($line) => 'gid://shopify/ProductVariant/'.$line['variant_id'], $terms['lines'])], $actor);
+            'variants' => array_map(fn ($line) => 'gid://shopify/ProductVariant/'.$line['variant_id'], $terms['lines'])], $actor, $forCollection);
         abort_unless(data_get($data, 'shop.myshopifyDomain') === $store->shop_domain && data_get($data, 'shop.currencyCode') === $row->terms['currency']
             && data_get($data, 'customer.id') === 'gid://shopify/Customer/'.$row->terms['shopify_customer_id']
             && collect(data_get($data, 'currentAppInstallation.accessScopes', []))->pluck('handle')->contains('write_draft_orders')
@@ -79,7 +98,7 @@ GRAPHQL;
             'shippingLine' => ['title' => 'Subscription shipping', 'priceWithCurrency' => self::money($terms['shipping_cents'], $terms['currency'])],
             'lineItems' => array_map(fn ($line) => ['variantId' => 'gid://shopify/ProductVariant/'.$line['variant_id'], 'quantity' => $line['quantity'],
                 'priceOverride' => self::money($line['unit_price_cents'], $terms['currency'])], $terms['lines'])];
-        $response = $this->request($row, $store, self::CALCULATE, ['input' => $input], $actor);
+        $response = $this->request($row, $store, self::CALCULATE, ['input' => $input], $actor, $forCollection);
         $result = $response['draftOrderCalculate'] ?? [];
         abort_unless(($result['userErrors'] ?? null) === [] && is_array($result['calculatedDraftOrder'] ?? null), 409, 'Shopify could not calculate these future delivery terms.');
         $calculated = $result['calculatedDraftOrder'];
@@ -109,7 +128,10 @@ GRAPHQL;
             abort_unless(is_string($tax['title'] ?? null) && strlen($tax['title']) <= 255 && (is_float($tax['rate'] ?? null) || is_int($tax['rate'] ?? null))
                 && $tax['rate'] >= 0 && $tax['rate'] <= 1, 409, 'Calculated tax evidence is incomplete.');
 
-            return ['title' => $tax['title'], 'rate' => (float) $tax['rate'], 'price_cents' => $this->bag($tax['priceSet'] ?? [], $terms['currency'])];
+            $rate = (float) $tax['rate'];
+
+            return ['title' => $tax['title'], 'rate' => $rate === floor($rate) ? (int) $rate : $rate,
+                'price_cents' => $this->bag($tax['priceSet'] ?? [], $terms['currency'])];
         }, $calculated['taxLines']);
         abort_unless(array_sum(array_column($terms['tax_lines'], 'price_cents')) === $terms['tax_cents'], 409, 'Calculated tax lines and total differ.');
         $terms['amount_cents'] = $terms['subtotal_cents'] + $terms['shipping_cents'] + $terms['tax_cents'];
@@ -123,24 +145,24 @@ GRAPHQL;
             'tax_is_estimated' => true, 'creates_order' => false, 'charges_customer' => false];
     }
 
-    private function request(SubscriptionBillingAgreement $row, ShopifyStore $store, string $document, array $variables, User $actor): array
+    private function request(SubscriptionBillingAgreement $row, ShopifyStore $store, string $document, array $variables, User $actor, bool $forCollection): array
     {
-        $this->unchanged($row, $store, $actor);
+        $this->unchanged($row, $store, $actor, $forCollection);
         $response = Http::withHeaders(['X-Shopify-Access-Token' => $store->access_token, 'Accept' => 'application/json'])->withoutRedirecting()
             ->connectTimeout(3)->timeout(12)->post('https://'.$store->shop_domain.'/admin/api/'.SubscriptionAccessService::API_VERSION.'/graphql.json', ['query' => $document, 'variables' => $variables]);
         abort_unless($response->successful() && $response->header('X-Shopify-API-Version') === SubscriptionAccessService::API_VERSION && strlen($response->body()) <= 1048576, 502, 'The original store calculation could not be verified.');
         $body = $response->json();
         abort_unless(is_array($body) && empty($body['errors']) && is_array($body['data'] ?? null), 409, 'The original store calculation requires review.');
-        $this->unchanged($row, $store, $actor);
+        $this->unchanged($row, $store, $actor, $forCollection);
 
         return $body['data'];
     }
 
-    private function unchanged(SubscriptionBillingAgreement $row, ShopifyStore $store, User $actor): void
+    private function unchanged(SubscriptionBillingAgreement $row, ShopifyStore $store, User $actor, bool $forCollection): void
     {
         $current = $store->fresh();
         $agreement = $row->fresh();
-        $this->available($agreement, $actor);
+        $this->available($agreement, $actor, $forCollection);
         SubscriptionBillingAuthorization::assertCurrent($agreement);
         abort_unless($current && $current->tenant_id === $row->tenant_id && $current->shop_domain === $store->shop_domain
             && hash_equals((string) $current->access_token, (string) $store->access_token) && $agreement->revision === $row->revision
@@ -149,11 +171,11 @@ GRAPHQL;
             409, 'The original store, billing terms or schedule changed during calculation.');
     }
 
-    private function available(SubscriptionBillingAgreement $row, User $actor): void
+    private function available(SubscriptionBillingAgreement $row, User $actor, bool $forCollection = false): void
     {
-        app(SubscriptionReplacementAccess::class)->owner($row->tenant_id, $actor->fresh(), $row->member_id, 'servicing');
+        app(SubscriptionReplacementAccess::class)->owner($row->tenant_id, $actor->fresh(), $row->member_id, $forCollection ? 'collection' : 'servicing');
         app(SubscriptionReplacementAccess::class)->member($row);
-        abort_unless($row->processor === 'braintree' && config('subscriptions.replacement_amendments_enabled') === true
+        abort_unless($row->processor === 'braintree' && ($forCollection || config('subscriptions.replacement_amendments_enabled') === true)
             && in_array($row->tenant_id, config('subscriptions.replacement_tenant_ids', []), true)
             && in_array($row->member_id, config('subscriptions.replacement_member_ids', []), true), 423, 'Future delivery changes are not enabled for this membership.');
         abort_unless(in_array($row->status, ['prepared', 'active', 'paused'], true), 409, 'This subscription has no future delivery to change.');

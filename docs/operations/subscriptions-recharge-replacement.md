@@ -7,6 +7,71 @@ access can be verified. Stripe setup is an explicit fallback, not a universal
 migration requirement. The first rollout is the two already prepared members;
 all other members retain Recharge billing until separately reviewed.
 
+## Accepted Braintree future terms (October 31; source candidate)
+
+`subscriptions:amend` now separately accepts an owner-reviewed delivery/scents
+quote for an individually activated Braintree member. It changes only current
+future terms/hash and the agreement revision. Original authorization, method
+binding, source/member evidence, billing anchor/date, activation, status, existing
+cycles and paid orders remain unchanged. No payment, source cancellation, order,
+customer/default address, message or provider-vault mutation is submitted by
+acceptance. The only provider operation is a fresh calculation of the exact quote.
+
+The private regular 0600 JSON file wraps the same `change` object used by the
+quote command plus a separate approval:
+
+```json
+{
+  "change": {"shipping_address": {"firstName": "Fictional", "lastName": "Member", "address1": "456 Example Road", "city": "Greenville", "provinceCode": "SC", "countryCode": "US", "zip": "29601"}, "fixed_shipping_reviewed": true, "policy_reference": "source-shipping:789"},
+  "approval": {"reference": "customer-request:REVIEW_ID", "quoted_total_reviewed": true, "continuing_authorization_reviewed": true}
+}
+```
+
+The verified owner/admin must review the customer's actual instruction, exact
+new total and whether continuing authority covers those future terms. A saved
+method or quote alone does not prove consent to a changed charge. This is an
+operator workflow; authenticated customer confirmation and native Shopify
+contract updates remain outstanding. No universal no-reauthorization claim follows.
+
+```
+subscriptions:amend --tenant=SLUG --actor=ID --agreement=ID --file=/private/amendment.json
+subscriptions:amend --tenant=SLUG --actor=ID --agreement=ID --file=/private/amendment.json --reviewed-hash=QUOTE_HASH --revision=REV --request-id=UUID --apply
+```
+
+Preview is offline. Apply requires the independent default-off
+`SUBSCRIPTIONS_REPLACEMENT_AMENDMENT_APPLY_ENABLED`, existing amendment/servicing
+and exact tenant/member gates, unchanged quote/context, current revision and an
+unstarted future billing instant. Unknown/processing/challenged/reviewed payments,
+refunds/disputes, prepared cycles and unconfirmed paid-order handoffs block it.
+An indefinitely paused member can accept future delivery terms after an old
+billing date; the action records that they take effect after resumption. The
+amendment never resumes billing or catches up missed cycles.
+Member/agreement locks, current owner/pivot reads and current cycle/action reads
+serialize acceptance with other requests, pauses, owner revocation and collection
+claims. Identical retries return the original action without provider requests,
+including after a later pause; changed content/approval or another action UUID
+cannot replace it.
+
+One encrypted append-only `terms_amended` action retains exact before/after terms,
+quote/context, explicit reviews, actor, revision and keyed authorization. The
+current-terms guard verifies the complete ordered chain back to the immutable
+original. Missing/corrupt/intermediate evidence or rolling the current row back to
+an older signed snapshot blocks new collection. Original customer, source line
+IDs, unit prices, quantities, fixed shipping, currency, schedule, anchor and
+Candle Cash exclusion cannot be replaced by a delivery amendment.
+
+Each subsequent amended Braintree collection recalculates current tax before a
+cycle or sale is created. Drift requires a new review; it never silently reprices
+the charge. Accepted billing verification follows the independent collection
+gate, so a servicing/amendment freeze stops new changes without undoing accepted
+terms. The immutable cycle carries the accepted tax breakdown into one paid
+Shopify order; old receipts and fulfillment details are retained. Numeric zero
+tax rates are normalized before encrypted JSON/HMAC persistence.
+
+Source tests cover original-method collection, exact new delivery/tax handoff,
+later-address preservation of paid orders, replay/tamper protection and five real
+MySQL races using older snapshots. No schema or production change was made.
+
 ## Future delivery quote foundation (October 31; source candidate)
 
 The preview-first `subscriptions:amendment-quote` owner command now validates one
@@ -15,7 +80,7 @@ calls the original store's pinned 2026-10 `draftOrderCalculate`; Shopify documen
 that this calculates totals [without creating a draft order](https://shopify.dev/docs/api/admin-graphql/2026-10/mutations/draftOrderCalculate).
 No agreement/action/cycle, order, customer/default address, saved method, source
 subscription or payment is written. It is an operator quote foundation; applying
-reviewed terms and customer confirmation remain outstanding.
+reviewed terms is described above; customer confirmation remains outstanding.
 
 The private regular 0600 JSON input may contain a complete US shipping address,
 exact source-line scent swaps, and an explicit owner review of the source's fixed
@@ -255,9 +320,10 @@ change must not make a historical payment appear to have used that new address,
 price or product. Current customer/store/currency/schedule identity also cannot be
 silently replaced by editing JSON.
 
-**Reviewed amendment execution remains outstanding.** Until it is implemented,
-changed current terms cannot collect or adopt a Shopify contract, even if an old
-reviewed hash is left in place. Original attempts still reconcile using their
+Reviewed Braintree owner amendments now carry their own separate signed history.
+Unreviewed changed terms cannot collect or adopt a Shopify contract, even if an
+old reviewed hash is left in place. Customer confirmation and Shopify contract
+amendments remain outstanding. Original attempts still reconcile using their
 frozen cycle terms and original account. Missing/corrupt snapshots fail closed;
 preparation replay never fills them from an existing agreement's current terms.
 Do not backfill original authority from mutable data as an upgrade shortcut.
@@ -462,7 +528,8 @@ proven. The two testers are acceptance cases, not hard-coded customer rules.
 - [x] Authenticated customer pause/resume/skip/cancel and private member schedule page, with paired native entry point.
 - [x] Immutable original reviewed authorization snapshot, separated historical proof and current collection/adoption guards.
 - [x] Source implementation for authenticated member polls/scents/history and private feedback after source cancellation, with neutral ballots and exact legacy vote continuity.
-- [ ] Address/scent future-term changes and original-authorization amendment handling.
+- [x] Source implementation for reviewed Braintree owner amendments, signed future-term history and exact amended-cycle receipt/tax handling.
+- [ ] Authenticated customer address/scent confirmation and native Shopify contract amendments.
 - [ ] Actual Braintree merchant sandbox/live acceptance and original source-stop verification.
 - [x] Source implementation for Shopify-vaulted paused adoption, activation, billing attempts and native receipt reconciliation.
 - [ ] Actual Shopify API/merchant acceptance, customer authentication recovery and source cutover acceptance.
@@ -642,11 +709,11 @@ state when that page closes. Private URL tokens are redacted from browser debug
 logs. Other members retain the existing account menus. No version bump, store
 submission, provider activation or customer distribution is performed.
 
-Address/scents need provider-calculated tax and delivery quotes, explicit review
-of new future terms and retained original authorization/source snapshots. Those
-amendments, membership/vote/comment parity after source cancellation, payment
-updates, operations and real hosted/customer acceptance are still required before
-cutover; this schedule checkpoint alone is not the full customer replacement.
+The later sections above provide current owner-reviewed Braintree amendments and
+membership/vote/comment continuity after cancellation. Customer address/scents
+confirmation, native Shopify contract amendments, payment updates, operations
+and real hosted/customer acceptance remain required; this schedule checkpoint
+alone is not the full customer replacement.
 
 ## Customer purchase history gateway icons
 

@@ -12,6 +12,31 @@ class SubscriptionAmendmentProposal
     {
         SubscriptionBillingAuthorization::assertCurrent($row);
         app(SubscriptionReplacementAccess::class)->member($row);
+        $data = $this->normalize($input);
+        $terms = $row->terms;
+        if (isset($data['shipping_address'])) {
+            $terms['shipping_address'] = $data['shipping_address'];
+        }
+        foreach ($data['swaps'] ?? [] as $swap) {
+            abort_unless(app(SubscriptionMembershipReviewService::class)->program($row) === 'candle_club', 409, 'Review Candle Club membership before selecting another club scent.');
+            $index = array_search($swap['subscription_id'], array_column($terms['lines'], 'subscription_id'), true);
+            abort_unless($index !== false, 409, 'Choose an original line from this subscription.');
+            $terms['lines'][$index]['variant_id'] = $swap['variant_id'];
+        }
+        abort_if(SubscriptionEvidence::canonical($terms) === SubscriptionEvidence::canonical($row->terms), 422, 'Choose a different delivery address or scent.');
+
+        return ['terms' => $terms, 'policy_review' => ['fixed_shipping_reviewed' => true, 'reference' => $data['policy_reference']], 'subject' => $this->subject($row)];
+    }
+
+    public function subject(SubscriptionBillingAgreement $row): array
+    {
+        return ['tenant_id' => $row->tenant_id, 'agreement_id' => $row->id, 'agreement_public_id' => $row->public_id,
+            'member_id' => $row->member_id, 'revision' => $row->revision, 'current_terms_hash' => $row->terms_hash,
+            'original_terms_hash' => SubscriptionBillingAuthorization::original($row)['terms_hash']];
+    }
+
+    public function normalize(array $input): array
+    {
         $data = Validator::make(['change' => $input], [
             'change' => ['required', 'array:shipping_address,swaps,fixed_shipping_reviewed,policy_reference'],
             'change.fixed_shipping_reviewed' => ['required', 'accepted'],
@@ -31,21 +56,11 @@ class SubscriptionAmendmentProposal
             'change.swaps.*.subscription_id' => ['required', 'string', 'distinct', 'regex:/\A[1-9][0-9]*\z/'],
             'change.swaps.*.variant_id' => ['required', 'string', 'regex:/\A[1-9][0-9]*\z/'],
         ])->validate()['change'];
-        $terms = $row->terms;
-        if (isset($data['shipping_address'])) {
-            $terms['shipping_address'] = $data['shipping_address'];
+        $data['fixed_shipping_reviewed'] = true;
+        if (isset($data['swaps'])) {
+            usort($data['swaps'], fn ($a, $b) => strcmp($a['subscription_id'], $b['subscription_id']));
         }
-        foreach ($data['swaps'] ?? [] as $swap) {
-            abort_unless(app(SubscriptionMembershipReviewService::class)->program($row) === 'candle_club', 409, 'Review Candle Club membership before selecting another club scent.');
-            $index = array_search($swap['subscription_id'], array_column($terms['lines'], 'subscription_id'), true);
-            abort_unless($index !== false, 409, 'Choose an original line from this subscription.');
-            $terms['lines'][$index]['variant_id'] = $swap['variant_id'];
-        }
-        abort_if(SubscriptionEvidence::canonical($terms) === SubscriptionEvidence::canonical($row->terms), 422, 'Choose a different delivery address or scent.');
 
-        return ['terms' => $terms, 'policy_review' => ['fixed_shipping_reviewed' => true, 'reference' => $data['policy_reference']],
-            'subject' => ['tenant_id' => $row->tenant_id, 'agreement_id' => $row->id, 'agreement_public_id' => $row->public_id,
-                'member_id' => $row->member_id, 'revision' => $row->revision, 'current_terms_hash' => $row->terms_hash,
-                'original_terms_hash' => SubscriptionBillingAuthorization::original($row)['terms_hash']]];
+        return $data;
     }
 }

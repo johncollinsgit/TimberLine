@@ -62,6 +62,9 @@ GRAPHQL;
     public function currentTerms(SubscriptionBillingAgreement $row): void
     {
         SubscriptionBillingAuthorization::assertCurrent($row);
+        if ($row->terms_hash !== data_get($row->authorization_evidence, 'original_authorization.terms_hash')) {
+            app(SubscriptionAmendmentQuote::class)->verifyCurrent($row, \App\Models\User::findOrFail($row->activated_by));
+        }
         $terms = $row->terms;
         if ($row->method_binding['environment'] === 'sandbox') {
             $sandbox = $this->read($row, self::SANDBOX_QUERY, []);

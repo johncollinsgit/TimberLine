@@ -73,6 +73,8 @@ class BraintreeScenario
 
     public ?string $saleMarkerPath = null;
 
+    public ?\Closure $amendmentResponder = null;
+
     public function __construct(public bool $production = false, public bool $candleClub = true)
     {
         Http::preventStrayRequests();
@@ -148,7 +150,7 @@ class BraintreeScenario
     {
         $source = $id === 'source_txn';
         $data = ['id' => $id, 'type' => 'sale', 'status' => $source || $this->settled ? 'settled' : 'submitted_for_settlement',
-            'amount' => '25.00', 'currencyIsoCode' => 'USD', 'merchantAccountId' => 'fictionalUSD', 'customer' => ['id' => 'customer123'],
+            'amount' => $source ? '25.00' : ($payload['amount'] ?? '25.00'), 'currencyIsoCode' => 'USD', 'merchantAccountId' => 'fictionalUSD', 'customer' => ['id' => 'customer123'],
             'orderId' => $source ? 'source_invoice' : ($payload['orderId'] ?? null), 'createdAt' => $source ? new \DateTimeImmutable('2027-01-01T15:00:00Z') : new \DateTimeImmutable(now()->toISOString()),
             'paymentInstrumentType' => $this->card ? 'credit_card' : 'paypal_account', 'recurring' => true, 'refundIds' => [], 'disputes' => []];
         if ($this->defect === 'original_customer' && $source) {
@@ -245,6 +247,9 @@ class BraintreeScenario
     private function shopify($request)
     {
         $query = $request['query'];
+        if ($this->amendmentResponder && in_array($query, [\App\Services\Subscriptions\SubscriptionAmendmentQuote::CATALOG, \App\Services\Subscriptions\SubscriptionAmendmentQuote::CALCULATE], true)) {
+            return ($this->amendmentResponder)($request);
+        }
         $data = ['shop' => ['myshopifyDomain' => $this->store->shop_domain, 'currencyCode' => 'USD', 'plan' => ['partnerDevelopment' => $this->defect !== 'production_store']]];
         if ($query === SubscriptionBillingShopifySource::SOURCE_QUERY) {
             $address = $this->address();
@@ -259,7 +264,7 @@ class BraintreeScenario
                 'lineItems' => ['nodes' => [['variant' => ['id' => 'gid://shopify/ProductVariant/999'], 'quantity' => 1, 'originalUnitPriceSet' => ['shopMoney' => ['amount' => '25.00', 'currencyCode' => 'USD']]]], 'pageInfo' => ['hasNextPage' => false]]];
         } elseif (str_contains($query, 'PilotQuote')) {
             $data['customer'] = ['id' => 'gid://shopify/Customer/456'];
-            $data['nodes'] = [['id' => 'gid://shopify/ProductVariant/999', 'product' => ['status' => 'ACTIVE'], 'inventoryItem' => ['requiresShipping' => true]]];
+            $data['nodes'] = array_map(fn ($id) => ['id' => $id, 'product' => ['status' => 'ACTIVE'], 'inventoryItem' => ['requiresShipping' => true]], $request['variables']['variants']);
         } elseif (str_contains($query, 'PilotShopifyPermissions')) {
             $data['currentAppInstallation'] = ['accessScopes' => array_map(fn ($scope) => ['handle' => $scope], ['write_orders', 'read_customers', 'read_products'])];
         } elseif (str_contains($query, 'PilotOrderRecovery')) {
@@ -268,18 +273,18 @@ class BraintreeScenario
             $payload = $request['variables'];
             $this->orderCreates[] = $payload;
             $cycle = SubscriptionBillingCycle::latest('id')->firstOrFail();
-            $address = $this->address();
+            $address = $cycle->terms['shipping_address'];
             $address['countryCodeV2'] = $address['countryCode'];
             unset($address['countryCode']);
             $this->savedOrder = ['id' => 'gid://shopify/Order/222', 'processedAt' => now()->toISOString(), 'createdAt' => now()->toISOString(), 'updatedAt' => now()->toISOString(),
                 'test' => ! $this->production, 'cancelledAt' => null, 'displayFinancialStatus' => 'PAID', 'displayFulfillmentStatus' => 'UNFULFILLED',
                 'customer' => ['id' => 'gid://shopify/Customer/456'], 'customAttributes' => $payload['order']['customAttributes'],
-                'totalPriceSet' => ['shopMoney' => ['amount' => '25.00', 'currencyCode' => 'USD']],
-                'totalShippingPriceSet' => ['shopMoney' => ['amount' => '0.00', 'currencyCode' => 'USD']],
-                'totalTaxSet' => ['shopMoney' => ['amount' => '0.00', 'currencyCode' => 'USD']], 'shippingAddress' => $address,
-                'lineItems' => ['nodes' => [['variant' => ['id' => 'gid://shopify/ProductVariant/999'], 'quantity' => 1, 'originalUnitPriceSet' => ['shopMoney' => ['amount' => '25.00', 'currencyCode' => 'USD']]]], 'pageInfo' => ['hasNextPage' => false]],
+                'totalPriceSet' => ['shopMoney' => ['amount' => \App\Services\Subscriptions\SubscriptionPilotShopifyBridge::decimal($cycle->amount_cents), 'currencyCode' => 'USD']],
+                'totalShippingPriceSet' => ['shopMoney' => ['amount' => \App\Services\Subscriptions\SubscriptionPilotShopifyBridge::decimal($cycle->terms['shipping_cents']), 'currencyCode' => 'USD']],
+                'totalTaxSet' => ['shopMoney' => ['amount' => \App\Services\Subscriptions\SubscriptionPilotShopifyBridge::decimal($cycle->terms['tax_cents']), 'currencyCode' => 'USD']], 'shippingAddress' => $address,
+                'lineItems' => ['nodes' => array_map(fn ($line) => ['variant' => ['id' => 'gid://shopify/ProductVariant/'.$line['variant_id']], 'quantity' => $line['quantity'], 'originalUnitPriceSet' => ['shopMoney' => ['amount' => \App\Services\Subscriptions\SubscriptionPilotShopifyBridge::decimal($line['unit_price_cents']), 'currencyCode' => 'USD']]], $cycle->terms['lines']), 'pageInfo' => ['hasNextPage' => false]],
                 'transactions' => [['id' => 'gid://shopify/OrderTransaction/333', 'gateway' => 'everbranch_braintree', 'paymentId' => null,
-                    'authorizationCode' => $cycle->provider_reference, 'kind' => 'SALE', 'status' => 'SUCCESS', 'amountSet' => ['shopMoney' => ['amount' => '25.00', 'currencyCode' => 'USD']]]]];
+                    'authorizationCode' => $cycle->provider_reference, 'kind' => 'SALE', 'status' => 'SUCCESS', 'amountSet' => ['shopMoney' => ['amount' => \App\Services\Subscriptions\SubscriptionPilotShopifyBridge::decimal($cycle->amount_cents), 'currencyCode' => 'USD']]]]];
             if ($this->defect === 'handoff_address') {
                 $this->savedOrder['shippingAddress']['address1'] = 'Different delivery address';
             } elseif ($this->defect === 'handoff_tax') {

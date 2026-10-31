@@ -30,11 +30,10 @@ class SubscriptionBillingAuthorization
         return $snapshot;
     }
 
-    /** Reviewed amendments will supply their own authority; an arbitrary JSON edit never does. */
-    public static function assertCurrent(SubscriptionBillingAgreement $row): void
+    /** Accepted amendments carry separate immutable evidence; arbitrary JSON edits never do. */
+    public static function assertCurrent(SubscriptionBillingAgreement $row, bool $currentRead = false): void
     {
         $original = self::original($row);
-        abort_unless(hash_equals($original['terms_hash'], $row->terms_hash)
-            && SubscriptionEvidence::canonical($original['terms']) === SubscriptionEvidence::canonical($row->terms), 409, 'Current billing terms require a separately reviewed amendment before collection or contract adoption.');
+        SubscriptionBillingTermsHistory::assertCurrent($row, $original, $currentRead);
     }
 }

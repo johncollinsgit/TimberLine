@@ -1,3 +1,19 @@
+## Accepted Braintree future terms (October 31; source candidate)
+
+`SubscriptionBillingAmendmentService` accepts a fresh exact quote and explicit
+owner review behind independent default-off apply and existing rollout gates.
+`SubscriptionBillingTermsHistory` verifies an unbroken encrypted signed action
+chain back to the original authorization; quote hashes alone grant no authority.
+Do not edit or backfill originals, replace unit pricing/source identities, rewrite
+cycles or roll current terms back to an older signed state. Member/agreement,
+current owner/pivot and cycle/action locks protect atomic acceptance and replay.
+Original-account future billing verifies current tax through the quote protocol
+before creating a cycle/sale; a change needs another review. Servicing freezes
+stop new changes while accepted collection uses its independent gates. Frozen
+tax lines feed only the new cycle's Shopify receipt. Real MySQL races and source
+end-to-end collection/handoff tests accompany this path; no DDL or production
+activation occurred. Customer confirmation and Shopify updates remain outstanding.
+
 ## Subscription delivery quote foundation (October 31; source candidate)
 
 `SubscriptionAmendmentProposal` derives address/scents proposals from an intact
@@ -9,9 +25,8 @@ default-off amendments gate. Current identity/terms/permission checks surround
 each request. It validates both currencies, exact lines and tax breakdown, rejects
 warnings/discounts/bundles and returns a keyed subject/context quote. It saves no
 agreement/action/cycle or provider resource. Do not use its hash as authorization
-or write the returned terms directly: current collection still requires unchanged
-original terms. Atomic amendment acceptance, customer confirmation and Shopify
-contract updates remain required. See the replacement runbook.
+or write returned terms directly: use the signed acceptance path above. Customer
+confirmation and Shopify contract updates remain required. See the runbook.
 
 ## Existing subscription membership review (October 31; source candidate)
 
@@ -87,8 +102,9 @@ two-worker billing dispatch race; no DDL or production activation is included.
 payment binding and authorization review saved at preparation. The encrypted
 `original_authorization` snapshot and review reference/actors cannot be replaced,
 removed or retrofitted on an existing agreement. Historical method/source proof
-uses those original terms; current billing/adoption requires unchanged reviewed
-terms until a separate audited amendment workflow exists. Retaining a stale hash
+uses those original terms; current billing verifies original terms or the complete
+accepted Braintree amendment chain. Shopify adoption retains its original-terms
+guard. Retaining a stale hash
 after editing JSON must not bypass the guard. Reconciliation continues to use
 immutable original cycle terms even if the current agreement later changes.
 Missing/corrupt snapshots require explicit evidence review, never an automatic

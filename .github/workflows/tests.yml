@@ -314,8 +314,8 @@ jobs:
       - name: Verify original subscription provider dispatch concurrency
         run: php ./vendor/bin/pest tests/Integration/SubscriptionBraintreeDispatchConcurrencyTest.php tests/Integration/SubscriptionShopifyAdoptionConcurrencyTest.php tests/Integration/SubscriptionShopifyBillingConcurrencyTest.php --compact
 
-      - name: Verify Candle Club voting and note concurrency
-        run: php ./vendor/bin/pest tests/Integration/SubscriptionMemberVotingConcurrencyTest.php tests/Integration/SubscriptionMembershipReviewConcurrencyTest.php --compact
+      - name: Verify subscription member actions and amendment concurrency
+        run: php ./vendor/bin/pest tests/Integration/SubscriptionMemberVotingConcurrencyTest.php tests/Integration/SubscriptionMembershipReviewConcurrencyTest.php tests/Integration/SubscriptionBillingAmendmentConcurrencyTest.php --compact
 
       - name: Verify POS register and shared-stock concurrency
         env:

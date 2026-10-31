@@ -20,6 +20,7 @@ return [
     'replacement_setup_enabled' => (bool) env('SUBSCRIPTIONS_REPLACEMENT_SETUP_ENABLED', false),
     'replacement_servicing_enabled' => (bool) env('SUBSCRIPTIONS_REPLACEMENT_SERVICING_ENABLED', false),
     'replacement_amendments_enabled' => (bool) env('SUBSCRIPTIONS_REPLACEMENT_AMENDMENTS_ENABLED', false),
+    'replacement_amendment_apply_enabled' => (bool) env('SUBSCRIPTIONS_REPLACEMENT_AMENDMENT_APPLY_ENABLED', false),
     'replacement_activation_enabled' => (bool) env('SUBSCRIPTIONS_REPLACEMENT_ACTIVATION_ENABLED', false),
     'replacement_collection_enabled' => (bool) env('SUBSCRIPTIONS_REPLACEMENT_COLLECTION_ENABLED', false),
     'replacement_handoff_enabled' => (bool) env('SUBSCRIPTIONS_REPLACEMENT_HANDOFF_ENABLED', false),

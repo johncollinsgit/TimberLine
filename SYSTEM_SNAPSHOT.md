@@ -1,3 +1,19 @@
+## Accepted Braintree future terms (October 31; source candidate)
+
+The preview-first `subscriptions:amend` CLI can separately accept a freshly quoted
+owner-reviewed delivery/scents change for an activated allowed member. A new
+independent apply gate defaults off. One encrypted signed action links exact
+before/after terms to original authorization; current collection validates the
+complete chain. Original customer, method, pricing/quantities, fixed shipping,
+anchor/schedule, member/source evidence and existing cycles/orders remain intact.
+Current owner/member/agreement/cycle locks reject duplicate/conflicting requests,
+later pauses, revoked owners and already claimed cycles, including old MySQL
+snapshots. Amended collection rechecks tax before money movement and uses the
+accepted breakdown in one original-method Shopify receipt. Drift requires review.
+No schema, source stop, live payment, deployment or customer distribution changed.
+Customer confirmation, native Shopify contract amendments and actual two-tester
+acceptance remain outstanding. See the replacement runbook.
+
 ## Subscription delivery quote foundation (October 31; source candidate)
 
 A preview-first owner CLI can explicitly fetch a pinned original-store calculation
@@ -7,7 +23,7 @@ provider tax lines/totals and refuses currency, discount, bundle or warning drif
 The independent amendments gate defaults off; both graph documents validate
 against the pinned schema. Owner/store/terms/rollout changes stop subsequent reads.
 No billing terms, authorization, order, customer/default address, source or payment
-are saved. This is quote source only: applying reviewed amendments, customer
+are saved by quoting. Separate owner acceptance is described above; customer
 confirmation, Shopify contract updates and actual provider acceptance remain
 outstanding. See the replacement runbook.
 
@@ -73,7 +89,8 @@ terms edits cannot authorize another collection or contract adoption, including
 when an old reviewed hash is retained. Existing attempted cycles still reconcile
 using their immutable terms. Missing/corrupt original snapshots require review;
 they are never reconstructed from current terms or silently backfilled.
-Reviewed address/scent amendment workflows remain outstanding. No DDL, live
+Reviewed Braintree owner amendments are described above; customer confirmation
+and native Shopify amendments remain outstanding. No DDL, live
 billing or customer rollout changed. See the replacement runbook.
 
 ## Shopify paused-contract adoption (October 30; source candidate)
