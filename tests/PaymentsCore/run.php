@@ -353,6 +353,29 @@ $tests['eight competing refunds cannot exceed original value'] = function (strin
     check($provider->calls() === 4, 'One payment plus exactly three reserved refunds expected.');
 };
 
+$tests['explicit native review parking retains uncertainty and prevents replacement of its original sale'] = function (string $path): void {
+    [$journal] = fixture($path);
+    $binding = new MerchantBinding(16, 'native_register', 'square_native', 'alpha_fixture', 'location_fixture', 'test');
+    $original = $journal->reservePayment($binding, sale('original'), 'original_request');
+    rejected(fn () => $journal->parkForReview(16, $original['id']));
+    check($journal->claim(16, $original['id']));
+    $journal->unknown(16, $original['id']);
+    rejected(fn () => $journal->reservePayment($binding, sale('different'), 'different_request'));
+    rejected(fn () => $journal->parkForReview(17, $original['id']));
+    $parked = $journal->parkForReview(16, $original['id']);
+    check($parked['state'] === 'unknown' && $parked['provider_id'] === null && $parked['parked_for_review']);
+    check($journal->parkForReview(16, $original['id']) === $parked);
+    rejected(fn () => $journal->reservePayment($binding, sale('original'), 'replacement_request'));
+    check(! $journal->claim(16, $original['id']));
+    $next = $journal->reservePayment($binding, sale('different'), 'different_request');
+    check($next['id'] !== $original['id']);
+    [$other] = fixture($path.'.other');
+    $unsupported = $other->reservePayment(binding(), sale(), 'unsupported');
+    $other->claim(16, $unsupported['id']);
+    $other->unknown(16, $unsupported['id']);
+    rejected(fn () => $other->parkForReview(16, $unsupported['id']));
+};
+
 $passed = 0;
 try {
     foreach ($tests as $name => $test) {

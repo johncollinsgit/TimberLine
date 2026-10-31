@@ -22,6 +22,7 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
             Route::get('/', [PosController::class, 'show'])->middleware($read)->name('sales.show');
             Route::post('/collect', [PosController::class, 'start'])->middleware($write)->name('sales.collect');
             Route::post('/reconcile', [PosController::class, 'reconcile'])->middleware($write)->name('sales.reconcile');
+            Route::post('/leave-for-review', [PosController::class, 'leaveForReview'])->middleware($write)->name('sales.leave-for-review');
             Route::post('/refunds', [PosController::class, 'refund'])->middleware($write)->name('sales.refund');
             Route::get('/receipt', [PosController::class, 'receipt'])->middleware($read)->name('sales.receipt');
             Route::post('/receipt/customer', [PosController::class, 'attachCustomer'])->middleware($write)->name('sales.receipt.customer');

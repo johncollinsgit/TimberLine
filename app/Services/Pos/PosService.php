@@ -245,6 +245,42 @@ final class PosService
         return $this->projection($sale);
     }
 
+    public function leaveForReview(string $register, string $id, array $input): array
+    {
+        $scope = $this->access->register($register, 'recover');
+        $key = 'pos-start-'.hash('sha256', $this->store->runtime().':'.$scope['tenant_id'].':'.$register);
+
+        return Cache::lock($key, 180)->block(5, function () use ($scope, $register, $id, $input): array {
+            $sale = $this->sale($scope, $id);
+            $snapshot = $this->snapshot($sale);
+            if (($input['sdk_flow_ended'] ?? false) !== true || ($input['no_card_presented'] ?? false) !== true
+                || ($input['sdk_attempt_id'] ?? null) !== $sale->sdk_attempt_id || (int) $sale->actor_id !== $scope['actor_id']
+                || ($snapshot['device_id'] ?? null) !== $scope['device_id'] || ! $sale->attempt_id
+                || $snapshot['terms']['source'] !== StockPosCommerce::VERSION) {
+                throw new PosException('original_uncollected_flow_confirmation_required', 409);
+            }
+            $operation = $this->journal->get($scope['tenant_id'], $sale->attempt_id);
+            if ($sale->state !== 'unknown' || $operation['state'] !== 'unknown' || $operation['provider_id'] !== null) {
+                return $this->inspect($register, $id);
+            }
+            $connection = $this->square->connection($scope['tenant_id'], $snapshot['connection_id']);
+            $this->square->verify($connection, false);
+            if ($fresh = app(SquareNativeProvider::class)->findPayment($operation)) {
+                return $this->reconcile($register, $id, $fresh->providerId);
+            }
+            $this->journal->parkForReview($scope['tenant_id'], $operation['id']);
+            if (! $this->store->rows('events', $scope['tenant_id'])->where('sale_id', $id)->where('code', 'payment_parked_for_review')->exists()) {
+                $this->store->event($scope['tenant_id'], $id, 'payment_parked_for_review', [
+                    'actor_id' => $scope['actor_id'], 'device_id' => $scope['device_id'], 'operation_id' => $operation['id'],
+                    'sdk_attempt_id' => $sale->sdk_attempt_id, 'no_card_presented' => true, 'financial_state_retained' => 'unknown',
+                    'original_attempt_must_not_be_replaced' => true,
+                ]);
+            }
+
+            return $this->projection($this->sale($scope, $id));
+        });
+    }
+
     public function discard(string $register, string $requestId): array
     {
         $scope = $this->access->register($register, 'recover');
@@ -434,6 +470,8 @@ final class PosService
 
         return ['customer' => isset($snapshot['customer']['id']) ? $snapshot['customer'] : null,
             'sale_id' => $sale->id, 'request_id' => $sale->request_id, 'state' => $sale->state,
+            'sdk_attempt_id' => $sale->sdk_attempt_id,
+            'parked_for_review' => $sale->state === 'unknown' && $this->store->rows('events', (int) $sale->tenant_id)->where('sale_id', $sale->id)->where('code', 'payment_parked_for_review')->exists(),
             'stock_state' => $sale->stock_state, 'amount_minor' => (int) $sale->amount_minor, 'currency' => 'USD',
             'inventory_authority' => $snapshot['terms']['source'] === StockPosCommerce::VERSION ? 'everbranch' : 'legacy',
             'operational_review_closed' => app(PosUncollectedClosure::class)->closed($sale),

@@ -1,3 +1,19 @@
+## Pending payment navigation (October 31; source candidate)
+
+Close returns to the register without erasing a pending payment; Account remains
+accessible. After the SDK interaction ends, the original operator/device may
+explicitly confirm no card was presented and leave that attempt for review.
+Fresh Square retrieval is required. An empty result is not financial cancellation:
+the original remains unknown, with its stock reservation and immutable request.
+An audited parked event allows a different sale; the original can never receive
+a replacement descriptor. Saved reviews remain accessible and late provider
+confirmation still reconciles the original receipt once. The SDK watchdog treats
+an active payment handle as presentation, including Apple's system scene.
+Opening a warm basket reuses the chosen register/catalog, and known payment
+recovery makes one fresh reconciliation request. Background work uses a compact
+progress banner; unresolved status reads Payment not confirmed, never a permanent
+Checking label. Server quote/payment verification and mutation locks remain.
+
 ## Everbranch Pay: finished goods and guest checkout (October 31; source candidate)
 
 The owner follow-up preserves the original mountain/photo styling, completes

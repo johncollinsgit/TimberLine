@@ -72,7 +72,7 @@ final class SqlitePaymentJournal implements PaymentJournal
             if ($this->query("SELECT id FROM payment_core_operations WHERE tenant_id = ? AND kind = 'payment' AND sale_id = ?", [$binding->tenantId, $sale->saleId])) {
                 throw new DomainException('This sale already has a payment attempt. Recover its original request.');
             }
-            if ($this->query("SELECT id FROM payment_core_operations WHERE tenant_id = ? AND register_id = ? AND state IN ('reserved','processing','unknown','review')", [$binding->tenantId, $binding->registerId])) {
+            if ($this->query("SELECT id FROM payment_core_operations o WHERE tenant_id = ? AND register_id = ? AND state IN ('reserved','processing','unknown','review') AND (state <> 'unknown' OR NOT EXISTS (SELECT 1 FROM payment_core_events p WHERE p.operation_id=o.id AND p.event_code='explicit_review_parked'))", [$binding->tenantId, $binding->registerId])) {
                 throw new DomainException('Resolve the register operation before another sale.');
             }
 
@@ -204,6 +204,22 @@ final class SqlitePaymentJournal implements PaymentJournal
         $this->execute('INSERT INTO payment_core_events (operation_id, event_code, evidence_version) VALUES (?, ?, ?)', [$row['id'], $code, $version]);
     }
 
+    public function parkForReview(int $tenantId, string $id): array
+    {
+        return $this->locked(function () use ($tenantId, $id): array {
+            $row = $this->get($tenantId, $id);
+            if ($row['kind'] !== 'payment' || $row['binding']['provider'] !== 'square_native'
+                || $row['state'] !== 'unknown' || $row['claimed'] !== 1 || $row['provider_id'] !== null) {
+                throw new DomainException('Only an unresolved native interaction with no provider payment can be parked.');
+            }
+            if (! $row['parked_for_review']) {
+                $this->event($row, 'explicit_review_parked', $row['version']);
+            }
+
+            return $this->get($tenantId, $id);
+        });
+    }
+
     private function byRequest(int $tenantId, string $requestId): ?array
     {
         $row = $this->query('SELECT * FROM payment_core_operations WHERE tenant_id = ? AND request_id = ?', [$tenantId, $requestId]);
@@ -227,6 +243,7 @@ final class SqlitePaymentJournal implements PaymentJournal
 
     private function decode(array $row): array
     {
+        $row['parked_for_review'] = $this->query("SELECT id FROM payment_core_events WHERE operation_id=? AND event_code='explicit_review_parked'", [$row['id']]) !== null;
         $row['binding'] = json_decode($row['binding'], true, 512, JSON_THROW_ON_ERROR);
         $row['terms'] = json_decode($row['terms'], true, 512, JSON_THROW_ON_ERROR);
         foreach (['tenant_id', 'amount_minor', 'claimed', 'version'] as $key) {

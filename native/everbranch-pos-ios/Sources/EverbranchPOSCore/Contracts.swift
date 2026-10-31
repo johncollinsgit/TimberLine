@@ -85,6 +85,8 @@ public struct Sale: Decodable, Sendable {
     public let lines: [SaleLine]?
     public let inventoryAuthority: String?
     public let operationalReviewClosed: Bool?
+    public let parkedForReview: Bool?
+    public let sdkAttemptId: String?
     public var canLeave: Bool {
         (state == "succeeded" && (stockState == "committed" || (inventoryAuthority == "everbranch" && receiptAvailable && canonicalConfirmation))) || (["failed", "cancelled"].contains(state) && stockState == "released") || (operationalReviewClosed == true && state == "unknown" && stockState == "released" && !canonicalConfirmation && !receiptAvailable)
     }

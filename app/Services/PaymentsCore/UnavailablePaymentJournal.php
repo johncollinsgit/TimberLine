@@ -39,6 +39,11 @@ final class UnavailablePaymentJournal implements PaymentJournal
         throw new DomainException('Durable payment persistence is unavailable.');
     }
 
+    public function parkForReview(int $tenantId, string $id): array
+    {
+        throw new DomainException('Durable payment persistence is unavailable.');
+    }
+
     public function apply(int $tenantId, string $id, ProviderEvidence $evidence): array
     {
         throw new DomainException('Durable payment persistence is unavailable.');

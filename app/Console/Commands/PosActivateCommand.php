@@ -81,9 +81,11 @@ final class PosActivateCommand extends Command
                 $completedOwnerUpgrade = false;
                 if ($ownerRequested && is_string($claimed)) {
                     $original = $store->rows('sales', $tenant)->where('id', $claimed)->where('register_id', $register->id)->first();
-                    if ($original?->attempt_id && in_array($original->state, ['succeeded', 'failed', 'cancelled'], true)) {
+                    if ($original?->attempt_id) {
                         $originalPayment = app(\App\Services\PaymentsCore\PaymentJournal::class)->get($tenant, $original->attempt_id);
-                        $completedOwnerUpgrade = $originalPayment['state'] === $original->state;
+                        $completedOwnerUpgrade = $originalPayment['state'] === $original->state
+                            && (in_array($original->state, ['succeeded', 'failed', 'cancelled'], true)
+                                || ($original->state === 'unknown' && ($originalPayment['parked_for_review'] ?? false) === true));
                     }
                 }
                 if (config('pos_live.development_acceptance_enabled') !== true || config('pos_live.collection_enabled') !== false

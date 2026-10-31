@@ -76,6 +76,25 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Sign in to checkout"].waitForExistence(timeout: 5))
     }
 
+    func testPendingPaymentCanCloseBrowseAndOpenAccountWithoutLosingTheAttempt() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-recovery-ui-tests"]; app.launch()
+        XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Leave for review"].exists)
+        XCTAssertTrue(app.staticTexts["Payment not confirmed"].exists)
+        XCTAssertFalse(app.staticTexts["Checking payment status"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 5))
+        app.segmentedControls.buttons["Keypad"].tap()
+        XCTAssertTrue(app.buttons["keypad-7"].exists)
+        app.buttons["Account & Tap to Pay"].tap()
+        XCTAssertTrue(app.navigationBars["Account & Tap to Pay"].waitForExistence(timeout: 5))
+        app.buttons["Close"].tap()
+        app.buttons["Payment saved · Open status"].tap()
+        XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Leave for review"].exists)
+        attach(app, name: "Pending payment retains Close and review navigation")
+    }
+
     private func attach(_ app: XCUIApplication, name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name
         attachment.lifetime = .keepAlways; add(attachment)

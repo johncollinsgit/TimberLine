@@ -53,6 +53,7 @@ final class POSAppDelegate: NSObject, UIApplicationDelegate {
     private var presentationWatchdog: Task<Void, Never>?
     private weak var presentingController: UIViewController?
     private(set) var lastMessage: String?
+    var hasActivePayment: Bool { POSAppDelegate.squareReady && MobilePaymentsSDK.shared.paymentManager.currentPaymentHandle != nil }
     func setup(_ auth: DeviceAuthorization, diagnostics: Bool) async throws {
         guard POSAppDelegate.squareReady, auth.applicationId == POSAppDelegate.applicationID,
               auth.environment == POSAppDelegate.environment else { throw POSError.unavailable("This signed build is not configured for this merchant environment.") }
@@ -146,7 +147,8 @@ final class POSAppDelegate: NSObject, UIApplicationDelegate {
                 for second in 1...300 {
                     try? await Task.sleep(for: .seconds(1))
                     guard !Task.isCancelled, let self, self.completed != nil else { return }
-                    if controller?.presentedViewController != nil { seen = true; dismissedTicks = 0 }
+                    // Tap to Pay may use a system scene rather than this controller's modal hierarchy.
+                    if MobilePaymentsSDK.shared.paymentManager.currentPaymentHandle != nil || controller?.presentedViewController != nil { seen = true; dismissedTicks = 0 }
                     else if seen { dismissedTicks += 1 }
                     if (!seen && second >= 12) || dismissedTicks >= 2 || second == 300 {
                         // Retain the SDK handle and original attempt after missing presentation/callbacks.

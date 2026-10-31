@@ -62,9 +62,10 @@ struct POSView: View {
     @State private var showingCustomer = false
     @State private var contactOnly = false
     @State private var automaticQuoteRequested = false
+    @State private var confirmUncollected = false
     @FocusState private var inputFocused: Bool
 
-    private var isSetup: Bool { screen == .setup && model.pending == nil }
+    private var isSetup: Bool { screen == .setup }
     private var setupAllowed: Bool {
         guard let register = model.selectedRegister else { return false }
         return !(register.setupBlockers ?? register.blockers).contains { $0 != "merchant_evidence_stale" }
@@ -87,48 +88,54 @@ struct POSView: View {
                             .accessibilityIdentifier("status-message")
                     }
                     if !model.signedIn { signIn }
-                    else if model.pending != nil { recovery }
+                    else if model.pending != nil && !isSetup { recovery }
                     else if choosingRegister || model.selectedRegister == nil { registerPicker }
                     else if isSetup { setup }
                     else { checkout }
                     if isSetup || !model.signedIn { accountDetails }
                 }.padding(20)
-            }
+            }.disabled(model.busy)
             .scrollDismissesKeyboard(.interactively)
             .background(PayTheme.paper)
             .foregroundStyle(PayTheme.ink)
-            .navigationTitle(!model.signedIn ? (screen == .checkout ? "Sign in to checkout" : "Welcome") : model.pending != nil ? "Current sale" : model.selectedRegister == nil ? "Choose your business" : isSetup ? "Account & Tap to Pay" : "Checkout")
+            .navigationTitle(!model.signedIn ? (screen == .checkout ? "Sign in to checkout" : "Welcome") : isSetup ? "Account & Tap to Pay" : model.pending != nil ? "Current sale" : model.selectedRegister == nil ? "Choose your business" : "Checkout")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(PayTheme.paper, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
-                if model.pending == nil, let onClose {
+                if let onClose {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Close", action: onClose).frame(minWidth: 44, minHeight: 44)
+                        Button(action: onClose) { Text("Close").lineLimit(1).fixedSize() }.frame(minWidth: 64, minHeight: 44).disabled(model.collector.hasActivePayment)
                     }
                 }
-                if model.pending == nil, let onAccount {
-                    ToolbarItem(placement: .primaryAction) { Button("Account", action: onAccount).frame(minHeight: 44) }
+                if let onAccount {
+                    ToolbarItem(placement: .primaryAction) { Button(action: onAccount) { Text("Account").lineLimit(1).fixedSize() }.frame(minHeight: 44) }
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer(); Button("Done") { inputFocused = false }
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { footer }
-            .overlay {
+            .overlay(alignment: .top) {
                 if model.busy && model.paymentPhase != "card_entry" {
-                    ZStack {
-                        PayTheme.paper.opacity(0.65).ignoresSafeArea()
-                        ProgressView(model.paymentPhase.isEmpty ? "Loading…" : model.paymentPhase).padding(24).background(PayTheme.cream, in: RoundedRectangle(cornerRadius: 18))
-                    }.accessibilityIdentifier("payment-busy")
+                    ProgressView(model.paymentPhase.isEmpty ? "Updating…" : model.paymentPhase)
+                        .font(.subheadline).padding(.horizontal, 18).padding(.vertical, 10)
+                        .background(PayTheme.cream, in: Capsule()).padding(.top, 8)
+                        .accessibilityIdentifier("payment-busy").allowsHitTesting(false)
                 }
             }
-            .interactiveDismissDisabled(model.pending != nil || model.busy)
-            .disabled(model.busy)
+            .interactiveDismissDisabled(model.collector.hasActivePayment)
+            .confirmationDialog("No card was presented?", isPresented: $confirmUncollected, titleVisibility: .visible) {
+                Button("Save for review and return to register") { model.leaveUncollectedForReview() }
+                Button("Keep this payment open", role: .cancel) {}
+            } message: { Text("The original attempt stays saved for Square verification. Do not charge this customer again until its status is resolved. You can start a different sale.") }
             .task {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--pos-recovery-ui-tests") { return }
+                #endif
                 guard model.signedIn else { return }
                 model.perform {
-                    try await model.loadWorkspaces()
+                    if !model.registerLoaded { try await model.loadWorkspaces() }
                     if model.pending != nil { try await model.recover() }
                 }
             }
@@ -380,7 +387,7 @@ struct POSView: View {
                         ForEach(Array((line.components ?? []).enumerated()), id: \.offset) { _, part in Text("\(part.quantity) × \(part.title)").font(.caption).foregroundStyle(PayTheme.muted) }
                     }
                     if let customer = sale.customer { Label(customer.name, systemImage: "person.crop.circle.fill") }
-                    Text(sale.canonicalConfirmation ? "Payment confirmed" : sale.operationalReviewClosed == true ? "Uncollected sale closed after review" : sale.state == "quoted" ? "Review before payment" : sale.state == "cancelled" ? "Payment cancelled" : sale.state == "failed" ? "Payment unsuccessful" : "Checking payment status")
+                    Text(sale.canonicalConfirmation ? "Payment confirmed" : sale.operationalReviewClosed == true ? "Uncollected sale closed after review" : sale.state == "quoted" ? "Review before payment" : sale.state == "cancelled" ? "Payment cancelled" : sale.state == "failed" ? "Payment unsuccessful" : "Payment not confirmed")
                         .font(.headline)
                     if sale.collectionReady != true && sale.state == "quoted" { Text(sale.inventoryAuthority == "everbranch" ? "Updating availability or awaiting register approval. You can check this basket again; no payment has started." : "Payment collection is awaiting setup or approval.").font(.subheadline).foregroundStyle(PayTheme.muted) }
                     if sale.canonicalConfirmation && !sale.receiptAvailable { Text("Payment received. Order finalization needs review. Do not charge again.").font(.subheadline) }
@@ -391,8 +398,11 @@ struct POSView: View {
                     if sale.canonicalConfirmation && model.receipt?.customer == nil { Button("Add customer") { showingCustomer = true }.buttonStyle(PayButtonStyle(primary: false)) }
                     if sale.canLeave && model.pending?.refundRequestID == nil { Button("Next sale", action: model.nextSale).buttonStyle(PayButtonStyle()) }
                 } else { Text("Recover this sale before starting another payment.").font(.subheadline) }
-                Button("Check original sale") { model.perform { try await model.recover() } }.buttonStyle(PayButtonStyle(primary: false))
-                if model.pending?.collectionRequested == false { Button("Discard unstarted quote", role: .destructive, action: model.discard).frame(minHeight: 44) }
+                Button("Check payment status") { model.perform { try await model.recover() } }.buttonStyle(PayButtonStyle(primary: false))
+                if model.sale?.state == "unknown" && model.pending?.refundRequestID == nil {
+                    Button("Leave for review") { confirmUncollected = true }.buttonStyle(PayButtonStyle(primary: false))
+                }
+                if model.pending?.collectionRequested == false { Button("Cancel this sale", role: .destructive, action: model.discard).frame(minHeight: 44) }
             }
             if let receipt = model.receipt {
                 PayCard(title: "Receipt", icon: "receipt") {
