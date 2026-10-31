@@ -429,6 +429,12 @@ function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation 
     $test->shopifyPaid = false;
     $test->shopifyFulfilled = false;
     Http::fake(['https://fictional-pos-*.myshopify.com/*' => function ($request) use ($test, $loseCreate, $wrongLocation, $small) {
+        // Shopify rejects [] as the variables parameter, including the shop
+        // identity query before every mutation. Exercise the actual JSON body.
+        $wire = json_decode($request->body());
+        if (property_exists($wire, 'variables') && ! is_object($wire->variables)) {
+            return Http::response(['errors' => [['message' => 'Invalid variables parameter.']]]);
+        }
         $query = $request['query'];
         $shop = ['id' => 'gid://shopify/Shop/1', 'currencyCode' => 'USD'];
         $money = fn ($value) => ['shopMoney' => ['amount' => $small ? (['10.70' => '3.21', '0.70' => '0.21', '10.00' => '3.00'][$value] ?? $value) : $value, 'currencyCode' => 'USD']];

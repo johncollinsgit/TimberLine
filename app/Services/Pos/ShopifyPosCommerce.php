@@ -329,7 +329,8 @@ final class ShopifyPosCommerce
         $token = ShopifyStore::forTenantId($scope['tenant_id'])->whereKey($settings['store_id'])->firstOrFail()->access_token;
         try {
             $response = Http::withHeaders(['X-Shopify-Access-Token' => $token])->acceptJson()->connectTimeout(5)->timeout(20)
-                ->post('https://'.$settings['shop_domain'].'/admin/api/2026-10/graphql.json', ['query' => $query, 'variables' => $variables]);
+                ->post('https://'.$settings['shop_domain'].'/admin/api/2026-10/graphql.json',
+                    ['query' => $query, ...($variables ? ['variables' => $variables] : [])]);
         } catch (\Illuminate\Http\Client\ConnectionException) {
             throw new PosException('shopify_operation_unconfirmed', 503);
         }
