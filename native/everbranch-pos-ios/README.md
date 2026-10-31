@@ -54,4 +54,6 @@ The catalog uses a fixed phone frame with a separate scrolling content area,
 16-point inputs and larger controls. Native setup uses inline titles, merchant
 cards, a docked primary action and optional account/device diagnostics. UI tests
 exercise search focus without zoom, pinned navigation, the basket handoff,
-separate setup/checkout entry and returning to the preserved basket.
+separate setup/checkout entry and returning to the preserved basket. A completed
+sale clears that basket before returning to products for the next customer. The
+connected-catalog contract tests run with `node --test Tests/RegisterCatalog.test.mjs`.

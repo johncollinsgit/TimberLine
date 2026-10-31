@@ -43,6 +43,7 @@ struct POSReceipt: Decodable {
     @Published var busy = false
     @Published var message: String?
     @Published var tapReady = false
+    @Published var completedSaleGeneration = 0
     @Published var diagnostics = false
     private var initialBasket: [RegisterBasketLine]
     @Published var basketIssue: String?
@@ -282,6 +283,7 @@ struct POSReceipt: Decodable {
         perform {
             self.pending = nil; try self.savePending(); self.sale = nil; self.receipt = nil
             self.selectedCustomer = nil; self.customers = []; self.customerQuery = ""; self.customerName = ""; self.customerEmail = ""; self.invoiceID = ""; self.quantities = [:]
+            self.completedSaleGeneration += 1
         }
     }
     func logout() {

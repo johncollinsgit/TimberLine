@@ -8,7 +8,8 @@ struct ModernForestryRegisterView: View {
 
     var body: some View {
         ModernForestryCatalog(items: model.selectedRegister == nil ? nil : model.items,
-                              registerName: model.selectedRegister?.name) { selections in
+                              registerName: model.selectedRegister?.name,
+                              completedSaleGeneration: model.completedSaleGeneration) { selections in
             guard !model.busy else { return }
             screen = selections.isEmpty ? .setup : .checkout
             model.begin(basket: selections)
@@ -29,6 +30,7 @@ struct ModernForestryRegisterView: View {
 private struct ModernForestryCatalog: UIViewRepresentable {
     let items: [CatalogItem]?
     let registerName: String?
+    let completedSaleGeneration: Int
     let openRegister: ([RegisterBasketLine]) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(openRegister: openRegister) }
@@ -54,6 +56,7 @@ private struct ModernForestryCatalog: UIViewRepresentable {
     func updateUIView(_ web: WKWebView, context: Context) {
         context.coordinator.openRegister = openRegister
         context.coordinator.updateCatalog(items, registerName: registerName, web: web)
+        context.coordinator.completeSale(completedSaleGeneration, web: web)
     }
 
     static func dismantleUIView(_ web: WKWebView, coordinator: Coordinator) {
@@ -66,6 +69,7 @@ private struct ModernForestryCatalog: UIViewRepresentable {
         var pageURL: URL?
         private var catalogJSON = "null"
         private var sentCatalogJSON: String?
+        private var completedSaleGeneration = 0
         init(openRegister: @escaping ([RegisterBasketLine]) -> Void) { self.openRegister = openRegister }
 
         func updateCatalog(_ items: [CatalogItem]?, registerName: String?, web: WKWebView) {
@@ -87,6 +91,13 @@ private struct ModernForestryCatalog: UIViewRepresentable {
             let snapshot = catalogJSON
             web.evaluateJavaScript("window.updateLiveCatalog && window.updateLiveCatalog(\(snapshot))") { [weak self] _, error in
                 if error == nil { self?.sentCatalogJSON = snapshot }
+            }
+        }
+
+        func completeSale(_ generation: Int, web: WKWebView) {
+            guard generation > completedSaleGeneration else { return }
+            web.evaluateJavaScript("window.completeNativeSale && window.completeNativeSale()") { [weak self] _, error in
+                if error == nil { self?.completedSaleGeneration = generation }
             }
         }
 

@@ -53,6 +53,8 @@ struct POSView: View {
     var screen: POSScreen
     @ObservedObject var model: POSViewModel
     @State private var choosingRegister = false
+    @State private var choosingBusiness = false
+    @State private var workspaceQuery = ""
     @State private var addingProducts = false
     @State private var creatingCustomer = false
     @FocusState private var inputFocused: Bool
@@ -122,7 +124,9 @@ struct POSView: View {
                     if model.pending != nil { try await model.recover() }
                 }
             }
+            .onChange(of: model.completedSaleGeneration) { _, _ in onClose() }
         }
+        .buttonStyle(.plain)
         .tint(PayTheme.ink)
         .preferredColorScheme(.light)
     }
@@ -152,13 +156,20 @@ struct POSView: View {
     private var registerPicker: some View {
         VStack(spacing: 16) {
             PayCard(title: "Choose your business", icon: "building.2") {
-                ForEach(model.workspaces) { workspace in
-                    Button { model.choose(workspace) } label: {
+                if let workspace = model.selectedWorkspace, !choosingBusiness {
+                    Label(workspace.name, systemImage: "checkmark.circle.fill")
+                    Button("Change business") { choosingBusiness = true }.frame(minHeight: 44)
+                } else {
+                    TextField("Find your business", text: $workspaceQuery).payInput().focused($inputFocused)
+                    ForEach(model.workspaces.filter { workspaceQuery.isEmpty || $0.name.localizedCaseInsensitiveContains(workspaceQuery) }) { workspace in
+                    Button { inputFocused = false; choosingBusiness = false; model.choose(workspace) } label: {
                         HStack {
                             Text(workspace.name).multilineTextAlignment(.leading)
                             Spacer()
                             Image(systemName: model.selectedWorkspace?.id == workspace.id ? "checkmark.circle.fill" : "chevron.right")
                         }.frame(minHeight: 44)
+                    }
+                    Divider()
                     }
                 }
             }
@@ -309,7 +320,7 @@ struct POSView: View {
                 if let sale = model.sale {
                     Text(POSMoney.display(sale.amountMinor)).font(.system(size: 44, weight: .regular, design: .serif)).monospacedDigit()
                     if let customer = sale.customer { Label(customer.name, systemImage: "person.crop.circle.fill") }
-                    Text(sale.canonicalConfirmation ? "Payment confirmed" : sale.state == "quoted" ? "Review before payment" : "Checking payment status")
+                    Text(sale.canonicalConfirmation ? "Payment confirmed" : sale.state == "quoted" ? "Review before payment" : sale.state == "cancelled" ? "Payment cancelled" : sale.state == "failed" ? "Payment unsuccessful" : "Checking payment status")
                         .font(.headline)
                     if sale.collectionReady != true && sale.state == "quoted" { Text("Payment collection is awaiting setup or approval.").font(.subheadline).foregroundStyle(PayTheme.muted) }
                     if sale.canonicalConfirmation && !sale.receiptAvailable { Text("Payment received. Order finalization needs review. Do not charge again.").font(.subheadline) }

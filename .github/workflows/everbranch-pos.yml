@@ -25,6 +25,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Verify native recovery contracts
         run: swift test --package-path native/everbranch-pos-ios --scratch-path "$RUNNER_TEMP/pos-swift"
+      - name: Verify connected catalog and basket handoff
+        run: node --test native/everbranch-pos-ios/Tests/RegisterCatalog.test.mjs
       - name: Verify deterministic project
         run: |
           python3 native/everbranch-pos-ios/scripts/generate-project.py

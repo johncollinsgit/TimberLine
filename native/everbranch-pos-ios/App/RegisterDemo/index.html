@@ -74,6 +74,7 @@ let selectedEvent='show',staff='connect',tab='sell',query='',basket=[],guest='',
 const content=document.getElementById('content'),sheet=document.getElementById('sheet');
 const savedCatalog=products.map(p=>p.variants.map(v=>({...v})));
 let liveCatalog=null;
+window.completeNativeSale=function(){basket=[];quote=null;selectedProduct=null;bundleDraft=null;tab='sell';render();content.scrollTo(0,0)};
 window.updateLiveCatalog=function(snapshot){
  liveCatalog=snapshot;
  const available=new Map((snapshot?.items||[]).map(i=>[String(i.id).split('/').pop(),i]));

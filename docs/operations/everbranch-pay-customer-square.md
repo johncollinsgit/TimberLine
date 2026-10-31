@@ -182,7 +182,7 @@ Subsequent owner setup resolved several earlier evidence gaps above:
 - The registered phone requested native Square onboarding on build 2026103102.
   Server authorization is not proof that Apple linking and reader setup finished.
 
-Build 2026103103 is the revised phone interface candidate. Its signed development
+Build 2026103104 is the revised phone interface candidate. Its signed development
 archive is distinct from App Store/TestFlight publishing approval. Installation,
 protected-release checks and actual phone interaction must be recorded separately;
 normal payment collection remains off until the original acceptance gates pass.
