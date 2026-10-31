@@ -39,7 +39,16 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
             let messages = ["select_existing_customer": "This contact already has a customer record. Find and select it instead.",
                 "customer_request_conflict": "The original customer request has different details. Recover that request before continuing.",
                 "customer_admin_required": "An owner or administrator can create a customer. Select an existing customer or ask your manager.",
-                "customer_selection_required": "Select the customer before reviewing this sale."]
+                "customer_selection_required": "Select the customer before reviewing this sale.",
+                "stock_availability_update_pending": "Availability is updating. Check this basket again before charging.",
+                "stock_unavailable": "One of these products is no longer available. Review the basket.",
+                "stock_count_changed_by_activity": "Stock changed while you were counting. Refresh Products and check the remaining physical units again.",
+                "catalog_changed": "A product or price changed. Return to Products and review the basket.",
+                "checkout_settings_changed": "The register settings changed. Review a new total before charging.",
+                "receipt_customer_already_associated": "This receipt is already linked to a different customer. Ask a manager to review it.",
+                "customer_rewards_historical_review": "The purchase is linked. A manager needs to review its rewards eligibility.",
+                "collection_not_ready": "This register still needs its payment readiness review.",
+                "inventory_collection_off": "This register is being prepared for its inventory acceptance test."]
             throw POSError.unavailable(messages[code] ?? code.replacingOccurrences(of: "_", with: " "))
         }
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase

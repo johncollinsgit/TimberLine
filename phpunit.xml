@@ -8,6 +8,9 @@
         <testsuite name="POS Live">
             <directory>tests/PosLive</directory>
         </testsuite>
+        <testsuite name="Finished Goods">
+            <directory>tests/Stock</directory>
+        </testsuite>
         <testsuite name="Unit">
             <directory>tests/Unit</directory>
         </testsuite>

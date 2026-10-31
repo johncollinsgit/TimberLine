@@ -1791,6 +1791,340 @@ CREATE TABLE `commerce_sources` (
   CONSTRAINT `commerce_sources_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_balances`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_balances` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `pool_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `item_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `on_hand` bigint NOT NULL DEFAULT '0',
+  `reserved` bigint unsigned NOT NULL DEFAULT '0',
+  `version` bigint unsigned NOT NULL DEFAULT '0',
+  `counted_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `csb_scope_uq` (`tenant_id`,`pool_id`,`item_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_bindings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_bindings` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `channel` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `channel_key` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `pool_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT '1',
+  `publish_enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `reviewed_by` bigint unsigned NOT NULL,
+  `settings` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `csc_channel_uq` (`tenant_id`,`channel`,`channel_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_bundles`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_bundles` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `item_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `required_quantity` int unsigned NOT NULL,
+  `eligible_items` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `revision` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT '1',
+  `reviewed_by` bigint unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `csu_item_uq` (`tenant_id`,`item_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_catalog_runs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_catalog_runs` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `store_id` bigint unsigned NOT NULL,
+  `generation` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `started_at` timestamp NOT NULL,
+  `completed_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `csg_store_uq` (`tenant_id`,`store_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_event_links`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_event_links` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `event_id` bigint unsigned NOT NULL,
+  `provider` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `external_id` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `metadata` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reviewed_by` bigint unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `cse_source_uq` (`tenant_id`,`provider`,`external_id`),
+  KEY `cse_event_idx` (`tenant_id`,`event_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_items` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `sku` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `title` varchar(250) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `product_key` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `variant_label` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `image_url` text COLLATE utf8mb4_unicode_ci,
+  `unit_amount_minor` bigint unsigned NOT NULL DEFAULT '0',
+  `currency` char(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'USD',
+  `tracked` tinyint(1) NOT NULL DEFAULT '1',
+  `active` tinyint(1) NOT NULL DEFAULT '1',
+  `revision` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `metadata` longtext COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `csi_tenant_idx` (`tenant_id`,`active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_movements`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_movements` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `pool_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `item_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `operation_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reason` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `delta` bigint NOT NULL,
+  `before_quantity` bigint NOT NULL,
+  `after_quantity` bigint NOT NULL,
+  `actor_id` bigint unsigned NOT NULL,
+  `source_ref` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `csm_scope_idx` (`tenant_id`,`pool_id`,`item_id`,`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_mutexes`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_mutexes` (
+  `tenant_id` bigint unsigned NOT NULL,
+  PRIMARY KEY (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_online_inbox`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_online_inbox` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `store_id` bigint unsigned NOT NULL,
+  `order_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `state` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `attempts` int unsigned NOT NULL DEFAULT '0',
+  `error_code` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `next_attempt_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `csi_event_uq` (`tenant_id`,`store_id`,`event_hash`),
+  KEY `csi_queue_idx` (`tenant_id`,`state`,`next_attempt_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_online_orders`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_online_orders` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `store_id` bigint unsigned NOT NULL,
+  `order_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `pool_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `state` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_updated_at` timestamp NOT NULL,
+  `lines` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `restocks` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `csw_order_uq` (`tenant_id`,`store_id`,`order_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_operations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_operations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `request_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `input_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `actor_id` bigint unsigned NOT NULL,
+  `result` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `cso_request_uq` (`tenant_id`,`request_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_pools`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_pools` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_key` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT '1',
+  `reviewed_by` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `csp_event_uq` (`tenant_id`,`event_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_production_links`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_production_links` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `order_line_id` bigint unsigned NOT NULL,
+  `item_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_signature` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `received_quantity` bigint unsigned NOT NULL DEFAULT '0',
+  `reviewed_by` bigint unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `csl_source_uq` (`tenant_id`,`order_line_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_production_sources`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_production_sources` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `order_id` bigint unsigned NOT NULL,
+  `reviewed_by` bigint unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `csd_order_uq` (`order_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_provider_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_provider_items` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `store_id` bigint unsigned NOT NULL,
+  `item_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `variant_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `inventory_item_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT '1',
+  `catalog_generation` char(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `unit_amount_minor` bigint unsigned NOT NULL DEFAULT '0',
+  `revision` char(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `inventory_policy` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `location_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `acknowledged_quantity` bigint DEFAULT NULL,
+  `acknowledged_version` bigint unsigned NOT NULL DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `pending_online_delta` bigint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `csx_variant_uq` (`tenant_id`,`store_id`,`variant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_publications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_publications` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `binding_id` bigint unsigned NOT NULL,
+  `pool_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `item_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `version` bigint unsigned NOT NULL,
+  `quantity` bigint NOT NULL,
+  `expected_quantity` bigint DEFAULT NULL,
+  `idempotency_key` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `state` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `attempts` int unsigned NOT NULL DEFAULT '0',
+  `provider_reference` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `claimed_at` timestamp NULL DEFAULT NULL,
+  `error_code` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `css_version_uq` (`binding_id`,`item_id`,`version`),
+  KEY `css_queue_idx` (`state`,`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_receipt_associations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_receipt_associations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sale_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `customer_profile_id` bigint unsigned DEFAULT NULL,
+  `actor_id` bigint unsigned NOT NULL,
+  `request_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `input_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `contact` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reward_context` longtext COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `csa_sale_uq` (`tenant_id`,`runtime_id`,`sale_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commerce_stock_reservations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `commerce_stock_reservations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `hold_key` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `pool_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `item_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `quantity` int unsigned NOT NULL,
+  `balance_version` bigint unsigned NOT NULL DEFAULT '0',
+  `collection_locked_at` timestamp NULL DEFAULT NULL,
+  `state` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'held',
+  `expires_at` timestamp NOT NULL,
+  `payment_ref` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `csr_hold_item_uq` (`tenant_id`,`hold_key`,`item_id`),
+  KEY `csr_expiry_idx` (`tenant_id`,`state`,`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `custom_module_requests`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -13837,3 +14171,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (317,'2026_10_29_15
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (318,'2026_10_22_190000_create_payment_core_journal_tables',42);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (319,'2026_10_22_190100_create_payment_core_quotes_table',42);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (320,'2026_10_24_010000_create_pos_live_tables',42);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (321,'2026_10_31_190000_create_finished_goods_stock_tables',43);

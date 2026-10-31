@@ -25,13 +25,25 @@ final class PosCustomerDirectory
             throw new PosException('customer_query_required', 422);
         }
         $matches = MarketingProfile::query()->forTenantId($scope['tenant_id'])->whereNull('archived_at');
-        foreach (preg_split('/\s+/u', trim($query), -1, PREG_SPLIT_NO_EMPTY) as $part) {
-            $pattern = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], Str::lower($part)).'%';
-            $matches->where(function ($q) use ($pattern): void {
-                foreach (['first_name', 'last_name', 'email', 'phone', 'normalized_email', 'normalized_phone'] as $column) {
-                    $q->orWhereRaw('LOWER('.$column.") LIKE ? ESCAPE '!'", [$pattern]);
+        $digits = preg_replace('/[^0-9]/', '', $query);
+        if (preg_match('/^[+()0-9.\s-]+$/D', trim($query)) && strlen($digits) >= 7) {
+            $phone = app(\App\Support\Marketing\MarketingIdentityNormalizer::class)->normalizePhone($query);
+            $matches->where(function ($q) use ($phone, $digits): void {
+                if ($phone !== null) {
+                    $q->where('normalized_phone', $phone);
                 }
+                $q->orWhere('normalized_phone', 'like', '%'.$digits.'%')
+                    ->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '(', ''), ')', ''), '-', ''), ' ', ''), '.', '') LIKE ?", ['%'.$digits.'%']);
             });
+        } else {
+            foreach (preg_split('/\s+/u', trim($query), -1, PREG_SPLIT_NO_EMPTY) as $part) {
+                $pattern = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], Str::lower($part)).'%';
+                $matches->where(function ($q) use ($pattern): void {
+                    foreach (['first_name', 'last_name', 'email', 'phone', 'normalized_email', 'normalized_phone'] as $column) {
+                        $q->orWhereRaw('LOWER('.$column.") LIKE ? ESCAPE '!'", [$pattern]);
+                    }
+                });
+            }
         }
         $found = $matches->orderBy('id')->limit(41)->get();
         $canonical = $this->identities->canonicalCollection($found, $scope['tenant_id']);

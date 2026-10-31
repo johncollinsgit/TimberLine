@@ -5,6 +5,8 @@ the capability to connect a payment to one customer entry and track that
 customer's online and in-person purchases and rewards together. Modern Forestry
 is the first pilot, not a tenant-specific implementation or exclusive entitlement.
 
+For inventory-owned Pay registers, guest collection precedes optional audited customer association. See [finished-goods stock](finished-goods-stock.md). Financial snapshots stay immutable; receipt contact alone does not verify account identity.
+
 ## Product contract
 
 - Included capability for every tenant and business template. The Customers

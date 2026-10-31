@@ -57,7 +57,7 @@ final class PosCustomerProgramCommand extends Command
                 throw new PosException('customer_rewards_policy_changed');
             }
             $before = $store->decrypt($row->configuration);
-            $after = [...$before, 'customer_required' => true, 'customer_contract_version' => 1,
+            $after = [...$before, 'customer_required' => ! app(\App\Services\Pos\StockPosCommerce::class)->enabled($row), 'customer_contract_version' => 1,
                 'customer_rewards' => ['enabled' => true, 'policy_version' => $current['version'],
                     'threshold_mode' => 'highest_per_purchase', 'reviewed_by' => $actor->id, 'reviewed_at' => now()->toIso8601String()]];
             $store->rows('registers', $tenant)->where('id', $row->id)->update(['configuration' => $store->encrypt($after)]);

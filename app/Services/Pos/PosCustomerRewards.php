@@ -40,7 +40,7 @@ final class PosCustomerRewards
         return ['version' => Contract::hash([$program, $policy, $access]), 'program' => $program, 'policy' => $policy, 'access' => $access];
     }
 
-    public function freeze(array $scope, array $customer): array
+    public function freeze(array $scope, ?array $customer): array
     {
         $setup = $this->store->decrypt($scope['register']->configuration)['customer_rewards'] ?? [];
         $current = $this->policy($scope['tenant_id']);
@@ -61,6 +61,11 @@ final class PosCustomerRewards
         if (! empty($rules['spend_threshold_rewards']) && ($setup['threshold_mode'] ?? null) !== 'highest_per_purchase') {
             throw new PosException('reward_threshold_terms_unreviewed', 503);
         }
+        if ($customer === null) {
+            return ['enabled' => true, 'anonymous' => true, 'version' => $current['version'], 'rules' => $rules,
+                'program' => $current['program'], 'threshold_mode' => $setup['threshold_mode'] ?? null, 'redemption' => 'online_only',
+                'captured_at' => now()->toIso8601String(), 'refund_policy' => 'recalculate_original_rules'];
+        }
         $profile = $this->identities->byId($scope['tenant_id'], $customer['id']);
         $history = app(CustomerCommerceSnapshotService::class)->forProfile($profile, $scope['tenant_id'], 100);
         $prior = collect($history['purchases'])->filter(fn ($p) => $p['confirmed']
@@ -75,9 +80,12 @@ final class PosCustomerRewards
 
     public function apply(object $sale, ?array $refund = null): void
     {
-        $snapshot = app(PosService::class)->snapshot($sale);
+        $snapshot = app(PosReceiptCustomers::class)->decorate($sale, app(PosService::class)->snapshot($sale));
         if (empty($snapshot['customer']['id'])) {
             return;
+        }
+        if (($snapshot['customer_rewards']['historical_review_required'] ?? false) === true) {
+            throw new PosException('customer_rewards_historical_review');
         }
         $payment = $this->journal->get((int) $sale->tenant_id, $sale->attempt_id);
         if ($sale->state !== 'succeeded' || $payment['state'] !== 'succeeded' || $payment['kind'] !== 'payment'
@@ -93,7 +101,14 @@ final class PosCustomerRewards
             || $refund['original_id'] !== $sale->attempt_id || $refund['original_provider_id'] !== $payment['provider_id'])) {
             throw new PosException('confirmed_refund_required');
         }
-        $review = $this->store->db->transaction(function () use ($sale, $snapshot, $refund): bool {
+        // Journal verification owns its committed boundary. Never call it from the wallet transaction.
+        $purchases = app(PosCustomerPurchases::class);
+        $refundRevision = $purchases->refundRevision($sale);
+        $refunded = $purchases->confirmedRefunds($sale, $refund);
+        if (! hash_equals($refundRevision, $purchases->refundRevision($sale))) {
+            throw new PosException('customer_refund_evidence_changed');
+        }
+        $review = $this->store->db->transaction(function () use ($sale, $snapshot, $refund, $refunded, $refundRevision, $purchases): bool {
             $tenant = (int) $sale->tenant_id;
             $id = (int) $snapshot['customer']['id'];
             MarketingProfile::query()->forTenantId($tenant)->whereKey($id)->lockForUpdate()->firstOrFail();
@@ -101,6 +116,9 @@ final class PosCustomerRewards
                 throw new PosException('customer_identity_review_required');
             }
             $sale = $this->store->rows('sales', $tenant)->where('id', $sale->id)->lockForUpdate()->firstOrFail();
+            if (! hash_equals($refundRevision, $purchases->refundRevision($sale))) {
+                throw new PosException('customer_refund_evidence_changed');
+            }
             if ($refund) {
                 $seen = $this->store->rows('events', $tenant)->where('sale_id', $sale->id)->where('code', 'customer_refund_confirmed')
                     ->get()->contains(fn ($e) => $this->store->decrypt($e->details)['operation_id'] === $refund['id']);
@@ -112,8 +130,7 @@ final class PosCustomerRewards
             if (! $terms['enabled']) {
                 return false;
             }
-            $refunded = app(PosCustomerPurchases::class)->confirmedRefunds($sale);
-            $subtotal = array_sum(array_map(fn ($line) => $line['unit_amount_minor'] * $line['quantity'], $snapshot['sale']['lines']));
+            $subtotal = $snapshot['terms']['rewardable_subtotal_minor'] ?? array_sum(array_map(fn ($line) => $line['unit_amount_minor'] * $line['quantity'], $snapshot['sale']['lines']));
             $remaining = intdiv($subtotal * ((int) $sale->amount_minor - $refunded), (int) $sale->amount_minor);
             $rules = $terms['rules'];
             $desired = 0;

@@ -63,6 +63,7 @@ final class SquareNativeProvider implements PaymentProvider
 
             if (($payment['status'] ?? null) === 'COMPLETED') {
                 app(PosSquareRefundObserver::class)->observe($sale, $connection, $payment);
+                app(PosReceiptDetails::class)->observe($sale, $payment);
             }
             if (! empty($payment['order_id'])) {
                 $this->store->rows('sales', (int) $sale->tenant_id)->where('id', $sale->id)->update(['provider_order_id' => $payment['order_id']]);

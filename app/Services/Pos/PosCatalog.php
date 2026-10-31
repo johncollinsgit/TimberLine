@@ -9,10 +9,13 @@ use App\Services\PaymentsCore\Contract;
 
 final class PosCatalog
 {
-    public function __construct(private PosStore $store, private ShopifyPosCommerce $shopify) {}
+    public function __construct(private PosStore $store, private ShopifyPosCommerce $shopify, private StockPosCommerce $stock) {}
 
     public function listing(array $scope): array
     {
+        if ($this->stock->enabled($scope['register'])) {
+            return $this->stock->catalog($scope);
+        }
         if ($scope['register']->catalog_source === 'shopify') {
             return $this->shopify->catalog($scope);
         }
@@ -54,6 +57,14 @@ final class PosCatalog
     {
         if (isset($input['source_order_id'])) {
             return $this->invoice($scope, $input['source_order_id']);
+        }
+        if ($this->stock->enabled($scope['register'])) {
+            return $this->stock->quote($scope, $input);
+        }
+        foreach ($input['items'] ?? [] as $item) {
+            if (isset($item['components'])) {
+                throw new PosException('bundle_register_setup_required');
+            }
         }
         if ($scope['register']->catalog_source === 'shopify') {
             return $this->shopify->quote($scope, $input['items']);

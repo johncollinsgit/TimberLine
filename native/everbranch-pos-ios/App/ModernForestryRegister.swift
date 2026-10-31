@@ -1,135 +1,227 @@
 import SwiftUI
-import WebKit
+import UIKit
 
 struct EverbranchRegisterView: View {
-    @State private var showingRegister = false
-    @State private var screen: POSScreen = .setup
-    @State private var catalogOpened = SecureStore.read("selected-register") != nil
     @StateObject private var model = POSViewModel()
-
-    private var catalogTestMode: Bool {
+    @State private var basket = false
+    @State private var account = false
+    private var fixture: Bool {
         #if DEBUG
         ProcessInfo.processInfo.arguments.contains("--pos-catalog-ui-tests")
         #else
         false
         #endif
     }
-
     var body: some View {
         Group {
-            if catalogTestMode || (model.signedIn && model.registerLoaded && catalogOpened && model.selectedWorkspace?.slug == "modern-forestry") {
-                ModernForestryCatalog(items: model.selectedRegister == nil ? nil : model.items,
-                                      registerName: model.selectedRegister?.name,
-                                      completedSaleGeneration: model.completedSaleGeneration) { selections in
-                    guard !model.busy else { return }
-                    screen = selections.isEmpty ? .setup : .checkout
-                    model.begin(basket: selections)
-                    showingRegister = true
-                }
-                .ignoresSafeArea(edges: .bottom)
-            } else if model.signedIn && model.registerLoaded && catalogOpened {
-                POSView(onAccount: { screen = .setup; showingRegister = true }, screen: .checkout, model: model)
-            } else {
-                POSView(onOpenRegister: { catalogOpened = true }, screen: .setup, model: model)
+            if model.pending != nil && !basket { POSView(screen: .checkout, model: model) }
+            else if model.signedIn && model.registerLoaded && model.selectedRegister?.catalogSource == "native" && model.selectedRegister?.guestCheckout != true {
+                // Retain the original service/invoice lane until its merchant activates the stock adapter.
+                POSView(screen: .checkout, model: model)
             }
+            else if fixture || (model.signedIn && model.registerLoaded) {
+                NativeRegister(model: model, onBasket: { basket = true }, onAccount: { account = true })
+            } else { POSView(screen: .setup, model: model) }
         }
-        .background(Color(red: 0.96, green: 0.95, blue: 0.90))
-        .sheet(isPresented: $showingRegister) {
-            POSView(onClose: { showingRegister = false }, onOpenRegister: { catalogOpened = true; showingRegister = false }, screen: screen, model: model)
-        }
-        .onChange(of: model.signedIn) { _, signedIn in if !signedIn { catalogOpened = false; showingRegister = false } }
+        .background(PayTheme.paper)
+        .sheet(isPresented: $basket) { POSView(onClose: { basket = false }, screen: .checkout, model: model) }
+        .sheet(isPresented: $account) { POSView(onClose: { account = false }, onOpenRegister: { account = false }, screen: .setup, model: model) }
+        .onChange(of: model.completedSaleGeneration) { _, _ in basket = false }
+        .onChange(of: model.signedIn) { _, value in if !value { account = false; basket = false } }
     }
 }
 
-private struct ModernForestryCatalog: UIViewRepresentable {
-    let items: [CatalogItem]?
-    let registerName: String?
-    let completedSaleGeneration: Int
-    let openRegister: ([RegisterBasketLine]) -> Void
+private enum RegisterTab: String, CaseIterable { case products = "Products", favorites = "Favorites", keypad = "Keypad" }
+private struct ProductGroup: Identifiable {
+    let id: String
+    let items: [CatalogItem]
+    var title: String { items[0].title }
+    var available: Bool { items.contains { ($0.availableQuantity ?? 1) > 0 && !["count_required", "review_required", "components_count_required"].contains($0.availability ?? "") } }
+}
 
-    func makeCoordinator() -> Coordinator { Coordinator(openRegister: openRegister) }
+private struct NativeRegister: View {
+    @ObservedObject var model: POSViewModel
+    let onBasket: () -> Void
+    let onAccount: () -> Void
+    @State private var tab: RegisterTab = .products
+    @State private var search = ""
+    @State private var favorites = Set<String>()
+    @State private var options: ProductGroup?
+    @State private var bundle: CatalogItem?
+    @State private var keypadCents = 0
+    @State private var stockCounts: [String: String] = [:]
+    @FocusState private var searchFocused: Bool
+    private var favoriteKey: String { "register-favorites:\(model.selectedWorkspace?.id ?? 0):\(model.selectedRegister?.id ?? "fixture")" }
+    private var groups: [ProductGroup] {
+        Dictionary(grouping: model.items, by: { $0.productKey ?? $0.id }).map { ProductGroup(id: $0.key, items: $0.value.sorted { $0.unitAmountMinor < $1.unitAmountMinor }) }
+            .filter { (tab != .favorites || favorites.contains($0.id)) && (search.isEmpty || $0.items.contains { ($0.title + " " + ($0.variantLabel ?? "") + " " + ($0.sku ?? "")).localizedCaseInsensitiveContains(search) }) }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+    private var count: Int { model.quantities.values.reduce(0, +) + (model.customAmountMinor > 0 ? 1 : 0) }
+    private var subtotal: Int { model.items.reduce(model.customAmountMinor) { $0 + $1.unitAmountMinor * (model.quantities[$1.id] ?? 0) } }
 
-    func makeUIView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .nonPersistent()
-        configuration.userContentController.add(context.coordinator, name: "register")
-        let web = WKWebView(frame: .zero, configuration: configuration)
-        web.navigationDelegate = context.coordinator
-        web.isOpaque = false
-        web.backgroundColor = .clear
-        web.scrollView.bounces = false
-        web.scrollView.contentInsetAdjustmentBehavior = .never
-        web.scrollView.keyboardDismissMode = .onDrag
-        if let page = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "RegisterDemo") {
-            context.coordinator.pageURL = page.standardizedFileURL
-            web.loadFileURL(page, allowingReadAccessTo: page.deletingLastPathComponent())
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("EVERBRANCH PAY", systemImage: "leaf.fill").font(.caption.weight(.semibold)).tracking(1.5)
+                    Text(model.selectedWorkspace?.name ?? "Register").font(.system(.title2, design: .serif)).lineLimit(1)
+                }
+                Spacer()
+                Button("Account", action: onAccount).font(.subheadline.weight(.semibold)).padding(14).background(PayTheme.cream, in: Capsule()).accessibilityLabel("Account & Tap to Pay")
+            }.padding(.horizontal, 20)
+            Picker("Register", selection: $tab) { ForEach(RegisterTab.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).padding(.horizontal, 20)
+            if let message = model.message { Text(message).font(.footnote).foregroundStyle(PayTheme.muted).padding(.horizontal, 20) }
+            if tab == .keypad { keypad }
+            else {
+                HStack { Image(systemName: "magnifyingglass"); TextField("Search products", text: $search).focused($searchFocused).submitLabel(.done).onSubmit { searchFocused = false }.textInputAutocapitalization(.never).autocorrectionDisabled() }.padding(14).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20)
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                        ForEach(groups) { group in product(group) }
+                    }.padding(.horizontal, 20).padding(.bottom, 16)
+                    if groups.isEmpty { ContentUnavailableView(tab == .favorites ? "Your favorites" : "No matching products", systemImage: tab == .favorites ? "star" : "magnifyingglass", description: Text(tab == .favorites ? "Use the star on a product to keep it here." : "Try another name or refresh the catalog.")) }
+                }.scrollDismissesKeyboard(.interactively).refreshable { model.refreshProducts() }
+            }
+        }.padding(.top, 12).foregroundStyle(PayTheme.ink).background(PayTheme.paper)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !searchFocused { Button { searchFocused = false; onBasket() } label: {
+                HStack { Text("\(count)").padding(.horizontal, 12).padding(.vertical, 8).background(.white.opacity(0.15), in: Capsule()); Text("View basket"); Spacer(); Text(POSMoney.display(subtotal)).monospacedDigit() }.font(.body.weight(.semibold)).padding(16).foregroundStyle(PayTheme.cream).background(PayTheme.ink, in: Capsule())
+            }.disabled(count == 0 || model.busy).opacity(count == 0 ? 0.55 : 1).padding(16).background(PayTheme.paper) }
         }
-        return web
+        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { searchFocused = false } } }
+        .sheet(item: $options) { group in optionsSheet(group) }
+        .sheet(item: $bundle) { item in BundleOptions(item: item, model: model) }
+        .onAppear {
+            favorites = Set(UserDefaults.standard.stringArray(forKey: favoriteKey) ?? [])
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--pos-catalog-ui-tests") && model.items.isEmpty { model.loadCatalogFixture() }
+            #endif
+        }
+        .onChange(of: favoriteKey) { _, _ in favorites = Set(UserDefaults.standard.stringArray(forKey: favoriteKey) ?? []) }
+        .onChange(of: model.stockCountGeneration) { _, _ in options = nil; stockCounts = [:] }
+        .buttonStyle(.plain).preferredColorScheme(.light)
     }
 
-    func updateUIView(_ web: WKWebView, context: Context) {
-        context.coordinator.openRegister = openRegister
-        context.coordinator.updateCatalog(items, registerName: registerName, web: web)
-        context.coordinator.completeSale(completedSaleGeneration, web: web)
+    private func product(_ group: ProductGroup) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ZStack(alignment: .topTrailing) {
+                Button { select(group) } label: {
+                    AsyncImage(url: group.items[0].imageUrl.flatMap(URL.init(string:))) { image in image.resizable().scaledToFill() }
+                        placeholder: { ZStack { PayTheme.line.opacity(0.5); Image(systemName: "leaf").font(.largeTitle).foregroundStyle(PayTheme.muted) } }
+                        .frame(maxWidth: .infinity).frame(height: 142).clipped().clipShape(RoundedRectangle(cornerRadius: 20))
+                }.accessibilityLabel(group.items.count == 1 ? "Add \(group.title)" : "Choose \(group.title) options")
+                Button {
+                    if favorites.contains(group.id) { favorites.remove(group.id) } else { favorites.insert(group.id) }
+                    UserDefaults.standard.set(Array(favorites), forKey: favoriteKey)
+                } label: { Image(systemName: favorites.contains(group.id) ? "star.fill" : "star").frame(width: 44, height: 44).background(PayTheme.cream.opacity(0.95), in: Circle()) }
+                    .accessibilityLabel(favorites.contains(group.id) ? "Remove \(group.title) from favorites" : "Favorite \(group.title)")
+            }
+            Button { select(group) } label: {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(group.title).font(.system(.title3, design: .serif)).lineLimit(2).frame(minHeight: 48, alignment: .top)
+                    Text((group.items.count > 1 ? "From " : "") + POSMoney.display(group.items[0].unitAmountMinor)).font(.headline).monospacedDigit()
+                    Text(!group.available ? (group.items.contains { $0.availability == "review_required" } ? "Bundle setup needed" : model.selectedRegister?.canManageInventory == true ? "Count stock" : group.items.contains { $0.availability == "count_required" } ? "Count needed" : "Unavailable") : group.items.count > 1 ? "Choose options" : "Add to basket").font(.caption.weight(.semibold)).padding(.horizontal, 12).padding(.vertical, 10).background(PayTheme.paper, in: Capsule())
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }.disabled(!group.available && model.selectedRegister?.canManageInventory != true).accessibilityLabel(group.items.count == 1 ? "Add \(group.title) to basket" : "Choose \(group.title) options")
+        }.padding(12).background(PayTheme.cream, in: RoundedRectangle(cornerRadius: 28)).overlay(RoundedRectangle(cornerRadius: 28).stroke(PayTheme.line, lineWidth: 1))
     }
-
-    static func dismantleUIView(_ web: WKWebView, coordinator: Coordinator) {
-        web.configuration.userContentController.removeScriptMessageHandler(forName: "register")
-        web.navigationDelegate = nil
+    private func select(_ group: ProductGroup) {
+        searchFocused = false
+        guard group.available || model.selectedRegister?.canManageInventory == true else { return }
+        if group.items.count == 1 && group.items[0].kind == "bundle" { bundle = group.items[0] }
+        else if group.items.count == 1 && group.available { add(group.items[0]) } else { options = group }
     }
-
-    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
-        var openRegister: ([RegisterBasketLine]) -> Void
-        var pageURL: URL?
-        private var catalogJSON = "null"
-        private var sentCatalogJSON: String?
-        private var completedSaleGeneration = 0
-        init(openRegister: @escaping ([RegisterBasketLine]) -> Void) { self.openRegister = openRegister }
-
-        func updateCatalog(_ items: [CatalogItem]?, registerName: String?, web: WKWebView) {
-            if let items, let data = try? JSONSerialization.data(withJSONObject: [
-                "register": registerName ?? "Your register",
-                "items": items.map { ["id": $0.id, "price": $0.unitAmountMinor, "quantity": $0.availableQuantity ?? 99] as [String: Any] }
-            ]), let json = String(data: data, encoding: .utf8) { catalogJSON = json }
-            else { catalogJSON = "null" }
-            sendCatalog(web)
+    private func add(_ item: CatalogItem) {
+        let quantity = model.quantities[item.id] ?? 0
+        guard model.pending == nil, !model.busy, quantity < min(99, item.availableQuantity ?? 99), item.kind != "bundle", !["count_required", "review_required"].contains(item.availability ?? "") else { return }
+        model.quantities[item.id] = quantity + 1
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+    private func optionsSheet(_ group: ProductGroup) -> some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(group.items) { item in
+                        Button { if item.kind == "bundle" { options = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { bundle = item } } else { add(item); options = nil } } label: {
+                            HStack { VStack(alignment: .leading) { Text(item.variantLabel ?? item.title).font(.headline); Text(item.availability == "review_required" ? "Bundle setup needed" : item.kind == "bundle" ? "Mix & match" : (item.availableQuantity ?? 1) > 0 ? "Add to basket" : "Unavailable").font(.subheadline) }; Spacer(); Text(POSMoney.display(item.unitAmountMinor)).monospacedDigit() }.padding(20).background(PayTheme.cream, in: Capsule())
+                        }.disabled((item.availableQuantity ?? 1) == 0 || ["count_required", "review_required"].contains(item.availability ?? "")).accessibilityLabel("Add \(group.title) \(item.variantLabel ?? "")")
+                        if model.selectedRegister?.canManageInventory == true && item.kind != "bundle" && item.availability != "review_required" && (item.availableQuantity == 0 || item.availability == "count_required") {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Count the physical \(item.variantLabel ?? item.title) units remaining at this event. Include units held for open sales.").font(.subheadline).foregroundStyle(PayTheme.muted)
+                                TextField("Physical units remaining", text: Binding(get: { stockCounts[item.id] ?? "" }, set: { stockCounts[item.id] = $0 })).keyboardType(.numberPad).padding(16).background(PayTheme.cream, in: Capsule())
+                                Button("Confirm count") { model.countStock(item, quantity: stockCounts[item.id] ?? "") }.font(.headline).frame(maxWidth: .infinity, minHeight: 52).background(PayTheme.ink, in: Capsule()).foregroundStyle(PayTheme.cream).disabled(model.busy || Int(stockCounts[item.id] ?? "") == nil)
+                            }
+                        }
+                    }
+                    if let message = model.message { Text(message).font(.subheadline) }
+                }.padding(20)
+            }.background(PayTheme.paper).foregroundStyle(PayTheme.ink).navigationTitle(group.title).navigationBarTitleDisplayMode(.inline).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { options = nil } } }
+        }.presentationDetents([.medium, .large]).buttonStyle(.plain)
+    }
+    private var keypad: some View {
+        VStack(spacing: 16) {
+            Text(POSMoney.display(keypadCents)).font(.system(size: 56, weight: .regular, design: .serif)).monospacedDigit().padding(.vertical, 16)
+            if model.selectedRegister?.customAmountEnabled != true { Text("Custom amounts need your business’s tax setup reviewed. You can sell catalog products now.").font(.subheadline).foregroundStyle(PayTheme.muted).padding(.horizontal) }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 12) {
+                ForEach(["1", "2", "3", "4", "5", "6", "7", "8", "9", "Clear", "0", "Delete"], id: \.self) { key in
+                    Button(key) { if key == "Clear" { keypadCents = 0 } else if key == "Delete" { keypadCents /= 10 } else if let digit = Int(key), keypadCents <= 10_000_000 { keypadCents = min(100_000_000, keypadCents * 10 + digit) } }.font(.title2).frame(maxWidth: .infinity, minHeight: 64).background(PayTheme.cream, in: Capsule())
+                }
+            }.padding(.horizontal, 20)
+            Button("Add \(POSMoney.display(keypadCents))") { model.customAmountMinor = keypadCents; keypadCents = 0; onBasket() }.font(.headline).frame(maxWidth: .infinity, minHeight: 54).background(PayTheme.ink, in: Capsule()).foregroundStyle(PayTheme.cream).padding(.horizontal, 20).disabled(keypadCents == 0 || model.selectedRegister?.customAmountEnabled != true)
+            Spacer(minLength: 0)
         }
+    }
+}
 
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            sentCatalogJSON = nil
-            sendCatalog(webView)
-        }
+#if DEBUG
+extension POSViewModel {
+    func loadCatalogFixture() {
+        var rows: [[String: Any]] = [
+            ["item_id": String(repeating: "a", count: 32), "product_key": "fixture-laurel", "title": "Laurel & Fig", "variant_label": "Wax Melt", "unit_amount_minor": 700],
+            ["item_id": String(repeating: "b", count: 32), "product_key": "fixture-laurel", "title": "Laurel & Fig", "variant_label": "8oz Candle", "unit_amount_minor": 2000],
+            ["item_id": String(repeating: "c", count: 32), "product_key": "fixture-river", "title": "River Birch", "variant_label": "8oz Candle", "unit_amount_minor": 2000]
+        ].map { $0.merging(["kind": "merchandise", "revision": String(repeating: "d", count: 64), "available_quantity": 10, "availability": "available"], uniquingKeysWith: { a, _ in a }) }
+        rows.append(["item_id": String(repeating: "e", count: 32), "product_key": "fixture-trio", "title": "Fictional trio", "variant_label": "Mix & match", "unit_amount_minor": 1800, "kind": "bundle", "revision": String(repeating: "f", count: 64), "available_quantity": 6, "availability": "available", "bundle_quantity": 3, "bundle_items": [rows[0], rows[2]]])
+        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
+        items = (try? decoder.decode(CatalogList.self, from: JSONSerialization.data(withJSONObject: ["items": rows])))?.items ?? []
+    }
+}
+#endif
 
-        private func sendCatalog(_ web: WKWebView) {
-            guard !web.isLoading, sentCatalogJSON != catalogJSON else { return }
-            let snapshot = catalogJSON
-            web.evaluateJavaScript("window.updateLiveCatalog && window.updateLiveCatalog(\(snapshot))") { [weak self] _, error in
-                if error == nil { self?.sentCatalogJSON = snapshot }
-            }
-        }
 
-        func completeSale(_ generation: Int, web: WKWebView) {
-            guard generation > completedSaleGeneration else { return }
-            web.evaluateJavaScript("window.completeNativeSale && window.completeNativeSale()") { [weak self] _, error in
-                if error == nil { self?.completedSaleGeneration = generation }
-            }
-        }
-
-        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard message.name == "register", message.frameInfo.isMainFrame,
-                  message.frameInfo.request.url?.standardizedFileURL == pageURL,
-                  let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
-            if action == "setup", Set(body.keys) == ["action"] { openRegister([]) }
-            if action == "checkout", Set(body.keys) == ["action", "items"],
-               let basket = try? RegisterBasket.parse(body["items"]) { openRegister(basket) }
-        }
-
-        func webView(_ web: WKWebView, decidePolicyFor action: WKNavigationAction,
-                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            guard let url = action.request.url, url.isFileURL, url.standardizedFileURL == pageURL else {
-                decisionHandler(.cancel); return
-            }
-            decisionHandler(.allow)
-        }
+private struct BundleOptions: View {
+    let item: CatalogItem
+    @ObservedObject var model: POSViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var choices: [String: Int] = [:]
+    @State private var bundles = 1
+    private var required: Int { (item.bundleQuantity ?? 0) * bundles }
+    private var selected: Int { choices.values.reduce(0, +) }
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text("Choose \(required) items · \(selected) selected").font(.headline)
+                Stepper("\(bundles) bundle\(bundles == 1 ? "" : "s")", value: $bundles, in: 1...max(1, min(99, item.availableQuantity ?? 1))).padding(.horizontal, 20)
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(item.bundleItems ?? []) { part in
+                            HStack {
+                                AsyncImage(url: part.imageUrl.flatMap(URL.init(string:))) { image in image.resizable().scaledToFill() } placeholder: { PayTheme.line }.frame(width: 56, height: 56).clipped().clipShape(RoundedRectangle(cornerRadius: 12))
+                                VStack(alignment: .leading) { Text(part.title).font(.headline); Text(part.variantLabel ?? "").font(.caption); if part.availability == "count_required" { Text("Count needed").font(.caption) } }
+                                Spacer()
+                                Stepper(value: Binding(get: { choices[part.id] ?? 0 }, set: { choices[part.id] = $0 }), in: 0...max(choices[part.id] ?? 0, min(required - selected + (choices[part.id] ?? 0), part.availableQuantity ?? 0))) { Text("\(choices[part.id] ?? 0)").monospacedDigit() }.fixedSize().accessibilityIdentifier("bundle-quantity-\(part.id)")
+                            }.padding(14).background(PayTheme.cream, in: RoundedRectangle(cornerRadius: 20))
+                        }
+                    }.padding(.horizontal, 20)
+                }
+                Button {
+                    guard selected == required, required > 0, model.pending == nil else { return }
+                    model.quantities[item.id] = bundles; model.bundleComponents[item.id] = choices
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred(); dismiss()
+                } label: { Text("Add bundle · \(POSMoney.display(item.unitAmountMinor * bundles))").font(.headline).frame(maxWidth: .infinity).padding(18).foregroundStyle(PayTheme.cream).background(PayTheme.ink, in: Capsule()) }.disabled(selected != required || required == 0 || model.busy || item.availability == "review_required").opacity(selected == required && required > 0 ? 1 : 0.5).padding(20)
+            }.background(PayTheme.paper).foregroundStyle(PayTheme.ink).navigationTitle(item.title).navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+                .onAppear { choices = model.bundleComponents[item.id] ?? [:]; bundles = max(1, model.quantities[item.id] ?? 1) }
+        }.preferredColorScheme(.light)
     }
 }

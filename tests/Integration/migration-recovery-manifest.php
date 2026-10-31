@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_31_190000_create_finished_goods_stock_tables.php' => [
+        'test' => 'tests/Integration/StockMySqlRecoveryTest.php',
+        'scenarios' => ['retained stock before trailing receipt-association DDL and named index replay; altered index rejected; non-destructive rollback'],
+    ],
     '2026_10_24_010000_create_pos_live_tables.php' => [
         'test' => 'tests/Integration/PosLiveMySqlRecoveryTest.php',
         'scenarios' => ['retained encrypted unknown payment before trailing table and every named index; changed index and duplicate source claim fail without deleting evidence; rollback retains all tables'],

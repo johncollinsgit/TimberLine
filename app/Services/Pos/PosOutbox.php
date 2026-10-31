@@ -36,7 +36,7 @@ final class PosOutbox
                 } catch (\Throwable $error) {
                     $code = $error instanceof PosException ? $error->blocker : 'outbox_processing_failed';
                     $this->store->rows('outbox', $scope['tenant_id'])->where('id', $effect->id)->update([
-                        'state' => $current->attempts >= 7 || in_array($code, ['customer_rewards_shortfall_review', 'customer_identity_review_required'], true) ? 'review' : 'retry', 'error_code' => $code,
+                        'state' => $current->attempts >= 7 || in_array($code, ['customer_rewards_shortfall_review', 'customer_identity_review_required', 'customer_rewards_historical_review'], true) ? 'review' : 'retry', 'error_code' => $code,
                         'available_at' => now()->addSeconds(min(300, 5 * (2 ** min(6, $current->attempts)))),
                     ]);
                     $this->store->event($scope['tenant_id'], $effect->sale_id, 'effect_needs_reconciliation', ['effect' => $effect->effect_key, 'code' => $code]);
@@ -75,13 +75,15 @@ final class PosOutbox
             return;
         }
         $operation = $this->journal->get($scope['tenant_id'], $payload['operation_id']);
-        if ($effect->effect_key === 'customer_purchase' || str_starts_with($effect->effect_key, 'customer_refund_')) {
+        if ($effect->effect_key === 'customer_purchase' || str_starts_with($effect->effect_key, 'customer_refund_') || str_starts_with($effect->effect_key, 'customer_association_')) {
             app(PosCustomerRewards::class)->apply($sale, $operation['kind'] === 'refund' ? $operation : null);
         } elseif ($effect->effect_key === 'finalize') {
             if ($operation['state'] !== 'succeeded') {
                 throw new PosException('paid_evidence_required');
             }
-            if ($snapshot['terms']['source'] === 'shopify') {
+            if ($snapshot['terms']['source'] === StockPosCommerce::VERSION) {
+                app(StockPosCommerce::class)->finalize($sale, $snapshot, $operation);
+            } elseif ($snapshot['terms']['source'] === 'shopify') {
                 $this->shopify->finalize($scope, $sale, $snapshot, $operation);
             } else {
                 $this->native->finalize($sale, $snapshot, $operation);
@@ -91,7 +93,9 @@ final class PosOutbox
             if (! in_array($operation['state'], ['failed', 'cancelled'], true)) {
                 throw new PosException('unpaid_evidence_required');
             }
-            if ($snapshot['terms']['source'] === 'shopify') {
+            if ($snapshot['terms']['source'] === StockPosCommerce::VERSION) {
+                app(StockPosCommerce::class)->release($sale, $snapshot);
+            } elseif ($snapshot['terms']['source'] === 'shopify') {
                 $this->shopify->release($scope, $sale);
             } else {
                 $this->native->release($sale, $snapshot);
@@ -100,7 +104,7 @@ final class PosOutbox
             if ($operation['kind'] !== 'refund' || $operation['state'] !== 'succeeded') {
                 throw new PosException('confirmed_refund_required');
             }
-            if ($snapshot['terms']['source'] === 'shopify') {
+            if ($snapshot['terms']['source'] === 'shopify' && ! app(PosUncollectedClosure::class)->recorded($sale)) {
                 $this->shopify->refund($scope, $sale, $operation);
             } elseif ($snapshot['terms']['source'] === 'website_invoice') {
                 $this->invoiceRefund($sale, $snapshot, $operation);

@@ -46,7 +46,8 @@ final class PosAdministration
             $refunded = $paid->sum(fn ($sale) => app(PosCustomerPurchases::class)->confirmedRefunds($sale));
             $rows[] = ['location_id' => $location, 'name' => $scope['registers']->firstWhere('location_id', $location)->location_name,
                 'paid_sales' => $paid->count(), 'gross_minor' => (int) $paid->sum('amount_minor'), 'refunded_minor' => $refunded,
-                'unresolved_payments' => $group->whereIn('state', ['processing', 'unknown', 'review'])->count(),
+                'unresolved_payments' => $group->whereIn('state', ['processing', 'unknown', 'review'])->reject(fn ($sale) => app(PosUncollectedClosure::class)->closed($sale))->count(),
+                'reviewed_uncollected_sales' => $group->filter(fn ($sale) => app(PosUncollectedClosure::class)->closed($sale))->count(),
                 'paid_orders_pending_sync' => $paid->where('stock_state', '!=', 'committed')->count()];
         }
 

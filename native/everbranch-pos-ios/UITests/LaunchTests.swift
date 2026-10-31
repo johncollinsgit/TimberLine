@@ -2,72 +2,66 @@ import XCTest
 
 final class LaunchTests: XCTestCase {
     func testSignInComesBeforeAnyBusinessCatalog() {
-        let app = XCUIApplication()
-        app.launch()
+        let app = XCUIApplication(); app.launch()
         XCTAssertTrue(app.buttons["Continue with Google"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Continue with email"].exists)
         XCTAssertFalse(app.webViews.firstMatch.exists)
         XCTAssertFalse(app.staticTexts["Modern Forestry"].exists)
-        XCTAssertFalse(app.buttons["Close"].exists)
-        attach(app, name: "Everbranch Pay sign in first")
+        attach(app, name: "Everbranch Pay sign in")
     }
 
-    func testMerchantCatalogOpensFocusedNativeSetupWithoutCollection() {
-        let app = XCUIApplication()
-        app.launchArguments = ["--pos-catalog-ui-tests"]
-        app.launch()
-        let catalog = app.webViews.firstMatch
-        XCTAssertTrue(catalog.buttons["Build 3 × 8oz candles bundle"].waitForExistence(timeout: 15))
-        XCTAssertTrue(catalog.buttons["Build 3 × 16oz candles bundle"].exists)
-        XCTAssertTrue(catalog.buttons["Build 5 wax melts bundle"].exists)
-        XCTAssertFalse(catalog.buttons.matching(NSPredicate(format: "label CONTAINS 'Simulate'")).firstMatch.exists)
-        catalog.buttons["Account & Tap to Pay"].tap()
-        XCTAssertTrue(app.buttons["Continue with email"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.navigationBars["Welcome"].exists)
-        XCTAssertTrue(app.staticTexts["SANDBOX — no real customer payments"].exists)
-        XCTAssertFalse(app.staticTexts["Device enrollment"].exists)
-        app.buttons["Account & device details"].tap()
-        XCTAssertTrue(app.staticTexts["Device enrollment"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["Tap to pay"].exists)
-        attach(app, name: "Branded account setup")
+    func testNativeCatalogUsesTabsPillsAndSeparateAccountSetup() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests"]; app.launch()
+        XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.segmentedControls.buttons["Favorites"].exists)
+        XCTAssertTrue(app.segmentedControls.buttons["Keypad"].exists)
+        XCTAssertFalse(app.webViews.firstMatch.exists)
+        XCTAssertTrue(app.buttons["Add River Birch to basket"].exists)
+        app.buttons["Account & Tap to Pay"].tap()
+        XCTAssertTrue(app.buttons["Continue with Google"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Charge '")).firstMatch.exists)
         app.buttons["Close"].tap()
-        XCTAssertTrue(catalog.buttons["Build 3 × 8oz candles bundle"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.textFields["Search products"].waitForExistence(timeout: 5))
+        attach(app, name: "Native product grid and labeled pills")
     }
 
-    func testSearchKeepsPhoneScaleAndBasketOpensCheckout() {
-        let app = XCUIApplication()
-        app.launchArguments = ["--pos-catalog-ui-tests"]
-        app.launch()
-        let catalog = app.webViews.firstMatch
-        let search = catalog.textFields["Search products"]
-        XCTAssertTrue(search.waitForExistence(timeout: 15))
-        let originalWidth = search.frame.width
-        let account = catalog.buttons["Account & Tap to Pay"]
-        let originalHeaderY = account.frame.minY
-        search.tap()
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
-        search.typeText("Laurel")
-        XCTAssertEqual(search.frame.width, originalWidth, accuracy: 2, "Focusing search must not zoom the web content")
-        XCTAssertEqual(account.frame.minY, originalHeaderY, accuracy: 2, "The app header should stay pinned")
-        let product = catalog.buttons["View Laurel & Fig variants"]
-        XCTAssertTrue(product.waitForExistence(timeout: 5))
-        product.tap()
-        let variant = catalog.buttons["Add Laurel & Fig Wax Melt"]
-        XCTAssertTrue(variant.waitForExistence(timeout: 5))
-        variant.tap()
-        catalog.buttons.matching(NSPredicate(format: "label CONTAINS 'Review basket'")).firstMatch.tap()
-        XCTAssertTrue(catalog.buttons["Review customer & payment →"].waitForExistence(timeout: 5))
-        catalog.buttons["Review customer & payment →"].tap()
+    func testSearchAndOneVariantSheetAddToBasketWithoutCustomerMenus() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests"]; app.launch()
+        let search = app.textFields["Search products"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        let width = search.frame.width; let headerY = app.buttons["Account & Tap to Pay"].frame.minY
+        search.tap(); search.typeText("Laurel")
+        XCTAssertEqual(search.frame.width, width, accuracy: 2)
+        XCTAssertEqual(app.buttons["Account & Tap to Pay"].frame.minY, headerY, accuracy: 2)
+        app.buttons["Choose Laurel & Fig options"].firstMatch.tap()
+        let variant = app.buttons["Add Laurel & Fig Wax Melt"]
+        XCTAssertTrue(variant.waitForExistence(timeout: 5)); variant.tap()
+        let basket = app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch
+        XCTAssertTrue(basket.isEnabled)
+        attach(app, name: "Native options add directly to basket")
+        basket.tap()
+        // Fixtures are deliberately unauthenticated and cannot reach a payment processor.
         XCTAssertTrue(app.navigationBars["Sign in to checkout"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Continue with email"].exists)
-        attach(app, name: "Customer checkout entry")
-        app.buttons["Close"].tap()
-        XCTAssertTrue(catalog.buttons["Review customer & payment →"].waitForExistence(timeout: 5), "Closing native checkout preserves the basket")
+    }
+
+    func testMixAndMatchUsesOneSheetAndRequiresTheExactBundleQuantity() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests"]; app.launch()
+        let search = app.textFields["Search products"]; XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap(); search.typeText("trio")
+        app.buttons["Add Fictional trio to basket"].tap()
+        let add = app.buttons["Add bundle · $18.00"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5)); XCTAssertFalse(add.isEnabled)
+        let quantity = app.steppers["bundle-quantity-" + String(repeating: "a", count: 32)]
+        XCTAssertTrue(quantity.exists)
+        for _ in 0..<3 { quantity.buttons["bundle-quantity-" + String(repeating: "a", count: 32) + "-Increment"].tap() }
+        XCTAssertTrue(add.isEnabled); attach(app, name: "One mix and match sheet")
+        add.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.isEnabled)
     }
 
     private func attach(_ app: XCUIApplication, name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = name; attachment.lifetime = .keepAlways
-        add(attachment)
+        let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name
+        attachment.lifetime = .keepAlways; add(attachment)
     }
 }

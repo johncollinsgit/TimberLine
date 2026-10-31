@@ -200,6 +200,49 @@ final class ShopifyPosCommerce
         }
         $reference = $this->reference($sale);
         $order = $this->order($scope, $reference['order_id']);
+        $this->cancelPendingOrder($scope, $sale, $order);
+    }
+
+    /** Operational closure only, after a separate device/provider review; never payment evidence. */
+    public function reviewUncollected(array $scope, object $sale, array $snapshot, bool $cancel = false): array
+    {
+        if ($snapshot['terms']['source'] !== 'shopify' || $sale->state !== 'unknown') {
+            throw new PosException('legacy_uncollected_review_required');
+        }
+        $reference = $this->reference($sale);
+        if (empty($reference['order_id'])) {
+            throw new PosException('shopify_original_order_required');
+        }
+        $order = $this->order($scope, $reference['order_id']);
+        if (! in_array('EverbranchPOS-'.$sale->id, $order['tags'] ?? [], true) || ! empty($order['transactions'])) {
+            throw new PosException('shopify_cancel_payment_review');
+        }
+        if (! $order['cancelledAt']) {
+            $this->verifyOrder($scope, $sale, $snapshot, $order);
+            if ($order['displayFinancialStatus'] !== 'PENDING' || ($order['totalOutstandingSet']['shopMoney']['currencyCode'] ?? '') !== 'USD'
+                || self::minor($order['totalOutstandingSet']['shopMoney']['amount'] ?? '0') !== (int) $sale->amount_minor) {
+                throw new PosException('shopify_cancel_payment_review');
+            }
+            foreach ($order['fulfillmentOrders']['nodes'] as $fulfillment) {
+                if (! in_array($fulfillment['status'], ['OPEN', 'SCHEDULED'], true)) {
+                    throw new PosException('shopify_fulfillment_review');
+                }
+                foreach ($fulfillment['lineItems']['nodes'] as $line) {
+                    if ($line['remainingQuantity'] !== $line['totalQuantity']) {
+                        throw new PosException('shopify_fulfillment_review');
+                    }
+                }
+            }
+        }
+        if ($cancel) {
+            $this->cancelPendingOrder($scope, $sale, $order);
+        }
+
+        return ['order_id' => $order['id'], 'already_cancelled' => (bool) $order['cancelledAt'], 'unpaid_order_reviewed' => true];
+    }
+
+    private function cancelPendingOrder(array $scope, object $sale, array $order): void
+    {
         if (! $order['cancelledAt']) {
             if ($order['displayFinancialStatus'] !== 'PENDING') {
                 throw new PosException('shopify_cancel_payment_review');

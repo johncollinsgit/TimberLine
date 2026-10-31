@@ -1,28 +1,31 @@
-## Everbranch Pay customer-linked Square pilot (October 31; source candidate)
+## Everbranch Pay: finished goods and guest checkout (October 31; source candidate)
 
-Registered-device development acceptance has a separate default-off gate,
-private Apple grant/signing/installation evidence, exact merchant/owner/device/build
-binding, at most two hours and $10, and one claimed original sale. It leaves
-commercial collection, publishing and physical/inventory acceptance flags false.
-Recovery/refunds retain their separate servicing controls after the test expires.
-See the registered-device section in the Pay runbook before enabling it.
+The new explicitly assigned `everbranch_inventory_v1` lane keeps finished-goods
+stock, in-person sales and receipts in Everbranch, with Square financial authority
+and no new Shopify order mirror. The native register uses Products/Favorites/
+Keypad, photo grids, variant/bundle sheets and labeled pills. Guest checkout
+precedes optional customer lookup/association and original-term rewards.
 
-The focused native Square release combines shared customer commerce with a live
-basket handoff, register-scoped canonical customer selection/creation, immutable
-customer/policy terms, exact provider mirror suppression and existing-ledger
-show earning/refund reconciliation. Owner onboarding has an independent default-off
-exact-build gate; commercial collection gates remain required. POS is an included
-capability for every plan, with merchant-specific guided setup and acceptance.
-Production installation, inventory permissions, Apple distribution approval and
-physical payment/settlement acceptance remain separate. Read
-`docs/operations/everbranch-pay-customer-square.md` before activation.
+Existing event/retail plans mean **to produce**; confirmed ready units, physical
+counts and transfers establish goods available to sell. Modern Forestry uses
+separate event pools; Columbus is the reviewed October 30–November 1 Asana event.
+After earlier show sales, begin from remaining physical counts, not original
+packing totals or guessed deductions. Owners can count a few pilot products on
+the phone; uncounted products remain visible and unavailable. Materials and
+historical production remain intact.
 
-The native phone interface starts with Everbranch Google/email sign-in and
-active-membership business selection. It separates merchant-themed setup from
-customer checkout, restores only currently authorized register identifiers, and shows the
-connected register's available products. Focused search no longer changes page
-scale. These interface changes do not activate collection or establish provider,
-physical-payment or publishing acceptance.
+All tenants retain this included capability with their own merchant/program/pool
+setup. Shared Shopify stock requires a reviewed opening baseline, exact mappings,
+matching current commitments, tracked DENY policy and permissions. Unknown online
+bundle behavior blocks activation. Native Website stock/subscriptions retain
+existing adapters; do not claim a native Website shared-stock cutover. Both new
+inventory flags default off. Legacy attempts retain original-provider recovery.
+
+Read `docs/operations/everbranch-pay-owned-inventory.md` and
+`docs/architecture/finished-goods-stock.md` before setup or release. Protected
+migration/build release, exact signed installation, physical payment/refund/rewards
+and settlement acceptance remain required. Apple registered-device development
+access does not establish distribution approval or normal commercial readiness.
 
 ## Facilities mobile controls (October 30; source candidate)
 
