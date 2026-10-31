@@ -1,3 +1,16 @@
+## Subscription delivery quote foundation (October 31; source candidate)
+
+A preview-first owner CLI can explicitly fetch a pinned original-store calculation
+for proposed Braintree delivery addresses or 16oz scent swaps. It retains member
+unit prices, source line IDs/quantities and owner-reviewed fixed shipping, checks
+provider tax lines/totals and refuses currency, discount, bundle or warning drift.
+The independent amendments gate defaults off; both graph documents validate
+against the pinned schema. Owner/store/terms/rollout changes stop subsequent reads.
+No billing terms, authorization, order, customer/default address, source or payment
+are saved. This is quote source only: applying reviewed amendments, customer
+confirmation, Shopify contract updates and actual provider acceptance remain
+outstanding. See the replacement runbook.
+
 ## Existing subscription membership review (October 31; source candidate)
 
 A preview-first owner CLI appends a separately reviewed Candle Club membership

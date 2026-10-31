@@ -1,3 +1,18 @@
+## Subscription delivery quote foundation (October 31; source candidate)
+
+`SubscriptionAmendmentProposal` derives address/scents proposals from an intact
+current agreement. `SubscriptionAmendmentQuote` calculates via the original store,
+preserving membership prices with explicit variant price overrides and reviewed
+fixed source shipping. `subscriptions:amendment-quote` is offline until `--fetch`;
+fetch requires verified owner/admin, servicing, exact rollout and the independent
+default-off amendments gate. Current identity/terms/permission checks surround
+each request. It validates both currencies, exact lines and tax breakdown, rejects
+warnings/discounts/bundles and returns a keyed subject/context quote. It saves no
+agreement/action/cycle or provider resource. Do not use its hash as authorization
+or write the returned terms directly: current collection still requires unchanged
+original terms. Atomic amendment acceptance, customer confirmation and Shopify
+contract updates remain required. See the replacement runbook.
+
 ## Existing subscription membership review (October 31; source candidate)
 
 `SubscriptionMembershipReviewService` accepts original prepared membership or one

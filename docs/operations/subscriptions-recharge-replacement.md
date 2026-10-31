@@ -7,6 +7,67 @@ access can be verified. Stripe setup is an explicit fallback, not a universal
 migration requirement. The first rollout is the two already prepared members;
 all other members retain Recharge billing until separately reviewed.
 
+## Future delivery quote foundation (October 31; source candidate)
+
+The preview-first `subscriptions:amendment-quote` owner command now validates one
+existing agreement's proposed address or scent changes. An explicit `--fetch`
+calls the original store's pinned 2026-10 `draftOrderCalculate`; Shopify documents
+that this calculates totals [without creating a draft order](https://shopify.dev/docs/api/admin-graphql/2026-10/mutations/draftOrderCalculate).
+No agreement/action/cycle, order, customer/default address, saved method, source
+subscription or payment is written. It is an operator quote foundation; applying
+reviewed terms and customer confirmation remain outstanding.
+
+The private regular 0600 JSON input may contain a complete US shipping address,
+exact source-line scent swaps, and an explicit owner review of the source's fixed
+shipping policy for that proposed destination:
+
+```json
+{
+  "shipping_address": {
+    "firstName": "Fictional", "lastName": "Member",
+    "address1": "456 Example Road", "city": "Greenville",
+    "provinceCode": "SC", "countryCode": "US", "zip": "29601"
+  },
+  "swaps": [{"subscription_id": "ORIGINAL_NUMERIC_ID", "variant_id": "SELECTED_NUMERIC_ID"}],
+  "fixed_shipping_reviewed": true,
+  "policy_reference": "original-shipping:SOURCE_SUBSCRIPTION_ID"
+}
+```
+
+Provide an address, a swap, or both. The source shipping amount and original unit
+prices/quantities remain fixed; this does not infer that retail shipping rates
+apply to the club. The owner must verify the actual contractual shipping policy
+covers that destination. New scent identity must be an active, shippable 16oz
+variant in the exact store and requires reviewed Candle Club membership. Catalog
+prices cannot replace membership pricing: the documented
+[variant price override](https://shopify.dev/docs/api/admin-graphql/2026-10/input-objects/DraftOrderLineItemInput#fields-priceOverride)
+is explicit, and returned override/unit/line/subtotal values must agree.
+
+```
+subscriptions:amendment-quote --tenant=SLUG --actor=ID --agreement=ID --file=/private/delivery.json
+subscriptions:amendment-quote --tenant=SLUG --actor=ID --agreement=ID --file=/private/delivery.json --fetch
+```
+
+Without `--fetch` the command is offline. Fetch additionally requires the
+independent default-off `SUBSCRIPTIONS_REPLACEMENT_AMENDMENTS_ENABLED`, existing
+servicing and exact tenant/member gates, verified owner/admin and the original
+store credential. The original app must have `write_draft_orders` plus effective
+customer/product/inventory reads. Actual original-account permissions still need
+verification. Sandbox quotes require an isolated development store. Shopify-vaulted
+contract amendment calculation/commit is still separate outstanding work.
+
+The returned quote binds the original/current terms hashes, agreement/member,
+revision, exact input, fixed shipping policy reference, store/app identity and
+credential fingerprint. It checks both shop/presentment money, all tax lines and
+their sum, currency, customer, quantities, no bundles/discounts/deposits, and no
+alerts/warnings. Tax remains a projected figure. Changed permissions, credentials,
+schedule, terms or rollout stop the next request; original authorization and the
+agreement are rechecked before/after each request. A quote hash cannot authorize
+collection or bypass the unchanged-terms guard. The existing paid/cycle history
+is untouched. Both new documents validate against the bundled pinned schema;
+connector validation explicitly skips and is not a pass. Local HTTP fixtures do
+not establish actual provider/tax/shipping acceptance.
+
 ## Candle Club membership after source stop (source candidate)
 
 An activated replacement membership now retains the app's current poll, exact
