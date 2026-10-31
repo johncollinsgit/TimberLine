@@ -57,6 +57,10 @@ is the first pilot, not a tenant-specific implementation or exclusive entitlemen
 5. **Confirmed purchase/rewards lifecycle.** Ingest the original confirmed sale
    once, apply the merchant's configured earn rules through the existing ledger,
    and reverse the appropriate earning on refunds according to those rules.
+   Validate tenant-owned program settings before activating a new merchant:
+   the existing settings resolver's legacy global fallback is not evidence that
+   this merchant approved its own program. The shared read snapshot deliberately
+   uses tenant-owned setup only and performs no program activation or migration.
    A gateway callback, redirected browser or successful app build is not payment
    confirmation. Preserve existing historical balances and recorded program terms.
 6. **Cross-surface acceptance and release.** Run the acceptance matrix below,
