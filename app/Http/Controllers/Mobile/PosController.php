@@ -104,6 +104,12 @@ final class PosController extends Controller
         return $this->respond($r, [], fn () => $this->pos->discard($register, $requestId));
     }
 
+    public function leaveForReview(Request $r, string $tenant, string $register, string $sale): JsonResponse
+    {
+        return $this->respond($r, ['sdk_attempt_id' => ['required', 'uuid'], 'sdk_flow_ended' => ['required', 'boolean'],
+            'no_card_presented' => ['required', 'boolean']], fn ($input) => $this->pos->leaveForReview($register, $sale, $input));
+    }
+
     public function attachCustomer(Request $r, string $tenant, string $register, string $sale): JsonResponse
     {
         return $this->respond($r, ['request_id' => ['required', 'uuid'], 'customer_profile_id' => ['sometimes', 'integer', 'min:1'],

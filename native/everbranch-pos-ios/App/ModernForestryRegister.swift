@@ -5,6 +5,7 @@ struct EverbranchRegisterView: View {
     @StateObject private var model = POSViewModel()
     @State private var basket = false
     @State private var account = false
+    @State private var showRecovery = true
     private var fixture: Bool {
         #if DEBUG
         ProcessInfo.processInfo.arguments.contains("--pos-catalog-ui-tests")
@@ -14,19 +15,19 @@ struct EverbranchRegisterView: View {
     }
     var body: some View {
         Group {
-            if model.pending != nil && !basket { POSView(screen: .checkout, model: model) }
+            if model.pending != nil && !basket && showRecovery { POSView(onClose: { showRecovery = false }, onAccount: { showRecovery = false; account = true }, screen: .checkout, model: model) }
             else if model.signedIn && model.registerLoaded && model.selectedRegister?.catalogSource == "native" && model.selectedRegister?.guestCheckout != true {
                 // Retain the original service/invoice lane until its merchant activates the stock adapter.
                 POSView(screen: .checkout, model: model)
             }
             else if fixture || (model.signedIn && model.registerLoaded) {
-                NativeRegister(model: model, onBasket: { basket = true }, onAccount: { account = true })
+                NativeRegister(model: model, onBasket: { showRecovery = true; basket = true }, onAccount: { account = true })
             } else { POSView(screen: .setup, model: model) }
         }
         .background(PayTheme.paper)
         .sheet(isPresented: $basket) { POSView(onClose: { basket = false }, screen: .checkout, model: model) }
         .sheet(isPresented: $account) { POSView(onClose: { account = false }, onOpenRegister: { account = false }, screen: .setup, model: model) }
-        .onChange(of: model.completedSaleGeneration) { _, _ in basket = false }
+        .onChange(of: model.completedSaleGeneration) { _, _ in basket = false; showRecovery = false }
         .onChange(of: model.signedIn) { _, value in if !value { account = false; basket = false } }
     }
 }
@@ -50,6 +51,7 @@ private struct NativeRegister: View {
     @State private var bundle: CatalogItem?
     @State private var keypadCents = 0
     @State private var stockCounts: [String: String] = [:]
+    @State private var savedPayments = false
     @FocusState private var searchFocused: Bool
     private var favoriteKey: String { "register-favorites:\(model.selectedWorkspace?.id ?? 0):\(model.selectedRegister?.id ?? "fixture")" }
     private var groups: [ProductGroup] {
@@ -73,6 +75,8 @@ private struct NativeRegister: View {
                 .background { ZStack(alignment: .bottom) { PayTheme.ink; Image("RegisterMountains").resizable().scaledToFit().opacity(0.85) } }
                 .clipped()
             Picker("Register", selection: $tab) { ForEach(RegisterTab.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).padding(.horizontal, 20)
+            if model.pending != nil { Button("Payment saved · Open status", action: onBasket).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
+            else if !model.visibleSavedPayments.isEmpty { Button("Payments for review (\(model.visibleSavedPayments.count))") { savedPayments = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
             if let message = model.message { Text(message).font(.footnote).foregroundStyle(PayTheme.muted).padding(.horizontal, 20) }
             if tab == .keypad { keypad }
             else {
@@ -93,6 +97,15 @@ private struct NativeRegister: View {
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { searchFocused = false } } }
         .sheet(item: $options) { group in optionsSheet(group) }
         .sheet(item: $bundle) { item in BundleOptions(item: item, model: model) }
+        .sheet(isPresented: $savedPayments) {
+            NavigationStack {
+                List(model.visibleSavedPayments) { saved in
+                    Button { savedPayments = false; model.openSavedPayment(saved); DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: onBasket) } label: {
+                        VStack(alignment: .leading, spacing: 6) { Text(POSMoney.display(saved.amountMinor)).font(.headline); Text("Needs Square confirmation").font(.subheadline); Text(saved.savedAt, style: .time).font(.caption) }
+                    }
+                }.navigationTitle("Payments for review").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { savedPayments = false } } }
+            }.preferredColorScheme(.light)
+        }
         .onAppear {
             favorites = Set(UserDefaults.standard.stringArray(forKey: favoriteKey) ?? [])
             #if DEBUG
@@ -130,6 +143,7 @@ private struct NativeRegister: View {
         else if group.items.count == 1 && group.available { add(group.items[0]) } else { options = group }
     }
     private func add(_ item: CatalogItem) {
+        if model.pending != nil { onBasket(); return }
         let quantity = model.quantities[item.id] ?? 0
         guard model.pending == nil, !model.busy, quantity < min(99, item.availableQuantity ?? 99), item.kind != "bundle", !["count_required", "review_required"].contains(item.availability ?? "") else { return }
         model.quantities[item.id] = quantity + 1
@@ -168,7 +182,7 @@ private struct NativeRegister: View {
                     } label: { Text(key).font(.title2).frame(maxWidth: .infinity, minHeight: 64).background(PayTheme.cream, in: Capsule()).contentShape(Capsule()) }.accessibilityIdentifier("keypad-\(key.lowercased())")
                 }
             }.padding(.horizontal, 20)
-            Button { model.customAmountMinor = keypadCents; keypadCents = 0; onBasket() } label: { Text("Add \(POSMoney.display(keypadCents))").font(.headline).frame(maxWidth: .infinity, minHeight: 54).background(PayTheme.ink, in: Capsule()).foregroundStyle(PayTheme.cream).contentShape(Capsule()) }.padding(.horizontal, 20).disabled(keypadCents == 0 || model.selectedRegister?.customAmountEnabled != true)
+            Button { if model.pending != nil { onBasket(); return }; model.customAmountMinor = keypadCents; keypadCents = 0; onBasket() } label: { Text("Add \(POSMoney.display(keypadCents))").font(.headline).frame(maxWidth: .infinity, minHeight: 54).background(PayTheme.ink, in: Capsule()).foregroundStyle(PayTheme.cream).contentShape(Capsule()) }.padding(.horizontal, 20).disabled(keypadCents == 0 || model.selectedRegister?.customAmountEnabled != true)
             Spacer(minLength: 0)
         }
     }
@@ -188,6 +202,14 @@ extension POSViewModel {
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
         items = (try? decoder.decode(CatalogList.self, from: JSONSerialization.data(withJSONObject: ["items": rows])))?.items ?? []
         selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": [], "custom_amount_enabled": true, "guest_checkout": true]))
+        if ProcessInfo.processInfo.arguments.contains("--pos-recovery-ui-tests") {
+            signedIn = true; registerLoaded = true
+            selectedWorkspace = try? decoder.decode(Workspace.self, from: Data(#"{"id":1,"name":"Fictional","slug":"fixture"}"#.utf8))
+            var saved = PendingSale(workspace: "fixture", register: "fixture")
+            saved.saleID = "fixture-sale"; saved.collectionRequested = true; saved.sdkStarted = true
+            pending = saved
+            sale = try? decoder.decode(Sale.self, from: JSONSerialization.data(withJSONObject: ["sale_id": "fixture-sale", "request_id": saved.requestID, "state": "unknown", "stock_state": "held", "amount_minor": 763, "currency": "USD", "receipt_available": false, "canonical_confirmation": false, "recovery_required": true, "sdk_attempt_id": UUID().uuidString]))
+        }
     }
 }
 #endif

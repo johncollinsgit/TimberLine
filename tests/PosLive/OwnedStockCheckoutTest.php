@@ -472,3 +472,38 @@ it('verifies prior in-person history before associating the next guest purchase 
     expect(\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->first()->balance)->toBe(4.75)
         ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(2);
 });
+
+it('parks an explicitly ended no-card interaction without financial cancellation and admits only a different sale', function (): void {
+    $quote = $this->postJson($this->base.'/quotes', $this->selection)->assertOk()->json();
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk();
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->first();
+    Http::fake(['*/v2/payments?*' => Http::response(['payments' => []])]);
+    $body = ['sdk_attempt_id' => $sale->sdk_attempt_id, 'sdk_flow_ended' => true, 'no_card_presented' => true];
+    foreach (['sdk_flow_ended', 'no_card_presented'] as $key) {
+        $this->postJson($this->base.'/sales/'.$sale->id.'/leave-for-review', [...$body, $key => false])->assertConflict();
+    }
+    $this->postJson($this->base.'/sales/'.$sale->id.'/leave-for-review', [...$body, 'sdk_attempt_id' => (string) Str::uuid()])->assertConflict();
+    $this->withHeader('X-Pos-Device', 'other-device');
+    foreach (app('router')->getRoutes() as $route) {
+        $route->flushController();
+    }
+    $this->postJson($this->base.'/sales/'.$sale->id.'/leave-for-review', $body)->assertNotFound();
+    $this->withHeader('X-Pos-Device', 'fixture_device_1234');
+    foreach (app('router')->getRoutes() as $route) {
+        $route->flushController();
+    }
+    for ($i = 0; $i < 2; $i++) {
+        $this->postJson($this->base.'/sales/'.$sale->id.'/leave-for-review', $body)->assertOk()
+            ->assertJsonPath('state', 'unknown')->assertJsonPath('parked_for_review', true)
+            ->assertJsonPath('receipt_available', false)->assertJsonPath('stock_state', 'held');
+    }
+    expect($this->journal->get($this->tenant->id, $sale->attempt_id)['parked_for_review'])->toBeTrue()
+        ->and($this->store->rows('events', $this->tenant->id)->where('code', 'payment_parked_for_review')->count())->toBe(1);
+    $this->postJson($this->base.'/sales/'.$sale->id.'/collect')->assertOk()->assertJsonMissingPath('collection');
+    $this->selection['request_id'] = (string) Str::uuid();
+    $next = $this->postJson($this->base.'/quotes', $this->selection)->assertOk()->json();
+    $this->postJson($this->base.'/sales/'.$next['sale_id'].'/collect')->assertOk()->assertJsonPath('state', 'unknown');
+    ownedStockComplete($this, $quote);
+    $this->postJson($this->base.'/sales/'.$sale->id.'/leave-for-review', $body)->assertOk()->assertJsonPath('state', 'succeeded')->assertJsonPath('parked_for_review', false);
+    expect(DB::table('orders')->where('tenant_id', $this->tenant->id)->count())->toBe(0);
+});

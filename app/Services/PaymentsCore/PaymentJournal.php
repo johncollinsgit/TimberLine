@@ -22,5 +22,8 @@ interface PaymentJournal
 
     public function unknown(int $tenantId, string $id): array;
 
+    /** Preserve financial uncertainty while explicitly separating a finished customer interaction. */
+    public function parkForReview(int $tenantId, string $id): array;
+
     public function apply(int $tenantId, string $id, ProviderEvidence $evidence): array;
 }

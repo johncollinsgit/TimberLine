@@ -8,6 +8,12 @@ struct POSCustomerResponse: Decodable { let customer: POSCustomer }
 struct PendingCustomerCreation: Codable { let workspace: String; let register: String; let requestID: String }
 struct RefundResponse: Decodable { let refundId: String; let state: String; let sale: Sale }
 private struct SavedRegister: Codable { let workspace: String; let register: String }
+struct SavedPaymentReview: Codable, Identifiable {
+    var id: String { pending.requestID }
+    let pending: PendingSale
+    let amountMinor: Int
+    let savedAt: Date
+}
 struct POSReceipt: Decodable {
     struct Line: Decodable { let title: String; let quantity: Int; let subtotalMinor: Int?; let taxMinor: Int?; let components: [SaleComponent]? }
     struct PaymentDetails: Decodable {
@@ -61,6 +67,8 @@ struct POSReceipt: Decodable {
     @Published var sale: Sale?
     @Published var receipt: POSReceipt?
     @Published var pending: PendingSale?
+    @Published var savedPaymentReviews: [SavedPaymentReview] = []
+    var visibleSavedPayments: [SavedPaymentReview] { savedPaymentReviews.filter { $0.pending.workspace == selectedWorkspace?.slug && $0.pending.register == selectedRegister?.id } }
     @Published var busy = false
     @Published var message: String?
     @Published var tapReady = false
@@ -100,6 +108,7 @@ struct POSReceipt: Decodable {
         if let value = SecureStore.read("pending-customer") { pendingCustomer = try? JSONDecoder().decode(PendingCustomerCreation.self, from: value) }
         signedIn = api.token != nil
         if let value = SecureStore.read("pending-sale") { pending = try? JSONDecoder().decode(PendingSale.self, from: value) }
+        if let value = SecureStore.read("payments-for-review") { savedPaymentReviews = (try? JSONDecoder().decode([SavedPaymentReview].self, from: value)) ?? [] }
     }
     func perform(_ action: @escaping () async throws -> Void) {
         guard !busy else { return }
@@ -378,6 +387,7 @@ struct POSReceipt: Decodable {
         guard sale?.canLeave == true, pending?.refundRequestID == nil else { return }
         perform {
             try self.collector.releaseVerifiedAttempt()
+            if let request = self.pending?.requestID { self.savedPaymentReviews.removeAll { $0.pending.requestID == request }; try self.savePaymentReviews() }
             self.pending = nil; try self.savePending(); self.sale = nil; self.receipt = nil
             self.selectedCustomer = nil; self.customers = []; self.customerQuery = ""; self.customerName = ""; self.customerEmail = ""; self.invoiceID = ""; self.quantities = [:]; self.bundleComponents = [:]
             self.completedSaleGeneration += 1
@@ -385,6 +395,31 @@ struct POSReceipt: Decodable {
             self.associationRequestID = nil; self.associationCustomerID = nil
             self.clearReceiptInputs()
             if let register = self.selectedRegister { try await self.loadRegister(register) }
+        }
+    }
+    private func savePaymentReviews() throws { try SecureStore.write("payments-for-review", try JSONEncoder().encode(savedPaymentReviews)) }
+    func leaveUncollectedForReview() {
+        guard let base, let pending, let sale, sale.state == "unknown", let attempt = sale.sdkAttemptId, pending.refundRequestID == nil else { return }
+        perform {
+            try self.collector.releaseVerifiedAttempt()
+            let result: Sale = try await self.api.request(base + "/sales/\(sale.saleId)/leave-for-review", method: "POST", body: ["sdk_attempt_id": attempt, "sdk_flow_ended": true, "no_card_presented": true])
+            self.sale = result
+            guard result.parkedForReview == true else { try await self.recover(); return }
+            if !self.savedPaymentReviews.contains(where: { $0.pending.requestID == pending.requestID }) {
+                self.savedPaymentReviews.append(SavedPaymentReview(pending: pending, amountMinor: result.amountMinor, savedAt: Date()))
+                try self.savePaymentReviews()
+            }
+            self.pending = nil; try self.savePending(); self.sale = nil; self.receipt = nil
+            self.selectedCustomer = nil; self.customers = []; self.quantities = [:]; self.bundleComponents = [:]; self.customAmountMinor = 0; self.invoiceID = ""
+            self.completedSaleGeneration += 1
+            self.message = "Original payment saved for review. Start a different sale; do not recharge the original customer."
+        }
+    }
+    func openSavedPayment(_ saved: SavedPaymentReview) {
+        guard pending == nil else { return }
+        perform {
+            self.pending = saved.pending; try self.savePending()
+            try await self.loadWorkspaces(); try await self.recover()
         }
     }
     func attachSelectedCustomer() {

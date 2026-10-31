@@ -115,6 +115,11 @@ final class MobileContractClaimBarrier implements PaymentJournal
         return $this->inner->unknown($tenantId, $id);
     }
 
+    public function parkForReview(int $tenantId, string $id): array
+    {
+        return $this->inner->parkForReview($tenantId, $id);
+    }
+
     public function apply(int $tenantId, string $id, ProviderEvidence $evidence): array
     {
         return $this->inner->apply($tenantId, $id, $evidence);

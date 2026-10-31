@@ -44,7 +44,11 @@ final class MySqlPaymentJournal implements PaymentJournal
             }
             if ($this->db->table('payment_core_operations')->where('tenant_id', $binding->tenantId)
                 ->where('register_id', $binding->registerId)->where('id', '<>', $row['id'])
-                ->whereIn('state', ['reserved', 'processing', 'unknown', 'review'])->lockForUpdate()->first()) {
+                ->whereIn('state', ['reserved', 'processing', 'unknown', 'review'])
+                ->where(fn ($active) => $active->where('state', '<>', 'unknown')
+                    ->orWhereNotExists(fn ($q) => $q->selectRaw('1')->from('payment_core_events as parked')
+                        ->whereColumn('parked.operation_id', 'payment_core_operations.id')->where('parked.event_code', 'explicit_review_parked')))
+                ->lockForUpdate()->first()) {
                 throw new DomainException('Resolve the register operation before another sale.');
             }
             $this->event($row['id'], 'reserved', 0);
@@ -128,6 +132,22 @@ final class MySqlPaymentJournal implements PaymentJournal
             $row = $this->load($tenantId, $id);
             if (in_array($row['state'], ['reserved', 'processing', 'unknown'], true)) {
                 $this->db->table('payment_core_operations')->where('tenant_id', $tenantId)->where('id', $id)->update(['state' => 'unknown']);
+            }
+
+            return $this->load($tenantId, $id);
+        });
+    }
+
+    public function parkForReview(int $tenantId, string $id): array
+    {
+        return $this->locked($tenantId, function () use ($tenantId, $id): array {
+            $row = $this->load($tenantId, $id);
+            if ($row['kind'] !== 'payment' || $row['binding']['provider'] !== 'square_native'
+                || $row['state'] !== 'unknown' || $row['claimed'] !== 1 || $row['provider_id'] !== null) {
+                throw new DomainException('Only an unresolved native interaction with no provider payment can be parked.');
+            }
+            if (! $row['parked_for_review']) {
+                $this->event($id, 'explicit_review_parked', $row['version']);
             }
 
             return $this->load($tenantId, $id);
@@ -252,6 +272,7 @@ final class MySqlPaymentJournal implements PaymentJournal
 
     private function decode(array $row): array
     {
+        $row['parked_for_review'] = $this->db->table('payment_core_events')->where('operation_id', $row['id'])->where('event_code', 'explicit_review_parked')->exists();
         $row['binding'] = json_decode($this->crypt->decrypt($row['binding'], false), true, 512, JSON_THROW_ON_ERROR);
         $row['terms'] = json_decode($this->crypt->decrypt($row['terms'], false), true, 512, JSON_THROW_ON_ERROR);
         foreach (['tenant_id', 'binding_id', 'amount_minor', 'claimed', 'version'] as $key) {
