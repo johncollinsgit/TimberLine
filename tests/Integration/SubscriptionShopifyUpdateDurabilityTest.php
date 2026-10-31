@@ -467,11 +467,13 @@ test('a native review reserves its original UUID without preventing a fresh safe
     expect($this->s->agreement->fresh()->status)->toBe('paused');
 });
 
-test('native accepted terms cannot collect before fresh amended-tax preflight is connected', function () {
+test('native accepted terms wait for a completed fresh tax calculation before collection', function () {
     $quote = ($this->calculate)();
     config()->set('subscriptions.replacement_amendment_apply_enabled', true);
     expect(nativeCommit($this, $quote)['status'])->toBe('applied');
-    expect(fn () => app(SubscriptionShopifyExecutionService::class)->ready($this->s->agreement->fresh(), $this->s->actor))->toThrow(HttpException::class);
+    $this->s->taxPending = true;
+    $this->travelTo(CarbonImmutable::parse('2027-01-31T15:00:00Z'));
+    expect(fn () => app(SubscriptionShopifyExecutionService::class)->collect($this->s->agreement->fresh()))->toThrow(HttpException::class);
     expect($this->s->bills)->toBe([])->and(DB::table('subscription_billing_cycles')->where('agreement_id', $this->s->agreement->id)->count())->toBe(0);
 });
 

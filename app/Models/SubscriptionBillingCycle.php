@@ -45,6 +45,10 @@ class SubscriptionBillingCycle extends Model
             if ($proof !== null && data_get($row->reconciliation, 'dispatch_source_proof') !== $proof) {
                 throw new \LogicException('Retain the source-stop proof used for the original payment dispatch.');
             }
+            $tax = data_get($row->getOriginal('reconciliation'), 'dispatch_native_tax_preflight');
+            if ($tax !== null && data_get($row->reconciliation, 'dispatch_native_tax_preflight') !== $tax) {
+                throw new \LogicException('Retain the native tax proof used for the original payment dispatch.');
+            }
         });
         static::deleting(fn () => throw new \LogicException('Retain subscription payment evidence.'));
     }

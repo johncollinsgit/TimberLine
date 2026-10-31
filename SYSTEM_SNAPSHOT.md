@@ -1,3 +1,27 @@
+## Native amended billing tax preflight (October 31; source candidate)
+
+Accepted native delivery terms now collect only after a fresh original-app
+calculation verifies exact accepted subtotal/shipping/tax/total, no discounts or
+warnings, original line IDs/prices/policies/method/note and current contract
+version. `SubscriptionShopifyTaxProtocol` and `SubscriptionShopifyTaxService` keep
+signed encrypted request/send/provider-handle/proof actions. The send claim
+commits before bounded HTTP; tax-only metadata is never committed to the live
+contract. Changed totals or authority stop before payment. Freshness is bounded
+to three minutes from dispatch and proof observation; rereading an old completed
+calculation cannot extend it. Expired checks get a separately recorded generation
+without replaying a calculation or payment. No native tax rate/line data is invented.
+
+The tax-only worker runs each minute for due allowed active Everbranch native
+members; the existing collection/reconciliation cadence stays five minutes.
+Short bounded original-ID reads and the minute worker handle asynchronous results.
+The collector rechecks the proof before cycle creation and final payment dispatch,
+re-reads the exact contract version and freezes the used proof with the attempt.
+Unsent cycles can refresh their proof only under the same frozen authority;
+already-started attempts retain their independent original-ID reconciliation.
+Editing freezes do not withdraw separately accepted collection authority.
+Real original-method/provider/customer/backend/two-tester acceptance and native
+customer confirmation still remain; no live billing/deployment/source change occurred.
+
 ## Native update approval, commit and term history (October 31; source candidate)
 
 The preview-first `subscriptions:shopify-amend` CLI now supports original-owner
@@ -21,8 +45,8 @@ signed terms-only revision chain, for Braintree and native agreements. The
 reconciliation worker can finish an already approved native update without
 submitting another commit. No source mandate or old cycle/order is rewritten.
 
-Native amended collection/positive provider synchronization remains blocked until
-the fresh native tax preflight is connected. Native authenticated customer
+Native amended collection now uses the fresh tax preflight described above;
+positive provider synchronization retains its separate authority gates. Native authenticated customer
 confirmation and actual original-method/provider/customer/Shopify/two-tester
 acceptance remain unfinished. No DDL, live provider mutation, charge, source
 cancellation, deployment, notification or rollout occurred. See the runbook.
@@ -43,7 +67,7 @@ retain an older valid paused provider date without changing either schedule.
 
 The owner commit/history/CLI and reconciliation worker are described above.
 Reconciliation after an editing freeze preserves later status/date/revision state.
-Fresh collection tax preflight and native customer confirmation remain pending.
+Fresh collection tax preflight is described above; native customer confirmation remains pending.
 Real MySQL durability/worker races exercise the path; no live mutation occurred.
 
 ## Original-app schema and native update builder (October 31; source candidate)
@@ -65,7 +89,7 @@ updates omit lines; scent-only updates omit delivery replacement. Ambiguous line
 binding, repricing, warnings, method/date/status or retained-evidence drift fail
 closed. The protocol class remains pure; the calculation journal described above
 now retains durable dispatch/calculation and commit recovery with signed future
-terms. Fresh collection tax preflight and native customer confirmation are still
+terms. Fresh collection tax preflight is now connected; native customer confirmation is still
 required before native customer updates can launch. No live provider mutation or
 rollout occurred. See the replacement runbook.
 

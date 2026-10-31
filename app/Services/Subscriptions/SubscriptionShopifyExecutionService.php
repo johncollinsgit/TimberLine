@@ -123,6 +123,7 @@ class SubscriptionShopifyExecutionService
         if ($existing?->payment_started_at) {
             return $this->reconcile($existing);
         }
+        app(SubscriptionShopifyTaxService::class)->assertCollectEntry($row);
         $this->ready($row, $actor, $existing?->id);
         $clock = now($row->terms['timezone']);
         abort_unless($date === $clock->toDateString() && $clock->hour >= $row->terms['billing_hour'], 409, 'Collect only the reviewed current billing day; never catch up overdue charges.');
@@ -131,14 +132,20 @@ class SubscriptionShopifyExecutionService
         $row = $row->fresh();
         $providerCycle = $this->transport()->billingCycle($row, $date);
         SubscriptionShopifyBillingProtocol::unbilled($row, $providerCycle['subscriptionBillingCycle'] ?? [], $date);
+        $tax = app(SubscriptionShopifyTaxService::class)->review($row, $actor, $date, $existing?->id);
         $proof = $this->source($row, $date, $actor);
-        $cycle = DB::transaction(function () use ($row, $actor, $method, $proof, $date) {
+        $cycle = DB::transaction(function () use ($row, $actor, $method, $proof, $date, $tax) {
             $current = $this->locked($row);
             $existing = SubscriptionBillingCycle::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)->whereDate('cycle_date', $date)->lockForUpdate()->first();
             $this->ready($current, $actor->fresh(), $existing?->id);
             abort_unless($current->status === 'active' && $current->revision === $row->revision && $current->next_billing_date?->toDateString() === $date
                 && $method['processor_context'] === $this->transport()->context($current) && $this->sourceFresh($current, $proof), 409);
+            app(SubscriptionShopifyTaxService::class)->assertFresh($current, $tax, $date, true);
             if ($existing) {
+                if (! $existing->payment_started_at && $tax) {
+                    $existing->update(['reconciliation' => array_replace($existing->reconciliation ?? [], ['native_tax_preflight' => $tax])]);
+                }
+
                 return $existing;
             }
             $cycle = new SubscriptionBillingCycle(['tenant_id' => $row->tenant_id, 'agreement_id' => $row->id, 'processor' => 'shopify',
@@ -147,6 +154,9 @@ class SubscriptionShopifyExecutionService
                 'terms' => $current->terms + ['terms_hash' => $current->terms_hash, 'original_terms_hash' => $method['original_terms_hash'],
                     'method_type' => $method['method_type'], 'shopify_contract_id' => data_get($current->authorization_evidence, 'shopify_adoption.contract_id')],
                 'method_binding' => $current->method_binding, 'source_evidence' => $proof + ['processor_context' => $method['processor_context']], 'request_uuid' => (string) Str::uuid()]);
+            if ($tax) {
+                $cycle->reconciliation = ['native_tax_preflight' => $tax];
+            }
             $cycle->provider_request = SubscriptionShopifyBillingProtocol::payload($cycle);
             $cycle->save();
 
@@ -337,11 +347,10 @@ class SubscriptionShopifyExecutionService
         $access = app(SubscriptionReplacementAccess::class);
         $access->owner($row->tenant_id, $actor, $row->member_id, 'collection');
         $access->owner($row->tenant_id, $actor, $row->member_id, 'handoff');
-        $access->member($row);
+        $member = $access->member($row);
+        abort_unless($row->status === 'prepared' || $member->billing_owner === 'everbranch', 409, 'The original member no longer assigns future billing to Everbranch.');
         SubscriptionBillingAuthorization::assertCurrent($row);
         app(SubscriptionShopifyUpdateService::class)->assertNoPendingCommit($row);
-        abort_if(SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)->where('kind', 'terms_amended')->exists(),
-            423, 'Fresh native amended-tax collection preflight must be connected before billing these accepted delivery terms.');
         abort_unless($row->processor === 'shopify' && config('subscriptions.replacement_shopify_collection_enabled') === true, 423, 'Shopify replacement collection is paused.');
         $context = $this->transport()->context($row);
         abort_unless($row->method_binding['environment'] === 'sandbox' || config('subscriptions.replacement_shopify_live_acceptance_verified') === true, 423, 'Actual original Shopify merchant acceptance is required.');
@@ -362,6 +371,8 @@ class SubscriptionShopifyExecutionService
     public function assertDispatch(SubscriptionBillingAgreement $row, SubscriptionBillingCycle $cycle, array $proof): void
     {
         $this->ready($row, User::findOrFail($row->activated_by), $cycle->id);
+        app(SubscriptionShopifyTaxService::class)->assertFresh($row, data_get($cycle->reconciliation, 'dispatch_native_tax_preflight')
+            ?? data_get($cycle->reconciliation, 'native_tax_preflight'), $cycle->cycle_date->toDateString(), DB::transactionLevel() > 0);
         $member = app(SubscriptionReplacementAccess::class)->member($row);
         $clock = now($row->terms['timezone']);
         abort_unless($member->billing_owner === 'everbranch' && $row->status === 'active' && $row->activated_at && $row->method_verified_at

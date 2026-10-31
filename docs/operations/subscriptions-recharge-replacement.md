@@ -69,8 +69,8 @@ catalog. It has no HTTP, commit, local-term save or billing side effect. It:
 The protocol class is a **pure builder**. The calculation journal described
 below now durably retains intent before calculate and polls only the original ID.
 The owner commit/history/recovery path below now retains exact approval and one
-committed send claim before HTTP. Native fresh tax checks before amended billing
-and authenticated customer confirmation remain required. Existing original-term
+committed send claim before HTTP. Native fresh tax preflight is now connected as
+described below; authenticated native customer confirmation remains required. Existing original-term
 billing retains its separate gates and already-started attempts remain reconcilable.
 No DDL, contract update, charge, source stop, activation or deployment occurred.
 
@@ -918,7 +918,7 @@ alone is not the full customer replacement.
 to encrypted signed append-only `SubscriptionBillingAction` stages. The internal
 owner methods calculate, reconcile or explicitly close an uncommitted review.
 Owner commit/CLI/history and worker recovery are described next; native customer
-confirmation and amended-tax collection preflight are not connected yet.
+confirmation remains outstanding; the amended-tax collection lane is described below.
 `SUBSCRIPTIONS_REPLACEMENT_SHOPIFY_AMENDMENTS_ENABLED=false` is independent of
 the general amendment and existing exact-member servicing gates. Enabling it
 alone cannot change a contract or charge a customer.
@@ -952,8 +952,8 @@ visibility, no-resend recovery, immutable evidence tampering, stale review/curre
 owner revocation, credential revocation beyond an older consistent snapshot,
 terminal failure, close/replay and two independent workers.
 
-The owner commit/history/recovery extension follows. Fresh native tax preflight
-and authenticated customer confirmation remain required before native edits launch.
+The owner commit/history/recovery and fresh native tax extensions follow.
+Authenticated native customer confirmation remains required before customer edits launch.
 Original source-method association and real merchant/provider/two-tester hosted
 acceptance remain unproven. No live contract, source, order or charge changed.
 
@@ -1018,13 +1018,66 @@ pause/cancellation remain possible. Finite customer pauses survive contiguous
 validated terms-only amendments for both Braintree and native agreements; a
 missing revision, new schedule or changed accepted resume date requires review.
 
-Fresh native amended-tax collection preflight and native authenticated customer
-confirmation remain incomplete. New native amended collection and positive
-provider synchronization are explicitly blocked until that preflight is added.
+Fresh native amended-tax collection preflight is connected below. Native
+authenticated customer confirmation remains incomplete. Positive provider
+synchronization retains its original owned-contract and authority checks.
 The owner CLI is not evidence of production acceptance. Actual saved-method/source
 association, merchant/API, customer view, Shopify fulfillment/backend and exact
 two-tester acceptance remain required. No deployment, live contract/source/order/
 charge, customer notification or rollout was performed.
+
+## Fresh native amended-tax collection (source candidate; gated)
+
+`SubscriptionShopifyTaxService` performs an original-app update calculation only
+for accepted native amended terms that are due today on an active individually
+activated Everbranch member. Its input retains all unchanged live fields and adds
+a unique `everbranch_collection_review` attribute only to the calculation. It
+never commits that calculation. The separate amendment CLI cannot commit its
+request UUID. Consequently this check does not change a customer's saved address,
+the live contract, old order, source subscription or payment method. See
+[Shopify's calculation semantics](https://shopify.dev/docs/api/admin-graphql/2026-10/mutations/subscriptionContractUpdateCalculate).
+
+Encrypted signed request/send/received/proof/expired actions retain every
+generation. The send claim commits before bounded original-app HTTP; a separate
+MySQL observer verifies visibility. Initial provider handles remain immutable.
+A correlated terminal success must match the exact accepted subtotal, shipping,
+aggregate tax, total and currency, with no discounts/warnings, and the original
+method, line IDs/quantities/prices/policies, selling-plan fields and note. Native
+tax lines/rates are not fabricated. User errors, stale context, changed terms or
+changed tax require review before any billing cycle or payment is created.
+
+Freshness is at most three minutes from the recorded calculation send and proof
+observation. A fresh read of an old completed calculation cannot extend that
+window. The service performs up to two short bounded pending-result reads. The
+minute `subscriptions:replacement-process --tax-preflight` mode also prepares or
+polls due allowed active native members; it never charges when used alone. The
+existing `--collect --reconcile` job keeps its five-minute cadence. Both use the
+existing exact-member collection/handoff/merchant gates, which remain default-off.
+Expired or unconfirmed tax-only calculations age into an auditable new unique
+generation; the original send/handle is never overwritten or replayed. No
+calculation from this lane can update the live contract. Slow, failed or ambiguous
+checks leave collection blocked rather than manufacture a paid result.
+
+The collector checks proof freshness/context/current revision before preparing a
+cycle, then re-reads the original full contract version and checks again before
+claiming/sending payment. The actual proof is frozen as
+`reconciliation.dispatch_native_tax_preflight`; it cannot be erased or replaced.
+A prepared unsent cycle can refresh only its mutable proof pointer while its
+frozen amount, terms hash/revision, method and request remain identical. A cycle
+that belongs to an older authority requires review. An already-started attempt
+reconciles through its original ID without another tax calculation or payment,
+even after its proof expires or editing is withdrawn. New amended dispatch refuses
+an enclosing transaction before provider work. Existing source-stop/duplicate
+coverage is still refreshed after the tax check and immediately gates payment.
+
+Real MySQL cases exercise independent claim visibility, one calculation/payment
+across competing workers, delayed minute/five-minute schedules, same-handle
+pending recovery, expired/unknown generation renewal, changed tax/version/owner,
+warnings/errors/revocation, immutable dispatch proof and frozen-cycle refresh.
+This is local source evidence, not actual merchant/provider/customer/Shopify
+acceptance. Native customer confirmation, original adoption ID/outer-transaction
+audits and the real two-tester rollout remain required. No DDL, deployment, live
+provider contract/order/charge/source change or customer notification occurred.
 
 ## Customer purchase history gateway icons
 

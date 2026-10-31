@@ -78,6 +78,13 @@ GRAPHQL;
             fn ($current, $quote) => $this->request($current, SubscriptionShopifyUpdateProtocol::document('commit'), ['id' => $quote['calculation_id']], false, true));
     }
 
+    /** Tax-only calculations have no commit entry point and cannot alter the live contract. */
+    public function taxCalculate(SubscriptionBillingAgreement $row, string $uuid): array
+    {
+        return app(SubscriptionShopifyTaxService::class)->dispatch($row, $uuid,
+            fn ($current, $variables) => $this->request($current, SubscriptionShopifyUpdateProtocol::document('calculate'), $variables, false, true));
+    }
+
     public function originalOrder(SubscriptionBillingAgreement $row, string $id): array
     {
         abort_unless(preg_match('/\A[1-9][0-9]{0,19}\z/', $id), 422);
@@ -134,12 +141,15 @@ GRAPHQL;
     public function bill(SubscriptionBillingCycle $cycle, array $sourceProof): array
     {
         $row = $this->cycleAgreement($cycle);
+        app(SubscriptionShopifyTaxService::class)->assertCollectEntry($row);
         $this->assertBillingCapabilities($row, 'subscriptionBillingAttemptCreate');
         $providerCycle = $this->billingCycle($row, $cycle->cycle_date->toDateString());
         SubscriptionShopifyBillingProtocol::unbilled($row, $providerCycle['subscriptionBillingCycle'] ?? [], $cycle->cycle_date->toDateString());
-        $contract = $this->contractRead($row, 'contract')['subscriptionContract'] ?? [];
+        $tax = app(SubscriptionShopifyTaxService::class);
+        $contract = ($tax->required($row) ? $this->updateRead($row, 'contract') : $this->contractRead($row, 'contract'))['subscriptionContract'] ?? [];
         SubscriptionShopifyBillingProtocol::owned($row, $contract);
         SubscriptionShopifyContractProtocol::assertTerms($row, $contract, data_get($row->authorization_evidence, 'shopify_adoption.original.request_uuid', ''), SubscriptionShopifyUpdateHistory::attributes($row));
+        $tax->assertFresh($row, data_get($cycle->reconciliation, 'native_tax_preflight'), $cycle->cycle_date->toDateString(), false, $contract);
         abort_unless(($contract['status'] ?? null) === 'ACTIVE' && SubscriptionShopifyBillingProtocol::sameInstant($contract['nextBillingDate'] ?? null,
             SubscriptionShopifyBillingProtocol::instant($cycle->terms, $cycle->cycle_date->toDateString())), 409, 'The original Shopify contract is not active on this reviewed billing instant.');
         DB::transaction(function () use ($row, $cycle, $sourceProof) {
@@ -149,7 +159,8 @@ GRAPHQL;
             abort_if($attempt->payment_started_at || data_get($attempt->reconciliation, 'dispatch_started_at'), 409, 'Recover the original Shopify attempt; never submit another payment request.');
             app(SubscriptionShopifyExecutionService::class)->assertDispatch($current, $attempt, $sourceProof);
             $attempt->update(['payment_status' => 'sending', 'payment_started_at' => now(),
-                'reconciliation' => array_replace($attempt->reconciliation ?? [], ['dispatch_started_at' => now()->toISOString(), 'dispatch_source_proof' => $sourceProof])]);
+                'reconciliation' => array_replace($attempt->reconciliation ?? [], ['dispatch_started_at' => now()->toISOString(), 'dispatch_source_proof' => $sourceProof],
+                    app(SubscriptionShopifyTaxService::class)->required($current) ? ['dispatch_native_tax_preflight' => $attempt->reconciliation['native_tax_preflight']] : [])]);
         });
         $attempt = $cycle->fresh();
         $row = $this->cycleAgreement($attempt);

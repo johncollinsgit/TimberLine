@@ -310,6 +310,7 @@ Schedule::command('website:reconcile-payments')->everyFiveMinutes()->withoutOver
 // Existing accepted provider objects are reconciled independently of new collection.
 Schedule::command('subscriptions:pilot-process --collect --reconcile')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();
 Schedule::command('subscriptions:replacement-process --collect --reconcile')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();
+Schedule::command('subscriptions:replacement-process --tax-preflight')->everyMinute()->withoutOverlapping(5)->runInBackground();
 Schedule::command('payments:health')->everyFifteenMinutes()->withoutOverlapping(10)->runInBackground();
 Schedule::command('website:reconcile-shipments')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();
 Schedule::command('website:dispatch-order-notifications')->everyMinute()->withoutOverlapping(10)->runInBackground();

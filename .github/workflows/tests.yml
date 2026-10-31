@@ -315,7 +315,7 @@ jobs:
         run: scripts/ci/verify-mysql-schema-baseline.sh
 
       - name: Verify original subscription provider dispatch concurrency
-        run: php ./vendor/bin/pest tests/Integration/SubscriptionBraintreeDispatchConcurrencyTest.php tests/Integration/SubscriptionShopifyAdoptionConcurrencyTest.php tests/Integration/SubscriptionShopifyBillingConcurrencyTest.php tests/Integration/SubscriptionShopifyUpdateDurabilityTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/SubscriptionBraintreeDispatchConcurrencyTest.php tests/Integration/SubscriptionShopifyAdoptionConcurrencyTest.php tests/Integration/SubscriptionShopifyBillingConcurrencyTest.php tests/Integration/SubscriptionShopifyUpdateDurabilityTest.php tests/Integration/SubscriptionShopifyTaxPreflightTest.php --compact
 
       - name: Verify subscription member actions and amendment concurrency
         run: php ./vendor/bin/pest tests/Integration/SubscriptionMemberVotingConcurrencyTest.php tests/Integration/SubscriptionMembershipReviewConcurrencyTest.php tests/Integration/SubscriptionBillingAmendmentConcurrencyTest.php tests/Integration/SubscriptionCustomerDeliveryConcurrencyTest.php --compact

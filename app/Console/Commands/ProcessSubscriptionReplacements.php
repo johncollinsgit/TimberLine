@@ -7,13 +7,14 @@ use App\Models\SubscriptionBillingCycle;
 use App\Models\User;
 use App\Services\Subscriptions\SubscriptionBraintreeExecutionService;
 use App\Services\Subscriptions\SubscriptionShopifyExecutionService;
+use App\Services\Subscriptions\SubscriptionShopifyTaxService;
 use App\Services\Subscriptions\SubscriptionShopifyUpdateService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Schema;
 
 class ProcessSubscriptionReplacements extends Command
 {
-    protected $signature = 'subscriptions:replacement-process {--collect} {--reconcile} {--limit=20}';
+    protected $signature = 'subscriptions:replacement-process {--collect} {--reconcile} {--tax-preflight} {--limit=20}';
 
     protected $description = 'Process exact allowed replacement members and reconcile original Braintree/Shopify attempts without resubmitting payments.';
 
@@ -32,12 +33,37 @@ class ProcessSubscriptionReplacements extends Command
         }
         $allowed = SubscriptionBillingAgreement::query()->whereIn('processor', ['braintree', 'shopify'])
             ->whereIn('tenant_id', config('subscriptions.replacement_tenant_ids', []))->whereIn('member_id', config('subscriptions.replacement_member_ids', []));
-        if (! $this->option('collect') && ! $this->option('reconcile')) {
+        if (! $this->option('collect') && ! $this->option('reconcile') && ! $this->option('tax-preflight')) {
             $this->line(json_encode(['active' => (clone $allowed)->where('status', 'active')->count(), 'provider_requests' => false]));
 
             return self::SUCCESS;
         }
         $counts = ['processed' => 0, 'reconciled' => 0, 'schedules_synced' => 0, 'review_required' => 0];
+        if ($this->option('tax-preflight')) {
+            $counts['tax_checked'] = 0;
+            if (config('subscriptions.replacement_collection_enabled') === true && config('subscriptions.replacement_shopify_collection_enabled') === true) {
+                $tax = app(SubscriptionShopifyTaxService::class);
+                foreach ((clone $allowed)->where('processor', 'shopify')->where('status', 'active')->whereNotNull('activated_at')
+                    ->whereBetween('next_billing_date', [now()->subDay()->toDateString(), now()->addDay()->toDateString()])
+                    ->orderBy('updated_at')->orderBy('id')->limit($limit)->get() as $agreement) {
+                    $clock = now($agreement->terms['timezone']);
+                    if ($agreement->next_billing_date->toDateString() !== $clock->toDateString() || $clock->hour < $agreement->terms['billing_hour'] || ! $tax->required($agreement)) {
+                        continue;
+                    }
+                    $cycle = SubscriptionBillingCycle::query()->forTenantId($agreement->tenant_id)->where('agreement_id', $agreement->id)
+                        ->whereDate('cycle_date', $agreement->next_billing_date->toDateString())->first();
+                    if ($cycle?->payment_started_at) {
+                        continue;
+                    }
+                    try {
+                        $tax->review($agreement, User::findOrFail($agreement->activated_by), $agreement->next_billing_date->toDateString(), $cycle?->id);
+                        $counts['tax_checked']++;
+                    } catch (\Throwable) {
+                        $counts['review_required']++;
+                    }
+                }
+            }
+        }
         if ($this->option('reconcile')) {
             $cycles = SubscriptionBillingCycle::query()->whereIn('processor', ['braintree', 'shopify'])->whereNotNull('payment_started_at')
                 ->whereIn('agreement_id', (clone $allowed)->select('id'))->where(function ($query) {

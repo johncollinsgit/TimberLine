@@ -3,6 +3,8 @@
 namespace Tests\Support\Subscriptions;
 
 use App\Models\SubscriptionBillingAction;
+use App\Models\SubscriptionBillingCycle;
+use App\Services\Subscriptions\SubscriptionPilotShopifyBridge;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -51,6 +53,28 @@ class ShopifyUpdateScenario extends ShopifyExecutionScenario
     public ?string $updateMarkerPath = null;
 
     public ?array $proposedChange = null;
+
+    public array $taxInputs = [];
+
+    public int $taxPolls = 0;
+
+    public bool $taxPending = false;
+
+    public bool $taxLoseResponse = false;
+
+    public bool $taxWarning = false;
+
+    public bool $taxUserError = false;
+
+    public ?int $calculatedTaxCents = null;
+
+    public ?\Closure $beforeTaxPoll = null;
+
+    public ?string $taxMarkerPath = null;
+
+    public int $taxDelaySeconds = 0;
+
+    private array $taxStartedAt = [];
 
     public function __construct()
     {
@@ -104,6 +128,45 @@ class ShopifyUpdateScenario extends ShopifyExecutionScenario
                 'total' => $money('26.75'), 'totalDeliveryDiscounts' => $money('0.00'), 'totalMerchandiseDiscounts' => $money('0.00')]];
     }
 
+    public function complete(string $id): void
+    {
+        parent::complete($id);
+        $attempt = &$this->attempts[$id];
+        $cycle = SubscriptionBillingCycle::query()->where('request_uuid', $attempt['idempotencyKey'])->firstOrFail();
+        $terms = $cycle->terms;
+        $money = fn ($cents) => ['shopMoney' => ['amount' => SubscriptionPilotShopifyBridge::decimal($cents), 'currencyCode' => $terms['currency']]];
+        $order = &$attempt['state']['order'];
+        $order['totalPriceSet'] = $order['currentTotalPriceSet'] = $money($terms['amount_cents']);
+        $order['totalTaxSet'] = $money($terms['tax_cents']);
+        $order['totalShippingPriceSet'] = $money($terms['shipping_cents']);
+        $order['shippingAddress'] = $terms['shipping_address'];
+        $order['shippingAddress']['countryCodeV2'] = $order['shippingAddress']['countryCode'];
+        unset($order['shippingAddress']['countryCode']);
+        $order['lineItems']['nodes'] = array_map(fn ($line) => ['variant' => ['id' => 'gid://shopify/ProductVariant/'.$line['variant_id']],
+            'quantity' => $line['quantity'], 'originalUnitPriceSet' => $money($line['unit_price_cents'])], $terms['lines']);
+        $order['transactions'][0]['amountSet'] = $attempt['transactions']['nodes'][0]['amountSet'] = $money($terms['amount_cents']);
+    }
+
+    private function taxCalculation(string $uuid): array
+    {
+        $pending = $this->taxPending || ($this->taxDelaySeconds > 0 && now()->lt($this->taxStartedAt[$uuid]->addSeconds($this->taxDelaySeconds)));
+        $id = 'gid://shopify/SubscriptionContractCalculation'.($pending ? 'Pending' : 'Success').'/tax_'.$uuid;
+        if ($pending) {
+            return ['__typename' => 'SubscriptionContractCalculationPending', 'id' => $id];
+        }
+        $contract = $this->contract;
+        $contract['customAttributes'] = $this->taxInputs[$uuid]['input']['customAttributes'];
+        $terms = $this->agreement->fresh()->terms;
+        $tax = $this->calculatedTaxCents ?? $terms['tax_cents'];
+        $money = fn ($cents) => ['amount' => SubscriptionPilotShopifyBridge::decimal($cents), 'currencyCode' => $terms['currency']];
+
+        return ['__typename' => 'SubscriptionContractCalculationSuccess', 'id' => $id, 'withMerchandiseCustomizations' => false,
+            'warnings' => $this->taxWarning ? [['code' => 'DELIVERY_OPTION_NOT_FOUND', 'field' => []]] : [], 'calculatedContract' => $contract,
+            'projectedOrderTotals' => ['subtotal' => $money($terms['subtotal_cents']), 'totalDelivery' => $money($terms['shipping_cents']),
+                'totalTax' => $money($tax), 'total' => $money($terms['subtotal_cents'] + $terms['shipping_cents'] + $tax),
+                'totalDeliveryDiscounts' => $money(0), 'totalMerchandiseDiscounts' => $money(0)]];
+    }
+
     protected function shopify($request)
     {
         $query = $request['query'];
@@ -134,6 +197,31 @@ class ShopifyUpdateScenario extends ShopifyExecutionScenario
             $data = $identity + ['customer' => ['id' => 'gid://shopify/Customer/456'], 'nodes' => [['id' => $request['variables']['variants'][0],
                 'title' => '16oz', 'product' => ['title' => 'Forest Rain', 'status' => 'ACTIVE'], 'inventoryItem' => ['requiresShipping' => true]]]];
         } elseif (str_starts_with($query, 'mutation ReplacementCalculateUpdate')) {
+            $review = collect($request['variables']['input']['customAttributes'])->firstWhere('key', 'everbranch_collection_review');
+            if ($review) {
+                $uuid = $review['value'];
+                $sent = SubscriptionBillingAction::query()->where('agreement_id', $this->agreement->id)->where('kind', 'shopify_tax_sent')
+                    ->where('request_uuid', (string) \Ramsey\Uuid\Uuid::uuid5(\Ramsey\Uuid\Uuid::NAMESPACE_URL, 'everbranch:native-tax-phase:'.$uuid.':sent'))->firstOrFail();
+                config()->set('database.connections.native_tax_observer', config('database.connections.'.DB::getDefaultConnection()));
+                try {
+                    if (! DB::connection('native_tax_observer')->table('subscription_billing_actions')->where('id', $sent->id)->exists()) {
+                        throw new \RuntimeException('Native tax send claim must be committed before HTTP.');
+                    }
+                } finally {
+                    DB::purge('native_tax_observer');
+                }
+                $this->taxInputs[$uuid] = $request['variables'];
+                $this->taxStartedAt[$uuid] = \Carbon\CarbonImmutable::instance(now());
+                if ($this->taxMarkerPath) {
+                    file_put_contents($this->taxMarkerPath, "tax\n", FILE_APPEND | LOCK_EX);
+                }
+                if ($this->taxLoseResponse) {
+                    throw new ConnectionException('Fictional tax response lost after calculation.');
+                }
+
+                return Http::response(['data' => ['subscriptionContractUpdateCalculate' => ['subscriptionContractCalculation' => $this->taxCalculation($uuid),
+                    'userErrors' => $this->taxUserError ? [['code' => 'INVALID', 'field' => []]] : []]]], 200, ['X-Shopify-API-Version' => '2026-10']);
+            }
             $sent = SubscriptionBillingAction::query()->where('agreement_id', $this->agreement->id)->where('kind', 'shopify_update_calculate_sent')->firstOrFail();
             // A separate connection must see the committed marker even though the send holds the original row locks.
             $name = 'native_update_observer';
@@ -195,6 +283,16 @@ class ShopifyUpdateScenario extends ShopifyExecutionScenario
             }
             $data = ['subscriptionContractCalculationCommit' => ['contract' => $applied, 'userErrors' => []]];
         } elseif (str_starts_with($query, 'query ReplacementUpdateCalculation')) {
+            $reference = basename($request['variables']['id']);
+            if (str_starts_with($reference, 'tax_') && isset($this->taxInputs[substr($reference, 4)])) {
+                $this->taxPolls++;
+                if ($hook = $this->beforeTaxPoll) {
+                    $this->beforeTaxPoll = null;
+                    $hook();
+                }
+
+                return Http::response(['data' => $identity + ['subscriptionContractCalculation' => $this->taxCalculation(substr($reference, 4))]], 200, ['X-Shopify-API-Version' => '2026-10']);
+            }
             $this->updatePolls++;
             if ($hook = $this->beforeUpdateCalculationRead) {
                 $this->beforeUpdateCalculationRead = null;

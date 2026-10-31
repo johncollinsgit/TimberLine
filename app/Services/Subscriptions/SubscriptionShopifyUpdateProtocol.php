@@ -187,6 +187,12 @@ class SubscriptionShopifyUpdateProtocol
         }
     }
 
+    /** Calculation-only metadata is supplied by the signed tax intent, never a customer payload. */
+    public function assertUnchangedProjection(SubscriptionBillingAgreement $row, array $before, array $contract, array $attributes): void
+    {
+        $this->result($row, ['before' => $before, 'variables' => ['input' => ['customAttributes' => $attributes]]], $row->terms, $contract);
+    }
+
     private function catalog(SubscriptionBillingAgreement $row, array &$terms, array $catalog, array $context): void
     {
         abort_unless(data_get($catalog, 'shop.myshopifyDomain') === $terms['shop_domain'] && data_get($catalog, 'shop.currencyCode') === $terms['currency']
