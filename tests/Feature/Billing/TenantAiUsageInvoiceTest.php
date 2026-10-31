@@ -34,14 +34,14 @@ test('settled tenant AI usage rolls into one idempotent monthly Everbranch invoi
     ]);
     TenantBudSetting::query()->create([
         'tenant_id' => $tenant->id, 'status' => 'approved', 'ai_status' => 'approved', 'ai_monthly_budget_cents' => 2500,
-        'ai_used_cents' => 1, 'ai_period_started_at' => now()->subMonth()->startOfMonth(),
+        'ai_used_cents' => 1, 'ai_period_started_at' => now()->subMonthNoOverflow()->startOfMonth(),
         'ai_reviewed_by_user_id' => $user->id, 'ai_reviewed_at' => now()->subMonths(2),
     ]);
     $event = TenantAiUsageEvent::query()->create([
         'tenant_id' => $tenant->id, 'user_id' => $user->id, 'client_uuid' => fake()->uuid(),
         'feature' => 'field_voice_transcription', 'context' => 'job_note', 'model' => 'gpt-transcribe', 'status' => 'settled',
         'duration_seconds' => 90, 'provider_cost_micros' => 6750, 'buyer_charge_micros' => 6750,
-        'occurred_at' => now()->subMonth()->startOfMonth()->addDay(), 'metadata' => ['billing_scope' => 'tenant_monthly'],
+        'occurred_at' => now()->subMonthNoOverflow()->startOfMonth()->addDay(), 'metadata' => ['billing_scope' => 'tenant_monthly'],
     ]);
     Http::fake(['https://stripe.test/v1/customers/cus_ai_customer' => Http::response([
         'id' => 'cus_ai_customer', 'name' => 'AI Customer', 'email' => 'owner@example.com',
