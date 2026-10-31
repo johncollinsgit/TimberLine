@@ -93,6 +93,10 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Leave for review"].exists)
         attach(app, name: "Pending payment retains Close and review navigation")
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.buttons["Check payment status"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Payment saved · Open status"].exists)
     }
 
     private func attach(_ app: XCUIApplication, name: String) {
