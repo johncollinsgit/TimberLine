@@ -32,7 +32,7 @@ class SyncMarketingProfileFromOrder implements ShouldQueue
     public ?int $tenantId = null;
 
     /**
-     * @param array<string,mixed> $identityContext
+     * @param  array<string,mixed>  $identityContext
      */
     public function __construct(
         int $orderId,
@@ -50,11 +50,17 @@ class SyncMarketingProfileFromOrder implements ShouldQueue
         CandleCashOrderEventService $candleCashOrderEventService,
         CandleCashRedemptionReconciliationService $reconciliationService,
         BirthdayRewardRedemptionReconciliationService $birthdayReconciliationService
-    ): void
-    {
+    ): void {
         $order = Order::query()->find($this->orderId);
         if (! $order) {
             return;
+        }
+
+        if (data_get($order->attribution_meta, 'customer_commerce.source_name') === 'everbranch_pos'
+            || data_get($order->attribution_meta, 'customer_commerce.everbranch_pos_tag')) {
+            app(\App\Services\Pos\PosShopifyOrderIdentity::class)->link($order);
+
+            return; // Only the original confirmed Square sale owns identity/reward effects.
         }
 
         $attributionMeta = is_array($this->identityContext['attribution_meta'] ?? null)

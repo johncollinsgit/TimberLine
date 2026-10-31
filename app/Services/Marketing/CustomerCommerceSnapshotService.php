@@ -50,13 +50,22 @@ class CustomerCommerceSnapshotService
         $ids = $this->aliasIds($canonical, $tenantId);
         $links = MarketingProfileLink::query()->forTenantId($tenantId)
             ->whereIn('marketing_profile_id', $ids)->get();
-        $issues = [];
-        $purchases = collect();
+        $native = app(\App\Services\Pos\PosCustomerPurchases::class)->forProfiles($tenantId, $ids, $limit);
+        $issues = $native['issues'];
+        $purchases = collect($native['purchases']);
 
         if (Schema::hasTable('orders')) {
             $orderIds = $this->sourceIds($links, 'order', $tenantId, $canonical, $issues);
             foreach (Order::query()->forTenantId($tenantId)->whereIn('id', $orderIds)
                 ->latest('ordered_at')->latest('id')->limit($limit + 1)->get() as $order) {
+                if (app(\App\Services\Pos\PosCustomerPurchases::class)->sourceConflicts($tenantId, 'order', (string) $order->id, $canonical->id)) {
+                    $issues[] = 'customer_identity_review_required';
+
+                    continue;
+                }
+                if (in_array($order->shopify_store_key.':'.$order->shopify_order_id, $native['shopify_orders'], true)) {
+                    continue;
+                }
                 $evidence = (array) data_get($order->attribution_meta, 'customer_commerce', []);
                 if ($evidence['test'] ?? false) {
                     continue;
@@ -89,6 +98,14 @@ class CustomerCommerceSnapshotService
                 ->where('status', 'COMPLETED')->get()->groupBy('square_order_id');
             $conflictingPayments = $this->conflictingSourceIds('square_payment', $payments->flatten(1)->pluck('square_payment_id'), $tenantId, $canonical, $issues);
             foreach ($squareOrders as $order) {
+                if (app(\App\Services\Pos\PosCustomerPurchases::class)->sourceConflicts($tenantId, 'square_order', $order->square_order_id, $canonical->id)) {
+                    $issues[] = 'customer_identity_review_required';
+
+                    continue;
+                }
+                if (in_array($order->square_order_id, $native['square_orders'], true)) {
+                    continue;
+                }
                 $confirmed = strtoupper((string) $order->state) === 'COMPLETED' && $order->closed_at !== null;
                 $tenders = $payments->get($order->square_order_id, collect());
                 if ($tenders->contains(fn ($payment) => in_array($payment->square_payment_id, $conflictingPayments, true))) {
@@ -112,7 +129,12 @@ class CustomerCommerceSnapshotService
                 ->latest('created_at_source')->latest('id')->limit($limit + 1)->get();
             $conflictingOrders = $this->conflictingSourceIds('square_order', $payments->pluck('square_order_id')->filter(), $tenantId, $canonical, $issues);
             foreach ($payments as $payment) {
-                if (in_array((string) $payment->square_order_id, $conflictingOrders, true)) {
+                if (app(\App\Services\Pos\PosCustomerPurchases::class)->sourceConflicts($tenantId, 'square_payment', $payment->square_payment_id, $canonical->id)) {
+                    $issues[] = 'customer_identity_review_required';
+
+                    continue;
+                }
+                if (in_array($payment->square_payment_id, $native['square_payments'], true) || in_array((string) $payment->square_order_id, $native['square_orders'], true) || in_array((string) $payment->square_order_id, $conflictingOrders, true)) {
                     continue;
                 }
                 // A provider payment is another representation of its original order.

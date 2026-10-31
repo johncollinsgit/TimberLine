@@ -5,6 +5,8 @@ return [
     'collection_enabled' => (bool) env('POS_LIVE_COLLECTION_ENABLED', false),
     'servicing_enabled' => (bool) env('POS_LIVE_SERVICING_ENABLED', false),
     'runtime_id' => env('POS_RUNTIME_ID'),
+    'onboarding_enabled' => (bool) env('POS_NATIVE_ONBOARDING_ENABLED', false),
+    'onboarding_build' => env('POS_NATIVE_ONBOARDING_BUILD'),
     'native_client_enabled' => (bool) env('POS_NATIVE_CLIENT_ENABLED', false),
     'square_application_id' => env('POS_SQUARE_APPLICATION_ID'),
     'square_application_secret' => env('POS_SQUARE_APPLICATION_SECRET'),

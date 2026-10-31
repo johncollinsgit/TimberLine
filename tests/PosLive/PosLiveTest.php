@@ -255,7 +255,7 @@ it('serializes partial refunds against the original paid budget without restocki
     $input['amount_minor'] = 571;
     $this->postJson($this->base.'/sales/'.$id.'/refunds', $input)->assertConflict();
     expect((int) $this->store->rows('items', $this->tenant->id)->first()->quantity)->toBe(0);
-    Http::assertSentCount(3); // Only one refund POST plus its list and canonical GET; fake reset cleared earlier reads.
+    Http::assertSentCount(6); // Three original-payment audits, one refund POST, list and canonical refund GET.
 });
 
 function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation = false): void
@@ -268,6 +268,9 @@ function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation 
         'location_id' => 'gid://shopify/Location/2', 'variant_ids' => ['gid://shopify/ProductVariant/3'],
         'tax_address' => ['address1' => 'Fictional test address', 'city' => 'Test', 'provinceCode' => 'SC', 'countryCode' => 'US', 'zip' => '00000']];
     $test->store->rows('registers', $test->tenant->id)->update(['catalog_source' => 'shopify', 'configuration' => $test->store->encrypt($settings)]);
+    $profile = \App\Models\MarketingProfile::create(['tenant_id' => $test->tenant->id, 'first_name' => 'Fictional buyer']);
+    $test->selection['customer_profile_id'] = $profile->id;
+    $test->shopifyCustomerID = null;
     $test->shopifyCreates = 0;
     $test->shopifyPaid = false;
     $test->shopifyFulfilled = false;
@@ -276,7 +279,7 @@ function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation 
         $shop = ['id' => 'gid://shopify/Shop/1', 'currencyCode' => 'USD'];
         $money = fn ($value) => ['shopMoney' => ['amount' => $value, 'currencyCode' => 'USD']];
         $sale = $test->store->rows('sales', $test->tenant->id)->first();
-        $order = fn () => ['id' => 'gid://shopify/Order/4', 'displayFinancialStatus' => $test->shopifyPaid ? 'PAID' : 'PENDING', 'cancelledAt' => null,
+        $order = fn () => ['customer' => $test->shopifyCustomerID ? ['id' => $test->shopifyCustomerID] : null, 'id' => 'gid://shopify/Order/4', 'displayFinancialStatus' => $test->shopifyPaid ? 'PAID' : 'PENDING', 'cancelledAt' => null,
             'totalPriceSet' => $money('10.70'), 'totalTaxSet' => $money('0.70'), 'totalOutstandingSet' => $money($test->shopifyPaid ? '0.00' : '10.70'),
             'tags' => ['EverbranchPOS-'.$sale?->id], 'transactions' => $test->shopifyPaid ? [['id' => 'gid://shopify/OrderTransaction/5',
                 'kind' => 'SALE', 'status' => 'SUCCESS', 'gateway' => 'manual', 'amountSet' => $money('10.70')]] : [],
@@ -488,4 +491,19 @@ it('renews stale merchant evidence through provider retrieval while retaining in
     expect(strtotime($this->store->rows('connections', $this->tenant->id)->first()->verified_at))->toBeGreaterThan(time() - 60);
     config()->set('pos_live.tap_entitlement_verified', false);
     $this->postJson($this->base.'/authorize-device')->assertStatus(503);
+});
+
+it('associates only the explicitly linked Shopify customer and leaves marketing consent untouched', function (): void {
+    posFixtureShopify($this);
+    $shop = \App\Models\ShopifyStore::forTenantId($this->tenant->id)->firstOrFail();
+    \App\Models\MarketingProfileLink::create(['tenant_id' => $this->tenant->id,
+        'marketing_profile_id' => $this->selection['customer_profile_id'], 'source_type' => 'shopify_customer',
+        'source_id' => $shop->store_key.':77', 'match_method' => 'manual_review']);
+    $this->shopifyCustomerID = 'gid://shopify/Customer/77';
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk();
+    Http::assertSent(fn ($r) => str_contains((string) ($r['query'] ?? ''), 'mutation PosOrder')
+        && data_get($r->data(), 'variables.order.customer.toAssociate.id') === 'gid://shopify/Customer/77'
+        && ! array_key_exists('buyerAcceptsMarketing', data_get($r->data(), 'variables.order', []))
+        && ! array_key_exists('toUpsert', data_get($r->data(), 'variables.order.customer', [])));
 });

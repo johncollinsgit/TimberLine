@@ -48,7 +48,7 @@ final class PosAccess implements PaymentAccess
 
     public function register(string $id, string $operation = 'read'): array
     {
-        $actor = $this->actor(in_array($operation, ['quote', 'collect', 'recover', 'refund', 'admin'], true));
+        $actor = $this->actor(in_array($operation, ['quote', 'collect', 'setup', 'recover', 'refund', 'admin'], true));
         $register = $this->store->rows('registers', $actor['tenant_id'])->where('id', $id)->first();
         $device = $this->request->header('X-Pos-Device', '');
         $assignment = $this->store->rows('assignments', $actor['tenant_id'])->where('register_id', $id)
@@ -59,7 +59,7 @@ final class PosAccess implements PaymentAccess
         if ($operation === 'refund' && ($assignment->role === 'cashier' || $actor['role'] === 'member')) {
             throw new PosException('manager_required', 403);
         }
-        if (in_array($operation, ['quote', 'collect', 'catalog'], true)
+        if (in_array($operation, ['quote', 'collect', 'setup', 'catalog'], true)
             && ! app(TenantModuleAccessResolver::class)->canAccess($actor['tenant_id'], 'pos')) {
             throw new PosException('pos_entitlement_required', 403);
         }

@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Http;
 /** Dedicated POS adapter. It never reuses native Website stock or Shopify checkout. */
 final class ShopifyPosCommerce
 {
-    private const ORDER_FIELDS = 'id displayFinancialStatus cancelledAt totalPriceSet{shopMoney{amount currencyCode}} totalTaxSet{shopMoney{amount currencyCode}} totalOutstandingSet{shopMoney{amount currencyCode}} tags transactions{id kind status gateway amountSet{shopMoney{amount currencyCode}}} fulfillmentOrders(first:50){pageInfo{hasNextPage} nodes{id status assignedLocation{location{id}} lineItems(first:100){pageInfo{hasNextPage} nodes{id remainingQuantity totalQuantity lineItem{variant{id}}}}}}';
+    private const ORDER_FIELDS = 'id customer{id} displayFinancialStatus cancelledAt totalPriceSet{shopMoney{amount currencyCode}} totalTaxSet{shopMoney{amount currencyCode}} totalOutstandingSet{shopMoney{amount currencyCode}} tags transactions{id kind status gateway amountSet{shopMoney{amount currencyCode}}} fulfillmentOrders(first:50){pageInfo{hasNextPage} nodes{id status assignedLocation{location{id}} lineItems(first:100){pageInfo{hasNextPage} nodes{id remainingQuantity totalQuantity lineItem{variant{id}}}}}}';
 
     public function __construct(private PosStore $store) {}
 
@@ -121,7 +121,10 @@ final class ShopifyPosCommerce
             $payload = ['currency' => 'USD', 'financialStatus' => 'PENDING', 'lineItems' => $terms['order_lines'],
                 'taxLines' => $taxLines, 'taxesIncluded' => false, 'shippingAddress' => $terms['tax_address'],
                 'sourceIdentifier' => $sale->id, 'sourceName' => 'everbranch_pos', 'tags' => [$tag],
-                'buyerAcceptsMarketing' => false, 'note' => 'Counter collection pending. Do not fulfill or collect separately.'];
+                'note' => 'Counter collection pending. Do not fulfill or collect separately.'];
+            if (! empty($snapshot['customer']['shopify_customer_id'])) {
+                $payload['customer'] = ['toAssociate' => ['id' => $snapshot['customer']['shopify_customer_id']]];
+            }
             $data = $this->graphql($scope, 'mutation PosOrder($order:OrderCreateOrderInput!,$options:OrderCreateOptionsInput){orderCreate(order:$order,options:$options){order{'.self::ORDER_FIELDS.'} userErrors{field message}}}',
                 ['order' => $payload, 'options' => ['inventoryBehaviour' => 'DECREMENT_OBEYING_POLICY', 'sendReceipt' => false, 'sendFulfillmentReceipt' => false]]);
             $order = $this->result($data, 'orderCreate')['order'] ?? null;
@@ -265,6 +268,9 @@ final class ShopifyPosCommerce
             || ($order['fulfillmentOrders']['pageInfo']['hasNextPage'] ?? true)) {
             throw new PosException('shopify_order_mismatch');
         }
+        if (isset($snapshot['customer']['id']) && ($order['customer']['id'] ?? null) !== ($snapshot['customer']['shopify_customer_id'] ?? null)) {
+            throw new PosException('shopify_customer_mismatch');
+        }
         $actual = [];
         foreach ($order['fulfillmentOrders']['nodes'] as $fulfillment) {
             if (($fulfillment['assignedLocation']['location']['id'] ?? '') !== $snapshot['terms']['shopify_location_id']
@@ -322,6 +328,9 @@ final class ShopifyPosCommerce
                 ->post('https://'.$settings['shop_domain'].'/admin/api/2026-10/graphql.json', ['query' => $query, 'variables' => $variables]);
         } catch (\Illuminate\Http\Client\ConnectionException) {
             throw new PosException('shopify_operation_unconfirmed', 503);
+        }
+        if (collect($response->json('errors') ?? [])->contains(fn ($error) => data_get($error, 'extensions.code') === 'ACCESS_DENIED')) {
+            throw new PosException('shopify_permissions_required', 503);
         }
         if (! $response->successful() || $response->json('errors') || ! is_array($response->json('data'))) {
             throw new PosException('shopify_operation_unconfirmed', 503);

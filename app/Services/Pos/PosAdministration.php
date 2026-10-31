@@ -43,9 +43,7 @@ final class PosAdministration
         foreach ($locations as $location) {
             $group = $sales->where('location_id', $location);
             $paid = $group->where('state', 'succeeded');
-            $attempts = $paid->pluck('attempt_id')->filter();
-            $refunded = (int) $this->store->db->table('payment_core_operations')->where('tenant_id', $scope['tenant_id'])
-                ->whereIn('original_id', $attempts)->where('kind', 'refund')->where('state', 'succeeded')->sum('amount_minor');
+            $refunded = $paid->sum(fn ($sale) => app(PosCustomerPurchases::class)->confirmedRefunds($sale));
             $rows[] = ['location_id' => $location, 'name' => $scope['registers']->firstWhere('location_id', $location)->location_name,
                 'paid_sales' => $paid->count(), 'gross_minor' => (int) $paid->sum('amount_minor'), 'refunded_minor' => $refunded,
                 'unresolved_payments' => $group->whereIn('state', ['processing', 'unknown', 'review'])->count(),

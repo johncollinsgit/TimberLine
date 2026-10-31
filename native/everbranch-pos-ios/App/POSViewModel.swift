@@ -2,6 +2,10 @@ import SwiftUI
 
 struct PrintingQuote: Decodable, Identifiable { let id: Int; let number: String; let amountMinor: Int }
 struct PrintingQuoteList: Decodable { let quotes: [PrintingQuote] }
+struct POSCustomer: Decodable, Identifiable { let id: Int; let name: String; let email: String?; let phone: String? }
+struct POSCustomerList: Decodable { let customers: [POSCustomer]; let hasMore: Bool }
+struct POSCustomerResponse: Decodable { let customer: POSCustomer }
+struct PendingCustomerCreation: Codable { let workspace: String; let register: String; let requestID: String }
 struct RefundResponse: Decodable { let refundId: String; let state: String; let sale: Sale }
 struct POSReceipt: Decodable {
     struct Line: Decodable { let title: String; let quantity: Int; let subtotalMinor: Int?; let taxMinor: Int? }
@@ -13,6 +17,7 @@ struct POSReceipt: Decodable {
     let paymentReference: String
     let refundedMinor: Int
     let settlementStatus: String
+    let customerRewardsStatus: String?
     var shareText: String {
         ([merchantLocation, "Receipt \(receiptNumber)"] + lines.map { "\($0.quantity) × \($0.title)" }
          + ["Paid: \(POSMoney.display(amountMinor))", "Refunded: \(POSMoney.display(refundedMinor))", "Payment: \(paymentReference)"]).joined(separator: "\n")
@@ -38,11 +43,21 @@ struct POSReceipt: Decodable {
     @Published var message: String?
     @Published var tapReady = false
     @Published var diagnostics = false
+    private let initialBasket: [RegisterBasketLine]
+    @Published var customerQuery = ""
+    @Published var customers: [POSCustomer] = []
+    @Published var selectedCustomer: POSCustomer?
+    @Published var customerFirstName = ""
+    @Published var customerLastName = ""
+    @Published var customerPhone = ""
+    @Published var pendingCustomer: PendingCustomerCreation?
     @Published var customerName = ""
     @Published var customerEmail = ""
     @Published var invoiceID = ""
     @Published var refundAmount = ""
-    init() {
+    init(basket: [RegisterBasketLine] = []) {
+        initialBasket = basket
+        if let value = SecureStore.read("pending-customer") { pendingCustomer = try? JSONDecoder().decode(PendingCustomerCreation.self, from: value) }
         signedIn = api.token != nil
         if let value = SecureStore.read("pending-sale") { pending = try? JSONDecoder().decode(PendingSale.self, from: value) }
     }
@@ -75,7 +90,7 @@ struct POSReceipt: Decodable {
     func choose(_ workspace: Workspace) {
         guard pending == nil else { return }
         perform {
-            self.selectedWorkspace = workspace; self.selectedRegister = nil; self.tapReady = false
+            self.selectedWorkspace = workspace; self.selectedRegister = nil; self.tapReady = false; self.selectedCustomer = nil; self.customers = []
             let result: RegisterList = try await self.api.request("api/mobile/v1/workspaces/\(workspace.slug)/pos/registers")
             self.registers = result.registers
         }
@@ -86,6 +101,13 @@ struct POSReceipt: Decodable {
             self.selectedRegister = register; self.tapReady = false; self.quantities = [:]
             let value: CatalogList = try await self.api.request(self.base! + "/catalog")
             self.items = value.items
+            self.selectedCustomer = nil; self.customers = []
+            if !self.initialBasket.isEmpty {
+                guard register.catalogSource == "shopify", self.initialBasket.allSatisfy({ line in
+                    value.items.contains(where: { $0.id == line.variantID && line.quantity <= ($0.availableQuantity ?? 99) })
+                }) else { throw POSError.unavailable("Some selected products are unavailable at this register. Review the live product list before continuing.") }
+                self.quantities = Dictionary(uniqueKeysWithValues: self.initialBasket.map { ($0.variantID, $0.quantity) })
+            }
             let quotes: PrintingQuoteList = try await self.api.request(self.base! + "/printing-quotes")
             self.printingQuotes = quotes.quotes
         }
@@ -98,8 +120,46 @@ struct POSReceipt: Decodable {
             self.tapReady = true
         }
     }
+    func searchCustomers() {
+        guard let base, customerQuery.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 else { return }
+        perform {
+            let result: POSCustomerList = try await self.api.request(base + "/customers", query: ["query": self.customerQuery])
+            self.customers = result.customers
+            if result.customers.isEmpty { self.message = "No matching customer. You can create a new record below." }
+        }
+    }
+    func createCustomer() {
+        guard let base, let workspace = selectedWorkspace, let register = selectedRegister,
+              !customerFirstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        perform {
+            if let pending = self.pendingCustomer, pending.workspace != workspace.slug || pending.register != register.id {
+                throw POSError.unavailable("Recover the earlier customer request at its original register before creating another record.")
+            }
+            if self.pendingCustomer == nil {
+                self.pendingCustomer = PendingCustomerCreation(workspace: workspace.slug, register: register.id, requestID: UUID().uuidString.lowercased())
+                try SecureStore.write("pending-customer", try JSONEncoder().encode(self.pendingCustomer!))
+            }
+            var body: [String: Any] = ["request_id": self.pendingCustomer!.requestID, "first_name": self.customerFirstName]
+            if !self.customerLastName.isEmpty { body["last_name"] = self.customerLastName }
+            if !self.customerEmail.isEmpty { body["email"] = self.customerEmail }
+            if !self.customerPhone.isEmpty { body["phone"] = self.customerPhone }
+            let result: POSCustomerResponse = try await self.api.request(base + "/customers", method: "POST", body: body)
+            self.selectedCustomer = result.customer
+            try SecureStore.write("pending-customer", nil); self.pendingCustomer = nil
+            self.customerFirstName = ""; self.customerLastName = ""; self.customerEmail = ""; self.customerPhone = ""
+        }
+    }
+    func recoverCustomer() {
+        guard let base, let pending = pendingCustomer, pending.workspace == selectedWorkspace?.slug,
+              pending.register == selectedRegister?.id else { return }
+        perform {
+            let result: POSCustomerResponse = try await self.api.request(base + "/customer-requests/" + pending.requestID)
+            self.selectedCustomer = result.customer
+            try SecureStore.write("pending-customer", nil); self.pendingCustomer = nil
+        }
+    }
     func quote() {
-        guard pending == nil, let workspace = selectedWorkspace, let register = selectedRegister, let base else { return }
+        guard pending == nil, let customer = selectedCustomer, let workspace = selectedWorkspace, let register = selectedRegister, let base else { return }
         perform {
             self.pending = PendingSale(workspace: workspace.slug, register: register.id)
             try self.savePending() // Persist the request BEFORE sending it.
@@ -111,12 +171,7 @@ struct POSReceipt: Decodable {
                     return quantity > 0 ? ["item_id": item.id, "quantity": quantity, "revision": item.revision] : nil
                 }
             }
-            if !self.customerName.isEmpty || !self.customerEmail.isEmpty {
-                var customer: [String: String] = [:]
-                if !self.customerName.isEmpty { customer["name"] = self.customerName }
-                if !self.customerEmail.isEmpty { customer["email"] = self.customerEmail }
-                body["customer"] = customer
-            }
+            body["customer_profile_id"] = customer.id
             let result: Sale = try await self.api.request(base + "/quotes", method: "POST", body: body)
             self.sale = result; self.pending?.saleID = result.saleId; try self.savePending()
         }
@@ -183,14 +238,14 @@ struct POSReceipt: Decodable {
         guard sale?.canLeave == true, pending?.refundRequestID == nil else { return }
         perform {
             self.pending = nil; try self.savePending(); self.sale = nil; self.receipt = nil
-            self.customerName = ""; self.customerEmail = ""; self.invoiceID = ""; self.quantities = [:]
+            self.selectedCustomer = nil; self.customers = []; self.customerQuery = ""; self.customerName = ""; self.customerEmail = ""; self.invoiceID = ""; self.quantities = [:]
         }
     }
     func logout() {
         perform {
             await self.collector.signOut(); try SecureStore.write("session", nil)
             self.api.token = nil; self.signedIn = false; self.tapReady = false
-            self.workspaces = []; self.registers = []; self.items = []; self.sale = nil; self.receipt = nil
+            self.workspaces = []; self.registers = []; self.items = []; self.sale = nil; self.receipt = nil; self.selectedCustomer = nil; self.customers = []; self.customerQuery = ""; self.customerFirstName = ""; self.customerLastName = ""; self.customerEmail = ""; self.customerPhone = ""
             // Pending recovery identifiers remain in Keychain; signing out never clears payment uncertainty.
         }
     }

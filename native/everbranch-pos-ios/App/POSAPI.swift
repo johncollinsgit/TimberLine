@@ -16,10 +16,13 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
         session = URLSession(configuration: config, delegate: NoRedirects(), delegateQueue: nil)
         token = SecureStore.read("session").flatMap { String(data: $0, encoding: .utf8) }
     }
-    func request<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil) async throws -> T {
+    func request<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil, query: [String: String] = [:]) async throws -> T {
         try POSOrigin.validate(origin)
         guard !path.contains(".."), !path.contains("://") else { throw POSError.invalidOrigin }
-        var request = URLRequest(url: origin.appendingPathComponent(path))
+        var components = URLComponents(url: origin.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        if !query.isEmpty { components.queryItems = query.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) } }
+        guard let url = components.url else { throw POSError.invalidOrigin }
+        var request = URLRequest(url: url)
         request.httpMethod = method; request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -32,7 +35,11 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
         guard (200...299).contains(http.statusCode) else {
             let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let code = (value?["error"] as? [String: Any])?["code"] as? String ?? "request_\(http.statusCode)"
-            throw POSError.unavailable(code.replacingOccurrences(of: "_", with: " "))
+            let messages = ["select_existing_customer": "This contact already has a customer record. Find and select it instead.",
+                "customer_request_conflict": "The original customer request has different details. Recover that request before continuing.",
+                "customer_admin_required": "An owner or administrator can create a customer. Select an existing customer or ask your manager.",
+                "customer_selection_required": "Select the customer before reviewing this sale."]
+            throw POSError.unavailable(messages[code] ?? code.replacingOccurrences(of: "_", with: " "))
         }
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(T.self, from: data)

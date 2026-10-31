@@ -473,10 +473,10 @@ $catalog = [
             'display_name' => 'Point of Sale',
             'description' => 'Merchant-owned counter and native payment operations with location-scoped staff access.',
             'status' => 'live', 'market_state' => 'INTERNAL_ONLY', 'channels' => ['both'],
-            'classification' => 'shared-core', 'included_in_plans' => [], 'default_enabled' => false,
-            'default_setup_status' => 'not_started', 'dependencies' => [], 'billing_mode' => 'custom',
+            'classification' => 'shared-core', 'included_in_plans' => ['base', 'starter', 'growth', 'pro'], 'default_enabled' => false,
+            'default_setup_status' => 'not_started', 'dependencies' => [], 'billing_mode' => 'included',
             'activation_policy' => 'guided', 'visibility' => ['public_site' => false, 'app_store' => false, 'mobile_store' => false],
-            'cta_routing' => 'contact_sales', 'capabilities' => ['pos.register', 'pos.locations', 'pos.reports'],
+            'cta_routing' => 'none', 'capabilities' => ['pos.register', 'pos.locations', 'pos.reports'],
         ],
         'dashboard' => [
             'display_name' => 'Overview',

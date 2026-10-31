@@ -36,7 +36,7 @@ final class PosOutbox
                 } catch (\Throwable $error) {
                     $code = $error instanceof PosException ? $error->blocker : 'outbox_processing_failed';
                     $this->store->rows('outbox', $scope['tenant_id'])->where('id', $effect->id)->update([
-                        'state' => $current->attempts >= 7 ? 'review' : 'retry', 'error_code' => $code,
+                        'state' => $current->attempts >= 7 || in_array($code, ['customer_rewards_shortfall_review', 'customer_identity_review_required'], true) ? 'review' : 'retry', 'error_code' => $code,
                         'available_at' => now()->addSeconds(min(300, 5 * (2 ** min(6, $current->attempts)))),
                     ]);
                     $this->store->event($scope['tenant_id'], $effect->sale_id, 'effect_needs_reconciliation', ['effect' => $effect->effect_key, 'code' => $code]);
@@ -60,13 +60,24 @@ final class PosOutbox
             if ($operation) {
                 $binding = MerchantBinding::restore($operation['binding']);
                 $core = new PaymentCore($this->journal, ['square_native' => app(SquareNativeProvider::class)], new PosRecoveryAccess($this->store));
+                if ($operation['state'] === 'succeeded') {
+                    app(SquareNativeProvider::class)->audit($operation);
+                }
                 $service->recordOutcome($sale, $core->recover($binding, $operation['id']));
             }
 
             return;
         }
+        if (str_starts_with($effect->effect_key, 'customer_refunds_')) {
+            app(PosCustomerRewards::class)->apply($sale);
+            $this->store->event($scope['tenant_id'], $sale->id, 'effect_completed', ['effect' => $effect->effect_key]);
+
+            return;
+        }
         $operation = $this->journal->get($scope['tenant_id'], $payload['operation_id']);
-        if ($effect->effect_key === 'finalize') {
+        if ($effect->effect_key === 'customer_purchase' || str_starts_with($effect->effect_key, 'customer_refund_')) {
+            app(PosCustomerRewards::class)->apply($sale, $operation['kind'] === 'refund' ? $operation : null);
+        } elseif ($effect->effect_key === 'finalize') {
             if ($operation['state'] !== 'succeeded') {
                 throw new PosException('paid_evidence_required');
             }

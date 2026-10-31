@@ -8,6 +8,9 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
     $write = ['abilities:mobile:write,payments:write', 'throttle:30,1'];
     Route::get('/registers', [PosController::class, 'registers'])->middleware($read)->name('registers');
     Route::prefix('/registers/{register}')->where(['register' => '[a-f0-9]{32}'])->group(function () use ($read, $write): void {
+        Route::get('/customers', [PosController::class, 'customers'])->middleware($read)->name('customers.search');
+        Route::post('/customers', [PosController::class, 'createCustomer'])->middleware($write)->name('customers.create');
+        Route::get('/customer-requests/{requestId}', [PosController::class, 'customerRequest'])->whereUuid('requestId')->middleware($read)->name('customers.request');
         Route::get('/catalog', [PosController::class, 'catalog'])->middleware($read)->name('catalog');
         Route::get('/printing-quotes', [PosController::class, 'approvedQuotes'])->middleware($read)->name('printing-quotes');
         Route::post('/quotes', [PosController::class, 'quote'])->middleware($write)->name('quotes');

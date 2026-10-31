@@ -1,3 +1,15 @@
+## Everbranch Pay customer-linked Square pilot (October 31; source candidate)
+
+The focused native Square release combines shared customer commerce with a live
+basket handoff, register-scoped canonical customer selection/creation, immutable
+customer/policy terms, exact provider mirror suppression and existing-ledger
+show earning/refund reconciliation. Owner onboarding has an independent default-off
+exact-build gate; commercial collection gates remain required. POS is an included
+capability for every plan, with merchant-specific guided setup and acceptance.
+Production installation, inventory permissions, Apple distribution approval and
+physical payment/settlement acceptance remain separate. Read
+`docs/operations/everbranch-pay-customer-square.md` before activation.
+
 ## Facilities mobile controls (October 30; source candidate)
 
 The paired public frontend adds whole-card work-order menus, a docked ticket

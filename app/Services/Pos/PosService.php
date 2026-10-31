@@ -17,7 +17,7 @@ final class PosService
 {
     public function __construct(private PosStore $store, private PosAccess $access, private PosReadiness $readiness,
         private PosCatalog $catalog, private NativePosCommerce $native, private ShopifyPosCommerce $shopify,
-        private SquareClient $square, private PaymentJournal $journal, private SquareNativeProvider $provider) {}
+        private SquareClient $square, private PaymentJournal $journal, private SquareNativeProvider $provider, private PosCustomerDirectory $customers, private PosCustomerRewards $rewards) {}
 
     private function core(): PaymentCore
     {
@@ -39,6 +39,8 @@ final class PosService
             }
             $rows[] = ['id' => $register->id, 'name' => $register->name, 'location' => $register->location_name,
                 'catalog_source' => $register->catalog_source, 'environment' => $scope['connection']->environment,
+                'can_create_customers' => in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
+                'setup_blockers' => config('pos_live.onboarding_enabled') === true ? $this->readiness->onboardingBlockers($register, $scope['connection'], $scope) : $this->readiness->blockers($register, $scope['connection']),
                 'blockers' => $this->readiness->blockers($register, $scope['connection'])];
         }
 
@@ -57,9 +59,17 @@ final class PosService
 
     public function authorizeDevice(string $register): array
     {
-        $scope = $this->access->register($register, 'collect');
-        $scope = $this->refreshStaleMerchant($scope);
-        $this->access->assertAllowed($this->access->binding($scope), 'collect');
+        $scope = $this->access->register($register, 'setup');
+        if (config('pos_live.onboarding_enabled') === true && in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true)) {
+            if ($this->readiness->onboardingBlockers($scope['register'], $scope['connection'], $scope)) {
+                throw new PosException('onboarding_not_ready', 503);
+            }
+            $this->store->event($scope['tenant_id'], $register, 'native_onboarding_authorized',
+                ['actor_id' => $scope['actor_id'], 'device_id' => $scope['device_id'], 'build' => $scope['build']]);
+        } else {
+            $scope = $this->refreshStaleMerchant($scope);
+            $this->access->assertAllowed($this->access->binding($scope), 'collect');
+        }
         $this->square->verify($scope['connection']);
         $credentials = $this->store->decrypt($scope['connection']->credentials);
 
@@ -100,20 +110,30 @@ final class PosService
         if (empty($settings['tax_valid_until']) || strtotime($settings['tax_valid_until']) <= time()) {
             throw new PosException('tax_review_expired', 503);
         }
+        if (($settings['customer_required'] ?? $scope['register']->catalog_source === 'shopify') && empty($input['customer_profile_id'])) {
+            throw new PosException('customer_selection_required', 422);
+        }
+        $customer = isset($input['customer_profile_id']) ? $this->customers->freeze($scope, $input['customer_profile_id']) : null;
+        $rewards = $customer ? $this->rewards->freeze($scope, $customer) : ['enabled' => false];
         $snapshot = ['binding' => $binding->snapshot(), 'connection_id' => $scope['connection']->id,
-            'build' => $scope['build'], 'device_id' => $scope['device_id'], 'input_hash' => $hash, 'terms' => $terms, 'customer' => $input['customer'] ?? null,
+            'build' => $scope['build'], 'device_id' => $scope['device_id'], 'input_hash' => $hash, 'terms' => $terms, 'customer' => $customer ?? ($input['customer'] ?? null), 'customer_rewards' => $rewards,
             'register_name' => $scope['register']->name, 'location_name' => $scope['register']->location_name,
             'sale' => $sale->snapshot(), 'configuration' => $settings];
         $claim = $terms['source'] === 'website_invoice' ? Contract::hash(['invoice', $terms['source_order_id'], $terms['invoice_hash']]) : null;
         try {
-            $this->store->rows('sales', $scope['tenant_id'])->insert($this->store->values($scope['tenant_id'], [
-                'id' => $id, 'register_id' => $register, 'location_id' => $scope['register']->location_id,
-                'actor_id' => $scope['actor_id'], 'request_id' => $input['request_id'], 'payment_request_id' => (string) Str::uuid(),
-                'sdk_attempt_id' => (string) Str::uuid(), 'active_source_claim' => $claim,
-                'snapshot' => $this->store->encrypt($snapshot), 'snapshot_hash' => Contract::hash($snapshot),
-                'amount_minor' => $sale->amountMinor, 'currency' => 'usd', 'commerce_source' => $terms['source'], 'state' => 'quoted', 'stock_state' => 'unprepared',
-                'created_at' => now(), 'expires_at' => now()->addMinutes(10),
-            ]));
+            $this->store->db->transaction(function () use ($scope, $input, $register, $id, $sale, $snapshot, $claim, $terms, $customer): void {
+                $this->store->rows('sales', $scope['tenant_id'])->insert($this->store->values($scope['tenant_id'], [
+                    'id' => $id, 'register_id' => $register, 'location_id' => $scope['register']->location_id,
+                    'actor_id' => $scope['actor_id'], 'request_id' => $input['request_id'], 'payment_request_id' => (string) Str::uuid(),
+                    'sdk_attempt_id' => (string) Str::uuid(), 'active_source_claim' => $claim,
+                    'snapshot' => $this->store->encrypt($snapshot), 'snapshot_hash' => Contract::hash($snapshot),
+                    'amount_minor' => $sale->amountMinor, 'currency' => 'usd', 'commerce_source' => $terms['source'], 'state' => 'quoted', 'stock_state' => 'unprepared',
+                    'created_at' => now(), 'expires_at' => now()->addMinutes(10),
+                ]));
+                if ($customer) {
+                    $this->customers->linkSale($scope, $id, $customer['id']);
+                }
+            }, 3);
         } catch (QueryException $error) {
             $old = $this->store->rows('sales', $scope['tenant_id'])->where('request_id', $input['request_id'])->first();
             if ($old && hash_equals($this->snapshot($old)['input_hash'], $hash)) {
@@ -150,6 +170,15 @@ final class PosService
             }
             if (! hash_equals($binding->fingerprint(), $this->access->binding($scope)->fingerprint())) {
                 throw new PosException('merchant_binding_changed');
+            }
+            if (isset($snapshot['customer']['id'])) {
+                $currentCustomer = $this->customers->freeze($scope, (int) $snapshot['customer']['id']);
+                if ($currentCustomer['id'] !== $snapshot['customer']['id'] || ($currentCustomer['shopify_customer_id'] ?? null) !== ($snapshot['customer']['shopify_customer_id'] ?? null)) {
+                    throw new PosException('customer_selection_changed');
+                }
+                if (($snapshot['customer_rewards']['enabled'] ?? false) && ($this->rewards->policy($scope['tenant_id'])['version'] ?? null) !== $snapshot['customer_rewards']['version']) {
+                    throw new PosException('customer_rewards_policy_changed');
+                }
             }
             $this->square->verify($scope['connection']);
             if ($snapshot['terms']['source'] === 'shopify') {
@@ -263,6 +292,9 @@ final class PosService
             $this->store->rows('sales', $tenant)->where('id', $sale->id)->update(['attempt_id' => $operation['id'], 'state' => $operation['state']]);
             if (in_array($operation['state'], ['succeeded', 'failed', 'cancelled'], true)) {
                 $this->enqueue($tenant, $sale->id, $operation['state'] === 'succeeded' ? 'finalize' : 'release', ['operation_id' => $operation['id']]);
+                if ($operation['state'] === 'succeeded') {
+                    $this->enqueue($tenant, $sale->id, 'customer_purchase', ['operation_id' => $operation['id']]);
+                }
             }
         }, 3);
     }
@@ -275,6 +307,10 @@ final class PosService
         if (! $sale->attempt_id || $sale->stock_state !== 'committed') {
             throw new PosException('sale_finalization_required');
         }
+        $this->provider->audit($this->journal->get($scope['tenant_id'], $sale->attempt_id));
+        if ($input['amount_minor'] > (int) $sale->amount_minor - app(PosCustomerPurchases::class)->confirmedRefunds($sale)) {
+            throw new PosException('refund_exceeds_remaining_payment');
+        }
         $row = $this->core()->refund(MerchantBinding::restore($snapshot['binding']), $sale->attempt_id,
             $input['request_id'], $input['amount_minor'], $input['reason']);
         if (! in_array($row['state'], ['succeeded', 'failed', 'cancelled'], true)) {
@@ -282,6 +318,7 @@ final class PosService
         }
         if ($row['state'] === 'succeeded') {
             $this->enqueue($scope['tenant_id'], $id, 'refund_'.$row['id'], ['operation_id' => $row['id']]);
+            $this->enqueue($scope['tenant_id'], $id, 'customer_refund_'.$row['id'], ['operation_id' => $row['id']]);
             app(PosOutbox::class)->drainSale($scope, $id);
         }
 
@@ -304,8 +341,11 @@ final class PosService
             'merchant_location' => $snapshot['location_name'], 'register_name' => $snapshot['register_name'],
             'lines' => $snapshot['terms']['display'], 'amount_minor' => (int) $sale->amount_minor, 'currency' => 'USD',
             'payment_reference' => $operation['provider_id'], 'customer' => $snapshot['customer'],
+            'customer_rewards_status' => ! ($snapshot['customer_rewards']['enabled'] ?? false) ? 'not_configured'
+                : ($this->store->rows('outbox', $scope['tenant_id'])->where('sale_id', $id)->where('effect_key', 'like', 'customer_%')->where('state', 'review')->exists() ? 'review_required'
+                    : ($this->store->rows('outbox', $scope['tenant_id'])->where('sale_id', $id)->where('effect_key', 'like', 'customer_%')->whereNotIn('state', ['completed', 'review'])->exists() ? 'pending' : 'processed')),
             'refunds' => $refunds->map(fn ($r) => ['id' => $r->id, 'state' => $r->state, 'amount_minor' => (int) $r->amount_minor])->all(),
-            'refunded_minor' => (int) $refunds->where('state', 'succeeded')->sum('amount_minor'),
+            'refunded_minor' => max((int) $refunds->where('state', 'succeeded')->sum('amount_minor'), app(PosCustomerPurchases::class)->confirmedRefunds($sale)),
             'settlement_status' => 'provider_reconciliation_required'];
     }
 
@@ -348,10 +388,12 @@ final class PosService
     {
         $snapshot = $this->snapshot($sale);
 
-        return ['sale_id' => $sale->id, 'request_id' => $sale->request_id, 'state' => $sale->state,
+        return ['customer' => isset($snapshot['customer']['id']) ? $snapshot['customer'] : null,
+            'sale_id' => $sale->id, 'request_id' => $sale->request_id, 'state' => $sale->state,
             'stock_state' => $sale->stock_state, 'amount_minor' => (int) $sale->amount_minor, 'currency' => 'USD',
             'lines' => $snapshot['terms']['display'], 'expires_at' => $sale->expires_at,
             'canonical_confirmation' => $sale->state === 'succeeded',
+            'collection_ready' => $this->readiness->blockers($this->access->register($sale->register_id)['register'], $this->access->register($sale->register_id)['connection'], (int) $sale->amount_minor) === [],
             'manager_refunds_allowed' => $this->access->register($sale->register_id)['can_refund'],
             'receipt_available' => $sale->state === 'succeeded' && $sale->stock_state === 'committed',
             'recovery_required' => $sale->descriptor_issued_at !== null && ! in_array($sale->state, ['succeeded', 'failed', 'cancelled'], true)];

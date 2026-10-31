@@ -23,6 +23,27 @@ final class PosController extends Controller
         return $this->respond($r, [], fn () => $this->pos->catalog($register));
     }
 
+    public function customers(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['query' => ['required', 'string', 'min:2', 'max:120', 'regex:/\A[^\p{C}]+\z/u']],
+            fn ($input) => app(\App\Services\Pos\PosCustomerDirectory::class)->search($register, $input['query']));
+    }
+
+    public function createCustomer(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['request_id' => ['required', 'uuid'],
+            'first_name' => ['required', 'string', 'max:120', 'regex:/\A[^\p{C}]+\z/u'],
+            'last_name' => ['sometimes', 'nullable', 'string', 'max:120', 'regex:/\A[^\p{C}]*\z/u'],
+            'email' => ['sometimes', 'nullable', 'email:rfc', 'max:190'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:80', 'regex:/\A[^\p{C}]*\z/u']],
+            fn ($input) => app(\App\Services\Pos\PosCustomerDirectory::class)->create($register, $input));
+    }
+
+    public function customerRequest(Request $r, string $tenant, string $register, string $requestId): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosCustomerDirectory::class)->request($register, $requestId));
+    }
+
     public function approvedQuotes(Request $r, string $tenant, string $register): JsonResponse
     {
         return $this->respond($r, [], fn () => $this->pos->approvedQuotes($register));
@@ -45,6 +66,7 @@ final class PosController extends Controller
             'items' => ['required_without:source_order_id', 'array', 'min:1', 'max:50'],
             'items.*' => ['array:item_id,quantity,revision'], 'items.*.item_id' => ['required', 'string', 'max:100', 'distinct'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:99'], 'items.*.revision' => ['required', 'regex:/^[a-f0-9]{64}$/D'],
+            'customer_profile_id' => ['sometimes', 'integer', 'min:1'],
             'customer' => ['sometimes', 'nullable', 'array:name,email'], 'customer.name' => ['sometimes', 'string', 'max:150'],
             'customer.email' => ['sometimes', 'email:rfc', 'max:254'],
         ], fn ($input) => $this->pos->quote($register, $input));
@@ -90,7 +112,7 @@ final class PosController extends Controller
             if (array_diff(array_keys($input), $top) || Validator::make($input, $rules)->fails()) {
                 throw new PosException('invalid_request', 422);
             }
-            foreach (['amount_minor', 'source_order_id'] as $key) {
+            foreach (['amount_minor', 'source_order_id', 'customer_profile_id'] as $key) {
                 if (isset($input[$key]) && ! is_int($input[$key])) {
                     throw new PosException('invalid_request', 422);
                 }

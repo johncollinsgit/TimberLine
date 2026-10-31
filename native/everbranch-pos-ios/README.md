@@ -22,3 +22,15 @@ paid status. The original field application remains independent.
 
 Future release: offline collection and explicit provider-level idempotency for
 queued submission/retries. Current online duplicate-payment safeguards stay in place.
+
+## Customer-linked Modern Forestry pilot
+
+The merchant catalog hands only variant IDs and quantities to native checkout.
+The server supplies live prices/tax/stock and freezes a selected canonical customer
+and reviewed rewards policy. New customer requests retain only recovery IDs in
+Keychain, with explicit owner/admin creation and no marketing enrollment. Bundles
+are blocked from live checkout pending their provider pricing/stock mapping.
+Owner onboarding can run behind its separate exact-build gate while collection
+remains disabled; the server reports collection readiness on each sale.
+See `../../docs/operations/everbranch-pay-customer-square.md`. No successful live
+payment, Apple distribution approval or device acceptance is implied by this source.

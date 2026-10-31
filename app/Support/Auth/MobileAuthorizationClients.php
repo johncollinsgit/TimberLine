@@ -16,7 +16,7 @@ final class MobileAuthorizationClients
 
     public static function assertAllowed(string $client, string $redirect): void
     {
-        $legacy = $client === 'everbranch-mobile' && $redirect === 'everbranch://auth/callback';
+        $legacy = $client === 'everbranch-mobile' && in_array($redirect, ['everbranch://auth/callback', 'https://app.theeverbranch.com/field/'], true);
         $payments = self::isPayments($client)
             && $client === self::PAYMENTS_CLIENT
             && $redirect === self::PAYMENTS_REDIRECT

@@ -144,3 +144,11 @@ from deployment and real customer acceptance. Only after the full matrix passes
 may the pilot be described as demonstrated online/in-person customer history
 and rewards. Availability to every tenant is the platform requirement; it is
 not a claim that every tenant or provider has already been activated.
+
+## Native Square follow-through (October 31; source candidate)
+
+The customer-linked native checkout and rewards outbox are now implemented in
+the focused Everbranch Pay candidate. See `../operations/everbranch-pay-customer-square.md`
+for API changes, exact original-provider associations, policy semantics and the
+remaining deployment/provider/physical acceptance gates. Earlier outstanding
+implementation milestones above describe the read-only release, not live proof.

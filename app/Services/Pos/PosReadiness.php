@@ -8,6 +8,37 @@ final class PosReadiness
 {
     public function __construct(private PosStore $store) {}
 
+    /** Owner onboarding on one reviewed build is separate from permission to collect. */
+    public function onboardingBlockers(object $register, object $connection, array $scope): array
+    {
+        $blockers = [];
+        foreach (['enabled', 'native_client_enabled', 'onboarding_enabled'] as $flag) {
+            if (config('pos_live.'.$flag) !== true) {
+                $blockers[] = $flag.'_off';
+            }
+        }
+        if (! in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true)) {
+            $blockers[] = 'owner_onboarding_required';
+        }
+        if (! in_array((int) $register->tenant_id, config('pos_live.tenant_ids', []), true)
+            || $connection->environment !== config('pos_live.square_environment') || ! config('pos_live.square_application_id')) {
+            $blockers[] = 'onboarding_merchant_binding_unverified';
+        }
+        if ($connection->environment === 'production') {
+            foreach (['tap_entitlement_verified', 'square_signature_verified'] as $flag) {
+                if (config('pos_live.'.$flag) !== true) {
+                    $blockers[] = $flag.'_missing';
+                }
+            }
+            if (! config('pos_live.apple_team_id') || ! config('pos_live.onboarding_build')
+                || ! hash_equals((string) config('pos_live.onboarding_build'), $scope['build'])) {
+                $blockers[] = 'reviewed_onboarding_build_required';
+            }
+        }
+
+        return $blockers;
+    }
+
     /** Saved evidence only: this report never creates grants or contacts a provider. */
     public function blockers(object $register, object $connection, ?int $amount = null): array
     {
@@ -16,6 +47,12 @@ final class PosReadiness
         foreach (['enabled', 'collection_enabled', 'native_client_enabled'] as $flag) {
             if (config('pos_live.'.$flag) !== true) {
                 $blockers[] = $flag.'_off';
+            }
+        }
+        if (($settings['customer_rewards']['enabled'] ?? false) === true) {
+            $current = app(PosCustomerRewards::class)->policy((int) $register->tenant_id);
+            if (! $current || ($settings['customer_rewards']['policy_version'] ?? null) !== $current['version']) {
+                $blockers[] = 'customer_rewards_policy_unreviewed';
             }
         }
         if (! $register->active || ! $register->collection_enabled) {

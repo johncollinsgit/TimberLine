@@ -315,6 +315,7 @@ class ShopifyOrderIngestor
             'cancelled' => ! empty($payload['cancelled_at']),
             'test' => (bool) ($payload['test'] ?? false),
             'source_name' => (string) ($payload['source_name'] ?? ''),
+            'everbranch_pos_tag' => preg_match('/(?:^|,\s*)EverbranchPOS-([a-f0-9]{32})(?:,|$)/', is_array($payload['tags'] ?? null) ? implode(', ', $payload['tags']) : (string) ($payload['tags'] ?? ''), $posMatch) ? $posMatch[1] : null,
             'currency' => (string) ($payload['currency'] ?? data_get($payload, 'total_price_set.shop_money.currency_code', '')),
             // Original shop-currency total, not the mutable current/refunded total
             // or a presentment-currency label paired with a shop-currency amount.

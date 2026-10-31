@@ -17,6 +17,8 @@ public struct Register: Decodable, Identifiable, Sendable {
     public let catalogSource: String
     public let environment: String
     public let blockers: [String]
+    public let setupBlockers: [String]?
+    public let canCreateCustomers: Bool?
 }
 public struct RegisterList: Decodable, Sendable {
     public let registers: [Register]
@@ -34,7 +36,10 @@ public struct CatalogItem: Decodable, Identifiable, Sendable {
     public let availableQuantity: Int?
 }
 public struct CatalogList: Decodable, Sendable { public let items: [CatalogItem] }
+public struct SaleCustomer: Decodable, Sendable { public let id: Int; public let name: String }
 public struct Sale: Decodable, Sendable {
+    public let customer: SaleCustomer?
+    public let collectionReady: Bool?
     public let saleId: String
     public let requestId: String
     public let state: String

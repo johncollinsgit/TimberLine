@@ -20,7 +20,7 @@ final class PosServiceProvider extends ServiceProvider
                 $schedule->command('pos:reconcile --limit=100')->everyMinute()->withoutOverlapping(10);
             }
         });
-        $this->commands([\App\Console\Commands\PosReadinessCommand::class, \App\Console\Commands\PosReconcileCommand::class,
+        $this->commands([\App\Console\Commands\PosCustomerProgramCommand::class, \App\Console\Commands\PosReadinessCommand::class, \App\Console\Commands\PosReconcileCommand::class,
             \App\Console\Commands\PosProvisionCommand::class, \App\Console\Commands\PosActivateCommand::class, \App\Console\Commands\PosAcceptCommand::class]);
     }
 }

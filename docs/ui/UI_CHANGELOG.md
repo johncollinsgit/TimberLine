@@ -1,3 +1,11 @@
+## 2026-10-31 — Everbranch Pay customer-linked checkout (source candidate)
+
+Modern Forestry's catalog opens native live-basket review and customer selection.
+Assigned owners/admins can create or recover one customer request. Quote recovery
+shows the frozen customer, and receipts distinguish pending/review rewards. Native
+setup has a privacy link. Merchant, Apple, exact-build and physical collection
+gates remain visible and unchanged for charging; unsupported bundles fail closed.
+
 ## 2026-10-28 — Controlled subscription enrollment
 
 - Added private customer terms and Stripe card setup, separate owner activation,
