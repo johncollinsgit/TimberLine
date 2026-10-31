@@ -30,7 +30,7 @@ button:disabled {
     cursor:wait;
     opacity:.7
 }
-a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible {
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible {
     outline:3px solid #b98031;
     outline-offset:4px
 }
@@ -491,4 +491,24 @@ summary {
     * {
         scroll-behavior:auto!important
     }
+}
+.delivery-form fieldset { border:0; padding:0; margin:24px 0 }
+.delivery-form legend { font-weight:700; margin-bottom:14px }
+.delivery-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px }
+.delivery-field { margin-bottom:14px; min-width:0 }
+.delivery-field-wide { grid-column:1/-1 }
+.delivery-field label { display:block; font-size:14px; font-weight:600; margin-bottom:7px }
+.delivery-field input,.delivery-field select { box-sizing:border-box; width:100%; min-height:48px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); font:inherit }
+.delivery-field input[readonly] { background:var(--cream) }
+.delivery-total { font-size:19px }
+.delivery-review-card { max-width:680px }
+.delivery-review-wrap { max-width:760px }
+.delivery-consent { display:flex; align-items:flex-start; gap:12px; margin:24px 0; line-height:1.6 }
+.delivery-consent input { margin-top:5px; width:20px; height:20px; flex-shrink:0; accent-color:var(--forest) }
+@media(max-width:600px) { .delivery-grid { grid-template-columns:1fr } }
+@media(min-width:1000px) {
+    .club-layout.delivery-layout { max-width:none }
+    .delivery-layout .subscription-column { grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:max-content 1fr; align-items:start }
+    .delivery-layout .delivery-card { grid-column:2; grid-row:1/span 2 }
+    .delivery-layout .terms-card,.delivery-layout .authorization-card { grid-column:1 }
 }

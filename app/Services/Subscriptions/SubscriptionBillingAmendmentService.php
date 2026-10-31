@@ -8,6 +8,7 @@ use App\Models\SubscriptionBillingAgreement;
 use App\Models\SubscriptionBillingCycle;
 use App\Models\SubscriptionPilotMember;
 use App\Models\User;
+use App\Services\Mobile\ModernForestryMobileCustomerSession;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -31,7 +32,7 @@ class SubscriptionBillingAmendmentService
         if (SubscriptionBillingAction::query()->forTenantId($tenantId)->where('agreement_id', $scope->id)->where('request_uuid', $uuid)->exists()) {
             return $this->save($scope, $actor, $input, $approval, $quoteHash, $uuid, $revision, null);
         }
-        $this->future($scope);
+        $this->assertFuture($scope);
         try {
             $quote = app(SubscriptionAmendmentQuote::class)->calculate($scope, $input, $actor);
         } catch (\Throwable $error) {
@@ -45,30 +46,79 @@ class SubscriptionBillingAmendmentService
         return $this->save($scope, $actor, $input, $approval, $quoteHash, $uuid, $revision, $quote);
     }
 
-    private function save(SubscriptionBillingAgreement $scope, User $actor, array $input, array $approval, string $quoteHash,
-        string $uuid, int $revision, ?array $quote): SubscriptionBillingAction
+    public function customerReplay(ModernForestryMobileCustomerSession $session, string $uuid, int $revision, string $hash): ?SubscriptionBillingAction
     {
-        return DB::transaction(function () use ($scope, $actor, $input, $approval, $quoteHash, $uuid, $revision, $quote) {
+        abort_unless(Str::isUuid($uuid) && $revision >= 1 && preg_match('/\A[a-f0-9]{64}\z/', $hash), 422);
+        $scope = app(SubscriptionReplacementCustomerAccess::class)->agreement($session);
+        abort_unless($scope, 404);
+
+        return DB::transaction(function () use ($scope, $session, $uuid, $revision, $hash) {
             SubscriptionPilotMember::query()->forTenantId($scope->tenant_id)->whereKey($scope->member_id)->lockForUpdate()->firstOrFail();
             $row = SubscriptionBillingAgreement::query()->forTenantId($scope->tenant_id)->whereKey($scope->id)->lockForUpdate()->firstOrFail();
-            $this->authorize($row, $actor, true);
+            app(SubscriptionCustomerAmendmentService::class)->assertIdentity($row, $session, true);
             SubscriptionBillingAuthorization::assertCurrent($row, true);
+            $prior = SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)->where('request_uuid', strtolower($uuid))->lockForUpdate()->first();
+            if ($prior) {
+                abort_unless($prior->kind === 'terms_amended' && $prior->actor_type === 'shopify_customer'
+                    && $prior->actor_reference === app(SubscriptionCustomerAmendmentService::class)->reference($session)
+                    && $prior->expected_revision === $revision && data_get($prior->request, 'customer_review.profile_id') === $session->profile->id
+                    && data_get($prior->request, 'customer_review.review_hash') === $hash, 409, 'This request ID belongs to another accepted action.');
+            }
+
+            return $prior;
+        });
+    }
+
+    public function acceptCustomer(SubscriptionBillingAgreement $row, ModernForestryMobileCustomerSession $session,
+        SubscriptionBillingAction $policy, array $review, array $quote, bool $confirmed): SubscriptionBillingAction
+    {
+        abort_unless($confirmed, 422, 'Confirm your reviewed future delivery and total.');
+        $e = $review['evidence'];
+        abort_unless(($quote['quote_hash'] ?? null) === $e['quote_hash'], 409, 'Review the current delivery total.');
+
+        return $this->save($row, User::findOrFail((int) $policy->actor_reference), $review['input'],
+            ['reference' => 'delivery-policy:'.$policy->request_uuid, 'quoted_total_reviewed' => true, 'continuing_authorization_reviewed' => true],
+            $quote['quote_hash'], $e['request_uuid'], $e['revision'], $quote, ['session' => $session, 'review' => $review]);
+    }
+
+    private function save(SubscriptionBillingAgreement $scope, User $actor, array $input, array $approval, string $quoteHash,
+        string $uuid, int $revision, ?array $quote, ?array $customer = null): SubscriptionBillingAction
+    {
+        return DB::transaction(function () use ($scope, $actor, $input, $approval, $quoteHash, $uuid, $revision, $quote, $customer) {
+            SubscriptionPilotMember::query()->forTenantId($scope->tenant_id)->whereKey($scope->member_id)->lockForUpdate()->firstOrFail();
+            $row = SubscriptionBillingAgreement::query()->forTenantId($scope->tenant_id)->whereKey($scope->id)->lockForUpdate()->firstOrFail();
+            if ($customer) {
+                app(SubscriptionCustomerAmendmentService::class)->assertIdentity($row, $customer['session'], true);
+            } else {
+                $this->authorize($row, $actor, true);
+            }
+            SubscriptionBillingAuthorization::assertCurrent($row, true);
+            $actorType = $customer ? 'shopify_customer' : 'user';
+            $actorReference = $customer ? app(SubscriptionCustomerAmendmentService::class)->reference($customer['session']) : (string) $actor->id;
             $prior = SubscriptionBillingAction::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)->where('request_uuid', $uuid)->lockForUpdate()->first();
             if ($prior) {
-                abort_unless($prior->kind === 'terms_amended' && $prior->actor_type === 'user' && $prior->actor_reference === (string) $actor->id
+                abort_unless($prior->kind === 'terms_amended' && $prior->actor_type === $actorType && $prior->actor_reference === $actorReference
                     && $prior->expected_revision === $revision && ($prior->request['quote']['quote_hash'] ?? null) === $quoteHash
                     && SubscriptionEvidence::canonical($prior->request['input'] ?? []) === SubscriptionEvidence::canonical($input)
-                    && SubscriptionEvidence::canonical($prior->request['approval'] ?? []) === SubscriptionEvidence::canonical($approval),
+                    && SubscriptionEvidence::canonical($prior->request['approval'] ?? []) === SubscriptionEvidence::canonical($approval)
+                    && (! $customer || SubscriptionEvidence::canonical($prior->request['customer_review'] ?? []) === SubscriptionEvidence::canonical($customer['review']['evidence'])),
                     409, 'This request ID belongs to another accepted action.');
 
                 return $prior;
+            }
+            if ($customer) {
+                $service = app(SubscriptionCustomerAmendmentService::class);
+                $policy = $service->policy($row, $customer['session'], true);
+                $service->assertReview($row, $customer['session'], $customer['review']);
+                $service->assertPolicy($row, $policy, $customer['review']);
+                abort_unless((int) $policy->actor_reference === $actor->id, 409, 'The merchant review changed.');
             }
             abort_unless($quote && $row->revision === $revision && $row->terms_hash === $scope->terms_hash
                 && ($quote['subject']['revision'] ?? null) === $revision && ($quote['subject']['current_terms_hash'] ?? null) === $row->terms_hash
                 && ($quote['subject']['agreement_id'] ?? null) === $row->id && ($quote['subject']['member_id'] ?? null) === $row->member_id
                 && CarbonImmutable::parse($quote['checked_at'])->betweenIncluded(now()->subMinutes(2), now()->addSeconds(5)),
                 409, 'The original agreement or quote changed before acceptance.');
-            $this->future($row, true);
+            $this->assertFuture($row, true);
             $store = ShopifyStore::query()->forTenantId($row->tenant_id)->findOrFail($row->terms['shopify_store_id']);
             abort_unless($store->shop_domain === $quote['context']['shop_domain'] && $store->id === $quote['context']['shopify_store_id']
                 && hash_equals(SubscriptionEvidence::digest((string) $store->access_token), $quote['context']['credential_fingerprint']),
@@ -77,9 +127,10 @@ class SubscriptionBillingAmendmentService
             SubscriptionBillingTermsHistory::allowed($original['terms'], $quote['terms']);
             $hash = SubscriptionBillingTermsHistory::termsHash($row, $quote['terms'], $uuid);
             $action = new SubscriptionBillingAction(['tenant_id' => $row->tenant_id, 'agreement_id' => $row->id, 'request_uuid' => $uuid,
-                'kind' => 'terms_amended', 'actor_type' => 'user', 'actor_reference' => (string) $actor->id, 'expected_revision' => $revision,
+                'kind' => 'terms_amended', 'actor_type' => $actorType, 'actor_reference' => $actorReference, 'expected_revision' => $revision,
                 'request' => ['version' => 1, 'original_terms_hash' => $original['terms_hash'], 'agreement_public_id' => $row->public_id,
-                    'member_id' => $row->member_id, 'accepted_by' => $actor->id, 'input' => $input, 'approval' => $approval, 'quote' => $quote],
+                    'member_id' => $row->member_id, 'accepted_by' => $customer ? $actorReference : $actor->id, 'input' => $input, 'approval' => $approval, 'quote' => $quote]
+                    + ($customer ? ['customer_review' => $customer['review']['evidence'], 'continuing_authorization_reviewed_by' => $actor->id] : []),
                 'before_state' => ['terms' => $row->terms, 'terms_hash' => $row->terms_hash],
                 'after_state' => ['terms' => $quote['terms'], 'terms_hash' => $hash, 'revision' => $revision + 1,
                     'effective_from' => $row->status === 'paused' ? null : $row->next_billing_date->toDateString(),
@@ -95,7 +146,7 @@ class SubscriptionBillingAmendmentService
         });
     }
 
-    private function authorize(SubscriptionBillingAgreement $row, User $actor, bool $currentRead = false): void
+    public function authorize(SubscriptionBillingAgreement $row, User $actor, bool $currentRead = false): void
     {
         $actor = $currentRead ? User::query()->whereKey($actor->id)->lockForUpdate()->firstOrFail() : $actor->fresh();
         if ($currentRead) {
@@ -112,7 +163,7 @@ class SubscriptionBillingAmendmentService
         SubscriptionBillingAuthorization::original($row);
     }
 
-    private function future(SubscriptionBillingAgreement $row, bool $currentRead = false): void
+    public function assertFuture(SubscriptionBillingAgreement $row, bool $currentRead = false): void
     {
         $clock = now($row->terms['timezone']);
         abort_unless(in_array($row->status, ['active', 'paused'], true) && $row->next_billing_date

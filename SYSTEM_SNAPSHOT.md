@@ -1,3 +1,20 @@
+## Authenticated customer future delivery (October 31; source candidate)
+
+The existing private member portal now offers Braintree address/scents review and
+confirmation behind a separate default-off customer-delivery gate, exact rollout
+and a signed merchant-reviewed shipping/scent policy. Preview-first
+`subscriptions:delivery-policy` records explicit original-member coverage without
+changing billing terms or the original mandate. Customer reviews are encrypted,
+expire after ten minutes and bind the real customer/profile, revision, exact
+input/quote/total and merchant policy. A fresh calculation and current locking
+reads precede one signed future-term action with the true Shopify customer actor;
+the continuing-authority merchant reviewer is recorded separately. Pauses,
+revoked policies/owners/profiles and claimed payments stop stale acceptance.
+Accepted replay never undoes later stops. No payment entry, source/default-address
+edit, charge, old-order change, DDL or deployment occurs. Real MySQL races and
+rendered branded desktop/phone views accompany the private HTTP path. Native
+Shopify amendments and real hosted/provider/two-tester acceptance remain pending.
+
 ## Original-store history and actual rollout check (October 31)
 
 Braintree method verification, merchant acceptance, activation and collection now
@@ -29,8 +46,8 @@ later pauses, revoked owners and already claimed cycles, including old MySQL
 snapshots. Amended collection rechecks tax before money movement and uses the
 accepted breakdown in one original-method Shopify receipt. Drift requires review.
 No schema, source stop, live payment, deployment or customer distribution changed.
-Customer confirmation, native Shopify contract amendments and actual two-tester
-acceptance remain outstanding. See the replacement runbook.
+Braintree customer confirmation is described above; native Shopify contract
+amendments and actual two-tester acceptance remain outstanding. See the runbook.
 
 ## Subscription delivery quote foundation (October 31; source candidate)
 
@@ -107,8 +124,8 @@ terms edits cannot authorize another collection or contract adoption, including
 when an old reviewed hash is retained. Existing attempted cycles still reconcile
 using their immutable terms. Missing/corrupt original snapshots require review;
 they are never reconstructed from current terms or silently backfilled.
-Reviewed Braintree owner amendments are described above; customer confirmation
-and native Shopify amendments remain outstanding. No DDL, live
+Reviewed Braintree owner and customer amendments are described above;
+native Shopify amendments remain outstanding. No DDL, live
 billing or customer rollout changed. See the replacement runbook.
 
 ## Shopify paused-contract adoption (October 30; source candidate)

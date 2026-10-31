@@ -20,11 +20,12 @@ class SubscriptionBillingTermsHistory
             $after = $action->after_state;
             $proof = $after['authorization_hash'] ?? null;
             unset($after['authorization_hash']);
-            abort_unless($row->processor === 'braintree' && $action->actor_type === 'user' && ctype_digit($action->actor_reference)
+            $owner = $action->actor_type === 'user' && ctype_digit($action->actor_reference) && ($request['accepted_by'] ?? null) === (int) $action->actor_reference;
+            $customer = $action->actor_type === 'shopify_customer';
+            abort_unless($row->processor === 'braintree' && ($owner || $customer)
                 && $action->expected_revision >= 1 && $action->expected_revision >= $revision && ($after['revision'] ?? null) === $action->expected_revision + 1
                 && ($request['version'] ?? null) === 1 && ($request['original_terms_hash'] ?? null) === $original['terms_hash']
                 && ($request['agreement_public_id'] ?? null) === $row->public_id && ($request['member_id'] ?? null) === $row->member_id
-                && ($request['accepted_by'] ?? null) === (int) $action->actor_reference
                 && ($request['approval']['quoted_total_reviewed'] ?? null) === true
                 && ($request['approval']['continuing_authorization_reviewed'] ?? null) === true
                 && is_string($request['approval']['reference'] ?? null)
@@ -33,6 +34,9 @@ class SubscriptionBillingTermsHistory
                 && is_string($proof) && hash_equals(self::seal($action), $proof)
                 && hash_equals(self::termsHash($row, $after['terms'], $action->request_uuid), $after['terms_hash']),
                 409, 'The accepted future terms history no longer matches its original review.');
+            if ($customer) {
+                app(SubscriptionCustomerAmendmentService::class)->assertHistory($row, $action, $currentRead);
+            }
             self::allowed($original['terms'], $after['terms']);
             $terms = $after['terms'];
             $hash = $after['terms_hash'];

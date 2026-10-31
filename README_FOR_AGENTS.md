@@ -1,3 +1,20 @@
+## Customer delivery review and confirmation (October 31; source candidate)
+
+Use the existing private member portal for Braintree customer delivery edits,
+behind `replacement_customer_delivery_enabled` (default off), exact rollout and
+explicit `subscriptions:delivery-policy` merchant review. A policy records
+original-member fixed shipping coverage and offered scents without changing
+billing terms, revision or original authorization. Do not fabricate review flags
+for a customer or impersonate the owner as the customer actor. Encrypted expiring
+review data binds the exact customer/profile, input, original-store quote, total,
+policy, revision and UUID. Confirmation recalculates tax/availability and shares
+the original member/agreement/current-row locks before one signed future-term
+action. Policy history remains valid for already accepted terms after a later
+editing withdrawal; current policy still gates new edits. Preserve private host,
+CSRF, throttle and safe stop access. No payment entry or charge occurs here.
+Native Shopify amendments and actual hosted/provider/rollout acceptance remain
+outstanding. See the replacement runbook and customer-delivery concurrency tests.
+
 ## Historical source access and live-state evidence (October 31)
 
 `SubscriptionBillingShopifySource::originalPayment` checks `read_all_orders` and
@@ -9,7 +26,7 @@ claims no new payment cycle. The original store has these scopes in the latest
 read-only check, but no Braintree API connection or replacement deployment exists.
 Both prepared testers remain Recharge-owned with zero pilot enrollments/cycles.
 Real October order linkage is observed, not real reusable-method acceptance.
-Retain customer confirmation/native amendments and actual hosted/provider tests
+Retain native amendments and actual hosted customer/provider acceptance tests
 as outstanding work. See `docs/operations/subscriptions-recharge-replacement.md`.
 
 ## Accepted Braintree future terms (October 31; source candidate)
@@ -26,7 +43,8 @@ before creating a cycle/sale; a change needs another review. Servicing freezes
 stop new changes while accepted collection uses its independent gates. Frozen
 tax lines feed only the new cycle's Shopify receipt. Real MySQL races and source
 end-to-end collection/handoff tests accompany this path; no DDL or production
-activation occurred. Customer confirmation and Shopify updates remain outstanding.
+activation occurred. Braintree customer confirmation is described above;
+Shopify updates and actual customer/provider acceptance remain outstanding.
 
 ## Subscription delivery quote foundation (October 31; source candidate)
 

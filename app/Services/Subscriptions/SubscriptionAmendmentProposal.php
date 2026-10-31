@@ -14,7 +14,7 @@ class SubscriptionAmendmentProposal
         app(SubscriptionReplacementAccess::class)->member($row);
         $data = $this->normalize($input);
         $terms = $row->terms;
-        if (isset($data['shipping_address'])) {
+        if (isset($data['shipping_address']) && SubscriptionBillingShopifySource::address($data['shipping_address']) !== SubscriptionBillingShopifySource::address($terms['shipping_address'])) {
             $terms['shipping_address'] = $data['shipping_address'];
         }
         foreach ($data['swaps'] ?? [] as $swap) {

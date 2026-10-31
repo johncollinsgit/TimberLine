@@ -7,6 +7,89 @@ access can be verified. Stripe setup is an explicit fallback, not a universal
 migration requirement. The first rollout is the two already prepared members;
 all other members retain Recharge billing until separately reviewed.
 
+## Customer future delivery and scent confirmation (October 31; source candidate)
+
+The existing authenticated app management link now opens a branded private member
+page with Braintree delivery editing, behind the independent default-off
+`SUBSCRIPTIONS_REPLACEMENT_CUSTOMER_DELIVERY_ENABLED` gate. Existing exact tenant,
+member, servicing, amendment/apply and entitlement gates still apply. Only an
+individually activated, method-verified original Shopify customer can use it.
+Other members and native Shopify agreements do not gain this action from the gate.
+
+Merchant shipping coverage is explicit and separate from customer confirmation.
+`subscriptions:delivery-policy` previews offline and requires a private regular
+0600 JSON file. The preview includes the actual fixed shipping fee, current
+amount, currency, agreement/member, policy and keyed review. An explicit reviewed
+hash/revision/UUID records one encrypted signed `delivery_policy_reviewed` action
+and a current policy pointer. Billing terms, revision, original authorization,
+saved method, source subscription and existing orders/cycles are unchanged.
+Identical retries retain the original action; a newer policy cannot be rolled
+back by replay. The recorded reviewer must be an active verified owner/admin.
+
+Fictional input shape; supply the merchant's actually reviewed shipping coverage
+and offered scent list for the exact original store and membership:
+
+```json
+{
+  "enabled": true,
+  "provinces": ["SC", "NC"],
+  "allow_scent_swaps": true,
+  "scents": [{"variant_id": "888", "label": "Forest Rain / 16oz"}],
+  "reference": "merchant-policy:REVIEW_ID",
+  "fixed_shipping_reviewed": true,
+  "continuing_authorization_reviewed": true
+}
+```
+
+```
+subscriptions:delivery-policy --tenant=SLUG --actor=ID --agreement=ID --file=/private/delivery-policy.json
+subscriptions:delivery-policy --tenant=SLUG --actor=ID --agreement=ID --file=/private/delivery-policy.json --reviewed-hash=REVIEW_HASH --revision=REV --request-id=UUID --record
+```
+
+The policy offers complete US addresses only in the reviewed states and optional
+curated membership scents. A fresh original-store calculation still verifies
+each selected variant's active shippable 16oz status, exact member pricing and
+quantities, fixed shipping and tax. A policy label alone is not availability.
+Set `enabled:false` through a new reviewed policy to withdraw new customer edits.
+Withdrawing editing does not undo a previously accepted customer delivery or
+cancel its separately authorized subscription billing.
+
+The customer flow posts to `/subscriptions/member/{token}/delivery/review`, then
+`/delivery/confirm`. Both retain CSRF, request throttles and the configured app
+host. The original verified Shopify identity and current tenant/profile/store/
+member select the agreement; form IDs, matching email or demo identity cannot.
+Profile views remain offline. There is no card entry, new payment setup, provider
+vault mutation, charge, order or source/default-address edit in this flow.
+
+The review shows the actual returned scent label, address, subtotal, shipping,
+estimated tax, future total and effective date. Paused members are told that
+billing stays paused. A required checkbox confirms these future delivery terms.
+The ten-minute server review is encrypted in cache and HMAC-bound to the exact
+customer/profile, UUID, revision, input, quoted terms/total and merchant policy.
+Confirmation recalculates the original quote; changed tax, products, policy,
+credential, owner, schedule or terms requires review again before saving.
+
+One `terms_amended` action records `actor_type:shopify_customer`, the original
+customer GID and customer confirmation separately from the merchant reviewer of
+continuing authority. Shared member/agreement locks and current profile/store,
+owner/pivot, policy/action and cycle reads precede acceptance. The existing signed
+terms history and collector verify the retained customer/policy evidence without
+replacing the original mandate. Unstarted future terms change once; old paid
+orders, attempted cycles and the billing anchor stay intact. Exact accepted
+replays return the old action even after cache expiry, later pause/cancel or an
+editing freeze, without restoring an older state or making provider requests.
+
+Source tests cover the private HTTP flow, identity/host/expiry/confirmation,
+scope and tax drift, encrypted-cache/evidence tampering, paused old-date changes,
+merchant review CLI, and one same-method payment/Shopify receipt after customer
+confirmation. Seven real MySQL worker races cover identical/competing requests,
+policy withdrawal, pause, owner revocation, profile removal and a billing claim
+after an older snapshot. Four actual rendered desktop/phone views pass browser
+checks for overflow, labels, required confirmation and absence of payment entry.
+No DDL, native distribution, source stop, real customer delivery change or payment
+occurred. Native Shopify contract amendments and actual hosted/provider/two-member
+acceptance remain outstanding; the customer feature is not live.
+
 ## Original-store historical access and fresh deployment check (October 31)
 
 The Braintree original-payment read now requests the current original app's
@@ -72,8 +155,9 @@ quote command plus a separate approval:
 The verified owner/admin must review the customer's actual instruction, exact
 new total and whether continuing authority covers those future terms. A saved
 method or quote alone does not prove consent to a changed charge. This is an
-operator workflow; authenticated customer confirmation and native Shopify
-contract updates remain outstanding. No universal no-reauthorization claim follows.
+operator workflow; the separate Braintree customer flow is described above.
+Native Shopify contract updates remain outstanding. No universal
+no-reauthorization claim follows.
 
 ```
 subscriptions:amend --tenant=SLUG --actor=ID --agreement=ID --file=/private/amendment.json
@@ -122,7 +206,8 @@ calls the original store's pinned 2026-10 `draftOrderCalculate`; Shopify documen
 that this calculates totals [without creating a draft order](https://shopify.dev/docs/api/admin-graphql/2026-10/mutations/draftOrderCalculate).
 No agreement/action/cycle, order, customer/default address, saved method, source
 subscription or payment is written. It is an operator quote foundation; applying
-reviewed terms is described above; customer confirmation remains outstanding.
+reviewed terms and the separate Braintree customer confirmation are described
+above. Native Shopify amendments remain outstanding.
 
 The private regular 0600 JSON input may contain a complete US shipping address,
 exact source-line scent swaps, and an explicit owner review of the source's fixed
@@ -364,8 +449,9 @@ silently replaced by editing JSON.
 
 Reviewed Braintree owner amendments now carry their own separate signed history.
 Unreviewed changed terms cannot collect or adopt a Shopify contract, even if an
-old reviewed hash is left in place. Customer confirmation and Shopify contract
-amendments remain outstanding. Original attempts still reconcile using their
+old reviewed hash is left in place. Customer confirmation now retains its own
+merchant-policy and customer evidence; native Shopify contract amendments remain
+outstanding. Original attempts still reconcile using their
 frozen cycle terms and original account. Missing/corrupt snapshots fail closed;
 preparation replay never fills them from an existing agreement's current terms.
 Do not backfill original authority from mutable data as an upgrade shortcut.
@@ -571,7 +657,8 @@ proven. The two testers are acceptance cases, not hard-coded customer rules.
 - [x] Immutable original reviewed authorization snapshot, separated historical proof and current collection/adoption guards.
 - [x] Source implementation for authenticated member polls/scents/history and private feedback after source cancellation, with neutral ballots and exact legacy vote continuity.
 - [x] Source implementation for reviewed Braintree owner amendments, signed future-term history and exact amended-cycle receipt/tax handling.
-- [ ] Authenticated customer address/scent confirmation and native Shopify contract amendments.
+- [x] Source implementation for authenticated Braintree customer address/scent review and confirmation, separate merchant coverage and truthful customer action evidence.
+- [ ] Native Shopify contract amendments and actual hosted customer-delivery acceptance.
 - [ ] Actual Braintree merchant sandbox/live acceptance and original source-stop verification.
 - [x] Source implementation for Shopify-vaulted paused adoption, activation, billing attempts and native receipt reconciliation.
 - [ ] Actual Shopify API/merchant acceptance, customer authentication recovery and source cutover acceptance.

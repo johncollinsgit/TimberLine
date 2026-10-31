@@ -18,7 +18,7 @@
 <p class="intro-copy">Review your next delivery and manage future billing.</p></section>
 @if(session('subscription_status'))<p role="status" class="notice">{{ session('subscription_status') }}</p>@endif
 @if($errors->any())<p role="alert" class="notice notice-error">{{ $errors->first() }}</p>@endif
-<div class="club-layout single-column"><div id="subscription" class="subscription-column">
+<div class="club-layout single-column {{ ($deliveryOptions ?? null) ? 'delivery-layout' : '' }}"><div id="subscription" class="subscription-column">
 <section class="paper-card terms-card" aria-labelledby="subscription-title">
 <div class="card-heading"><p class="eyebrow">JUST FOR YOU</p><span class="member-badge">{{ ucfirst($agreement->status) }}</span></div>
 <h2 id="subscription-title">{{ $modernForestry ? 'Your Candle Club' : 'Your subscription' }}</h2>
@@ -31,6 +31,9 @@
 <div><dt>Deliver to</dt><dd>{{ $terms['shipping_address']['firstName'] }} {{ $terms['shipping_address']['lastName'] }}<br>{{ $terms['shipping_address']['address1'] }}@if(!empty($terms['shipping_address']['address2'])), {{ $terms['shipping_address']['address2'] }}@endif<br>{{ $terms['shipping_address']['city'] }}, {{ $terms['shipping_address']['provinceCode'] }} {{ $terms['shipping_address']['zip'] }}</dd></div>
 <div><dt>Payment method</dt><dd>Your existing saved payment method</dd></div>
 </dl></section>
+@if($deliveryOptions ?? null)
+@include('subscriptions.replacement-delivery-form')
+@endif
 @if(in_array($agreement->status, ['active','paused'], true))
 <section class="paper-card authorization-card" aria-labelledby="manage-title"><p class="eyebrow">A LITTLE FLEXIBILITY</p><h2 id="manage-title">Manage future billing</h2>
 <p>These changes apply to future cycles. A payment already processing or a placed order may need our team’s help.</p>
