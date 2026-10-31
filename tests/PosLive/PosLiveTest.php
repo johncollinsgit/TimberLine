@@ -158,6 +158,42 @@ it('retains development owner device build tenant evidence and budget boundaries
     Http::assertNothingSent();
 })->with(['flag', 'build', 'amount', 'expiry', 'duration', 'merchant', 'tenant', 'profile', 'proof', 'signature', 'device', 'actor']);
 
+it('removes rehearsal amount duration and single-sale restrictions only for an explicitly reviewed registered owner', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Production payment bindings require the durable MySQL journal.');
+    }
+    $settings = posFixtureDevelopment($this);
+    $settings['development_acceptance']['owner_requested'] = true;
+    $settings['development_acceptance']['max_amount_minor'] = null;
+    $settings['development_acceptance']['expires_at'] = now()->addHours(6)->toIso8601String();
+    $settings['development_acceptance']['evidence'] += ['owner_requested_unrestricted_collection' => true,
+        'owner_actor_id' => $this->actor->id, 'owner_request_sha256' => str_repeat('a', 64)];
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    $this->store->rows('items', $this->tenant->id)->update(['unit_amount_minor' => 15000, 'quantity' => 2]);
+    $first = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$first['sale_id'].'/collect')->assertOk()->assertJsonPath('collection.amount_minor', 16050);
+    posFixtureSquarePayment($this, $first['sale_id'], changes: ['amount_money' => ['amount' => 16050], 'total_money' => ['amount' => 16050]]);
+    $this->postJson($this->base.'/sales/'.$first['sale_id'].'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()->assertJsonPath('state', 'succeeded');
+    $this->selection['request_id'] = (string) Str::uuid();
+    $second = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$second['sale_id'].'/collect')->assertOk()->assertJsonPath('collection.amount_minor', 16050);
+    expect($this->store->rows('events', $this->tenant->id)->where('code', 'registered_owner_collection')->count())->toBe(2)
+        ->and(config('pos_live.collection_enabled'))->toBeFalse()->and(config('pos_live.distribution_verified'))->toBeFalse();
+});
+
+it('does not accept an unrestricted session without the exact owner request evidence', function (): void {
+    $settings = posFixtureDevelopment($this);
+    $settings['development_acceptance']['owner_requested'] = true;
+    $settings['development_acceptance']['max_amount_minor'] = null;
+    $settings['development_acceptance']['expires_at'] = now()->addHours(6)->toIso8601String();
+    $settings['development_acceptance']['evidence'] += ['owner_requested_unrestricted_collection' => true,
+        'owner_actor_id' => $this->actor->id + 1, 'owner_request_sha256' => str_repeat('a', 64)];
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertStatus(503);
+    Http::assertNothingSent();
+});
+
 it('requires quotes from the same development session before any reservation', function (): void {
     posFixtureDevelopment($this);
     $quote = posFixtureQuote($this);
@@ -210,6 +246,35 @@ it('keeps real Shopify preparation in development acceptance and cannot replace 
     $this->postJson($this->base.'/sales/'.$second['sale_id'].'/collect')->assertConflict();
     expect($this->shopifyCreates)->toBe(1)->and($this->journal->findByRequest($this->tenant->id,
         $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->first()->payment_request_id))->toBeNull();
+});
+
+it('requires the separate owner review flag to activate registered-device operation without rehearsal caps', function (): void {
+    $settings = posFixtureDevelopment($this);
+    $merchantPath = tempnam(sys_get_temp_dir(), 'pos-owner-merchant-');
+    $developmentPath = tempnam(sys_get_temp_dir(), 'pos-owner-review-');
+    try {
+        file_put_contents($merchantPath, json_encode(['tenant_id' => $this->tenant->id, 'merchant_id' => 'fixture_merchant',
+            'location_id' => 'fixture_location', 'actual_processing_rate' => 'Fictional reviewed test rate',
+            'everbranch_markup_minor' => 0, 'paid_square_subscription_added' => false]));
+        $evidence = $settings['development_acceptance']['evidence'];
+        $evidence += ['owner_requested_unrestricted_collection' => true, 'owner_actor_id' => $this->actor->id,
+            'owner_request_sha256' => str_repeat('a', 64)];
+        file_put_contents($developmentPath, json_encode($evidence));
+        chmod($merchantPath, 0600);
+        chmod($developmentPath, 0600);
+        $options = ['tenant' => $this->tenant->id, 'register' => $this->register, '--actor' => $this->actor->id,
+            '--review' => $merchantPath, '--development-review' => $developmentPath, '--build' => 'development_build',
+            '--acceptance-device' => 'fixture_device_1234', '--registered-owner' => true];
+        $this->artisan('pos:activate', $options)->assertExitCode(0);
+        $this->artisan('pos:activate', [...$options, '--apply' => true])->assertExitCode(0);
+        $saved = $this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration)['development_acceptance'];
+        expect($saved['max_amount_minor'])->toBeNull()->and($saved['owner_requested'])->toBeTrue()
+            ->and($saved['expires_at'])->toBe($evidence['profile_expires_at'])
+            ->and(config('pos_live.collection_enabled'))->toBeFalse()->and(config('pos_live.distribution_verified'))->toBeFalse();
+    } finally {
+        unlink($merchantPath);
+        unlink($developmentPath);
+    }
 });
 
 it('prepares and finalizes the original Shopify order in a development acceptance sale without claiming prior inventory proof', function (): void {

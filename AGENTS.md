@@ -1,5 +1,17 @@
 ## Everbranch Pay inventory and guest checkout (owner direction, 2026-10-31)
 
+- Follow-up owner direction: preserve the original mountain banner/photo register,
+  use only the show's reviewed scents and cotton-wick sizes/wax melts, finish
+  bundles/keypad, and remove Everbranch's rehearsal dollar/time/single-sale caps
+  on the exactly reviewed registered owner phone. `pos:activate --registered-owner`
+  needs explicit private owner-request evidence. Keep registered-device, merchant,
+  membership, signing, tax, original-attempt and duplicate-payment checks. This
+  does not establish Apple publishing approval or allow additional devices.
+- An owner may explicitly choose untracked show stock after earlier sales. Keep
+  remaining quantities unknown; never invent balances from original box totals.
+  Reviewed bundles may use untracked components; counted components retain their
+  actual availability limits. Scope the show's catalog with `catalog_item_ids`.
+
 - Everbranch owns finished-goods inventory, customers, in-person sales, receipts
   and rewards. Square owns payment/refund/settlement evidence. New POS sales must
   not create Shopify orders; Shopify remains the existing catalog/price source

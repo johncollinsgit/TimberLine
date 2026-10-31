@@ -179,6 +179,40 @@ merchant binding to force a new lane.
 
 ## Release and physical acceptance
 
+### Owner-requested registered-device operation
+
+The October 31 owner follow-up explicitly removes Everbranch's $10, two-hour and
+single-sale rehearsal rules for the reviewed owner phone. This is separate from
+Apple's registered-device distribution restriction, which remains in effect.
+`pos:activate --registered-owner` still requires `--development-review` and the
+exact installed build, device, owner, merchant, location and valid signing/grant
+evidence. The private review additionally needs
+`owner_requested_unrestricted_collection: true`, integer `owner_actor_id`, and
+`owner_request_sha256` containing the actual direction's digest. The session has
+no Everbranch amount or single-sale cap; it expires with the actual provisioning
+profile. Tax validity, membership, device assignment and current provider
+readiness still apply. Commercial/public distribution flags are not fabricated.
+An already claimed rehearsal may upgrade only after its original payment journal
+and sale agree on a terminal outcome; unknown attempts remain blocked.
+
+The show's optional `catalog_item_ids` selects exact canonical variants without
+deactivating the full tenant catalog or changing another register. Modern Forestry
+uses only the pictured scents, 8oz/16oz cotton candles and wax melts, with reviewed
+bundle parents. No mugs, wood wicks or 4oz variants belong in this register.
+For the owner's explicitly untracked show inventory, remaining balances stay
+unknown and the receipt records selected units. Bundle definitions may include
+untracked merchandise; any counted component keeps its actual reservation limit.
+Original packed boxes (4 × 16oz, 8 × 8oz, 8 melts per box) are source information,
+never a replacement for today's remaining count. Restore tracking only through
+an explicit reconciled physical count and reviewed configuration.
+
+Native register photos use Shopify-generated 400px JPEG renditions. The original
+mountain header is a small local asset, not the old 57 MB demo. The complete
+keypad pill is tappable; refresh also reloads register capabilities so newly
+enabled custom amounts do not remain disabled by stale client settings. Custom
+taxable-merchandise amounts reuse the reviewed show address and calculate tax
+server-side; they are not treated as rewardable catalog merchandise.
+
 Use additive migration recovery, real MySQL contention tests, the reviewed
 schema dump/fingerprint, native build/UI checks, a focused PR and protected Forge
 release. Install one planned signed candidate on the approved phone. Inspect
@@ -186,7 +220,7 @@ its exact bundle/team/profile/device/signature and Square merchant/location.
 The development entitlement case does not prove TestFlight/App Store approval.
 Preserve existing onboarding, servicing and commercial collection gates.
 
-The bounded registered-device acceptance session still requires exact private
+The default bounded registered-device acceptance session still requires exact private
 Apple/signing/installation evidence, approved owner/register/phone/build and the
 existing time/amount/one-sale limits. Stop Mirroring before physical card entry.
 Never activate normal collection from source tests or a no-card attempt.

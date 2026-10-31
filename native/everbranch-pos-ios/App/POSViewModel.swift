@@ -412,8 +412,13 @@ struct POSReceipt: Decodable {
         }
     }
     func refreshProducts() {
-        guard pending == nil, let base else { return }
-        perform { let result: CatalogList = try await self.api.request(base + "/catalog"); self.items = result.items }
+        guard pending == nil, let base, let workspace = selectedWorkspace, let register = selectedRegister else { return }
+        perform {
+            let registers: RegisterList = try await self.api.request("api/mobile/v1/workspaces/\(workspace.slug)/pos/registers")
+            guard let current = registers.registers.first(where: { $0.id == register.id }) else { throw POSError.unavailable("Choose an available register in Account.") }
+            self.registers = registers.registers; self.selectedRegister = current
+            let result: CatalogList = try await self.api.request(base + "/catalog"); self.items = result.items
+        }
     }
     func reviewReceiptRewards() {
         guard let base, let sale, let customer = receipt?.customer, selectedRegister?.canManageInventory == true,

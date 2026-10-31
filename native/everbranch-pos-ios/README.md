@@ -69,3 +69,17 @@ Everbranch Pay; the selected merchant supplies the business identity inside it.
 Catalog-only UI tests use a Debug-only launch argument. That preview path is
 compiled out of Release archives and never supplies authentication or payment
 readiness. The normal launch test verifies that sign-in precedes all catalogs.
+
+## Register follow-up
+
+Restore the original mountain art from the legacy demo as the small local
+`RegisterMountains` asset. The demo itself remains excluded. Product cards and
+keypad pills use complete button hit areas, including when search is open.
+Shopify supplies 400px JPEG catalog renditions; refreshing products also reloads
+register capabilities. Show-specific catalog selection and reviewed bundles are
+server-owned. Explicitly untracked components remain selectable without invented
+remaining balances; counted components keep their actual limits.
+
+Owner-requested registered-device operation removes Everbranch rehearsal amount,
+time and single-sale rules only with the separately reviewed exact owner/device/
+build evidence. It does not establish public distribution approval.
