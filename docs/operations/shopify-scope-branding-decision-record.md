@@ -155,7 +155,10 @@ was verified in the owning Modern Forestry Dev Dashboard. Its new-version form
 rejects `read_discounts_allocator_functions`,
 `write_discounts_allocator_functions` and
 `unauthenticated_read_collection_listings`. The retail config and store-scoped
-OAuth reconnect omit these rejected names and add `read_inventory`. Existing
+OAuth reconnect omit these rejected names and add `read_inventory` and
+`read_locations`. The live API separately denied `Location.name` after the
+inventory grant, so the location permission is required for the reviewed
+fulfillment location. Existing
 product/collection listing, discount, customer, pixel, validation, order and
 fulfillment access remains. Shopify's current access-scope reference lists both
 Product and Collection under `unauthenticated_read_product_listings`.

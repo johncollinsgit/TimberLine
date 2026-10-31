@@ -92,9 +92,13 @@ other merchants still need their own account, program, device and acceptance.
   Enable only that channel flag through the existing audited policy controls;
   preserve the approved amounts and online redemption behavior.
 - The retail connection is `modernforestry.myshopify.com`. A live locations query
-  returned ACCESS_DENIED. The retail app needs `read_inventory` (also sufficient
-  for Location reads) and merchant reauthorization before live stock/location
-  review. Wholesale connection settings are unchanged.
+  returned ACCESS_DENIED. Granting `read_inventory` succeeded, but a fresh live
+  lookup then denied `Location.name`, explicitly requiring `read_locations` or
+  `read_markets_home`. The retail pilot therefore needs both `read_inventory`
+  and the narrower location permission `read_locations`, followed by merchant
+  reauthorization before live stock/location review. The general Location type's
+  alternative-scope listing did not establish access to every selected field.
+  Wholesale connection settings are unchanged.
 - The owning Modern Forestry Dev Dashboard was reached and the exact client ID
   confirmed. Its version form rejects three existing scope names:
   `read_discounts_allocator_functions`, `write_discounts_allocator_functions`
