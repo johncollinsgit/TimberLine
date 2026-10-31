@@ -8,6 +8,7 @@ class BudCapabilityRegistry
     public function all(): array
     {
         return [
+            'customer_commerce' => ['label' => 'Customer purchases and rewards', 'questions' => ['can I see online and in-person purchases together', 'does every tenant get customer rewards'], 'actions' => ['open the customer record and its linked purchase history', 'explain included rewards setup and customer source connections', 'check payment and customer-link readiness before claiming live availability']],
             'marketing_desk' => ['label' => 'Marketing desk', 'questions' => ['what should we post', 'which posts worked', 'help with marketing workflows'], 'actions' => ['prepare brand-grounded content drafts', 'open the calendar or shared inbox', 'propose an inactive marketing recipe']],
             'customer_loop' => ['label' => 'Customer Loop', 'questions' => ['what needs attention', 'what should we follow up on', 'what happened today'], 'actions' => ['prepare a follow-up draft', 'create a review request draft', 'create a social draft']],
             'workflows' => ['label' => 'Workflow Automations', 'questions' => ['how do I automate this', 'what template should I use'], 'actions' => ['open a matching template', 'explain trigger and if/then logic']],

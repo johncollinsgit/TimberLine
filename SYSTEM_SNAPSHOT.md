@@ -3971,3 +3971,14 @@ The old native-WebKit wizard gate failed on hidden Next after a click. Two exact
 local unchanged runs passed; an assumed catalog race was not reproduced. No
 speculative product/test workaround is added. The repaired-head WebKit gate must
 pass. No runtime, provider, publication, merge or deployment action occurred.
+## Unified customer commerce direction (October 30, 2026)
+
+Every tenant should have one canonical customer entry connecting its confirmed
+online/in-person purchases and the existing rewards history. This is included
+shared capability, with Modern Forestry as the first pilot. Explicit source
+associations preserve Website/Shopify/provider identity and order authority;
+they do not merge records or grant marketing consent. The implementation plan,
+surface inventory, acceptance matrix and truthful launch boundary are in
+`docs/architecture/unified-customer-commerce.md`. The phone catalog build and
+the separate draft live POS candidate have not established real cross-channel
+customer/rewards acceptance.

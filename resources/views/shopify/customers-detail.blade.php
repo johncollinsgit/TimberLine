@@ -715,6 +715,7 @@
             data-profile-id="{{ $deferredBootstrap['profileId'] ?? '' }}"
             data-perf-debug="{{ ! empty($deferredBootstrap['perfDebug']) ? 'true' : 'false' }}"
         >
+            <x-customer-commerce :snapshot="$detail['customer_commerce'] ?? null" :rewards-label="$resolvedRewardsLabel" />
             <section class="customers-detail-section customers-detail-hero" aria-label="Customer profile header">
                 <div>
                     <p class="customers-detail-eyebrow">Customer Detail</p>

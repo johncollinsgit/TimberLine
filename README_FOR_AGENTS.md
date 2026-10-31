@@ -3291,3 +3291,12 @@ The old native-WebKit wizard gate failed on hidden Next after a click. Two exact
 local unchanged runs passed; an assumed catalog race was not reproduced. No
 speculative product/test workaround is added. The repaired-head WebKit gate must
 pass. No runtime, provider, publication, merge or deployment action occurred.
+## Every-tenant customer commerce requirement (October 30, 2026)
+
+Read `docs/architecture/unified-customer-commerce.md` for the owner's universal
+customer requirement: one tenant-scoped identity, linked confirmed online and
+in-person purchases, and one existing rewards history. Include this capability
+for every plan/template; retain merchant program and payment activation checks.
+Do not create a second customer identity or loyalty ledger, infer linkage from
+a card tap, or label source/UI tests as physical acceptance. Explicit read-only
+source associations preserve the independent Website/Shopify/provider records.

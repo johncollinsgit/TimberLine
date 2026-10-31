@@ -1507,6 +1507,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/customers/{marketingProfile}/email-deliveries/export', [MarketingCustomersController::class, 'exportEmailDeliveries'])
                     ->name('customers.email-deliveries.export');
                 Route::patch('/customers/{marketingProfile}', [MarketingCustomersController::class, 'update'])->name('customers.update');
+                Route::post('/customers/{marketingProfile}/commerce-sources', [MarketingCustomersController::class, 'linkCommerceSource'])->name('customers.commerce-sources.store');
                 Route::post('/customers/{marketingProfile}/birthday', [MarketingCustomersController::class, 'updateBirthday'])->name('customers.update-birthday');
                 Route::post('/customers/{marketingProfile}/consent', [MarketingCustomersController::class, 'updateConsent'])->name('customers.update-consent');
                 Route::post('/customers/{marketingProfile}/candle-cash/grant', [MarketingCustomersController::class, 'grantCandleCash'])->name('customers.candle-cash.grant');

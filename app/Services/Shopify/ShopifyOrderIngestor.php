@@ -167,6 +167,7 @@ class ShopifyOrderIngestor
                 is_array($order->attribution_meta ?? null) ? $order->attribution_meta : [],
                 $payloadAttributionMeta
             );
+            $this->captureCustomerCommerceEvidence($order, $orderData, $store, $resolvedTenantId);
 
             if (empty($order->status)) {
                 $order->status = 'new';
@@ -288,6 +289,84 @@ class ShopifyOrderIngestor
             'partially_refunded',
             'refunded',
         ], true);
+    }
+
+    /** Preserve provider-observed payment/channel evidence without treating workflow status as paid. */
+    protected function captureCustomerCommerceEvidence(Order $order, array $payload, array $store, ?int $tenantId): void
+    {
+        if (! $tenantId || ! isset($payload['financial_status']) || empty($payload['updated_at'] ?? $payload['created_at'] ?? null)) {
+            return;
+        }
+        try {
+            $observedAt = CarbonImmutable::parse($payload['updated_at'] ?? $payload['created_at']);
+            $prior = data_get($order->attribution_meta, 'customer_commerce.observed_at');
+            if ($prior && CarbonImmutable::parse($prior)->greaterThan($observedAt)) {
+                return;
+            }
+        } catch (\Throwable) {
+            return;
+        }
+        $meta = (array) $order->attribution_meta;
+        $evidence = [
+            'tenant_id' => $tenantId,
+            'shopify_order_id' => (string) $order->shopify_order_id,
+            'store_key' => (string) $store['key'],
+            'financial_status' => strtolower(trim((string) $payload['financial_status'])),
+            'cancelled' => ! empty($payload['cancelled_at']),
+            'test' => (bool) ($payload['test'] ?? false),
+            'source_name' => (string) ($payload['source_name'] ?? ''),
+            'currency' => (string) ($payload['currency'] ?? data_get($payload, 'total_price_set.shop_money.currency_code', '')),
+            // Original shop-currency total, not the mutable current/refunded total
+            // or a presentment-currency label paired with a shop-currency amount.
+            'total_price' => data_get($payload, 'total_price_set.shop_money.amount', $payload['total_price'] ?? null),
+            'refund_total' => $this->customerCommerceRefundTotal($payload),
+            'observed_at' => $observedAt->toIso8601String(),
+        ];
+        $previous = (array) ($meta['customer_commerce'] ?? []);
+        if ($prior && CarbonImmutable::parse($prior)->equalTo($observedAt) && $previous !== $evidence) {
+            $evidence['conflicted'] = true;
+        }
+        $meta['customer_commerce'] = $evidence;
+        $order->attribution_meta = $meta;
+    }
+
+    /** Successful original refund transactions, never line subtotals or adjustments. */
+    protected function customerCommerceRefundTotal(array $payload): ?string
+    {
+        $total = 0;
+        $seen = [];
+        $currency = strtoupper((string) ($payload['currency'] ?? ''));
+        foreach ((array) ($payload['refunds'] ?? []) as $refund) {
+            foreach ((array) ($refund['transactions'] ?? []) as $transaction) {
+                if (($transaction['kind'] ?? '') !== 'refund' || ($transaction['status'] ?? '') !== 'success') {
+                    continue;
+                }
+                $id = trim((string) ($transaction['id'] ?? ''));
+                $amount = (string) ($transaction['amount'] ?? '');
+                if ($id === '' || strtoupper((string) ($transaction['currency'] ?? '')) !== $currency
+                    || ! preg_match('/^([0-9]{1,11})(?:\.([0-9]{1,2}))?$/D', $amount, $match)) {
+                    return null;
+                }
+                $minor = ((int) $match[1]) * 100 + (int) str_pad($match[2] ?? '', 2, '0');
+                if (array_key_exists($id, $seen)) {
+                    if ($seen[$id] !== $minor) {
+                        return null;
+                    }
+
+                    continue;
+                }
+                $seen[$id] = $minor;
+                $total += $minor;
+                if ($total > 9999999999999) {
+                    return null;
+                }
+            }
+        }
+        if ($seen === [] && in_array($payload['financial_status'] ?? '', ['refunded', 'partially_refunded'], true)) {
+            return null;
+        }
+
+        return intdiv($total, 100).'.'.str_pad((string) ($total % 100), 2, '0', STR_PAD_LEFT);
     }
 
     /**

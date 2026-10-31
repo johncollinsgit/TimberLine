@@ -19,6 +19,9 @@
                 <a href="{{ route('marketing.customers') }}" class="fb-btn fb-btn-secondary">Back to customers</a>
             </header>
 
+            <x-customer-commerce :snapshot="$customerCommerce ?? null" :rewards-label="data_get($customerCommerce ?? [], 'rewards.label', 'Rewards')" />
+            <x-customer-commerce-link :profile="$profile" />
+
             @if (session('toast.message'))
                 <div class="fb-state {{ session('toast.style') === 'success' ? 'fb-state-success' : 'fb-state-warning' }}">{{ session('toast.message') }}</div>
             @endif

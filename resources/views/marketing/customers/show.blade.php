@@ -20,6 +20,9 @@
             hint-text="This profile is a marketing-layer identity record. Source links and communication history are additive overlays on operational data, not replacements."
         />
 
+        <x-customer-commerce :snapshot="$customerCommerce ?? null" :rewards-label="$rewardsLabel" />
+        <x-customer-commerce-link :profile="$profile" />
+
         <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6">
             <div class="flex items-start justify-between gap-4">
                 <div>
