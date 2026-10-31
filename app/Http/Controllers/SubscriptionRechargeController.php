@@ -7,6 +7,7 @@ use App\Models\SubscriptionRechargeConnection;
 use App\Models\SubscriptionRechargeResource;
 use App\Models\Tenant;
 use App\Services\Subscriptions\SubscriptionAccessService;
+use App\Services\Subscriptions\SubscriptionEvidence;
 use App\Services\Subscriptions\SubscriptionRechargeManualSettingsService;
 use App\Services\Subscriptions\SubscriptionRechargeReadinessService;
 use App\Services\Subscriptions\SubscriptionRechargeReadService;
@@ -69,7 +70,9 @@ class SubscriptionRechargeController extends Controller
             $query = IntegrationConnection::query()->where('tenant_id', $tenant->id)->where('provider', 'recharge');
             $old = $query->where('metadata->subscription_source_request_uuid', strtolower($data['request_uuid']))->first();
             if ($old) {
-                abort_unless((int) $old->connected_by_user_id === (int) $request->user()->id && ($old->metadata['expected_identity'] ?? null) === $identity
+                abort_unless((int) $old->connected_by_user_id === (int) $request->user()->id
+                    && is_array($old->metadata['expected_identity'] ?? null)
+                    && SubscriptionEvidence::canonical($old->metadata['expected_identity'] ?? []) === SubscriptionEvidence::canonical($identity)
                     && hash_equals((string) $old->access_token, $data['recharge_access_token']), 409, 'The setup request conflicts with its original draft.');
 
                 return $old;

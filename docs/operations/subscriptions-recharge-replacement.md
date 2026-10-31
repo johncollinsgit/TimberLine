@@ -7,6 +7,70 @@ access can be verified. Stripe setup is an explicit fallback, not a universal
 migration requirement. The first rollout is the two already prepared members;
 all other members retain Recharge billing until separately reviewed.
 
+## Operator inspection and closure of native delivery reviews (source candidate)
+
+A current verified workspace owner/admin can inspect a native customer or staff
+review even after the original profile, reviewer permission, editing rollout or
+credential is withdrawn. This is local review cleanup, not payment authorization,
+provider recovery or source cancellation. Canonical Subscriptions access is
+resolved afresh under locks; removed module access still denies the operation.
+
+```
+php artisan subscriptions:shopify-amend --tenant=WORKSPACE --actor=ID --agreement=ID \
+  --action=inspect --request-id=ORIGINAL_UUID
+```
+
+The bounded result includes current revision/status/date, original actor type,
+stage IDs/times/signature validity, `close_allowed`, `requires_provider_recovery`
+and an operator-specific `review_hash`. It exposes no raw saved-method/provider
+IDs, addresses, credentials or full customer journal. Missing or corrupt parent
+stages, altered accepted history and uncertain commits remain blocked. Inspection
+makes no provider request; it is not proof of a provider's current outcome.
+
+`--action=close-review` without `--apply` performs the same inspection without
+opening an input file. For an actually reviewed, closable local request, create
+a regular private 0600 JSON file of at most 64 KiB containing only:
+
+```json
+{"closure":{"reference":"support-case:123","reason":"Customer abandoned this delivery review; retain the accepted delivery terms.","no_provider_change_reviewed":true}}
+```
+
+```
+php artisan subscriptions:shopify-amend --tenant=WORKSPACE --actor=ID --agreement=ID \
+  --action=close-review --request-id=ORIGINAL_UUID --revision=INSPECTED_REVISION \
+  --reviewed-hash=INSPECTED_HASH --file=/PRIVATE/closure.json --apply
+```
+
+The closure hash binds the actual operator, exact current agreement and immutable
+journal. Shared member/agreement locks serialize the final check with customer
+approval and commit dispatch. A pre-commit calculation, including a lost initial
+calculation response, can be closed because it cannot change a contract. A signed
+definite rejection or proven pre-HTTP failure can be closed; any ambiguous sent
+commit must retain its original reconciliation path and cannot be discarded.
+Applied actions cannot be closed. An invalid/unknown inspection exits nonzero.
+
+The existing signed encrypted `shopify_update_aborted` action retains reason,
+reference, actual operator, original requester and inspected journal fingerprints.
+Original request/approval/send/result records, terms, dates, method, billing owner
+and cycles are unchanged. A retry needs the same operator, original hash/revision
+and exact reason/reference; it returns the original closure without restoring an
+older agreement state. Current operator access is rechecked. A different closure
+cannot overwrite the audit. Existing requester close/recovery paths remain.
+
+This source capability is covered by disposable real-MySQL tests, including
+customer confirmation versus operator closure in separate processes. Provider
+responses in these tests are fictional. No deployment, live billing/source/
+contract/order, credential or rollout change is implied by these checks.
+
+Recharge private setup draft retries compare canonical exact identity values and
+types, retaining original actor and private-token equality. MySQL reorders JSON
+object keys; order alone must not make an unchanged retry conflict. Changing the
+merchant/store, token, actor or value types still returns a conflict and preserves
+the original draft without provider requests. MySQL feature coverage also uses
+explicit tenant-1 fixtures for the existing Modern Forestry authentication/import
+boundary and a supported relative future entitlement timestamp. These are test
+fixture corrections, not relaxations of production access.
+
 ## Original-app schema and native update construction (October 31)
 
 At 06:02 UTC, a read-only query using the original retail Shopify credential

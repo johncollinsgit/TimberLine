@@ -1,3 +1,25 @@
+## Native review operator recovery (October 31; source candidate)
+
+Use `subscriptions:shopify-amend --action=inspect --request-id=UUID` for local
+signed-stage inspection. `--action=close-review` without `--apply` is the same
+offline preview. Applying requires a private 0600 `closure` file with reason,
+reference and boolean `no_provider_change_reviewed:true`, the original UUID and
+exact inspected revision/hash. Current verified owner/admin and fresh canonical
+module access remain required even for retries. No positive rollout gate is
+needed to close an unsent draft, and no provider request is made.
+
+`SubscriptionShopifyReviewService` locks member/agreement before current authority
+and signed history. It records the actual operator in the existing aborted phase
+while preserving original customer/staff attribution. Unknown sends, applied
+actions and missing/corrupt journals cannot be closed. Never manufacture a known
+failure or clear a retained claim. Exact closure replay preserves newer stops.
+See the replacement runbook and real-MySQL operator/concurrent-customer cases.
+
+Recharge setup retries use canonical exact-value/type identity comparison rather
+than PHP array key order. Keep the original actor, merchant and private token
+checks. Subscription feature fixtures now run on both SQLite and MySQL without
+depending on auto-increment reset or timestamps beyond MySQL's supported range.
+
 ## Native customer confirmation (October 31; source candidate)
 
 The private delivery portal now uses the original native update journal for

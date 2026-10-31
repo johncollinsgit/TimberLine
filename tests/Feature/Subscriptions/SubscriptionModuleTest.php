@@ -324,7 +324,7 @@ test('paused or cancelled candle club contracts cannot request a voting code', f
 })->with(['paused', 'cancelled', 'failed']);
 
 test('demo preview is explicit and email alone does not unlock candle club', function (): void {
-    $tenant = Tenant::query()->create([
+    $tenant = Tenant::query()->forceCreate([
         'id' => 1,
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
@@ -363,7 +363,7 @@ test('demo preview is explicit and email alone does not unlock candle club', fun
 });
 
 test('explicit demo requests do not create operational events', function (): void {
-    $tenant = Tenant::query()->create([
+    $tenant = Tenant::query()->forceCreate([
         'id' => 1,
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
@@ -390,7 +390,7 @@ test('explicit demo requests do not create operational events', function (): voi
 });
 
 test('non candle club profile cannot record mobile candle club actions', function (): void {
-    $tenant = Tenant::query()->create([
+    $tenant = Tenant::query()->forceCreate([
         'id' => 1,
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
@@ -576,7 +576,7 @@ test('candle club scent feedback exports to native reviews as pending', function
 });
 
 test('candle club recipe import keeps oils internal and member cards recipe free', function (): void {
-    $tenant = Tenant::query()->create([
+    $tenant = Tenant::query()->forceCreate([
         'id' => 1,
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
@@ -611,7 +611,7 @@ test('candle club recipe import keeps oils internal and member cards recipe free
 });
 
 test('candle club recipe import is strict about modern forestry tenant one', function (): void {
-    Tenant::query()->create([
+    Tenant::query()->forceCreate([
         'id' => 1,
         'name' => 'Different Tenant',
         'slug' => 'different-tenant',

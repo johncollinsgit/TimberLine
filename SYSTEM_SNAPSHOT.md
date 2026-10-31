@@ -1,3 +1,27 @@
+## Native delivery review operations (October 31; source candidate)
+
+`subscriptions:shopify-amend --action=inspect` now reports the bounded local
+signed journal and a current owner/admin-specific review hash without provider
+requests or private customer/method details. `--action=close-review` previews
+the same inspection; applying requires the exact hash/revision and a private
+reason/reference/explicit no-provider-change acknowledgement. The existing
+append-only aborted phase records the actual operator and original requester
+separately, without rewriting agreement, source, cycle or original action state.
+
+Current verified owner/admin and fresh canonical Subscriptions access are
+required. Positive rollout, editing, profile and credential withdrawal do not
+strand an unsent local draft. Missing/corrupt history or an uncertain sent commit
+cannot be closed; definite signed rejections and proven pre-HTTP failures can.
+Member/agreement locks serialize closure with customer confirmation. Exact
+closure retries retain their original audit and preserve later stops. No DDL,
+provider call, deployment, activation or collection change occurs.
+
+Recharge private credential-draft replay now compares canonical identity objects
+so MySQL JSON key ordering does not reject an unchanged request. Merchant values,
+value types, original actor and secret must still match exactly. Feature fixtures
+explicitly retain tenant-1 bindings and supported relative timestamp windows;
+production tenant/authentication and entitlement checks are unchanged.
+
 ## Native authenticated customer delivery (October 31; source candidate)
 
 The branded private portal now supports original Shopify delivery/scents reviews
