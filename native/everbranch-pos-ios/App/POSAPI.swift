@@ -32,6 +32,7 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw POSError.unavailable("No server response.") }
+        if http.statusCode == 401 { throw POSError.signInRequired }
         guard (200...299).contains(http.statusCode) else {
             let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let code = (value?["error"] as? [String: Any])?["code"] as? String ?? "request_\(http.statusCode)"

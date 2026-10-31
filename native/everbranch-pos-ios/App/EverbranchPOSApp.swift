@@ -2,7 +2,7 @@ import SwiftUI
 
 @main struct EverbranchPOSApp: App {
     @UIApplicationDelegateAdaptor(POSAppDelegate.self) var appDelegate
-    var body: some Scene { WindowGroup { ModernForestryRegisterView() } }
+    var body: some Scene { WindowGroup { EverbranchRegisterView() } }
 }
 
 enum POSScreen { case setup, checkout }
@@ -49,7 +49,9 @@ private extension View {
 }
 
 struct POSView: View {
-    var onClose: () -> Void
+    var onClose: (() -> Void)? = nil
+    var onOpenRegister: (() -> Void)? = nil
+    var onAccount: (() -> Void)? = nil
     var screen: POSScreen
     @ObservedObject var model: POSViewModel
     @State private var choosingRegister = false
@@ -92,15 +94,18 @@ struct POSView: View {
             .scrollDismissesKeyboard(.interactively)
             .background(PayTheme.paper)
             .foregroundStyle(PayTheme.ink)
-            .navigationTitle(model.pending != nil ? "Current sale" : isSetup ? "Account & Tap to Pay" : "Checkout")
+            .navigationTitle(!model.signedIn ? (screen == .checkout ? "Sign in to checkout" : "Welcome") : model.pending != nil ? "Current sale" : model.selectedRegister == nil ? "Choose your business" : isSetup ? "Account & Tap to Pay" : "Checkout")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(PayTheme.paper, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
-                if model.pending == nil {
+                if model.pending == nil, let onClose {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Close", action: onClose).frame(minWidth: 44, minHeight: 44)
                     }
+                }
+                if model.pending == nil, let onAccount {
+                    ToolbarItem(placement: .primaryAction) { Button("Account", action: onAccount).frame(minHeight: 44) }
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer(); Button("Done") { inputFocused = false }
@@ -124,7 +129,7 @@ struct POSView: View {
                     if model.pending != nil { try await model.recover() }
                 }
             }
-            .onChange(of: model.completedSaleGeneration) { _, _ in onClose() }
+            .onChange(of: model.completedSaleGeneration) { _, _ in onClose?() }
         }
         .buttonStyle(.plain)
         .tint(PayTheme.ink)
@@ -135,9 +140,9 @@ struct POSView: View {
         VStack(alignment: .leading, spacing: 8) {
             Label("EVERBRANCH PAY", systemImage: "leaf.fill")
                 .font(.caption.weight(.semibold)).tracking(2).foregroundStyle(PayTheme.muted)
-            Text(model.selectedWorkspace?.name ?? "Modern Forestry")
+            Text(model.selectedWorkspace?.name ?? "Everbranch Pay")
                 .font(.system(.largeTitle, design: .serif)).fixedSize(horizontal: false, vertical: true)
-            Text(isSetup ? "Your register, ready for the next customer." : "One customer. One purchase. Connected rewards.")
+            Text(!model.signedIn ? "Sign in. Choose your business. Get ready to sell." : model.selectedWorkspace == nil ? "Choose a business you belong to, then its assigned register." : isSetup ? "Your register, ready for the next customer." : "One customer. One purchase. Connected rewards.")
                 .font(.subheadline).foregroundStyle(PayTheme.muted)
             if POSAppDelegate.environment != "production" {
                 Text("SANDBOX — no real customer payments").font(.caption.weight(.semibold))
@@ -149,7 +154,8 @@ struct POSView: View {
         PayCard(title: "Connect your register", icon: "person.crop.circle") {
             Text("Sign in to choose your business and the register assigned to this iPhone.")
                 .font(.subheadline).foregroundStyle(PayTheme.muted)
-            Button("Sign in to Everbranch", action: model.login).buttonStyle(PayButtonStyle())
+            Button("Continue with Google", action: model.loginWithGoogle).buttonStyle(PayButtonStyle())
+            Button("Continue with email", action: model.login).buttonStyle(PayButtonStyle(primary: false))
         }
     }
 
@@ -160,6 +166,10 @@ struct POSView: View {
                     Label(workspace.name, systemImage: "checkmark.circle.fill")
                     Button("Change business") { choosingBusiness = true }.frame(minHeight: 44)
                 } else {
+                    if model.workspaces.isEmpty {
+                        Text("This account has no active business memberships. Ask your business owner for an invitation, or sign out to use another account.")
+                            .font(.subheadline).foregroundStyle(PayTheme.muted)
+                    }
                     TextField("Find your business", text: $workspaceQuery).payInput().focused($inputFocused)
                     ForEach(model.workspaces.filter { workspaceQuery.isEmpty || $0.name.localizedCaseInsensitiveContains(workspaceQuery) }) { workspace in
                     Button { inputFocused = false; choosingBusiness = false; model.choose(workspace) } label: {
@@ -198,7 +208,7 @@ struct POSView: View {
         PayCard(title: "Your register", icon: "storefront") {
             if let register = model.selectedRegister {
                 Text(register.name).font(.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-                Text(register.location).font(.subheadline).foregroundStyle(PayTheme.muted)
+                Text("Square location: \(register.location)").font(.subheadline).foregroundStyle(PayTheme.muted)
                 Button("Change business or register") { choosingRegister = true }.frame(minHeight: 44)
             }
         }
@@ -225,8 +235,11 @@ struct POSView: View {
         if model.signedIn, model.pending == nil, model.selectedRegister != nil, !choosingRegister {
             VStack(spacing: 8) {
                 if isSetup {
-                    if model.tapReady { Button("Back to products", action: onClose).buttonStyle(PayButtonStyle()) }
-                    else { Button("Set up Tap to Pay", action: model.setup).buttonStyle(PayButtonStyle()).disabled(!setupAllowed) }
+                    if model.tapReady, let open = onOpenRegister ?? onClose { Button("Open register", action: open).buttonStyle(PayButtonStyle()) }
+                    else {
+                        Button("Set up Tap to Pay", action: model.setup).buttonStyle(PayButtonStyle()).disabled(!setupAllowed)
+                        if let open = onOpenRegister ?? onClose { Button("Open register", action: open).frame(minHeight: 44).disabled(!model.registerLoaded) }
+                    }
                 } else {
                     Button("Review exact total", action: { inputFocused = false; model.quote() })
                         .buttonStyle(PayButtonStyle()).disabled(!quoteAllowed)

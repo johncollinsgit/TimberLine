@@ -1,8 +1,20 @@
 import XCTest
 
 final class LaunchTests: XCTestCase {
+    func testSignInComesBeforeAnyBusinessCatalog() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.buttons["Continue with Google"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Continue with email"].exists)
+        XCTAssertFalse(app.webViews.firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["Modern Forestry"].exists)
+        XCTAssertFalse(app.buttons["Close"].exists)
+        attach(app, name: "Everbranch Pay sign in first")
+    }
+
     func testMerchantCatalogOpensFocusedNativeSetupWithoutCollection() {
         let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests"]
         app.launch()
         let catalog = app.webViews.firstMatch
         XCTAssertTrue(catalog.buttons["Build 3 × 8oz candles bundle"].waitForExistence(timeout: 15))
@@ -10,8 +22,8 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(catalog.buttons["Build 5 wax melts bundle"].exists)
         XCTAssertFalse(catalog.buttons.matching(NSPredicate(format: "label CONTAINS 'Simulate'")).firstMatch.exists)
         catalog.buttons["Account & Tap to Pay"].tap()
-        XCTAssertTrue(app.buttons["Sign in to Everbranch"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.navigationBars["Account & Tap to Pay"].exists)
+        XCTAssertTrue(app.buttons["Continue with email"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.navigationBars["Welcome"].exists)
         XCTAssertTrue(app.staticTexts["SANDBOX — no real customer payments"].exists)
         XCTAssertFalse(app.staticTexts["Device enrollment"].exists)
         app.buttons["Account & device details"].tap()
@@ -24,6 +36,7 @@ final class LaunchTests: XCTestCase {
 
     func testSearchKeepsPhoneScaleAndBasketOpensCheckout() {
         let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests"]
         app.launch()
         let catalog = app.webViews.firstMatch
         let search = catalog.textFields["Search products"]
@@ -45,8 +58,8 @@ final class LaunchTests: XCTestCase {
         catalog.buttons.matching(NSPredicate(format: "label CONTAINS 'Review basket'")).firstMatch.tap()
         XCTAssertTrue(catalog.buttons["Review customer & payment →"].waitForExistence(timeout: 5))
         catalog.buttons["Review customer & payment →"].tap()
-        XCTAssertTrue(app.navigationBars["Checkout"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Sign in to Everbranch"].exists)
+        XCTAssertTrue(app.navigationBars["Sign in to checkout"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Continue with email"].exists)
         attach(app, name: "Customer checkout entry")
         app.buttons["Close"].tap()
         XCTAssertTrue(catalog.buttons["Review customer & payment →"].waitForExistence(timeout: 5), "Closing native checkout preserves the basket")

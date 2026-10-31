@@ -37,6 +37,7 @@ struct POSReceipt: Decodable {
     @Published var quantities: [String: Int] = [:]
     @Published var selectedWorkspace: Workspace?
     @Published var selectedRegister: Register?
+    @Published var registerLoaded = false
     @Published var sale: Sale?
     @Published var receipt: POSReceipt?
     @Published var pending: PendingSale?
@@ -70,6 +71,16 @@ struct POSReceipt: Decodable {
         Task {
             defer { busy = false }
             do { try await action() }
+            catch POSError.signInRequired {
+                try? SecureStore.write("session", nil)
+                api.token = nil; signedIn = false; tapReady = false; registerLoaded = false
+                selectedWorkspace = nil; selectedRegister = nil; selectedCustomer = nil; customers = []
+                workspaces = []; registers = []; items = []; printingQuotes = []; quantities = [:]; sale = nil; receipt = nil
+                customerQuery = ""; customerFirstName = ""; customerLastName = ""; customerEmail = ""; customerPhone = ""; customerName = ""
+                invoiceID = ""; refundAmount = ""; initialBasket = []; basketIssue = nil
+                await collector.signOut()
+                message = "Sign in again to continue. Any unfinished payment is saved for recovery."
+            }
             catch let POSError.unavailable(text) { message = text }
             catch { message = pending == nil ? "Couldn’t finish that step. Check your connection and try again." : "The operation is not confirmed. Keep this sale and check its status before trying another payment." }
         }
@@ -86,6 +97,9 @@ struct POSReceipt: Decodable {
     func login() {
         perform { try await self.signIn.signIn(api: self.api); self.signedIn = true; try await self.loadWorkspaces() }
     }
+    func loginWithGoogle() {
+        perform { try await self.signIn.signIn(api: self.api, method: .google); self.signedIn = true; try await self.loadWorkspaces() }
+    }
     func loadWorkspaces() async throws {
         let response: WorkspaceList = try await api.request("api/mobile/v1/workspaces")
         workspaces = response.workspaces
@@ -94,7 +108,7 @@ struct POSReceipt: Decodable {
         let saved = SecureStore.read("selected-register").flatMap { try? JSONDecoder().decode(SavedRegister.self, from: $0) }
         let slug = selectedWorkspace?.slug ?? saved?.workspace
         guard let workspace = workspaces.first(where: { $0.slug == slug }) else {
-            selectedWorkspace = nil; selectedRegister = nil; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; tapReady = false
+            selectedWorkspace = nil; selectedRegister = nil; registerLoaded = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; tapReady = false
             return
         }
         selectedWorkspace = workspace
@@ -102,7 +116,7 @@ struct POSReceipt: Decodable {
         registers = result.registers
         let registerID = selectedRegister?.id ?? saved?.register
         guard let register = registers.first(where: { $0.id == registerID }) else {
-            selectedRegister = nil; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; tapReady = false
+            selectedRegister = nil; registerLoaded = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; tapReady = false
             return
         }
         try await loadRegister(register)
@@ -114,12 +128,13 @@ struct POSReceipt: Decodable {
     }
     private func loadRegister(_ register: Register) async throws {
         if selectedRegister?.id != register.id {
-            tapReady = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; invoiceID = ""
+            registerLoaded = false; tapReady = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; invoiceID = ""
         }
         selectedRegister = register
         guard let base else { return }
         let value: CatalogList = try await api.request(base + "/catalog")
         items = value.items
+        registerLoaded = true
         if !initialBasket.isEmpty {
             guard register.catalogSource == "shopify", initialBasket.allSatisfy({ line in
                 value.items.contains(where: { $0.id == line.variantID && line.quantity <= ($0.availableQuantity ?? 99) })
@@ -140,7 +155,7 @@ struct POSReceipt: Decodable {
     func choose(_ workspace: Workspace) {
         guard pending == nil else { return }
         perform {
-            self.selectedWorkspace = workspace; self.selectedRegister = nil; self.tapReady = false; self.selectedCustomer = nil; self.customers = []; self.items = []; self.quantities = [:]; self.invoiceID = ""
+            self.selectedWorkspace = workspace; self.selectedRegister = nil; self.registerLoaded = false; self.tapReady = false; self.selectedCustomer = nil; self.customers = []; self.items = []; self.quantities = [:]; self.invoiceID = ""
             let result: RegisterList = try await self.api.request("api/mobile/v1/workspaces/\(workspace.slug)/pos/registers")
             self.registers = result.registers
         }
@@ -291,7 +306,7 @@ struct POSReceipt: Decodable {
             await self.collector.signOut(); try SecureStore.write("session", nil)
             try SecureStore.write("selected-register", nil)
             self.api.token = nil; self.signedIn = false; self.tapReady = false
-            self.selectedWorkspace = nil; self.selectedRegister = nil; self.quantities = [:]; self.initialBasket = []; self.basketIssue = nil
+            self.selectedWorkspace = nil; self.selectedRegister = nil; self.registerLoaded = false; self.quantities = [:]; self.initialBasket = []; self.basketIssue = nil
             self.workspaces = []; self.registers = []; self.items = []; self.sale = nil; self.receipt = nil; self.selectedCustomer = nil; self.customers = []; self.customerQuery = ""; self.customerFirstName = ""; self.customerLastName = ""; self.customerEmail = ""; self.customerPhone = ""
             // Pending recovery identifiers remain in Keychain; signing out never clears payment uncertainty.
         }

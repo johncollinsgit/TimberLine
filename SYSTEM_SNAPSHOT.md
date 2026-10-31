@@ -10,8 +10,9 @@ Production installation, inventory permissions, Apple distribution approval and
 physical payment/settlement acceptance remain separate. Read
 `docs/operations/everbranch-pay-customer-square.md` before activation.
 
-The native phone interface now separates merchant-themed setup from customer
-checkout, restores only currently authorized register identifiers, and shows the
+The native phone interface starts with Everbranch Google/email sign-in and
+active-membership business selection. It separates merchant-themed setup from
+customer checkout, restores only currently authorized register identifiers, and shows the
 connected register's available products. Focused search no longer changes page
 scale. These interface changes do not activate collection or establish provider,
 physical-payment or publishing acceptance.

@@ -1,29 +1,43 @@
 import SwiftUI
 import WebKit
 
-struct ModernForestryRegisterView: View {
+struct EverbranchRegisterView: View {
     @State private var showingRegister = false
     @State private var screen: POSScreen = .setup
+    @State private var catalogOpened = SecureStore.read("selected-register") != nil
     @StateObject private var model = POSViewModel()
 
+    private var catalogTestMode: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--pos-catalog-ui-tests")
+        #else
+        false
+        #endif
+    }
+
     var body: some View {
-        ModernForestryCatalog(items: model.selectedRegister == nil ? nil : model.items,
-                              registerName: model.selectedRegister?.name,
-                              completedSaleGeneration: model.completedSaleGeneration) { selections in
-            guard !model.busy else { return }
-            screen = selections.isEmpty ? .setup : .checkout
-            model.begin(basket: selections)
-            showingRegister = true
+        Group {
+            if catalogTestMode || (model.signedIn && model.registerLoaded && catalogOpened && model.selectedWorkspace?.slug == "modern-forestry") {
+                ModernForestryCatalog(items: model.selectedRegister == nil ? nil : model.items,
+                                      registerName: model.selectedRegister?.name,
+                                      completedSaleGeneration: model.completedSaleGeneration) { selections in
+                    guard !model.busy else { return }
+                    screen = selections.isEmpty ? .setup : .checkout
+                    model.begin(basket: selections)
+                    showingRegister = true
+                }
+                .ignoresSafeArea(edges: .bottom)
+            } else if model.signedIn && model.registerLoaded && catalogOpened {
+                POSView(onAccount: { screen = .setup; showingRegister = true }, screen: .checkout, model: model)
+            } else {
+                POSView(onOpenRegister: { catalogOpened = true }, screen: .setup, model: model)
+            }
         }
         .background(Color(red: 0.96, green: 0.95, blue: 0.90))
-        .ignoresSafeArea(edges: .bottom)
         .sheet(isPresented: $showingRegister) {
-            POSView(onClose: { showingRegister = false }, screen: screen, model: model)
+            POSView(onClose: { showingRegister = false }, onOpenRegister: { catalogOpened = true; showingRegister = false }, screen: screen, model: model)
         }
-        .task { if model.signedIn && model.pending == nil { model.perform { try await model.loadWorkspaces() } } }
-        .onAppear {
-            if SecureStore.read("pending-sale") != nil { showingRegister = true }
-        }
+        .onChange(of: model.signedIn) { _, signedIn in if !signedIn { catalogOpened = false; showingRegister = false } }
     }
 }
 

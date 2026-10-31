@@ -182,7 +182,24 @@ Subsequent owner setup resolved several earlier evidence gaps above:
 - The registered phone requested native Square onboarding on build 2026103102.
   Server authorization is not proof that Apple linking and reader setup finished.
 
-Build 2026103104 is the revised phone interface candidate. Its signed development
+Build 2026103107 is the revised phone interface candidate. Its signed development
 archive is distinct from App Store/TestFlight publishing approval. Installation,
 protected-release checks and actual phone interaction must be recorded separately;
 normal payment collection remains off until the original acceptance gates pass.
+
+
+### Sign-in and business entry
+
+Everbranch Pay now starts with native Google/email sign-in, then the signed-in
+account's active business memberships and device-assigned registers. Google uses
+the existing Everbranch OAuth route and POS S256/code exchange; there is no new
+Google application, widened callback allowlist or separate POS user database.
+Revoked and unrelated memberships are excluded by the shared workspace API.
+The source test follows the existing Google user through native-code exchange
+and checks its scoped abilities, one-time use and active-membership list. This
+fixture is distinct from observing the real Google consent/browser flow.
+
+Only a selected, authorized Modern Forestry register opens that merchant's photo
+catalog. Other businesses use the same native customer/basket controls with their
+own register items. Restoring a previous register rechecks current membership and
+device assignment. No business selection enables collection or publishing.
