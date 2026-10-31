@@ -39,7 +39,7 @@ class ShopifyReuseScenario
 
     public bool $card = false;
 
-    public function __construct()
+    public function __construct(public bool $production = false)
     {
         Http::preventStrayRequests();
         $this->tenant = Tenant::create(['name' => 'Fictional Shopify reuse', 'slug' => 'shopify-reuse']);
@@ -79,7 +79,7 @@ class ShopifyReuseScenario
         config()->set('subscriptions.recharge_read_tenant_ids', [$this->tenant->id]);
         $input = ['processor' => 'shopify', 'shipping_cents' => 0, 'tax_cents' => 0, 'shipping_address' => $this->address(),
             'method_binding' => ['installation_id' => $this->installation->id, 'payment_method_gid' => 'gid://shopify/CustomerPaymentMethod/original_method',
-                'source_connection_id' => $this->source->id, 'source_payment_method_id' => '321', 'environment' => 'sandbox'],
+                'source_connection_id' => $this->source->id, 'source_payment_method_id' => '321', 'environment' => $this->production ? 'production' : 'sandbox'],
             'authorization_reference' => 'original-source:123', 'source_terms_reviewed' => true, 'continuing_authorization_reviewed' => true];
         $service = app(SubscriptionBillingAgreementService::class);
         $review = $service->review($this->tenant->id, $this->actor, $member->id, $input);
@@ -104,7 +104,7 @@ class ShopifyReuseScenario
             $scopes = array_diff($scopes, ['read_customer_payment_methods']);
         }
         $data = ['shop' => ['id' => 'gid://shopify/Shop/1001', 'myshopifyDomain' => $this->store->shop_domain, 'currencyCode' => 'USD',
-            'ianaTimezone' => 'America/New_York', 'plan' => ['partnerDevelopment' => $this->defect !== 'production_store']],
+            'ianaTimezone' => 'America/New_York', 'plan' => ['partnerDevelopment' => $this->production ? false : $this->defect !== 'production_store']],
             'currentAppInstallation' => ['id' => 'gid://shopify/AppInstallation/3001', 'app' => ['id' => $this->defect === 'app' ? 'gid://shopify/App/9999' : 'gid://shopify/App/2001',
                 'apiKey' => 'fictional-subscription-client'], 'accessScopes' => array_map(fn ($scope) => ['handle' => $scope], array_values($scopes))]];
         if (str_contains($request['query'], 'ReplacementSavedMethod')) {
@@ -118,7 +118,7 @@ class ShopifyReuseScenario
             $address['province'] = 'South Carolina';
             unset($address['countryCode']);
             $money = fn ($amount) => ['shopMoney' => ['amount' => $amount, 'currencyCode' => 'USD']];
-            $data['order'] = ['id' => 'gid://shopify/Order/111', 'customer' => ['id' => 'gid://shopify/Customer/456'], 'test' => true,
+            $data['order'] = ['id' => 'gid://shopify/Order/111', 'customer' => ['id' => 'gid://shopify/Customer/456'], 'test' => ! $this->production,
                 'updatedAt' => '2027-01-02T15:00:00Z', 'processedAt' => '2027-01-02T15:00:00Z', 'cancelledAt' => null,
                 'displayFinancialStatus' => $this->defect === 'refunded_order' ? 'REFUNDED' : 'PAID', 'customAttributes' => [['key' => 'rc_subscription_ids', 'value' => '789']],
                 'totalPriceSet' => $money('25.00'), 'totalShippingPriceSet' => $money('0.00'), 'totalTaxSet' => $money('0.00'), 'shippingAddress' => $address,

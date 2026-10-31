@@ -42,6 +42,10 @@ class SubscriptionBillingAgreement extends Model
                     throw new \LogicException('Retain the original Shopify adoption request, dispatch and provider references.');
                 }
             }
+            $activation = data_get($row->getOriginal('authorization_evidence'), 'shopify_activation.original');
+            if ($activation !== null && data_get($row->authorization_evidence, 'shopify_activation.original') !== $activation) {
+                throw new \LogicException('Retain the original Shopify activation request and source authority.');
+            }
         });
         static::deleting(fn () => throw new \LogicException('Retain subscription authorization history.'));
     }

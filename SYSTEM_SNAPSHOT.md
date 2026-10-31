@@ -1,3 +1,19 @@
+## Native Shopify subscription billing (October 30; source candidate)
+
+The replacement now includes original-account Shopify activation, current-day
+billing attempts, bounded original-attempt recovery and native paid-order
+reconciliation. It records Shopify's own order and payment once; it never uses
+the external order-create bridge for these attempts. Fresh source-stop, exact
+saved-method/contract/cycle review, merchant acceptance and independent default-off
+collection gates precede dispatch. Pending/challenged/unknown results retain the
+original request. Refunds/disputes and duplicate coverage block later collection.
+Accepted pause/cancel/skip/resume schedules sync through the reconciliation worker;
+local stops retain already-started attempts. Native production receipts and
+fulfillment project into existing read-only reporting; sandbox receipts remain
+excluded from production totals. The pinned billing documents validate locally;
+the separate calculation-schema gap and real store/provider acceptance remain
+unresolved. No live billing, source cancellation or deployment occurred.
+
 ## Original subscription authorization evidence (October 30; source candidate)
 
 New replacement preparations retain an encrypted, immutable snapshot of the
@@ -20,8 +36,9 @@ billing must be verified stopped before one durable contract commit. Lost result
 recover only the original app/customer/adoption UUID; empty, duplicate or partial
 reads never authorize another commit. The created contract is paused and its first
 billing instant is confirmed. Local activation, billing ownership and collection
-remain unchanged. Actual store/provider acceptance and billing execution remain
-outstanding. The bundled offline schema lacks documented calculation fields, so
+remain unchanged in the adoption command. Separate billing execution source is
+described above; actual store/provider acceptance remains outstanding. The bundled
+offline schema lacks documented calculation fields, so
 this source is not considered API-accepted from local tests alone. See the runbook.
 
 ## Modern Forestry reward channel limits (October 30; source candidate)

@@ -32,9 +32,9 @@ class ShopifyAdoptionScenario extends ShopifyReuseScenario
 
     public ?string $dispatchMarkerPath = null;
 
-    public function __construct()
+    public function __construct(bool $production = false)
     {
-        parent::__construct();
+        parent::__construct($production);
         $scopes = ['read_store', 'read_customers', 'read_subscriptions', 'read_payment_methods', 'read_orders'];
         $this->source->update(['scopes' => $scopes]);
         $this->sourceRevision->update(['scopes' => $scopes]);
@@ -101,7 +101,7 @@ class ShopifyAdoptionScenario extends ShopifyReuseScenario
         }
         $state = data_get($this->agreement->fresh()->authorization_evidence, 'shopify_adoption', []);
         $identity = ['shop' => ['id' => 'gid://shopify/Shop/1001', 'myshopifyDomain' => $this->store->shop_domain, 'currencyCode' => 'USD',
-            'ianaTimezone' => 'America/New_York', 'plan' => ['partnerDevelopment' => true]],
+            'ianaTimezone' => 'America/New_York', 'plan' => ['partnerDevelopment' => ! $this->production]],
             'currentAppInstallation' => ['id' => 'gid://shopify/AppInstallation/3001', 'app' => ['id' => 'gid://shopify/App/2001', 'apiKey' => 'fictional-subscription-client'],
                 'accessScopes' => array_map(fn ($handle) => ['handle' => $handle], ['read_customer_payment_methods', 'read_own_subscription_contracts',
                     'read_customers', 'read_orders', 'read_products', ...($this->adoptionDefect === 'write_scope' ? [] : ['write_own_subscription_contracts'])])]];

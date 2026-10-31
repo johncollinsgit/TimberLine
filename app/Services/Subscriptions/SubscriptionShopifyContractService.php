@@ -129,7 +129,7 @@ class SubscriptionShopifyContractService
                 && $state['calculation_id'] === $commit['calculation_id'] && $this->fresh($commit['source_stop_proof'])
                 && $commit['processor_context'] === $this->transport()->context($current), 409, 'Original contract or source-stop proof changed before adoption.');
             $this->saveState($current, array_replace($state, ['commit_original' => $commit, 'commit_send_proof' => $commit['source_stop_proof'], 'status' => 'commit_prepared']));
-            $this->audit($current, $actor, 'shopify_contract_commit_requested', $commit);
+            $this->audit($current, $actor, 'shopify_commit_requested', $commit);
         });
 
         return $this->sendCommit($row->fresh(), $actor);

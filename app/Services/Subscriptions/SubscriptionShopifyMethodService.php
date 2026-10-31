@@ -19,8 +19,9 @@ class SubscriptionShopifyMethodService
         $row = SubscriptionBillingAgreement::query()->forTenantId($tenantId)->findOrFail($agreementId);
         $access = app(SubscriptionReplacementAccess::class);
         $access->owner($tenantId, $actor, $row->member_id, 'setup');
-        $access->member($row);
-        abort_unless($row->processor === 'shopify' && $row->status === 'prepared' && ! $row->activated_at, 409);
+        $member = $access->member($row);
+        abort_unless($row->processor === 'shopify' && (($row->status === 'prepared' && ! $row->activated_at)
+            || (! $persist && $row->activated_at && $member->billing_owner === 'everbranch' && in_array($row->status, ['active', 'paused'], true))), 409);
         $original = SubscriptionBillingAuthorization::original($row);
         $sourceContext = $this->sourceContext($row);
         $transport = app(SubscriptionShopifyBillingTransport::class);

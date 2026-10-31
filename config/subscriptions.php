@@ -25,6 +25,7 @@ return [
     'replacement_braintree_collection_enabled' => (bool) env('SUBSCRIPTIONS_REPLACEMENT_BRAINTREE_COLLECTION_ENABLED', false),
     'replacement_braintree_live_acceptance_verified' => (bool) env('SUBSCRIPTIONS_REPLACEMENT_BRAINTREE_LIVE_ACCEPTANCE_VERIFIED', false),
     'replacement_shopify_adoption_enabled' => (bool) env('SUBSCRIPTIONS_REPLACEMENT_SHOPIFY_ADOPTION_ENABLED', false),
+    'replacement_shopify_collection_enabled' => (bool) env('SUBSCRIPTIONS_REPLACEMENT_SHOPIFY_COLLECTION_ENABLED', false),
     'replacement_shopify_live_acceptance_verified' => (bool) env('SUBSCRIPTIONS_REPLACEMENT_SHOPIFY_LIVE_ACCEPTANCE_VERIFIED', false),
     'replacement_tenant_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('SUBSCRIPTIONS_REPLACEMENT_TENANT_IDS', ''))), fn (int $id) => $id > 0)),
     'replacement_member_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('SUBSCRIPTIONS_REPLACEMENT_MEMBER_IDS', ''))), fn (int $id) => $id > 0)),

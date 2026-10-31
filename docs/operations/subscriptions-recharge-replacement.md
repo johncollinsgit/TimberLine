@@ -7,6 +7,78 @@ access can be verified. Stripe setup is an explicit fallback, not a universal
 migration requirement. The first rollout is the two already prepared members;
 all other members retain Recharge billing until separately reviewed.
 
+## Native Shopify billing (source candidate; production remains disabled)
+
+The original-app transport now supports separately gated activation, one durable
+billing attempt and reconciliation of the Shopify-created order. It preserves
+the original saved method, contract, credential, customer and billing anchor.
+There is no external order-create handoff or second collection for a native order.
+
+```
+subscriptions:shopify-billing summary --tenant=SLUG --actor=ID --agreement=ID
+subscriptions:shopify-billing accept --tenant=SLUG --actor=ID --agreement=ID --terms-hash=HASH --apply
+subscriptions:shopify-billing activate --tenant=SLUG --actor=ID --agreement=ID --terms-hash=HASH --revision=REV --apply
+subscriptions:shopify-billing collect --tenant=SLUG --actor=ID --agreement=ID --apply
+subscriptions:shopify-billing reconcile --tenant=SLUG --actor=ID --agreement=ID --cycle=ID --apply
+subscriptions:shopify-billing sync --tenant=SLUG --actor=ID --agreement=ID --apply
+```
+
+All actions without `--apply` are offline. Acceptance checks current pinned
+billing capabilities, own-contract write permission and `read_all_orders` for
+continued historical receipt verification. Shopify otherwise limits ordinary
+order access to recent history; see [order access](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/Order).
+Acceptance records no charge and does not enable collection. The existing setup,
+activation, collection, handoff and exact tenant/member gates still apply.
+`SUBSCRIPTIONS_REPLACEMENT_SHOPIFY_COLLECTION_ENABLED` defaults off; production
+also requires independent `SUBSCRIPTIONS_REPLACEMENT_SHOPIFY_LIVE_ACCEPTANCE_VERIFIED`.
+
+Activation requires the reviewed paused adoption and fresh original Recharge
+shutdown/charge coverage. The original activation intent is retained before the
+provider patch. A lost acknowledgement recovers the same contract; replay never
+undoes a later member pause, skip or cancellation. Local billing ownership changes
+only after the owned contract is active on its original first billing instant.
+
+Collection requires the reviewed current day/hour, unchanged terms, exact current
+saved-method proof and fresh source stop. The provider cycle must be unedited,
+unskipped, unbilled and without prior attempts, on the exact reviewed instant.
+Shared member/agreement/cycle locks durably claim one dispatch and source proof
+before HTTP. The original UUID, contract and payload stay fixed. Inventory policy
+is respected and payment policy is `FAIL_UNLESS_VALID_PAYMENT_METHOD`; unpaid-order
+creation is never selected. There is no overdue catch-up or automatic new attempt
+after uncertainty.
+
+The current API's pending, authentication-required, failed and successful states
+remain distinct. Reconciliation uses the original attempt ID or complete bounded
+original-contract pages with an exact idempotency key. Empty, partial or multiple
+matches never permit another dispatch. A successful state requires the exact
+owned paid order, products, quantities, prices, shipping, tax, currency, address,
+environment and matching actual payment transactions before receipt confirmation.
+Projected tax remains estimated; actual merchant tax/shipping acceptance is
+required before enabling production. Future authentication handling and dunning
+remain separate outstanding work; a challenged attempt never becomes paid from a
+redirect or a new payment request.
+
+Only a fresh verified receipt of the original immutable native cycle is excluded
+from the post-payment Shopify collection check. An arbitrary own-order string
+cannot hide a Shopify payment. Other Shopify/Recharge collections remain review
+blockers. Original order IDs and attempts survive refunds/disputes; these states
+block later collection and are excluded from confirmed collection totals. Sandbox receipts
+never appear as production collections. Production native order/payment and later
+fulfillment project into the existing read-only reporting lane without counting
+the receipt a second time.
+
+The bounded `subscriptions:replacement-process --reconcile --collect` worker now
+routes by the retained processor and syncs accepted Shopify schedule changes.
+Unchanged confirmed schedules make no extra provider calls. Local safe stops
+still prevent future collection while a remote acknowledgement is unconfirmed.
+Schedule patches never submit a charge, and cannot race past a newer local review.
+
+Seven pinned billing operations validate against the bundled 2026-10 schema.
+That does not resolve the separate calculation/adoption schema gap below or prove
+real account permissions, processor behavior, source cancellation effects or
+customer-visible parity. Full rollout remains blocked on hosted/provider
+acceptance for the two original testers. No production command was executed.
+
 ## Original authorization evidence (source candidate)
 
 Preparation now freezes `original_authorization` inside encrypted agreement
@@ -88,9 +160,10 @@ unknown until supported contract adoption and actual merchant acceptance succeed
 Finite source charge limits or a conflicting fixed monthly anchor require separate
 review; they cannot silently become an indefinite contract on another billing day.
 No real merchant mapping or no-reauthorization conclusion is established by the
-fictional tests. Shopify-vaulted collection remains unimplemented and disabled.
+fictional tests. Separate native billing source is described above and remains
+disabled pending actual merchant/API acceptance.
 
-## Paused Shopify contract adoption (source candidate; no billing execution)
+## Paused Shopify contract adoption (source candidate; adoption command does not bill)
 
 The original-app transport has a fixed calculation/commit protocol following
 Shopify's documented `SubscriptionContractCalculation` API. It retains the exact
@@ -229,7 +302,8 @@ proven. The two testers are acceptance cases, not hard-coded customer rules.
 - [x] Immutable original reviewed authorization snapshot, separated historical proof and current collection/adoption guards.
 - [ ] Address/scent future-term changes and original-authorization amendment handling.
 - [ ] Actual Braintree merchant sandbox/live acceptance and original source-stop verification.
-- [ ] Shopify-vaulted contract ownership/migration and billing attempts.
+- [x] Source implementation for Shopify-vaulted paused adoption, activation, billing attempts and native receipt reconciliation.
+- [ ] Actual Shopify API/merchant acceptance, customer authentication recovery and source cutover acceptance.
 - [ ] Customer membership/control parity, dunning, refunds and reconciliation.
 - [ ] Protected release and actual two-member acceptance.
 - [ ] Reviewed wider migration and eventual Recharge account retirement.

@@ -1,3 +1,27 @@
+## Native Shopify subscription billing (October 30; source candidate)
+
+`SubscriptionShopifyExecutionService` and the fixed billing protocol extend only
+the original installed-app transport. `subscriptions:shopify-billing` previews by
+default; explicit accept/activate/collect/reconcile/sync actions and the bounded
+replacement worker preserve exact tenant/member rollout. Merchant acceptance
+checks current own-contract writes, historical order access and pinned billing
+state/input capabilities. Separate Shopify collection/live-acceptance gates
+default off. Real merchant/API acceptance is still mandatory.
+
+Member/agreement/cycle locks protect one durable dispatch marker, source proof and
+stable original UUID. Recovery reads the original ID or complete bounded owned
+contract pages; no uncertain response permits another attempt. Exact paid-order
+economics, products, address, environment and payment transactions precede native
+receipt confirmation and anchor advancement. The external Shopify order bridge
+is never invoked. Only that fresh verified native receipt can be excluded from
+post-payment source coverage; other collections still block. Late refunds,
+disputes, pending challenges and duplicate signals require reconciliation.
+Schedule patches serialize with local member actions; retries do not undo later
+stops. The worker skips unchanged confirmed schedules without provider calls.
+Native order/payment/fulfillment reporting remains tenant-scoped and excludes
+sandbox collections. MySQL tests cover actual adoption/activation setup and a
+two-worker billing dispatch race; no DDL or production activation is included.
+
 ## Original subscription authorization evidence (October 30; source candidate)
 
 `SubscriptionBillingAuthorization` verifies the original HMAC-bound terms,

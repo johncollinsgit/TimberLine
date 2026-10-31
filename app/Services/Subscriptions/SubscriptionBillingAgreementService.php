@@ -112,7 +112,7 @@ class SubscriptionBillingAgreementService
                 && in_array($row->status, ['active', 'paused', 'cancelled'], true), 409, 'This agreement has not taken over billing from Recharge.');
             abort_unless($row->revision === $expectedRevision, 409, 'The subscription changed. Review its current state.');
             $inFlight = SubscriptionBillingCycle::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)
-                ->whereIn('payment_status', ['prepared', 'sending', 'unknown', 'processing', 'review'])->exists();
+                ->whereIn('payment_status', ['prepared', 'sending', 'unknown', 'processing', 'requires_action', 'review'])->exists();
             abort_if(! in_array($kind, ['pause', 'cancel'], true) && $inFlight, 409, 'An original billing attempt needs reconciliation before a schedule change.');
             $before = $this->state($row);
             if ($kind === 'cancel') {

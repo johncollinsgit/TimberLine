@@ -4,8 +4,10 @@ namespace App\Services\Subscriptions;
 
 use App\Models\ShopifyStore;
 use App\Models\SubscriptionBillingAgreement;
+use App\Models\SubscriptionBillingCycle;
 use App\Models\SubscriptionCredentialRevision;
 use App\Models\SubscriptionInstallation;
+use App\Models\SubscriptionPilotMember;
 use App\Models\SubscriptionRechargeConnection;
 use App\Models\SubscriptionRechargeCredentialRevision;
 use App\Models\User;
@@ -50,6 +52,121 @@ GRAPHQL;
         abort_unless(preg_match('/\A[1-9][0-9]{0,19}\z/', $id), 422);
 
         return $this->read($row, 'order', ['id' => 'gid://shopify/Order/'.$id]);
+    }
+
+    public function billingCapabilities(SubscriptionBillingAgreement $row): array
+    {
+        return $this->request($row, SubscriptionShopifyBillingProtocol::document('billing_capabilities'), [], true);
+    }
+
+    public function billingReadiness(SubscriptionBillingAgreement $row): void
+    {
+        $this->assertBillingCapabilities($row, 'subscriptionBillingAttemptCreate');
+    }
+
+    public function billingCycle(SubscriptionBillingAgreement $row, string $date): array
+    {
+        $input = ['contractId' => data_get($row->authorization_evidence, 'shopify_adoption.contract_id'),
+            'selector' => ['date' => SubscriptionShopifyBillingProtocol::instant($row->terms, $date)]];
+        abort_unless(is_string($input['contractId']), 409);
+
+        return $this->request($row, SubscriptionShopifyBillingProtocol::document('billing_cycle'), ['input' => $input], true);
+    }
+
+    public function billingAttempt(SubscriptionBillingCycle $cycle): array
+    {
+        abort_unless(is_string($cycle->provider_reference), 409);
+
+        return $this->request($this->cycleAgreement($cycle), SubscriptionShopifyBillingProtocol::document('attempt'), ['id' => $cycle->provider_reference], true);
+    }
+
+    public function billingAttempts(SubscriptionBillingCycle $cycle, ?string $after = null): array
+    {
+        abort_unless($after === null || (strlen($after) <= 2048 && $after !== ''), 409);
+
+        return $this->request($this->cycleAgreement($cycle), SubscriptionShopifyBillingProtocol::document('attempts'),
+            ['id' => $cycle->terms['shopify_contract_id'], 'after' => $after], true);
+    }
+
+    private function cycleAgreement(SubscriptionBillingCycle $cycle): SubscriptionBillingAgreement
+    {
+        $row = SubscriptionBillingAgreement::query()->forTenantId($cycle->tenant_id)->findOrFail($cycle->agreement_id);
+        abort_unless($cycle->processor === 'shopify' && $cycle->method_binding === $row->method_binding
+            && $cycle->terms['shopify_contract_id'] === data_get($row->authorization_evidence, 'shopify_adoption.contract_id')
+            && data_get($cycle->source_evidence, 'processor_context') === $this->context($row)
+            && $cycle->merchant_fingerprint === SubscriptionEvidence::digest(SubscriptionEvidence::canonical($this->context($row))), 409, 'Retain the original Shopify cycle account, contract and credential.');
+
+        return $row;
+    }
+
+    /** The single payment dispatch is claimed under the same locks as pause/cancel and never replayed. */
+    public function bill(SubscriptionBillingCycle $cycle, array $sourceProof): array
+    {
+        $row = $this->cycleAgreement($cycle);
+        $this->assertBillingCapabilities($row, 'subscriptionBillingAttemptCreate');
+        $providerCycle = $this->billingCycle($row, $cycle->cycle_date->toDateString());
+        SubscriptionShopifyBillingProtocol::unbilled($row, $providerCycle['subscriptionBillingCycle'] ?? [], $cycle->cycle_date->toDateString());
+        $contract = $this->contractRead($row, 'contract')['subscriptionContract'] ?? [];
+        SubscriptionShopifyBillingProtocol::owned($row, $contract);
+        SubscriptionShopifyContractProtocol::assertTerms($row, $contract, data_get($row->authorization_evidence, 'shopify_adoption.original.request_uuid', ''));
+        abort_unless(($contract['status'] ?? null) === 'ACTIVE' && SubscriptionShopifyBillingProtocol::sameInstant($contract['nextBillingDate'] ?? null,
+            SubscriptionShopifyBillingProtocol::instant($cycle->terms, $cycle->cycle_date->toDateString())), 409, 'The original Shopify contract is not active on this reviewed billing instant.');
+        DB::transaction(function () use ($row, $cycle, $sourceProof) {
+            SubscriptionPilotMember::query()->forTenantId($row->tenant_id)->whereKey($row->member_id)->lockForUpdate()->firstOrFail();
+            $current = SubscriptionBillingAgreement::query()->forTenantId($row->tenant_id)->whereKey($row->id)->lockForUpdate()->firstOrFail();
+            $attempt = SubscriptionBillingCycle::query()->forTenantId($row->tenant_id)->whereKey($cycle->id)->lockForUpdate()->firstOrFail();
+            abort_if($attempt->payment_started_at || data_get($attempt->reconciliation, 'dispatch_started_at'), 409, 'Recover the original Shopify attempt; never submit another payment request.');
+            app(SubscriptionShopifyExecutionService::class)->assertDispatch($current, $attempt, $sourceProof);
+            $attempt->update(['payment_status' => 'sending', 'payment_started_at' => now(),
+                'reconciliation' => array_replace($attempt->reconciliation ?? [], ['dispatch_started_at' => now()->toISOString(), 'dispatch_source_proof' => $sourceProof])]);
+        });
+        $attempt = $cycle->fresh();
+        $row = $this->cycleAgreement($attempt);
+        app(SubscriptionShopifyExecutionService::class)->assertDispatch($row, $attempt, $sourceProof);
+
+        return $this->request($row, SubscriptionShopifyBillingProtocol::document('bill'), [
+            'id' => $attempt->provider_request['subscriptionContractId'], 'input' => $attempt->provider_request['subscriptionBillingAttemptInput'],
+        ], false);
+    }
+
+    /** Serialize owned schedule patches with local customer changes. These operations never charge. */
+    public function schedule(SubscriptionBillingAgreement $row, string $operation, int $expectedRevision): array
+    {
+        abort_unless(in_array($operation, ['activate', 'pause', 'cancel', 'set_date'], true), 422);
+        $mutation = ['activate' => 'subscriptionContractActivate', 'pause' => 'subscriptionContractPause',
+            'cancel' => 'subscriptionContractCancel', 'set_date' => 'subscriptionContractSetNextBillingDate'][$operation];
+        $this->assertBillingCapabilities($row, $mutation);
+
+        return DB::transaction(function () use ($row, $operation, $expectedRevision) {
+            SubscriptionPilotMember::query()->forTenantId($row->tenant_id)->whereKey($row->member_id)->lockForUpdate()->firstOrFail();
+            $current = SubscriptionBillingAgreement::query()->forTenantId($row->tenant_id)->whereKey($row->id)->lockForUpdate()->firstOrFail();
+            abort_unless($current->revision === $expectedRevision, 409, 'The local subscription schedule changed before the provider patch.');
+            app(SubscriptionShopifyExecutionService::class)->assertSchedule($current, $operation);
+            $variables = ['id' => data_get($current->authorization_evidence, 'shopify_adoption.contract_id')];
+            if ($operation === 'set_date') {
+                $variables['date'] = SubscriptionShopifyBillingProtocol::instant($current->terms,
+                    $current->next_billing_date?->toDateString() ?? $current->terms['first_billing_date']);
+            }
+            $document = match ($operation) {
+                'pause' => SubscriptionShopifyContractProtocol::document('pause'),
+                'set_date' => SubscriptionShopifyContractProtocol::document('first_date'),
+                default => SubscriptionShopifyBillingProtocol::document($operation),
+            };
+
+            return $this->request($current, $document, $variables, false);
+        });
+    }
+
+    private function assertBillingCapabilities(SubscriptionBillingAgreement $row, string $mutation): void
+    {
+        $data = $this->billingCapabilities($row);
+        abort_unless(collect(data_get($data, 'currentAppInstallation.accessScopes', []))->pluck('handle')->contains('write_own_subscription_contracts')
+            && collect(data_get($data, 'currentAppInstallation.accessScopes', []))->pluck('handle')->contains('read_all_orders')
+            && collect(data_get($data, 'mutationType.fields', []))->pluck('name')->contains($mutation)
+            && collect(data_get($data, 'attemptType.fields', []))->pluck('name')->contains('state')
+            && ! array_diff(['actor', 'billingCycleSelector', 'idempotencyKey', 'inventoryPolicy', 'originTime', 'paymentProcessingPolicy'], collect(data_get($data, 'inputType.inputFields', []))->pluck('name')->all())
+            && ! array_diff(['SubscriptionBillingAttemptPendingState', 'SubscriptionBillingAttemptActionRequiredState', 'SubscriptionBillingAttemptFailedState', 'SubscriptionBillingAttemptSuccessState'], collect(data_get($data, 'stateType.possibleTypes', []))->pluck('name')->all()),
+            423, 'The original app needs the pinned billing protocol, own-contract write permission and historical order access for continuing reconciliation.');
     }
 
     public function contractRead(SubscriptionBillingAgreement $row, string $operation): array

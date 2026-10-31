@@ -250,11 +250,13 @@ class SubscriptionPilotService
             $blockers[] = 'Stripe merchant, signed callback and Shopify bridge readiness required';
         }
 
+        $processorLabel = $replacementCycle?->processor === 'shopify' ? 'Shopify' : 'Braintree';
         $replacementPayment = $replacementCycle ? match ($replacementCycle->payment_status) {
-            'succeeded' => $replacementCycle->method_binding['environment'] === 'production' ? 'Confirmed Braintree payment' : 'Confirmed sandbox payment',
-            'processing' => 'Processing Braintree settlement', 'unknown', 'sending' => 'Original Braintree payment unconfirmed',
-            'refunded' => 'Braintree refund observed', 'disputed' => 'Braintree dispute observed', 'declined' => 'Braintree payment declined',
-            'review' => 'Braintree payment needs review', default => 'Awaiting payment',
+            'succeeded' => $replacementCycle->method_binding['environment'] === 'production' ? 'Confirmed '.$processorLabel.' payment' : 'Confirmed sandbox payment',
+            'processing' => $processorLabel === 'Braintree' ? 'Processing Braintree settlement' : 'Processing Shopify payment',
+            'unknown', 'sending' => 'Original '.$processorLabel.' payment unconfirmed', 'requires_action' => 'Shopify payment authentication required',
+            'refunded' => $processorLabel.' refund observed', 'disputed' => $processorLabel.' dispute observed', 'declined' => $processorLabel.' payment declined',
+            'review' => $processorLabel.' payment needs review', default => 'Awaiting payment',
         } : null;
 
         return ['id' => $member->id, 'name' => $member->details['name'], 'email' => $member->details['email'],
@@ -340,16 +342,27 @@ class SubscriptionPilotService
             }
             if (! $subscriptionIds && Schema::hasTable('subscription_billing_cycles')) {
                 $replacementCycle = SubscriptionBillingCycle::query()->forTenantId($tenantId)->where('shopify_order_id', (string) $order['id'])
-                    ->where('public_id', $attributes->get('everbranch_billing_cycle'))->first();
+                    ->where(fn ($q) => $q->where('processor', 'shopify')->orWhere('public_id', $attributes->get('everbranch_billing_cycle')))->first();
                 if ($replacementCycle) {
                     $agreement = SubscriptionBillingAgreement::query()->forTenantId($tenantId)->find($replacementCycle->agreement_id);
-                    if (! $agreement || $agreement->member_id !== $member->id || $replacementCycle->processor !== 'braintree'
+                    $native = $replacementCycle->processor === 'shopify';
+                    $proof = data_get($replacementCycle->reconciliation, 'latest_shopify_receipt', []);
+                    $mapping = $native
+                        ? ($agreement && $agreement->method_binding === $replacementCycle->method_binding
+                            && in_array($proof['status'] ?? null, ['succeeded', 'refunded', 'disputed'], true)
+                            && data_get($agreement->authorization_evidence, 'shopify_adoption.contract_id') === $replacementCycle->terms['shopify_contract_id']
+                            && ($proof['attempt_id'] ?? null) === $replacementCycle->provider_reference && ($proof['order_id'] ?? null) === (string) $order['id']
+                            && $replacementCycle->amount_cents === $this->cents((string) ($order['total_price'] ?? ''))
+                            && array_map('basename', $proof['payment_ids'] ?? []) === array_values(array_map(fn ($t) => (string) $t['id'], array_filter($order['transactions'] ?? [],
+                                fn ($t) => strtolower((string) ($t['gateway'] ?? '')) === 'shopify_payments' && strtolower((string) ($t['status'] ?? '')) === 'success'
+                                    && in_array(strtolower((string) ($t['kind'] ?? '')), ['sale', 'capture'], true)))))
+                        : ($replacementCycle->processor === 'braintree' && $replacementCycle->provider_reference === $attributes->get('everbranch_braintree_transaction')
+                            && $replacementCycle->merchant_fingerprint === $attributes->get('everbranch_processor_account')
+                            && $replacementCycle->terms['terms_hash'] === $attributes->get('everbranch_terms_hash'));
+                    if (! $agreement || $agreement->member_id !== $member->id || ! $mapping
                         || ! $replacementCycle->paid_at || ($replacementCycle->method_binding['environment'] ?? null) !== 'production'
                         || $replacementCycle->handoff_status !== 'confirmed' || $replacementCycle->terms['shopify_store_id'] !== $store->id
-                        || $replacementCycle->terms['shop_domain'] !== $store->shop_domain
-                        || $replacementCycle->provider_reference !== $attributes->get('everbranch_braintree_transaction')
-                        || $replacementCycle->merchant_fingerprint !== $attributes->get('everbranch_processor_account')
-                        || $replacementCycle->terms['terms_hash'] !== $attributes->get('everbranch_terms_hash')) {
+                        || $replacementCycle->terms['shop_domain'] !== $store->shop_domain) {
                         $replacementCycle = null;
                     }
                 }

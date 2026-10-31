@@ -312,7 +312,7 @@ jobs:
         run: scripts/ci/verify-mysql-schema-baseline.sh
 
       - name: Verify original subscription provider dispatch concurrency
-        run: php ./vendor/bin/pest tests/Integration/SubscriptionBraintreeDispatchConcurrencyTest.php tests/Integration/SubscriptionShopifyAdoptionConcurrencyTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/SubscriptionBraintreeDispatchConcurrencyTest.php tests/Integration/SubscriptionShopifyAdoptionConcurrencyTest.php tests/Integration/SubscriptionShopifyBillingConcurrencyTest.php --compact
 
       - name: Verify POS register and shared-stock concurrency
         env:

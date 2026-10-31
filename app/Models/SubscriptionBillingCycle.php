@@ -41,6 +41,10 @@ class SubscriptionBillingCycle extends Model
             if ($priorDispatch !== null && data_get($row->reconciliation, 'dispatch_started_at') !== $priorDispatch) {
                 throw new \LogicException('The original provider dispatch marker cannot be replaced or erased.');
             }
+            $proof = data_get($row->getOriginal('reconciliation'), 'dispatch_source_proof');
+            if ($proof !== null && data_get($row->reconciliation, 'dispatch_source_proof') !== $proof) {
+                throw new \LogicException('Retain the source-stop proof used for the original payment dispatch.');
+            }
         });
         static::deleting(fn () => throw new \LogicException('Retain subscription payment evidence.'));
     }
