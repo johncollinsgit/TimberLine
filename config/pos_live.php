@@ -3,6 +3,7 @@
 return [
     'enabled' => (bool) env('POS_LIVE_ENABLED', false),
     'collection_enabled' => (bool) env('POS_LIVE_COLLECTION_ENABLED', false),
+    'development_acceptance_enabled' => (bool) env('POS_DEVELOPMENT_ACCEPTANCE_ENABLED', false),
     'servicing_enabled' => (bool) env('POS_LIVE_SERVICING_ENABLED', false),
     'runtime_id' => env('POS_RUNTIME_ID'),
     'onboarding_enabled' => (bool) env('POS_NATIVE_ONBOARDING_ENABLED', false),

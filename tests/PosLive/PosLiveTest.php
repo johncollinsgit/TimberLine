@@ -72,6 +72,160 @@ function posFixtureQuote($test): array
     return $test->postJson($test->base.'/quotes', $test->selection)->assertOk()->json();
 }
 
+function posFixtureDevelopment($test): array
+{
+    config()->set(['pos_live.square_environment' => 'production', 'pos_live.apple_team_id' => 'FICTIONALTEAM',
+        'pos_live.onboarding_build' => 'development_build', 'pos_live.development_acceptance_enabled' => true,
+        'pos_live.distribution_verified' => false, 'pos_live.collection_enabled' => false,
+        'pos_live.tap_entitlement_verified' => true, 'pos_live.square_signature_verified' => true,
+        'pos_live.webhooks_verified' => true, 'cache.default' => 'database']);
+    $test->withHeader('X-Pos-Build', 'development_build');
+    $test->store->rows('connections', $test->tenant->id)->update(['environment' => 'production']);
+    $test->store->rows('items', $test->tenant->id)->update(['unit_amount_minor' => 300]);
+    $review = ['tenant_id' => $test->tenant->id, 'register_id' => $test->register,
+        'merchant_id' => 'fixture_merchant', 'location_id' => 'fixture_location',
+        'application_id' => config('pos_live.square_application_id'), 'bundle_id' => config('pos_live.bundle_id'),
+        'apple_team_id' => 'FICTIONALTEAM', 'build' => 'development_build', 'device_id' => 'fixture_device_1234',
+        'development_profile_verified' => true, 'registered_device_verified' => true, 'installed_build_verified' => true,
+        'apple_case_id' => 'FICTIONAL', 'profile_uuid' => 'FICTIONAL', 'profile_expires_at' => now()->addDay()->toIso8601String()];
+    foreach (['grant_sha256', 'signature_report_sha256', 'installed_build_report_sha256', 'ipa_sha256', 'registered_udid_sha256'] as $key) {
+        $review[$key] = str_repeat('f', 64);
+    }
+    $settings = $test->store->decrypt($test->store->rows('registers', $test->tenant->id)->first()->configuration);
+    $settings['merchant_review'] = ['document_hash' => str_repeat('a', 64), 'markup_minor' => 0];
+    $settings['shopify_acceptance_verified'] = false;
+    $settings['development_acceptance'] = ['id' => str_repeat('e', 32), 'actor_id' => $test->actor->id,
+        'device_id' => 'fixture_device_1234', 'build' => 'development_build', 'max_amount_minor' => 500,
+        'issued_at' => now()->toIso8601String(), 'expires_at' => now()->addHour()->toIso8601String(), 'evidence' => $review];
+    $test->store->rows('registers', $test->tenant->id)->update(['collection_enabled' => false, 'configuration' => $test->store->encrypt($settings)]);
+
+    return $settings;
+}
+
+it('permits one reviewed development sale with commercial gates still off and recovers it after expiry', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Production payment bindings require the durable MySQL journal.');
+    }
+    posFixtureDevelopment($this);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk()->assertJsonPath('collection.amount_minor', 321);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk()->assertJsonMissingPath('collection');
+    $this->selection['request_id'] = (string) Str::uuid();
+    $second = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$second['sale_id'].'/collect')->assertConflict();
+    expect(config('pos_live.collection_enabled'))->toBeFalse()->and(config('pos_live.distribution_verified'))->toBeFalse()
+        ->and((bool) $this->store->rows('registers', $this->tenant->id)->first()->collection_enabled)->toBeFalse();
+    $settings = $this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration);
+    $settings['development_acceptance']['expires_at'] = now()->subMinute()->toIso8601String();
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    posFixtureSquarePayment($this, $quote['sale_id'], changes: ['amount_money' => ['amount' => 321], 'total_money' => ['amount' => 321]]);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()->assertJsonPath('state', 'succeeded');
+    $this->postJson($this->base.'/sales/'.$second['sale_id'].'/collect')->assertStatus(503);
+});
+
+it('retains development owner device build tenant evidence and budget boundaries', function (string $change): void {
+    $settings = posFixtureDevelopment($this);
+    if ($change === 'flag') {
+        config()->set('pos_live.development_acceptance_enabled', false);
+    } elseif ($change === 'build') {
+        $this->withHeader('X-Pos-Build', 'other_build');
+    } elseif ($change === 'amount') {
+        $settings['development_acceptance']['max_amount_minor'] = 300;
+    } elseif ($change === 'expiry') {
+        $settings['development_acceptance']['expires_at'] = now()->subMinute()->toIso8601String();
+    } elseif ($change === 'duration') {
+        $settings['development_acceptance']['expires_at'] = now()->addHours(3)->toIso8601String();
+    } elseif ($change === 'merchant') {
+        $settings['development_acceptance']['evidence']['merchant_id'] = 'other_merchant';
+    } elseif ($change === 'tenant') {
+        $settings['development_acceptance']['evidence']['tenant_id']++;
+    } elseif ($change === 'profile') {
+        $settings['development_acceptance']['evidence']['profile_expires_at'] = now()->subMinute()->toIso8601String();
+    } elseif ($change === 'proof') {
+        unset($settings['development_acceptance']['evidence']['grant_sha256']);
+    } elseif ($change === 'signature') {
+        config()->set('pos_live.square_signature_verified', false);
+    } elseif ($change === 'device') {
+        $this->store->rows('assignments', $this->tenant->id)->insert($this->store->values($this->tenant->id, [
+            'register_id' => $this->register, 'user_id' => $this->actor->id, 'device_id' => 'another_assigned_device', 'role' => 'admin', 'active' => true]));
+        $this->withHeader('X-Pos-Device', 'another_assigned_device');
+    } elseif ($change === 'actor') {
+        $settings['development_acceptance']['actor_id']++;
+    }
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertStatus(503);
+    Http::assertNothingSent();
+})->with(['flag', 'build', 'amount', 'expiry', 'duration', 'merchant', 'tenant', 'profile', 'proof', 'signature', 'device', 'actor']);
+
+it('requires quotes from the same development session before any reservation', function (): void {
+    posFixtureDevelopment($this);
+    $quote = posFixtureQuote($this);
+    $settings = $this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration);
+    $settings['development_acceptance']['id'] = str_repeat('a', 32);
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertStatus(503);
+    Http::assertNothingSent();
+});
+
+it('previews and audits development activation without marking commercial or physical acceptance true', function (): void {
+    $settings = posFixtureDevelopment($this);
+    $merchantPath = tempnam(sys_get_temp_dir(), 'pos-merchant-');
+    $developmentPath = tempnam(sys_get_temp_dir(), 'pos-development-');
+    try {
+        file_put_contents($merchantPath, json_encode(['tenant_id' => $this->tenant->id, 'merchant_id' => 'fixture_merchant',
+            'location_id' => 'fixture_location', 'actual_processing_rate' => 'Fictional reviewed test rate',
+            'everbranch_markup_minor' => 0, 'paid_square_subscription_added' => false]));
+        file_put_contents($developmentPath, json_encode($settings['development_acceptance']['evidence']));
+        chmod($merchantPath, 0600);
+        chmod($developmentPath, 0600);
+        $options = ['tenant' => $this->tenant->id, 'register' => $this->register, '--actor' => $this->actor->id,
+            '--review' => $merchantPath, '--development-review' => $developmentPath, '--build' => 'development_build',
+            '--acceptance-device' => 'fixture_device_1234', '--acceptance-cap' => 500];
+        $this->artisan('pos:activate', $options)->assertExitCode(0);
+        expect($this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration)['development_acceptance']['id'])->toBe(str_repeat('e', 32));
+        $this->artisan('pos:activate', [...$options, '--apply' => true])->assertExitCode(0);
+        $register = $this->store->rows('registers', $this->tenant->id)->first();
+        expect((bool) $register->collection_enabled)->toBeFalse()
+            ->and($this->store->rows('connections', $this->tenant->id)->first()->acceptance_at)->toBeNull()
+            ->and($this->store->rows('events', $this->tenant->id)->where('code', 'development_acceptance_activated')->count())->toBe(1);
+        $saved = $this->store->decrypt($register->configuration);
+        $saved['development_acceptance']['sale_id'] = 'claimed-original-sale';
+        $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($saved)]);
+        expect(fn () => \Illuminate\Support\Facades\Artisan::call('pos:activate', [...$options, '--apply' => true]))
+            ->toThrow(\App\Services\Pos\PosException::class, 'private_unused_development_review_required');
+    } finally {
+        unlink($merchantPath);
+        unlink($developmentPath);
+    }
+});
+
+it('keeps real Shopify preparation in development acceptance and cannot replace an ambiguous order', function (): void {
+    posFixtureShopify($this, loseCreate: true, small: true);
+    posFixtureDevelopment($this);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertStatus(503)->assertJsonMissingPath('collection');
+    $this->selection['request_id'] = (string) Str::uuid();
+    $second = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$second['sale_id'].'/collect')->assertConflict();
+    expect($this->shopifyCreates)->toBe(1)->and($this->journal->findByRequest($this->tenant->id,
+        $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->first()->payment_request_id))->toBeNull();
+});
+
+it('prepares and finalizes the original Shopify order in a development acceptance sale without claiming prior inventory proof', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Production payment bindings require the durable MySQL journal.');
+    }
+    posFixtureShopify($this, small: true);
+    posFixtureDevelopment($this);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk()->assertJsonPath('stock_state', 'held');
+    posFixtureSquarePayment($this, $quote['sale_id'], changes: ['amount_money' => ['amount' => 321], 'total_money' => ['amount' => 321]]);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()->assertJsonPath('stock_state', 'committed');
+    expect($this->shopifyCreates)->toBe(1)->and($this->shopifyPaid)->toBeTrue()->and($this->shopifyFulfilled)->toBeTrue()
+        ->and($this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration)['shopify_acceptance_verified'])->toBeFalse();
+});
+
 function posFixtureSquarePayment($test, string $sale, string $status = 'COMPLETED', array $changes = []): void
 {
     $row = $test->store->rows('sales', $test->tenant->id)->where('id', $sale)->first();
@@ -258,7 +412,7 @@ it('serializes partial refunds against the original paid budget without restocki
     Http::assertSentCount(6); // Three original-payment audits, one refund POST, list and canonical refund GET.
 });
 
-function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation = false): void
+function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation = false, bool $small = false): void
 {
     $shop = \App\Models\ShopifyStore::create(['tenant_id' => $test->tenant->id, 'store_key' => 'fixture-store-'.$test->tenant->id,
         'shop_domain' => 'fictional-pos-'.$test->tenant->id.'.myshopify.com', 'access_token' => 'fixture-shopify-token']);
@@ -274,10 +428,10 @@ function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation 
     $test->shopifyCreates = 0;
     $test->shopifyPaid = false;
     $test->shopifyFulfilled = false;
-    Http::fake(['https://fictional-pos-*.myshopify.com/*' => function ($request) use ($test, $loseCreate, $wrongLocation) {
+    Http::fake(['https://fictional-pos-*.myshopify.com/*' => function ($request) use ($test, $loseCreate, $wrongLocation, $small) {
         $query = $request['query'];
         $shop = ['id' => 'gid://shopify/Shop/1', 'currencyCode' => 'USD'];
-        $money = fn ($value) => ['shopMoney' => ['amount' => $value, 'currencyCode' => 'USD']];
+        $money = fn ($value) => ['shopMoney' => ['amount' => $small ? (['10.70' => '3.21', '0.70' => '0.21', '10.00' => '3.00'][$value] ?? $value) : $value, 'currencyCode' => 'USD']];
         $sale = $test->store->rows('sales', $test->tenant->id)->first();
         $order = fn () => ['customer' => $test->shopifyCustomerID ? ['id' => $test->shopifyCustomerID] : null, 'id' => 'gid://shopify/Order/4', 'displayFinancialStatus' => $test->shopifyPaid ? 'PAID' : 'PENDING', 'cancelledAt' => null,
             'totalPriceSet' => $money('10.70'), 'totalTaxSet' => $money('0.70'), 'totalOutstandingSet' => $money($test->shopifyPaid ? '0.00' : '10.70'),
@@ -289,7 +443,7 @@ function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation 
                     'remainingQuantity' => 1, 'totalQuantity' => 1, 'lineItem' => ['variant' => ['id' => 'gid://shopify/ProductVariant/3']]]]]]]]];
         if (str_contains($query, 'PosCatalog')) {
             $data = ['shop' => $shop, 'nodes' => [['id' => 'gid://shopify/ProductVariant/3', 'title' => 'Default', 'sku' => 'FICTIONAL-SHOPIFY',
-                'price' => '10.00', 'updatedAt' => '2026-10-24T00:00:00Z', 'inventoryPolicy' => 'DENY',
+                'price' => $small ? '3.00' : '10.00', 'updatedAt' => '2026-10-24T00:00:00Z', 'inventoryPolicy' => 'DENY',
                 'product' => ['id' => 'gid://shopify/Product/8', 'title' => 'Fictional Shopify product', 'status' => 'ACTIVE', 'isGiftCard' => false],
                 'inventoryItem' => ['tracked' => true, 'inventoryLevel' => ['quantities' => [['name' => 'available', 'quantity' => 1]]]]]]];
         } elseif (str_contains($query, 'PosCalculate')) {

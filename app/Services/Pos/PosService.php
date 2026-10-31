@@ -41,7 +41,7 @@ final class PosService
                 'catalog_source' => $register->catalog_source, 'environment' => $scope['connection']->environment,
                 'can_create_customers' => in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
                 'setup_blockers' => config('pos_live.onboarding_enabled') === true ? $this->readiness->onboardingBlockers($register, $scope['connection'], $scope) : $this->readiness->blockers($register, $scope['connection']),
-                'blockers' => $this->readiness->blockers($register, $scope['connection'])];
+                'blockers' => $this->readiness->blockers($register, $scope['connection'], null, $scope)];
         }
 
         return ['registers' => $rows, 'runtime_id' => $this->store->runtime(), 'square_application_id' => config('pos_live.square_application_id')];
@@ -117,6 +117,7 @@ final class PosService
         $id = bin2hex(random_bytes(16));
         $sale = new SaleSnapshot($id, 'usd', $terms['lines']);
         $snapshot = ['binding' => $binding->snapshot(), 'connection_id' => $scope['connection']->id,
+            'development_acceptance_id' => app(PosDevelopmentAcceptance::class)->session($scope['register'], $scope['connection'], $scope)['id'] ?? null,
             'build' => $scope['build'], 'device_id' => $scope['device_id'], 'input_hash' => $hash, 'terms' => $terms, 'customer' => $customer ?? ($input['customer'] ?? null), 'customer_rewards' => $rewards,
             'register_name' => $scope['register']->name, 'location_name' => $scope['register']->location_name,
             'sale' => $sale->snapshot(), 'configuration' => $settings];
@@ -162,7 +163,7 @@ final class PosService
                 return $this->inspect($register, $id);
             }
             $scope = $this->refreshStaleMerchant($scope, (int) $sale->amount_minor);
-            $blockers = $this->readiness->blockers($scope['register'], $scope['connection'], (int) $sale->amount_minor);
+            $blockers = $this->readiness->blockers($scope['register'], $scope['connection'], (int) $sale->amount_minor, $scope);
             if ($blockers) {
                 throw new PosException('collection_not_ready', 503);
             }
@@ -181,6 +182,8 @@ final class PosService
                     throw new PosException('customer_rewards_policy_changed');
                 }
             }
+            $this->access->assertAllowed($binding, 'collect');
+            app(PosDevelopmentAcceptance::class)->claim($scope, $sale, $snapshot);
             $this->square->verify($scope['connection']);
             if ($snapshot['terms']['source'] === 'shopify') {
                 $this->shopify->prepare($scope, $sale, $snapshot);

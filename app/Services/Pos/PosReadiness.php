@@ -40,11 +40,12 @@ final class PosReadiness
     }
 
     /** Saved evidence only: this report never creates grants or contacts a provider. */
-    public function blockers(object $register, object $connection, ?int $amount = null): array
+    public function blockers(object $register, object $connection, ?int $amount = null, ?array $scope = null): array
     {
         $settings = $this->store->decrypt($register->configuration);
+        $development = app(PosDevelopmentAcceptance::class)->session($register, $connection, $scope);
         $blockers = [];
-        foreach (['enabled', 'collection_enabled', 'native_client_enabled'] as $flag) {
+        foreach (['enabled', ...($development ? [] : ['collection_enabled']), 'native_client_enabled'] as $flag) {
             if (config('pos_live.'.$flag) !== true) {
                 $blockers[] = $flag.'_off';
             }
@@ -55,7 +56,7 @@ final class PosReadiness
                 $blockers[] = 'customer_rewards_policy_unreviewed';
             }
         }
-        if (! $register->active || ! $register->collection_enabled) {
+        if (! $register->active || (! $register->collection_enabled && ! $development)) {
             $blockers[] = 'register_collection_off';
         }
         if (! $connection->active || ! $connection->verified_at) {
@@ -74,7 +75,7 @@ final class PosReadiness
             $blockers[] = 'durable_mysql_required';
         }
         if ($connection->environment === 'production') {
-            foreach (['distribution_verified', 'tap_entitlement_verified', 'square_signature_verified', 'webhooks_verified'] as $flag) {
+            foreach ([...($development ? [] : ['distribution_verified']), 'tap_entitlement_verified', 'square_signature_verified', 'webhooks_verified'] as $flag) {
                 if (config('pos_live.'.$flag) !== true) {
                     $blockers[] = $flag.'_missing';
                 }
@@ -85,7 +86,7 @@ final class PosReadiness
             if (in_array(config('cache.default'), ['array', 'null'], true)) {
                 $blockers[] = 'shared_lock_store_required';
             }
-            if (! $connection->acceptance_at || ! $connection->acceptance_build) {
+            if (! $development && (! $connection->acceptance_at || ! $connection->acceptance_build)) {
                 // A separately reviewed bounded acceptance session can precede
                 // launch. Its named device/actor are still checked by PosAccess.
                 $test = $settings['acceptance'] ?? [];
@@ -111,8 +112,13 @@ final class PosReadiness
         if (empty($settings['tax_valid_until']) || strtotime($settings['tax_valid_until']) <= time()) {
             $blockers[] = 'tax_review_expired';
         }
-        if ($register->catalog_source === 'shopify' && ($settings['shopify_acceptance_verified'] ?? false) !== true) {
+        // The bounded development sale establishes inventory acceptance. It still
+        // prepares/verifies the real pending Shopify order before issuing collection.
+        if (! $development && $register->catalog_source === 'shopify' && ($settings['shopify_acceptance_verified'] ?? false) !== true) {
             $blockers[] = 'shopify_acceptance_missing';
+        }
+        if ($development && $amount !== null && $amount > $development['max_amount_minor']) {
+            $blockers[] = 'development_acceptance_amount_exceeded';
         }
 
         return array_values(array_unique($blockers));

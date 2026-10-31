@@ -1,5 +1,43 @@
 # Everbranch Pay: customer-linked Square pilot
 
+## Registered-device development acceptance
+
+Apple's case 23096691 grants development use restricted to registered devices.
+Square documents production payments with registered debug-build signatures.
+Publishing remains a separate milestone. Development acceptance therefore has
+its own `POS_DEVELOPMENT_ACCEPTANCE_ENABLED` switch (default false), while
+`POS_LIVE_COLLECTION_ENABLED` and `POS_DISTRIBUTION_VERIFIED` remain false.
+
+Use `pos:activate` with its existing merchant review, owner, exact build,
+assigned admin device, time/amount caps and `--development-review=/private/file.json`.
+Preview first, then `--apply` only after source tests/protected release and actual
+evidence inspection. The mode requires production merchant/app/team/bundle/build
+and device bindings; a current registered-device development profile; the Apple
+case ID; and SHA-256 evidence references for the grant, signature report,
+installed-build report, IPA and registered hardware ID. Private files must be
+mode 0600. This operator review records facts; it creates no provider grants.
+
+At most two hours and $10 are allowed; the initial Modern Forestry test uses
+60 minutes and $5 including tax. New quotes freeze the session ID. Under the
+existing shared register lock, collection claims exactly one original sale
+before external stock/payment work. A second sale, older session/quote,
+different owner/device/build, expired profile/session or excess amount is denied.
+An ambiguous order or payment keeps that original claim. Activation cannot
+replace a claimed development session. No extra descriptor is issued on retries.
+
+The first bounded sale establishes the still-missing physical and Shopify
+acceptance evidence. It must pass the existing real catalog/tax recalculation,
+customer/policy freeze, pending-order stock reservation and fulfillment-location
+verification before Square credentials are issued for collection. Only fresh
+Square confirmation can mark it paid/finalize it. Development mode does not set
+`shopify_acceptance_verified`, physical acceptance or publishing approval true.
+Normal collection still requires those original checks. Keep independent
+servicing enabled for original-sale recovery/refunds after the session ends.
+Stop iPhone Mirroring before physically collecting a card payment: the Square
+SDK rejects screen capture. No new phone installation is needed for this gate.
+
+Source: [Square iOS application signatures](https://developer.squareup.com/docs/mobile-payments-sdk/ios#application-signature).
+
 Source candidate, October 31, 2026. Modern Forestry is the first merchant. Square
 is the payment/refund/settlement authority; Shopify owns catalog, prices, tax and
 stock; Everbranch retains the selected customer and existing rewards ledger.
