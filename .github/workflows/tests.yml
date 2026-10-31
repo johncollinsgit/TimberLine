@@ -315,7 +315,7 @@ jobs:
         run: php ./vendor/bin/pest tests/Integration/SubscriptionBraintreeDispatchConcurrencyTest.php tests/Integration/SubscriptionShopifyAdoptionConcurrencyTest.php tests/Integration/SubscriptionShopifyBillingConcurrencyTest.php --compact
 
       - name: Verify Candle Club voting and note concurrency
-        run: php ./vendor/bin/pest tests/Integration/SubscriptionMemberVotingConcurrencyTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/SubscriptionMemberVotingConcurrencyTest.php tests/Integration/SubscriptionMembershipReviewConcurrencyTest.php --compact
 
       - name: Verify POS register and shared-stock concurrency
         env:

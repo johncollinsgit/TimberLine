@@ -1,3 +1,15 @@
+## Existing subscription membership review (October 31; source candidate)
+
+A preview-first owner CLI appends a separately reviewed Candle Club membership
+supplement for an existing agreement without rewriting original payment authority.
+Exact original customer/source IDs, controlled rollout, keyed review and revision
+precede one encrypted immutable action. The billing agreement and its revision,
+terms, anchor, payment binding and gates remain unchanged. Real MySQL workers
+retain one action for concurrent identical/competing requests, including older
+snapshots. Corrupt originals cannot be backfilled; activation and entitlement
+still gate benefits. No provider, customer notification, production mutation or
+schema change occurred. See the replacement runbook.
+
 ## Candle Club membership after cutover (October 31; source candidate)
 
 Reviewed Candle Club membership now retains polls, voting history, chosen/monthly

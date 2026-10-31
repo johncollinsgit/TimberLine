@@ -1,3 +1,16 @@
+## Existing subscription membership review (October 31; source candidate)
+
+`SubscriptionMembershipReviewService` accepts original prepared membership or one
+HMAC-bound append-only `membership_review` action. The preview-first
+`subscriptions:membership` CLI requires a private file, exact source/customer
+context, verified owner/admin and exact rollout. Apply retains original payment
+authorization and every billing agreement field, including its revision; the
+action's expected revision records the reviewed state rather than changing terms.
+Member/agreement locks and current action reads preserve one immutable review
+under real MySQL retries/races. Never backfill missing originals, infer membership
+from a saved method, or treat this review as customer activation/payment consent.
+Broader member/operator parity and real two-tester acceptance remain outstanding.
+
 ## Candle Club membership after cutover (October 31; source candidate)
 
 `SubscriptionReplacementCommunityService` resolves benefits only from the exact

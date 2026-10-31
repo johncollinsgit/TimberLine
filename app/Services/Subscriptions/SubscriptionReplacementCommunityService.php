@@ -20,10 +20,7 @@ class SubscriptionReplacementCommunityService
         if (! $row || ! app(SubscriptionAccessService::class)->entitled($row->tenant_id)) {
             return null;
         }
-        $original = SubscriptionBillingAuthorization::original($row);
-        if (($original['terms']['membership_program'] ?? null) !== 'candle_club'
-            || data_get($original, 'authorization.membership_review.reviewed_by') !== $row->prepared_by
-            || ! is_string(data_get($original, 'authorization.membership_review.reference'))
+        if (app(SubscriptionMembershipReviewService::class)->program($row) !== 'candle_club'
             || ($activeOnly && $row->status !== 'active')) {
             return null;
         }

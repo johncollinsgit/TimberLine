@@ -31,8 +31,7 @@ These fields enter the original reviewed hash and encrypted authorization
 snapshot. Generic subscriptions grant no club benefits, and client-supplied
 program/profile/tenant values cannot grant access. Do not edit an existing
 authorization to add these fields. Existing agreements without original club
-review need a separately reviewed membership supplement before benefits can be
-enabled; that supplement workflow remains outstanding. Verify the two testers'
+review use the separate membership supplement below. Verify the two testers'
 original membership evidence as part of preparation/cutover acceptance.
 
 New ballots use `subscription_member_votes`, keyed to the original member and
@@ -69,6 +68,44 @@ setup adds no lifecycle event and does not contact a provider.
 Broader commitment/gift/member/operator overview parity and customer acceptance
 remain outstanding. Existing public OTP delivery is still not configured in
 production; this source enables no email/SMS sends.
+
+### Existing-agreement membership review (October 31; source candidate)
+
+`subscriptions:membership` previews an owner/admin review for one exact allowed
+agreement. Its private 0600 JSON input contains:
+
+```json
+{
+  "membership_program": "candle_club",
+  "membership_reference": "original-club:SOURCE_SUBSCRIPTION_ID",
+  "source_membership_reviewed": true,
+  "customer_gid": "gid://shopify/Customer/ORIGINAL_NUMERIC_ID",
+  "source_subscription_ids": ["ORIGINAL_NUMERIC_SUBSCRIPTION_ID"]
+}
+```
+
+Every original source subscription and the full original customer ID must match.
+The verified owner/admin reviews source membership; no customer authorization form
+is sent. Preview performs no write or provider request. Apply requires that exact
+review hash, revision and request UUID:
+
+```
+subscriptions:membership --tenant=SLUG --actor=ID --agreement=ID --file=/private/membership.json
+subscriptions:membership --tenant=SLUG --actor=ID --agreement=ID --file=/private/membership.json --reviewed-hash=REVIEW_HASH --revision=REV --request-id=UUID --apply
+```
+
+Apply appends one encrypted `membership_review` action with a keyed review hash,
+the exact original agreement/customer/source context and reviewer. It leaves the
+complete billing agreement, original authorization, current terms/hash, payment
+binding, billing revision/anchor/status and provider gates untouched. It does not
+activate the member, cancel Recharge, collect, send or issue anything. Benefits
+still require the existing authenticated activated Everbranch membership and
+entitlement. An unchanged UUID retry returns the accepted review after later
+schedule changes; another review cannot replace it. Missing/corrupt original
+authorization cannot be reconstructed by this workflow. Shared member/agreement
+locks and current action reads retain one review under concurrent old snapshots.
+Real MySQL tests cover both shared and competing request UUIDs. No schema change
+or production membership supplement was performed.
 
 ## Native Shopify billing (source candidate; production remains disabled)
 
