@@ -116,12 +116,12 @@ struct POSView: View {
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { footer }
-            .overlay {
+            .overlay(alignment: .top) {
                 if model.busy && model.paymentPhase != "card_entry" {
-                    ZStack {
-                        PayTheme.paper.opacity(0.65).ignoresSafeArea()
-                        ProgressView(model.paymentPhase.isEmpty ? "Loading…" : model.paymentPhase).padding(24).background(PayTheme.cream, in: RoundedRectangle(cornerRadius: 18))
-                    }.accessibilityIdentifier("payment-busy").allowsHitTesting(false)
+                    ProgressView(model.paymentPhase.isEmpty ? "Updating…" : model.paymentPhase)
+                        .font(.subheadline).padding(.horizontal, 18).padding(.vertical, 10)
+                        .background(PayTheme.cream, in: Capsule()).padding(.top, 8)
+                        .accessibilityIdentifier("payment-busy").allowsHitTesting(false)
                 }
             }
             .interactiveDismissDisabled(model.collector.hasActivePayment)
@@ -135,7 +135,7 @@ struct POSView: View {
                 #endif
                 guard model.signedIn else { return }
                 model.perform {
-                    try await model.loadWorkspaces()
+                    if !model.registerLoaded { try await model.loadWorkspaces() }
                     if model.pending != nil { try await model.recover() }
                 }
             }
@@ -387,7 +387,7 @@ struct POSView: View {
                         ForEach(Array((line.components ?? []).enumerated()), id: \.offset) { _, part in Text("\(part.quantity) × \(part.title)").font(.caption).foregroundStyle(PayTheme.muted) }
                     }
                     if let customer = sale.customer { Label(customer.name, systemImage: "person.crop.circle.fill") }
-                    Text(sale.canonicalConfirmation ? "Payment confirmed" : sale.operationalReviewClosed == true ? "Uncollected sale closed after review" : sale.state == "quoted" ? "Review before payment" : sale.state == "cancelled" ? "Payment cancelled" : sale.state == "failed" ? "Payment unsuccessful" : "Checking payment status")
+                    Text(sale.canonicalConfirmation ? "Payment confirmed" : sale.operationalReviewClosed == true ? "Uncollected sale closed after review" : sale.state == "quoted" ? "Review before payment" : sale.state == "cancelled" ? "Payment cancelled" : sale.state == "failed" ? "Payment unsuccessful" : "Payment not confirmed")
                         .font(.headline)
                     if sale.collectionReady != true && sale.state == "quoted" { Text(sale.inventoryAuthority == "everbranch" ? "Updating availability or awaiting register approval. You can check this basket again; no payment has started." : "Payment collection is awaiting setup or approval.").font(.subheadline).foregroundStyle(PayTheme.muted) }
                     if sale.canonicalConfirmation && !sale.receiptAvailable { Text("Payment received. Order finalization needs review. Do not charge again.").font(.subheadline) }

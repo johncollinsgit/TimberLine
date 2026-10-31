@@ -342,9 +342,13 @@ struct POSReceipt: Decodable {
         guard let base, let pending else { return }
         var result: Sale
         if let id = pending.saleID {
-            result = try await api.request(base + "/sales/\(id)")
-            if pending.collectionRequested && result.state != "quoted" && result.state != "cancelled" {
+            if pending.collectionRequested, let known = sale, known.saleId == id, !["quoted", "cancelled"].contains(known.state) {
                 result = try await api.request(base + "/sales/\(id)/reconcile", method: "POST", body: hint.map { ["payment_id": $0] } ?? [:])
+            } else {
+                result = try await api.request(base + "/sales/\(id)")
+                if pending.collectionRequested && result.state != "quoted" && result.state != "cancelled" {
+                    result = try await api.request(base + "/sales/\(id)/reconcile", method: "POST", body: hint.map { ["payment_id": $0] } ?? [:])
+                }
             }
         } else { result = try await api.request(base + "/requests/\(pending.requestID)") }
         if result.state == "quoted" && !result.recoveryRequired { self.pending?.collectionRequested = false }

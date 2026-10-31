@@ -80,6 +80,8 @@ final class LaunchTests: XCTestCase {
         let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-recovery-ui-tests"]; app.launch()
         XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Leave for review"].exists)
+        XCTAssertTrue(app.staticTexts["Payment not confirmed"].exists)
+        XCTAssertFalse(app.staticTexts["Checking payment status"].exists)
         app.buttons["Close"].tap()
         XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 5))
         app.segmentedControls.buttons["Keypad"].tap()
