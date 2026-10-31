@@ -37,7 +37,7 @@ final class PosCustomerPurchases
                 if (! $sale || ! $sale->attempt_id) {
                     continue;
                 }
-                $snapshot = app(PosService::class)->snapshot($sale);
+                $snapshot = app(PosReceiptCustomers::class)->decorate($sale, app(PosService::class)->snapshot($sale));
                 $customer = $this->identities->byId($tenant, (int) ($snapshot['customer']['id'] ?? 0));
                 $conflict = MarketingProfileLink::query()->forTenantId($tenant)->where('source_type', 'pos_sale')
                     ->where('source_id', $link->source_id)->get()->contains(fn ($other) => $this->identities->byId($tenant, (int) $other->marketing_profile_id)?->id !== $customer?->id);
@@ -105,7 +105,7 @@ final class PosCustomerPurchases
         }
         foreach ($query->limit(2)->get() as $sale) {
             try {
-                $snapshot = app(PosService::class)->snapshot($sale);
+                $snapshot = app(PosReceiptCustomers::class)->decorate($sale, app(PosService::class)->snapshot($sale));
                 if (! empty($snapshot['customer']['id']) && $this->mirrorLinksConflict($tenant, $sale, $snapshot, $this->journal->get($tenant, $sale->attempt_id)['provider_id'], (int) $snapshot['customer']['id'])) {
                     return true;
                 }

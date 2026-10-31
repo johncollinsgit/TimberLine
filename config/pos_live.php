@@ -2,6 +2,8 @@
 
 return [
     'enabled' => (bool) env('POS_LIVE_ENABLED', false),
+    'owned_inventory_enabled' => (bool) env('POS_OWNED_INVENTORY_ENABLED', false),
+    'inventory_publication_enabled' => (bool) env('POS_INVENTORY_PUBLICATION_ENABLED', false),
     'collection_enabled' => (bool) env('POS_LIVE_COLLECTION_ENABLED', false),
     'development_acceptance_enabled' => (bool) env('POS_DEVELOPMENT_ACCEPTANCE_ENABLED', false),
     'servicing_enabled' => (bool) env('POS_LIVE_SERVICING_ENABLED', false),

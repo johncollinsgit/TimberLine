@@ -1,3 +1,22 @@
+## Everbranch Pay inventory and guest checkout (owner direction, 2026-10-31)
+
+- Everbranch owns finished-goods inventory, customers, in-person sales, receipts
+  and rewards. Square owns payment/refund/settlement evidence. New POS sales must
+  not create Shopify orders; Shopify remains the existing catalog/price source
+  and receives online availability from Everbranch through explicit adapters.
+- Tenant owners configure shared or separate stock pools. Modern Forestry uses
+  confirmed ready/packed stock per show. Existing event plans mean to produce,
+  not units available to sell. After prior show sales, use remaining physical
+  counts; never seed original packing totals or deduct historical Square sales
+  again. Read `docs/operations/everbranch-pay-owned-inventory.md`.
+- Customer selection is optional at checkout. After confirmed payment, staff may
+  explicitly associate the receipt with an Everbranch customer by phone/name/email
+  lookup. Preserve original financial snapshots, audit associations and earn once
+  through the existing ledger. Never infer identity from a card or contact match.
+- Preserve legacy original-attempt recovery, materials inventory and domain
+  boundaries. New authority and new native controls require protected release,
+  reviewed opening counts/mappings and physical acceptance before activation.
+
 ## Shared AI provider and publishing flags (2026-10-24)
 
 - Read `docs/operations/provider-terms-and-publishing.md` when changing Apple

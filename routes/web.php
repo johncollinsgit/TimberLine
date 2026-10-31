@@ -8,6 +8,8 @@
 \Illuminate\Support\Facades\Route::prefix('pos/admin')->middleware(['auth', 'verified', \App\Http\Middleware\ResolvePosTenant::class])->name('pos.admin.')->group(function (): void {
     \Illuminate\Support\Facades\Route::get('/', [\App\Http\Controllers\PosAdminController::class, 'index'])->name('index');
     \Illuminate\Support\Facades\Route::get('/report', [\App\Http\Controllers\PosAdminController::class, 'report'])->name('report');
+    \Illuminate\Support\Facades\Route::get('/stock', [\App\Http\Controllers\StockAdministrationController::class, 'index'])->name('stock.index');
+    \Illuminate\Support\Facades\Route::post('/stock', [\App\Http\Controllers\StockAdministrationController::class, 'update'])->middleware('throttle:30,1')->name('stock.update');
     \Illuminate\Support\Facades\Route::post('/items/{item}/adjust', [\App\Http\Controllers\PosAdminController::class, 'adjust'])->where('item', '[a-f0-9]{32}')->name('stock.adjust');
     \Illuminate\Support\Facades\Route::post('/pause', [\App\Http\Controllers\PosAdminController::class, 'pause'])->name('pause');
 });

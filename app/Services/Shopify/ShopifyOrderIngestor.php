@@ -74,6 +74,9 @@ class ShopifyOrderIngestor
 
         $syncedOrderId = null;
         $identityContext = [];
+        if ($resolvedTenantId !== null && config('pos_live.owned_inventory_enabled') === true) {
+            app(\App\Services\Inventory\StockOnlineInbox::class)->enqueue($resolvedTenantId, (string) $store['key'], $orderData);
+        }
 
         DB::transaction(function () use ($store, $orderData, $mergedLines, $shopifyOrderId, $resolvedTenantId, &$summary, &$syncedOrderId, &$identityContext): void {
             $order = Order::query()

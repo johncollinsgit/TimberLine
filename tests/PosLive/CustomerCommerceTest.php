@@ -131,6 +131,15 @@ it('searches tenant customers literally without a contact-based merge', function
     $this->withHeader('X-Pos-Device', 'not-assigned')->getJson($this->base.'/customers?query=Ada')->assertNotFound();
 });
 
+it('finds a formatted phone by normalized digits without choosing or merging the customer', function (): void {
+    $this->profile->update(['phone' => '(864) 555-0101', 'normalized_phone' => '+18645550101']);
+    foreach (['8645550101', '(864) 555-0101', '+1 864 555 0101'] as $query) {
+        $response = $this->getJson($this->base.'/customers?'.http_build_query(['query' => $query]))->assertOk()->json();
+        expect(array_column($response['customers'], 'id'))->toContain($this->profile->id);
+    }
+    expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(0);
+});
+
 it('creates one customer across retries and recovers it without granting consent', function (): void {
     $input = ['request_id' => (string) Str::uuid(), 'first_name' => 'New', 'last_name' => 'Buyer', 'email' => 'new@example.invalid'];
     $id = $this->postJson($this->base.'/customers', $input)->assertOk()->json('customer.id');

@@ -43,8 +43,19 @@ final class PosReadiness
     public function blockers(object $register, object $connection, ?int $amount = null, ?array $scope = null): array
     {
         $settings = $this->store->decrypt($register->configuration);
+        $stockCore = ($settings['commerce_adapter'] ?? null) === StockPosCommerce::VERSION;
         $development = app(PosDevelopmentAcceptance::class)->session($register, $connection, $scope);
         $blockers = [];
+        if ($stockCore) {
+            if (config('pos_live.owned_inventory_enabled') !== true) {
+                $blockers[] = 'inventory_collection_off';
+            }
+            try {
+                app(StockPosCommerce::class)->settings(['tenant_id' => (int) $register->tenant_id, 'register' => $register]);
+            } catch (\DomainException) {
+                $blockers[] = 'inventory_setup_required';
+            }
+        }
         foreach (['enabled', ...($development ? [] : ['collection_enabled']), 'native_client_enabled'] as $flag) {
             if (config('pos_live.'.$flag) !== true) {
                 $blockers[] = $flag.'_off';
@@ -112,9 +123,9 @@ final class PosReadiness
         if (empty($settings['tax_valid_until']) || strtotime($settings['tax_valid_until']) <= time()) {
             $blockers[] = 'tax_review_expired';
         }
-        // The bounded development sale establishes inventory acceptance. It still
-        // prepares/verifies the real pending Shopify order before issuing collection.
-        if (! $development && $register->catalog_source === 'shopify' && ($settings['shopify_acceptance_verified'] ?? false) !== true) {
+        // Legacy development attempts retain their original Shopify hold contract.
+        // Inventory-owned attempts instead reserve counted Everbranch stock.
+        if (! $development && ! $stockCore && $register->catalog_source === 'shopify' && ($settings['shopify_acceptance_verified'] ?? false) !== true) {
             $blockers[] = 'shopify_acceptance_missing';
         }
         if ($development && $amount !== null && $amount > $development['max_amount_minor']) {

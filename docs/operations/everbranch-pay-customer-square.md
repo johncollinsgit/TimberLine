@@ -1,4 +1,6 @@
-# Everbranch Pay: customer-linked Square pilot
+# Everbranch Pay: original customer-linked Square pilot
+
+**New inventory-owned registers:** follow [the current runbook](everbranch-pay-owned-inventory.md). The customer prerequisite, pending Shopify order and mirror below describe the retained legacy adapter only; never apply them to a new `everbranch_inventory_v1` sale.
 
 ## Registered-device development acceptance
 

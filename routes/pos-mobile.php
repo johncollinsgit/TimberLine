@@ -12,6 +12,7 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
         Route::post('/customers', [PosController::class, 'createCustomer'])->middleware($write)->name('customers.create');
         Route::get('/customer-requests/{requestId}', [PosController::class, 'customerRequest'])->whereUuid('requestId')->middleware($read)->name('customers.request');
         Route::get('/catalog', [PosController::class, 'catalog'])->middleware($read)->name('catalog');
+        Route::post('/stock-counts', [PosController::class, 'countStock'])->middleware($write)->name('stock.counts');
         Route::get('/printing-quotes', [PosController::class, 'approvedQuotes'])->middleware($read)->name('printing-quotes');
         Route::post('/quotes', [PosController::class, 'quote'])->middleware($write)->name('quotes');
         Route::post('/authorize-device', [PosController::class, 'authorizeDevice'])->middleware($write)->name('device.authorize');
@@ -23,6 +24,7 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
             Route::post('/reconcile', [PosController::class, 'reconcile'])->middleware($write)->name('sales.reconcile');
             Route::post('/refunds', [PosController::class, 'refund'])->middleware($write)->name('sales.refund');
             Route::get('/receipt', [PosController::class, 'receipt'])->middleware($read)->name('sales.receipt');
+            Route::post('/receipt/customer', [PosController::class, 'attachCustomer'])->middleware($write)->name('sales.receipt.customer');
         });
     });
 });

@@ -33,6 +33,9 @@ public struct Register: Decodable, Identifiable, Sendable {
     public let blockers: [String]
     public let setupBlockers: [String]?
     public let canCreateCustomers: Bool?
+    public let guestCheckout: Bool?
+    public let customAmountEnabled: Bool?
+    public let canManageInventory: Bool?
 }
 public struct RegisterList: Decodable, Sendable {
     public let registers: [Register]
@@ -48,9 +51,23 @@ public struct CatalogItem: Decodable, Identifiable, Sendable {
     public let unitAmountMinor: Int
     public let revision: String
     public let availableQuantity: Int?
+    public let productKey: String?
+    public let variantLabel: String?
+    public let imageUrl: String?
+    public let availability: String?
+    public let balanceVersion: Int?
+    public let bundleQuantity: Int?
+    public let bundleItems: [CatalogItem]?
 }
 public struct CatalogList: Decodable, Sendable { public let items: [CatalogItem] }
 public struct SaleCustomer: Decodable, Sendable { public let id: Int; public let name: String }
+public struct SaleComponent: Decodable, Sendable { public let title: String; public let quantity: Int }
+public struct SaleLine: Decodable, Sendable {
+    public let title: String
+    public let quantity: Int
+    public let subtotalMinor: Int?
+    public let components: [SaleComponent]?
+}
 public struct Sale: Decodable, Sendable {
     public let customer: SaleCustomer?
     public let collectionReady: Bool?
@@ -65,8 +82,11 @@ public struct Sale: Decodable, Sendable {
     public let recoveryRequired: Bool
     public let managerRefundsAllowed: Bool?
     public let collection: CollectionDescriptor?
+    public let lines: [SaleLine]?
+    public let inventoryAuthority: String?
+    public let operationalReviewClosed: Bool?
     public var canLeave: Bool {
-        (state == "succeeded" && stockState == "committed") || (["failed", "cancelled"].contains(state) && stockState == "released")
+        (state == "succeeded" && (stockState == "committed" || (inventoryAuthority == "everbranch" && receiptAvailable && canonicalConfirmation))) || (["failed", "cancelled"].contains(state) && stockState == "released") || (operationalReviewClosed == true && state == "unknown" && stockState == "released" && !canonicalConfirmation && !receiptAvailable)
     }
 }
 public struct DeviceAuthorization: Decodable, Sendable {
@@ -94,7 +114,7 @@ public struct CollectionDescriptor: Codable, Sendable {
     public let tipsEnabled: Bool
 
     public func validate(sale: Sale, applicationID: String, environment: String, now: Date = Date()) throws {
-        guard sale.state == "unknown", !sale.canonicalConfirmation, !sale.receiptAvailable, applicationId == applicationID, self.environment == environment, currency == "USD",
+        guard sale.state == "unknown", sale.stockState == "held", sale.operationalReviewClosed != true, !sale.canonicalConfirmation, !sale.receiptAvailable, applicationId == applicationID, self.environment == environment, currency == "USD",
               amountMinor > 0, amountMinor <= 100_000_000, amountMinor == sale.amountMinor, saleId == sale.saleId,
               onlineOnly, applicationFeeMinor == 0, !tipsEnabled, paymentAttemptId != referenceId,
               UUID(uuidString: paymentAttemptId) != nil, UUID(uuidString: referenceId) != nil,

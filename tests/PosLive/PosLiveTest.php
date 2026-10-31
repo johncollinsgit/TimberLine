@@ -428,6 +428,7 @@ function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation 
     $test->shopifyCreates = 0;
     $test->shopifyPaid = false;
     $test->shopifyFulfilled = false;
+    $test->shopifyCancelled = false;
     Http::fake(['https://fictional-pos-*.myshopify.com/*' => function ($request) use ($test, $loseCreate, $wrongLocation, $small) {
         // Shopify rejects [] as the variables parameter, including the shop
         // identity query before every mutation. Exercise the actual JSON body.
@@ -439,7 +440,7 @@ function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation 
         $shop = ['id' => 'gid://shopify/Shop/1', 'currencyCode' => 'USD'];
         $money = fn ($value) => ['shopMoney' => ['amount' => $small ? (['10.70' => '3.21', '0.70' => '0.21', '10.00' => '3.00'][$value] ?? $value) : $value, 'currencyCode' => 'USD']];
         $sale = $test->store->rows('sales', $test->tenant->id)->first();
-        $order = fn () => ['customer' => $test->shopifyCustomerID ? ['id' => $test->shopifyCustomerID] : null, 'id' => 'gid://shopify/Order/4', 'displayFinancialStatus' => $test->shopifyPaid ? 'PAID' : 'PENDING', 'cancelledAt' => null,
+        $order = fn () => ['customer' => $test->shopifyCustomerID ? ['id' => $test->shopifyCustomerID] : null, 'id' => 'gid://shopify/Order/4', 'displayFinancialStatus' => $test->shopifyPaid ? 'PAID' : 'PENDING', 'cancelledAt' => $test->shopifyCancelled ? '2026-10-31T19:00:00Z' : null,
             'totalPriceSet' => $money('10.70'), 'totalTaxSet' => $money('0.70'), 'totalOutstandingSet' => $money($test->shopifyPaid ? '0.00' : '10.70'),
             'tags' => ['EverbranchPOS-'.$sale?->id], 'transactions' => $test->shopifyPaid ? [['id' => 'gid://shopify/OrderTransaction/5',
                 'kind' => 'SALE', 'status' => 'SUCCESS', 'gateway' => 'manual', 'amountSet' => $money('10.70')]] : [],
@@ -468,6 +469,10 @@ function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation 
             $data = ['shop' => $shop, 'orders' => ['nodes' => [$order()]]];
         } elseif (str_contains($query, 'PosOrderStatus')) {
             $data = ['shop' => $shop, 'order' => $order()];
+        } elseif (str_contains($query, 'PosCancel')) {
+            expect($request['query'])->toContain('refund:false,restock:true');
+            $test->shopifyCancelled = true;
+            $data = ['orderCancel' => ['job' => ['id' => 'fixture-cancel', 'done' => true], 'userErrors' => []]];
         } elseif (str_contains($query, 'PosPaid')) {
             $test->shopifyPaid = true;
             $data = ['orderMarkAsPaid' => ['order' => ['id' => 'gid://shopify/Order/4'], 'userErrors' => []]];
@@ -518,6 +523,58 @@ it('blocks collection when Shopify commits fulfillment to a different location',
     $quote = posFixtureQuote($this);
     $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertConflict();
     expect($this->store->rows('sales', $this->tenant->id)->first()->descriptor_issued_at)->toBeNull();
+});
+
+function posFixtureUncollectedReview($test): array
+{
+    posFixtureShopify($test);
+    $quote = posFixtureQuote($test);
+    $test->postJson($test->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk();
+    $test->store->rows('sales', $test->tenant->id)->where('id', $quote['sale_id'])->update(['descriptor_issued_at' => gmdate('Y-m-d H:i:s', time() - 900)]);
+    $test->lateSquarePayment = false;
+    Http::fake(['*/v2/payments*' => function ($request) use ($test, $quote) {
+        $sale = $test->store->rows('sales', $test->tenant->id)->where('id', $quote['sale_id'])->first();
+        $payment = ['id' => 'fixture_payment', 'reference_id' => $sale->payment_request_id, 'location_id' => 'fixture_location',
+            'source_type' => 'CARD', 'status' => 'COMPLETED', 'amount_money' => ['amount' => 1070, 'currency' => 'USD'], 'total_money' => ['amount' => 1070, 'currency' => 'USD']];
+        if (str_contains($request->url(), '/payments/fixture_payment')) {
+            return Http::response(['payment' => $payment]);
+        }
+
+        return Http::response(['payments' => $test->lateSquarePayment ? [$payment] : []]);
+    }]);
+
+    return [$quote, ['app_terminated_at' => gmdate('c', time() - 360), 'app_process_absent_at' => gmdate('c'),
+        'owner_confirmed_no_card_presented' => true, 'app_device_id' => 'fixture_device_1234', 'process_evidence_sha256' => str_repeat('e', 64)]];
+}
+
+it('closes a reviewed unpaid legacy order without inventing a terminal financial result and preserves late payment recovery', function (): void {
+    [$quote, $proof] = posFixtureUncollectedReview($this);
+    $review = app(\App\Services\Pos\PosUncollectedClosure::class);
+    expect($review->review($this->tenant->id, $quote['sale_id'], $this->actor->id, $proof)['applied'])->toBeFalse()
+        ->and($this->shopifyCancelled)->toBeFalse();
+    $review->review($this->tenant->id, $quote['sale_id'], $this->actor->id, $proof, true);
+    $sale = $this->store->rows('sales', $this->tenant->id)->first();
+    expect($sale->state)->toBe('unknown')->and($sale->stock_state)->toBe('released')
+        ->and($this->journal->get($this->tenant->id, $sale->attempt_id)['provider_id'])->toBeNull()
+        ->and((bool) $this->store->rows('registers', $this->tenant->id)->first()->active)->toBeFalse()
+        ->and($this->shopifyCancelled)->toBeTrue();
+    $this->getJson($this->base.'/sales/'.$sale->id)->assertOk()->assertJsonPath('operational_review_closed', true)->assertJsonPath('canonical_confirmation', false);
+    $this->lateSquarePayment = true;
+    $this->postJson($this->base.'/sales/'.$sale->id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()
+        ->assertJsonPath('canonical_confirmation', true)->assertJsonPath('operational_review_closed', false);
+    expect($this->store->rows('events', $this->tenant->id)->where('code', 'late_payment_after_reviewed_closure')->count())->toBe(1)
+        ->and($this->shopifyCreates)->toBe(1);
+});
+
+it('refuses uncollected cleanup without fresh device evidence or when the Shopify order has payment activity', function (): void {
+    [$quote, $proof] = posFixtureUncollectedReview($this);
+    $review = app(\App\Services\Pos\PosUncollectedClosure::class);
+    expect(fn () => $review->review($this->tenant->id, $quote['sale_id'], $this->actor->id, [...$proof, 'owner_confirmed_no_card_presented' => false], true))
+        ->toThrow(\App\Services\Pos\PosException::class, 'fresh_device_end_evidence_required');
+    $this->shopifyPaid = true;
+    expect(fn () => $review->review($this->tenant->id, $quote['sale_id'], $this->actor->id, $proof, true))
+        ->toThrow(\App\Services\Pos\PosException::class, 'shopify_cancel_payment_review');
+    expect($this->shopifyCancelled)->toBeFalse()->and((bool) $this->store->rows('registers', $this->tenant->id)->first()->active)->toBeTrue();
 });
 
 function posFixturePrintingQuote($test): \App\Models\WebsiteOrder

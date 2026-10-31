@@ -1,5 +1,7 @@
 # Everbranch POS: Square iPhone pilot
 
+For the new inventory-owned guest register, use [the current Pay runbook](everbranch-pay-owned-inventory.md). Original attempts retain the adapter and provider references described here.
+
 Source candidate, collection disabled by default. Alpha Printing and Modern
 Forestry are the first intended merchants. No merchant, entitlement, staff,
 device, tax rate or production credential is seeded by this implementation.

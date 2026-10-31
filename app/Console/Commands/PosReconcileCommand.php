@@ -30,6 +30,7 @@ final class PosReconcileCommand extends Command
             $query->where('tenant_id', (int) $this->option('tenant'));
         }
         if (! $this->option('all')) {
+            app(\App\Services\Pos\PosUncollectedClosure::class)->excludeClosed($query);
             $query->where(function ($q): void {
                 $q->whereIn('state', ['reserved', 'processing', 'unknown', 'review'])
                     ->orWhere(fn ($expired) => $expired->where('state', 'quoted')->where('expires_at', '<=', now()))
@@ -84,8 +85,10 @@ final class PosReconcileCommand extends Command
         $review = $store->db->table('pos_live_outbox')->where('runtime_id', $store->runtime())->whereIn('state', ['review', 'retry'])->count();
         $this->line(json_encode(['reconciliation_errors' => $failed, 'commerce_effects_pending_review' => $review]));
 
-        $unresolved = $store->db->table('pos_live_sales')->where('runtime_id', $store->runtime())
-            ->whereIn('state', ['unknown', 'processing'])->where('created_at', '<', now()->subMinutes(5))->count();
+        $unresolvedQuery = $store->db->table('pos_live_sales')->where('runtime_id', $store->runtime())
+            ->whereIn('state', ['unknown', 'processing'])->where('created_at', '<', now()->subMinutes(5));
+        app(\App\Services\Pos\PosUncollectedClosure::class)->excludeClosed($unresolvedQuery);
+        $unresolved = $unresolvedQuery->count();
         if ($review || $failed || $unresolved) {
             \Illuminate\Support\Facades\Log::warning('pos.reconciliation_attention', ['runtime_id' => $store->runtime(),
                 'errors' => $failed, 'commerce_pending_review' => $review, 'unresolved_payments' => $unresolved]);
