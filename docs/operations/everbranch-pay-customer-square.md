@@ -2,6 +2,13 @@
 
 ## Registered-device development acceptance
 
+The first mirrored checkout exposed a request-envelope defect before any sale
+was created: Shopify rejects `variables: []` for the no-variable shop identity
+query. The adapter now omits absent variables, matching Shopify's documented
+HTTP request format. Provider fixtures validate serialized JSON so this failure
+cannot be hidden by PHP array handling. Verify the actual quote again after the
+protected server release; no native reinstall is required.
+
 Apple's case 23096691 grants development use restricted to registered devices.
 Square documents production payments with registered debug-build signatures.
 Publishing remains a separate milestone. Development acceptance therefore has
