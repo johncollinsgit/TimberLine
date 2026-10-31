@@ -60,6 +60,11 @@ class ShopifyOAuth
             }
         }
 
-        return array_values(array_unique($scopes));
+        // Keep a store's reviewed app-version exclusions out of reconnects too.
+        // The retail Dev Dashboard rejects these legacy names; other apps retain
+        // their own declared permission set until separately reviewed.
+        $excluded = $store['excluded_scopes'] ?? [];
+
+        return array_values(array_diff(array_unique($scopes), $excluded));
     }
 }

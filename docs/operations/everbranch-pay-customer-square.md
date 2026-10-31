@@ -95,9 +95,27 @@ other merchants still need their own account, program, device and acceptance.
   returned ACCESS_DENIED. The retail app needs `read_inventory` (also sufficient
   for Location reads) and merchant reauthorization before live stock/location
   review. Wholesale connection settings are unchanged.
+- The owning Modern Forestry Dev Dashboard was reached and the exact client ID
+  confirmed. Its version form rejects three existing scope names:
+  `read_discounts_allocator_functions`, `write_discounts_allocator_functions`
+  and `unauthenticated_read_collection_listings`. The retail candidate and its
+  reconnect requests omit only those rejected names while adding read-only
+  inventory. Current Storefront documentation grants Collection access through
+  the retained `unauthenticated_read_product_listings`; discount access remains
+  `read_discounts` / `write_discounts`. Publish the reviewed app version and
+  reauthorize only after this backend reaches production. Do not redeploy all
+  extensions or change the wholesale app as part of this repair.
+- The organizer's Columbus setup letter confirms October 30-November 1 at
+  801 Front Ave, Columbus, GA 31901. It lists 9% tax; Georgia DOR's general chart
+  effective October 1, 2026 also lists Muscogee at 9%. The reviewed Shopify
+  calculation, product taxability and fulfillment location still need verification.
+  Sources: https://madeinthesouthshows.com/columbus-setup-letter and
+  https://dor.georgia.gov/sales-tax-rates-general.
 - Apple's case 23096691 grants development access restricted to registered test
-  devices. Distribution approval remains unverified. John’s phone was not
-  reachable for the new installation when checked.
+  devices. Distribution approval remains unverified. Build 2026103101 was installed
+  over Wi-Fi on John's registered phone and launched; device app metadata confirms
+  the exact bundle, version and build. This is installation evidence, not payment
+  acceptance.
 
 ## Acceptance and Apple submission packet
 
