@@ -606,9 +606,11 @@ test('private authorization page scopes branding and keeps feature previews sepa
         ->assertSee('Saving a card does not activate new billing.');
     if ($modernForestry) {
         $response->assertSee('modern-forestry-logo-white.png')->assertSee('COMING SOON')
-            ->assertSee('Share your scent notes')->assertSee('Make room for a skip');
+            ->assertSee('Share your scent notes')->assertSee('Make room for a skip')
+            ->assertSee('Candle Cash, your way')->assertSee('$10 for your birthday')
+            ->assertSee('Recurring Candle Club charges are excluded.');
     } else {
-        $response->assertDontSee('modern-forestry-logo-white.png')->assertDontSee('COMING SOON');
+        $response->assertDontSee('modern-forestry-logo-white.png')->assertDontSee('COMING SOON')->assertDontSee('$10 for your birthday');
     }
     $this->post($url.'/authorize', ['terms_hash' => $row->terms_hash])->assertSessionHasErrors('accepted');
     expect(count(Http::recorded()))->toBe($requests)

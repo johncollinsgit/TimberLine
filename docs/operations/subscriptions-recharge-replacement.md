@@ -7,6 +7,64 @@ access can be verified. Stripe setup is an explicit fallback, not a universal
 migration requirement. The first rollout is the two already prepared members;
 all other members retain Recharge billing until separately reviewed.
 
+## Modern Forestry rewards (owner confirmed October 30)
+
+Members may redeem Candle Cash on other purchases: up to **$5 per in-person
+purchase** and **$10 online**. Recurring Candle Club charges are excluded.
+
+The owner also requested the **$10 annual birthday reward**. The native rewards
+overview and Modern Forestry Coming soon page include it as the existing Birthday
+Club coupon benefit, separate from the Candle Cash wallet. The native overview
+shows it as available only when that tenant's annual $10 coupon program is enabled;
+otherwise it is labelled Coming soon. Rendering rewards never issues a birthday
+gift, credits a balance or sends a message. Existing Birthday Club annual coverage,
+identity, eligibility and expiration remain authoritative; no second bonus or
+retroactive gift is created by this change.
+
+The existing fixed-value reward model issues new $5 Square codes and $10 online
+codes. This applies only to the persisted `modern-forestry` tenant through
+`marketing.candle_cash.tenant_channel_rules`; other merchants retain their rules.
+In-person issuance reuses an open code rather than debiting again. Each new code
+retains its issued amount/channel; cancellation of an unused new in-person code
+restores that debit exactly once. Previous issued codes remain unchanged and must
+be resolved before issuing another in-person code for that customer.
+
+Square remains the established staff workflow: issue the in-person code from the
+customer profile, apply $5 at the register, then record the Square order ID when
+marking it redeemed. This build does not automatically apply a Square discount.
+Manual reconciliation and ingested use share tenant/order locks and permit one
+reward per purchase. They reject online codes on Square orders. In-person codes
+cannot create Shopify discounts or become the native bag's active online code.
+The native rewards screen and history show both limits and the issued value.
+
+Modern Forestry Shopify discounts explicitly set `appliesOnSubscription=false`
+and `appliesOnOneTimePurchase=true`. Reusing an existing discount can correct those
+eligibility flags without changing its amount, code or dates. This is exercised
+only with fictional local HTTP fixtures; deploy/hosted acceptance remains required.
+Everbranch recurring agreement terms retain `candle_cash_allowed=false`.
+
+## Shopify saved-method mapping (source candidate)
+
+`subscriptions:shopify summary --tenant=SLUG --actor=ID --agreement=ID` is offline.
+`verify` additionally requires `--source-order=ORIGINAL_NUMERIC_ORDER_ID` and defaults
+to preview; `--apply` saves encrypted evidence only. It never creates or adopts a
+contract, stops Recharge or submits a billing attempt.
+
+The original pinned subscription installation and credential, shop/app identity,
+scopes, environment, customer, unrevoked/unexpired card or active Shop Pay agreement
+must agree. The paid original Shopify order must match the reviewed source
+subscription IDs, products, amount, tax, shipping and address. Current Recharge
+store/customer/subscription/address/method reads must identify the **same full
+Shopify payment-method GID**, not a matching email, card suffix or default method.
+Unavailable/opaque source mappings, changed dates or terms, refunds, rotated
+credentials, expired methods and missing scopes fail closed. Raw source vault
+tokens are used ephemerally and are not copied into mirrors or reports.
+
+This step proves current method access only. `reauthorization_required` remains
+unknown until supported contract adoption and actual merchant acceptance succeed.
+No real merchant mapping or no-reauthorization conclusion is established by the
+fictional tests. Shopify-vaulted collection remains unimplemented and disabled.
+
 ## Existing implementation examined
 
 | Existing component | Retain and extend | Current limit |

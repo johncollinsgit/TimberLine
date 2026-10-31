@@ -1,3 +1,25 @@
+## Modern Forestry reward channel limits (October 30; source candidate)
+
+New Modern Forestry staff-issued Square Candle Cash codes debit $5; online codes
+remain $10. Persisted tenant ownership selects these rules. Issued value/channel
+snapshots, open-code reuse, original-value cancellation refunds and shared
+tenant/order reconciliation locks preserve one code per in-person purchase.
+Staff still applies the discount at the Square register and records the order ID;
+this source does not install a Square POS extension or mutate Square checkout.
+Old issued codes retain their value. Online discounts exclude subscription items,
+and recurring Everbranch Candle Club terms continue to disallow Candle Cash.
+Native rewards describe both channels and exclude in-person codes from bag reuse.
+The $10 annual Birthday Club benefit also appears in the native overview and
+Modern Forestry roadmap; it reuses the existing yearly program without issuing a
+second gift or wallet credit. Unconfigured birthday programs remain Coming soon.
+No deployment, balance backfill or live billing change has been performed.
+
+Shopify/Shop Pay original-method verification now has a preview-first owner CLI.
+Exact original installation credentials, paid order, source subscription/address
+and full saved-method identity must agree; last-four matching is insufficient.
+This proves current access only, leaving contract adoption, reauthorization need
+and collection unproven. See `docs/operations/subscriptions-recharge-replacement.md`.
+
 ## Replacement customer schedule access (October 30; source candidate)
 
 Activated Everbranch members now use their original verified Shopify identity for

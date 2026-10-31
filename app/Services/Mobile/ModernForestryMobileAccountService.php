@@ -269,6 +269,19 @@ class ModernForestryMobileAccountService
         $balancePoints = $this->candleCashService->currentBalance($profile);
         $reward = $this->candleCashService->storefrontReward($tenantId);
         $rewardPayload = $this->candleCashService->storefrontRewardPayload($reward, $balancePoints, $tenantId);
+        $rules = $this->candleCashService->redemptionRulesPayload($tenantId);
+        $channelPolicy = app(\App\Services\Marketing\CandleCashChannelPolicy::class)->rules($tenantId);
+        if (isset($channelPolicy['birthday_reward_amount'])) {
+            $birthdayConfig = app(\App\Services\Marketing\BirthdayRewardEngineService::class)->rewardConfig($tenantId);
+            $birthdayReady = app(\App\Services\Marketing\BirthdayClubService::class)->enabled($tenantId)
+                && ($birthdayConfig['enabled'] ?? false) && ($birthdayConfig['reward_type'] ?? null) === 'discount_code'
+                && (float) ($birthdayConfig['reward_value'] ?? 0) === (float) $channelPolicy['birthday_reward_amount'];
+            $rules['birthday_reward_amount_formatted'] = $this->candleCashService->formatRewardCurrency($channelPolicy['birthday_reward_amount']);
+            $rules['birthday_reward_coming_soon'] = ! $birthdayReady;
+            $rules['birthday_reward_summary'] = $birthdayReady
+                ? 'A $10 birthday reward once each year through Birthday Club. Your existing birthday eligibility and expiry rules apply.'
+                : 'Coming soon: a $10 birthday reward once each year through Birthday Club.';
+        }
         $embeddedRewards = $this->embeddedRewards->payload($tenantId);
         $earnItems = collect((array) data_get($embeddedRewards, 'earn.items', []))
             ->filter(fn (mixed $item): bool => is_array($item)
@@ -291,7 +304,7 @@ class ModernForestryMobileAccountService
             'rewards' => array_values(array_filter([$rewardPayload])),
             'history' => $this->rewardHistory($profile, $tenantId),
             'redemptions' => $this->redemptions($profile, $tenantId),
-            'rules' => $this->candleCashService->redemptionRulesPayload($tenantId),
+            'rules' => $rules,
         ];
     }
 
@@ -999,11 +1012,15 @@ class ModernForestryMobileAccountService
      */
     protected function redemptionPayload(CandleCashRedemption $redemption, int $tenantId, bool $revealCode): array
     {
+        $inPerson = $redemption->platform === 'square';
+
         return [
             'id' => (int) $redemption->id,
-            'name' => $redemption->reward && $this->candleCashService->isStorefrontReward($redemption->reward, $tenantId)
+            'name' => $inPerson ? $this->candleCashService->formatRewardCurrency($this->candleCashService->redemptionAmountForIssuedCode($redemption)).' Candle Cash · In person'
+                : ($redemption->reward && $this->candleCashService->isStorefrontReward($redemption->reward, $tenantId)
                 ? 'Redeem '.$this->candleCashService->fixedRedemptionFormatted($tenantId).' Reward Credit'
-                : (string) ($redemption->reward?->name ?: 'Reward'),
+                : (string) ($redemption->reward?->name ?: 'Reward')),
+            'usableOnline' => ! $inPerson,
             'status' => (string) ($redemption->status ?: 'issued'),
             'code' => $revealCode ? $this->nullableString($redemption->redemption_code) : null,
             'amount' => $this->candleCashService->amountFromPoints($redemption->candle_cash_spent),

@@ -10,6 +10,8 @@
         ['04', 'Keep your address current', 'Manage where your next Candle Club delivery goes.'],
         ['05', 'Make room for a skip', 'Review available skips and pauses when you need a little breathing room.'],
         ['06', 'Your club, at a glance', 'See upcoming billing and deliveries, manage payments, or request cancellation.'],
+        ['07', 'Candle Cash, your way', 'Use up to $5 in person or $10 online on other purchases. Recurring Candle Club charges are excluded.'],
+        ['08', '$10 for your birthday', 'Celebrate with an annual Birthday Club reward, subject to your birthday eligibility and expiry.'],
     ];
 @endphp
 <!doctype html>

@@ -1,3 +1,14 @@
+## 2026-10-30 — Modern Forestry Candle Cash by purchase channel (source candidate)
+
+- Customer rewards show $5 in person and $10 online, excluding recurring Candle
+  Club charges. Staff issuance and the paired native rewards copy use these rules.
+- The $10 annual birthday benefit appears in native rewards and the Modern
+  Forestry Coming soon page. It reuses Birthday Club without issuing another gift.
+- New Square codes retain their $5 value, cannot apply to online bags and require
+  a Square order ID for reconciliation. Old issued values remain unchanged.
+- Square register discounts remain staff-applied; no live deployment or balance
+  change was performed.
+
 ## 2026-10-30 — Private subscription schedule controls (source candidate)
 
 - The exact activated member can review existing terms/history and pause, resume,

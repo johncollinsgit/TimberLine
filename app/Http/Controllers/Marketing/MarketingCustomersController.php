@@ -2046,6 +2046,8 @@ class MarketingCustomersController extends Controller
             $message = match ($error) {
                 'insufficient_balance' => 'Not enough reward balance for that reward.',
                 'inactive_reward' => 'Reward is inactive.',
+                'in_person_reward_unavailable' => 'Choose the standard Candle Cash reward for an in-person purchase.',
+                'existing_in_person_redemption' => 'Resolve the existing in-person reward code before issuing another. Its original value is unchanged.',
                 default => 'Reward redemption failed.',
             };
 

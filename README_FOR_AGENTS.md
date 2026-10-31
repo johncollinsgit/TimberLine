@@ -1,3 +1,26 @@
+## Modern Forestry reward channel limits and Shopify method proof (October 30; source candidate)
+
+`CandleCashChannelPolicy` resolves the persisted profile tenant's explicit config:
+Modern Forestry issues new $5 Square codes and $10 online codes; other merchants
+retain existing rules. A code freezes its amount/channel. Both staff reconciliation
+and Square ingestion lock the same tenant/order namespace to reject duplicate use.
+Unused new in-person codes restore only their original debit on cancellation.
+Online codes cannot reconcile as Square codes, in-person codes cannot create
+Shopify discounts, and Modern Forestry discounts explicitly exclude subscription
+items. Existing subscription `candle_cash_allowed=false` remains authoritative.
+Square discounts still require the established staff register/reconciliation flow.
+The native rewards overview and Modern Forestry roadmap include the existing $10
+annual Birthday Club coupon, with Coming soon shown until the exact tenant's $10
+annual program is enabled. Reading rewards never issues gifts, sends messages or
+credits the wallet; retain existing yearly identity/coverage checks.
+Do not rewrite existing issued codes or production balances as a rollout shortcut.
+
+`subscriptions:shopify summary|verify` uses only the original subscription app
+credential and fixed query-only protocol, plus exact ephemeral Recharge method
+mapping. Preview is default; `--apply` persists encrypted masked evidence only.
+No contract adoption, source stop, payment attempt or universal no-reauthorization
+claim follows from this proof. See the replacement runbook; collection stays gated.
+
 ## Replacement customer schedule access (October 30; source candidate)
 
 Activated Everbranch members now use their original verified Shopify identity for

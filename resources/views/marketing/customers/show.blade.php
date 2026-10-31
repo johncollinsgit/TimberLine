@@ -7,6 +7,8 @@
     if ($rewardsLabel === '') {
         $rewardsLabel = 'Rewards';
     }
+    $redemptionRules = app(\App\Services\Marketing\CandleCashService::class)->redemptionRulesPayload($profile->tenant_id);
+    $channelSummary = $redemptionRules['channel_summary'] ?? null;
 @endphp
 
 <x-layouts::app :title="'Customer'">
@@ -1205,6 +1207,9 @@
 
                 <form method="POST" action="{{ route('marketing.customers.candle-cash.redeem', $profile) }}" class="space-y-2 rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
                     @csrf
+                    @if($channelSummary)
+                        <p class="text-xs text-zinc-700">{{ $channelSummary }} Square issues an in-person code; apply that amount at the register and record the Square order ID when reconciling.</p>
+                    @endif
                     <div class="grid gap-2 sm:grid-cols-3">
                         <select name="reward_id" class="rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-2 text-xs text-zinc-950">
                             @foreach($activeRewards as $reward)
@@ -1212,8 +1217,8 @@
                             @endforeach
                         </select>
                         <select name="platform" class="rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-2 text-xs text-zinc-950">
-                            <option value="shopify">Shopify</option>
-                            <option value="square">Square</option>
+                            <option value="shopify">Shopify{{ $channelSummary ? ' · '.$redemptionRules['max_redeemable_per_order_formatted'].' online' : '' }}</option>
+                            <option value="square">Square{{ $channelSummary ? ' · '.app(\App\Services\Marketing\CandleCashService::class)->formatRewardCurrency($redemptionRules['in_person_max_redeemable_per_order_dollars']).' in person' : '' }}</option>
                         </select>
                         <button type="submit" @disabled($activeRewards->isEmpty()) class="inline-flex rounded-full border border-amber-300/35 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 disabled:opacity-40">
                             Redeem
@@ -1242,7 +1247,7 @@
                             @forelse($candleRedemptions as $redemption)
                                 <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-2.5 space-y-1.5">
                                     <div class="font-semibold text-zinc-900">
-                                        {{ $redemption->reward?->name ?: ('Reward #' . $redemption->reward_id) }}
+                                        {{ data_get($redemption->redemption_context, 'channel_policy.channel') === 'in_person' ? app(\App\Services\Marketing\CandleCashService::class)->formatRewardCurrency($redemption->candle_cash_spent).' Candle Cash · In person' : ($redemption->reward?->name ?: ('Reward #' . $redemption->reward_id)) }}
                                         <span class="text-[10px] uppercase tracking-[0.18em] text-zinc-500">· {{ strtoupper((string) ($redemption->status ?: 'issued')) }}</span>
                                     </div>
                                     <div class="text-zinc-600">{{ app(\App\Services\Marketing\CandleCashService::class)->formatRewardCurrency(app(\App\Services\Marketing\CandleCashService::class)->amountFromPoints((int) $redemption->candle_cash_spent)) }} · <span class="font-mono">{{ $redemption->redemption_code }}</span></div>
@@ -1265,7 +1270,7 @@
                                                 @csrf
                                                 <input type="hidden" name="platform" value="square" />
                                                 <input type="hidden" name="external_order_source" value="square_manual" />
-                                                <input type="text" name="external_order_id" placeholder="Order ID" class="w-28 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] text-zinc-950" />
+                                                <input type="text" name="external_order_id" placeholder="Order ID" @required(data_get($redemption->redemption_context, 'channel_policy.channel') === 'in_person') class="w-28 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-[11px] text-zinc-950" />
                                                 <button type="submit" class="inline-flex rounded-full border border-zinc-300 bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-900">
                                                     Mark Redeemed
                                                 </button>
