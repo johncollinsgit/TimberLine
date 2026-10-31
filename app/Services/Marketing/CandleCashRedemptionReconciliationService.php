@@ -7,7 +7,10 @@ use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
 use App\Models\SquareOrder;
+use App\Models\Tenant;
 use App\Services\Tenancy\TenantResolver;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CandleCashRedemptionReconciliationService
 {
@@ -16,11 +19,10 @@ class CandleCashRedemptionReconciliationService
         protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder,
         protected TenantResolver $tenantResolver,
         protected CandleCashService $candleCashService
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,int>
      */
     public function reconcileShopifyOrder(Order $order, array $options = []): array
@@ -59,7 +61,7 @@ class CandleCashRedemptionReconciliationService
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,int>
      */
     public function reconcileSquareOrder(SquareOrder $order, array $options = []): array
@@ -95,10 +97,23 @@ class CandleCashRedemptionReconciliationService
     }
 
     /**
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $context
      */
     public function markRedeemedManually(CandleCashRedemption $redemption, array $context = []): CandleCashRedemption
     {
+        if (data_get($redemption->redemption_context, 'channel_policy.channel') === 'online'
+            && (($context['platform'] ?? 'square') === 'square' || str_starts_with((string) ($context['external_order_source'] ?? 'square_manual'), 'square'))) {
+            throw ValidationException::withMessages(['platform' => 'This code is for an online purchase. Issue an in-person code for Square.']);
+        }
+        if (app(CandleCashChannelPolicy::class)->isInPersonCode($redemption)) {
+            if (($context['platform'] ?? 'square') !== 'square') {
+                throw ValidationException::withMessages(['platform' => 'This reward is for an in-person Square purchase.']);
+            }
+
+            return app(CandleCashChannelPolicy::class)->consumeInPerson($redemption,
+                trim((string) ($context['external_order_source'] ?? 'square_manual')),
+                trim((string) ($context['external_order_id'] ?? '')), 'manual_reconcile', $context);
+        }
         if ($redemption->status === 'redeemed') {
             return $redemption;
         }
@@ -144,10 +159,26 @@ class CandleCashRedemptionReconciliationService
     }
 
     /**
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $context
      */
     public function cancelRedemption(CandleCashRedemption $redemption, array $context = []): CandleCashRedemption
     {
+        if (app(CandleCashChannelPolicy::class)->isInPersonCode($redemption)) {
+            return DB::transaction(function () use ($redemption, $context) {
+                Tenant::query()->whereKey($redemption->profile()->value('tenant_id'))->lockForUpdate()->firstOrFail();
+                $current = CandleCashRedemption::query()->whereKey($redemption->id)->lockForUpdate()->firstOrFail();
+                if (! in_array($current->status, ['issued', 'canceled'], true)) {
+                    throw ValidationException::withMessages(['redemption' => 'Only an unused in-person reward can be canceled.']);
+                }
+                if ($current->status === 'issued') {
+                    $this->candleCashService->cancelIssuedRedemptionAndRestoreBalance($current, $context['notes'] ?? 'Unused in-person reward canceled by staff.', 'in_person_reward_canceled');
+                    $current->refresh()->forceFill(['redemption_context' => $this->mergeContext((array) $current->redemption_context,
+                        ['canceled_by' => $context['actor_id'] ?? null, 'canceled_at' => now()->toISOString()])])->save();
+                }
+
+                return $current->fresh();
+            });
+        }
         $notes = trim((string) ($context['notes'] ?? '')) ?: null;
         $actorId = isset($context['actor_id']) ? (int) $context['actor_id'] : null;
 
@@ -180,9 +211,9 @@ class CandleCashRedemptionReconciliationService
     }
 
     /**
-     * @param array<int,string> $codes
-     * @param array<int,int> $profileIds
-     * @param array<string,mixed> $context
+     * @param  array<int,string>  $codes
+     * @param  array<int,int>  $profileIds
+     * @param  array<string,mixed>  $context
      * @return array<string,int>
      */
     public function reconcileCodes(
@@ -219,7 +250,7 @@ class CandleCashRedemptionReconciliationService
                 'endpoint' => $externalOrderSource,
                 'source_type' => $externalOrderSource,
                 'source_id' => $externalOrderId,
-                'dedupe_key' => sha1('tenant_missing|' . $externalOrderSource . '|' . $externalOrderId . '|' . implode(',', $codes)),
+                'dedupe_key' => sha1('tenant_missing|'.$externalOrderSource.'|'.$externalOrderId.'|'.implode(',', $codes)),
                 'meta' => [
                     'codes' => $codes,
                     'external_order_source' => $externalOrderSource,
@@ -250,7 +281,7 @@ class CandleCashRedemptionReconciliationService
                     'endpoint' => $externalOrderSource,
                     'source_type' => $externalOrderSource,
                     'source_id' => $externalOrderId,
-                    'dedupe_key' => sha1('nf|' . $code . '|' . $externalOrderSource . '|' . $externalOrderId . '|tenant:' . $tenantId),
+                    'dedupe_key' => sha1('nf|'.$code.'|'.$externalOrderSource.'|'.$externalOrderId.'|tenant:'.$tenantId),
                     'meta' => [
                         'code' => $code,
                         'tenant_id' => $tenantId,
@@ -258,10 +289,45 @@ class CandleCashRedemptionReconciliationService
                         'external_order_id' => $externalOrderId,
                     ],
                 ]);
+
                 continue;
             }
 
             $summary['matched']++;
+
+            if (data_get($redemption->redemption_context, 'channel_policy.channel') === 'online' && str_starts_with($externalOrderSource, 'square')) {
+                $summary['rejected']++;
+                $this->logRejected($redemption, 'online_code_on_in_person_purchase', $code, $externalOrderSource, $externalOrderId, $tenantId);
+
+                continue;
+            }
+
+            if (app(CandleCashChannelPolicy::class)->isInPersonCode($redemption)) {
+                if ($profileIds === [] || ! in_array((int) $redemption->marketing_profile_id, $profileIds, true)) {
+                    $summary['rejected']++;
+                    $this->logRejected($redemption, 'profile_mismatch', $code, $externalOrderSource, $externalOrderId, $tenantId);
+
+                    continue;
+                }
+                try {
+                    // Dry runs use the same guards and roll back the local reconciliation write.
+                    $already = $redemption->status === 'redeemed';
+                    DB::beginTransaction();
+                    try {
+                        app(CandleCashChannelPolicy::class)->consumeInPerson($redemption, $externalOrderSource, $externalOrderId, $redeemedChannel);
+                        $dryRun ? DB::rollBack() : DB::commit();
+                    } catch (\Throwable $exception) {
+                        DB::rollBack();
+                        throw $exception;
+                    }
+                    $summary[$already ? 'already_reconciled' : 'reconciled']++;
+                } catch (ValidationException) {
+                    $summary['rejected']++;
+                    $this->logRejected($redemption, 'in_person_channel_or_order_policy', $code, $externalOrderSource, $externalOrderId, $tenantId);
+                }
+
+                continue;
+            }
 
             if ($redemption->expires_at && $redemption->expires_at->isPast() && $redemption->status !== 'redeemed') {
                 if (! $dryRun) {
@@ -281,6 +347,7 @@ class CandleCashRedemptionReconciliationService
                     externalOrderId: $externalOrderId,
                     tenantId: $tenantId
                 );
+
                 continue;
             }
 
@@ -299,7 +366,7 @@ class CandleCashRedemptionReconciliationService
                         'candle_cash_redemption_id' => (int) $redemption->id,
                         'source_type' => $externalOrderSource,
                         'source_id' => $externalOrderId,
-                        'dedupe_key' => sha1('ar|' . $redemption->id . '|' . $externalOrderSource . '|' . $externalOrderId),
+                        'dedupe_key' => sha1('ar|'.$redemption->id.'|'.$externalOrderSource.'|'.$externalOrderId),
                         'meta' => [
                             'code' => $code,
                         ],
@@ -316,6 +383,7 @@ class CandleCashRedemptionReconciliationService
                         tenantId: $tenantId
                     );
                 }
+
                 continue;
             }
 
@@ -330,6 +398,7 @@ class CandleCashRedemptionReconciliationService
                         externalOrderId: $externalOrderId,
                         tenantId: $tenantId
                     );
+
                     continue;
                 }
 
@@ -352,11 +421,13 @@ class CandleCashRedemptionReconciliationService
                             externalOrderId: $externalOrderId,
                             tenantId: $tenantId
                         );
+
                         continue;
                     }
 
                     if ((bool) ($result['already_redeemed'] ?? false)) {
                         $summary['already_reconciled']++;
+
                         continue;
                     }
                 }
@@ -371,7 +442,7 @@ class CandleCashRedemptionReconciliationService
                     'candle_cash_redemption_id' => (int) $redemption->id,
                     'source_type' => $externalOrderSource,
                     'source_id' => $externalOrderId,
-                    'dedupe_key' => sha1('ok|' . $redemption->id . '|' . $externalOrderSource . '|' . $externalOrderId),
+                    'dedupe_key' => sha1('ok|'.$redemption->id.'|'.$externalOrderSource.'|'.$externalOrderId),
                     'meta' => [
                         'code' => $code,
                         'channel' => $redeemedChannel,
@@ -379,6 +450,7 @@ class CandleCashRedemptionReconciliationService
                     ],
                     'resolution_status' => 'resolved',
                 ]);
+
                 continue;
             }
 
@@ -392,6 +464,7 @@ class CandleCashRedemptionReconciliationService
                     externalOrderId: $externalOrderId,
                     tenantId: $tenantId
                 );
+
                 continue;
             }
 
@@ -417,7 +490,7 @@ class CandleCashRedemptionReconciliationService
                 'candle_cash_redemption_id' => (int) $redemption->id,
                 'source_type' => $externalOrderSource,
                 'source_id' => $externalOrderId,
-                'dedupe_key' => sha1('ok|' . $redemption->id . '|' . $externalOrderSource . '|' . $externalOrderId),
+                'dedupe_key' => sha1('ok|'.$redemption->id.'|'.$externalOrderSource.'|'.$externalOrderId),
                 'meta' => [
                     'code' => $code,
                     'channel' => $redeemedChannel,
@@ -430,7 +503,7 @@ class CandleCashRedemptionReconciliationService
     }
 
     /**
-     * @param array<int,string> $codes
+     * @param  array<int,string>  $codes
      * @return array<int,string>
      */
     public function normalizeCodes(array $codes): array
@@ -462,7 +535,7 @@ class CandleCashRedemptionReconciliationService
      */
     protected function profileIdsForOrder(Order $order, ?int $tenantId = null): array
     {
-        $shopifySourceId = (string) ($order->shopify_store_key ?: $order->shopify_store ?: 'unknown') . ':' . $order->shopify_order_id;
+        $shopifySourceId = (string) ($order->shopify_store_key ?: $order->shopify_store ?: 'unknown').':'.$order->shopify_order_id;
 
         $profileIds = MarketingProfileLink::query()
             ->where(function ($query) use ($order, $shopifySourceId): void {
@@ -518,7 +591,7 @@ class CandleCashRedemptionReconciliationService
     }
 
     /**
-     * @param array<int,int> $profileIds
+     * @param  array<int,int>  $profileIds
      * @return array<int,int>
      */
     protected function filterProfileIdsByTenant(array $profileIds, ?int $tenantId): array
@@ -539,7 +612,7 @@ class CandleCashRedemptionReconciliationService
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      */
     protected function tenantIdForShopifyOrder(Order $order, array $options = []): ?int
     {
@@ -561,7 +634,7 @@ class CandleCashRedemptionReconciliationService
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      */
     protected function tenantIdForSquareOrder(SquareOrder $order, array $options = []): ?int
     {
@@ -668,8 +741,8 @@ class CandleCashRedemptionReconciliationService
     }
 
     /**
-     * @param array<string,mixed> $existing
-     * @param array<string,mixed> $incoming
+     * @param  array<string,mixed>  $existing
+     * @param  array<string,mixed>  $incoming
      * @return array<string,mixed>
      */
     protected function mergeContext(array $existing, array $incoming): array
@@ -698,7 +771,7 @@ class CandleCashRedemptionReconciliationService
             'candle_cash_redemption_id' => (int) $redemption->id,
             'source_type' => $externalOrderSource,
             'source_id' => $externalOrderId,
-            'dedupe_key' => sha1('rej|' . $redemption->id . '|' . $externalOrderSource . '|' . $externalOrderId . '|' . $reason),
+            'dedupe_key' => sha1('rej|'.$redemption->id.'|'.$externalOrderSource.'|'.$externalOrderId.'|'.$reason),
             'meta' => [
                 'code' => $code,
                 'reason' => $reason,

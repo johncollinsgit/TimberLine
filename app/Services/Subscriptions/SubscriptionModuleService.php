@@ -6,6 +6,7 @@ use App\Models\MarketingProfile;
 use App\Models\MarketingReviewHistory;
 use App\Models\User;
 use App\Services\Media\FreeStockPhotoService;
+use App\Services\Mobile\ModernForestryMobileCustomerSession;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -48,6 +49,12 @@ class SubscriptionModuleService
                 ->whereColumn('subscription_contracts.shopify_subscription_contract_gid', 'subscription_votes.shopify_subscription_contract_gid')
                 ->selectRaw('1'))
             ->whereIn('subscription_votes.subscription_poll_id', $this->operationalPolls($tenantId)->select('id'));
+    }
+
+    protected function memberVoteCount(int $tenantId, int $pollId, ?int $optionId = null): int
+    {
+        return Schema::hasTable('subscription_member_votes') ? app(SubscriptionReplacementCommunityService::class)->votes($tenantId)
+            ->where('v.subscription_poll_id', $pollId)->when($optionId, fn ($q) => $q->where('v.subscription_poll_option_id', $optionId))->count() : 0;
     }
 
     protected function operationalPolls(int $tenantId)
@@ -135,7 +142,7 @@ class SubscriptionModuleService
             'recent_votes' => $poll
                 ? $this->operationalVotes($tenantId)
                     ->where('subscription_poll_id', (int) $poll['id'])
-                    ->count()
+                    ->count() + $this->memberVoteCount($tenantId, (int) $poll['id'])
                 : 0,
             'active_candle_club_customers' => $this->activeCandleClubCustomers($tenantId),
             'monthly_scents' => $this->monthlyScentCards($tenantId),
@@ -487,6 +494,24 @@ class SubscriptionModuleService
         ];
     }
 
+    public function candleClubContent(int $tenantId, bool $includeScents = true): array
+    {
+        $this->access->assertEntitled($tenantId);
+        $poll = $this->activePoll($tenantId);
+
+        return ['active_poll' => $poll ? $this->pollPayload($poll['id']) : null,
+            'previous_chosen_scents' => $includeScents ? $this->previousChosenScents($tenantId) : [],
+            'monthly_scents' => $includeScents ? $this->monthlyScentCards($tenantId, 6, false) : []];
+    }
+
+    /** Current locking read for a ballot transaction, independent of an earlier membership snapshot. */
+    public function lockOpenCandleClubPoll(int $tenantId): ?array
+    {
+        $this->access->assertEntitled($tenantId);
+
+        return $this->activePoll($tenantId, true);
+    }
+
     /**
      * @param  array<string,mixed>|null  $poll
      * @return array<string,mixed>
@@ -648,7 +673,10 @@ class SubscriptionModuleService
             ];
         }
 
-        DB::transaction(function () use ($tenantId, $pollId, $optionId, $contract, $contractGid, $profile): void {
+        $blocked = DB::transaction(function () use ($tenantId, $pollId, $optionId, $contract, $contractGid, $profile): ?array {
+            if ($blocked = $this->legacyVoteBlocker($tenantId, $pollId, $optionId, $contract)) {
+                return $blocked;
+            }
             DB::table('subscription_votes')->insert([
                 'tenant_id' => $tenantId,
                 'subscription_poll_id' => $pollId,
@@ -678,7 +706,12 @@ class SubscriptionModuleService
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            return null;
         });
+        if ($blocked) {
+            return $blocked;
+        }
 
         return [
             'ok' => true,
@@ -754,7 +787,7 @@ class SubscriptionModuleService
         }
 
         $contract = $this->activeCandleClubContractForIdentifier($tenantId, $normalized['type'], $normalized['value']);
-        if (! $contract) {
+        if (! $contract || app(SubscriptionReplacementCommunityService::class)->convertedContract($tenantId, $contract)) {
             return ['ok' => false, 'status' => 'not_eligible', 'message' => 'Only active Candle Club members can vote.'];
         }
 
@@ -843,7 +876,10 @@ class SubscriptionModuleService
             return ['ok' => false, 'status' => 'already_voted', 'message' => 'This Candle Club subscription has already voted.'];
         }
 
-        DB::transaction(function () use ($tenantId, $pollId, $optionId, $tokenId, $contract, $source): void {
+        $blocked = DB::transaction(function () use ($tenantId, $pollId, $optionId, $tokenId, $contract, $source): ?array {
+            if ($blocked = $this->legacyVoteBlocker($tenantId, $pollId, $optionId, $contract)) {
+                return $blocked;
+            }
             DB::table('subscription_votes')->insert([
                 'tenant_id' => $tenantId,
                 'subscription_poll_id' => $pollId,
@@ -867,9 +903,38 @@ class SubscriptionModuleService
                     'verified_at' => now(),
                     'updated_at' => now(),
                 ]);
+
+            return null;
         });
+        if ($blocked) {
+            return $blocked;
+        }
 
         return ['ok' => true, 'status' => 'vote_recorded', 'message' => 'Your vote has been recorded.'];
+    }
+
+    private function legacyVoteBlocker(int $tenantId, int $pollId, int $optionId, object $contract): ?array
+    {
+        // Follow replacement member/agreement -> poll lock order before accepting a stale source-page vote.
+        $converted = app(SubscriptionReplacementCommunityService::class)->convertedContract($tenantId, $contract, true);
+        $poll = $this->operationalPolls($tenantId)->where('id', $pollId)->lockForUpdate()->first();
+        if (! $this->pollIsOpen($poll)) {
+            return ['ok' => false, 'status' => 'poll_not_open', 'message' => 'Voting is not open.'];
+        }
+        $current = $this->operationalContracts($tenantId)->where('id', $contract->id)->where('status', 'active')->where('is_candle_club', true)->lockForUpdate()->first();
+        if (! $current || $converted || $current->shopify_customer_gid !== $contract->shopify_customer_gid
+            || $current->recharge_subscription_id !== $contract->recharge_subscription_id) {
+            return ['ok' => false, 'status' => 'not_eligible', 'message' => 'Open your authenticated account to review current Candle Club voting access.'];
+        }
+        if (! DB::table('subscription_poll_options')->where('tenant_id', $tenantId)->where('subscription_poll_id', $pollId)->where('id', $optionId)->lockForUpdate()->first()) {
+            return ['ok' => false, 'status' => 'invalid_option', 'message' => 'Choose one of the current Candle Club voting options.'];
+        }
+        if (DB::table('subscription_votes')->where('tenant_id', $tenantId)->where('subscription_poll_id', $pollId)
+            ->where('shopify_subscription_contract_gid', $current->shopify_subscription_contract_gid)->lockForUpdate()->first()) {
+            return ['ok' => false, 'status' => 'already_voted', 'message' => 'This Candle Club subscription has already voted.'];
+        }
+
+        return null;
     }
 
     /**
@@ -898,7 +963,7 @@ class SubscriptionModuleService
             ->map(function (object $option): array {
                 $votes = $this->operationalVotes((int) $option->tenant_id)
                     ->where('subscription_poll_option_id', (int) $option->id)
-                    ->count();
+                    ->count() + $this->memberVoteCount((int) $option->tenant_id, (int) $option->subscription_poll_id, (int) $option->id);
 
                 return [
                     'id' => (int) $option->id,
@@ -974,18 +1039,31 @@ class SubscriptionModuleService
     public function submitCandleClubScentFeedback(MarketingProfile $profile, int $monthlyScentId, array $payload): array
     {
         $this->access->assertEntitled((int) $profile->tenant_id);
-        if (! Schema::hasTable('subscription_candle_club_scent_feedback')) {
-            return ['ok' => false, 'status' => 'feedback_not_ready', 'message' => 'Candle Club scent feedback is not ready yet.'];
-        }
-
-        $tenantId = (int) $profile->tenant_id;
-        $this->access->assertEntitled($tenantId);
         $contract = $this->activeCandleClubContractForProfile($profile);
-
-        if (! $contract) {
+        if (! $contract || app(SubscriptionReplacementCommunityService::class)->convertedContract((int) $profile->tenant_id, $contract)) {
             return ['ok' => false, 'status' => 'not_eligible', 'message' => 'Only active Candle Club members can review monthly Candle Club scents.'];
         }
 
+        return $this->recordScentFeedback($profile, $monthlyScentId, $payload, $contract);
+    }
+
+    public function submitReplacementScentFeedback(ModernForestryMobileCustomerSession $session, int $monthlyScentId, array $payload): array
+    {
+        $this->access->assertEntitled((int) $session->profile->tenant_id);
+
+        return $this->recordScentFeedback($session->profile, $monthlyScentId, $payload, null, function () use ($session) {
+            $row = app(SubscriptionReplacementCommunityService::class)->lockedMembership($session);
+
+            return $row && app(SubscriptionReplacementCustomerAccess::class)->canChange($row, 'resume') ? $row : null;
+        });
+    }
+
+    private function recordScentFeedback(MarketingProfile $profile, int $monthlyScentId, array $payload, ?object $contract, ?callable $membershipAuthority = null): array
+    {
+        $tenantId = (int) $profile->tenant_id;
+        if (! Schema::hasTable('subscription_candle_club_scent_feedback')) {
+            return ['ok' => false, 'status' => 'feedback_not_ready', 'message' => 'Candle Club scent feedback is not ready yet.'];
+        }
         $monthlyScent = DB::table('subscription_candle_club_monthly_scents')
             ->where('tenant_id', $tenantId)
             ->where('id', $monthlyScentId)
@@ -1006,7 +1084,14 @@ class SubscriptionModuleService
         $title = $this->nullableString($data['title'] ?? null);
         $requestId = isset($data['request_id']) ? strtolower($data['request_id']) : null;
 
-        return DB::transaction(function () use ($tenantId, $profile, $monthlyScentId, $contract, $payload, $body, $title, $rating, $requestId): array {
+        return DB::transaction(function () use ($tenantId, $profile, $monthlyScentId, $contract, $payload, $body, $title, $rating, $requestId, $membershipAuthority): array {
+            $this->access->assertEntitled($tenantId);
+            $membership = $membershipAuthority ? $membershipAuthority() : null;
+            $legacy = $membershipAuthority ? null : $this->activeCandleClubContractForProfile($profile);
+            if (($membershipAuthority && ! $membership) || (! $membershipAuthority && (! $legacy || $legacy->id !== $contract->id
+                || app(SubscriptionReplacementCommunityService::class)->convertedContract($tenantId, $legacy, true)))) {
+                return ['ok' => false, 'status' => 'not_eligible', 'message' => 'Only active Candle Club members can review monthly Candle Club scents.'];
+            }
             // Serialize retries on the owned scent, without adding a new feedback store.
             $ownedScent = DB::table('subscription_candle_club_monthly_scents')->where('tenant_id', $tenantId)
                 ->where('id', $monthlyScentId)->lockForUpdate()->first();
@@ -1014,8 +1099,16 @@ class SubscriptionModuleService
             if ($requestId) {
                 $prior = DB::table('subscription_candle_club_scent_feedback')->where('tenant_id', $tenantId)
                     ->where('marketing_profile_id', $profile->id)->where('subscription_candle_club_monthly_scent_id', $monthlyScentId)
-                    ->where('metadata->request_id', $requestId)->first();
+                    ->where('metadata->request_id', $requestId)->lockForUpdate()->first();
                 if ($prior) {
+                    $priorMember = data_get($this->decodeJson($prior->metadata ?? null), 'member_id');
+                    $sameMembership = $membership
+                        ? ($priorMember !== null ? (int) $priorMember === $membership->member_id
+                            : in_array((int) $prior->subscription_contract_id, array_map('intval', app(SubscriptionReplacementCommunityService::class)->legacyContractIds($membership)), true))
+                        : $priorMember === null;
+                    if (! $sameMembership) {
+                        return ['ok' => false, 'status' => 'request_conflict', 'message' => 'This request ID belongs to another original membership. Start a new scent note.'];
+                    }
                     if ((int) $prior->rating !== $rating || $prior->title !== $title || $prior->body !== $body) {
                         return ['ok' => false, 'status' => 'request_conflict', 'message' => 'This feedback request already has different content. Reopen the comment to send a new note.'];
                     }
@@ -1030,7 +1123,9 @@ class SubscriptionModuleService
                 'marketing_profile_id' => (int) $profile->id,
                 'rating' => $rating, 'title' => $title, 'body' => $body,
                 'visibility' => 'candle_club', 'status' => 'pending',
-                'metadata' => json_encode(['source' => (string) ($payload['source'] ?? 'mobile_app'), 'private_first' => true, 'request_id' => $requestId], JSON_THROW_ON_ERROR),
+                'metadata' => json_encode(['source' => (string) ($payload['source'] ?? 'mobile_app'), 'private_first' => true, 'request_id' => $requestId,
+                    'billing_agreement_id' => $membership?->id, 'member_id' => $membership?->member_id,
+                    'membership_terms_hash' => $membership ? SubscriptionBillingAuthorization::original($membership)['terms_hash'] : null], JSON_THROW_ON_ERROR),
                 'created_at' => now(), 'updated_at' => now(),
             ]);
 
@@ -1170,12 +1265,13 @@ class SubscriptionModuleService
         ];
     }
 
-    protected function activePoll(int $tenantId): ?array
+    protected function activePoll(int $tenantId, bool $currentRead = false): ?array
     {
         $poll = $this->operationalPolls($tenantId)
             ->where('poll_type', self::CANDLE_CLUB_TYPE)
             ->where('status', 'open')
             ->orderByDesc('id')
+            ->when($currentRead, fn ($query) => $query->lockForUpdate())
             ->first();
 
         if (! $this->pollIsOpen($poll)) {
@@ -1549,7 +1645,7 @@ class SubscriptionModuleService
             ->all();
     }
 
-    protected function monthlyScentCards(int $tenantId, int $limit = 12): array
+    protected function monthlyScentCards(int $tenantId, int $limit = 12, bool $resolveMissingPhotos = true): array
     {
         if (! Schema::hasTable('subscription_candle_club_monthly_scents')) {
             return collect($this->previousChosenScents($tenantId))
@@ -1574,8 +1670,8 @@ class SubscriptionModuleService
             ->orderByDesc('month')
             ->limit($limit)
             ->get()
-            ->map(function (object $row) use ($tenantId): array {
-                $row = $this->ensureMonthlyScentPhoto($row);
+            ->map(function (object $row) use ($tenantId, $resolveMissingPhotos): array {
+                $row = $resolveMissingPhotos ? $this->ensureMonthlyScentPhoto($row) : $row;
                 $feedback = DB::table('subscription_candle_club_scent_feedback')
                     ->where('tenant_id', $tenantId)
                     ->where('subscription_candle_club_monthly_scent_id', (int) $row->id)

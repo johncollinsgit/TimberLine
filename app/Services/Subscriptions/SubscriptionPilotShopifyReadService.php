@@ -3,6 +3,7 @@
 namespace App\Services\Subscriptions;
 
 use App\Models\ShopifyStore;
+use App\Models\SubscriptionBillingCycle;
 use App\Models\SubscriptionPilotMember;
 use App\Models\User;
 use App\Services\Shopify\ShopifyGraphqlClient;
@@ -10,6 +11,24 @@ use App\Services\Shopify\ShopifyGraphqlClient;
 /** Explicit, bounded, query-only reads for the reviewed pilot's original store. */
 class SubscriptionPilotShopifyReadService
 {
+    public function projectNativeReceipt(SubscriptionBillingCycle $cycle, array $order): void
+    {
+        $proof = data_get($cycle->reconciliation, 'latest_shopify_receipt', []);
+        abort_unless($cycle->processor === 'shopify' && $cycle->paid_at && $cycle->handoff_status === 'confirmed'
+            && in_array($proof['status'] ?? null, ['succeeded', 'refunded', 'disputed'], true) && ($proof['order_id'] ?? null) === $cycle->shopify_order_id
+            && ($proof['receipt_digest'] ?? null) === SubscriptionEvidence::digest(SubscriptionEvidence::canonical($order)), 409);
+        $store = ShopifyStore::query()->forTenantId($cycle->tenant_id)->findOrFail($cycle->terms['shopify_store_id']);
+        $money = data_get($order, 'totalPriceSet.shopMoney');
+        $payload = ['id' => basename($order['id']), 'customer' => ['id' => $cycle->terms['shopify_customer_id']], 'test' => $order['test'],
+            'processed_at' => $order['processedAt'], 'created_at' => $order['createdAt'], 'updated_at' => $order['updatedAt'], 'cancelled_at' => $order['cancelledAt'],
+            'financial_status' => $proof['status'] === 'disputed' ? 'disputed' : strtolower($order['displayFinancialStatus']), 'fulfillment_status' => strtolower($order['displayFulfillmentStatus']),
+            'total_price' => $money['amount'], 'currency' => $money['currencyCode'],
+            'note_attributes' => array_map(fn ($a) => ['name' => $a['key'], 'value' => $a['value']], $order['customAttributes']),
+            'transactions' => array_map(fn ($t) => ['id' => basename($t['id']), 'gateway' => $t['gateway'], 'kind' => $t['kind'], 'status' => $t['status'],
+                'amount' => data_get($t, 'amountSet.shopMoney.amount')], $order['transactions'])];
+        app(SubscriptionPilotService::class)->projectShopifyOrder($cycle->tenant_id, $store->store_key, $payload, 'shopify_read');
+    }
+
     public const QUERY = <<<'GRAPHQL'
 query PilotShopifyOrders($query: String!, $after: String) {
   shop { myshopifyDomain }
@@ -26,7 +45,8 @@ query PilotShopifyOrders($query: String!, $after: String) {
 }
 GRAPHQL;
 
-    public function refresh(int $tenantId, User $actor, int $memberId, ?string $guardCycleDate = null): int
+    public function refresh(int $tenantId, User $actor, int $memberId, ?string $guardCycleDate = null,
+        ?SubscriptionBillingCycle $nativeCycle = null, bool $sandbox = false): int
     {
         $access = app(SubscriptionAccessService::class);
         $access->assertManager($tenantId, $actor);
@@ -37,7 +57,7 @@ GRAPHQL;
         $fingerprint = SubscriptionEvidence::digest($store->access_token);
         $client = new ShopifyGraphqlClient($store->shop_domain, $store->access_token, SubscriptionAccessService::API_VERSION);
         $from = $member->target_date->subMonthsNoOverflow(6)->startOfMonth()->toDateString();
-        $query = 'customer_id:'.$member->shopify_customer_id.' created_at:>='.$from.' test:false';
+        $query = 'customer_id:'.$member->shopify_customer_id.' created_at:>='.$from.' test:'.($sandbox ? 'true' : 'false');
         $cursor = null;
         $orders = [];
         $seen = [];
@@ -71,7 +91,8 @@ GRAPHQL;
                     // Any real collection for this customer is conservative review,
                     // including an order without Recharge or pilot attributes.
                     // The external Stripe mirror is never a Shopify collection.
-                    if (collect($row['transactions'])->contains(fn ($transaction) => strtolower((string) ($transaction['gateway'] ?? '')) === 'shopify_payments'
+                    $originalNativeReceipt = $nativeCycle && SubscriptionShopifyBillingProtocol::excludes($nativeCycle, $member, $guardCycleDate, $row);
+                    if (! $originalNativeReceipt && collect($row['transactions'])->contains(fn ($transaction) => strtolower((string) ($transaction['gateway'] ?? '')) === 'shopify_payments'
                         && strtoupper((string) ($transaction['status'] ?? '')) === 'SUCCESS'
                         && in_array(strtoupper((string) ($transaction['kind'] ?? '')), ['SALE', 'CAPTURE'], true))) {
                         throw new \App\Exceptions\SubscriptionPilotCoverageException('shopify_collection_in_window', 'A Shopify Payments collection already exists in this customer billing window.');

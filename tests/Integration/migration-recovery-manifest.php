@@ -3,6 +3,14 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_30_230000_create_subscription_member_votes.php' => [
+        'test' => 'tests/Integration/SubscriptionMemberVotesMySqlRecoveryTest.php',
+        'scenarios' => ['accepted encrypted ballots survive bare-table/missing-constraint/completed-DDL recovery and code rollback; composite tenant ownership rejects foreign votes; incompatible named indexes stop without replacing evidence'],
+    ],
+    '2026_10_30_220000_create_subscription_billing_ledger.php' => [
+        'test' => 'tests/Integration/SubscriptionBillingLedgerMySqlRecoveryTest.php',
+        'scenarios' => ['encrypted mandates and original provider requests retained across parent-only creation, missing named constraints and repeated recovery; composite tenant ownership rejects foreign cycles; changed indexes stop without deleting evidence; code rollback preserves all billing history'],
+    ],
     '2026_10_29_150000_create_team_search_index.php' => [
         'test' => 'tests/Integration/TeamSearchMySqlRecoveryTest.php',
         'scenarios' => ['encrypted documents and checkpoints survive missing terms table', 'named lookup and document indexes recover without replacing rows', 'completed DDL replay remains idempotent'],

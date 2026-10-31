@@ -1,3 +1,12 @@
+## Recharge replacement ledger and purchase gateways (October 30; source candidate)
+
+The examined [replacement plan](docs/operations/subscriptions-recharge-replacement.md)
+prioritizes supported existing Braintree/Shopify payment methods. A separate
+encrypted billing ledger and preview-first operator commands prepare exact
+members and retain original billing anchors. Customer purchase history shows
+recorded gateway icons with a bounded, metadata-only history refresh. No new
+processor collection or replacement activation is implemented by this checkpoint.
+
 ## Candle Club member authorization and scent notes (source candidate)
 
 The private Modern Forestry authorization page previews upcoming app features

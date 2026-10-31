@@ -4,6 +4,8 @@ namespace App\Services\Subscriptions;
 
 use App\Models\MarketingProfile;
 use App\Models\ShopifyStore;
+use App\Models\SubscriptionBillingAgreement;
+use App\Models\SubscriptionBillingCycle;
 use App\Models\SubscriptionPilotEvent;
 use App\Models\SubscriptionPilotMember;
 use App\Models\Tenant;
@@ -150,7 +152,14 @@ class SubscriptionPilotService
         $events = SubscriptionPilotEvent::query()->forTenantId($tenantId)->whereIn('member_id', $selected ? [$selected->id] : $members->pluck('id'))
             ->orderBy('occurred_at')->orderBy('id')->get();
         $cards = $members->map(fn ($member) => $this->memberReadout($member, $events->where('member_id', $member->id)))->all();
+        $braintree = Schema::hasTable('subscription_billing_cycles')
+            ? SubscriptionBillingCycle::query()->forTenantId($tenantId)->where('processor', 'braintree')
+                ->whereIn('agreement_id', SubscriptionBillingAgreement::query()->forTenantId($tenantId)
+                    ->whereIn('member_id', $selected ? [$selected->id] : $members->pluck('id'))->select('id'))
+                ->whereNotNull('paid_at')->get()->filter(fn ($cycle) => $this->observedBraintreePayment($cycle))
+            : collect();
         $labels = $events->where('kind', 'payment')->pluck('cycle_date')->filter()->map(fn ($date) => $date->format('Y-m'))
+            ->merge($braintree->map(fn ($cycle) => $cycle->cycle_date->format('Y-m')))
             ->merge(($selected ? collect([$selected]) : $members)->map(fn ($m) => $m->target_date->format('Y-m')))->unique()->sort()->values()->all();
         $datasets = [];
         $singleCurrency = $members->pluck('currency')->unique()->count() === 1;
@@ -163,6 +172,11 @@ class SubscriptionPilotService
                 return $singleCurrency && $rows->isNotEmpty() ? round($rows->sum('amount_cents') / 100, 2) : null;
             }, $labels)];
         }
+        $datasets[] = ['label' => 'Braintree collections', 'data' => array_map(function ($month) use ($braintree, $singleCurrency) {
+            $rows = $braintree->filter(fn ($cycle) => $cycle->cycle_date->format('Y-m') === $month);
+
+            return $singleCurrency && $rows->isNotEmpty() ? round($rows->sum('amount_cents') / 100, 2) : null;
+        }, $labels)];
         $tenant = Tenant::query()->findOrFail($tenantId);
         $accountReady = app(TenantPaymentsReadinessService::class)->readinessFor($tenant);
 
@@ -191,42 +205,93 @@ class SubscriptionPilotService
             ? \App\Models\SubscriptionPilotEnrollment::query()->forTenantId($member->tenant_id)->where('member_id', $member->id)->first() : null;
         $executionCycle = $enrollment ? \App\Models\SubscriptionPilotCycle::query()->forTenantId($member->tenant_id)->where('enrollment_id', $enrollment->id)
             ->whereDate('cycle_date', $member->target_date->toDateString())->first() : null;
-        $possible = $duplicate || $excess || data_get($executionCycle?->reconciliation, 'possible_duplicate') === true;
-        $coverage = data_get($executionCycle?->reconciliation, 'coverage');
+        $replacement = Schema::hasTable('subscription_billing_agreements')
+            ? \App\Models\SubscriptionBillingAgreement::query()->forTenantId($member->tenant_id)->where('member_id', $member->id)->first() : null;
+        $replacementCycle = $replacement ? \App\Models\SubscriptionBillingCycle::query()->forTenantId($member->tenant_id)->where('agreement_id', $replacement->id)
+            ->whereDate('cycle_date', $member->target_date->toDateString())->first() : null;
+        $braintreePaid = $replacementCycle && $this->observedBraintreePayment($replacementCycle) ? $replacementCycle->amount_cents : 0;
+        $totalPaid = $unique->sum('amount_cents') + $braintreePaid;
+        $duplicate = $duplicate || ($braintreePaid > 0 && $unique->isNotEmpty());
+        $excess = $excess || ($member->expected_amount_cents !== null && $totalPaid > $member->expected_amount_cents);
+        if ($replacementCycle && data_get($replacementCycle->reconciliation, 'checked_at')) {
+            $observed = collect([$observed, CarbonImmutable::parse($replacementCycle->reconciliation['checked_at'])])->filter()->max();
+        }
+        $possible = $duplicate || $excess || data_get($executionCycle?->reconciliation, 'possible_duplicate') === true
+            || data_get($replacementCycle?->reconciliation, 'possible_duplicate') === true;
+        $coverage = data_get(($replacementCycle ?? $executionCycle)?->reconciliation, 'coverage');
         $clear = $coverage && ($coverage['status'] ?? null) === 'observed_clear'
             && CarbonImmutable::parse($coverage['checked_at'])->gt(now()->subMinutes(15));
         $blockers = [];
         if ($member->billing_owner === 'recharge') {
             $blockers[] = 'Recharge billing remains primary';
         }
-        if (! $enrollment?->authorized_at) {
+        if ($replacement) {
+            if (! $replacement->method_verified_at) {
+                $blockers[] = ucfirst($replacement->processor).' saved payment method and continuing authorization need verification';
+            }
+            if (! $replacement->activated_at) {
+                $blockers[] = 'Individual source-stop and merchant acceptance required before replacement activation';
+            }
+            if ($replacementCycle?->last_error_code) {
+                $blockers[] = 'Operator review: '.str_replace('_', ' ', $replacementCycle->last_error_code);
+            }
+        } elseif ($enrollment && ! $enrollment->authorized_at) {
             $blockers[] = 'Customer Stripe authorization required';
+        } elseif (! $enrollment) {
+            $blockers[] = 'Review existing payment method reuse before requesting new customer authorization';
         }
-        if (! $enrollment?->activated_at) {
+        if (! $enrollment?->activated_at && ! $replacement?->activated_at) {
             $blockers[] = 'Fresh Recharge billing-stop and charge checks required before activation';
         }
         if ($executionCycle?->last_error_code) {
             $blockers[] = 'Operator review: '.str_replace('_', ' ', $executionCycle->last_error_code);
         }
-        if (! $enrollment?->activated_at) {
+        if ($enrollment && ! $enrollment->activated_at && ! $replacement) {
             $blockers[] = 'Stripe merchant, signed callback and Shopify bridge readiness required';
         }
+
+        $processorLabel = $replacementCycle?->processor === 'shopify' ? 'Shopify' : 'Braintree';
+        $replacementPayment = $replacementCycle ? match ($replacementCycle->payment_status) {
+            'succeeded' => $replacementCycle->method_binding['environment'] === 'production' ? 'Confirmed '.$processorLabel.' payment' : 'Confirmed sandbox payment',
+            'processing' => $processorLabel === 'Braintree' ? 'Processing Braintree settlement' : 'Processing Shopify payment',
+            'unknown', 'sending' => 'Original '.$processorLabel.' payment unconfirmed', 'requires_action' => 'Shopify payment authentication required',
+            'refunded' => $processorLabel.' refund observed', 'disputed' => $processorLabel.' dispute observed', 'declined' => $processorLabel.' payment declined',
+            'review' => $processorLabel.' payment needs review', default => 'Awaiting payment',
+        } : null;
 
         return ['id' => $member->id, 'name' => $member->details['name'], 'email' => $member->details['email'],
             'status' => $member->status, 'billing_owner' => $member->billing_owner,
             'target_date' => $member->target_date->toDateString(), 'currency' => $member->currency,
             'expected_amount_cents' => $member->expected_amount_cents, 'lines' => $member->details['lines'],
             'source_url' => $member->details['source_url'], 'source_observed_at' => $member->details['source_observed_at'],
-            'last_observed_at' => $observed, 'paid_cents' => $unique->sum('amount_cents'),
-            'payment_status' => $unique->isNotEmpty() ? 'Observed payment' : (now($member->timezone)->toDateString() < $member->target_date->toDateString() ? 'Awaiting cycle' : 'Not verified'),
-            'shopify_status' => $orders->isNotEmpty() ? 'Observed order' : 'Not verified',
+            'last_observed_at' => $observed, 'paid_cents' => $totalPaid,
+            'payment_observed' => $totalPaid > 0,
+            'order_observed' => $orders->isNotEmpty() || ($replacementCycle?->handoff_status === 'confirmed' && $replacementCycle->method_binding['environment'] === 'production'),
+            'fulfillment_observed' => $current->where('kind', 'fulfillment')->where('status', 'fulfilled')->isNotEmpty(),
+            'payment_status' => $replacementPayment ?? ($unique->isNotEmpty() ? 'Observed payment' : (now($member->timezone)->toDateString() < $member->target_date->toDateString() ? 'Awaiting cycle' : 'Not verified')),
+            'shopify_status' => $replacementCycle?->handoff_status === 'confirmed'
+                ? ($replacementCycle->method_binding['environment'] === 'production' ? 'Confirmed Shopify order' : 'Confirmed sandbox order')
+                : ($orders->isNotEmpty() ? 'Observed order' : 'Not verified'),
             'fulfillment_status' => $current->where('kind', 'fulfillment')->where('status', 'fulfilled')->isNotEmpty() ? 'Observed fulfillment' : 'Not verified',
             'duplicate_status' => $possible ? 'Possible duplicate' : ($clear ? 'No additional payment observed at '.CarbonImmutable::parse($coverage['checked_at'])->setTimezone($member->timezone)->format('g:i a T') : 'Not verified'),
-            'duplicate_alert' => $possible, 'execution_status' => $enrollment?->status,
+            'duplicate_alert' => $possible, 'execution_status' => $replacement?->status ?? $enrollment?->status,
+            'coverage_current' => (bool) $clear && ! $possible,
+            'replacement_status' => $replacement?->status, 'replacement_processor' => $replacement?->processor,
             'can_review_execution' => config('subscriptions.pilot_setup_enabled') && in_array($member->tenant_id, config('subscriptions.pilot_tenant_ids', []), true),
             'coverage_checked_at' => $coverage['checked_at'] ?? null, 'candle_cash_allowed' => false,
             'activation_blockers' => $blockers,
         ];
+    }
+
+    /** Collections observed at the original processor, never sandbox money or accounting revenue. */
+    private function observedBraintreePayment(SubscriptionBillingCycle $cycle): bool
+    {
+        return $cycle->processor === 'braintree' && $cycle->paid_at && $cycle->provider_reference
+            && ($cycle->method_binding['environment'] ?? null) === 'production'
+            && in_array($cycle->payment_status, ['succeeded', 'review'], true)
+            && data_get($cycle->reconciliation, 'provider_status') === 'settled'
+            && data_get($cycle->reconciliation, 'refund_ids') === []
+            && data_get($cycle->reconciliation, 'dispute_count') === 0;
     }
 
     private function latest($events)
@@ -260,6 +325,7 @@ class SubscriptionPilotService
         foreach ($members as $member) {
             $expected = array_filter(array_column($member->details['lines'], 'subscription_id'));
             $pilotCycle = null;
+            $replacementCycle = null;
             if (! $subscriptionIds && \Illuminate\Support\Facades\Schema::hasTable('subscription_pilot_cycles')) {
                 $pilotCycle = \App\Models\SubscriptionPilotCycle::query()->forTenantId($tenantId)->where('shopify_order_id', (string) $order['id'])
                     ->where('public_id', $attributes->get('everbranch_pilot_cycle'))->first();
@@ -274,12 +340,40 @@ class SubscriptionPilotService
                     }
                 }
             }
-            if ((! $pilotCycle && (! $expected || ! $subscriptionIds || array_diff($subscriptionIds, $expected))) || $member->details['shop_domain'] !== $store->shop_domain) {
+            if (! $subscriptionIds && Schema::hasTable('subscription_billing_cycles')) {
+                $replacementCycle = SubscriptionBillingCycle::query()->forTenantId($tenantId)->where('shopify_order_id', (string) $order['id'])
+                    ->where(fn ($q) => $q->where('processor', 'shopify')->orWhere('public_id', $attributes->get('everbranch_billing_cycle')))->first();
+                if ($replacementCycle) {
+                    $agreement = SubscriptionBillingAgreement::query()->forTenantId($tenantId)->find($replacementCycle->agreement_id);
+                    $native = $replacementCycle->processor === 'shopify';
+                    $proof = data_get($replacementCycle->reconciliation, 'latest_shopify_receipt', []);
+                    $mapping = $native
+                        ? ($agreement && $agreement->method_binding === $replacementCycle->method_binding
+                            && in_array($proof['status'] ?? null, ['succeeded', 'refunded', 'disputed'], true)
+                            && data_get($agreement->authorization_evidence, 'shopify_adoption.contract_id') === $replacementCycle->terms['shopify_contract_id']
+                            && ($proof['attempt_id'] ?? null) === $replacementCycle->provider_reference && ($proof['order_id'] ?? null) === (string) $order['id']
+                            && $replacementCycle->amount_cents === $this->cents((string) ($order['total_price'] ?? ''))
+                            && array_map('basename', $proof['payment_ids'] ?? []) === array_values(array_map(fn ($t) => (string) $t['id'], array_filter($order['transactions'] ?? [],
+                                fn ($t) => strtolower((string) ($t['gateway'] ?? '')) === 'shopify_payments' && strtolower((string) ($t['status'] ?? '')) === 'success'
+                                    && in_array(strtolower((string) ($t['kind'] ?? '')), ['sale', 'capture'], true)))))
+                        : ($replacementCycle->processor === 'braintree' && $replacementCycle->provider_reference === $attributes->get('everbranch_braintree_transaction')
+                            && $replacementCycle->merchant_fingerprint === $attributes->get('everbranch_processor_account')
+                            && $replacementCycle->terms['terms_hash'] === $attributes->get('everbranch_terms_hash'));
+                    if (! $agreement || $agreement->member_id !== $member->id || ! $mapping
+                        || ! $replacementCycle->paid_at || ($replacementCycle->method_binding['environment'] ?? null) !== 'production'
+                        || $replacementCycle->handoff_status !== 'confirmed' || $replacementCycle->terms['shopify_store_id'] !== $store->id
+                        || $replacementCycle->terms['shop_domain'] !== $store->shop_domain) {
+                        $replacementCycle = null;
+                    }
+                }
+            }
+            $ownedCycle = $replacementCycle ?? $pilotCycle;
+            if ((! $ownedCycle && (! $expected || ! $subscriptionIds || array_diff($subscriptionIds, $expected))) || $member->details['shop_domain'] !== $store->shop_domain) {
                 continue;
             }
             $at = CarbonImmutable::parse($order['processed_at'] ?? $order['created_at']);
             $updated = CarbonImmutable::parse($order['updated_at'] ?? $order['processed_at'] ?? $order['created_at']);
-            $cycle = $pilotCycle ? $pilotCycle->cycle_date->toDateString() : $at->setTimezone($member->timezone)->toDateString();
+            $cycle = $ownedCycle ? $ownedCycle->cycle_date->toDateString() : $at->setTimezone($member->timezone)->toDateString();
             $financial = strtolower((string) ($order['financial_status'] ?? ''));
             $status = $financial === 'paid' && empty($order['cancelled_at']) ? 'success' : ($financial === 'refunded' ? 'refunded' : 'pending');
             $currency = (string) ($order['currency'] ?? '');

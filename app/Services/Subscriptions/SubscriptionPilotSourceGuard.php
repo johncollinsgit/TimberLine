@@ -3,6 +3,8 @@
 namespace App\Services\Subscriptions;
 
 use App\Models\ShopifyStore;
+use App\Models\SubscriptionBillingAgreement;
+use App\Models\SubscriptionBillingCycle;
 use App\Models\SubscriptionPilotEvent;
 use App\Models\SubscriptionPilotMember;
 use App\Models\SubscriptionRechargeConnection;
@@ -14,6 +16,25 @@ use Carbon\CarbonImmutable;
 class SubscriptionPilotSourceGuard
 {
     public function stopped(SubscriptionPilotMember $member, int $connectionId, string $cycleDate, User $actor, ?string $ownOrderId = null): array
+    {
+        return $this->inspect($member, $connectionId, $cycleDate, $actor, $ownOrderId);
+    }
+
+    public function stoppedForShopify(SubscriptionBillingAgreement $row, string $date, User $actor, ?SubscriptionBillingCycle $originalCycle = null): array
+    {
+        abort_unless($row->processor === 'shopify' && ($row->method_binding['processor'] ?? null) === 'shopify', 409);
+        $member = app(SubscriptionReplacementAccess::class)->member($row);
+        if ($originalCycle) {
+            abort_unless($originalCycle->tenant_id === $row->tenant_id && $originalCycle->agreement_id === $row->id
+                && $originalCycle->processor === 'shopify' && $originalCycle->cycle_date->toDateString() === $date, 409);
+        }
+
+        return $this->inspect($member, $row->method_binding['source_connection_id'], $date, $actor,
+            $originalCycle?->shopify_order_id, $originalCycle, $row->method_binding['environment'] === 'sandbox');
+    }
+
+    private function inspect(SubscriptionPilotMember $member, int $connectionId, string $cycleDate, User $actor, ?string $ownOrderId = null,
+        ?SubscriptionBillingCycle $nativeCycle = null, bool $sandbox = false): array
     {
         $started = microtime(true);
         app(SubscriptionAccessService::class)->assertManager($member->tenant_id, $actor);
@@ -57,7 +78,7 @@ class SubscriptionPilotSourceGuard
             abort_unless(isset($page['charges']) && is_array($page['charges']) && array_is_list($page['charges'])
                 && array_key_exists('next_cursor', $page) && ! $page['next_cursor'] && $page['charges'] === [], 409, 'Recharge charge history is not clear or complete for this pilot cycle.');
         }
-        app(SubscriptionPilotShopifyReadService::class)->refresh($member->tenant_id, $actor, $member->id, $cycleDate);
+        app(SubscriptionPilotShopifyReadService::class)->refresh($member->tenant_id, $actor, $member->id, $cycleDate, $nativeCycle, $sandbox);
         abort_if(SubscriptionPilotEvent::query()->forTenantId($member->tenant_id)->where('member_id', $member->id)
             ->where('provider', 'shopify')->where('kind', 'order')->where('status', 'success')->whereDate('cycle_date', $cycleDate)
             ->when($ownOrderId, fn ($query) => $query->where('provider_reference', '!=', $ownOrderId))->exists(), 409, 'A paid Shopify subscription order already exists for this cycle.');

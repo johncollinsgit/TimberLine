@@ -85,6 +85,30 @@ test('credential drafts are encrypted idempotent local records and are never fla
     Http::assertNothingSent();
 });
 
+test('a credential draft replay cannot change its merchant token actor or identity value types', function (string $defect) {
+    $input = ['provider_store_id' => '9001', 'identifier' => 'reviewed-merchant', 'platform' => 'shopify',
+        'recharge_access_token' => 'PRIVATE_SETUP_CANARY_1234567890', 'request_uuid' => (string) Str::uuid()];
+    $this->post(($this->postUrl)('source'), $input)->assertRedirect();
+    $source = IntegrationConnection::query()->sole();
+    if ($defect === 'type') {
+        $metadata = $source->metadata;
+        $metadata['expected_identity']['provider_store_id'] = 9001;
+        $source->update(['metadata' => $metadata]);
+    } elseif ($defect === 'actor') {
+        $other = User::factory()->create(['is_active' => true]);
+        $other->tenants()->attach($this->tenant->id, ['role' => 'manager', 'membership_active' => true]);
+        $this->actingAs($other);
+    } else {
+        $input[match ($defect) {
+            'store' => 'provider_store_id', 'merchant' => 'identifier', 'token' => 'recharge_access_token'
+        }] = $defect === 'token' ? 'DIFFERENT_PRIVATE_SETUP_CANARY_1234567890' : 'different-value';
+    }
+    $before = $source->fresh()->getAttributes();
+    $this->post(($this->postUrl)('source'), $input)->assertStatus(409)->assertDontSee('PRIVATE_SETUP_CANARY_1234567890');
+    expect(IntegrationConnection::query()->count())->toBe(1)->and($source->fresh()->getAttributes())->toBe($before);
+    Http::assertNothingSent();
+})->with(['store', 'merchant', 'token', 'actor', 'type']);
+
 test('workspace retains accepted source only and preparation preserves exact values without customer adoption', function () {
     $connection = rechargeWorkspaceCapture($this);
     $beforeRequests = count(Http::recorded());

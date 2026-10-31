@@ -25,6 +25,7 @@ query CandleCashDiscountByCode($code: String!) {
         title
         startsAt
         endsAt
+        customerGets { appliesOnOneTimePurchase appliesOnSubscription }
         combinesWith {
           orderDiscounts
           productDiscounts
@@ -47,6 +48,7 @@ mutation CandleCashDiscountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasic
           title
           startsAt
           endsAt
+          customerGets { appliesOnOneTimePurchase appliesOnSubscription }
           combinesWith {
             orderDiscounts
             productDiscounts
@@ -75,6 +77,7 @@ mutation CandleCashDiscountCodeBasicUpdate($id: ID!, $basicCodeDiscount: Discoun
           title
           startsAt
           endsAt
+          customerGets { appliesOnOneTimePurchase appliesOnSubscription }
           combinesWith {
             orderDiscounts
             productDiscounts
@@ -95,14 +98,16 @@ GRAPHQL;
     public function __construct(
         protected CandleCashService $candleCashService,
         protected TenantMarketingSettingsResolver $settingsResolver
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{discount_id:?string,discount_node_id:?string,store_key:string,starts_at:?string,ends_at:?\Carbon\CarbonInterface}
      */
     public function ensureDiscountForRedemption(CandleCashRedemption $redemption, ?string $preferredStoreKey = null): array
     {
+        if ($redemption->platform === 'square' || app(CandleCashChannelPolicy::class)->isInPersonCode($redemption)) {
+            throw new RuntimeException('An in-person Candle Cash code cannot be used for an online Shopify discount.');
+        }
         $rewardCode = trim((string) $redemption->redemption_code);
         if ($rewardCode === '') {
             throw new RuntimeException('Reward redemption is missing a reward code.');
@@ -119,6 +124,7 @@ GRAPHQL;
             trim((string) ($store['api_version'] ?? '')) ?: '2026-01'
         );
         $desiredCombinesWith = $this->combinesWithInput($redemption);
+        $purchaseEligibility = $this->purchaseEligibilityInput($redemption);
 
         $lookup = $client->query(self::LOOKUP_BY_CODE_QUERY, [
             'code' => $rewardCode,
@@ -126,11 +132,13 @@ GRAPHQL;
 
         $existing = $this->discountIdentifiersFromPayload($lookup['codeDiscountNodeByCode'] ?? null);
         if ($existing !== null) {
-            if (! $this->combinesWithMatches($existing['combines_with'] ?? null, $desiredCombinesWith)) {
+            if (! $this->combinesWithMatches($existing['combines_with'] ?? null, $desiredCombinesWith)
+                || ($purchaseEligibility !== [] && ($existing['purchase_eligibility'] ?? null) !== $purchaseEligibility)) {
                 $existing = $this->updateDiscountCombinesWith(
                     $client,
                     $existing,
-                    $desiredCombinesWith
+                    $desiredCombinesWith,
+                    $purchaseEligibility
                 );
             }
 
@@ -154,7 +162,7 @@ GRAPHQL;
 
         $errors = $this->extractUserErrors((array) ($payload['userErrors'] ?? []));
         if ($errors !== []) {
-            throw new RuntimeException('Shopify reward discount create failed: ' . implode(' | ', $errors));
+            throw new RuntimeException('Shopify reward discount create failed: '.implode(' | ', $errors));
         }
 
         $created = $this->discountIdentifiersFromPayload($payload['codeDiscountNode'] ?? null);
@@ -333,6 +341,7 @@ GRAPHQL;
             'customerSelection' => ['all' => true],
             'combinesWith' => $this->combinesWithInput($redemption),
             'customerGets' => [
+                ...$this->purchaseEligibilityInput($redemption),
                 'items' => ['all' => true],
                 'value' => [
                     'discountAmount' => [
@@ -360,7 +369,6 @@ GRAPHQL;
     }
 
     /**
-     * @param mixed $payload
      * @return array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface,combines_with:?array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}}|null
      */
     protected function discountIdentifiersFromPayload(mixed $payload): ?array
@@ -389,11 +397,15 @@ GRAPHQL;
             'combines_with' => is_array($discount['combinesWith'] ?? null)
                 ? $this->normalizedCombinesWith((array) $discount['combinesWith'])
                 : null,
+            'purchase_eligibility' => is_array($discount['customerGets'] ?? null) ? [
+                'appliesOnOneTimePurchase' => $discount['customerGets']['appliesOnOneTimePurchase'] ?? null,
+                'appliesOnSubscription' => $discount['customerGets']['appliesOnSubscription'] ?? null,
+            ] : null,
         ];
     }
 
     /**
-     * @param array<int,mixed> $errors
+     * @param  array<int,mixed>  $errors
      * @return array<int,string>
      */
     protected function extractUserErrors(array $errors): array
@@ -455,7 +467,7 @@ GRAPHQL;
     }
 
     /**
-     * @param array<int,mixed> $selectedPromoTypes
+     * @param  array<int,mixed>  $selectedPromoTypes
      * @return array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}
      */
     protected function combinesWithFromSelectedPromoTypes(array $selectedPromoTypes): array
@@ -488,11 +500,13 @@ GRAPHQL;
 
             if (in_array($promoType, ['order', 'order_discount', 'order_discounts', 'cart', 'cart_discount', 'cart_discounts'], true)) {
                 $orderDiscounts = true;
+
                 continue;
             }
 
             if (in_array($promoType, ['product', 'product_discount', 'product_discounts', 'line_item', 'line_items', 'item', 'item_discounts'], true)) {
                 $productDiscounts = true;
+
                 continue;
             }
 
@@ -509,14 +523,15 @@ GRAPHQL;
     }
 
     /**
-     * @param array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface,combines_with:?array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}} $existingDiscount
-     * @param array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool} $desiredCombinesWith
+     * @param  array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface,combines_with:?array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}}  $existingDiscount
+     * @param  array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}  $desiredCombinesWith
      * @return array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface,combines_with:?array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}}
      */
     protected function updateDiscountCombinesWith(
         ShopifyGraphqlClient $client,
         array $existingDiscount,
-        array $desiredCombinesWith
+        array $desiredCombinesWith,
+        array $purchaseEligibility = []
     ): array {
         $discountNodeId = trim((string) ($existingDiscount['discount_node_id'] ?? ''));
         if ($discountNodeId === '') {
@@ -527,6 +542,7 @@ GRAPHQL;
             'id' => $discountNodeId,
             'basicCodeDiscount' => [
                 'combinesWith' => $this->normalizedCombinesWith($desiredCombinesWith),
+                ...($purchaseEligibility !== [] ? ['customerGets' => $purchaseEligibility] : []),
             ],
         ]);
 
@@ -537,7 +553,7 @@ GRAPHQL;
 
         $errors = $this->extractUserErrors((array) ($payload['userErrors'] ?? []));
         if ($errors !== []) {
-            throw new RuntimeException('Shopify reward discount update failed: ' . implode(' | ', $errors));
+            throw new RuntimeException('Shopify reward discount update failed: '.implode(' | ', $errors));
         }
 
         $updated = $this->discountIdentifiersFromPayload($payload['codeDiscountNode'] ?? null);
@@ -548,9 +564,14 @@ GRAPHQL;
         return $updated;
     }
 
+    protected function purchaseEligibilityInput(CandleCashRedemption $redemption): array
+    {
+        return app(CandleCashChannelPolicy::class)->rules($this->tenantIdForRedemption($redemption)) !== null
+            ? ['appliesOnOneTimePurchase' => true, 'appliesOnSubscription' => false] : [];
+    }
+
     /**
-     * @param mixed $currentCombinesWith
-     * @param array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool} $desiredCombinesWith
+     * @param  array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}  $desiredCombinesWith
      */
     protected function combinesWithMatches(mixed $currentCombinesWith, array $desiredCombinesWith): bool
     {
@@ -558,7 +579,6 @@ GRAPHQL;
     }
 
     /**
-     * @param mixed $combinesWith
      * @return array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}
      */
     protected function normalizedCombinesWith(mixed $combinesWith): array
@@ -598,7 +618,7 @@ GRAPHQL;
     }
 
     /**
-     * @param array<string,mixed> $store
+     * @param  array<string,mixed>  $store
      */
     protected function storeOwnedByTenant(array $store, int $tenantId): bool
     {

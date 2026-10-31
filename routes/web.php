@@ -798,6 +798,18 @@ Route::prefix('signup/classes/{tenant:slug}')
 
 Route::get('/subscriptions/manage/{token}', [\App\Http\Controllers\SubscriptionPilotCustomerController::class, 'show'])
     ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:60,1')->name('subscriptions.pilot.customer');
+Route::get('/subscriptions/member/{token}', [\App\Http\Controllers\SubscriptionReplacementCustomerController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:60,1')->name('subscriptions.replacement.customer');
+Route::post('/subscriptions/member/{token}', [\App\Http\Controllers\SubscriptionReplacementCustomerController::class, 'change'])
+    ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:10,1')->name('subscriptions.replacement.customer.change');
+Route::post('/subscriptions/member/{token}/delivery/review', [\App\Http\Controllers\SubscriptionReplacementCustomerController::class, 'reviewDelivery'])
+    ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:6,1')->name('subscriptions.replacement.customer.delivery.review');
+Route::post('/subscriptions/member/{token}/delivery/confirm', [\App\Http\Controllers\SubscriptionReplacementCustomerController::class, 'confirmDelivery'])
+    ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:6,1')->name('subscriptions.replacement.customer.delivery.confirm');
+Route::get('/subscriptions/member/{token}/delivery/{requestId}', [\App\Http\Controllers\SubscriptionReplacementCustomerController::class, 'deliveryStatus'])
+    ->where('token', '[A-Za-z0-9]{64}')->whereUuid('requestId')->middleware('throttle:30,1')->name('subscriptions.replacement.customer.delivery.status');
+Route::post('/subscriptions/member/{token}/delivery/{requestId}/discard', [\App\Http\Controllers\SubscriptionReplacementCustomerController::class, 'discardDelivery'])
+    ->where('token', '[A-Za-z0-9]{64}')->whereUuid('requestId')->middleware('throttle:6,1')->name('subscriptions.replacement.customer.delivery.discard');
 Route::post('/api/mobile/v1/modern-forestry/account/subscriptions/manage', [\App\Http\Controllers\SubscriptionPilotCustomerController::class, 'mobileManage'])
     ->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:10,1')->name('subscriptions.pilot.mobile-manage');
 Route::post('/subscriptions/manage/{token}/authorize', [\App\Http\Controllers\SubscriptionPilotCustomerController::class, 'authorizePayment'])

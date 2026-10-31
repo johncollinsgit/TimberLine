@@ -2,6 +2,12 @@
 
 ## Product contract
 
+The owner-confirmed direction is full Recharge replacement by Everbranch, using
+existing Braintree/Shopify payment methods wherever supported. The Stripe executor
+below is one existing pilot rail, not a requirement to reauthorize every member.
+Follow `subscriptions-recharge-replacement.md` for the examined baseline, build
+order and per-member acceptance. Its plan does not enable any billing gate.
+
 Subscriptions is a reusable paid retail Branch at the existing USD 99/month
 catalog price. Modern Forestry retains its included entitlement. The pilot is
 tenant configuration, not a tenant-specific fork. Tenant-owned customers,

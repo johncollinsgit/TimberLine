@@ -116,6 +116,7 @@ class SubscriptionPilotExecutionService
 
     public function beginAuthorization(SubscriptionPilotEnrollment $enrollment, string $token, string $termsHash, bool $accepted, string $ip): string
     {
+        $this->assertOriginalBillingLane($enrollment);
         $this->gate($enrollment->tenant_id, 'pilot_setup_enabled');
         app(SubscriptionAccessService::class)->assertEntitled($enrollment->tenant_id);
         abort_unless($accepted && hash_equals($enrollment->terms_hash, $termsHash) && $this->fromAccess($token)->id === $enrollment->id
@@ -208,8 +209,10 @@ class SubscriptionPilotExecutionService
         $proof = app(SubscriptionPilotSourceGuard::class)->stopped($member, $row->terms['recharge_connection_id'], $row->terms['first_billing_date'], $actor);
 
         return DB::transaction(function () use ($row, $actor, $proof, $member) {
+            SubscriptionPilotMember::query()->forTenantId($row->tenant_id)->whereKey($row->member_id)->lockForUpdate()->firstOrFail();
             $current = $this->locked($row);
             $this->owner($row->tenant_id, $actor->fresh());
+            $this->assertOriginalBillingLane($current);
             abort_unless(in_array($current->status, ['authorized', 'active'], true), 409);
             $current->update(['status' => 'active', 'activated_at' => $current->activated_at ?? now(), 'activated_by' => $actor->id,
                 'next_billing_date' => $current->next_billing_date ?? $current->terms['first_billing_date']]);
@@ -253,8 +256,10 @@ class SubscriptionPilotExecutionService
         $quote = app(SubscriptionPilotShopifyBridge::class)->quote($member);
         abort_unless($quote['shipping_address'] === $terms['shipping_address'], 409, 'The delivery address changed and needs a new quote review.');
         $cycle = DB::transaction(function () use ($row, $actor, $terms, $date, $proof) {
+            SubscriptionPilotMember::query()->forTenantId($row->tenant_id)->whereKey($row->member_id)->lockForUpdate()->firstOrFail();
             $current = $this->locked($row);
             $this->owner($row->tenant_id, $actor->fresh());
+            $this->assertOriginalBillingLane($current);
             abort_unless($current->status === 'active' && $current->next_billing_date?->toDateString() === $date
                 && $current->terms_hash === $row->terms_hash && CarbonImmutable::parse($proof['checked_at'])->gt(now()->subMinutes(1)), 409, 'Billing authorization or source proof changed.');
             if ($current->paused_until && $current->paused_until->toDateString() <= $date) {
@@ -553,6 +558,7 @@ class SubscriptionPilotExecutionService
 
     private function collectionReady(SubscriptionPilotEnrollment $row): void
     {
+        $this->assertOriginalBillingLane($row);
         $this->gate($row->tenant_id, 'pilot_collection_enabled');
         $this->gate($row->tenant_id, 'pilot_handoff_enabled');
         abort_if(SubscriptionPilotCycle::query()->forTenantId($row->tenant_id)->where('enrollment_id', $row->id)->get(['id', 'reconciliation'])
@@ -566,6 +572,16 @@ class SubscriptionPilotExecutionService
                 && preg_match('/^evt_[A-Za-z0-9]+$/D', $proof['event_id'] ?? ''), 423, 'This merchant needs a genuine connected-account pilot callback.');
         }
         app(SubscriptionPilotStripeTransport::class)->verifyMerchant($row->tenant_id, $row->terms['merchant']);
+    }
+
+    private function assertOriginalBillingLane(SubscriptionPilotEnrollment $row): void
+    {
+        $member = SubscriptionPilotMember::query()->forTenantId($row->tenant_id)->findOrFail($row->member_id);
+        abort_unless(in_array($member->billing_owner, ['recharge', 'stripe'], true), 409, 'Another billing lane already owns this member.');
+        if (\Illuminate\Support\Facades\Schema::hasTable('subscription_billing_agreements')) {
+            abort_if(\App\Models\SubscriptionBillingAgreement::query()->forTenantId($row->tenant_id)->where('member_id', $row->member_id)
+                ->whereNotNull('activated_at')->exists(), 409, 'A replacement agreement already took over this member.');
+        }
     }
 
     private function member(SubscriptionPilotEnrollment $row): SubscriptionPilotMember

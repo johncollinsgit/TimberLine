@@ -1,11 +1,386 @@
+## Native delivery review operations (October 31; source candidate)
+
+`subscriptions:shopify-amend --action=inspect` now reports the bounded local
+signed journal and a current owner/admin-specific review hash without provider
+requests or private customer/method details. `--action=close-review` previews
+the same inspection; applying requires the exact hash/revision and a private
+reason/reference/explicit no-provider-change acknowledgement. The existing
+append-only aborted phase records the actual operator and original requester
+separately, without rewriting agreement, source, cycle or original action state.
+
+Current verified owner/admin and fresh canonical Subscriptions access are
+required. Positive rollout, editing, profile and credential withdrawal do not
+strand an unsent local draft. Missing/corrupt history or an uncertain sent commit
+cannot be closed; definite signed rejections and proven pre-HTTP failures can.
+Member/agreement locks serialize closure with customer confirmation. Exact
+closure retries retain their original audit and preserve later stops. No DDL,
+provider call, deployment, activation or collection change occurs.
+
+Recharge private credential-draft replay now compares canonical identity objects
+so MySQL JSON key ordering does not reject an unchanged request. Merchant values,
+value types, original actor and secret must still match exactly. Feature fixtures
+explicitly retain tenant-1 bindings and supported relative timestamp windows;
+production tenant/authentication and entitlement checks are unchanged.
+
+## Native authenticated customer delivery (October 31; source candidate)
+
+The branded private portal now supports original Shopify delivery/scents reviews
+through the native update journal. `SubscriptionShopifyCustomerActor` binds the
+authenticated customer/profile and separately signed merchant policy. Native
+calculate sends `CUSTOMER`; requested/quoted/approval/send/result and accepted
+terms retain `shopify_customer`, original method and exact quoted total. Current
+profile, policy, owner/reviewer, credentials, future-cycle and editing/apply gates
+are rechecked before one commit. Signed dispatch evidence cannot start a new
+interactive request. Original merchant commands retain their `MERCHANT` path.
+
+Known pending calculations have a private status view and bounded auto-refresh;
+status GET never starts a new calculation or commit. Exact review has a required
+customer checkbox and no payment entry. Unfinished reviews can be explicitly
+closed; an uncertain dispatched commit can only recover. Customer ownership and
+original profile bind every status/confirmation/discard route. Later pauses and
+editing withdrawal survive original commit recovery, and signed historical policy
+validation needs no current editing authority. Native future collection still
+requires its fresh accepted-total tax check. No DDL, live mutation or rollout.
+Actual original-method/source/merchant/customer/Shopify/two-tester acceptance remains.
+
+## Original-provider dispatch transaction boundaries (October 31; source candidate)
+
+New original Shopify adoption calculations/commits and Shopify/Braintree payments
+reject enclosing transactions before provider work. Their one-send markers must
+commit before HTTP/SDK dispatch, including calls directly to the transport.
+Already-dispatched adoption and payment recovery remains available. Braintree
+recovery inside a caller transaction can confirm the original payment but defers
+a new Shopify receipt until a top-level pass; existing receipt recovery stays
+available. The replacement receipt bridge independently guards new sends.
+
+Eight workflow suites now run under `tests/Integration/SubscriptionRuntime` on
+guarded disposable MySQL without RefreshDatabase transactions. Provider replies
+remain fictional; independent connections verify durable adoption/payment/receipt
+markers before dispatch. Current-test created tenant/user IDs scope cleanup.
+MySQL also exposed reordered JSON keys in stored Braintree merchant acceptance;
+canonical comparison now retains exact values/types without depending on key
+order. No DDL or live change. Actual merchant/source/customer/Shopify/two-tester acceptance remains unfinished.
+
+## Initial Shopify adoption calculation identity (October 31; source candidate)
+
+Initial adoption retains the first provider calculation ID for polling and a
+separate immutable `terminal_calculation_id` only after a successful result proves
+the original adoption UUID, saved method and exact terms/totals. Concrete pending,
+success and failure IDs are retained as returned; no ID is rewritten or invented.
+One commit targets only the verified successful ID bound to the exact review hash.
+An unsent prepared commit rereads that reviewed ID; older generic intents can gain
+terminal evidence only from a fresh response matching their immutable commit ID
+and review. Already-dispatched commits still recover without resending. Source
+stop, original app/credential and rollout gates remain. No DDL or live change.
+Original dispatch boundaries and native customer confirmation are implemented
+above; actual acceptance remains outstanding. See the replacement runbook.
+
+## Native amended billing tax preflight (October 31; source candidate)
+
+Accepted native delivery terms now collect only after a fresh original-app
+calculation verifies exact accepted subtotal/shipping/tax/total, no discounts or
+warnings, original line IDs/prices/policies/method/note and current contract
+version. `SubscriptionShopifyTaxProtocol` and `SubscriptionShopifyTaxService` keep
+signed encrypted request/send/provider-handle/proof actions. The send claim
+commits before bounded HTTP; tax-only metadata is never committed to the live
+contract. Changed totals or authority stop before payment. Freshness is bounded
+to three minutes from dispatch and proof observation; rereading an old completed
+calculation cannot extend it. Expired checks get a separately recorded generation
+without replaying a calculation or payment. No native tax rate/line data is invented.
+
+The tax-only worker runs each minute for due allowed active Everbranch native
+members; the existing collection/reconciliation cadence stays five minutes.
+Short bounded original-ID reads and the minute worker handle asynchronous results.
+The collector rechecks the proof before cycle creation and final payment dispatch,
+re-reads the exact contract version and freezes the used proof with the attempt.
+Unsent cycles can refresh their proof only under the same frozen authority;
+already-started attempts retain their independent original-ID reconciliation.
+Editing freezes do not withdraw separately accepted collection authority.
+Real original-method/provider/customer/backend/two-tester acceptance and native
+customer confirmation still remain; no live billing/deployment/source change occurred.
+
+## Native update approval, commit and term history (October 31; source candidate)
+
+The preview-first `subscriptions:shopify-amend` CLI now supports original-owner
+calculation, exact quote/continuing-authority approval, one contract commit,
+reconciliation and explicit pre-commit closure. General/native amendment and
+apply gates remain default-off. Current provider version/calculation, original
+saved method and complete fresh Recharge stop coverage precede one signed commit
+claim committed before HTTP. Enclosing transactions are rejected. A lost result
+is never resent; recovery reads only the owned contract and checks its unique
+amendment marker, original line IDs, prices, method, policies and note. Concrete
+calculation IDs from Shopify's documented state types are retained as returned;
+the initial poll ID stays immutable and a terminal success must prove the intent.
+
+Signed native term history links original authority, exact approval, send/result
+and intervening signed stops. Application advances the current revision while
+preserving newer status/date/resume state; old retries do not restore old terms.
+Historical validation is local even after credentials are withdrawn. Pending
+approval/commit blocks resume/skip/new collection, with owned-contract pause and
+cancellation still available. Finite customer pauses survive only an unbroken
+signed terms-only revision chain, for Braintree and native agreements. The
+reconciliation worker can finish an already approved native update without
+submitting another commit. No source mandate or old cycle/order is rewritten.
+
+Native amended collection now uses the fresh tax preflight described above;
+positive provider synchronization retains its separate authority gates. Native authenticated customer confirmation is implemented above; actual original-method/provider/customer/Shopify/two-tester acceptance remains unfinished. No DDL, live provider mutation, charge, source
+cancellation, deployment, notification or rollout occurred. See the runbook.
+
+## Durable native update calculations (October 31; source candidate)
+
+`SubscriptionShopifyUpdateService` now prepares and dispatches an original-contract
+update calculation behind separate default-off native amendment and existing
+servicing/rollout gates. Encrypted signed append-only actions retain the immutable
+intent, one send claim, provider ID and calculated quote. Enclosing transactions
+are rejected: the send record commits before a second member/agreement/current
+owner/credential locking transaction holds authority through bounded HTTP. No
+mutable agreement pointer can erase that claim. A response lost without an ID
+stays unknown and is never resubmitted; known IDs are polled. IDs commit before
+quote validation, so warnings, user errors and stale reviews retain recovery
+evidence. Pre-commit closure is explicit and audited. A finite local pause may
+retain an older valid paused provider date without changing either schedule.
+
+The owner commit/history/CLI and reconciliation worker are described above.
+Reconciliation after an editing freeze preserves later status/date/revision state.
+Fresh collection tax preflight and native customer confirmation are described above; actual acceptance remains pending.
+Real MySQL durability/worker races exercise the path; no live mutation occurred.
+
+## Original-app schema and native update builder (October 31; source candidate)
+
+A read-only original retail app probe returned pinned Shopify 2026-10 with the
+documented create/update calculation and commit types. All 21 existing/new native
+operation documents and sample create/update variables validate against that
+actual schema. A small type-only projection with provenance now runs in CI;
+the bundled toolkit snapshot still fails/skips the new API and is not a pass.
+Read-only method visibility also found Jennifer's one unrevoked, active, unexpired
+Shop Pay agreement; Rynda has no Shopify method visible. Exact source association,
+merchant acceptance and continuing authority remain unproven.
+
+`SubscriptionShopifyUpdateProtocol` builds and validates an original-contract
+update intent, projected quote and applied snapshot without HTTP or local writes.
+It retains actual provider line IDs, fixed member prices, pricing policies,
+selling-plan metadata, original note/method/anchors and source IDs. Address-only
+updates omit lines; scent-only updates omit delivery replacement. Ambiguous line
+binding, repricing, warnings, method/date/status or retained-evidence drift fail
+closed. The protocol class remains pure; the calculation journal described above
+now retains durable dispatch/calculation and commit recovery with signed future
+terms. Fresh collection tax preflight and native customer confirmation are now connected in source; actual acceptance still gates launch. No live provider mutation or
+rollout occurred. See the replacement runbook.
+
+## Authenticated customer future delivery (October 31; source candidate)
+
+The existing private member portal now offers Braintree address/scents review and
+confirmation behind a separate default-off customer-delivery gate, exact rollout
+and a signed merchant-reviewed shipping/scent policy. Preview-first
+`subscriptions:delivery-policy` records explicit original-member coverage without
+changing billing terms or the original mandate. Customer reviews are encrypted,
+expire after ten minutes and bind the real customer/profile, revision, exact
+input/quote/total and merchant policy. A fresh calculation and current locking
+reads precede one signed future-term action with the true Shopify customer actor;
+the continuing-authority merchant reviewer is recorded separately. Pauses,
+revoked policies/owners/profiles and claimed payments stop stale acceptance.
+Accepted replay never undoes later stops. No payment entry, source/default-address
+edit, charge, old-order change, DDL or deployment occurs. Real MySQL races and
+rendered branded desktop/phone views accompany the private HTTP path. Native
+Shopify amendments and real hosted/provider/two-tester acceptance remain pending.
+
+## Original-store history and actual rollout check (October 31)
+
+Braintree method verification, merchant acceptance, activation and collection now
+require the original Shopify app's `read_all_orders` plus order read/write scope
+in the same response as the original order proof. A readable recent order alone
+cannot establish continuing historical access. Missing/revoked scope stops before
+method evidence is accepted or a new cycle/payment/order is created.
+
+A fresh read-only production check found two prepared Recharge-owned testers,
+zero pilot enrollments/cycles, no replacement billing tables and no Braintree API
+connection. The original retail Shopify credential successfully read pinned
+2026-10 permissions, including historical orders, own contracts and saved methods.
+Connected Shopify reads confirmed the expected Braintree reference/subscription
+attributes on Rynda's October order and Shopify Payments/subscription linkage on
+Jennifer's. These facts do not prove vault reuse, source-stop coverage, actual
+customer/backend parity or rollout acceptance. No production write occurred.
+The source candidate remains undeployed. See the replacement runbook.
+
+## Accepted Braintree future terms (October 31; source candidate)
+
+The preview-first `subscriptions:amend` CLI can separately accept a freshly quoted
+owner-reviewed delivery/scents change for an activated allowed member. A new
+independent apply gate defaults off. One encrypted signed action links exact
+before/after terms to original authorization; current collection validates the
+complete chain. Original customer, method, pricing/quantities, fixed shipping,
+anchor/schedule, member/source evidence and existing cycles/orders remain intact.
+Current owner/member/agreement/cycle locks reject duplicate/conflicting requests,
+later pauses, revoked owners and already claimed cycles, including old MySQL
+snapshots. Amended collection rechecks tax before money movement and uses the
+accepted breakdown in one original-method Shopify receipt. Drift requires review.
+No schema, source stop, live payment, deployment or customer distribution changed.
+Braintree customer confirmation is described above; native Shopify contract
+amendments and actual two-tester acceptance remain outstanding. See the runbook.
+
+## Subscription delivery quote foundation (October 31; source candidate)
+
+A preview-first owner CLI can explicitly fetch a pinned original-store calculation
+for proposed Braintree delivery addresses or 16oz scent swaps. It retains member
+unit prices, source line IDs/quantities and owner-reviewed fixed shipping, checks
+provider tax lines/totals and refuses currency, discount, bundle or warning drift.
+The independent amendments gate defaults off; both graph documents validate
+against the pinned schema. Owner/store/terms/rollout changes stop subsequent reads.
+No billing terms, authorization, order, customer/default address, source or payment
+are saved by quoting. Separate owner acceptance is described above; customer
+confirmation, Shopify contract updates and actual provider acceptance remain
+outstanding. See the replacement runbook.
+
+## Existing subscription membership review (October 31; source candidate)
+
+A preview-first owner CLI appends a separately reviewed Candle Club membership
+supplement for an existing agreement without rewriting original payment authority.
+Exact original customer/source IDs, controlled rollout, keyed review and revision
+precede one encrypted immutable action. The billing agreement and its revision,
+terms, anchor, payment binding and gates remain unchanged. Real MySQL workers
+retain one action for concurrent identical/competing requests, including older
+snapshots. Corrupt originals cannot be backfilled; activation and entitlement
+still gate benefits. No provider, customer notification, production mutation or
+schema change occurred. See the replacement runbook.
+
+## Candle Club membership after cutover (October 31; source candidate)
+
+Reviewed Candle Club membership now retains polls, voting history, chosen/monthly
+scents and private scent notes after the imported source contract is cancelled.
+It uses the original authenticated customer and activated Everbranch agreement,
+with an explicit original membership review; a saved payment method or matching
+email alone grants no club benefits. New ballots use a separate processor-neutral
+table, with one ballot per member/poll, encrypted source evidence and shared
+totals. Exact source subscription/customer IDs retain legacy ballots without
+rewriting mirrors or fabricating Shopify contract IDs. Ambiguous history requires
+review. Locking reads prevent duplicate ballots and honor a pause committed after
+an initial membership read. Poll closure also uses a current locking read; scent
+note retries retain one record across concurrent requests. Legacy requests lock
+the original membership before the poll, rejecting cutover after an older read.
+Existing pending comments survive unchanged retries
+across cutover. Reads/writes create no payment, provider mutation or message.
+The additive table has real MySQL recovery/concurrency and a regenerated verified
+data-free schema baseline. Broader member/commitment/operator parity, future-term
+amendments and actual two-tester acceptance remain outstanding.
+
+The original store binding compares canonical typed content: MySQL's JSON key
+ordering no longer rejects an unchanged installation. Changed identity types,
+store/app values and cross-tenant routing still require review; replay adds no
+binding event or provider call.
+
+## Native Shopify subscription billing (October 30; source candidate)
+
+The replacement now includes original-account Shopify activation, current-day
+billing attempts, bounded original-attempt recovery and native paid-order
+reconciliation. It records Shopify's own order and payment once; it never uses
+the external order-create bridge for these attempts. Fresh source-stop, exact
+saved-method/contract/cycle review, merchant acceptance and independent default-off
+collection gates precede dispatch. Pending/challenged/unknown results retain the
+original request. Refunds/disputes and duplicate coverage block later collection.
+Accepted pause/cancel/skip/resume schedules sync through the reconciliation worker;
+local stops retain already-started attempts. Native production receipts and
+fulfillment project into existing read-only reporting; sandbox receipts remain
+excluded from production totals. The pinned billing documents validate locally;
+the original-app captured schema now validates calculations as described above.
+Real store/provider acceptance remains unresolved. No live billing, source
+cancellation or deployment occurred.
+
+## Original subscription authorization evidence (October 30; source candidate)
+
+New replacement preparations retain an encrypted, immutable snapshot of the
+original reviewed terms, hash and continuing-authorization review. Braintree and
+Shopify historical payment/source checks use that snapshot. Arbitrary current
+terms edits cannot authorize another collection or contract adoption, including
+when an old reviewed hash is retained. Existing attempted cycles still reconcile
+using their immutable terms. Missing/corrupt original snapshots require review;
+they are never reconstructed from current terms or silently backfilled.
+Reviewed Braintree owner and customer amendments are described above;
+native Shopify amendments remain outstanding. No DDL, live
+billing or customer rollout changed. See the replacement runbook.
+
+## Shopify paused-contract adoption (October 30; source candidate)
+
+The replacement Shopify command now has offline planning and separately gated
+calculation/adoption/recovery steps. It verifies original saved-method/source
+mapping, exact calculated terms/totals, current original-app write permission and
+the pinned account's actual calculation API capabilities before writing. Source
+billing must be verified stopped before one durable contract commit. Lost results
+recover only the original app/customer/adoption UUID; empty, duplicate or partial
+reads never authorize another commit. The created contract is paused and its first
+billing instant is confirmed. Local activation, billing ownership and collection
+remain unchanged in the adoption command. Separate billing execution source is
+described above; actual store/provider acceptance remains outstanding. The bundled
+offline schema lacks documented calculation fields; the later captured original
+app schema validates the protocol types. Actual mutation/merchant acceptance is
+still mandatory. See the runbook.
+
+## Modern Forestry reward channel limits (October 30; source candidate)
+
+New Modern Forestry staff-issued Square Candle Cash codes debit $5; online codes
+remain $10. Persisted tenant ownership selects these rules. Issued value/channel
+snapshots, open-code reuse, original-value cancellation refunds and shared
+tenant/order reconciliation locks preserve one code per in-person purchase.
+Staff still applies the discount at the Square register and records the order ID;
+this source does not install a Square POS extension or mutate Square checkout.
+Old issued codes retain their value. Online discounts exclude subscription items,
+and recurring Everbranch Candle Club terms continue to disallow Candle Cash.
+Native rewards describe both channels and exclude in-person codes from bag reuse.
+The $10 annual Birthday Club benefit also appears in the native overview and
+Modern Forestry roadmap; it reuses the existing yearly program without issuing a
+second gift or wallet credit. Unconfigured birthday programs remain Coming soon.
+No deployment, balance backfill or live billing change has been performed.
+
+Shopify/Shop Pay original-method verification now has a preview-first owner CLI.
+Exact original installation credentials, paid order, source subscription/address
+and full saved-method identity must agree; last-four matching is insufficient.
+This proves current access only, leaving contract adoption, reauthorization need
+and collection unproven. See `docs/operations/subscriptions-recharge-replacement.md`.
+
+## Replacement customer schedule access (October 30; source candidate)
+
+Activated Everbranch members now use their original verified Shopify identity for
+pause/resume/skip/cancel and a short private member page. Shared locks, revisioned
+UUID actions, accepted finite-pause resumes and original payment retention keep
+schedule changes separate from collection. Safe stops remain available during a
+merchant freeze/lost entitlement; resumption requires exact current rollout.
+The paired native source opens a fresh original-host private page and refreshes
+on return. No new payment authorization, live activation or distribution occurs.
+Address/scent amendments, membership parity and actual customer acceptance remain
+outstanding. See `docs/operations/subscriptions-recharge-replacement.md`.
+
+## Recharge replacement ledger and customer gateway history (October 30; source candidate)
+
+The owner wants Everbranch to replace Recharge while retaining supported existing
+payment authorizations. The examined baseline and staged acceptance plan are in
+`docs/operations/subscriptions-recharge-replacement.md`. New encrypted agreement,
+cycle and action tables separate processor from billing owner. Preview-first
+commands prepare exact allowed members and change only activated Everbranch
+schedules, retaining the original anchor and original provider attempts. There
+is a separately gated Braintree executor and five-minute reconciliation worker.
+Exact original method/source mapping, merchant acceptance and fresh source-stop
+coverage precede individual activation and one durable recurring sale. Unknown
+results never resubmit. The generic Shopify bridge records the original external
+payment once; owned order/fulfillment projection and production-only payment
+charts remain separate. Sandbox collections are excluded from real totals.
+Customer address/scent amendments and membership parity, Shopify-vaulted adoption, operations and actual two-member
+acceptance remain outstanding; no production activation has been performed.
+
+Everbranch customer purchase history shows icons and text for recorded gateways,
+including split payments. Existing Shopify ingestion captures minimal gateway
+evidence. An explicit bounded owner/manager command can enrich one customer's
+history through original-store reads, rechecking identity and credentials before
+metadata-only persistence. Opening the profile remains offline. Unknown methods
+remain unknown; generic PayPal or Shopify Payments never implies Braintree/Shop Pay.
+
 ## Braintree account verification (October 30; source candidate)
 
 An exact tenant rollout adds Braintree account verification to the existing
 owner-only Accept payments page. The official PHP SDK reads the selected active
 merchant account; tenant-owned credentials are encrypted and hidden, excluded
 from flash input and bound to an immutable connection identity/revision. Exact
-customer/method lookups return masked proof only. No charge, verification hold,
-vault mutation, billing-owner switch or Stripe replacement is implemented.
+customer/method lookups return masked proof only. This connection flow performs
+no charge, verification hold, vault mutation or billing-owner switch. The separate
+replacement executor has its own exact rollout, source-stop and collection gates.
 See `docs/operations/self-service-payments.md`. Keep collection and source-stop
 acceptance separate from connecting the merchant.
 
@@ -23,8 +398,9 @@ members using the existing feedback endpoint. Comments remain private/pending
 for review; request UUIDs make unchanged retries converge without rewriting an
 accepted comment. No schema or billing changes are included. Release the backend
 before the native update and validate the hosted page separately. Braintree vault
-reuse and provider-to-provider Stripe migration are possible design paths, not
-implemented or activated by this source. See `docs/operations/subscriptions-pilot.md`.
+reuse now has separate default-off replacement source; real merchant/source
+acceptance and customer activation remain unproven. Provider-to-provider Stripe
+migration is not performed by this source. See `docs/operations/subscriptions-pilot.md`.
 
 ## Facilities mobile controls (October 30; source candidate)
 

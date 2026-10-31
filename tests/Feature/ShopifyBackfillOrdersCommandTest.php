@@ -95,7 +95,7 @@ test('shopify historical backfill imports orders and canonical links without que
     Http::fake([
         'https://retail-test.myshopify.com/admin/api/2026-01/orders.json*' => Http::response([
             'orders' => [
-                fakeShopifyOrderPayload(1001, 'cust-1001', 'alpha@example.com', '2026-01-05T10:00:00Z'),
+                array_replace(fakeShopifyOrderPayload(1001, 'cust-1001', 'alpha@example.com', '2026-01-05T10:00:00Z'), ['payment_gateway_names' => ['braintree']]),
                 fakeShopifyOrderPayload(1002, 'cust-1002', 'beta@example.com', '2026-01-06T10:00:00Z'),
             ],
         ], 200),
@@ -117,6 +117,7 @@ test('shopify historical backfill imports orders and canonical links without que
         ->and(MarketingProfileLink::query()->where('source_type', 'order')->count())->toBe(2)
         ->and(MarketingProfileLink::query()->where('source_type', 'shopify_customer')->count())->toBe(2)
         ->and(MarketingImportRun::query()->where('type', 'shopify_orders_backfill')->where('tenant_id', $tenant->id)->where('status', 'completed')->count())->toBe(1);
+    expect(data_get(Order::query()->where('shopify_order_id', 1001)->firstOrFail()->attribution_meta, 'payment_gateways.names'))->toBe(['braintree']);
 
     Queue::assertNotPushed(SyncMarketingProfileFromOrder::class);
 });

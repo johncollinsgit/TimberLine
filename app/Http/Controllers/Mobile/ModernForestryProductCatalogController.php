@@ -440,6 +440,7 @@ class ModernForestryProductCatalogController extends Controller
 
         $validated = $request->validate([
             'action' => ['required', 'string', 'max:80'],
+            'request_id' => ['nullable', 'uuid'], 'revision' => ['nullable', 'integer', 'min:1'],
             'scent' => ['nullable', 'string', 'max:255'],
             'product_variant_gid' => ['nullable', 'string', 'max:190'],
             'duration_months' => ['nullable', 'integer', 'min:1', 'max:12'],

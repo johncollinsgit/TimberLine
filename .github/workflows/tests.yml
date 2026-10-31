@@ -149,6 +149,9 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
+      - name: Validate subscription protocols against captured original-app schema
+        run: node scripts/ci/validate-subscription-shopify-api.mjs
+
       - name: Install browsers for Fleet embedding checks
         timeout-minutes: 45
         run: npx playwright install --with-deps chromium webkit
@@ -294,7 +297,7 @@ jobs:
         run: php ./vendor/bin/pest tests/Integration/TeamSearchMySqlRecoveryTest.php --compact
 
       - name: Verify subscription pilot evidence partial-DDL recovery
-        run: php ./vendor/bin/pest tests/Integration/BirthdayClubMySqlRecoveryTest.php tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/BirthdayClubMySqlRecoveryTest.php tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php tests/Integration/SubscriptionBillingLedgerMySqlRecoveryTest.php tests/Integration/SubscriptionMemberVotesMySqlRecoveryTest.php --compact
 
       - name: Verify POS simulation partial-DDL recovery
         env:
@@ -310,6 +313,15 @@ jobs:
 
       - name: Verify committed MySQL schema baseline
         run: scripts/ci/verify-mysql-schema-baseline.sh
+
+      - name: Verify original subscription provider dispatch concurrency
+        run: php ./vendor/bin/pest tests/Integration/SubscriptionBraintreeDispatchConcurrencyTest.php tests/Integration/SubscriptionShopifyAdoptionConcurrencyTest.php tests/Integration/SubscriptionShopifyBillingConcurrencyTest.php tests/Integration/SubscriptionShopifyUpdateDurabilityTest.php tests/Integration/SubscriptionShopifyTaxPreflightTest.php --compact
+
+      - name: Verify subscription provider workflows with durable commits
+        run: php ./vendor/bin/pest tests/Integration/SubscriptionRuntime --compact
+
+      - name: Verify subscription member actions and amendment concurrency
+        run: php ./vendor/bin/pest tests/Integration/SubscriptionMemberVotingConcurrencyTest.php tests/Integration/SubscriptionMembershipReviewConcurrencyTest.php tests/Integration/SubscriptionBillingAmendmentConcurrencyTest.php tests/Integration/SubscriptionCustomerDeliveryConcurrencyTest.php --compact
 
       - name: Verify POS register and shared-stock concurrency
         env:

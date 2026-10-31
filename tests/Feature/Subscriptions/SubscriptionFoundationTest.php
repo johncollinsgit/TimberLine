@@ -27,7 +27,8 @@ require_once __DIR__.'/../../Support/SubscriptionFoundationHelpers.php';
 beforeEach(function (): void {
     $this->withoutVite();
     Http::preventStrayRequests();
-    $this->tenant = Tenant::query()->create(['name' => 'Subscription merchant', 'slug' => 'subscription-merchant']);
+    // The Modern Forestry mobile test-token resolver intentionally binds tenant 1.
+    $this->tenant = Tenant::query()->forceCreate(['id' => 1, 'name' => 'Subscription merchant', 'slug' => 'subscription-merchant']);
     $this->actor = subscriptionFoundationFixture($this, $this->tenant);
     $this->profile = MarketingProfile::factory()->create(['tenant_id' => $this->tenant->id]);
     $this->contract = DB::table('subscription_contracts')->insertGetId([
@@ -149,6 +150,7 @@ test('mobile US billing handoff cannot open a paused subscription purchase', fun
 });
 
 test('confirmed commercial grants are required and validity windows cannot be bypassed', function (?string $status, ?string $starts, ?string $ends, bool $expected): void {
+    $starts = $starts === 'future' ? now()->addDays(2)->toDateTimeString() : $starts;
     TenantModuleEntitlement::query()->where('tenant_id', $this->tenant->id)->update(['billing_status' => $status, 'starts_at' => $starts, 'ends_at' => $ends]);
     \App\Models\TenantModuleState::query()->updateOrCreate(['tenant_id' => $this->tenant->id, 'module_key' => 'subscriptions'], ['enabled_override' => true]);
     app()->forgetInstance(TenantModuleAccessResolver::class);
@@ -156,7 +158,7 @@ test('confirmed commercial grants are required and validity windows cannot be by
 })->with([
     ['add_on_paid', null, null, true], ['add_on_comped', null, null, true], ['included_in_plan', null, null, true], ['custom_contract', null, null, true],
     ['pending_billing', null, null, false], [null, null, null, false], ['unavailable', null, null, false],
-    ['add_on_paid', '2099-01-01', null, false], ['add_on_comped', null, '2000-01-01', false],
+    ['add_on_paid', 'future', null, false], ['add_on_comped', null, '2000-01-01', false],
 ]);
 
 test('canonical paid addon fulfillment grants access while manual pending or expired addon rows do not', function (string $source, bool $enabled, ?string $ends, bool $expected): void {
@@ -250,6 +252,29 @@ test('future address intent is encrypted and leaves existing contract and order 
         ->and((array) DB::table('subscription_contracts')->find($this->contract))->toBe($before);
     Http::assertNothingSent();
 });
+
+test('binding accepts database JSON key ordering without accepting changed identity types', function (bool $changeType): void {
+    $access = app(SubscriptionAccessService::class);
+    $original = $access->binding((int) $this->tenant->id);
+    $stored = array_reverse($original, true);
+    if ($changeType) {
+        $stored['tenant_id'] = (string) $stored['tenant_id'];
+    }
+    $metadata = DB::table('subscription_module_settings')->where('tenant_id', $this->tenant->id)->value('metadata');
+    $metadata = json_decode($metadata, true);
+    $metadata['provider_binding'] = $stored;
+    DB::table('subscription_module_settings')->where('tenant_id', $this->tenant->id)->update(['metadata' => json_encode($metadata)]);
+    $events = DB::table('subscription_lifecycle_events')->count();
+    if ($changeType) {
+        expect(fn () => $access->assertBinding((int) $this->tenant->id))->toThrow(HttpException::class);
+        expect(fn () => $access->bindStore((int) $this->tenant->id, ShopifyStores::find('retail', true), $this->actor))->toThrow(HttpException::class);
+    } else {
+        expect($access->assertBinding((int) $this->tenant->id))->toEqual($original);
+        expect($access->bindStore((int) $this->tenant->id, ShopifyStores::find('retail', true), $this->actor))->toEqual($original);
+    }
+    expect(DB::table('subscription_lifecycle_events')->count())->toBe($events);
+    Http::assertNothingSent();
+})->with(['database reorders keys' => false, 'changed identity type' => true]);
 
 test('binding rejects cross-tenant store app rotation and client replacement while surviving setup review', function (): void {
     $access = app(SubscriptionAccessService::class);
