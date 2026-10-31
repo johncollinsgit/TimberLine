@@ -1,3 +1,24 @@
+## Actual Shopify schema and native update protocol (October 31)
+
+`scripts/ci/validate-subscription-shopify-api.mjs` validates 21 protocol documents
+against the type-only pinned 2026-10 original-app capture in
+`tests/Fixtures/Subscriptions`. Provenance/checksum accompany the projection;
+`--schema-json` can verify a fresh successful original-app capture. No credentials,
+app bootstrap, provider requests or customer data are involved in the CI check.
+The bundled toolkit still lacks calculation types; its failure/skip is separate
+from the passing actual-schema validation and from unproven mutation acceptance.
+
+`SubscriptionShopifyUpdateProtocol` is a pure intent/quote/applied-result builder,
+not an enabled amendment executor. Preserve real provider line IDs and complete
+fixed price/pricing-policy and selling-plan fields when replacing lines. Omit
+unchanged delivery/line fields; never infer line IDs from source IDs or silently
+reprice from the catalog. Accepted prior attributes must come from signed retained
+provider evidence, never a client or an unchecked response. Native durable
+dispatch/recovery, signed term application, stop precedence, fresh tax collection
+preflight and customer confirmation remain to be integrated. No live update was
+attempted. The latest method read sees Jennifer's active Shop Pay agreement;
+source mapping and merchant acceptance remain required. See the runbook.
+
 ## Customer delivery review and confirmation (October 31; source candidate)
 
 Use the existing private member portal for Braintree customer delivery edits,
@@ -157,8 +178,9 @@ date; ambiguous/changed/overdue results remain paused for review. They never
 activate local billing, advance a cycle, create an order or submit a charge.
 
 The bundled 2026-10 validator snapshot is missing calculation fields present in
-the current official 2026-10 docs/schema tool. Record that failure; do not claim
-full API validation from fictional fixtures. Every adoption write probes the
+the current official 2026-10 docs/schema tool. Record that failure separately;
+the later actual original-app schema capture validates the typed documents, but
+does not prove mutation acceptance. Every adoption write probes the
 original account's exact pinned schema and permissions. Real isolated-store API
 acceptance remains mandatory before a production gate is enabled. See
 `docs/operations/subscriptions-recharge-replacement.md`.

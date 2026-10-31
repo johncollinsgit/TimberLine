@@ -15,7 +15,7 @@ billingPolicy { interval intervalCount minCycles maxCycles anchors { type day mo
 deliveryPolicy { interval intervalCount anchors { type day month cutoffDay } multiFulfillment { numberOfFulfillments } }
 deliveryPrice { amount currencyCode }
 deliveryMethod { __typename ... on SubscriptionDeliveryMethodShipping { address { firstName lastName company address1 address2 city provinceCode countryCodeV2 zip phone } } }
-lines(first: 25) { nodes { variantId quantity currentPrice { amount currencyCode } requiresShipping customAttributes
+lines(first: 25) { nodes { id variantId quantity currentPrice { amount currencyCode } requiresShipping customAttributes
   { key value } discountAllocations { __typename } pricingPolicy { basePrice { amount currencyCode } cycleDiscounts { __typename } } } pageInfo { hasNextPage } }
 discounts(first: 1) { nodes { __typename } pageInfo { hasNextPage } }
 GRAPHQL;
@@ -65,11 +65,11 @@ GRAPHQL;
             ->setHour($row->terms['billing_hour'])->utc()->toISOString();
     }
 
-    public static function assertTerms(SubscriptionBillingAgreement $row, array $contract, string $requestUuid): void
+    public static function assertTerms(SubscriptionBillingAgreement $row, array $contract, string $requestUuid, ?array $acceptedAttributes = null): void
     {
         $terms = $row->terms;
         $attributes = collect($contract['customAttributes'] ?? [])->map(fn ($item) => [$item['key'] ?? null, $item['value'] ?? null])->sort()->values()->all();
-        $expectedAttributes = collect(self::input($row, $requestUuid)['customAttributes'])->map(fn ($item) => [$item['key'], $item['value']])->sort()->values()->all();
+        $expectedAttributes = collect($acceptedAttributes ?? self::input($row, $requestUuid)['customAttributes'])->map(fn ($item) => [$item['key'], $item['value']])->sort()->values()->all();
         abort_unless(($contract['currencyCode'] ?? null) === $terms['currency']
             && data_get($contract, 'customer.id') === 'gid://shopify/Customer/'.$terms['shopify_customer_id']
             && data_get($contract, 'customerPaymentMethod.id') === $row->method_binding['payment_method_gid']

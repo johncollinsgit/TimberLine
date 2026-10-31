@@ -1,3 +1,25 @@
+## Original-app schema and native update builder (October 31; source candidate)
+
+A read-only original retail app probe returned pinned Shopify 2026-10 with the
+documented create/update calculation and commit types. All 21 existing/new native
+operation documents and sample create/update variables validate against that
+actual schema. A small type-only projection with provenance now runs in CI;
+the bundled toolkit snapshot still fails/skips the new API and is not a pass.
+Read-only method visibility also found Jennifer's one unrevoked, active, unexpired
+Shop Pay agreement; Rynda has no Shopify method visible. Exact source association,
+merchant acceptance and continuing authority remain unproven.
+
+`SubscriptionShopifyUpdateProtocol` builds and validates an original-contract
+update intent, projected quote and applied snapshot without HTTP or local writes.
+It retains actual provider line IDs, fixed member prices, pricing policies,
+selling-plan metadata, original note/method/anchors and source IDs. Address-only
+updates omit lines; scent-only updates omit delivery replacement. Ambiguous line
+binding, repricing, warnings, method/date/status or retained-evidence drift fail
+closed. This is a pure protocol builder: durable dispatch/unknown-result recovery,
+native signed future-term application, worker and customer confirmation are still
+required before native updates can be enabled. No provider mutation or rollout
+occurred. See the replacement runbook.
+
 ## Authenticated customer future delivery (October 31; source candidate)
 
 The existing private member portal now offers Braintree address/scents review and
@@ -112,8 +134,9 @@ Accepted pause/cancel/skip/resume schedules sync through the reconciliation work
 local stops retain already-started attempts. Native production receipts and
 fulfillment project into existing read-only reporting; sandbox receipts remain
 excluded from production totals. The pinned billing documents validate locally;
-the separate calculation-schema gap and real store/provider acceptance remain
-unresolved. No live billing, source cancellation or deployment occurred.
+the original-app captured schema now validates calculations as described above.
+Real store/provider acceptance remains unresolved. No live billing, source
+cancellation or deployment occurred.
 
 ## Original subscription authorization evidence (October 30; source candidate)
 
@@ -140,8 +163,9 @@ reads never authorize another commit. The created contract is paused and its fir
 billing instant is confirmed. Local activation, billing ownership and collection
 remain unchanged in the adoption command. Separate billing execution source is
 described above; actual store/provider acceptance remains outstanding. The bundled
-offline schema lacks documented calculation fields, so
-this source is not considered API-accepted from local tests alone. See the runbook.
+offline schema lacks documented calculation fields; the later captured original
+app schema validates the protocol types. Actual mutation/merchant acceptance is
+still mandatory. See the runbook.
 
 ## Modern Forestry reward channel limits (October 30; source candidate)
 

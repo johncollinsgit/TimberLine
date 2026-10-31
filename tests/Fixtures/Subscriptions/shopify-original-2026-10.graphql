@@ -1,0 +1,1453 @@
+# Captured from the original app pinned Shopify 2026-10 endpoint.
+
+# Checked 2026-10-31T06:02:16.095686Z
+
+# Schema types/fields only; no account IDs, credentials or customer data.
+
+# Projection validates protocol documents; it does not prove mutation/merchant acceptance.
+
+schema { query: QueryRoot mutation: Mutation }
+
+enum BillingAttemptUserErrorCode {
+  INVALID
+  BLANK
+  CONTRACT_NOT_FOUND
+  ORIGIN_TIME_BEFORE_CONTRACT_CREATION
+  UPCOMING_CYCLE_LIMIT_EXCEEDED
+  CYCLE_INDEX_OUT_OF_RANGE
+  CYCLE_START_DATE_OUT_OF_RANGE
+  ORIGIN_TIME_OUT_OF_RANGE
+  BILLING_CYCLE_CHARGE_BEFORE_EXPECTED_DATE
+  BILLING_CYCLE_SKIPPED
+  CONTRACT_UNDER_REVIEW
+  CONTRACT_TERMINATED
+  CONTRACT_PAUSED
+  THROTTLED
+  PROCESSING_FAILED
+}
+
+enum CountryCode {
+  AF
+  AX
+  AL
+  DZ
+  AD
+  AO
+  AI
+  AG
+  AR
+  AM
+  AW
+  AC
+  AU
+  AT
+  AZ
+  BS
+  BH
+  BD
+  BB
+  BY
+  BE
+  BZ
+  BJ
+  BM
+  BT
+  BO
+  BA
+  BW
+  BV
+  BR
+  IO
+  BN
+  BG
+  BF
+  BI
+  KH
+  CA
+  CV
+  BQ
+  KY
+  CF
+  TD
+  CL
+  CN
+  CX
+  CC
+  CO
+  KM
+  CG
+  CD
+  CK
+  CR
+  HR
+  CU
+  CW
+  CY
+  CZ
+  CI
+  DK
+  DJ
+  DM
+  DO
+  EC
+  EG
+  SV
+  GQ
+  ER
+  EE
+  SZ
+  ET
+  FK
+  FO
+  FJ
+  FI
+  FR
+  GF
+  PF
+  TF
+  GA
+  GM
+  GE
+  DE
+  GH
+  GI
+  GR
+  GL
+  GD
+  GP
+  GT
+  GG
+  GN
+  GW
+  GY
+  HT
+  HM
+  VA
+  HN
+  HK
+  HU
+  IS
+  IN
+  ID
+  IR
+  IQ
+  IE
+  IM
+  IL
+  IT
+  JM
+  JP
+  JE
+  JO
+  KZ
+  KE
+  KI
+  KP
+  XK
+  KW
+  KG
+  LA
+  LV
+  LB
+  LS
+  LR
+  LY
+  LI
+  LT
+  LU
+  MO
+  MG
+  MW
+  MY
+  MV
+  ML
+  MT
+  MQ
+  MR
+  MU
+  YT
+  MX
+  MD
+  MC
+  MN
+  ME
+  MS
+  MA
+  MZ
+  MM
+  NA
+  NR
+  NP
+  NL
+  AN
+  NC
+  NZ
+  NI
+  NE
+  NG
+  NU
+  NF
+  MK
+  NO
+  OM
+  PK
+  PS
+  PA
+  PG
+  PY
+  PE
+  PH
+  PN
+  PL
+  PT
+  QA
+  CM
+  RE
+  RO
+  RU
+  RW
+  BL
+  SH
+  KN
+  LC
+  MF
+  PM
+  WS
+  SM
+  ST
+  SA
+  SN
+  RS
+  SC
+  SL
+  SG
+  SX
+  SK
+  SI
+  SB
+  SO
+  ZA
+  GS
+  KR
+  SS
+  ES
+  LK
+  VC
+  SD
+  SR
+  SJ
+  SE
+  CH
+  SY
+  TW
+  TJ
+  TZ
+  TH
+  TL
+  TG
+  TK
+  TO
+  TT
+  TA
+  TN
+  TR
+  TM
+  TC
+  TV
+  UG
+  UA
+  AE
+  GB
+  US
+  UM
+  UY
+  UZ
+  VU
+  VE
+  VN
+  VG
+  WF
+  EH
+  YE
+  ZM
+  ZW
+  ZZ
+}
+
+enum CurrencyCode {
+  USD
+  EUR
+  GBP
+  CAD
+  AFN
+  ALL
+  DZD
+  AOA
+  ARS
+  AMD
+  AWG
+  AUD
+  BBD
+  AZN
+  BDT
+  BSD
+  BHD
+  BIF
+  BYN
+  BZD
+  BMD
+  BTN
+  BAM
+  BRL
+  BOB
+  BWP
+  BND
+  BGN
+  MMK
+  KHR
+  CVE
+  XCG
+  KYD
+  XAF
+  CLP
+  CNY
+  COP
+  KMF
+  CDF
+  CRC
+  HRK
+  CZK
+  DKK
+  DJF
+  DOP
+  XCD
+  EGP
+  ERN
+  ETB
+  FKP
+  XPF
+  FJD
+  GIP
+  GMD
+  GHS
+  GTQ
+  GYD
+  GEL
+  GNF
+  HTG
+  HNL
+  HKD
+  HUF
+  ISK
+  INR
+  IDR
+  ILS
+  IRR
+  IQD
+  JMD
+  JPY
+  JEP
+  JOD
+  KZT
+  KES
+  KID
+  KWD
+  KGS
+  LAK
+  LVL
+  LBP
+  LSL
+  LRD
+  LYD
+  LTL
+  MGA
+  MKD
+  MOP
+  MWK
+  MVR
+  MRU
+  MXN
+  MYR
+  MUR
+  MDL
+  MAD
+  MNT
+  MZN
+  NAD
+  NPR
+  ANG
+  NZD
+  NIO
+  NGN
+  NOK
+  OMR
+  PAB
+  PKR
+  PGK
+  PYG
+  PEN
+  PHP
+  PLN
+  QAR
+  RON
+  RUB
+  RWF
+  WST
+  SHP
+  SAR
+  RSD
+  SCR
+  SLL
+  SGD
+  SDG
+  SOS
+  SYP
+  ZAR
+  KRW
+  SSP
+  SBD
+  LKR
+  SRD
+  SZL
+  SEK
+  CHF
+  TWD
+  THB
+  TJS
+  TZS
+  TOP
+  TTD
+  TND
+  TRY
+  TMT
+  UGX
+  UAH
+  AED
+  UYU
+  UZS
+  VUV
+  VES
+  VND
+  XOF
+  YER
+  ZMW
+  USDC
+  BYR
+  STD
+  STN
+  VED
+  VEF
+  XXX
+}
+
+scalar DateTime
+
+enum DayOfTheWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+scalar Decimal
+
+enum DisputeStatus {
+  ACCEPTED
+  LOST
+  NEEDS_RESPONSE
+  PREVENTED
+  UNDER_REVIEW
+  WON
+  CHARGE_REFUNDED
+}
+
+enum OrderDisplayFinancialStatus {
+  PENDING
+  AUTHORIZED
+  PARTIALLY_PAID
+  PARTIALLY_REFUNDED
+  VOIDED
+  PAID
+  REFUNDED
+  EXPIRED
+}
+
+enum OrderDisplayFulfillmentStatus {
+  UNFULFILLED
+  PARTIALLY_FULFILLED
+  FULFILLED
+  RESTOCKED
+  PENDING_FULFILLMENT
+  OPEN
+  IN_PROGRESS
+  ON_HOLD
+  SCHEDULED
+  REQUEST_DECLINED
+  FULFILLMENT_NOT_REQUIRED
+}
+
+enum OrderTransactionKind {
+  SALE
+  CAPTURE
+  AUTHORIZATION
+  VOID
+  REFUND
+  CHANGE
+  EMV_AUTHORIZATION
+  SUGGESTED_REFUND
+}
+
+enum OrderTransactionStatus {
+  SUCCESS
+  FAILURE
+  PENDING
+  ERROR
+  AWAITING_RESPONSE
+  UNKNOWN
+}
+
+enum ProductStatus {
+  ACTIVE
+  ARCHIVED
+  DRAFT
+  UNLISTED
+}
+
+enum SellingPlanAnchorType {
+  WEEKDAY
+  MONTHDAY
+  YEARDAY
+}
+
+enum SellingPlanInterval {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+enum SellingPlanPricingPolicyAdjustmentType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  PRICE
+}
+
+enum SubscriptionActor {
+  CUSTOMER
+  MERCHANT
+  PARTNER
+}
+
+enum SubscriptionBillingAttemptGeneralErrorCode {
+  NON_TEST_ORDER_LIMIT_REACHED
+  FREE_GIFT_CARD_NOT_ALLOWED
+  CUSTOMER_NOT_FOUND
+  CUSTOMER_INVALID
+  INVALID_BILLING_ADDRESS
+  MERCHANT_ACCOUNT_ERROR
+  PAYMENT_METHOD_NOT_FOUND
+  PAYMENT_METHOD_NOT_SPECIFIED
+  PAYMENT_METHOD_INCOMPATIBLE_WITH_GATEWAY_CONFIG
+  PAYMENT_PROVIDER_IS_NOT_ENABLED
+}
+
+enum SubscriptionBillingAttemptInventoryErrorCode {
+  INSUFFICIENT_INVENTORY
+  INVENTORY_ALLOCATIONS_NOT_FOUND
+}
+
+enum SubscriptionBillingAttemptInventoryPolicy {
+  PRODUCT_VARIANT_INVENTORY_POLICY
+  ALLOW_OVERSELLING
+}
+
+enum SubscriptionBillingAttemptPaymentErrorCode {
+  PAYMENT_METHOD_DECLINED
+  EXPIRED_PAYMENT_METHOD
+  INSUFFICIENT_FUNDS
+  AUTHENTICATION_ERROR
+  INVALID_PAYMENT_METHOD
+  BUYER_CANCELED_PAYMENT_METHOD
+  INVALID_CUSTOMER_BILLING_AGREEMENT
+  AMOUNT_TOO_SMALL
+  AMOUNT_TOO_LARGE
+  CARD_NUMBER_INCORRECT
+  FRAUD_SUSPECTED
+  INVOICE_ALREADY_PAID
+  TEST_MODE
+  PAYPAL_ERROR_GENERAL
+  INVALID_SHIPPING_ADDRESS
+  TRANSIENT_ERROR
+  PURCHASE_TYPE_NOT_SUPPORTED
+  AUTHENTICATION_FAILED
+  AUTHENTICATION_REQUIRED
+  CALL_ISSUER
+  CARD_DECLINED
+  CONFIRMATION_REJECTED
+  DO_NOT_HONOR
+  MERCHANT_RULE
+  OFF_SESSION_REJECTED
+  RETRY_DECLINED
+  TRANSACTION_LIMIT_EXCEEDED
+  INCORRECT_ZIP
+  INVALID_AMOUNT
+  INVALID_CURRENCY
+  INVALID_CVC
+  INVALID_NUMBER
+  PAYMENT_METHOD_UNSUPPORTED
+  PAYMENT_PROVIDER_ERROR
+  INCORRECT_ADDRESS
+  INCORRECT_CVC
+  INCORRECT_NUMBER
+  INCORRECT_PIN
+  EXPIRED_CARD
+  INVALID_EXPIRY_DATE
+  EXPIRED_BUYER_ACTION
+  PROCESSING_ERROR
+  GENERIC_ERROR
+  CANCELLED_PAYMENT
+  INVALID_PURCHASE_TYPE
+  INVALID_REQUEST
+}
+
+enum SubscriptionBillingAttemptPaymentProcessingPolicy {
+  FAIL_UNLESS_VALID_PAYMENT_METHOD
+  SKIP_PAYMENT_AND_CREATE_UNPAID_ORDER
+}
+
+enum SubscriptionBillingCycleBillingCycleStatus {
+  BILLED
+  UNBILLED
+}
+
+enum SubscriptionContractCalculationCadenceUnit {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+enum SubscriptionContractCalculationCommitUserErrorCode {
+  INVALID
+  NOT_READY_TO_COMMIT
+  DISCOVERY_CALCULATION_NOT_COMMITTABLE
+  CALCULATION_NOT_FOUND
+  STALE_CONTRACT
+  INVALID_BILLING_DATE
+  CONTRACT_TERMINATED
+}
+
+enum SubscriptionContractCalculationDiagnosticCode {
+  INVALID
+  MERCHANDISE_NOT_FOUND
+  DELIVERY_ADDRESS_INVALID
+  CURRENCY_NOT_SUPPORTED
+  DELIVERY_NO_LOCATION_SHIPS_TO_ADDRESS
+  DELIVERY_PICKUP_LOCATION_UNAVAILABLE
+  PAYMENT_METHOD_NOT_FOUND
+  CUSTOM_VALIDATION
+  DELIVERY_METHOD_REQUIRED
+  DELIVERY_METHOD_UNUSED
+  CUSTOMER_CONTACT_METHOD_REQUIRED
+  BUNDLE_REQUIRES_MERCHANDISE_CUSTOMIZATIONS
+  COMBINED_LISTING_PARENT_NOT_PURCHASABLE
+  MERCHANDISE_GIFT_CARD_INVALID
+  DISCOUNT_CODE_NOT_APPLIED
+  CALCULATION_TIMEOUT
+  LINE_PRICE_ADJUSTED_FOR_FULFILLMENTS
+  PROCESSING_ERROR
+}
+
+enum SubscriptionContractCreateCalculateUserErrorCode {
+  INVALID
+}
+
+enum SubscriptionContractErrorCode {
+  INVALID
+}
+
+enum SubscriptionContractStatusUpdateErrorCode {
+  INVALID
+  CONTRACT_TERMINATED
+}
+
+enum SubscriptionContractSubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+  EXPIRED
+  FAILED
+}
+
+enum SubscriptionContractUpdateCalculateUserErrorCode {
+  INVALID
+  CONTRACT_TERMINATED
+  CONTRACT_HAS_FUTURE_EDITS
+}
+
+scalar URL
+
+enum WeightUnit {
+  KILOGRAMS
+  GRAMS
+  POUNDS
+  OUNCES
+}
+
+input AttributeInput {
+  key: String!
+  value: String!
+}
+
+input MailingAddressInput {
+  address1: String
+  address2: String
+  city: String
+  company: String
+  countryCode: CountryCode
+  firstName: String
+  lastName: String
+  phone: String
+  provinceCode: String
+  zip: String
+}
+
+input MoneyInput {
+  amount: Decimal!
+  currencyCode: CurrencyCode!
+}
+
+input SellingPlanPricingPolicyValueInput {
+  percentage: Float
+  fixedValue: Decimal
+}
+
+input SubscriptionBillingAttemptInput {
+  actor: SubscriptionActor
+  idempotencyKey: String!
+  originTime: DateTime
+  billingCycleSelector: SubscriptionBillingCycleSelector
+  paymentProcessingPolicy: SubscriptionBillingAttemptPaymentProcessingPolicy = FAIL_UNLESS_VALID_PAYMENT_METHOD
+  inventoryPolicy: SubscriptionBillingAttemptInventoryPolicy = PRODUCT_VARIANT_INVENTORY_POLICY
+}
+
+input SubscriptionBillingCycleInput {
+  contractId: ID!
+  selector: SubscriptionBillingCycleSelector!
+}
+
+input SubscriptionBillingCycleSelector {
+  index: Int
+  date: DateTime
+}
+
+input SubscriptionContractCalculationAnchorInput {
+  weekday: SubscriptionContractCalculationWeekdayAnchorInput
+  monthday: SubscriptionContractCalculationMonthdayAnchorInput
+  yearday: SubscriptionContractCalculationYeardayAnchorInput
+}
+
+input SubscriptionContractCalculationAppManagedBillingConfigInput {
+  minCycles: Int
+  maxCycles: Int
+}
+
+input SubscriptionContractCalculationAppManagedPricingPolicyInput {
+  basePrice: MoneyInput!
+  cyclePriceAdjustments: [SubscriptionContractCalculationCyclePriceAdjustmentInput!]!
+}
+
+input SubscriptionContractCalculationBillingPolicyInput {
+  anchors: [SubscriptionContractCalculationAnchorInput!]! = []
+  cadence: SubscriptionContractCalculationCadenceInput!
+}
+
+input SubscriptionContractCalculationCadenceInput {
+  unit: SubscriptionContractCalculationCadenceUnit!
+  count: Int!
+}
+
+input SubscriptionContractCalculationComponentLineInput {
+  productVariantLine: SubscriptionContractCalculationProductVariantLineInput
+}
+
+input SubscriptionContractCalculationContractCreateInput {
+  actor: SubscriptionActor
+  withMerchandiseCustomizations: Boolean!
+  customerId: ID!
+  currencyCode: CurrencyCode!
+  lines: [SubscriptionContractCalculationLineInput!]!
+  manualDiscounts: [SubscriptionContractCalculationManualDiscountInput!]!
+  discountCodes: [SubscriptionContractCalculationDiscountCodeInput!]! = []
+  note: String
+  customAttributes: [AttributeInput!]! = []
+  billingPolicy: SubscriptionContractCalculationBillingPolicyInput!
+  deliveryPolicy: SubscriptionContractCalculationDeliveryPolicyInput!
+  deliveryMethod: SubscriptionContractCalculationDeliveryMethodInput!
+  paymentMethod: SubscriptionContractCalculationPaymentMethodInput!
+  appManagedBillingConfig: SubscriptionContractCalculationAppManagedBillingConfigInput
+}
+
+input SubscriptionContractCalculationContractUpdateInput {
+  withMerchandiseCustomizations: Boolean!
+  lines: [SubscriptionContractCalculationLineInput!]
+  manualDiscounts: [SubscriptionContractCalculationManualDiscountInput!]
+  discountCodes: [SubscriptionContractCalculationDiscountCodeInput!]! = []
+  note: String
+  customAttributes: [AttributeInput!]
+  billingPolicy: SubscriptionContractCalculationBillingPolicyInput
+  deliveryPolicy: SubscriptionContractCalculationDeliveryPolicyInput
+  deliveryMethod: SubscriptionContractCalculationDeliveryMethodInput
+  paymentMethod: SubscriptionContractCalculationPaymentMethodInput
+  appManagedBillingConfig: SubscriptionContractCalculationAppManagedBillingConfigInput
+}
+
+input SubscriptionContractCalculationCustomerPaymentMethodInput {
+  id: ID!
+}
+
+input SubscriptionContractCalculationCustomLineInput {
+  id: ID
+  title: String!
+  variantTitle: String
+  quantity: Int!
+  price: MoneyInput!
+  requiresShipping: Boolean!
+  taxable: Boolean!
+  sku: String
+  customAttributes: [AttributeInput!]! = []
+  weight: WeightInput
+  appManagedPricingPolicy: SubscriptionContractCalculationAppManagedPricingPolicyInput
+  originSellingPlanId: ID
+  sellingPlanName: String
+  discounts: [SubscriptionContractCalculationLineDiscountInput!]!
+}
+
+input SubscriptionContractCalculationCyclePriceAdjustmentInput {
+  afterCycle: Int!
+  adjustmentType: SellingPlanPricingPolicyAdjustmentType!
+  adjustmentValue: SellingPlanPricingPolicyValueInput!
+  computedPrice: MoneyInput!
+}
+
+input SubscriptionContractCalculationDeliveryDiscountInput {
+  id: ID
+  title: String!
+  value: SubscriptionContractCalculationDiscountValueInput!
+  recurringCycleLimit: Int!
+}
+
+input SubscriptionContractCalculationDeliveryMethodInput {
+  shipping: SubscriptionContractCalculationDeliveryMethodShippingInput
+  localDelivery: SubscriptionContractCalculationDeliveryMethodLocalDeliveryInput
+  pickup: SubscriptionContractCalculationDeliveryMethodPickupInput
+  none: Boolean
+  fetchAvailableDeliveryOptions: SubscriptionContractCalculationFetchDeliveryOptionsInput
+}
+
+input SubscriptionContractCalculationDeliveryMethodLocalDeliveryInput {
+  address: MailingAddressInput!
+  title: String
+  presentmentTitle: String
+  description: String
+  code: String
+  phone: String!
+  instructions: String
+  deliveryPrice: MoneyInput!
+}
+
+input SubscriptionContractCalculationDeliveryMethodPickupInput {
+  title: String
+  presentmentTitle: String
+  description: String
+  code: String
+  locationId: ID!
+  deliveryPrice: MoneyInput!
+}
+
+input SubscriptionContractCalculationDeliveryMethodShippingInput {
+  address: MailingAddressInput!
+  title: String
+  presentmentTitle: String
+  description: String
+  code: String
+  carrierServiceId: ID
+  deliveryPrice: MoneyInput!
+}
+
+input SubscriptionContractCalculationDeliveryPolicyInput {
+  anchors: [SubscriptionContractCalculationAnchorInput!]! = []
+  multiFulfillment: SubscriptionContractCalculationMultipleFulfillmentConfigInput
+}
+
+input SubscriptionContractCalculationDiscountCodeInput {
+  redeemCode: String!
+}
+
+input SubscriptionContractCalculationDiscountFixedAmountInput {
+  appliesOnEachItem: Boolean!
+  amount: MoneyInput!
+}
+
+input SubscriptionContractCalculationDiscountValueInput {
+  percentage: Int
+  fixedAmount: SubscriptionContractCalculationDiscountFixedAmountInput
+}
+
+input SubscriptionContractCalculationFetchDeliveryOptionsInput {
+  address: MailingAddressInput!
+  withDeliveryCustomizations: Boolean = true
+}
+
+input SubscriptionContractCalculationLineDiscountInput {
+  id: ID
+  title: String!
+  value: SubscriptionContractCalculationDiscountValueInput!
+  recurringCycleLimit: Int!
+}
+
+input SubscriptionContractCalculationLineInput {
+  productVariantLine: SubscriptionContractCalculationProductVariantLineInput
+  customLine: SubscriptionContractCalculationCustomLineInput
+  productVariantParentLine: SubscriptionContractCalculationProductVariantParentLineInput
+}
+
+input SubscriptionContractCalculationManualDiscountInput {
+  orderDiscount: SubscriptionContractCalculationOrderDiscountInput
+  deliveryDiscount: SubscriptionContractCalculationDeliveryDiscountInput
+}
+
+input SubscriptionContractCalculationMonthdayAnchorInput {
+  dayOfMonth: Int!
+}
+
+input SubscriptionContractCalculationMultipleFulfillmentConfigInput {
+  cadence: SubscriptionContractCalculationCadenceInput!
+  numberOfFulfillments: Int!
+}
+
+input SubscriptionContractCalculationOrderDiscountInput {
+  id: ID
+  title: String!
+  value: SubscriptionContractCalculationDiscountValueInput!
+  recurringCycleLimit: Int!
+}
+
+input SubscriptionContractCalculationPaymentMethodInput {
+  customerPaymentMethod: SubscriptionContractCalculationCustomerPaymentMethodInput
+  none: Boolean
+}
+
+input SubscriptionContractCalculationProductVariantLineInput {
+  id: ID
+  productVariantId: ID!
+  quantity: Int!
+  priceOverride: MoneyInput
+  customAttributes: [AttributeInput!]! = []
+  appManagedPricingPolicy: SubscriptionContractCalculationAppManagedPricingPolicyInput
+  originSellingPlanId: ID
+  sellingPlanName: String
+  discounts: [SubscriptionContractCalculationLineDiscountInput!]!
+}
+
+input SubscriptionContractCalculationProductVariantParentLineInput {
+  id: ID
+  productVariantId: ID!
+  quantity: Int!
+  customAttributes: [AttributeInput!]! = []
+  components: [SubscriptionContractCalculationComponentLineInput!]!
+}
+
+input SubscriptionContractCalculationWeekdayAnchorInput {
+  dayOfWeek: DayOfTheWeek!
+}
+
+input SubscriptionContractCalculationYeardayAnchorInput {
+  dayOfMonth: Int!
+  month: Int!
+}
+
+input WeightInput {
+  value: Float!
+  unit: WeightUnit!
+}
+
+union SubscriptionBillingAttemptAction = SubscriptionBillingAttemptPaymentChallenge
+
+union SubscriptionBillingAttemptError = SubscriptionBillingAttemptGeneralError | SubscriptionBillingAttemptInventoryError | SubscriptionBillingAttemptPaymentError | SubscriptionBillingAttemptUnexpectedError
+
+union SubscriptionBillingAttemptState = SubscriptionBillingAttemptActionRequiredState | SubscriptionBillingAttemptFailedState | SubscriptionBillingAttemptPendingState | SubscriptionBillingAttemptSuccessState
+
+union SubscriptionCommittedContract = SubscriptionBillingCycleEditedContract | SubscriptionContract
+
+union SubscriptionContractCalculation = SubscriptionContractCalculationFailure | SubscriptionContractCalculationPending | SubscriptionContractCalculationSuccess
+
+union SubscriptionDeliveryMethod = SubscriptionDeliveryMethodLocalDelivery | SubscriptionDeliveryMethodPickup | SubscriptionDeliveryMethodShipping
+
+type AccessScope {
+  handle: String!
+}
+
+type App implements Node {
+  apiKey: String!
+  id: ID!
+}
+
+type AppInstallation implements Node {
+  accessScopes: [AccessScope!]!
+  app: App!
+  id: ID!
+}
+
+type Attribute {
+  key: String!
+  value: String
+}
+
+type BillingAttemptUserError {
+  code: BillingAttemptUserErrorCode
+  field: [String!]
+}
+
+type Customer implements Node {
+  id: ID!
+  subscriptionContracts(first: Int, after: String, last: Int, before: String, reverse: Boolean = false): SubscriptionContractConnection!
+}
+
+type CustomerPaymentMethod implements Node {
+  id: ID!
+  revokedAt: DateTime
+}
+
+type InventoryItem implements Node {
+  id: ID!
+  requiresShipping: Boolean!
+}
+
+type LineItem implements Node {
+  id: ID!
+  originalUnitPriceSet: MoneyBag!
+  quantity: Int!
+  variant: ProductVariant
+}
+
+type LineItemConnection {
+  nodes: [LineItem!]!
+  pageInfo: PageInfo!
+}
+
+type MailingAddress implements Node {
+  address1: String
+  address2: String
+  city: String
+  company: String
+  countryCodeV2: CountryCode
+  firstName: String
+  id: ID!
+  lastName: String
+  phone: String
+  province: String
+  provinceCode: String
+  zip: String
+}
+
+type MoneyBag {
+  shopMoney: MoneyV2!
+}
+
+type MoneyV2 {
+  amount: Decimal!
+  currencyCode: CurrencyCode!
+}
+
+type Mutation {
+  subscriptionBillingAttemptCreate(subscriptionContractId: ID!, subscriptionBillingAttemptInput: SubscriptionBillingAttemptInput!): SubscriptionBillingAttemptCreatePayload
+  subscriptionContractActivate(actor: SubscriptionActor, subscriptionContractId: ID!): SubscriptionContractActivatePayload
+  subscriptionContractCalculationCommit(id: ID!): SubscriptionContractCalculationCommitPayload
+  subscriptionContractCancel(actor: SubscriptionActor, subscriptionContractId: ID!): SubscriptionContractCancelPayload
+  subscriptionContractCreateCalculate(contractCreateInput: SubscriptionContractCalculationContractCreateInput!): SubscriptionContractCreateCalculatePayload
+  subscriptionContractPause(actor: SubscriptionActor, subscriptionContractId: ID!): SubscriptionContractPausePayload
+  subscriptionContractSetNextBillingDate(contractId: ID!, date: DateTime!): SubscriptionContractSetNextBillingDatePayload
+  subscriptionContractUpdateCalculate(actor: SubscriptionActor, contractId: ID!, contractUpdateInput: SubscriptionContractCalculationContractUpdateInput!): SubscriptionContractUpdateCalculatePayload
+}
+
+interface Node {
+  id: ID!
+}
+
+type Order implements Node {
+  cancelledAt: DateTime
+  createdAt: DateTime!
+  currentTotalPriceSet: MoneyBag!
+  customAttributes: [Attribute!]!
+  customer: Customer
+  displayFinancialStatus: OrderDisplayFinancialStatus
+  displayFulfillmentStatus: OrderDisplayFulfillmentStatus!
+  disputes: [OrderDisputeSummary!]!
+  id: ID!
+  lineItems(first: Int, after: String, last: Int, before: String, reverse: Boolean = false): LineItemConnection!
+  processedAt: DateTime!
+  refunds(first: Int): [Refund!]!
+  shippingAddress: MailingAddress
+  test: Boolean!
+  totalDiscountsSet: MoneyBag
+  totalPriceSet: MoneyBag!
+  totalShippingPriceSet: MoneyBag!
+  totalTaxSet: MoneyBag
+  transactions(first: Int, capturable: Boolean, manuallyResolvable: Boolean): [OrderTransaction!]!
+  updatedAt: DateTime!
+}
+
+type OrderDisputeSummary implements Node {
+  id: ID!
+  status: DisputeStatus!
+}
+
+type OrderTransaction implements Node {
+  amountSet: MoneyBag!
+  gateway: String
+  id: ID!
+  kind: OrderTransactionKind!
+  processedAt: DateTime
+  status: OrderTransactionStatus!
+  test: Boolean!
+}
+
+type OrderTransactionConnection {
+  nodes: [OrderTransaction!]!
+  pageInfo: PageInfo!
+}
+
+type PageInfo {
+  endCursor: String
+  hasNextPage: Boolean!
+}
+
+type Product implements Node {
+  id: ID!
+  status: ProductStatus!
+  title: String!
+}
+
+type ProductVariant implements Node {
+  id: ID!
+  inventoryItem: InventoryItem!
+  product: Product!
+  title: String!
+}
+
+type QueryRoot {
+  currentAppInstallation: AppInstallation!
+  customer(id: ID!): Customer
+  nodes(ids: [ID!]!): [Node]!
+  shop: Shop!
+  subscriptionBillingAttempt(id: ID!): SubscriptionBillingAttempt
+  subscriptionBillingCycle(billingCycleInput: SubscriptionBillingCycleInput!): SubscriptionBillingCycle
+  subscriptionContract(id: ID!): SubscriptionContract
+  subscriptionContractCalculation(id: ID!): SubscriptionContractCalculation
+}
+
+type Refund implements Node {
+  id: ID!
+}
+
+type SellingPlanAnchor {
+  cutoffDay: Int
+  day: Int!
+  month: Int
+  type: SellingPlanAnchorType!
+}
+
+type Shop implements Node {
+  currencyCode: CurrencyCode!
+  ianaTimezone: String!
+  id: ID!
+  myshopifyDomain: String!
+  plan: ShopPlan!
+}
+
+type ShopPlan {
+  partnerDevelopment: Boolean!
+}
+
+type SubscriptionBillingAttempt implements Node {
+  completedAt: DateTime
+  createdAt: DateTime!
+  id: ID!
+  idempotencyKey: String!
+  originTime: DateTime
+  respectInventoryPolicy: Boolean!
+  state: SubscriptionBillingAttemptState!
+  subscriptionContract: SubscriptionContract!
+  transactions(first: Int, after: String, last: Int, before: String, reverse: Boolean = false): OrderTransactionConnection!
+}
+
+type SubscriptionBillingAttemptActionRequiredState {
+  action: SubscriptionBillingAttemptAction!
+}
+
+type SubscriptionBillingAttemptConnection {
+  nodes: [SubscriptionBillingAttempt!]!
+  pageInfo: PageInfo!
+}
+
+type SubscriptionBillingAttemptCreatePayload {
+  subscriptionBillingAttempt: SubscriptionBillingAttempt
+  userErrors: [BillingAttemptUserError!]!
+}
+
+type SubscriptionBillingAttemptFailedState {
+  error: SubscriptionBillingAttemptError!
+}
+
+type SubscriptionBillingAttemptGeneralError {
+  code: SubscriptionBillingAttemptGeneralErrorCode!
+}
+
+type SubscriptionBillingAttemptInventoryError {
+  code: SubscriptionBillingAttemptInventoryErrorCode!
+}
+
+type SubscriptionBillingAttemptPaymentChallenge {
+  nextActionUrl: URL!
+}
+
+type SubscriptionBillingAttemptPaymentError {
+  code: SubscriptionBillingAttemptPaymentErrorCode!
+}
+
+type SubscriptionBillingAttemptPendingState {
+  processing: Boolean!
+}
+
+type SubscriptionBillingAttemptSuccessState {
+  order: Order
+}
+
+type SubscriptionBillingAttemptUnexpectedError {
+  message: String!
+}
+
+type SubscriptionBillingCycle {
+  billingAttemptExpectedDate: DateTime!
+  billingAttempts(first: Int, after: String, last: Int, before: String, reverse: Boolean = false): SubscriptionBillingAttemptConnection!
+  cycleEndAt: DateTime!
+  cycleIndex: Int!
+  cycleStartAt: DateTime!
+  edited: Boolean!
+  skipped: Boolean!
+  sourceContract: SubscriptionContract!
+  status: SubscriptionBillingCycleBillingCycleStatus!
+}
+
+type SubscriptionBillingCycleEditedContract {
+  appAdminUrl: URL
+}
+
+type SubscriptionBillingPolicy {
+  anchors: [SellingPlanAnchor!]!
+  interval: SellingPlanInterval!
+  intervalCount: Int!
+  maxCycles: Int
+  minCycles: Int
+}
+
+type SubscriptionCalculatedContract {
+  billingPolicy: SubscriptionBillingPolicy!
+  currencyCode: CurrencyCode!
+  customAttributes: [Attribute!]!
+  customer: Customer!
+  customerPaymentMethod(showRevoked: Boolean = false): CustomerPaymentMethod
+  deliveryMethod: SubscriptionDeliveryMethod
+  deliveryPolicy: SubscriptionDeliveryPolicy!
+  deliveryPrice: MoneyV2!
+  discounts(first: Int, after: String, last: Int, before: String, reverse: Boolean = false): SubscriptionManualDiscountConnection!
+  lines(first: Int, after: String, last: Int, before: String, reverse: Boolean = false): SubscriptionLineConnection!
+  note: String
+}
+
+type SubscriptionContract implements Node {
+  app: App
+  billingAttempts(first: Int, after: String, last: Int, before: String, reverse: Boolean = false): SubscriptionBillingAttemptConnection!
+  billingPolicy: SubscriptionBillingPolicy!
+  currencyCode: CurrencyCode!
+  customAttributes: [Attribute!]!
+  customer: Customer
+  customerPaymentMethod(showRevoked: Boolean = false): CustomerPaymentMethod
+  deliveryMethod: SubscriptionDeliveryMethod
+  deliveryPolicy: SubscriptionDeliveryPolicy!
+  deliveryPrice: MoneyV2!
+  discounts(first: Int, after: String, last: Int, before: String, reverse: Boolean = false): SubscriptionManualDiscountConnection!
+  id: ID!
+  lines(first: Int, after: String, last: Int, before: String, reverse: Boolean = false): SubscriptionLineConnection!
+  nextBillingDate: DateTime
+  note: String
+  status: SubscriptionContractSubscriptionStatus!
+  updatedAt: DateTime!
+}
+
+type SubscriptionContractActivatePayload {
+  contract: SubscriptionContract
+  userErrors: [SubscriptionContractStatusUpdateUserError!]!
+}
+
+type SubscriptionContractCalculationCommitPayload {
+  contract: SubscriptionCommittedContract
+  userErrors: [SubscriptionContractCalculationCommitUserError!]!
+}
+
+type SubscriptionContractCalculationCommitUserError {
+  code: SubscriptionContractCalculationCommitUserErrorCode
+  field: [String!]
+}
+
+type SubscriptionContractCalculationDiagnostic {
+  code: SubscriptionContractCalculationDiagnosticCode!
+  field: [String!]
+}
+
+type SubscriptionContractCalculationFailure {
+  errors: [SubscriptionContractCalculationDiagnostic!]!
+  id: ID!
+}
+
+type SubscriptionContractCalculationMultipleFulfillmentConfig {
+  numberOfFulfillments: Int!
+}
+
+type SubscriptionContractCalculationPending {
+  id: ID!
+}
+
+type SubscriptionContractCalculationProjectedOrderTotals {
+  subtotal: MoneyV2!
+  total: MoneyV2!
+  totalDelivery: MoneyV2!
+  totalDeliveryDiscounts: MoneyV2!
+  totalMerchandiseDiscounts: MoneyV2!
+  totalTax: MoneyV2!
+}
+
+type SubscriptionContractCalculationSuccess {
+  calculatedContract: SubscriptionCalculatedContract!
+  id: ID!
+  projectedOrderTotals: SubscriptionContractCalculationProjectedOrderTotals
+  warnings: [SubscriptionContractCalculationDiagnostic!]!
+  withMerchandiseCustomizations: Boolean!
+}
+
+type SubscriptionContractCancelPayload {
+  contract: SubscriptionContract
+  userErrors: [SubscriptionContractStatusUpdateUserError!]!
+}
+
+type SubscriptionContractConnection {
+  nodes: [SubscriptionContract!]!
+  pageInfo: PageInfo!
+}
+
+type SubscriptionContractCreateCalculatePayload {
+  subscriptionContractCalculation: SubscriptionContractCalculation
+  userErrors: [SubscriptionContractCreateCalculateUserError!]!
+}
+
+type SubscriptionContractCreateCalculateUserError {
+  code: SubscriptionContractCreateCalculateUserErrorCode
+  field: [String!]
+}
+
+type SubscriptionContractPausePayload {
+  contract: SubscriptionContract
+  userErrors: [SubscriptionContractStatusUpdateUserError!]!
+}
+
+type SubscriptionContractSetNextBillingDatePayload {
+  contract: SubscriptionContract
+  userErrors: [SubscriptionContractUserError!]!
+}
+
+type SubscriptionContractStatusUpdateUserError {
+  code: SubscriptionContractStatusUpdateErrorCode
+  field: [String!]
+}
+
+type SubscriptionContractUpdateCalculatePayload {
+  subscriptionContractCalculation: SubscriptionContractCalculation
+  userErrors: [SubscriptionContractUpdateCalculateUserError!]!
+}
+
+type SubscriptionContractUpdateCalculateUserError {
+  code: SubscriptionContractUpdateCalculateUserErrorCode
+  field: [String!]
+}
+
+type SubscriptionContractUserError {
+  code: SubscriptionContractErrorCode
+  field: [String!]
+}
+
+type SubscriptionCyclePriceAdjustment {
+  adjustmentType: SellingPlanPricingPolicyAdjustmentType!
+}
+
+type SubscriptionDeliveryMethodLocalDelivery {
+  address: MailingAddress!
+}
+
+type SubscriptionDeliveryMethodPickup {
+  pickupOption: SubscriptionDeliveryMethodPickupOption!
+}
+
+type SubscriptionDeliveryMethodPickupOption {
+  code: String
+}
+
+type SubscriptionDeliveryMethodShipping {
+  address: MailingAddress!
+}
+
+type SubscriptionDeliveryPolicy {
+  anchors: [SellingPlanAnchor!]!
+  interval: SellingPlanInterval!
+  intervalCount: Int!
+  multiFulfillment: SubscriptionContractCalculationMultipleFulfillmentConfig
+}
+
+type SubscriptionDiscountAllocation {
+  amount: MoneyV2!
+}
+
+type SubscriptionLine {
+  currentPrice: MoneyV2!
+  customAttributes: [Attribute!]!
+  discountAllocations: [SubscriptionDiscountAllocation!]!
+  id: ID!
+  pricingPolicy: SubscriptionPricingPolicy
+  quantity: Int!
+  requiresShipping: Boolean!
+  sellingPlanId: ID
+  sellingPlanName: String
+  variantId: ID
+}
+
+type SubscriptionLineConnection {
+  nodes: [SubscriptionLine!]!
+  pageInfo: PageInfo!
+}
+
+type SubscriptionManualDiscount {
+  id: ID!
+}
+
+type SubscriptionManualDiscountConnection {
+  nodes: [SubscriptionManualDiscount!]!
+  pageInfo: PageInfo!
+}
+
+type SubscriptionPricingPolicy {
+  basePrice: MoneyV2!
+  cycleDiscounts: [SubscriptionCyclePriceAdjustment!]!
+}

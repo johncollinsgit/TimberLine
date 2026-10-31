@@ -149,6 +149,9 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
+      - name: Validate subscription protocols against captured original-app schema
+        run: node scripts/ci/validate-subscription-shopify-api.mjs
+
       - name: Install browsers for Fleet embedding checks
         timeout-minutes: 45
         run: npx playwright install --with-deps chromium webkit

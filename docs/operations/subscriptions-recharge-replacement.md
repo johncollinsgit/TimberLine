@@ -7,6 +7,77 @@ access can be verified. Stripe setup is an explicit fallback, not a universal
 migration requirement. The first rollout is the two already prepared members;
 all other members retain Recharge billing until separately reviewed.
 
+## Original-app schema and native update construction (October 31)
+
+At 06:02 UTC, a read-only query using the original retail Shopify credential
+returned pinned `2026-10`, the correct store, own-contract write/historical-order/
+saved-method read scopes and the documented create/update calculation and commit
+types. All 15 existing native contract/billing documents and six new update
+documents validate against that actual schema. Actual generated create/update
+variables also pass its input coercion. This resolves the original-app syntax/
+type evidence gap; it does not execute or accept any provider mutation.
+
+`tests/Fixtures/Subscriptions/shopify-original-2026-10.graphql` is a roughly
+29 KiB projection of the captured type/field/input closure, with provenance and
+checksums. It contains no credentials, account IDs or customer data. The pinned
+`graphql` development dependency powers a new CI step:
+
+```
+node scripts/ci/validate-subscription-shopify-api.mjs
+node scripts/ci/validate-subscription-shopify-api.mjs --schema-json /private/original-app-schema.json
+```
+
+This validator reads protocol strings directly from the PHP classes without
+bootstrapping the app or making a provider request. A negative schema check
+rejects a removed update operation. The separate bundled toolkit still reports
+missing calculation types, and connector validation still skips; neither is a
+pass. Runtime capability/identity checks and actual isolated-store mutation,
+merchant, saved-method/source and customer/backend acceptance remain mandatory.
+
+A further read-only original-app method check at approximately 06:28 UTC found
+one visible Jennifer Shop Pay agreement: unrevoked, `inactive:false` and not
+expired. The method connection was complete. Rynda's complete Shopify method
+connection was empty, consistent with keeping her Braintree route separate.
+Only method fingerprints and status booleans are retained in the check output.
+Visibility alone is not exact Recharge source-method association, continuing
+authority, merchant acceptance or an authorized billing switch.
+
+`SubscriptionShopifyUpdateProtocol` now constructs and validates a native update
+intent using the actual original owned-contract snapshot and original-app
+catalog. It has no HTTP, commit, local-term save or billing side effect. It:
+
+- Captures the exact contract/customer/app/method, version, note and schedule,
+  original member/source identity, credential context and a unique amendment
+  marker under a keyed intent. The trusted caller supplies `MERCHANT` or
+  `CUSTOMER`; this must not come from an unverified form actor.
+- Omits the full line list for address-only edits and omits delivery replacement
+  for scent-only edits. Other omitted contract fields remain unchanged. See
+  [Shopify update calculation semantics](https://shopify.dev/docs/api/admin-graphql/2026-10/mutations/subscriptionContractUpdateCalculate).
+- When scents change, retains every real provider line ID and restates the
+  existing quantity, member price override, app-managed base-price policy,
+  custom attributes, no-discount state and selling-plan metadata. Unique exact
+  source-line binding is required; ambiguous duplicates need review. IDs are
+  never fabricated from Recharge/source IDs. See
+  [Shopify's line replacement requirements](https://shopify.dev/docs/apps/build/purchase-options/subscriptions/contracts/migrate-to-subscription-calculation-api).
+- Rechecks active shippable 16oz catalog identity and uses its returned label;
+  validates pending/success/warnings, exact projected subtotal/shipping/discounts/
+  tax/total and the original provider line-ID set. Projected tax is estimated.
+- Validates the applied original-contract result against the exact keyed quote,
+  note, saved method, line bindings and original schedule. A changed date/status
+  fails for reconciliation; this helper never restores a prior schedule.
+
+This phase is a **pure protocol builder**, not completed native amendment
+servicing. Next integration must durably retain original intent before calculate,
+poll only the original ID, collect exact quote/total confirmation, claim one
+commit before HTTP and recover an unknown result only through the original
+owned contract, amendment marker and exact line state. Retain pending/unknown/
+stale-contract outcomes; never issue a replacement commit from a missing result.
+Local pause/cancel must win over a later result, and already-started cycles must
+remain reconcilable. Native signed future-term history/application, a fresh native
+tax check before amended billing, worker processing and the authenticated customer
+flow are still required. Existing original-term billing and gates are unchanged.
+No DDL, contract update, charge, source stop, activation or deployment occurred.
+
 ## Customer future delivery and scent confirmation (October 31; source candidate)
 
 The existing authenticated app management link now opens a branded private member
@@ -565,14 +636,15 @@ fresh owned reads. Changed terms or an elapsed original billing date remain
 paused for new review. No local activation, member billing-owner change, order
 creation or billing attempt is part of this command.
 
-**API verification limit:** the current official 2026-10 docs and connected schema
-describe these calculation operations, but the bundled offline 2026-10 validator
-snapshot rejects them as missing. The connector validation endpoint skips rather
-than validates. These results are recorded as a validation gap, not as a pass.
-Original-account capability probes plus isolated-store calculate/commit/recovery
-acceptance must be demonstrated before enabling any production adoption. The
-fictional tests and real MySQL dispatcher race prove local authority/recovery
-logic; they do not establish live provider compatibility.
+**API verification limit:** the bundled offline 2026-10 validator still rejects
+these documented types and the connector validation endpoint skips. The later
+original-app pinned capture described above exposes the actual operations and
+validates all native documents and sample input variables. These are separate
+results: actual schema syntax/types pass; provider mutation/merchant acceptance
+is unproven. Runtime original-account capability probes and isolated-store
+calculate/commit/recovery acceptance remain mandatory before production adoption.
+The fictional tests and MySQL races prove local authority/recovery logic, not a
+completed real provider cutover.
 
 References: [Shopify calculation migration requirements](https://shopify.dev/docs/apps/build/purchase-options/subscriptions/contracts/migrate-to-subscription-calculation-api),
 [contract calculation](https://shopify.dev/docs/api/admin-graphql/2026-10/mutations/subscriptionContractCreateCalculate),
