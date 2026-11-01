@@ -11,6 +11,7 @@ struct CheckoutOfferRule: Decodable, Identifiable {
     let active: Bool
     let eligibleItemIds: [String]?
     let requiresOtherItem: Bool?
+    let allowAdditionalDiscounts: Bool?
 }
 
 struct CheckoutOfferRuleList: Decodable {
@@ -146,7 +147,7 @@ private struct CheckoutOfferPicker: View {
                 }.listStyle(.plain)
             }
             .navigationTitle("Add discount").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { onDone() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { onDone() }.fixedSize() } }
         }.foregroundStyle(PayTheme.ink).preferredColorScheme(.light)
     }
 
@@ -256,7 +257,7 @@ private struct CheckoutDiscountQuantityPicker: View {
         Form {
             Section("Number of items") {
                 Stepper("\(quantity) of \(available)", value: $quantity, in: 1...available)
-                Text(hasAddons ? "Discounts apply in order to regular-price items first, then add-ons of this product." : "Multiple discounts apply in order to the first items of this product.")
+                Text(hasAddons ? "Discounts apply to eligible regular-price items first. Some add-ons exclude further discounts." : "Multiple discounts apply in order to the first items of this product.")
                     .font(.caption).foregroundStyle(PayTheme.muted)
                 Button("Apply to \(quantity) item\(quantity == 1 ? "" : "s")") {
                     onChange(.addDiscount(CheckoutDiscountSelection(ruleId: rule.id, name: rule.name, scope: "item", itemId: targetID ?? item.id, itemName: title, quantity: quantity)))
