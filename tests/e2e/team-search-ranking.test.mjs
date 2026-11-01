@@ -15,6 +15,19 @@ test('deduplication, filters and exact-only short terms', () => {
   assert.deepEqual(Array.from(engine.search(fixture.documents, 'pipe', { state: 'active' }), item => item.id), ['task:alpha', 'project:alpha']);
   assert.equal(engine.search(fixture.documents, 'pipo').length, 0);
 });
+test('deduplicates before filtering and preserves prefix, phrase and tie ordering', () => {
+  const docs = [
+    { id: 'task:2', type: 'task', title: 'Café maintenance', body: 'Copper pipe repair', completed: true },
+    { id: 'task:2', type: 'task', title: 'Café maintenance', body: 'Copper pipe repair', completed: false },
+    { id: 'task:1', type: 'task', title: 'Cafe maintenance', body: 'Copper pipe repair', completed: true },
+    { id: 'task:3', type: 'task', title: 'Cafe maintenance', body: 'Copper repair pipe', completed: true },
+  ];
+  assert.equal(engine.search(docs, 'cafe maint', { state: 'active' }).length, 0);
+  assert.deepEqual(Array.from(engine.search(docs, 'cafe maint', { state: 'closed' }), x => x.id), ['task:1', 'task:2', 'task:3']);
+  assert.deepEqual(Array.from(engine.search(docs, '"copper pipe"'), x => x.id), ['task:1', 'task:2']);
+  const sparse = []; sparse[1] = docs[0]; sparse[3] = docs[2];
+  assert.deepEqual(Array.from(engine.search(sparse, 'cafe maint'), x => x.id), ['task:1', 'task:2']);
+});
 test('prepared search observes changed source fields and accepts a caller-parsed query', () => {
   const document = { id: 'task:mutable', identifier: 'TASK-1', type: 'task', title: 'Oak room', body: 'First notes' };
   engine.prepare(document);
@@ -24,6 +37,8 @@ test('prepared search observes changed source fields and accepts a caller-parsed
   assert.equal(engine.search([document], 'inspection')[0], document);
   assert.equal(engine.search([document], 'TASK-2')[0], document);
   const parsed = { text: 'maple', terms: ['maple'], phrases: [], commandsOnly: false };
+  assert(engine.score(document, parsed));
+  parsed.phrases = Array(1);
   assert(engine.score(document, parsed));
   document.body = { text: 'Dynamic notes', toString() { return this.text; } };
   engine.prepare(document); document.body.text = 'Changed evidence';
