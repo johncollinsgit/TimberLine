@@ -412,7 +412,20 @@ struct POSReceipt: Decodable {
             if let register = self.selectedRegister { try await self.loadRegister(register) }
         }
     }
-    private func savePaymentReviews() throws { try SecureStore.write("payments-for-review", try JSONEncoder().encode(savedPaymentReviews)) }
+    private func savePaymentReviews() throws {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-saved-payments-ui-tests") { return }
+        #endif
+        try SecureStore.write("payments-for-review", try JSONEncoder().encode(savedPaymentReviews))
+    }
+    func removeSavedPayment(_ saved: SavedPaymentReview) {
+        guard pending?.requestID != saved.pending.requestID else { return }
+        perform {
+            let original = self.savedPaymentReviews
+            self.savedPaymentReviews.removeAll { $0.pending.requestID == saved.pending.requestID }
+            do { try self.savePaymentReviews() } catch { self.savedPaymentReviews = original; throw error }
+        }
+    }
     func leaveUncollectedForReview() {
         guard let base, let pending, let sale, sale.state == "unknown", let attempt = sale.sdkAttemptId, pending.refundRequestID == nil else { return }
         perform {
