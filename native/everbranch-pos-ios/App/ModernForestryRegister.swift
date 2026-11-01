@@ -293,7 +293,7 @@ extension POSViewModel {
             if ProcessInfo.processInfo.arguments.contains("--pos-refund-inflight-ui-tests") { completed.refundRequestID = UUID().uuidString.lowercased() }
             pending = completed
             let saleData = try! JSONSerialization.data(withJSONObject: ["sale_id": "fixture-completed", "request_id": completed.requestID, "state": "succeeded", "stock_state": "committed", "amount_minor": 2180, "currency": "USD", "receipt_available": true, "canonical_confirmation": true, "recovery_required": false, "inventory_authority": "everbranch", "lines": [["title": "River Birch", "quantity": 1, "subtotal_minor": 2000]]])
-            let receiptData = try! JSONSerialization.data(withJSONObject: ["receipt_number": "fixture-receipt", "merchant_location": "Fixture", "register_name": "Fictional register", "lines": [["title": "River Birch", "quantity": 1]], "amount_minor": 2180, "payment_reference": "fixture-payment", "refunded_minor": 0, "settlement_status": "pending"])
+            let receiptData = try! JSONSerialization.data(withJSONObject: ["receipt_number": "fixture-receipt", "merchant_location": "Fixture", "register_name": "Fictional register", "lines": [["title": "River Birch", "quantity": 1]], "amount_minor": 2180, "payment_reference": "fixture-payment", "refunded_minor": ProcessInfo.processInfo.arguments.contains("--pos-refund-review-ui-tests") ? 1400 : 0, "settlement_status": "pending"])
             sale = try? decoder.decode(Sale.self, from: saleData); receipt = try? decoder.decode(POSReceipt.self, from: receiptData)
             POSCheckoutFixtureProtocol.setCompletedSale(saleData, receipt: receiptData)
         }

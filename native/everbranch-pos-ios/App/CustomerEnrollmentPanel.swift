@@ -1,4 +1,5 @@
 import SwiftUI
+import CryptoKit
 
 struct CustomerEnrollmentSettings: Decodable {
     let birthdayEnabled: Bool
@@ -396,5 +397,339 @@ struct RewardsRedemptionSettingsView: View {
             }
             if apply(result) { message = "Draft saved. Review it before publishing." }
         } catch { self.settings = nil; message = "Draft was not confirmed. Reopen settings and review the latest version before trying again." }
+    }
+}
+
+private struct RefundReviewAllocation: Decodable {
+    struct Line: Decodable { let lineId: String; let units: [Int] }
+    let lines: [Line]
+    let taxMinor: Int
+}
+private struct RefundReviewLine: Decodable {
+    let lineId: String?
+    let title: String
+    let quantity: Int
+    let customCharge: Bool?
+    let netSubtotalMinor: Int
+    let unitNetMinor: [Int]?
+}
+private struct RefundReviewPreview: Decodable {
+    let reviewVersion: String
+    let confirmedRefundedMinor: Int
+    let paymentMinor: Int
+    let taxMinor: Int?
+    let lines: [RefundReviewLine]
+    let allocationIsOwnerAttested: Bool
+    let previousApprovedAllocation: RefundReviewAllocation?
+    let previousAllocationState: String
+    enum CodingKeys: String, CodingKey { case reviewVersion, confirmedRefundedMinor, paymentMinor, taxMinor, lines, allocationIsOwnerAttested, previousApprovedAllocation, previousAllocationState }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        guard c.contains(.previousApprovedAllocation) else { throw DecodingError.keyNotFound(CodingKeys.previousApprovedAllocation, .init(codingPath: c.codingPath, debugDescription: "Prior allocation is required.")) }
+        reviewVersion = try c.decode(String.self, forKey: .reviewVersion)
+        confirmedRefundedMinor = try c.decode(Int.self, forKey: .confirmedRefundedMinor)
+        paymentMinor = try c.decode(Int.self, forKey: .paymentMinor)
+        taxMinor = try c.decodeIfPresent(Int.self, forKey: .taxMinor)
+        lines = try c.decode([RefundReviewLine].self, forKey: .lines)
+        allocationIsOwnerAttested = try c.decode(Bool.self, forKey: .allocationIsOwnerAttested)
+        previousApprovedAllocation = try c.decodeIfPresent(RefundReviewAllocation.self, forKey: .previousApprovedAllocation)
+        previousAllocationState = try c.decode(String.self, forKey: .previousAllocationState)
+    }
+}
+private struct RefundReviewStatus: Decodable {
+    let state: String
+    let reviewReason: String?
+    let lastVerifiedAt: String?
+    let verificationIsPointInTime: Bool
+}
+private struct RefundReviewResult: Decodable {
+    let accepted: Bool
+    let ownerAttested: Bool
+    let state: String
+    let reviewReason: String?
+}
+private struct RefundReviewUnit: Identifiable, Codable {
+    let lineId: String
+    let index: Int
+    let title: String
+    let amount: Int
+    var id: String { "\(lineId):\(index)" }
+}
+private struct RefundReviewSubmission: Codable {
+    struct Line: Codable { let lineId: String; let units: [Int] }
+    let origin: String
+    let base: String
+    let saleId: String
+    let requestId: String
+    let version: String
+    let lines: [Line]
+    let items: [RefundReviewUnit]
+    let taxMinor: Int
+    let reason: String
+    let confirmedRefundedMinor: Int
+    var body: [String: Any] { ["request_id": requestId, "review_version": version, "reason": reason, "confirmed": true,
+        "allocation": ["lines": lines.map { ["line_id": $0.lineId, "units": $0.units] }, "tax_minor": taxMinor]] }
+    func valid(origin expectedOrigin: String, base expectedBase: String, saleId expectedSale: String) -> Bool {
+        guard origin == expectedOrigin, base == expectedBase, saleId == expectedSale, UUID(uuidString: requestId) != nil,
+              version.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil, taxMinor >= 0,
+              !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, reason.count <= 500,
+              !reason.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }),
+              confirmedRefundedMinor > 0, confirmedRefundedMinor <= 100_000_000, items.count <= 5049,
+              lines.count <= 51, items.allSatisfy({ $0.index >= 0 && $0.index < 99 && $0.amount >= 0 && $0.amount <= confirmedRefundedMinor }),
+              items.reduce(taxMinor, { $0 + $1.amount }) == confirmedRefundedMinor else { return false }
+        let ids = items.map(\.id)
+        guard Set(ids).count == ids.count else { return false }
+        let itemIds = Set(ids)
+        var encoded = Set<String>(), lineIds = Set<String>()
+        for line in lines {
+            guard (line.lineId == "custom" || line.lineId.range(of: "^[a-f0-9]{32}$", options: .regularExpression) != nil),
+                  lineIds.insert(line.lineId).inserted, !line.units.isEmpty else { return false }
+            for index in line.units {
+                guard (0..<99).contains(index), encoded.insert("\(line.lineId):\(index)").inserted else { return false }
+            }
+        }
+        return encoded == itemIds
+    }
+}
+
+/// Records an owner's item/tax attestation for already-completed refunds; it never issues a refund.
+struct RefundRewardsReviewView: View {
+    @ObservedObject var model: POSViewModel
+    let base: String
+    let saleId: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var status: RefundReviewStatus?
+    @State private var preview: RefundReviewPreview?
+    @State private var units: [RefundReviewUnit] = []
+    @State private var locked = Set<String>()
+    @State private var selected = Set<String>()
+    @State private var minimumTax = 0
+    @State private var tax = "0.00"
+    @State private var reason = ""
+    @State private var confirmed = false
+    @State private var pending: RefundReviewSubmission?
+    @State private var busy = false
+    @State private var recoveryReady = false
+    @State private var authorizedSession: String?
+    @State private var message: String?
+    @FocusState private var inputFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Refund rewards status") {
+                    Text("This review concerns rewards for refunds already completed in Square. It does not issue a refund or restock items.")
+                    if let status, contextValid {
+                        Text(statusText(status))
+                        if let date = status.lastVerifiedAt { Text("Last verified: \(date)").font(.caption) }
+                        Text("Status is a point-in-time check and can change if Square reports another refund.").font(.caption)
+                    } else { Text("Status is not loaded.") }
+                    Button("Refresh review status") { Task { if recoveryReady && contextValid { await refreshStatus() } else { await restorePending() } } }.disabled(busy || !scopeValid)
+                    Button("Review confirmed refunds") { Task { await loadPreview() } }.disabled(busy || !recoveryReady || pending != nil)
+                }
+                if let pending, preview == nil, contextValid {
+                    Section("Saved unconfirmed review") {
+                        Text("The original submission may have been accepted. Status can describe an earlier review; retry only these exact details.")
+                        ForEach(pending.items) { item in Text("\(item.title) · unit \(item.index + 1) · \(POSMoney.display(item.amount))") }
+                        Text("Refunded tax: \(POSMoney.display(pending.taxMinor))")
+                        Text("Records reviewed: \(pending.reason)")
+                        Text("Confirmed refund total: \(POSMoney.display(pending.confirmedRefundedMinor))")
+                        Button("Retry exact review") { Task { await retry() } }.disabled(busy || !contextValid)
+                    }
+                }
+                if let preview, contextValid {
+                    Section("Select all refunded items") {
+                        Text("Square confirms the total, not these items. Check your records and select every refunded unit across all refunds, including earlier reviews.").font(.caption)
+                        Text("Confirmed refunds: \(POSMoney.display(preview.confirmedRefundedMinor))")
+                        ForEach(units) { unit in
+                            Toggle("\(unit.title) · unit \(unit.index + 1) · \(POSMoney.display(unit.amount))", isOn: Binding(get: { selected.contains(unit.id) }, set: { value in
+                                if value { selected.insert(unit.id) } else if !locked.contains(unit.id) { selected.remove(unit.id) }; confirmed = false
+                            })).disabled(locked.contains(unit.id) || pending != nil)
+                        }
+                        if preview.previousApprovedAllocation != nil { Text("The earlier owner-attested allocation is included and cannot be reduced. Its state is a point-in-time check.").font(.caption) }
+                        if !["none", "completed"].contains(preview.previousAllocationState) { Text("The earlier review needs attention or verification before another allocation can be submitted.").font(.caption) }
+                    }
+                    Section("Refunded tax and confirmation") {
+                        TextField("Total refunded tax", text: $tax).keyboardType(.decimalPad).focused($inputFocused).disabled(pending != nil)
+                            .accessibilityIdentifier("refund-review-tax").onChange(of: tax) { _, _ in confirmed = false }
+                        if minimumTax > 0 { Text("Earlier reviewed tax: \(POSMoney.display(minimumTax)) minimum.").font(.caption) }
+                        Text("Selected items and tax: \(POSMoney.display(selectedTotal)) of \(POSMoney.display(preview.confirmedRefundedMinor))")
+                        TextField("Records reviewed / reason", text: $reason, axis: .vertical).focused($inputFocused).disabled(pending != nil)
+                            .onChange(of: reason) { _, _ in confirmed = false }
+                        Toggle("I verified this cumulative item and tax allocation", isOn: $confirmed).disabled(pending != nil)
+                        if pending == nil { Button("Submit owner review") { Task { await submit() } }.disabled(!canSubmit || busy) }
+                        else {
+                            Text("This submission is unconfirmed. Status can refer to an earlier review; retry only the exact submission.").font(.caption)
+                            Button("Retry exact review") { Task { await retry() } }.disabled(busy)
+                        }
+                    }
+                }
+                if let message { Section { Text(message).font(.footnote).accessibilityIdentifier("refund-review-message") } }
+            }.navigationTitle("Refunded rewards").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() }.disabled(busy) } }
+                .disabled(busy).overlay { if busy { ProgressView() } }.task { await restorePending() }
+                .onChange(of: model.signedIn) { _, signedIn in if !signedIn { clearMemory() } }
+        }
+    }
+    private var normalizedOrigin: String? {
+        let origin = model.api.origin
+        guard (try? POSOrigin.validate(origin)) != nil, var parts = URLComponents(url: origin.standardized, resolvingAgainstBaseURL: false) else { return nil }
+        parts.scheme = parts.scheme?.lowercased(); parts.host = parts.host?.lowercased()
+        if parts.port == 443 { parts.port = nil }
+        while parts.path.hasSuffix("/") { parts.path.removeLast() }
+        return parts.string
+    }
+    private var sessionFingerprint: String? {
+        if let token = model.api.token, !token.isEmpty { return SHA256.hash(data: Data(token.utf8)).map { String(format: "%02x", $0) }.joined() }
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") && ProcessInfo.processInfo.arguments.contains("--pos-refund-review-ui-tests") { return "fixture-session" }
+        #endif
+        return nil
+    }
+    private var storageKey: String {
+        "refund-review-v1-" + SHA256.hash(data: Data(((normalizedOrigin ?? "") + "|" + base + "/sales/" + saleId).utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+    private var path: String { base + "/sales/" + saleId + "/refund-rewards-review" }
+    private var scopeValid: Bool { model.signedIn && model.base == base && model.sale?.saleId == saleId && normalizedOrigin != nil && sessionFingerprint != nil }
+    private var contextValid: Bool { scopeValid && authorizedSession != nil && authorizedSession == sessionFingerprint }
+    private func clearMemory() {
+        pending = nil; preview = nil; units = []; locked = []; selected = []; status = nil; authorizedSession = nil; recoveryReady = false; confirmed = false; reason = ""; tax = "0.00"; minimumTax = 0
+    }
+    private var taxMinor: Int? {
+        if tax.range(of: #"^0(?:\.0{1,2})?$"#, options: .regularExpression) != nil { return 0 }
+        return try? POSMoney.minor(tax)
+    }
+    private var selectedTotal: Int { units.filter { selected.contains($0.id) }.reduce(0) { $0 + $1.amount } + (taxMinor ?? 0) }
+    private var canSubmit: Bool {
+        guard contextValid, let preview, ["none", "completed"].contains(preview.previousAllocationState), let taxMinor, let maxTax = preview.taxMinor,
+              taxMinor >= minimumTax, taxMinor <= maxTax, selectedTotal == preview.confirmedRefundedMinor,
+              confirmed, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, reason.count <= 500,
+              !reason.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return false }
+        return true
+    }
+    private func statusText(_ value: RefundReviewStatus) -> String {
+        switch value.state {
+        case "not_approved": return "No reviewed allocation is recorded."
+        case "completed": return "The last recorded rewards review completed at its last verification."
+        case "verification_pending": return "The review was recorded; verification is pending."
+        case "review": return "This review needs further attention."
+        default: return "The review is being processed or needs attention."
+        }
+    }
+    private func refreshStatus() async {
+        guard scopeValid, !busy, let session = sessionFingerprint else { return }
+        busy = true; defer { busy = false }
+        do {
+            let result: RefundReviewStatus = try await model.api.request(path + "/status")
+            guard scopeValid, sessionFingerprint == session, authorizedSession == nil || authorizedSession == session else { clearMemory(); return }
+            guard result.verificationIsPointInTime,
+                  result.state != "completed" || (result.lastVerifiedAt?.isEmpty == false) else { status = nil; message = "Status needs review."; return }
+            status = result
+        } catch {
+            guard scopeValid, sessionFingerprint == session else { clearMemory(); return }
+            status = nil; message = "Could not load review status. Try again."
+        }
+    }
+    private func restorePending() async {
+        clearMemory()
+        guard scopeValid, let session = sessionFingerprint, let origin = normalizedOrigin else { return }
+        await refreshStatus() // Require current assigned-admin access before displaying saved details.
+        guard scopeValid, sessionFingerprint == session, status != nil else { clearMemory(); return }
+        do {
+            if let data = try SecureStore.readChecked(storageKey) {
+                let saved = try JSONDecoder().decode(RefundReviewSubmission.self, from: data)
+                guard saved.valid(origin: origin, base: base, saleId: saleId) else { throw POSError.unavailable("Saved review needs attention.") }
+                pending = saved
+            }
+            guard scopeValid, sessionFingerprint == session, normalizedOrigin == origin else { clearMemory(); return }
+            authorizedSession = session; recoveryReady = true
+        } catch { clearMemory(); message = "A saved review cannot be read securely. Ask an administrator for help before starting another review." }
+    }
+    private func loadPreview() async {
+        guard contextValid, recoveryReady, !busy, pending == nil else { return }
+        inputFocused = false; busy = true; defer { busy = false }
+        do {
+            let value: RefundReviewPreview = try await model.api.request(path)
+            guard contextValid, let parsed = parse(value) else { preview = nil; message = "This refund cannot be reviewed in Pay. Ask an administrator to check the records."; return }
+            preview = value; units = parsed.units; locked = parsed.locked; selected = parsed.locked; minimumTax = parsed.tax
+            tax = String(format: "%d.%02d", parsed.tax / 100, parsed.tax % 100); reason = ""; confirmed = false; message = nil
+        } catch { preview = nil; message = "Refund rewards review is unavailable or needs more evidence. No refund was changed." }
+    }
+    private func parse(_ value: RefundReviewPreview) -> (units: [RefundReviewUnit], locked: Set<String>, tax: Int)? {
+        guard value.allocationIsOwnerAttested, value.reviewVersion.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
+              value.paymentMinor > 0, value.confirmedRefundedMinor > 0, value.confirmedRefundedMinor < value.paymentMinor,
+              let tax = value.taxMinor, tax >= 0, tax <= value.paymentMinor, value.lines.count <= 51,
+              ["none", "completed", "review", "retry", "pending", "processing", "verification_pending"].contains(value.previousAllocationState),
+              (value.previousApprovedAllocation == nil) == (value.previousAllocationState == "none") else { return nil }
+        var result: [RefundReviewUnit] = []; var keys = Set<String>(); var total = tax
+        for line in value.lines {
+            let id = line.customCharge == true ? "custom" : (line.lineId ?? "")
+            guard (line.customCharge == true ? id == "custom" : id.range(of: "^[a-f0-9]{32}$", options: .regularExpression) != nil), keys.insert(id).inserted,
+                  (1...99).contains(line.quantity), line.netSubtotalMinor >= 0, line.netSubtotalMinor <= value.paymentMinor,
+                  id != "custom" || line.quantity == 1 else { return nil }
+            let amounts: [Int]
+            if let explicit = line.unitNetMinor { amounts = explicit }
+            else { guard line.netSubtotalMinor % line.quantity == 0 else { return nil }; amounts = Array(repeating: line.netSubtotalMinor / line.quantity, count: line.quantity) }
+            guard amounts.count == line.quantity, amounts.allSatisfy({ $0 >= 0 && $0 <= value.paymentMinor }), amounts.reduce(0, +) == line.netSubtotalMinor else { return nil }
+            total += line.netSubtotalMinor
+            guard total <= value.paymentMinor else { return nil }
+            for (index, amount) in amounts.enumerated() { result.append(RefundReviewUnit(lineId: id, index: index, title: line.title, amount: amount)) }
+        }
+        guard total == value.paymentMinor else { return nil }
+        var prior = Set<String>(); var priorTax = 0; var priorLines = Set<String>()
+        if let previous = value.previousApprovedAllocation {
+            guard previous.taxMinor >= 0, previous.taxMinor <= tax else { return nil }; priorTax = previous.taxMinor
+            for line in previous.lines {
+                guard priorLines.insert(line.lineId).inserted, !line.units.isEmpty else { return nil }
+                for index in line.units {
+                    let id = "\(line.lineId):\(index)"
+                    guard result.contains(where: { $0.id == id }), prior.insert(id).inserted else { return nil }
+                }
+            }
+            guard result.filter({ prior.contains($0.id) }).reduce(priorTax, { $0 + $1.amount }) <= value.confirmedRefundedMinor else { return nil }
+        }
+        return (result, prior, priorTax)
+    }
+    private func submit() async {
+        guard let preview, canSubmit, pending == nil else { return }
+        let chosen = units.filter { selected.contains($0.id) }
+        let lines = Dictionary(grouping: chosen, by: \.lineId).keys.sorted().map { id in
+            RefundReviewSubmission.Line(lineId: id, units: chosen.filter { $0.lineId == id }.map(\.index))
+        }
+        guard let origin = normalizedOrigin else { return }
+        let submission = RefundReviewSubmission(origin: origin, base: base, saleId: saleId, requestId: UUID().uuidString.lowercased(),
+            version: preview.reviewVersion, lines: lines, items: chosen, taxMinor: taxMinor!,
+            reason: reason.trimmingCharacters(in: .whitespacesAndNewlines), confirmedRefundedMinor: preview.confirmedRefundedMinor)
+        guard submission.valid(origin: origin, base: base, saleId: saleId) else { message = "This review needs attention before submission."; return }
+        do { try SecureStore.write(storageKey, try JSONEncoder().encode(submission)) }
+        catch { message = "The review could not be saved securely. Nothing was submitted."; return }
+        pending = submission
+        await retry()
+    }
+    private func retry() async {
+        guard contextValid, recoveryReady, !busy, let pending, let origin = normalizedOrigin, pending.valid(origin: origin, base: base, saleId: saleId) else { return }
+        inputFocused = false; busy = true
+        do {
+            let result: RefundReviewResult = try await model.api.request(path, method: "POST", body: pending.body)
+            guard contextValid else { clearMemory(); busy = false; return }
+            guard result.accepted, result.ownerAttested else { message = "Review status is uncertain. Check the original review before doing anything else."; busy = false; return }
+            if result.state == "completed" {
+                do { try SecureStore.write(storageKey, nil) }
+                catch { message = "Review recorded, but the saved retry could not be cleared. Check status before retrying."; busy = false; return }
+                preview = nil; self.pending = nil; confirmed = false
+                message = "Review recorded. Refresh status for the latest point-in-time check."
+            } else {
+                message = "The review was recorded but is not complete. Keep the original request and check its status before retrying."
+            }
+        } catch let error as RefundReviewServerError {
+            guard contextValid else { clearMemory(); busy = false; return }
+            if error.status == 409 { message = "The server reports changed or conflicting evidence. This saved request remains unconfirmed; check status and ask an administrator to review it." }
+            else { message = "The server did not accept this review. This saved request remains unconfirmed; check status and ask an administrator to review it." }
+        } catch {
+            guard contextValid else { clearMemory(); busy = false; return }
+            message = "Review was not confirmed. Refresh status or retry this exact review; do not enter a different allocation."
+        }
+        busy = false
+        await refreshStatus()
     }
 }

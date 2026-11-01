@@ -1,5 +1,10 @@
 import Foundation
 
+struct RefundReviewServerError: Error {
+    let status: Int
+    let code: String
+}
+
 final class NoRedirects: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
@@ -10,7 +15,13 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
     var token: String?
     private let session: URLSession
     init() {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") && ProcessInfo.processInfo.arguments.contains("--pos-refund-review-alt-origin-tests") {
+            origin = URL(string: "https://app.theeverbranch.com/test-origin")!
+        } else { origin = URL(string: Bundle.main.object(forInfoDictionaryKey: "POSAPIOrigin") as? String ?? "https://app.theeverbranch.com")! }
+        #else
         origin = URL(string: Bundle.main.object(forInfoDictionaryKey: "POSAPIOrigin") as? String ?? "https://app.theeverbranch.com")!
+        #endif
         let config = URLSessionConfiguration.ephemeral
         config.httpCookieStorage = nil; config.urlCache = nil; config.timeoutIntervalForRequest = 30
         #if DEBUG
@@ -34,11 +45,19 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
         let (data, response) = try await session.data(for: request)
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") && ProcessInfo.processInfo.arguments.contains("--pos-refund-review-session-change-tests") && path.hasSuffix("/refund-rewards-review/status") {
+            token = "fixture-changed-session"
+        }
+        #endif
         guard let http = response as? HTTPURLResponse else { throw POSError.unavailable("No server response.") }
         if http.statusCode == 401 { throw POSError.signInRequired }
         guard (200...299).contains(http.statusCode) else {
             let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let code = (value?["error"] as? [String: Any])?["code"] as? String ?? "request_\(http.statusCode)"
+            if method == "POST" && path.hasSuffix("/refund-rewards-review") && (400...499).contains(http.statusCode) {
+                throw RefundReviewServerError(status: http.statusCode, code: code)
+            }
             if path.contains("/customers/") && path.hasSuffix("/enrollment") && (400...499).contains(http.statusCode) {
                 throw POSError.enrollmentRejected(code)
             }
@@ -103,7 +122,62 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
         guard let url = request.url else { return }
         do {
             let data: Data
-            if ProcessInfo.processInfo.arguments.contains("--pos-reward-settings-ui-tests") && url.path.contains("/reward-redemption") {
+            if ProcessInfo.processInfo.arguments.contains("--pos-refund-review-ui-tests") && url.path.contains("/refund-rewards-review") {
+                let unavailable = ProcessInfo.processInfo.arguments.contains("--pos-refund-review-disabled-tests")
+                if url.path.hasSuffix("/status") {
+                    data = try JSONSerialization.data(withJSONObject: ["state": "completed", "review_reason": NSNull(), "last_verified_at": "2026-11-01T12:00:00Z", "verification_is_point_in_time": true])
+                } else if request.httpMethod == "POST" {
+                    if unavailable { throw URLError(.badServerResponse) }
+                    var body = request.httpBody ?? Data()
+                    if body.isEmpty, let stream = request.httpBodyStream {
+                        stream.open(); defer { stream.close() }; var buffer = [UInt8](repeating: 0, count: 1024)
+                        while stream.hasBytesAvailable { let count = stream.read(&buffer, maxLength: buffer.count); if count <= 0 { break }; body.append(buffer, count: count) }
+                    }
+                    let input = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+                    guard let id = input["request_id"] as? String, UUID(uuidString: id) != nil,
+                          input["review_version"] as? String == String(repeating: "d", count: 64), input["confirmed"] as? Bool == true,
+                          input["reason"] as? String == "Checked Square receipt", let allocation = input["allocation"] as? [String: Any],
+                          allocation["tax_minor"] as? Int == 200, let lines = allocation["lines"] as? [[String: Any]], lines.count == 1,
+                          lines[0]["line_id"] as? String == String(repeating: "a", count: 32), lines[0]["units"] as? [Int] == [0, 1] else { throw URLError(.badServerResponse) }
+                    if ProcessInfo.processInfo.arguments.contains("--pos-refund-review-conflict-tests") {
+                        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 409, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+                        client?.urlProtocol(self, didLoad: Data(#"{"error":{"code":"refund_evidence_changed"}}"#.utf8))
+                        client?.urlProtocolDidFinishLoading(self); return
+                    }
+                    if ProcessInfo.processInfo.arguments.contains("--pos-refund-review-shortfall-tests") {
+                        Self.lock.lock()
+                        let prior = UserDefaults.standard.string(forKey: "pos-test-refund-review-first-id")
+                        if prior == nil { UserDefaults.standard.set(id, forKey: "pos-test-refund-review-first-id") }
+                        else if prior == id { UserDefaults.standard.removeObject(forKey: "pos-test-refund-review-first-id") }
+                        Self.lock.unlock()
+                        if let prior, prior != id { throw URLError(.badServerResponse) }
+                        if prior == nil {
+                            client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+                            client?.urlProtocol(self, didLoad: Data(#"{"accepted":true,"owner_attested":true,"state":"review","review_reason":"customer_rewards_shortfall_review"}"#.utf8))
+                            client?.urlProtocolDidFinishLoading(self); return
+                        }
+                    }
+                    if ProcessInfo.processInfo.arguments.contains("--pos-refund-review-retry-tests") {
+                        Self.lock.lock()
+                        let prior = UserDefaults.standard.string(forKey: "pos-test-refund-review-first-id")
+                        if prior == nil { UserDefaults.standard.set(id, forKey: "pos-test-refund-review-first-id") }
+                        else if prior == id { UserDefaults.standard.removeObject(forKey: "pos-test-refund-review-first-id") }
+                        Self.lock.unlock()
+                        if prior == nil { throw URLError(.networkConnectionLost) }
+                        if prior != id { throw URLError(.badServerResponse) }
+                    }
+                    data = Data(#"{"accepted":true,"owner_attested":true,"state":"completed"}"#.utf8)
+                } else {
+                    if unavailable { throw URLError(.badServerResponse) }
+                    var value: [String: Any] = ["review_version": String(repeating: "d", count: 64), "confirmed_refunded_minor": 1400,
+                        "payment_minor": 2000, "tax_minor": 300, "allocation_is_owner_attested": true,
+                        "lines": [["line_id": String(repeating: "a", count: 32), "title": "Fictional candle", "quantity": 3, "net_subtotal_minor": 1700, "unit_net_minor": [700, 500, 500]]],
+                        "previous_approved_allocation": ["lines": [["line_id": String(repeating: "a", count: 32), "units": [0]]], "tax_minor": 100], "previous_allocation_state": "completed"]
+                    if ProcessInfo.processInfo.arguments.contains("--pos-refund-review-missing-prior-tests") { value.removeValue(forKey: "previous_approved_allocation") }
+                    if ProcessInfo.processInfo.arguments.contains("--pos-refund-review-processing-tests") { value["previous_allocation_state"] = "processing" }
+                    data = try JSONSerialization.data(withJSONObject: value)
+                }
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-reward-settings-ui-tests") && url.path.contains("/reward-redemption") {
                 let draft = url.path.hasSuffix("/draft"), publish = url.path.hasSuffix("/publish")
                 let management = !ProcessInfo.processInfo.arguments.contains("--pos-reward-settings-disabled-ui-tests")
                 if draft || publish {

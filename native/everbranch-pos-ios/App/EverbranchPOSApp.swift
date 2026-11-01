@@ -100,6 +100,7 @@ struct POSView: View {
     @State private var showingEnrollmentSettings = false
     @State private var showingWalletReview = false
     @State private var showingRewardsSettings = false
+    @State private var showingRefundRewardsReview = false
     @State private var editingBundle: BundleBasketLine?
     @State private var contactOnly = false
     @State private var automaticQuoteRequested = false
@@ -235,6 +236,11 @@ struct POSView: View {
             .sheet(isPresented: $showingEnrollmentSettings) { CustomerEnrollmentSettingsView(model: model) }
             .sheet(isPresented: $showingWalletReview) { ExistingWalletReviewView(model: model) }
             .sheet(isPresented: $showingRewardsSettings) { RewardsRedemptionSettingsView(model: model) }
+            .sheet(isPresented: $showingRefundRewardsReview) {
+                if let base = model.base, let sale = model.sale {
+                    RefundRewardsReviewView(model: model, base: base, saleId: sale.saleId)
+                }
+            }
             .sheet(item: $editingBundle) { line in
                 if let item = model.items.first(where: { $0.id == line.itemID }) {
                     BundleOptions(item: item, model: model, existing: line)
@@ -548,6 +554,9 @@ struct POSView: View {
                     ForEach(Array(receipt.lines.enumerated()), id: \.offset) { _, line in Text("\(line.quantity) × \(line.title)") }
                     if let details = receipt.paymentDetails { ForEach(Array(details.lines.enumerated()), id: \.offset) { _, text in Text(text).font(.subheadline).foregroundStyle(PayTheme.muted) } }
                     Text("Refunded: \(POSMoney.display(receipt.refundedMinor))")
+                    if receipt.refundedMinor > 0 && model.selectedRegister?.canManageCheckoutRules == true {
+                        Button("Review refunded rewards") { showingRefundRewardsReview = true }.buttonStyle(PayButtonStyle(primary: false))
+                    }
                     if receipt.customerRewardsStatus == "review_required" { Text("Your purchase is linked. Rewards need a manager’s review.").font(.subheadline) }
                     if receipt.customerRewardsStatus == "review_required" && model.selectedRegister?.canManageInventory == true {
                         DisclosureGroup("Review rewards eligibility") {
