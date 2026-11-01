@@ -36,7 +36,7 @@ final class PosOutbox
                 } catch (\Throwable $error) {
                     $code = $error instanceof PosException ? $error->blocker : 'outbox_processing_failed';
                     $this->store->rows('outbox', $scope['tenant_id'])->where('id', $effect->id)->update([
-                        'state' => $current->attempts >= 7 || in_array($code, ['customer_rewards_shortfall_review', 'customer_identity_review_required', 'customer_rewards_historical_review', 'customer_rewards_refund_allocation_review', 'reward_refund_allocation_review'], true) ? 'review' : 'retry', 'error_code' => $code,
+                        'state' => $current->attempts >= 7 || in_array($code, ['customer_rewards_shortfall_review', 'customer_identity_review_required', 'customer_rewards_historical_review', 'customer_rewards_refund_allocation_review', 'customer_refund_allocation_provider_changed', 'refund_evidence_changed', 'refund_allocation_unavailable', 'reward_refund_allocation_review'], true) ? 'review' : 'retry', 'error_code' => $code,
                         'available_at' => now()->addSeconds(min(300, 5 * (2 ** min(6, $current->attempts)))),
                     ]);
                     $this->store->event($scope['tenant_id'], $effect->sale_id, 'effect_needs_reconciliation', ['effect' => $effect->effect_key, 'code' => $code]);
@@ -55,6 +55,36 @@ final class PosOutbox
         $register->configuration = $this->store->encrypt($snapshot['configuration']);
         $scope['register'] = $register;
         $payload = $this->store->decrypt($effect->payload);
+        if (str_starts_with($effect->effect_key, 'reward_allocation_postcheck_')) {
+            try {
+                $fresh = app(PosRefundReviewEvidence::class)->inspect($sale);
+            } catch (PosException $error) {
+                if (in_array($error->blocker, ['square_refund_coverage_requires_review', 'refund_allocation_requires_review'], true)) {
+                    throw new PosException('customer_refund_allocation_provider_changed', 409);
+                }
+                throw $error;
+            }
+            if (! is_string($payload['review_version'] ?? null) || ! is_int($payload['profile_id'] ?? null)
+                || $fresh['profile_id'] !== $payload['profile_id'] || ! hash_equals($payload['review_version'], $fresh['review_version'])) {
+                throw new PosException('customer_refund_allocation_provider_changed', 409);
+            }
+            $this->store->db->transaction(function () use ($scope, $sale, $fresh): void {
+                app(\App\Services\Inventory\StockLedger::class)->rows('mutexes', $scope['tenant_id'])->lockForUpdate()->firstOrFail();
+                $current = $this->store->rows('sales', $scope['tenant_id'])->where('id', $sale->id)->lockForUpdate()->firstOrFail();
+                if (! hash_equals($fresh['local_revision'], app(PosCustomerPurchases::class)->refundRevision($current))) {
+                    throw new PosException('customer_refund_allocation_provider_changed', 409);
+                }
+                $currentSnapshot = app(PosReceiptCustomers::class)->decorate($current, app(PosService::class)->snapshot($current));
+                if (! hash_equals($fresh['reward_context_hash'], PosRefundReviewEvidence::rewardContextHash($currentSnapshot))) {
+                    throw new PosException('customer_refund_allocation_provider_changed', 409);
+                }
+                $this->store->rows('outbox', $scope['tenant_id'])->where('sale_id', $sale->id)->whereIn('state', ['review', 'retry'])
+                    ->whereIn('error_code', ['customer_rewards_refund_allocation_review', 'refund_allocation_unavailable'])
+                    ->update(['state' => 'completed', 'completed_at' => now(), 'error_code' => null]);
+            }, 3);
+
+            return;
+        }
         if ($effect->effect_key === 'reward_unstarted_release') {
             app(PosCandleCashLifecycle::class)->releaseUnstarted($scope['tenant_id'], $sale->id);
 
@@ -87,8 +117,20 @@ final class PosOutbox
 
             return;
         }
+        if (str_starts_with($effect->effect_key, 'customer_refunds_review_')
+            && (config('pos_live.partial_refund_reward_review_enabled', false) !== true
+                || config('pos_live.partial_refund_reward_resolution_enabled', false) !== true)) {
+            throw new PosException('refund_allocation_unavailable', 503);
+        }
         if (str_starts_with($effect->effect_key, 'customer_refunds_')) {
-            app(PosCustomerRewards::class)->apply($sale);
+            try {
+                app(PosCustomerRewards::class)->apply($sale);
+            } catch (PosException $error) {
+                if (str_starts_with($effect->effect_key, 'customer_refunds_review_') && $error->blocker === 'customer_refund_evidence_changed') {
+                    throw new PosException('refund_evidence_changed', 409);
+                }
+                throw $error;
+            }
             $this->store->event($scope['tenant_id'], $sale->id, 'effect_completed', ['effect' => $effect->effect_key]);
 
             return;

@@ -261,9 +261,11 @@ in-person and full-refund restoration with partial-refund review. This API
 does not edit the online rewards program or the shared wallet ledger.
 
 `POS_PARTIAL_REFUND_REWARD_REVIEW_ENABLED` defaults off. With it off,
-existing POS earning programs keep their prior proportional partial-refund
-adjustment; that estimate cannot identify which merchandise or tax was
-refunded. With it on, confirmed amount-only partial refunds leave earning
+sales without earlier allocation-review evidence keep their prior proportional
+partial-refund adjustment; that estimate cannot identify which merchandise or
+tax was refunded. A sale already in allocation review remains in review when
+the flag is turned off; queued effects cannot fall back to the estimate. With it
+on, confirmed amount-only partial refunds leave earning
 unchanged and enter review. The Square refund itself is not blocked. A complete
 item-allocation and staff review-resolution flow does not yet exist, so leave
 this flag off until that flow is implemented and verified. Full-refund and
@@ -271,6 +273,38 @@ spent-credit handling continue to use the original purchase evidence.
 If an effect already entered review while the flag was on, switching it off
 does not automatically retry or close that review; a later verified full refund
 may supersede it, otherwise it remains for manual review.
+
+The separately gated `POS_PARTIAL_REFUND_REWARD_RESOLUTION_ENABLED` also defaults
+off. Its candidate API is scoped to an assigned owner/admin register: GET
+`/sales/{sale}/refund-rewards-review` obtains fresh Square coverage and returns
+an evidence version, original lines and total tax. It also returns the last
+`previous_approved_allocation` (or null), and `previous_allocation_state`
+(`none`, `completed`, `review`, `retry`, or `verification_pending`). The
+version incorporates the validated approval history; a concurrent approval
+invalidates an earlier version. This is an owner-attested selection, including
+when its state needs review. POST to the same path accepts
+that exact version, an idempotency UUID, a reason, explicit confirmation and a
+cumulative allocation of whole frozen units plus a tax amount. The owner is
+attesting the allocation; Square confirms the refund amounts, not the items or
+tax selected. An allocation must match completed linked Square refund IDs and
+their total exactly. Unknown/pending refunds, incomplete coverage, unlinked or
+off-platform reimbursements, older receipts without sufficient frozen unit
+prices, fractional unit refunds and changed evidence remain review-only.
+Prior approved units and tax cannot be removed by a later cumulative allocation.
+No stock is returned or changed by this review.
+
+The adjustment uses the original frozen earning rules and the existing ledger.
+Spent-credit shortfalls remain review work and do not block the payment refund.
+An approved adjustment queues a durable post-write Square check; GET
+`/sales/{sale}/refund-rewards-review/status` reports pending, review or
+completed and labels verification as point-in-time. Square Dashboard can still
+change after any check. Later changes require the normal webhook/original-payment
+reconciliation and another review; completed checks do not guarantee future
+coverage. Routine reconciliation excludes completed sales, so verify the
+separately scheduled bounded `pos:reconcile --all` audit and alert delivery
+before any activation. The compact owner UI and end-to-end physical acceptance
+are not yet proven. Keep both flags off until independent security/concurrency
+review, provider acceptance and operational review handling are complete.
 
 Publication is hard-disabled regardless of feature flags. A policy recheck
 currently happens before the durable payment-start claim, so publishing a

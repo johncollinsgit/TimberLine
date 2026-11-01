@@ -45,6 +45,9 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
             Route::post('/reconcile', [PosController::class, 'reconcile'])->middleware($write)->name('sales.reconcile');
             Route::post('/leave-for-review', [PosController::class, 'leaveForReview'])->middleware($write)->name('sales.leave-for-review');
             Route::post('/refunds', [PosController::class, 'refund'])->middleware($write)->name('sales.refund');
+            Route::get('/refund-rewards-review', [PosController::class, 'refundRewardsReview'])->middleware($read)->name('sales.refund-rewards-review.show');
+            Route::get('/refund-rewards-review/status', [PosController::class, 'refundRewardsReviewStatus'])->middleware($read)->name('sales.refund-rewards-review.status');
+            Route::post('/refund-rewards-review', [PosController::class, 'approveRefundRewardsReview'])->middleware($write)->name('sales.refund-rewards-review.approve');
             Route::get('/receipt', [PosController::class, 'receipt'])->middleware($read)->name('sales.receipt');
             Route::get('/receipt/email', [PosController::class, 'receiptEmailStatus'])->middleware($read)->name('sales.receipt.email.status');
             Route::post('/receipt/email', [PosController::class, 'sendReceiptEmail'])->middleware($write)->name('sales.receipt.email.send');

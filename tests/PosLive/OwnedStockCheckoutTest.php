@@ -1461,3 +1461,355 @@ it('checks each Shopify-priced bundle line and rejects wrong aggregate tax total
         ->and(array_column($snapshot['terms']['display'], 'line_id'))->toBe([$firstId, $secondId])
         ->and($snapshot['terms']['stock'])->toBe([$this->item => 3, $other => 3]);
 });
+
+it('requires complete fresh Square coverage before a refund allocation can be reviewed', function (string $scenario): void {
+    $quote = $this->postJson($this->base.'/quotes', $this->selection)->assertOk()->json();
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail();
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($sale);
+    $snapshot['binding']['environment'] = 'live';
+    $this->store->rows('connections', $this->tenant->id)->where('id', $this->connection)->update(['environment' => 'production']);
+    $this->store->rows('sales', $this->tenant->id)->where('id', $sale->id)->update(['state' => 'succeeded',
+        'attempt_id' => 'fixture-payment-operation', 'snapshot' => $this->store->encrypt($snapshot),
+        'snapshot_hash' => \App\Services\PaymentsCore\Contract::hash($snapshot)]);
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $sale->id)->firstOrFail();
+    $operation = ['id' => $sale->attempt_id, 'kind' => 'payment', 'state' => 'succeeded', 'sale_id' => $sale->id,
+        'provider_id' => 'fixture-payment', 'request_id' => $sale->payment_request_id, 'amount_minor' => (int) $sale->amount_minor,
+        'currency' => 'usd', 'binding' => $snapshot['binding']];
+    $journal = \Mockery::mock(\App\Services\PaymentsCore\PaymentJournal::class);
+    $journal->shouldReceive('get')->andReturn($operation);
+    app()->instance(\App\Services\PaymentsCore\PaymentJournal::class, $journal);
+    $payment = ['id' => 'fixture-payment', 'status' => 'COMPLETED', 'source_type' => 'CARD', 'reference_id' => $sale->payment_request_id,
+        'location_id' => 'fixture_location', 'amount_money' => ['amount' => 1070, 'currency' => 'USD'],
+        'total_money' => ['amount' => 1070, 'currency' => 'USD'], 'refunded_money' => ['amount' => 500, 'currency' => 'USD'],
+        'refund_ids' => ['fixture-refund']];
+    $refund = ['id' => 'fixture-refund', 'payment_id' => 'fixture-payment', 'location_id' => 'fixture_location',
+        'status' => 'COMPLETED', 'destination_type' => 'SQUARE_GIFT_CARD', 'amount_money' => ['amount' => 500, 'currency' => 'USD']];
+    if ($scenario === 'missing') {
+        unset($payment['refund_ids']);
+    } elseif ($scenario === 'pending') {
+        $refund['status'] = 'PENDING';
+    } elseif ($scenario === 'mismatch') {
+        $refund['amount_money']['amount'] = 499;
+    } elseif ($scenario === 'wrong_payment') {
+        $refund['payment_id'] = 'different-payment';
+    } elseif ($scenario === 'old_api') {
+        config(['pos_live.square_api_version' => '2024-08-20']);
+    }
+    $reads = 0;
+    Http::fake(['*/v2/payments/fixture-payment' => function () use (&$reads, $payment, $scenario) {
+        $reads++;
+        if ($scenario === 'changed' && $reads === 2) {
+            $payment['refunded_money']['amount'] = 600;
+        }
+
+        return Http::response(['payment' => $payment]);
+    }, '*/v2/refunds/fixture-refund' => Http::response(['refund' => $refund])]);
+    $coverage = app(\App\Services\Pos\PosRefundCoverage::class);
+    if ($scenario === 'cross_method') {
+        $result = $coverage->verify($sale);
+        expect($result['refunded_minor'])->toBe(500)->and($result['refunds'])->toBe(['fixture-refund' => 500])
+            ->and(strlen($result['fingerprint']))->toBe(64);
+    } else {
+        expect(fn () => $coverage->verify($sale))->toThrow(\App\Services\Pos\PosException::class, 'square_refund_coverage_requires_review');
+    }
+    Http::assertNotSent(fn ($request) => $request->method() !== 'GET');
+})->with(['cross_method', 'missing', 'pending', 'mismatch', 'wrong_payment', 'old_api', 'changed']);
+
+it('resolves a fully evidenced owner-attested partial allocation once or retains a spent-credit shortfall', function (string $scenario): void {
+    if ($scenario === 'race' && (DB::connection()->getDriverName() !== 'mysql' || getenv('POS_LIVE_DISPOSABLE_MYSQL') !== '1' || ! function_exists('pcntl_fork'))) {
+        $this->markTestSkipped('Requires explicitly authorized local disposable MySQL and process forking.');
+    }
+    config(['pos_live.partial_refund_reward_review_enabled' => true, 'pos_live.partial_refund_reward_resolution_enabled' => true]);
+    $this->selection['items'][0]['quantity'] = 2;
+    $quote = $this->postJson($this->base.'/quotes', $this->selection)->assertOk()->json();
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail();
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($sale);
+    $snapshot['binding']['environment'] = 'live';
+    $snapshot['customer'] = ['id' => $this->profile->id, 'name' => 'Ada Buyer', 'shopify_customer_id' => null];
+    $snapshot['customer_rewards'] = ['enabled' => true, 'version' => str_repeat('a', 64), 'order_number' => 1,
+        'member' => false, 'program' => [], 'rules' => ['enable_order_based_earning' => true,
+            'spend_threshold_rewards' => [['spend_dollars' => 10, 'reward_dollars' => 1], ['spend_dollars' => 20, 'reward_dollars' => 3]]]];
+    $associationRewards = $snapshot['customer_rewards'];
+    if (in_array($scenario, ['association_changed', 'association_after_approval'], true)) {
+        $snapshot['customer'] = null;
+        $snapshot['customer_rewards'] = ['enabled' => false];
+    }
+    $this->store->rows('connections', $this->tenant->id)->where('id', $this->connection)->update(['environment' => 'production']);
+    $this->store->rows('sales', $this->tenant->id)->where('id', $sale->id)->update(['state' => 'succeeded',
+        'attempt_id' => 'fixture-payment-operation', 'snapshot' => $this->store->encrypt($snapshot),
+        'snapshot_hash' => \App\Services\PaymentsCore\Contract::hash($snapshot)]);
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $sale->id)->firstOrFail();
+    if (in_array($scenario, ['association_changed', 'association_after_approval'], true)) {
+        $this->stock->rows('receipt_associations', $this->tenant->id)->insert(['tenant_id' => $this->tenant->id,
+            'runtime_id' => 'fixture_runtime', 'sale_id' => $sale->id, 'customer_profile_id' => $this->profile->id,
+            'actor_id' => $this->actor->id, 'request_hash' => str_repeat('b', 64), 'input_hash' => str_repeat('c', 64),
+            'contact' => $this->store->encrypt([]), 'reward_context' => $this->store->encrypt($associationRewards),
+            'created_at' => now(), 'updated_at' => now()]);
+    }
+    $payment = ['id' => $sale->attempt_id, 'kind' => 'payment', 'state' => 'succeeded', 'sale_id' => $sale->id,
+        'tenant_id' => $this->tenant->id, 'provider_id' => 'fixture-payment', 'request_id' => $sale->payment_request_id,
+        'amount_minor' => (int) $sale->amount_minor, 'currency' => 'usd', 'binding' => $snapshot['binding']];
+    $journal = \Mockery::mock(\App\Services\PaymentsCore\PaymentJournal::class);
+    $journal->shouldReceive('get')->andReturn($payment);
+    app()->instance(\App\Services\PaymentsCore\PaymentJournal::class, $journal);
+    $rewards = app(\App\Services\Pos\PosCustomerRewards::class);
+    $rewards->apply($sale);
+    expect((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(3.0);
+    $this->store->event($this->tenant->id, $sale->id, 'square_refund_observed', ['refund_id' => 'fixture-refund',
+        'payment_id' => 'fixture-payment', 'amount_minor' => 1070]);
+    app(\App\Services\Pos\PosService::class)->enqueue($this->tenant->id, $sale->id, 'customer_refunds_fixture', []);
+    $scope = ['tenant_id' => $this->tenant->id, 'register' => $this->store->rows('registers', $this->tenant->id)->firstOrFail()];
+    app(\App\Services\Pos\PosOutbox::class)->drainSale($scope, $sale->id);
+    expect($this->store->rows('outbox', $this->tenant->id)->where('effect_key', 'customer_refunds_fixture')->value('state'))->toBe('review');
+    if ($scenario === 'shortfall') {
+        \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->update(['balance' => 0]);
+    }
+    $squarePayment = ['id' => 'fixture-payment', 'status' => 'COMPLETED', 'source_type' => 'CARD', 'reference_id' => $sale->payment_request_id,
+        'location_id' => 'fixture_location', 'amount_money' => ['amount' => 2140, 'currency' => 'USD'],
+        'total_money' => ['amount' => 2140, 'currency' => 'USD'], 'refunded_money' => ['amount' => 1070, 'currency' => 'USD'],
+        'refund_ids' => ['fixture-refund']];
+    $squareRefund = ['id' => 'fixture-refund', 'payment_id' => 'fixture-payment', 'location_id' => 'fixture_location',
+        'status' => 'COMPLETED', 'amount_money' => ['amount' => 1070, 'currency' => 'USD']];
+    $paymentReads = 0;
+    $refundsById = ['fixture-refund' => $squareRefund];
+    Http::fake(['*/v2/payments/fixture-payment' => function () use (&$paymentReads, &$squarePayment, $scenario, &$associationRewards, $sale) {
+        $paymentReads++;
+        if ($scenario === 'association_after_approval' && $paymentReads === 5) {
+            $associationRewards['order_number'] = 2;
+            $this->stock->operation($this->tenant->id, 'fixture-association-change', 'fixture', $this->actor->id, [], function () use ($sale, &$associationRewards): array {
+                $this->stock->rows('receipt_associations', $this->tenant->id)->where('sale_id', $sale->id)
+                    ->update(['reward_context' => $this->store->encrypt($associationRewards)]);
+
+                return [];
+            });
+        }
+        $result = $squarePayment;
+        if (($scenario === 'changed_after_approval' && $paymentReads >= 5)
+            || ($scenario === 'changed_after_write' && $paymentReads >= 7)) {
+            $result['refunded_money']['amount'] = 1080;
+        }
+        if ($scenario === 'postcheck_outage' && $paymentReads >= 7) {
+            return Http::response([], 503);
+        }
+
+        return Http::response(['payment' => $result]);
+    }, '*/v2/refunds/*' => function ($request) use (&$refundsById) {
+        return Http::response(['refund' => $refundsById[basename(parse_url($request->url(), PHP_URL_PATH))] ?? null]);
+    }]);
+    $url = $this->base.'/sales/'.$sale->id.'/refund-rewards-review';
+    if ($scenario === 'normal') {
+        config(['pos_live.partial_refund_reward_resolution_enabled' => false]);
+        $this->getJson($url)->assertStatus(503)->assertJsonPath('error.code', 'refund_allocation_unavailable');
+        config(['pos_live.partial_refund_reward_resolution_enabled' => true]);
+        $this->actor->tenants()->updateExistingPivot($this->tenant->id, ['role' => 'member']);
+        $this->getJson($url)->assertForbidden();
+        $this->actor->tenants()->updateExistingPivot($this->tenant->id, ['role' => 'admin']);
+        $foreign = Tenant::create(['name' => 'Other', 'slug' => 'other-'.Str::lower(Str::random(8)), 'status' => 'active']);
+        $this->getJson('/api/mobile/v1/workspaces/'.$foreign->slug.'/pos/registers/'.$this->register.'/sales/'.$sale->id.'/refund-rewards-review')->assertNotFound();
+        $otherRegister = str_repeat('f', 32);
+        $original = $this->store->rows('registers', $this->tenant->id)->where('id', $this->register)->firstOrFail();
+        $this->store->rows('registers', $this->tenant->id)->insert($this->store->values($this->tenant->id, [
+            'id' => $otherRegister, 'name' => 'Other fixture', 'location_id' => 'fixture_counter', 'location_name' => 'Other',
+            'connection_id' => $this->connection, 'catalog_source' => $original->catalog_source, 'active' => true,
+            'configuration' => $original->configuration]));
+        $this->store->rows('assignments', $this->tenant->id)->insert($this->store->values($this->tenant->id, [
+            'register_id' => $otherRegister, 'user_id' => $this->actor->id, 'device_id' => 'fixture_device_1234', 'role' => 'admin', 'active' => true]));
+        $this->getJson('/api/mobile/v1/workspaces/'.$this->tenant->slug.'/pos/registers/'.$otherRegister.'/sales/'.$sale->id.'/refund-rewards-review')->assertNotFound();
+    }
+    $preview = $this->getJson($url)->assertOk()->assertJsonPath('allocation_is_owner_attested', true)
+        ->assertJsonPath('confirmed_refunded_minor', 1070)->assertJsonPath('previous_approved_allocation', null)
+        ->assertJsonPath('previous_allocation_state', 'none')->json();
+    $this->getJson($url.'/status')->assertOk()->assertJsonPath('state', 'not_approved')->assertJsonPath('verification_is_point_in_time', true);
+    $input = ['request_id' => (string) Str::uuid(), 'review_version' => $preview['review_version'], 'reason' => 'Customer returned one item',
+        'confirmed' => true, 'allocation' => ['lines' => [['line_id' => $this->item, 'units' => [0]]], 'tax_minor' => 70]];
+    if ($scenario === 'disabled_queued') {
+        // Simulate a crash after durable approval but before its outbox effect runs.
+        $evidence = app(\App\Services\Pos\PosRefundReviewEvidence::class)->inspect($sale);
+        $calculated = app(\App\Services\Pos\PosRefundAllocation::class)->validate($evidence['snapshot']['terms'], 2140, 1070, $input['allocation']);
+        $this->store->event($this->tenant->id, $sale->id, 'customer_refund_allocation_approved', [
+            'request_id' => $input['request_id'], 'input_hash' => \App\Services\PaymentsCore\Contract::hash([$input['review_version'], $input['allocation'], $input['reason']]),
+            'actor_id' => $this->actor->id, 'reason' => $input['reason'], 'owner_attested' => true, 'snapshot_hash' => $sale->snapshot_hash,
+            'profile_id' => $this->profile->id, 'confirmed_refunded_minor' => 1070, 'local_revision' => $evidence['local_revision'],
+            'reward_context_hash' => $evidence['reward_context_hash'], 'coverage_fingerprint' => $evidence['coverage_fingerprint'],
+            'review_version' => $evidence['review_version'], 'allocation' => $input['allocation'], 'calculated' => $calculated,
+        ]);
+        $effectKey = 'customer_refunds_review_'.substr(hash('sha256', $input['request_id']), 0, 32);
+        app(\App\Services\Pos\PosService::class)->enqueue($this->tenant->id, $sale->id, $effectKey, []);
+        config(['pos_live.partial_refund_reward_review_enabled' => false, 'pos_live.partial_refund_reward_resolution_enabled' => false]);
+        app(\App\Services\Pos\PosOutbox::class)->drainSale($scope, $sale->id);
+        expect($this->store->rows('outbox', $this->tenant->id)->where('effect_key', $effectKey)->value('state'))->toBe('review')
+            ->and((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(3.0);
+        $this->getJson($url.'/status')->assertOk()->assertJsonPath('state', 'review')->assertJsonPath('review_reason', 'refund_allocation_unavailable');
+        app(\App\Services\Pos\PosService::class)->enqueue($this->tenant->id, $sale->id, 'customer_refunds_after_disable', []);
+        app(\App\Services\Pos\PosOutbox::class)->drainSale($scope, $sale->id);
+        expect($this->store->rows('outbox', $this->tenant->id)->where('effect_key', 'customer_refunds_after_disable')->value('state'))->toBe('review')
+            ->and((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(3.0);
+        config(['pos_live.partial_refund_reward_review_enabled' => true, 'pos_live.partial_refund_reward_resolution_enabled' => true]);
+        $this->postJson($url, $input)->assertOk()->assertJsonPath('state', 'completed');
+        expect((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(1.0)
+            ->and($this->store->rows('outbox', $this->tenant->id)->where('effect_key', 'customer_refunds_after_disable')->value('state'))->toBe('completed');
+
+        return;
+    }
+    if ($scenario === 'association_changed') {
+        $associationRewards['order_number'] = 2;
+        $this->stock->rows('receipt_associations', $this->tenant->id)->where('sale_id', $sale->id)
+            ->update(['reward_context' => $this->store->encrypt($associationRewards)]);
+        $this->postJson($url, $input)->assertStatus(409)->assertJsonPath('error.code', 'refund_evidence_changed');
+        expect($this->store->rows('events', $this->tenant->id)->where('sale_id', $sale->id)->where('code', 'customer_refund_allocation_approved')->count())->toBe(0)
+            ->and((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(3.0);
+
+        return;
+    }
+    if ($scenario === 'stale') {
+        $this->store->event($this->tenant->id, $sale->id, 'square_refund_observed', ['refund_id' => 'newer-refund',
+            'payment_id' => 'fixture-payment', 'amount_minor' => 1070]);
+        $this->postJson($url, $input)->assertStatus(503)->assertJsonPath('error.code', 'square_refund_coverage_requires_review');
+        expect($this->store->rows('events', $this->tenant->id)->where('sale_id', $sale->id)->where('code', 'customer_refund_allocation_approved')->count())->toBe(0)
+            ->and((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(3.0);
+
+        return;
+    }
+    if ($scenario === 'race') {
+        $directory = sys_get_temp_dir().'/pos-refund-review-'.bin2hex(random_bytes(8));
+        mkdir($directory, 0700);
+        DB::purge();
+        $pids = [];
+        try {
+            foreach (range(0, 1) as $i) {
+                $pid = pcntl_fork();
+                if ($pid === -1) {
+                    throw new RuntimeException('Cannot fork refund review race.');
+                }
+                if ($pid === 0) {
+                    try {
+                        while (! file_exists($directory.'/go')) {
+                            usleep(1000);
+                            clearstatcache();
+                        }
+                        $request = [...$input, 'request_id' => (string) Str::uuid(),
+                            'allocation' => ['lines' => [['line_id' => $this->item, 'units' => [$i]]], 'tax_minor' => 70]];
+                        $response = $this->postJson($url, $request);
+                        file_put_contents($directory.'/'.$i, (string) $response->getStatusCode());
+                        DB::disconnect();
+                        exit(0);
+                    } catch (Throwable) {
+                        exit(1);
+                    }
+                }
+                $pids[] = $pid;
+            }
+            touch($directory.'/go');
+            foreach ($pids as $pid) {
+                pcntl_waitpid($pid, $status);
+                expect(pcntl_wexitstatus($status))->toBe(0);
+            }
+            $statuses = [file_get_contents($directory.'/0'), file_get_contents($directory.'/1')];
+            sort($statuses);
+            expect($statuses)->toBe(['200', '409'])
+                ->and($this->store->rows('events', $this->tenant->id)->where('sale_id', $sale->id)->where('code', 'customer_refund_allocation_approved')->count())->toBe(1)
+                ->and((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(1.0)
+                ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(2);
+        } finally {
+            foreach ($pids as $pid) {
+                pcntl_waitpid($pid, $status, WNOHANG);
+            }
+            foreach (glob($directory.'/*') as $file) {
+                unlink($file);
+            }
+            rmdir($directory);
+        }
+
+        return;
+    }
+    $result = $this->postJson($url, $input)->assertOk()->assertJsonPath('owner_attested', true)->json();
+    if ($scenario === 'association_after_approval') {
+        expect($result['state'])->toBe('review')->and($result['review_reason'])->toBe('refund_evidence_changed')
+            ->and((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(3.0);
+        $this->getJson($url.'/status')->assertOk()->assertJsonPath('state', 'review')->assertJsonPath('review_reason', 'refund_customer_context_changed');
+
+        return;
+    }
+    if ($scenario === 'changed_after_approval') {
+        expect($result['state'])->toBe('retry')->and($result['review_reason'])->toBe('square_refund_coverage_requires_review')
+            ->and((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(3.0)
+            ->and($this->store->rows('outbox', $this->tenant->id)->where('effect_key', 'customer_refunds_fixture')->value('state'))->toBe('review');
+
+        return;
+    }
+    if ($scenario === 'changed_after_write') {
+        expect($result['state'])->toBe('review')->and($result['review_reason'])->toBe('customer_refund_allocation_provider_changed')
+            ->and((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(1.0)
+            ->and($this->store->rows('outbox', $this->tenant->id)->where('effect_key', 'customer_refunds_fixture')->value('state'))->toBe('review')
+            ->and($this->store->rows('outbox', $this->tenant->id)->where('error_code', 'customer_refund_allocation_provider_changed')->count())->toBe(1);
+        $this->getJson($url.'/status')->assertOk()->assertJsonPath('state', 'review')
+            ->assertJsonPath('review_reason', 'customer_refund_allocation_provider_changed');
+
+        return;
+    }
+    if ($scenario === 'postcheck_outage') {
+        expect($result['state'])->toBe('verification_pending')->and($result['review_reason'])->toBe('square_retrieval_unavailable')
+            ->and((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(1.0)
+            ->and($this->store->rows('outbox', $this->tenant->id)->where('effect_key', 'customer_refunds_fixture')->value('state'))->toBe('review');
+        $this->getJson($url.'/status')->assertOk()->assertJsonPath('state', 'verification_pending')
+            ->assertJsonPath('review_reason', 'square_retrieval_unavailable');
+
+        return;
+    }
+    if ($scenario === 'shortfall') {
+        expect($result['state'])->toBe('review')->and($result['review_reason'])->toBe('customer_rewards_shortfall_review')
+            ->and((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(0.0)
+            ->and($this->store->rows('outbox', $this->tenant->id)->where('effect_key', 'customer_refunds_fixture')->value('state'))->toBe('review');
+    } else {
+        expect($result['state'])->toBe('completed')
+            ->and((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(1.0)
+            ->and($this->store->rows('outbox', $this->tenant->id)->where('effect_key', 'customer_refunds_fixture')->value('state'))->toBe('completed');
+        $this->getJson($url.'/status')->assertOk()->assertJsonPath('state', 'completed')->assertJsonPath('verification_is_point_in_time', true);
+    }
+    $updatedPreview = $this->getJson($url)->assertOk()->assertJsonPath('previous_approved_allocation', $input['allocation'])
+        ->assertJsonPath('previous_allocation_state', $result['state'])->json();
+    expect($updatedPreview['review_version'])->not->toBe($preview['review_version']);
+    $this->postJson($url, $input)->assertOk()->assertJsonPath('state', $result['state']);
+    expect($this->store->rows('events', $this->tenant->id)->where('sale_id', $sale->id)->where('code', 'customer_refund_allocation_approved')->count())->toBe(1)
+        ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())
+        ->toBe($scenario === 'shortfall' ? 1 : 2);
+    $conflict = [...$input, 'request_id' => (string) Str::uuid(), 'allocation' => ['lines' => [['line_id' => $this->item, 'units' => [1]]], 'tax_minor' => 70]];
+    $this->postJson($url, $conflict)->assertStatus(409)->assertJsonPath('error.code', 'refund_allocation_conflict');
+    if ($scenario === 'shortfall') {
+        // Simulate the customer wallet later receiving sufficient value.
+        \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->update(['balance' => 3.0]);
+        $this->postJson($url, $input)->assertOk()->assertJsonPath('state', 'completed');
+        $this->getJson($url.'/status')->assertOk()->assertJsonPath('state', 'completed');
+        expect((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(1.0)
+            ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(2);
+    }
+    if ($scenario === 'normal') {
+        $this->store->event($this->tenant->id, $sale->id, 'square_refund_observed', ['refund_id' => 'fixture-tax-refund',
+            'payment_id' => 'fixture-payment', 'amount_minor' => 35]);
+        $squarePayment['refund_ids'][] = 'fixture-tax-refund';
+        $squarePayment['refunded_money']['amount'] = 1105;
+        $taxRefund = ['id' => 'fixture-tax-refund', 'payment_id' => 'fixture-payment', 'location_id' => 'fixture_location',
+            'status' => 'COMPLETED', 'amount_money' => ['amount' => 35, 'currency' => 'USD']];
+        $refundsById['fixture-tax-refund'] = $taxRefund;
+        $this->getJson($url.'/status')->assertOk()->assertJsonPath('state', 'review')->assertJsonPath('review_reason', 'refund_evidence_changed');
+        // Record the new amount-only review without changing the existing balance.
+        expect(fn () => $rewards->apply($sale))->toThrow(\App\Services\Pos\PosException::class, 'customer_rewards_refund_allocation_review');
+        $nextPreview = $this->getJson($url)->assertOk()->assertJsonPath('confirmed_refunded_minor', 1105)
+            ->assertJsonPath('previous_approved_allocation', $input['allocation'])->assertJsonPath('previous_allocation_state', 'review')->json();
+        $next = [...$input, 'request_id' => (string) Str::uuid(), 'review_version' => $nextPreview['review_version'],
+            'allocation' => ['lines' => [['line_id' => $this->item, 'units' => [1]]], 'tax_minor' => 105]];
+        $this->postJson($url, $next)->assertStatus(409)->assertJsonPath('error.code', 'refund_allocation_conflict');
+        $next['allocation']['lines'][0]['units'] = [0];
+        $this->postJson($url, $next)->assertOk()->assertJsonPath('state', 'completed');
+        expect((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(1.0)
+            ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(2);
+        $this->store->event($this->tenant->id, $sale->id, 'square_refund_observed', ['refund_id' => 'fixture-final-refund',
+            'payment_id' => 'fixture-payment', 'amount_minor' => 1035]);
+        $rewards->apply($sale);
+        $rewards->apply($sale);
+        $this->getJson($url.'/status')->assertOk()->assertJsonPath('state', 'review')->assertJsonPath('review_reason', 'refund_evidence_changed');
+        expect((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(0.0)
+            ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(3);
+    }
+    Http::assertNotSent(fn ($request) => $request->method() !== 'GET');
+})->with(['normal', 'shortfall', 'race', 'stale', 'changed_after_approval', 'changed_after_write', 'postcheck_outage', 'association_changed', 'association_after_approval', 'disabled_queued']);

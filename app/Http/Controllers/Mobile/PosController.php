@@ -364,6 +364,31 @@ final class PosController extends Controller
             'reason' => ['required', 'in:requested_by_customer,duplicate,other']], fn ($input) => $this->pos->refund($register, $sale, $input));
     }
 
+    public function refundRewardsReview(Request $r, string $tenant, string $register, string $sale): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosRefundReview::class)->preview(
+            app(\App\Services\Pos\PosAccess::class)->register($register, 'admin'), $sale));
+    }
+
+    public function refundRewardsReviewStatus(Request $r, string $tenant, string $register, string $sale): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosRefundReview::class)->status(
+            app(\App\Services\Pos\PosAccess::class)->register($register, 'admin'), $sale));
+    }
+
+    public function approveRefundRewardsReview(Request $r, string $tenant, string $register, string $sale): JsonResponse
+    {
+        return $this->respond($r, ['request_id' => ['required', 'uuid'], 'review_version' => ['required', 'regex:/^[a-f0-9]{64}$/D'],
+            'reason' => ['required', 'string', 'max:500'], 'confirmed' => ['required', 'boolean'],
+            'allocation' => ['required', 'array:lines,tax_minor'], 'allocation.tax_minor' => ['required', 'integer', 'min:0', 'max:100000000'],
+            'allocation.lines' => ['present', 'array', 'max:51'], 'allocation.lines.*' => ['array:line_id,units'],
+            'allocation.lines.*.line_id' => ['required', 'regex:/^(?:custom|[a-f0-9]{32})$/D'],
+            'allocation.lines.*.units' => ['required', 'array', 'min:1', 'max:99'],
+            'allocation.lines.*.units.*' => ['required', 'integer', 'min:0', 'max:98']],
+            fn ($input) => app(\App\Services\Pos\PosRefundReview::class)->approve(
+                app(\App\Services\Pos\PosAccess::class)->register($register, 'admin'), $sale, $input));
+    }
+
     private function respond(Request $request, array $rules, callable $action): JsonResponse
     {
         try {
