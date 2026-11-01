@@ -54,6 +54,12 @@ final class POSAppDelegate: NSObject, UIApplicationDelegate {
     private weak var presentingController: UIViewController?
     private(set) var lastMessage: String?
     var hasActivePayment: Bool { POSAppDelegate.squareReady && MobilePaymentsSDK.shared.paymentManager.currentPaymentHandle != nil }
+    var hasInFlightPayment: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-readiness-active-sdk-ui-tests") { return true }
+        #endif
+        return hasActivePayment || completed != nil || activeReference != nil || paymentHandle != nil
+    }
     func setup(_ auth: DeviceAuthorization, diagnostics: Bool) async throws {
         guard POSAppDelegate.squareReady, auth.applicationId == POSAppDelegate.applicationID,
               auth.environment == POSAppDelegate.environment else { throw POSError.unavailable("This signed build is not configured for this merchant environment.") }

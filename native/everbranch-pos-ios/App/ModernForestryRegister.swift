@@ -31,9 +31,29 @@ struct EverbranchRegisterView: View {
         .sheet(isPresented: $account) { POSView(onClose: { account = false }, onOpenRegister: { account = false }, screen: .setup, model: model) }
         .onChange(of: model.completedSaleGeneration) { _, _ in basket = false; showRecovery = false }
         .onChange(of: model.signedIn) { _, value in if !value { account = false; basket = false } }
+        .modifier(ReadinessRefreshObserver(model: model, account: $account, basket: $basket))
         #if DEBUG
         .onAppear { if ProcessInfo.processInfo.arguments.contains("--pos-completed-sheet-ui-tests") { showRecovery = false } }
         #endif
+    }
+}
+
+private struct ReadinessRefreshObserver: ViewModifier {
+    @ObservedObject var model: POSViewModel
+    @Binding var account: Bool
+    @Binding var basket: Bool
+    @Environment(\.scenePhase) private var scenePhase
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { model.appActivityChanged(scenePhase == .active) }
+            .onChange(of: scenePhase) { _, phase in model.appActivityChanged(phase == .active) }
+            .onChange(of: account) { _, _ in model.requestReadinessRefresh() }
+            .onChange(of: basket) { _, _ in model.requestReadinessRefresh() }
+            .onChange(of: model.registerLoaded) { _, loaded in if loaded { model.requestReadinessRefresh() } }
+            .onChange(of: model.busy) { _, busy in if !busy { model.drainReadinessRefresh() } }
+            .onChange(of: model.pending) { _, _ in model.drainReadinessRefresh() }
+            .onChange(of: model.sale?.state) { _, _ in model.drainReadinessRefresh() }
     }
 }
 
@@ -85,6 +105,14 @@ private struct NativeRegister: View {
             else if !model.visibleSavedPayments.isEmpty { Button("Payments for review (\(model.visibleSavedPayments.count))") { savedPayments = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
             if model.pending == nil && !model.visibleRecentSales.isEmpty { Button("Recent sales") { recentSales = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
             if let message = model.message { Text(message).font(.footnote).foregroundStyle(PayTheme.muted).padding(.horizontal, 20) }
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") {
+                Text("Readiness setups \(model.simulatedReadinessSetups)").accessibilityIdentifier("readiness-setup-count")
+            }
+            if ProcessInfo.processInfo.arguments.contains("--pos-readiness-delayed-ui-tests") {
+                Button("Enable fixture readiness") { POSCheckoutFixtureProtocol.setReadinessEnabled(true) }
+            }
+            #endif
             if tab == .keypad { keypad }
             else {
                 HStack { Image(systemName: "magnifyingglass"); TextField("Search products", text: $search).focused($searchFocused).submitLabel(.done).onSubmit { searchFocused = false }.textInputAutocapitalization(.never).autocorrectionDisabled() }.padding(14).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20)
@@ -242,6 +270,11 @@ extension POSViewModel {
             quantities = [String(repeating: "c", count: 32): 1]
             POSCheckoutFixtureProtocol.setCatalog(try! JSONSerialization.data(withJSONObject: ["items": rows]))
         }
+        if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") {
+            POSCheckoutFixtureProtocol.setReadinessEnabled(false)
+            selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": ["old_setup"], "setup_blockers": ["old_setup"], "guest_checkout": true]))
+            tapReady = false
+        }
         if ProcessInfo.processInfo.arguments.contains("--pos-saved-payments-ui-tests") {
             var first = PendingSale(workspace: "fixture", register: "fixture"); first.saleID = "fixture-review-1"
             var second = PendingSale(workspace: "fixture", register: "fixture"); second.saleID = "fixture-review-2"
@@ -264,6 +297,14 @@ extension POSViewModel {
             saved.saleID = "fixture-sale"; saved.collectionRequested = true; saved.sdkStarted = true
             pending = saved
             sale = try? decoder.decode(Sale.self, from: JSONSerialization.data(withJSONObject: ["sale_id": "fixture-sale", "request_id": saved.requestID, "state": "unknown", "stock_state": "held", "amount_minor": 763, "currency": "USD", "receipt_available": false, "canonical_confirmation": false, "recovery_required": true, "sdk_attempt_id": UUID().uuidString]))
+        }
+        if ProcessInfo.processInfo.arguments.contains("--pos-readiness-quote-ui-tests") {
+            var saved = PendingSale(workspace: "fixture", register: "fixture")
+            saved.saleID = "fixture-readiness-quote"
+            pending = saved
+            let data = try! JSONSerialization.data(withJSONObject: ["sale_id": "fixture-readiness-quote", "request_id": saved.requestID, "state": "quoted", "stock_state": "held", "amount_minor": 763, "currency": "USD", "receipt_available": false, "canonical_confirmation": false, "recovery_required": false, "collection_ready": true, "inventory_authority": "everbranch", "lines": []])
+            sale = try? decoder.decode(Sale.self, from: data)
+            POSCheckoutFixtureProtocol.setReadinessQuote(data)
         }
     }
 }
