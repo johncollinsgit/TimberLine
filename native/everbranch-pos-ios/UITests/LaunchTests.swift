@@ -76,6 +76,97 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Sign in to checkout"].waitForExistence(timeout: 5))
     }
 
+    func testPendingPaymentRoutesProductAndBundleSelectionsToOriginalStatus() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-recovery-ui-tests"]; app.launch()
+        XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 10))
+        app.buttons["Close"].tap()
+        let search = app.textFields["Search products"]; XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("trio"); app.buttons.matching(identifier: "Done").firstMatch.tap()
+        app.buttons["Add Fictional trio to basket"].tap()
+        XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Add bundle · $18.00"].exists)
+        XCTAssertTrue(app.staticTexts["Payment not confirmed"].exists)
+        app.buttons["Close"].tap()
+        let clear = app.textFields["Search products"]; XCTAssertTrue(clear.waitForExistence(timeout: 5))
+        clear.tap(); clear.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 4) + "Laurel"); app.buttons.matching(identifier: "Done").firstMatch.tap()
+        app.buttons["Choose Laurel & Fig options"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Add Laurel & Fig Wax Melt"].exists)
+        XCTAssertTrue(app.staticTexts["Payment not confirmed"].exists)
+    }
+
+    func testRegisterRefreshesStaleReadinessAndInitializesOnce() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-readiness-ui-tests"]
+        app.launch()
+        let count = app.staticTexts["readiness-setup-count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 10))
+        let ready = NSPredicate(format: "label == 'Readiness setups 1'")
+        expectation(for: ready, evaluatedWith: count)
+        waitForExpectations(timeout: 10)
+        app.buttons["Account & Tap to Pay"].tap()
+        XCTAssertTrue(app.staticTexts["iPhone setup complete"].waitForExistence(timeout: 5))
+        app.buttons["Close"].tap()
+        XCTAssertEqual(count.label, "Readiness setups 1")
+    }
+
+    func testReadinessRefreshDoesNotInitializeDuringUncertainPayment() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-readiness-ui-tests", "--pos-recovery-ui-tests"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Payment not confirmed"].exists)
+        app.buttons["Close"].tap()
+        let count = app.staticTexts["readiness-setup-count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 5))
+        XCTAssertEqual(count.label, "Readiness setups 0")
+        app.buttons["Account & Tap to Pay"].tap()
+        XCTAssertTrue(app.navigationBars["Account & Tap to Pay"].waitForExistence(timeout: 5))
+        app.buttons["Close"].tap()
+        XCTAssertEqual(count.label, "Readiness setups 0")
+        app.buttons["Payment saved · Open status"].tap()
+        XCTAssertTrue(app.staticTexts["Payment not confirmed"].waitForExistence(timeout: 5))
+    }
+
+    func testUnstartedQuoteUsesFreshReadinessWithoutChangingSale() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-readiness-ui-tests", "--pos-readiness-quote-ui-tests"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        let charge = app.buttons["Charge $7.63"]
+        XCTAssertTrue(charge.waitForExistence(timeout: 5))
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: charge)
+        waitForExpectations(timeout: 10)
+        XCTAssertFalse(app.buttons["Set up Tap to Pay"].exists)
+        XCTAssertFalse(app.staticTexts["Payment confirmed"].exists)
+    }
+
+    func testReadinessRefreshDoesNotReinitializeAnActiveSDK() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-readiness-ui-tests", "--pos-readiness-active-sdk-ui-tests"]
+        app.launch()
+        let count = app.staticTexts["readiness-setup-count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 10))
+        let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label != 'Readiness setups 0'"), object: count)
+        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 3), .timedOut)
+        XCTAssertEqual(count.label, "Readiness setups 0")
+    }
+
+    func testResumeRefreshesAfterServerReadinessChanges() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-readiness-ui-tests", "--pos-readiness-delayed-ui-tests"]
+        app.launch()
+        let count = app.staticTexts["readiness-setup-count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 10))
+        XCTAssertEqual(count.label, "Readiness setups 0")
+        app.buttons["Enable fixture readiness"].tap()
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(count.waitForExistence(timeout: 10))
+        expectation(for: NSPredicate(format: "label == 'Readiness setups 1'"), evaluatedWith: count)
+        waitForExpectations(timeout: 10)
+    }
+
     func testPendingPaymentCanCloseBrowseAndOpenAccountWithoutLosingTheAttempt() {
         let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-recovery-ui-tests"]; app.launch()
         XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 10))

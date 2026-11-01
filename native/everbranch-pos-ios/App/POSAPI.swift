@@ -66,11 +66,17 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
     nonisolated(unsafe) private static var catalogData = Data(#"{"items":[]}"#.utf8)
     nonisolated(unsafe) private static var completedSaleData = Data()
     nonisolated(unsafe) private static var completedReceiptData = Data()
+    nonisolated(unsafe) private static var readinessQuoteData = Data()
+    nonisolated(unsafe) private static var readinessEnabled = false
     static func setCatalog(_ data: Data) { lock.lock(); defer { lock.unlock() }; catalogData = data }
     static func setCompletedSale(_ sale: Data, receipt: Data) { lock.lock(); defer { lock.unlock() }; completedSaleData = sale; completedReceiptData = receipt }
+    static func setReadinessQuote(_ sale: Data) { lock.lock(); defer { lock.unlock() }; readinessQuoteData = sale }
+    static func setReadinessEnabled(_ enabled: Bool) { lock.lock(); defer { lock.unlock() }; readinessEnabled = enabled }
     private static func catalog() -> Data { lock.lock(); defer { lock.unlock() }; return catalogData }
     private static func completedSale() -> Data { lock.lock(); defer { lock.unlock() }; return completedSaleData }
     private static func completedReceipt() -> Data { lock.lock(); defer { lock.unlock() }; return completedReceiptData }
+    private static func readinessQuote() -> Data { lock.lock(); defer { lock.unlock() }; return readinessQuoteData }
+    private static func isReadinessEnabled() -> Bool { lock.lock(); defer { lock.unlock() }; return readinessEnabled }
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
@@ -80,10 +86,18 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
             if url.path.hasSuffix("/catalog") { data = Self.catalog() }
             else if url.path.hasSuffix("/discard") { data = Data(#"{"discarded":true}"#.utf8) }
             else if url.path == "/api/mobile/v1/workspaces" { data = Data(#"{"workspaces":[{"id":1,"name":"Fictional","slug":"fixture"}]}"#.utf8) }
-            else if url.path == "/api/mobile/v1/workspaces/fixture/pos/registers" { data = Data(#"{"runtime_id":"fixture","registers":[{"id":"fixture","name":"Fictional register","location":"Fixture","catalog_source":"shopify","environment":"sandbox","blockers":[],"guest_checkout":true}]}"#.utf8) }
+            else if url.path == "/api/mobile/v1/workspaces/fixture/pos/registers" {
+                let blocked = ProcessInfo.processInfo.arguments.contains("--pos-readiness-delayed-ui-tests") && !Self.isReadinessEnabled()
+                let blockers = blocked ? ["old_setup"] : []
+                data = try JSONSerialization.data(withJSONObject: ["runtime_id": "fixture", "registers": [["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": blockers, "setup_blockers": blockers, "guest_checkout": true]]])
+            }
+            else if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") && url.path.hasSuffix("/authorize-device") {
+                data = Data(#"{"application_id":"fixture","access_token":"fixture","location_id":"fixture","merchant_id":"fixture","environment":"sandbox","can_link_apple_account":false}"#.utf8)
+            }
             else if url.path.hasSuffix("/sales/fixture-completed") { data = Self.completedSale() }
             else if url.path.hasSuffix("/sales/fixture-completed/reconcile") { data = Self.completedSale() }
             else if url.path.hasSuffix("/sales/fixture-completed/receipt") { data = Self.completedReceipt() }
+            else if ProcessInfo.processInfo.arguments.contains("--pos-readiness-quote-ui-tests") && url.path.hasSuffix("/sales/fixture-readiness-quote") { data = Self.readinessQuote() }
             else if url.path.hasSuffix("/quotes") {
                 var body = request.httpBody ?? Data()
                 if body.isEmpty, let stream = request.httpBodyStream {
