@@ -203,6 +203,43 @@ final class LaunchTests: XCTestCase {
         XCTAssertFalse(app.buttons["Publish this code"].exists)
     }
 
+    func testLegacyAddonPreservesItsDiscountBehaviorUntilChanged() {
+        for protect in [false, true] {
+            let app = XCUIApplication()
+            app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-addon-rules-ui-tests"] + (protect ? ["--pos-addon-protect-ui-tests"] : [])
+            app.launch()
+            XCTAssertTrue(app.buttons["Account & Tap to Pay"].waitForExistence(timeout: 10)); app.buttons["Account & Tap to Pay"].tap()
+            let manage = app.buttons["Manage checkout rules"]; XCTAssertTrue(manage.waitForExistence(timeout: 5)); app.swipeUp(); manage.tap()
+            let legacy = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Legacy add-on'")).firstMatch
+            XCTAssertTrue(legacy.waitForExistence(timeout: 10)); legacy.tap()
+            let toggle = app.switches["Allow additional discounts"]
+            XCTAssertTrue(toggle.waitForExistence(timeout: 5)); app.swipeUp(); XCTAssertEqual(toggle.value as? String, "1")
+            if protect {
+                toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+                XCTAssertEqual(toggle.value as? String, "0")
+            }
+            app.buttons["Save"].tap()
+            let editorClosed = NSPredicate(format: "exists == false")
+            expectation(for: editorClosed, evaluatedWith: app.navigationBars["Edit rule"])
+            waitForExpectations(timeout: 5)
+            XCTAssertTrue(app.buttons["Add rule"].exists)
+            XCTAssertFalse(app.staticTexts["Could not save. Refresh rules and try again."].exists)
+            app.terminate()
+        }
+    }
+
+    func testNewAddonDefaultsToNoAdditionalDiscounts() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-addon-rules-ui-tests"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Account & Tap to Pay"].waitForExistence(timeout: 10)); app.buttons["Account & Tap to Pay"].tap()
+        let manage = app.buttons["Manage checkout rules"]; XCTAssertTrue(manage.waitForExistence(timeout: 5)); app.swipeUp(); manage.tap()
+        let add = app.buttons["Add rule"]; XCTAssertTrue(add.waitForExistence(timeout: 10)); add.tap()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Type'")).firstMatch.tap(); app.buttons["Add-on price"].tap(); app.swipeUp()
+        let toggle = app.switches["Allow additional discounts"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5)); XCTAssertEqual(toggle.value as? String, "0")
+    }
+
     private func createRestorableBundleQuote(_ app: XCUIApplication) {
         app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-bundle-basket-ui-tests", "--pos-restored-draft-ui-tests", "--pos-restored-draft-reset"]
         app.launch()

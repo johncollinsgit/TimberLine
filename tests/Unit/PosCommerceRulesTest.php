@@ -46,3 +46,29 @@ it('creates, edits and deletes rules while rejecting stale edits', function (): 
     expect(fn () => $service->delete($updated['rules'], 'five_off', $created['version']))->toThrow(PosException::class);
     expect($service->delete($updated['rules'], 'five_off', $updated['version'])['rules'])->toBe([]);
 });
+
+it('defaults new add-ons to protected while preserving legacy rule versions', function (): void {
+    $service = new PosCommerceRules;
+    $rule = ['id' => 'addon', 'name' => 'Add-on', 'kind' => 'addon', 'value' => 800,
+        'scopes' => ['item'], 'channels' => ['in_person'], 'active' => true,
+        'eligible_item_ids' => [str_repeat('a', 32)], 'requires_other_item' => true];
+    $legacy = $service->validate([$rule]);
+    expect($legacy['rules'][0])->not->toHaveKey('allow_additional_discounts');
+    $created = $service->save([], $rule, $service->validate([])['version']);
+    expect($created['rules'][0]['allow_additional_discounts'])->toBeFalse()
+        ->and($created['version'])->not->toBe($legacy['version']);
+    $oldClient = $service->save($created['rules'], $rule, $created['version']);
+    expect($oldClient['rules'][0]['allow_additional_discounts'])->toBeFalse();
+    $fixed = ['id' => 'addon', 'name' => 'Previously fixed', 'kind' => 'fixed', 'value' => 100,
+        'scopes' => ['item'], 'channels' => ['in_person'], 'active' => true];
+    $previous = $service->validate([$fixed]);
+    $converted = $service->save($previous['rules'], $rule, $previous['version']);
+    expect($converted['rules'][0]['allow_additional_discounts'])->toBeFalse();
+    $rule['name'] = 'Edited legacy add-on';
+    $edited = $service->save($legacy['rules'], $rule, $legacy['version']);
+    expect($edited['rules'][0])->not->toHaveKey('allow_additional_discounts');
+    $rule['allow_additional_discounts'] = true;
+    expect($service->save([], $rule, $service->validate([])['version'])['rules'][0]['allow_additional_discounts'])->toBeTrue();
+    $rule['allow_additional_discounts'] = 'false';
+    expect(fn () => $service->validate([$rule]))->toThrow(PosException::class);
+});

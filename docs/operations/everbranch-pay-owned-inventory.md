@@ -260,6 +260,20 @@ staff web, Field and authenticated customer accounts. Rehearse a second tenant's
 shared pool separately before claiming both configurations proven.
 # Tax-location review in the source candidate (November 1)
 
+## Add-on discount protection (November 1 candidate)
+
+Seller administrators manage add-ons under Account → Manage checkout rules.
+New add-ons default to `allow_additional_discounts: false`; the seller can edit
+that setting and review/publish the exact version for a register. An excluded
+add-on unit keeps its promotional price through subsequent fixed or percentage
+item/sale discounts. Regular units of the same variant remain eligible. Tax uses
+the resulting unit amounts. Existing serialized rules without the setting retain
+their prior behavior; an older client's edit preserves an explicit saved setting.
+Modern Forestry's $15/$20 add-ons must be published with additional discounts
+disabled before they are restored to the live offer list. Candle Cash
+and birthday redemption remain separate disabled flows; this rule does not prove
+their redemption allocation or cross-channel safety.
+
 The new administrator tax-location screen and publication gate default off.
 For a show pool, a reviewed event address and end date are checked at quote and
 at collection; a collection-boundary transaction locks and checks the event and

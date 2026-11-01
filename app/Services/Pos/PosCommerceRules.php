@@ -20,12 +20,27 @@ final class PosCommerceRules
         $found = false;
         foreach ($rules as $index => $existing) {
             if ($existing['id'] === $id) {
+                // Older clients omit this field when editing. Never silently
+                // remove an explicitly reviewed protection policy.
+                if (($rule['kind'] ?? null) === 'addon' && ! array_key_exists('allow_additional_discounts', $rule)
+                    && array_key_exists('allow_additional_discounts', $existing)) {
+                    $rule['allow_additional_discounts'] = $existing['allow_additional_discounts'];
+                }
+                if (($rule['kind'] ?? null) === 'addon' && ! array_key_exists('allow_additional_discounts', $rule)
+                    && ($existing['kind'] ?? null) !== 'addon') {
+                    $rule['allow_additional_discounts'] = false;
+                }
                 $rules[$index] = $rule;
                 $found = true;
                 break;
             }
         }
         if (! $found) {
+            // Existing serialized rules retain their old stacking semantics.
+            // New add-ons default to protecting their promotional price.
+            if (($rule['kind'] ?? null) === 'addon' && ! array_key_exists('allow_additional_discounts', $rule)) {
+                $rule['allow_additional_discounts'] = false;
+            }
             $rules[] = $rule;
         }
 
@@ -55,7 +70,7 @@ final class PosCommerceRules
         }
         $ids = [];
         foreach ($rules as $rule) {
-            if (! is_array($rule) || array_diff(array_keys($rule), ['id', 'name', 'kind', 'value', 'scopes', 'channels', 'active', 'eligible_item_ids', 'requires_other_item'])
+            if (! is_array($rule) || array_diff(array_keys($rule), ['id', 'name', 'kind', 'value', 'scopes', 'channels', 'active', 'eligible_item_ids', 'requires_other_item', 'allow_additional_discounts'])
                 || ! is_string($rule['id'] ?? null) || ! preg_match('/^[a-z0-9][a-z0-9_-]{0,63}$/D', $rule['id'])
                 || isset($ids[$rule['id']]) || ! is_string($rule['name'] ?? null)
                 || trim($rule['name']) !== $rule['name'] || mb_strlen($rule['name']) < 1 || mb_strlen($rule['name']) > 80
@@ -71,12 +86,13 @@ final class PosCommerceRules
             if ($rule['kind'] === 'addon') {
                 $items = $rule['eligible_item_ids'] ?? null;
                 if ($rule['scopes'] !== ['item'] || ! is_bool($rule['requires_other_item'] ?? null)
+                    || (array_key_exists('allow_additional_discounts', $rule) && ! is_bool($rule['allow_additional_discounts']))
                     || ! is_array($items) || ! array_is_list($items) || count($items) < 1 || count($items) > 500
                     || count(array_unique($items, SORT_REGULAR)) !== count($items)
                     || count(array_filter($items, fn ($id) => is_string($id) && preg_match('/^[a-f0-9]{32}$/D', $id))) !== count($items)) {
                     throw new PosException('checkout_rules_invalid', 422);
                 }
-            } elseif (array_key_exists('eligible_item_ids', $rule) || array_key_exists('requires_other_item', $rule)) {
+            } elseif (array_key_exists('eligible_item_ids', $rule) || array_key_exists('requires_other_item', $rule) || array_key_exists('allow_additional_discounts', $rule)) {
                 throw new PosException('checkout_rules_invalid', 422);
             }
         }
