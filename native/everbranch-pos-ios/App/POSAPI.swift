@@ -13,6 +13,9 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
         origin = URL(string: Bundle.main.object(forInfoDictionaryKey: "POSAPIOrigin") as? String ?? "https://app.theeverbranch.com")!
         let config = URLSessionConfiguration.ephemeral
         config.httpCookieStorage = nil; config.urlCache = nil; config.timeoutIntervalForRequest = 30
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") { config.protocolClasses = [POSCheckoutFixtureProtocol.self] }
+        #endif
         session = URLSession(configuration: config, delegate: NoRedirects(), delegateQueue: nil)
         token = SecureStore.read("session").flatMap { String(data: $0, encoding: .utf8) }
     }
@@ -55,3 +58,39 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
         return try decoder.decode(T.self, from: data)
     }
 }
+
+#if DEBUG
+/// Intercepts every request in the fictional checkout UI fixture; it cannot contact a processor.
+final class POSCheckoutFixtureProtocol: URLProtocol {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var catalogData = Data(#"{"items":[]}"#.utf8)
+    static func setCatalog(_ data: Data) { lock.lock(); defer { lock.unlock() }; catalogData = data }
+    private static func catalog() -> Data { lock.lock(); defer { lock.unlock() }; return catalogData }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard let url = request.url else { return }
+        do {
+            let data: Data
+            if url.path.hasSuffix("/catalog") { data = Self.catalog() }
+            else if url.path.hasSuffix("/discard") { data = Data(#"{"discarded":true}"#.utf8) }
+            else if url.path.hasSuffix("/quotes") {
+                var body = request.httpBody ?? Data()
+                if body.isEmpty, let stream = request.httpBodyStream {
+                    stream.open(); defer { stream.close() }
+                    var buffer = [UInt8](repeating: 0, count: 1024)
+                    while stream.hasBytesAvailable {
+                        let count = stream.read(&buffer, maxLength: buffer.count)
+                        if count <= 0 { break }; body.append(buffer, count: count)
+                    }
+                }
+                let input = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+                data = try JSONSerialization.data(withJSONObject: ["sale_id": "fixture-sale", "request_id": input["request_id"]!, "state": "quoted", "stock_state": "held", "amount_minor": 2180, "currency": "USD", "receipt_available": false, "canonical_confirmation": false, "recovery_required": false, "collection_ready": true, "inventory_authority": "everbranch", "lines": [["title": "River Birch", "quantity": 1, "subtotal_minor": 2000]]])
+            } else { throw URLError(.unsupportedURL) }
+            client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data); client?.urlProtocolDidFinishLoading(self)
+        } catch { client?.urlProtocol(self, didFailWithError: error) }
+    }
+    override func stopLoading() {}
+}
+#endif

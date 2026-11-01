@@ -202,6 +202,12 @@ extension POSViewModel {
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
         items = (try? decoder.decode(CatalogList.self, from: JSONSerialization.data(withJSONObject: ["items": rows])))?.items ?? []
         selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": [], "custom_amount_enabled": true, "guest_checkout": true]))
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") {
+            signedIn = true; registerLoaded = true; tapReady = true
+            selectedWorkspace = try? decoder.decode(Workspace.self, from: Data(#"{"id":1,"name":"Fictional","slug":"fixture"}"#.utf8))
+            quantities = [String(repeating: "c", count: 32): 1]
+            POSCheckoutFixtureProtocol.setCatalog(try! JSONSerialization.data(withJSONObject: ["items": rows]))
+        }
         if ProcessInfo.processInfo.arguments.contains("--pos-recovery-ui-tests") {
             signedIn = true; registerLoaded = true
             selectedWorkspace = try? decoder.decode(Workspace.self, from: Data(#"{"id":1,"name":"Fictional","slug":"fixture"}"#.utf8))
