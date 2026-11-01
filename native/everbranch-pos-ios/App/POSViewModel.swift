@@ -129,6 +129,12 @@ struct BundleBasketLine: Identifiable {
     @Published var customAmountMinor = 0
     @Published var customDescription = "Custom amount"
     @Published var setupInProgress = false
+    private var appIsActive = true
+    private var readinessRefreshWanted = false
+    private var readinessRefreshRunning = false
+    #if DEBUG
+    @Published var simulatedReadinessSetups = 0
+    #endif
     @Published var receiptContactName = ""
     @Published var receiptContactPhone = ""
     @Published var receiptContactEmail = ""
@@ -270,6 +276,60 @@ struct BundleBasketLine: Identifiable {
         if !tapReady && pending?.collectionRequested != true && !blockers.contains(where: { $0 != "merchant_evidence_stale" }) { await initializeTapToPay() }
     }
     func chooseAvailableProducts() { initialBasket = []; basketIssue = nil; quantities = [:]; bundleComponents = [:]; bundleLines = [] }
+    func appActivityChanged(_ active: Bool) {
+        appIsActive = active
+        if active { requestReadinessRefresh() }
+    }
+
+    func requestReadinessRefresh() {
+        readinessRefreshWanted = true
+        drainReadinessRefresh()
+    }
+
+    func drainReadinessRefresh() {
+        guard readinessRefreshWanted, !readinessRefreshRunning, appIsActive,
+              let workspace = selectedWorkspace, let register = selectedRegister,
+              readinessRefreshAllowed else { return }
+        readinessRefreshWanted = false
+        readinessRefreshRunning = true
+        Task {
+            defer {
+                readinessRefreshRunning = false
+                if readinessRefreshWanted { drainReadinessRefresh() }
+            }
+            do {
+                let response: RegisterList = try await api.request("api/mobile/v1/workspaces/\(workspace.slug)/pos/registers")
+                guard selectedWorkspace?.id == workspace.id, selectedRegister?.id == register.id else { return }
+                guard appIsActive, readinessRefreshAllowed else { readinessRefreshWanted = true; return }
+                guard let current = response.registers.first(where: { $0.id == register.id }) else {
+                    tapReady = false
+                    message = "This register is no longer available. Check your business access."
+                    return
+                }
+                registers = response.registers
+                selectedRegister = current
+                let blockers = current.setupBlockers ?? current.blockers
+                if !tapReady && !blockers.contains(where: { $0 != "merchant_evidence_stale" }) {
+                    perform { await self.initializeTapToPay() }
+                }
+            } catch {
+                guard selectedWorkspace?.id == workspace.id, selectedRegister?.id == register.id else { return }
+                if !tapReady { message = "Couldn't refresh payment readiness. Check your connection and try again." }
+            }
+        }
+    }
+
+    private var readinessRefreshAllowed: Bool {
+        if let pending {
+            guard pending.workspace == selectedWorkspace?.slug, pending.register == selectedRegister?.id,
+                  pending.refundRequestID == nil else { return false }
+        }
+        return POSReadinessRefresh.allowed(signedIn: signedIn, registerLoaded: registerLoaded,
+            hasSelection: selectedWorkspace != nil && selectedRegister != nil, busy: busy || setupInProgress,
+            sdkInFlight: collector.hasInFlightPayment, hasPending: pending != nil,
+            collectionRequested: pending?.collectionRequested == true, sdkStarted: pending?.sdkStarted == true,
+            saleState: sale?.state)
+    }
     func choose(_ workspace: Workspace) {
         guard pending == nil else { return }
         perform {
@@ -293,11 +353,21 @@ struct BundleBasketLine: Identifiable {
         perform { await self.initializeTapToPay() }
     }
     private func initializeTapToPay() async {
-        guard let base, !setupInProgress else { return }
+        guard let base, !setupInProgress, appIsActive, !collector.hasInFlightPayment, pending?.refundRequestID == nil,
+              pending == nil || (pending?.workspace == selectedWorkspace?.slug && pending?.register == selectedRegister?.id),
+              pending == nil || (pending?.collectionRequested == false && pending?.sdkStarted == false && sale?.state == "quoted") else { return }
         setupInProgress = true
         defer { setupInProgress = false }
         do {
             let auth: DeviceAuthorization = try await self.api.request(base + "/authorize-device", method: "POST", body: [:])
+            guard appIsActive, !collector.hasInFlightPayment, self.base == base, pending?.refundRequestID == nil,
+                  pending == nil || (pending?.workspace == selectedWorkspace?.slug && pending?.register == selectedRegister?.id),
+                  pending == nil || (pending?.collectionRequested == false && pending?.sdkStarted == false && sale?.state == "quoted") else { return }
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") {
+                simulatedReadinessSetups += 1; tapReady = true; return
+            }
+            #endif
             try await self.collector.setup(auth, diagnostics: self.diagnostics)
             self.tapReady = true
         } catch {

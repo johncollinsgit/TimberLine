@@ -43,6 +43,17 @@ public struct RegisterList: Decodable, Sendable {
     public let runtimeId: String
     public let squareApplicationId: String?
 }
+
+/// Refreshing configuration must never disturb an active or uncertain payment.
+public enum POSReadinessRefresh {
+    public static func allowed(signedIn: Bool, registerLoaded: Bool, hasSelection: Bool, busy: Bool,
+                               sdkInFlight: Bool, hasPending: Bool, collectionRequested: Bool,
+                               sdkStarted: Bool, saleState: String?) -> Bool {
+        guard signedIn, registerLoaded, hasSelection, !busy, !sdkInFlight else { return false }
+        guard hasPending else { return true }
+        return !collectionRequested && !sdkStarted && saleState == "quoted"
+    }
+}
 public struct CatalogItem: Decodable, Identifiable, Sendable {
     public var id: String { itemId }
     public let itemId: String
