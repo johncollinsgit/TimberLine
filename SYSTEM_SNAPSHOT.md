@@ -22,6 +22,13 @@ Shopify code with exclusive redemption. Phone installation and physical Square
 acceptance were deferred. See `docs/operations/everbranch-pay-birthday-channel-fence.md`
 and `docs/operations/everbranch-pay-processor-and-zoho-review.md`.
 
+Partial-refund review and resolution are separately default-off. The candidate
+staff screen records explicit owner-attested cumulative item/tax allocation,
+and retains an uncertain request on the device for exact retry. Square evidence
+and post-write verification are point-in-time; later provider changes need
+observation. A stale or conflicting saved request cannot yet be cleared safely
+in-app and requires administrator reconciliation. Refunds do not restock goods.
+
 ## Uncharged basket cancellation (November 1 UTC; source candidate)
 
 Cancel of an uncollected quote clears its basket and customer selection, retains other
