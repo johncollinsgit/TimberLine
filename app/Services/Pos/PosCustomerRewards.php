@@ -108,9 +108,25 @@ final class PosCustomerRewards
         if (! hash_equals($refundRevision, $purchases->refundRevision($sale))) {
             throw new PosException('customer_refund_evidence_changed');
         }
-        $review = $this->store->db->transaction(function () use ($sale, $snapshot, $refund, $refunded, $refundRevision, $purchases): bool {
+        $approvedEvidence = null;
+        if (config('pos_live.partial_refund_reward_review_enabled', false) === true
+            && config('pos_live.partial_refund_reward_resolution_enabled', false) === true
+            && $refunded > 0 && $refunded < (int) $sale->amount_minor) {
+            $approvalExists = $this->store->rows('events', (int) $sale->tenant_id)->where('sale_id', $sale->id)
+                ->where('code', 'customer_refund_allocation_approved')->get()->contains(function ($event) use ($refundRevision): bool {
+                    return ($this->store->decrypt($event->details)['local_revision'] ?? null) === $refundRevision;
+                });
+            if ($approvalExists) {
+                // A delayed retry must refresh Square evidence before changing the ledger.
+                $approvedEvidence = app(PosRefundReviewEvidence::class)->inspect($sale);
+            }
+        }
+        $review = $this->store->db->transaction(function () use ($sale, $snapshot, $refund, $refunded, $refundRevision, $purchases, $approvedEvidence): ?string {
             $tenant = (int) $sale->tenant_id;
             $id = (int) $snapshot['customer']['id'];
+            if ($approvedEvidence) {
+                app(\App\Services\Inventory\StockLedger::class)->rows('mutexes', $tenant)->lockForUpdate()->firstOrFail();
+            }
             MarketingProfile::query()->forTenantId($tenant)->whereKey($id)->lockForUpdate()->firstOrFail();
             if ($this->identities->byId($tenant, $id)?->id !== $id) {
                 throw new PosException('customer_identity_review_required');
@@ -118,6 +134,13 @@ final class PosCustomerRewards
             $sale = $this->store->rows('sales', $tenant)->where('id', $sale->id)->lockForUpdate()->firstOrFail();
             if (! hash_equals($refundRevision, $purchases->refundRevision($sale))) {
                 throw new PosException('customer_refund_evidence_changed');
+            }
+            if ($approvedEvidence) {
+                $currentSnapshot = app(PosReceiptCustomers::class)->decorate($sale, app(PosService::class)->snapshot($sale));
+                if (! hash_equals($approvedEvidence['reward_context_hash'], PosRefundReviewEvidence::rewardContextHash($currentSnapshot))
+                    || ! hash_equals($approvedEvidence['reward_context_hash'], PosRefundReviewEvidence::rewardContextHash($snapshot))) {
+                    throw new PosException('customer_refund_evidence_changed');
+                }
             }
             if ($refund) {
                 $seen = $this->store->rows('events', $tenant)->where('sale_id', $sale->id)->where('code', 'customer_refund_confirmed')
@@ -128,10 +151,65 @@ final class PosCustomerRewards
             }
             $terms = $snapshot['customer_rewards'] ?? ['enabled' => false];
             if (! $terms['enabled']) {
-                return false;
+                return null;
             }
             $subtotal = $snapshot['terms']['rewardable_subtotal_minor'] ?? array_sum(array_map(fn ($line) => $line['unit_amount_minor'] * $line['quantity'], $snapshot['sale']['lines']));
-            $remaining = intdiv($subtotal * ((int) $sale->amount_minor - $refunded), (int) $sale->amount_minor);
+            $remaining = null;
+            $resolvedAllocation = false;
+            $approvedRequestId = null;
+            if (config('pos_live.partial_refund_reward_review_enabled', false) !== true && $subtotal > 0 && $refunded > 0
+                && $refunded < (int) $sale->amount_minor && $this->store->rows('events', $tenant)->where('sale_id', $sale->id)
+                    ->whereIn('code', ['customer_refund_allocation_review', 'customer_refund_allocation_approved'])->lockForUpdate()->exists()) {
+                // Never replace a previously reviewed sale with the legacy
+                // estimate simply because the rollout flag was switched off.
+                return 'refund_allocation_unavailable';
+            }
+            if (config('pos_live.partial_refund_reward_review_enabled', false) === true
+                && $subtotal > 0 && $refunded > 0 && $refunded < (int) $sale->amount_minor) {
+                if ($approvedEvidence && ($approvedEvidence['profile_id'] ?? null) === $id
+                    && ($approvedEvidence['refunded_minor'] ?? null) === $refunded
+                    && hash_equals($refundRevision, $approvedEvidence['local_revision'])) {
+                    foreach ($this->store->rows('events', $tenant)->where('sale_id', $sale->id)
+                        ->where('code', 'customer_refund_allocation_approved')->lockForUpdate()->get() as $event) {
+                        $approved = $this->store->decrypt($event->details);
+                        if (($approved['owner_attested'] ?? null) !== true || ($approved['profile_id'] ?? null) !== $id
+                            || ($approved['local_revision'] ?? null) !== $refundRevision || ($approved['snapshot_hash'] ?? null) !== $sale->snapshot_hash
+                            || ($approved['reward_context_hash'] ?? null) !== $approvedEvidence['reward_context_hash']
+                            || ($approved['confirmed_refunded_minor'] ?? null) !== $refunded
+                            || ($approved['review_version'] ?? null) !== $approvedEvidence['review_version']
+                            || ($approved['coverage_fingerprint'] ?? null) !== $approvedEvidence['coverage_fingerprint']) {
+                            continue;
+                        }
+                        $allocation = app(PosRefundAllocation::class)->validate($snapshot['terms'], (int) $sale->amount_minor, $refunded, $approved['allocation']);
+                        if ($allocation !== ($approved['calculated'] ?? null)) {
+                            throw new PosException('refund_allocation_requires_review', 409);
+                        }
+                        $remaining = $allocation['remaining_rewardable_minor'];
+                        $resolvedAllocation = true;
+                        $approvedRequestId = $approved['request_id'] ?? null;
+                        if (! is_string($approvedRequestId) || ! \Illuminate\Support\Str::isUuid($approvedRequestId)) {
+                            throw new PosException('refund_allocation_requires_review', 409);
+                        }
+                        break;
+                    }
+                }
+                if (! $resolvedAllocation) {
+                    // Square's amount-only refund does not identify returned items or tax allocation.
+                    // Preserve confirmed evidence but leave the wallet untouched until allocation is reviewed.
+                    $key = Contract::hash(['allocation_review', $tenant, $sale->id, $id, $refunded, (int) $sale->amount_minor, $subtotal]);
+                    $existing = $this->store->rows('events', $tenant)->where('sale_id', $sale->id)->where('code', 'customer_refund_allocation_review')
+                        ->get()->contains(fn ($e) => ($this->store->decrypt($e->details)['review_key'] ?? null) === $key);
+                    if (! $existing) {
+                        $this->store->event($tenant, $sale->id, 'customer_refund_allocation_review', [
+                            'review_key' => $key, 'profile_id' => $id, 'refunded_minor' => $refunded,
+                            'payment_minor' => (int) $sale->amount_minor, 'rewardable_subtotal_minor' => $subtotal,
+                        ]);
+                    }
+
+                    return 'customer_rewards_refund_allocation_review';
+                }
+            }
+            $remaining ??= self::proportionalRemaining($subtotal, (int) $sale->amount_minor, $refunded);
             $rules = $terms['rules'];
             $desired = 0;
             if ($remaining > 0 && ($rules['enable_order_based_earning'] ?? true)) {
@@ -181,7 +259,7 @@ final class PosCustomerRewards
                 $this->store->event($tenant, $sale->id, 'customer_rewards_shortfall', ['profile_id' => $id,
                     'required_minor' => -$delta, 'available_minor' => (int) round($balance->balance * 100)]);
 
-                return true; // Commit refund evidence; never obstruct the provider refund.
+                return 'customer_rewards_shortfall_review'; // Commit refund evidence; never obstruct the provider refund.
             }
             if ($delta !== 0) {
                 $eventKey = $prefix.':'.substr(Contract::hash(['target_minor' => $desired]), 0, 32);
@@ -189,11 +267,40 @@ final class PosCustomerRewards
                     'everbranch_pay', $eventKey, $delta > 0 ? 'earn' : 'adjust', 'Everbranch Pay purchase or refund');
             }
 
-            return false;
+            if ($resolvedAllocation) {
+                // The provider can change after the pre-write read. Persist a
+                // second verification effect atomically with the ledger change.
+                app(PosService::class)->enqueue($tenant, $sale->id, 'reward_allocation_postcheck_'.substr(hash('sha256', $approvedRequestId), 0, 32), [
+                    'review_version' => $approvedEvidence['review_version'], 'profile_id' => $id,
+                ]);
+            }
+
+            if ($refunded === (int) $sale->amount_minor) {
+                // A full refund determines the remaining eligible amount exactly; retire only this
+                // sale's prior allocation-only reviews after the reward adjustment succeeds.
+                $superseded = $this->store->rows('outbox', $tenant)->where('sale_id', $sale->id)
+                    ->whereIn('state', ['review', 'retry'])->where('error_code', 'customer_rewards_refund_allocation_review')
+                    ->update(['state' => 'completed', 'completed_at' => now(), 'error_code' => null]);
+                if ($superseded) {
+                    $this->store->event($tenant, $sale->id, 'customer_refund_review_superseded', ['profile_id' => $id, 'refunded_minor' => $refunded]);
+                }
+            }
+
+            return null;
         }, 3);
         if ($review) {
-            throw new PosException('customer_rewards_shortfall_review');
+            throw new PosException($review);
         }
+    }
+
+    /** Amount-only refunds cannot identify returned units; this is a proportional estimate. */
+    public static function proportionalRemaining(int $subtotal, int $payment, int $refunded): int
+    {
+        if ($subtotal < 0 || $payment < 1 || $refunded < 0 || $refunded > $payment) {
+            throw new PosException('customer_refund_evidence_changed');
+        }
+
+        return intdiv($subtotal * ($payment - $refunded), $payment);
     }
 
     private function minor(mixed $amount): int

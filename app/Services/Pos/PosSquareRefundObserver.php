@@ -43,6 +43,11 @@ final class PosSquareRefundObserver
                     $this->store->event($tenant, $sale->id, 'square_refund_observed', $details);
                 }
                 app(PosService::class)->enqueue($tenant, $sale->id, 'customer_refunds_'.substr(hash('sha256', $id), 0, 40), []);
+                if ($this->store->db->getSchemaBuilder()->hasTable('pos_candle_cash_reservations')
+                    && $this->store->db->table('pos_candle_cash_reservations')->where('runtime_id', $this->store->runtime())
+                        ->where('tenant_id', $tenant)->where('sale_id', $sale->id)->exists()) {
+                    app(PosService::class)->enqueue($tenant, $sale->id, 'reward_refunds_'.substr(hash('sha256', $id), 0, 40), []);
+                }
             }, 3);
         }
     }

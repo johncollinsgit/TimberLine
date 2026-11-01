@@ -55,12 +55,19 @@ final class PosCustomerDirectory
             ->map(fn ($p) => $this->summary($p))->values()->all(), 'has_more' => $found->count() > 20];
     }
 
+    /** Explicitly selected customer only; this reads existing source records and never links identities. */
+    public function commerce(string $register, int $profileId): array
+    {
+        $scope = $this->access->register($register, 'catalog');
+        $profile = $this->profile($scope['tenant_id'], $profileId);
+
+        return ['customer' => $this->summary($profile),
+            'commerce' => app(\App\Services\Marketing\CustomerCommerceSnapshotService::class)->forProfile($profile, $scope['tenant_id'])];
+    }
+
     public function create(string $register, array $input): array
     {
         $scope = $this->access->register($register, 'quote');
-        if (! in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true)) {
-            throw new PosException('customer_admin_required', 403);
-        }
         $key = $this->requestKey($scope, $input['request_id']);
         $values = ['first_name' => trim($input['first_name']), 'last_name' => trim($input['last_name'] ?? ''),
             'email' => filled($input['email'] ?? null) ? Str::lower(trim($input['email'])) : null,
@@ -73,6 +80,9 @@ final class PosCustomerDirectory
         return $this->store->db->transaction(function () use ($scope, $key, $values, $hash): array {
             // Tenant admission also serializes identical contacts created at different registers.
             Tenant::query()->whereKey($scope['tenant_id'])->lockForUpdate()->firstOrFail();
+            if (! app(PosCustomerEnrollment::class)->canCreateCustomer($scope)) {
+                throw new PosException('customer_admin_required', 403);
+            }
             $prior = $this->creation($scope, $key);
             if ($prior) {
                 if (! hash_equals($prior['hash'], $hash)) {

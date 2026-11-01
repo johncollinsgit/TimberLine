@@ -66,4 +66,11 @@ final class ContractsTests: XCTestCase {
         let text = String(data: bytes, encoding: .utf8)!
         XCTAssertFalse(text.contains("accessToken")); XCTAssertFalse(text.contains("customer"))
     }
+    func testRecoveryJournalReadsLegacyStateAndRetainsAttemptMarker() throws {
+        let legacy = Data(#"{"workspace":"fixture","register":"counter","requestID":"request","collectionRequested":false,"sdkStarted":false}"#.utf8)
+        var pending = try JSONDecoder().decode(PendingSale.self, from: legacy)
+        XCTAssertNil(pending.collectionAttempted)
+        pending.collectionAttempted = true
+        XCTAssertEqual(try JSONDecoder().decode(PendingSale.self, from: JSONEncoder().encode(pending)).collectionAttempted, true)
+    }
 }

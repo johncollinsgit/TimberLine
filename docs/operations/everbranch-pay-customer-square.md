@@ -250,3 +250,115 @@ Only a selected, authorized Modern Forestry register opens that merchant's photo
 catalog. Other businesses use the same native customer/basket controls with their
 own register items. Restoring a previous register rechecks current membership and
 device assignment. No business selection enables collection or publishing.
+
+### Candle Cash payment safety candidate
+
+The register's owner-only reward-policy API can read the tenant's current
+policy and save an optimistic, tenant-scoped in-person draft when the separate
+management flag is enabled. The initial disabled $5 draft is an example, not
+a published policy. Channel and refund behavior are currently fixed to
+in-person and full-refund restoration with partial-refund review. This API
+does not edit the online rewards program or the shared wallet ledger.
+
+`POS_PARTIAL_REFUND_REWARD_REVIEW_ENABLED` defaults off. With it off,
+sales without earlier allocation-review evidence keep their prior proportional
+partial-refund adjustment; that estimate cannot identify which merchandise or
+tax was refunded. A sale already in allocation review remains in review when
+the flag is turned off; queued effects cannot fall back to the estimate. With it
+on, confirmed amount-only partial refunds leave earning
+unchanged and enter review. The Square refund itself is not blocked. A complete
+item-allocation and staff review-resolution flow does not yet exist, so leave
+this flag off until that flow is implemented and verified. Full-refund and
+spent-credit handling continue to use the original purchase evidence.
+If an effect already entered review while the flag was on, switching it off
+does not automatically retry or close that review; a later verified full refund
+may supersede it, otherwise it remains for manual review.
+
+The separately gated `POS_PARTIAL_REFUND_REWARD_RESOLUTION_ENABLED` also defaults
+off. Its candidate API is scoped to an assigned owner/admin register: GET
+`/sales/{sale}/refund-rewards-review` obtains fresh Square coverage and returns
+an evidence version, original lines and total tax. It also returns the last
+`previous_approved_allocation` (or null), and `previous_allocation_state`
+(`none`, `completed`, `review`, `retry`, or `verification_pending`). The
+version incorporates the validated approval history; a concurrent approval
+invalidates an earlier version. This is an owner-attested selection, including
+when its state needs review. POST to the same path accepts
+that exact version, an idempotency UUID, a reason, explicit confirmation and a
+cumulative allocation of whole frozen units plus a tax amount. The owner is
+attesting the allocation; Square confirms the refund amounts, not the items or
+tax selected. An allocation must match completed linked Square refund IDs and
+their total exactly. Unknown/pending refunds, incomplete coverage, unlinked or
+off-platform reimbursements, older receipts without sufficient frozen unit
+prices, fractional unit refunds and changed evidence remain review-only.
+Prior approved units and tax cannot be removed by a later cumulative allocation.
+No stock is returned or changed by this review.
+
+The adjustment uses the original frozen earning rules and the existing ledger.
+Spent-credit shortfalls remain review work and do not block the payment refund.
+An approved adjustment queues a durable post-write Square check; GET
+`/sales/{sale}/refund-rewards-review/status` reports pending, review or
+completed and labels verification as point-in-time. Square Dashboard can still
+change after any check. Later changes require the normal webhook/original-payment
+reconciliation and another review; completed checks do not guarantee future
+coverage. Routine reconciliation excludes completed sales, so verify the
+separately scheduled bounded `pos:reconcile --all` audit and alert delivery
+before any activation. The compact owner UI and end-to-end physical acceptance
+are not yet proven. Keep both flags off until independent security/concurrency
+review, provider acceptance and operational review handling are complete.
+
+Publication is hard-disabled regardless of feature flags. A policy recheck
+currently happens before the durable payment-start claim, so publishing a
+different cap concurrently could race a payment. Before publication can be
+implemented, serialize policy changes and the native payment handoff through
+the same durable admission boundary, recheck the fresh tenant program, policy
+and register review while holding the necessary database locks, account for
+all other program writers, and verify both ordering outcomes with real MySQL
+concurrency and fake-provider tests. Preserve already initiated or uncertain
+payments and held rewards. This work does not enable customer redemption.
+
+The source candidate adds a durable, non-expiring claim that lets exactly one
+collection start or unstarted cancellation win for the original sale. Discard,
+expiry and online-order stock preemption use the same fence when its internal
+gate is enabled. A second start never receives a new descriptor. If a start
+fails before a payment operation is recorded, retain the claim and route the
+original sale to recovery; do not issue a replacement charge or return held
+rewards on the assumption that a cache lease has expired.
+
+An unstarted cancellation records a retryable reward-release effect atomically
+with its claim. Confirmed payment and refund effects reconcile the same shared
+Candle Cash wallet once. Unknown outcomes keep the hold, and partial refunds
+require allocation review. Customer merges are blocked while a hold is active
+or a spent reward can still be restored, and a pending merge prevents a new
+hold. Original POS authorization and reservation records remain immutable.
+
+These paths are source work and stay default-off. They do not provide a live
+checkout redemption. The candidate includes a freshly authenticated Shopify
+subject linking to a newly created, separate profile only; email-derived or
+otherwise ambiguous existing wallet mappings still require independent proof and
+review. Its signed attestation fails closed on conflict, customer merge or app
+key rotation. The proof freezes the signed account link and original profile;
+hold creation and collection recheck that link, and a later conflicting import
+cannot redirect the existing hold to the import's profile. Existing import and
+webhook writers do not all share a subject lock or canonical uniqueness key,
+so they can still create a conflicting mapping after a check. This remains a
+rollout blocker: implement a bounded, durable canonical-subject fence across
+all writers before claiming one unified customer identity or enabling rewards.
+The proposed QR is a two-minute, one-use bearer authorization for
+one purchase up to the disclosed, versioned cap. It is not approval of a
+specific sale or amount. The customer app still needs a clear consent/disclosure
+screen and physical acceptance. Quote, customer link, proof and wallet hold are
+inserted atomically; total-zero sales still require a separate verified
+zero-tender lifecycle. No other tenant's account provider is proven yet.
+
+Interrupted starts remain in review rather than being automatically released.
+The journal refuses caller-owned transactions because a provider might be
+contacted after its methods return. A safe recoverable handoff therefore needs a
+new, narrowly scoped native-only journal operation that owns one database
+transaction, serializes its admission and the original sale/start claim,
+atomically records the original payment operation and descriptor issuance, and
+performs no provider calls. Cancellation must win under the same locks before
+that handoff, and every preparation path must recheck the cancelled sale. Test
+the real MySQL races, lost responses and original-only recovery before enabling.
+Coordinated rollout must ensure every worker enforces the fence before any
+reward sale is admitted; never turn it off while a fenced sale or hold remains
+unresolved. Existing uncertain and presented payments remain held for recovery.

@@ -166,15 +166,51 @@ it('freezes canonical identity and rejects a replay selecting someone else', fun
     $this->postJson($this->base.'/quotes', $this->selection)->assertConflict();
 });
 
+it('shows an explicitly selected customer’s connected purchase summary and balance only within the assigned tenant', function (): void {
+    \Illuminate\Support\Facades\Route::get('/api/mobile/v1/workspaces/{tenant}/pos/registers/{register}/fixture-customer-commerce/{profile}',
+        fn (string $tenant, string $register, int $profile) => response()->json(app(\App\Services\Pos\PosCustomerDirectory::class)->commerce($register, $profile)))
+        ->middleware(['auth:sanctum', 'mobile.tenant', 'abilities:mobile:read,payments:read']);
+    $sale = customerPosConfirm($this, ['first_order_reward_amount' => 5.25]);
+    app(\App\Services\Pos\PosCustomerRewards::class)->apply($sale);
+    $order = \App\Models\Order::create(['tenant_id' => $this->tenant->id, 'source' => 'shopify',
+        'shopify_order_id' => '9001', 'shopify_store_key' => 'fixture_online', 'ordered_at' => now()->subDay(),
+        'total_price' => '25.00', 'currency_code' => 'USD', 'attribution_meta' => ['customer_commerce' => [
+            'financial_status' => 'paid', 'tenant_id' => $this->tenant->id, 'shopify_order_id' => '9001',
+            'store_key' => 'fixture_online', 'source_name' => 'web', 'total_price' => '25.00', 'currency' => 'USD',
+        ]]]);
+    \App\Models\MarketingProfileLink::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $this->profile->id,
+        'source_type' => 'order', 'source_id' => (string) $order->id]);
+    $transactions = \App\Models\CandleCashTransaction::count();
+    $links = \App\Models\MarketingProfileLink::count();
+    $url = $this->base.'/fixture-customer-commerce/'.$this->profile->id;
+    $view = $this->getJson($url)->assertOk()->json();
+    expect($view['customer']['id'])->toBe($this->profile->id)
+        ->and($view['commerce']['customer_id'])->toBe($this->profile->id)
+        ->and($view['commerce']['purchases'])->toHaveCount(2)
+        ->and(collect($view['commerce']['purchases'])->pluck('channel')->sort()->values()->all())->toBe(['in_person', 'online'])
+        ->and($view['commerce']['rewards']['balance'])->toBe('5.25')
+        ->and(\App\Models\CandleCashTransaction::count())->toBe($transactions)
+        ->and(\App\Models\MarketingProfileLink::count())->toBe($links);
+    $other = Tenant::create(['name' => 'Other', 'slug' => 'other-'.Str::lower(Str::random(8)), 'status' => 'active']);
+    $foreign = \App\Models\MarketingProfile::create(['tenant_id' => $other->id, 'first_name' => 'Other person']);
+    $this->getJson($this->base.'/fixture-customer-commerce/'.$foreign->id)->assertNotFound();
+    $this->withHeader('X-Pos-Device', 'wrong-device')->getJson($url)->assertNotFound();
+});
+
 it('posts decimal rewards once and reverses only the original sale earning', function (): void {
+    config(['pos_live.partial_refund_reward_review_enabled' => true]);
     $sale = customerPosConfirm($this, ['first_order_reward_amount' => 5.25]);
     $service = app(\App\Services\Pos\PosCustomerRewards::class);
     $service->apply($sale);
     $service->apply($sale);
     expect(\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->first()->balance)->toBe(5.25);
     $partial = customerPosRefund($this, $sale, 'refund-one', 500);
-    $service->apply($sale, $partial);
-    expect(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(1);
+    expect(fn () => $service->apply($sale, $partial))->toThrow(\App\Services\Pos\PosException::class, 'customer_rewards_refund_allocation_review');
+    expect(fn () => $service->apply($sale, $partial))->toThrow(\App\Services\Pos\PosException::class, 'customer_rewards_refund_allocation_review');
+    expect(\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->first()->balance)->toBe(5.25)
+        ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(1)
+        ->and($this->store->rows('events', $this->tenant->id)->where('sale_id', $sale->id)->where('code', 'customer_refund_allocation_review')->count())->toBe(1)
+        ->and(app(\App\Services\Pos\PosCustomerPurchases::class)->confirmedRefunds($sale))->toBe(500);
     $full = customerPosRefund($this, $sale, 'refund-two', 570);
     $service->apply($sale, $full);
     $service->apply($sale, $partial);
@@ -186,14 +222,40 @@ it('posts decimal rewards once and reverses only the original sale earning', fun
     expect($view['purchases'])->toHaveCount(1)->and($view['purchases'][0])->toMatchArray(['channel' => 'in_person', 'status' => 'refunded', 'refunded_minor' => 1070]);
 });
 
-it('recalculates the approved highest spend tier after a partial refund', function (): void {
+it('holds the approved spend-tier earning for review after an amount-only partial refund', function (): void {
+    config(['pos_live.partial_refund_reward_review_enabled' => true]);
     $sale = customerPosConfirm($this, ['first_order_reward_amount' => null,
         'spend_threshold_rewards' => [['spend_dollars' => 5, 'reward_dollars' => 1], ['spend_dollars' => 10, 'reward_dollars' => 3]]]);
     $service = app(\App\Services\Pos\PosCustomerRewards::class);
     $service->apply($sale);
     expect(\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->first()->balance)->toBe(3.0);
-    $service->apply($sale, customerPosRefund($this, $sale, 'partial-refund', 300));
-    expect(\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->first()->balance)->toBe(1.0);
+    $partial = customerPosRefund($this, $sale, 'partial-refund', 300);
+    expect(fn () => $service->apply($sale, $partial))->toThrow(\App\Services\Pos\PosException::class, 'customer_rewards_refund_allocation_review');
+    expect(\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->first()->balance)->toBe(3.0)
+        ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(1)
+        ->and(app(\App\Services\Pos\PosCustomerPurchases::class)->confirmedRefunds($sale))->toBe(300);
+    $service->apply($sale, customerPosRefund($this, $sale, 'remaining-refund', 770));
+    expect(\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->first()->balance)->toBe(0.0)
+        ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(2);
+});
+
+it('preserves proportional partial-refund earning adjustments when the new review flag is off', function (): void {
+    config(['pos_live.partial_refund_reward_review_enabled' => false]);
+    $sale = customerPosConfirm($this, ['first_order_reward_amount' => null,
+        'spend_threshold_rewards' => [['spend_dollars' => 5, 'reward_dollars' => 1], ['spend_dollars' => 10, 'reward_dollars' => 3]]]);
+    $service = app(\App\Services\Pos\PosCustomerRewards::class);
+    $service->apply($sale);
+    expect(\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->first()->balance)->toBe(3.0);
+    $partial = customerPosRefund($this, $sale, 'partial-refund', 300);
+    $service->apply($sale, $partial);
+    $service->apply($sale, $partial);
+    expect(\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->first()->balance)->toBe(1.0)
+        ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(2)
+        ->and(app(\App\Services\Pos\PosCustomerPurchases::class)->confirmedRefunds($sale))->toBe(300)
+        ->and($this->store->rows('events', $this->tenant->id)->where('sale_id', $sale->id)->where('code', 'customer_refund_allocation_review')->count())->toBe(0);
+    $service->apply($sale, customerPosRefund($this, $sale, 'remaining-refund', 770));
+    expect(\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->first()->balance)->toBe(0.0)
+        ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(3);
 });
 
 it('retains confirmed refund evidence when spent rewards need review', function (): void {

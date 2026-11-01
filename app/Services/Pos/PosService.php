@@ -6,6 +6,7 @@ namespace App\Services\Pos;
 
 use App\Services\PaymentsCore\Contract;
 use App\Services\PaymentsCore\MerchantBinding;
+use App\Services\PaymentsCore\NativeAtomicPaymentJournal;
 use App\Services\PaymentsCore\PaymentCore;
 use App\Services\PaymentsCore\PaymentJournal;
 use App\Services\PaymentsCore\SaleSnapshot;
@@ -40,6 +41,7 @@ final class PosService
             $rows[] = ['id' => $register->id, 'name' => $register->name, 'location' => $register->location_name,
                 'catalog_source' => $register->catalog_source, 'environment' => $scope['connection']->environment,
                 'can_create_customers' => in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
+                'can_manage_checkout_rules' => ! config('enterprise.runtime') && in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
                 'can_manage_inventory' => app(StockPosCommerce::class)->enabled($register) && in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
                 'guest_checkout' => app(StockPosCommerce::class)->enabled($register),
                 'custom_amount_enabled' => app(StockPosCommerce::class)->enabled($register) && ($this->store->decrypt($register->configuration)['custom_amount_enabled'] ?? false) === true,
@@ -98,7 +100,21 @@ final class PosService
     {
         $scope = $this->access->register($register, 'quote');
         $binding = $this->access->binding($scope);
-        $hash = Contract::hash([$binding->snapshot(), $scope['actor_id'], $input]);
+        $hashInput = $input;
+        $redemption = $input['reward_redemption'] ?? null;
+        $proof = null;
+        if ($redemption !== null) {
+            if (! is_array($redemption) || ! is_string($redemption['proof'] ?? null)
+                || ! is_int($redemption['amount_minor'] ?? null) || $redemption['amount_minor'] < 1) {
+                throw new PosException('reward_authorization_invalid', 422);
+            }
+            $proof = $redemption['proof'];
+            // Only a hash enters the immutable request fingerprint. The QR
+            // bearer is never persisted in the quote or logged.
+            $hashInput['reward_redemption']['proof'] = hash('sha256', $proof);
+            unset($input['reward_redemption']);
+        }
+        $hash = Contract::hash([$binding->snapshot(), $scope['actor_id'], $hashInput]);
         $old = $this->store->rows('sales', $scope['tenant_id'])->where('request_id', $input['request_id'])->first();
         if ($old) {
             if (! hash_equals($this->snapshot($old)['input_hash'], $hash)) {
@@ -112,6 +128,32 @@ final class PosService
             throw new PosException('tax_review_expired', 503);
         }
         $stockCore = app(StockPosCommerce::class)->enabled($scope['register']);
+        if ($stockCore) {
+            app(PosTaxLocations::class)->assertCurrentReview($scope);
+        }
+        if ($redemption !== null) {
+            if (! $stockCore || config('pos_live.in_person_rewards_enabled', false) !== true
+                || config('pos_live.durable_start_claims_enabled', false) !== true) {
+                throw new PosException('in_person_rewards_unavailable', 503);
+            }
+            $authorization = app(PosRewardCustomerProof::class)->preview($scope['tenant_id'], $proof);
+            $policy = app(PosRewardRedemptionSettings::class)->forRegister($scope);
+            if ((int) $authorization->cap_minor < $redemption['amount_minor']
+                || ! hash_equals($policy['version'], $authorization->policy_version)
+                || (isset($input['customer_profile_id']) && $input['customer_profile_id'] !== (int) $authorization->marketing_profile_id)) {
+                throw new PosException('reward_authorization_invalid', 403);
+            }
+            $input['customer_profile_id'] = (int) $authorization->marketing_profile_id;
+            $scope['reward_redemption'] = ['profile_id' => (int) $authorization->marketing_profile_id,
+                'amount_minor' => $redemption['amount_minor'], 'policy_version' => $policy['version'],
+                'refund_policy' => $policy['refund_policy']];
+        }
+        if (! $stockCore && count(array_column($input['items'] ?? [], 'item_id')) !== count(array_unique(array_column($input['items'] ?? [], 'item_id')))) {
+            throw new PosException('duplicate_catalog_item', 422);
+        }
+        if (! $stockCore && (! empty($input['discounts']) || ! empty($input['addons']))) {
+            throw new PosException('checkout_offers_not_supported', 422);
+        }
         if (! $stockCore && ($settings['customer_required'] ?? $scope['register']->catalog_source === 'shopify') && empty($input['customer_profile_id'])) {
             throw new PosException('customer_selection_required', 422);
         }
@@ -128,7 +170,7 @@ final class PosService
             'sale' => $sale->snapshot(), 'configuration' => $settings];
         $claim = $terms['source'] === 'website_invoice' ? Contract::hash(['invoice', $terms['source_order_id'], $terms['invoice_hash']]) : null;
         try {
-            $this->store->db->transaction(function () use ($scope, $input, $register, $id, $sale, $snapshot, $claim, $terms, $customer): void {
+            $this->store->db->transaction(function () use ($scope, $input, $register, $id, $sale, $snapshot, $claim, $terms, $customer, $redemption, $proof): void {
                 $this->store->rows('sales', $scope['tenant_id'])->insert($this->store->values($scope['tenant_id'], [
                     'id' => $id, 'register_id' => $register, 'location_id' => $scope['register']->location_id,
                     'actor_id' => $scope['actor_id'], 'request_id' => $input['request_id'], 'payment_request_id' => (string) Str::uuid(),
@@ -139,6 +181,10 @@ final class PosService
                 ]));
                 if ($customer) {
                     $this->customers->linkSale($scope, $id, $customer['id']);
+                }
+                if ($redemption !== null) {
+                    $reservation = new PosCandleCashReservation($this->store, app(PosVerifiedRewardReservationAuthority::class), app(PosRewardRedemptionPolicy::class));
+                    $reservation->reserve($scope['tenant_id'], $id, $redemption['amount_minor'], $proof);
                 }
             }, 3);
         } catch (QueryException $error) {
@@ -172,62 +218,113 @@ final class PosService
                 // Never issue another native collection descriptor on an HTTP retry.
                 return $this->inspect($register, $id);
             }
-            $scope = $this->refreshStaleMerchant($scope, (int) $sale->amount_minor);
-            $blockers = $this->readiness->blockers($scope['register'], $scope['connection'], (int) $sale->amount_minor, $scope);
-            if ($blockers) {
-                throw new PosException('collection_not_ready', 503);
+            if (config('pos_live.durable_start_claims_enabled', false) !== true && $this->hasDurableClaim($scope['tenant_id'], $id)) {
+                throw new PosException('payment_recovery_required');
             }
-            if (strtotime($sale->expires_at) <= time() || $sale->state !== 'quoted') {
-                throw new PosException('quote_expired');
-            }
-            if (! hash_equals($binding->fingerprint(), $this->access->binding($scope)->fingerprint())) {
-                throw new PosException('merchant_binding_changed');
-            }
-            if (isset($snapshot['customer']['id'])) {
-                $currentCustomer = $this->customers->freeze($scope, (int) $snapshot['customer']['id']);
-                if ($currentCustomer['id'] !== $snapshot['customer']['id'] || ($currentCustomer['shopify_customer_id'] ?? null) !== ($snapshot['customer']['shopify_customer_id'] ?? null)) {
-                    throw new PosException('customer_selection_changed');
+            $collect = function () use ($scope, $id, $sale, $snapshot, $binding): array {
+                $scope = $this->refreshStaleMerchant($scope, (int) $sale->amount_minor);
+                $blockers = $this->readiness->blockers($scope['register'], $scope['connection'], (int) $sale->amount_minor, $scope);
+                if ($blockers) {
+                    throw new PosException('collection_not_ready', 503);
                 }
-            }
-            if (($snapshot['customer_rewards']['enabled'] ?? false) && ($this->rewards->policy($scope['tenant_id'])['version'] ?? null) !== $snapshot['customer_rewards']['version']) {
-                throw new PosException('customer_rewards_policy_changed');
-            }
-            $this->access->assertAllowed($binding, 'collect');
-            if ($snapshot['terms']['source'] === StockPosCommerce::VERSION && ! app(StockPosCommerce::class)->collectionReady($sale, $snapshot)) {
-                throw new PosException('stock_availability_update_pending');
-            }
-            if ($snapshot['terms']['source'] === StockPosCommerce::VERSION) {
-                app(StockPosCommerce::class)->prepare($scope, $sale, $snapshot);
-                app(StockPosCommerce::class)->lockCollection($scope, $sale, $snapshot);
-                app(PosDevelopmentAcceptance::class)->claim($scope, $sale, $snapshot);
-            } elseif ($snapshot['terms']['source'] === 'shopify') {
-                app(PosDevelopmentAcceptance::class)->claim($scope, $sale, $snapshot);
-                $this->square->verify($scope['connection']);
-                $this->shopify->prepare($scope, $sale, $snapshot);
-            } else {
-                app(PosDevelopmentAcceptance::class)->claim($scope, $sale, $snapshot);
-                $this->square->verify($scope['connection']);
-                $this->native->prepare($sale, $snapshot);
-            }
-            $this->access->assertAllowed($binding, 'collect');
-            $row = $this->core()->start($binding, new SaleSnapshot($id, 'usd', $snapshot['sale']['lines']), $sale->payment_request_id);
-            $this->store->rows('sales', $scope['tenant_id'])->where('id', $id)->update(['attempt_id' => $row['id'], 'state' => $row['state']]);
-            $this->access->assertAllowed($binding, 'collect');
-            $claimed = $this->store->rows('sales', $scope['tenant_id'])->where('id', $id)->whereNull('descriptor_issued_at')->update(['descriptor_issued_at' => now()]);
-            if ($claimed !== 1) {
-                throw new PosException('recovery_required');
-            }
-            $credentials = $this->store->decrypt($scope['connection']->credentials);
-            $this->store->event($scope['tenant_id'], $id, 'native_descriptor_issued');
+                if (strtotime($sale->expires_at) <= time() || $sale->state !== 'quoted') {
+                    throw new PosException('quote_expired');
+                }
+                if (! hash_equals($binding->fingerprint(), $this->access->binding($scope)->fingerprint())) {
+                    throw new PosException('merchant_binding_changed');
+                }
+                if ($snapshot['terms']['source'] === StockPosCommerce::VERSION) {
+                    $current = $this->store->decrypt($scope['register']->configuration);
+                    foreach (['tax_location_review', 'tax_valid_until', 'shopify.tax_address'] as $field) {
+                        if (! hash_equals(Contract::hash([data_get($snapshot['configuration'], $field)]), Contract::hash([data_get($current, $field)]))) {
+                            throw new PosException('checkout_settings_changed');
+                        }
+                    }
+                    app(PosTaxLocations::class)->assertCurrentReview($scope);
+                }
+                if (isset($snapshot['customer']['id'])) {
+                    $currentCustomer = $this->customers->freeze($scope, (int) $snapshot['customer']['id']);
+                    if ($currentCustomer['id'] !== $snapshot['customer']['id'] || ($currentCustomer['shopify_customer_id'] ?? null) !== ($snapshot['customer']['shopify_customer_id'] ?? null)) {
+                        throw new PosException('customer_selection_changed');
+                    }
+                }
+                if (($snapshot['customer_rewards']['enabled'] ?? false) && ($this->rewards->policy($scope['tenant_id'])['version'] ?? null) !== $snapshot['customer_rewards']['version']) {
+                    throw new PosException('customer_rewards_policy_changed');
+                }
+                $this->access->assertAllowed($binding, 'collect');
+                if ($snapshot['terms']['source'] === StockPosCommerce::VERSION && ! app(StockPosCommerce::class)->collectionReady($sale, $snapshot)) {
+                    throw new PosException('stock_availability_update_pending');
+                }
+                // A cache lease can expire or be process-local. The durable
+                // sale lock decides exactly one start versus cancellation.
+                $rewardTerms = $snapshot['terms']['pos_candle_cash'] ?? null;
+                if ($rewardTerms !== null && (config('pos_live.in_person_rewards_enabled', false) !== true
+                    || config('pos_live.durable_start_claims_enabled', false) !== true || ! is_array($rewardTerms))) {
+                    throw new PosException('reward_payment_fence_not_ready', 503);
+                }
+                if ($rewardTerms !== null) {
+                    $policy = app(PosRewardRedemptionSettings::class)->forRegister($scope);
+                    if (! is_string($rewardTerms['policy_version'] ?? null) || ! hash_equals($policy['version'], $rewardTerms['policy_version'])) {
+                        throw new PosException('in_person_rewards_policy_changed', 409);
+                    }
+                }
+                $nativeClaim = null;
+                if (config('pos_live.durable_start_claims_enabled', false) === true) {
+                    if ($snapshot['terms']['source'] === StockPosCommerce::VERSION) {
+                        if (! $this->journal instanceof NativeAtomicPaymentJournal) {
+                            throw new PosException('native_atomic_handoff_unavailable', 503);
+                        }
+                        $nativeClaim = app(PosPaymentStartClaim::class)->beginNativePreparation($scope['tenant_id'], $id, $rewardTerms);
+                    } else {
+                        app(PosPaymentStartClaim::class)->beginCollection($scope['tenant_id'], $id, $rewardTerms);
+                    }
+                }
+                if ($snapshot['terms']['source'] === StockPosCommerce::VERSION) {
+                    app(StockPosCommerce::class)->prepare($scope, $sale, $snapshot);
+                    app(StockPosCommerce::class)->lockCollection($scope, $sale, $snapshot);
+                    app(PosDevelopmentAcceptance::class)->claim($scope, $sale, $snapshot);
+                } elseif ($snapshot['terms']['source'] === 'shopify') {
+                    app(PosDevelopmentAcceptance::class)->claim($scope, $sale, $snapshot);
+                    $this->square->verify($scope['connection']);
+                    $this->shopify->prepare($scope, $sale, $snapshot);
+                } else {
+                    app(PosDevelopmentAcceptance::class)->claim($scope, $sale, $snapshot);
+                    $this->square->verify($scope['connection']);
+                    $this->native->prepare($sale, $snapshot);
+                }
+                $this->access->assertAllowed($binding, 'collect');
+                if ($snapshot['terms']['source'] === StockPosCommerce::VERSION) {
+                    app(StockPosCommerce::class)->assertOffersCurrent($scope, $snapshot);
+                }
+                if ($nativeClaim) {
+                    $row = $this->journal->handoffNative($binding, new SaleSnapshot($id, 'usd', $snapshot['sale']['lines']), $sale->payment_request_id, $nativeClaim->id);
+                    $this->access->assertAllowed($binding, 'collect');
+                } else {
+                    $row = $this->core()->start($binding, new SaleSnapshot($id, 'usd', $snapshot['sale']['lines']), $sale->payment_request_id);
+                    $this->store->rows('sales', $scope['tenant_id'])->where('id', $id)->update(['attempt_id' => $row['id'], 'state' => $row['state']]);
+                    $this->access->assertAllowed($binding, 'collect');
+                    $claimed = $this->store->rows('sales', $scope['tenant_id'])->where('id', $id)->whereNull('descriptor_issued_at')->update(['descriptor_issued_at' => now()]);
+                    if ($claimed !== 1) {
+                        throw new PosException('recovery_required');
+                    }
+                    $this->store->event($scope['tenant_id'], $id, 'native_descriptor_issued');
+                }
+                $credentials = $this->store->decrypt($scope['connection']->credentials);
 
-            return [...$this->projection($this->sale($scope, $id)), 'collection' => [
-                'application_id' => config('pos_live.square_application_id'), 'access_token' => $credentials['access_token'],
-                'location_id' => $binding->locationId, 'merchant_id' => $binding->merchantAccount,
-                'environment' => $scope['connection']->environment, 'amount_minor' => $row['amount_minor'], 'currency' => 'USD',
-                'payment_attempt_id' => $sale->sdk_attempt_id, 'reference_id' => $row['request_id'],
-                'sale_id' => $id, 'expires_at' => now()->addSeconds(90)->toIso8601String(),
-                'online_only' => true, 'application_fee_minor' => 0, 'tips_enabled' => false,
-            ]];
+                return [...$this->projection($this->sale($scope, $id)), 'collection' => [
+                    'application_id' => config('pos_live.square_application_id'), 'access_token' => $credentials['access_token'],
+                    'location_id' => $binding->locationId, 'merchant_id' => $binding->merchantAccount,
+                    'environment' => $scope['connection']->environment, 'amount_minor' => $row['amount_minor'], 'currency' => 'USD',
+                    'payment_attempt_id' => $sale->sdk_attempt_id, 'reference_id' => $row['request_id'],
+                    'sale_id' => $id, 'expires_at' => now()->addSeconds(90)->toIso8601String(),
+                    'online_only' => true, 'application_fee_minor' => 0, 'tips_enabled' => false,
+                ]];
+            };
+            if (! empty($snapshot['terms']['checkout_rules_version'])) {
+                return app(PosCommerceRuleStore::class)->withLock($scope['tenant_id'], $collect);
+            }
+
+            return $collect();
         });
     }
 
@@ -299,13 +396,24 @@ final class PosService
                 || $this->journal->findByRequest($scope['tenant_id'], $sale->payment_request_id)) {
                 throw new PosException('payment_recovery_required');
             }
-            $this->store->rows('sales', $scope['tenant_id'])->where('id', $sale->id)->update(['state' => 'cancelled']);
             $snapshot = $this->snapshot($sale);
+            if (config('pos_live.durable_start_claims_enabled', false) !== true
+                && (isset($snapshot['terms']['pos_candle_cash']) || $this->hasDurableClaim($scope['tenant_id'], $sale->id))) {
+                throw new PosException('reward_payment_fence_not_ready', 503);
+            }
+            if (config('pos_live.durable_start_claims_enabled', false) === true) {
+                app(PosPaymentStartClaim::class)->cancel($scope['tenant_id'], $sale->id);
+            } else {
+                $this->store->rows('sales', $scope['tenant_id'])->where('id', $sale->id)->update(['state' => 'cancelled']);
+            }
             if ($snapshot['terms']['source'] === StockPosCommerce::VERSION) {
                 $sale->state = 'cancelled';
                 app(StockPosCommerce::class)->release($sale, $snapshot);
             } else {
                 $this->native->release($sale, $snapshot);
+            }
+            if (isset($snapshot['terms']['pos_candle_cash'])) {
+                app(PosCandleCashLifecycle::class)->releaseUnstarted($scope['tenant_id'], $sale->id);
             }
             $this->store->event($scope['tenant_id'], $sale->id, 'unstarted_quote_discarded');
 
@@ -341,13 +449,31 @@ final class PosService
                 || $current->source_reference || $current->attempt_id || $this->journal->findByRequest((int) $sale->tenant_id, $sale->payment_request_id)) {
                 return;
             }
-            $this->store->rows('sales', (int) $sale->tenant_id)->where('id', $sale->id)->update(['state' => 'cancelled']);
             $snapshot = $this->snapshot($current);
+            if (config('pos_live.durable_start_claims_enabled', false) !== true
+                && (isset($snapshot['terms']['pos_candle_cash']) || $this->hasDurableClaim((int) $sale->tenant_id, $sale->id))) {
+                return;
+            }
+            if (config('pos_live.durable_start_claims_enabled', false) === true) {
+                try {
+                    app(PosPaymentStartClaim::class)->cancel((int) $sale->tenant_id, $sale->id);
+                } catch (PosException $error) {
+                    if (in_array($error->blocker, ['payment_claim_conflict', 'payment_claim_unavailable', 'payment_recovery_required'], true)) {
+                        return;
+                    }
+                    throw $error;
+                }
+            } else {
+                $this->store->rows('sales', (int) $sale->tenant_id)->where('id', $sale->id)->update(['state' => 'cancelled']);
+            }
             if ($snapshot['terms']['source'] === StockPosCommerce::VERSION) {
                 $current->state = 'cancelled';
                 app(StockPosCommerce::class)->release($current, $snapshot);
             } else {
                 $this->native->release($current, $snapshot);
+            }
+            if (isset($snapshot['terms']['pos_candle_cash'])) {
+                app(PosCandleCashLifecycle::class)->releaseUnstarted((int) $sale->tenant_id, $sale->id);
             }
         });
     }
@@ -358,7 +484,8 @@ final class PosService
         if ($operation['sale_id'] !== $sale->id || $operation['tenant_id'] !== $tenant || $operation['kind'] !== 'payment') {
             throw new PosException('payment_sale_mismatch');
         }
-        $this->store->db->transaction(function () use ($tenant, $sale, $operation): void {
+        $rewardTerms = $this->snapshot($sale)['terms']['pos_candle_cash'] ?? null;
+        $this->store->db->transaction(function () use ($tenant, $sale, $operation, $rewardTerms): void {
             $current = $this->store->rows('sales', $tenant)->where('id', $sale->id)->lockForUpdate()->firstOrFail();
             if ($current->state !== $operation['state'] && in_array($operation['state'], ['processing', 'succeeded'], true) && app(PosUncollectedClosure::class)->recorded($sale)) {
                 $this->store->event($tenant, $sale->id, 'late_payment_after_reviewed_closure', ['operation_id' => $operation['id'], 'state' => $operation['state']]);
@@ -366,6 +493,9 @@ final class PosService
             $this->store->rows('sales', $tenant)->where('id', $sale->id)->update(['attempt_id' => $operation['id'], 'state' => $operation['state']]);
             if (in_array($operation['state'], ['succeeded', 'failed', 'cancelled'], true)) {
                 $this->enqueue($tenant, $sale->id, $operation['state'] === 'succeeded' ? 'finalize' : 'release', ['operation_id' => $operation['id']]);
+                if ($rewardTerms !== null) {
+                    $this->enqueue($tenant, $sale->id, 'reward_payment_'.$operation['state'], ['operation_id' => $operation['id']]);
+                }
                 if ($operation['state'] === 'succeeded') {
                     $this->enqueue($tenant, $sale->id, 'customer_purchase', ['operation_id' => $operation['id']]);
                 }
@@ -395,6 +525,9 @@ final class PosService
         if ($row['state'] === 'succeeded') {
             $this->enqueue($scope['tenant_id'], $id, 'refund_'.$row['id'], ['operation_id' => $row['id']]);
             $this->enqueue($scope['tenant_id'], $id, 'customer_refund_'.$row['id'], ['operation_id' => $row['id']]);
+            if (isset($snapshot['terms']['pos_candle_cash'])) {
+                $this->enqueue($scope['tenant_id'], $id, 'reward_refund_'.$row['id'], ['operation_id' => $row['id']]);
+            }
             app(PosOutbox::class)->drainSale($scope, $id);
         }
 
@@ -417,6 +550,8 @@ final class PosService
         return ['receipt_number' => 'EB-'.strtoupper(substr($id, 0, 12)), 'created_at' => $sale->created_at,
             'merchant_location' => $snapshot['location_name'], 'register_name' => $snapshot['register_name'],
             'lines' => $snapshot['terms']['display'], 'amount_minor' => (int) $sale->amount_minor, 'currency' => 'USD',
+            'subtotal_minor' => $snapshot['terms']['subtotal_minor'] ?? null, 'discount_minor' => $snapshot['terms']['discount_minor'] ?? 0, 'tax_minor' => $snapshot['terms']['tax_minor'] ?? null,
+            'applied_offers' => $snapshot['terms']['applied_offers'] ?? [],
             'payment_reference' => $operation['provider_id'], 'customer' => $snapshot['customer'],
             'payment_details' => app(PosReceiptDetails::class)->forSale($sale) ?: null,
             'contact' => ($association = app(PosReceiptCustomers::class)->association($sale)) ? ($this->store->decrypt($association->contact) ?: null) : null,
@@ -464,6 +599,13 @@ final class PosService
         ]));
     }
 
+    private function hasDurableClaim(int $tenant, string $sale): bool
+    {
+        return $this->store->db->getSchemaBuilder()->hasTable('pos_payment_start_claims')
+            && $this->store->db->table('pos_payment_start_claims')->where('runtime_id', $this->store->runtime())
+                ->where('tenant_id', $tenant)->where('sale_id', $sale)->exists();
+    }
+
     private function projection(object $sale): array
     {
         $snapshot = app(PosReceiptCustomers::class)->decorate($sale, $this->snapshot($sale));
@@ -476,6 +618,8 @@ final class PosService
             'inventory_authority' => $snapshot['terms']['source'] === StockPosCommerce::VERSION ? 'everbranch' : 'legacy',
             'operational_review_closed' => app(PosUncollectedClosure::class)->closed($sale),
             'lines' => $snapshot['terms']['display'], 'expires_at' => $sale->expires_at,
+            'subtotal_minor' => $snapshot['terms']['subtotal_minor'] ?? null, 'discount_minor' => $snapshot['terms']['discount_minor'] ?? 0, 'tax_minor' => $snapshot['terms']['tax_minor'] ?? null,
+            'applied_offers' => $snapshot['terms']['applied_offers'] ?? [], 'checkout_rules_version' => $snapshot['terms']['checkout_rules_version'] ?? null,
             'canonical_confirmation' => $sale->state === 'succeeded',
             'collection_ready' => $this->readiness->blockers($this->access->register($sale->register_id)['register'], $this->access->register($sale->register_id)['connection'], (int) $sale->amount_minor) === []
                 && ($snapshot['terms']['source'] !== StockPosCommerce::VERSION || app(StockPosCommerce::class)->collectionReady($sale, $snapshot)),

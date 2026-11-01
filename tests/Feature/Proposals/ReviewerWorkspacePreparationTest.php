@@ -354,7 +354,9 @@ final class ReviewerWorkspacePreparationTest extends ReviewerWorkspaceFixture
 
     public function test_new_prepared_publication_accepts_equal_descriptor_expiry_and_preserves_normal_one_day_publication(): void
     {
-        $this->travelTo(now()->startOfSecond());
+        // Use the fixture's actual descriptor deadline as the shared clock;
+        // setUp may have crossed a wall-clock second before this test begins.
+        $this->travelTo(\Carbon\CarbonImmutable::parse($this->approval['workspace_descriptor']['expires_at'])->subDays(6));
         $this->prepare();
         $body = $this->publishBody();
         $body['days'] = 6;

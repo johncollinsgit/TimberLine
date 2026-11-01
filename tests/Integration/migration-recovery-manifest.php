@@ -3,6 +3,38 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_01_170000_create_pos_birthday_annual_holds.php' => [
+        'test' => 'tests/Integration/PosBirthdayAnnualHoldMySqlRecoveryTest.php',
+        'scenarios' => ['held annual evidence survives missing indexes, repeated recovery and rollback; duplicate and altered indexes fail closed'],
+    ],
+    '2026_11_01_140000_create_pos_shopify_discount_publications.php' => [
+        'test' => 'tests/Integration/PosShopifyDiscountMySqlRecoveryTest.php',
+        'scenarios' => ['uncertain publication evidence survives missing unique-index repair, replay and rollback; duplicate and changed indexes are rejected'],
+    ],
+    '2026_11_01_150000_create_pos_birthday_cycle_fences.php' => [
+        'test' => 'tests/Integration/PosBirthdayMySqlRecoveryTest.php',
+        'scenarios' => ['retained annual claim before authorization table creation, replay and non-destructive rollback; changed annual uniqueness fails closed'],
+    ],
+    '2026_11_01_160000_add_pos_reward_authorization_terms.php' => [
+        'test' => 'tests/Integration/PosCandleCashMySqlRecoveryTest.php',
+        'scenarios' => ['retained frozen cap survives interrupted authorization-column creation, replay and non-destructive rollback'],
+    ],
+    '2026_11_01_130000_create_pos_payment_start_claims.php' => [
+        'test' => 'tests/Integration/PosCandleCashMySqlRecoveryTest.php',
+        'scenarios' => ['starting claim retained before trailing index creation and rollback; duplicate and altered indexes rejected'],
+    ],
+    '2026_11_01_120000_create_pos_reward_authorizations.php' => [
+        'test' => 'tests/Integration/PosCandleCashMySqlRecoveryTest.php',
+        'scenarios' => ['bound proof retained before trailing index creation and rollback; duplicate token and altered indexes rejected'],
+    ],
+    '2026_11_01_110000_create_pos_candle_cash_reservations.php' => [
+        'test' => 'tests/Integration/PosCandleCashMySqlRecoveryTest.php',
+        'scenarios' => ['held redemption evidence retained before trailing index creation and rollback; duplicate sales and altered indexes rejected'],
+    ],
+    '2026_11_01_100000_create_tenant_commerce_rule_sets.php' => [
+        'test' => 'tests/Integration/CommerceRuleSetMySqlRecoveryTest.php',
+        'scenarios' => ['replayed atomic table creation and non-destructive rollback retain tenant rules and reject duplicate tenants'],
+    ],
     '2026_10_31_190000_create_finished_goods_stock_tables.php' => [
         'test' => 'tests/Integration/StockMySqlRecoveryTest.php',
         'scenarios' => ['retained stock before trailing receipt-association DDL and named index replay; altered index rejected; non-destructive rollback'],

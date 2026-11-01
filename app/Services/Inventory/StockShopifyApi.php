@@ -12,11 +12,13 @@ final class StockShopifyApi
 {
     public const CATALOG = 'query StockCatalog($cursor:String,$location:ID!){shop{id currencyCode} productVariants(first:100,after:$cursor){pageInfo{hasNextPage endCursor} nodes{id title sku price updatedAt taxable inventoryPolicy requiresComponents product{id title status isGiftCard featuredMedia{preview{image{url(transform:{maxWidth:400,preferredContentType:JPG})}}}} inventoryItem{id tracked inventoryLevel(locationId:$location){quantities(names:["available","committed"]){name quantity}}}}}}';
 
-    public const CALCULATE = 'mutation StockCalculate($input:DraftOrderInput!){draftOrderCalculate(input:$input){calculatedDraftOrder{taxesIncluded totalPriceSet{shopMoney{amount currencyCode}} totalTaxSet{shopMoney{amount currencyCode}} taxLines{title rate priceSet{shopMoney{amount currencyCode}}} lineItems{variant{id} quantity originalUnitPriceSet{shopMoney{amount currencyCode}}}} userErrors{field message}}}';
+    public const CALCULATE = 'mutation StockCalculate($input:DraftOrderInput!){draftOrderCalculate(input:$input){calculatedDraftOrder{taxesIncluded totalPriceSet{shopMoney{amount currencyCode}} totalTaxSet{shopMoney{amount currencyCode}} taxLines{title rate priceSet{shopMoney{amount currencyCode}}} lineItems{variant{id} quantity originalUnitPriceSet{shopMoney{amount currencyCode}} discountedTotalSet{shopMoney{amount currencyCode}}}} userErrors{field message}}}';
 
     public const PUBLISH = 'mutation StockPublish($input:InventorySetQuantitiesInput!,$key:String!){inventorySetQuantities(input:$input) @idempotent(key:$key){inventoryAdjustmentGroup{referenceDocumentUri changes{name delta}} userErrors{field message code}}}';
 
     public const LEVEL = 'query StockLevel($item:ID!,$location:ID!){inventoryItem(id:$item){id tracked inventoryLevel(locationId:$location){quantities(names:["available","committed"]){name quantity}}}}';
+
+    public const TAX_LOCATIONS = 'query TaxLocations($cursor:String){shop{id} locations(first:100,after:$cursor){pageInfo{hasNextPage endCursor} nodes{id name isActive address{address1 city provinceCode countryCode zip}}}}';
 
     public function __construct(private StockLedger $stock) {}
 
@@ -52,7 +54,7 @@ final class StockShopifyApi
         if (! $store || ! preg_match('/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/D', $store->shop_domain) || ! $store->access_token) {
             throw new StockException('stock_store_unavailable', 503);
         }
-        if (! in_array($query, [self::CATALOG, self::CALCULATE, self::PUBLISH, self::LEVEL], true)) {
+        if (! in_array($query, [self::CATALOG, self::CALCULATE, self::PUBLISH, self::LEVEL, self::TAX_LOCATIONS], true)) {
             throw new StockException('stock_operation_not_allowed');
         }
         try {

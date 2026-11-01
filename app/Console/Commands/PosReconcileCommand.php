@@ -69,6 +69,9 @@ final class PosReconcileCommand extends Command
                         if ($result['state'] === 'succeeded') {
                             $service->enqueue((int) $sale->tenant_id, $sale->id, 'refund_'.$result['id'], ['operation_id' => $result['id']]);
                             $service->enqueue((int) $sale->tenant_id, $sale->id, 'customer_refund_'.$result['id'], ['operation_id' => $result['id']]);
+                            if (isset($snapshot['terms']['pos_candle_cash'])) {
+                                $service->enqueue((int) $sale->tenant_id, $sale->id, 'reward_refund_'.$result['id'], ['operation_id' => $result['id']]);
+                            }
                         }
                     }
                 }

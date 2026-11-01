@@ -720,6 +720,20 @@ Route::post('/api/mobile/v1/modern-forestry/social-share/claim', [ModernForestry
 Route::get('/api/mobile/v1/modern-forestry/rewards', [ModernForestryProductCatalogController::class, 'rewards'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.rewards');
+Route::post('/api/mobile/v1/modern-forestry/rewards/verified-account', [ModernForestryProductCatalogController::class, 'createVerifiedRewardAccount'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:10,1')
+    ->name('mobile.modern-forestry.rewards.verified-account');
+Route::post('/api/mobile/v1/modern-forestry/rewards/existing-wallet-review', [ModernForestryProductCatalogController::class, 'requestExistingWalletReview'])
+    ->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:10,1')->name('mobile.modern-forestry.rewards.wallet-review.request');
+Route::get('/api/mobile/v1/modern-forestry/rewards/existing-wallet-review-terms', [ModernForestryProductCatalogController::class, 'existingWalletReviewTerms'])
+    ->middleware('throttle:30,1')->name('mobile.modern-forestry.rewards.wallet-review.terms');
+Route::get('/api/mobile/v1/modern-forestry/rewards/existing-wallet-review/{reference}', [ModernForestryProductCatalogController::class, 'existingWalletReviewStatus'])
+    ->where('reference', '[a-f0-9]{32}')->middleware('throttle:30,1')->name('mobile.modern-forestry.rewards.wallet-review.status');
+Route::post('/api/mobile/v1/modern-forestry/rewards/pos-authorization', [ModernForestryProductCatalogController::class, 'issuePosRewardAuthorization'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.rewards.pos-authorization');
 Route::post('/api/mobile/v1/modern-forestry/rewards/redeem', [ModernForestryProductCatalogController::class, 'redeemReward'])
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')

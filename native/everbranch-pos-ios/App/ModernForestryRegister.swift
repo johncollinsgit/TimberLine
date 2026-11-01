@@ -30,10 +30,31 @@ struct EverbranchRegisterView: View {
         }) { POSView(onClose: { basket = false }, screen: .checkout, model: model) }
         .sheet(isPresented: $account) { POSView(onClose: { account = false }, onOpenRegister: { account = false }, screen: .setup, model: model) }
         .onChange(of: model.completedSaleGeneration) { _, _ in basket = false; showRecovery = false }
+        .onChange(of: model.editingBasket) { _, editing in if editing { showRecovery = false; basket = true } }
         .onChange(of: model.signedIn) { _, value in if !value { account = false; basket = false } }
+        .modifier(ReadinessRefreshObserver(model: model, account: $account, basket: $basket))
         #if DEBUG
         .onAppear { if ProcessInfo.processInfo.arguments.contains("--pos-completed-sheet-ui-tests") { showRecovery = false } }
         #endif
+    }
+}
+
+private struct ReadinessRefreshObserver: ViewModifier {
+    @ObservedObject var model: POSViewModel
+    @Binding var account: Bool
+    @Binding var basket: Bool
+    @Environment(\.scenePhase) private var scenePhase
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { model.appActivityChanged(scenePhase == .active) }
+            .onChange(of: scenePhase) { _, phase in model.appActivityChanged(phase == .active) }
+            .onChange(of: account) { _, _ in model.requestReadinessRefresh() }
+            .onChange(of: basket) { _, _ in model.requestReadinessRefresh() }
+            .onChange(of: model.registerLoaded) { _, loaded in if loaded { model.requestReadinessRefresh() } }
+            .onChange(of: model.busy) { _, busy in if !busy { model.drainReadinessRefresh() } }
+            .onChange(of: model.pending) { _, _ in model.drainReadinessRefresh() }
+            .onChange(of: model.sale?.state) { _, _ in model.drainReadinessRefresh() }
     }
 }
 
@@ -85,6 +106,14 @@ private struct NativeRegister: View {
             else if !model.visibleSavedPayments.isEmpty { Button("Payments for review (\(model.visibleSavedPayments.count))") { savedPayments = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
             if model.pending == nil && !model.visibleRecentSales.isEmpty { Button("Recent sales") { recentSales = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
             if let message = model.message { Text(message).font(.footnote).foregroundStyle(PayTheme.muted).padding(.horizontal, 20) }
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") {
+                Text("Readiness setups \(model.simulatedReadinessSetups)").accessibilityIdentifier("readiness-setup-count")
+            }
+            if ProcessInfo.processInfo.arguments.contains("--pos-readiness-delayed-ui-tests") {
+                Button("Enable fixture readiness") { POSCheckoutFixtureProtocol.setReadinessEnabled(true) }
+            }
+            #endif
             if tab == .keypad { keypad }
             else {
                 HStack { Image(systemName: "magnifyingglass"); TextField("Search products", text: $search).focused($searchFocused).submitLabel(.done).onSubmit { searchFocused = false }.textInputAutocapitalization(.never).autocorrectionDisabled() }.padding(14).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20)
@@ -103,7 +132,7 @@ private struct NativeRegister: View {
         }
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { searchFocused = false } } }
         .sheet(item: $options) { group in optionsSheet(group) }
-        .sheet(item: $bundle) { item in BundleOptions(item: item, model: model) }
+        .sheet(item: $bundle) { item in BundleOptions(item: item, model: model, onPending: onBasket) }
         .sheet(isPresented: $savedPayments) {
             NavigationStack {
                 List {
@@ -151,7 +180,7 @@ private struct NativeRegister: View {
                     Text((group.items.count > 1 ? "From " : "") + POSMoney.display(group.items[0].unitAmountMinor)).font(.headline).monospacedDigit()
                     Text(!group.available ? (group.items.contains { $0.availability == "review_required" } ? "Bundle setup needed" : model.selectedRegister?.canManageInventory == true ? "Count stock" : group.items.contains { $0.availability == "count_required" } ? "Count needed" : "Unavailable") : group.items.count > 1 ? "Choose options" : "Add to basket").font(.caption.weight(.semibold)).padding(.horizontal, 12).padding(.vertical, 10).background(PayTheme.paper, in: Capsule())
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(12).background(PayTheme.cream, in: RoundedRectangle(cornerRadius: 28)).overlay(RoundedRectangle(cornerRadius: 28).stroke(PayTheme.line, lineWidth: 1)).contentShape(RoundedRectangle(cornerRadius: 28))
-            }.disabled(!group.available && model.selectedRegister?.canManageInventory != true).accessibilityLabel(group.items.count == 1 ? "Add \(group.title) to basket" : "Choose \(group.title) options")
+            }.disabled(model.pending == nil && !group.available && model.selectedRegister?.canManageInventory != true).accessibilityLabel(group.items.count == 1 ? "Add \(group.title) to basket" : "Choose \(group.title) options")
             Button {
                 if favorites.contains(group.id) { favorites.remove(group.id) } else { favorites.insert(group.id) }
                 UserDefaults.standard.set(Array(favorites), forKey: favoriteKey)
@@ -161,6 +190,7 @@ private struct NativeRegister: View {
     }
     private func select(_ group: ProductGroup) {
         searchFocused = false
+        if model.pending != nil { onBasket(); return }
         guard group.available || model.selectedRegister?.canManageInventory == true else { return }
         if group.items.count == 1 && group.items[0].kind == "bundle" { bundle = group.items[0] }
         else if group.items.count == 1 && group.available { add(group.items[0]) } else { options = group }
@@ -177,9 +207,19 @@ private struct NativeRegister: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(group.items) { item in
-                        Button { if item.kind == "bundle" { options = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { bundle = item } } else { add(item); options = nil } } label: {
+                        Button {
+                            if model.pending != nil {
+                                options = nil
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: onBasket)
+                            } else if item.kind == "bundle" {
+                                options = nil
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    if model.pending != nil { onBasket() } else { bundle = item }
+                                }
+                            } else { add(item); options = nil }
+                        } label: {
                             HStack { VStack(alignment: .leading) { Text(item.variantLabel ?? item.title).font(.headline); Text(item.availability == "review_required" ? "Bundle setup needed" : item.kind == "bundle" ? "Mix & match" : (item.availableQuantity ?? 1) > 0 ? "Add to basket" : "Unavailable").font(.subheadline) }; Spacer(); Text(POSMoney.display(item.unitAmountMinor)).monospacedDigit() }.padding(20).background(PayTheme.cream, in: Capsule())
-                        }.disabled((item.availableQuantity ?? 1) == 0 || ["count_required", "review_required"].contains(item.availability ?? "")).accessibilityLabel("Add \(group.title) \(item.variantLabel ?? "")")
+                        }.disabled(model.pending == nil && ((item.availableQuantity ?? 1) == 0 || ["count_required", "review_required"].contains(item.availability ?? ""))).accessibilityLabel("Add \(group.title) \(item.variantLabel ?? "")")
                         if model.selectedRegister?.canManageInventory == true && item.kind != "bundle" && item.availability != "review_required" && (item.availableQuantity == 0 || item.availability == "count_required") {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Count the physical \(item.variantLabel ?? item.title) units remaining at this event. Include units held for open sales.").font(.subheadline).foregroundStyle(PayTheme.muted)
@@ -224,12 +264,23 @@ extension POSViewModel {
         rows.append(["item_id": String(repeating: "e", count: 32), "product_key": "fixture-trio", "title": "Fictional trio", "variant_label": "Mix & match", "unit_amount_minor": 1800, "kind": "bundle", "revision": String(repeating: "f", count: 64), "available_quantity": untracked ? NSNull() : 6, "availability": "available", "bundle_quantity": 3, "bundle_items": [rows[0], rows[2]]])
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
         items = (try? decoder.decode(CatalogList.self, from: JSONSerialization.data(withJSONObject: ["items": rows])))?.items ?? []
-        selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": [], "custom_amount_enabled": true, "guest_checkout": true]))
+        selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": [], "custom_amount_enabled": true, "guest_checkout": true, "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests")]))
         if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") {
             signedIn = true; registerLoaded = true; tapReady = true
+            if ProcessInfo.processInfo.arguments.contains("--pos-enrollment-ui-tests") {
+                api.token = "fictional-test-session"
+                customerEnrollmentSettings = try? decoder.decode(CustomerEnrollmentSettings.self, from: JSONSerialization.data(withJSONObject: [
+                    "birthday_enabled": true, "birthday_configured": true, "can_manage": true, "can_create_customers": true, "cashier_create_enabled": false, "email_enabled": true, "email_wording": "I agree to promotional emails.",
+                    "sms_enabled": true, "sms_wording": "I agree to promotional texts.", "version": String(repeating: "d", count: 64)]))
+            }
             selectedWorkspace = try? decoder.decode(Workspace.self, from: Data(#"{"id":1,"name":"Fictional","slug":"fixture"}"#.utf8))
             quantities = [String(repeating: "c", count: 32): 1]
             POSCheckoutFixtureProtocol.setCatalog(try! JSONSerialization.data(withJSONObject: ["items": rows]))
+        }
+        if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") {
+            POSCheckoutFixtureProtocol.setReadinessEnabled(false)
+            selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": ["old_setup"], "setup_blockers": ["old_setup"], "guest_checkout": true]))
+            tapReady = false
         }
         if ProcessInfo.processInfo.arguments.contains("--pos-saved-payments-ui-tests") {
             var first = PendingSale(workspace: "fixture", register: "fixture"); first.saleID = "fixture-review-1"
@@ -242,7 +293,7 @@ extension POSViewModel {
             if ProcessInfo.processInfo.arguments.contains("--pos-refund-inflight-ui-tests") { completed.refundRequestID = UUID().uuidString.lowercased() }
             pending = completed
             let saleData = try! JSONSerialization.data(withJSONObject: ["sale_id": "fixture-completed", "request_id": completed.requestID, "state": "succeeded", "stock_state": "committed", "amount_minor": 2180, "currency": "USD", "receipt_available": true, "canonical_confirmation": true, "recovery_required": false, "inventory_authority": "everbranch", "lines": [["title": "River Birch", "quantity": 1, "subtotal_minor": 2000]]])
-            let receiptData = try! JSONSerialization.data(withJSONObject: ["receipt_number": "fixture-receipt", "merchant_location": "Fixture", "register_name": "Fictional register", "lines": [["title": "River Birch", "quantity": 1]], "amount_minor": 2180, "payment_reference": "fixture-payment", "refunded_minor": 0, "settlement_status": "pending"])
+            let receiptData = try! JSONSerialization.data(withJSONObject: ["receipt_number": "fixture-receipt", "merchant_location": "Fixture", "register_name": "Fictional register", "lines": [["title": "River Birch", "quantity": 1]], "amount_minor": 2180, "payment_reference": "fixture-payment", "refunded_minor": ProcessInfo.processInfo.arguments.contains("--pos-refund-review-ui-tests") ? 1400 : 0, "settlement_status": "pending"])
             sale = try? decoder.decode(Sale.self, from: saleData); receipt = try? decoder.decode(POSReceipt.self, from: receiptData)
             POSCheckoutFixtureProtocol.setCompletedSale(saleData, receipt: receiptData)
         }
@@ -254,19 +305,34 @@ extension POSViewModel {
             pending = saved
             sale = try? decoder.decode(Sale.self, from: JSONSerialization.data(withJSONObject: ["sale_id": "fixture-sale", "request_id": saved.requestID, "state": "unknown", "stock_state": "held", "amount_minor": 763, "currency": "USD", "receipt_available": false, "canonical_confirmation": false, "recovery_required": true, "sdk_attempt_id": UUID().uuidString]))
         }
+        if ProcessInfo.processInfo.arguments.contains("--pos-readiness-quote-ui-tests") {
+            var saved = PendingSale(workspace: "fixture", register: "fixture")
+            saved.saleID = "fixture-readiness-quote"
+            pending = saved
+            let data = try! JSONSerialization.data(withJSONObject: ["sale_id": "fixture-readiness-quote", "request_id": saved.requestID, "state": "quoted", "stock_state": "held", "amount_minor": 763, "currency": "USD", "receipt_available": false, "canonical_confirmation": false, "recovery_required": false, "collection_ready": true, "inventory_authority": "everbranch", "lines": []])
+            sale = try? decoder.decode(Sale.self, from: data)
+            POSCheckoutFixtureProtocol.setReadinessQuote(data)
+        }
     }
 }
 #endif
 
 
-private struct BundleOptions: View {
+struct BundleOptions: View {
     let item: CatalogItem
     @ObservedObject var model: POSViewModel
+    var existing: BundleBasketLine? = nil
+    var onPending: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var choices: [String: Int] = [:]
     @State private var bundles = 1
     private var required: Int { (item.bundleQuantity ?? 0) * bundles }
     private var selected: Int { choices.values.reduce(0, +) }
+    private func available(_ part: CatalogItem) -> Int {
+        guard let stock = part.availableQuantity else { return required }
+        let alreadyBundled = model.bundleLines.filter { $0.id != existing?.id }.reduce(0) { $0 + ($1.components[part.id] ?? 0) }
+        return max(0, stock - alreadyBundled - (model.quantities[part.id] ?? 0))
+    }
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
@@ -279,19 +345,25 @@ private struct BundleOptions: View {
                                 AsyncImage(url: part.imageUrl.flatMap(URL.init(string:))) { image in image.resizable().scaledToFill() } placeholder: { PayTheme.line }.frame(width: 56, height: 56).clipped().clipShape(RoundedRectangle(cornerRadius: 12))
                                 VStack(alignment: .leading) { Text(part.title).font(.headline); Text(part.variantLabel ?? "").font(.caption); if part.availability == "count_required" { Text("Count needed").font(.caption) } }
                                 Spacer()
-                                Stepper(value: Binding(get: { choices[part.id] ?? 0 }, set: { choices[part.id] = $0 }), in: 0...max(choices[part.id] ?? 0, min(required - selected + (choices[part.id] ?? 0), part.availableQuantity ?? required))) { Text("\(choices[part.id] ?? 0)").monospacedDigit() }.fixedSize().accessibilityIdentifier("bundle-quantity-\(part.id)")
+                                Stepper(value: Binding(get: { choices[part.id] ?? 0 }, set: { choices[part.id] = $0 }), in: 0...max(choices[part.id] ?? 0, min(required - selected + (choices[part.id] ?? 0), available(part)))) { Text("\(choices[part.id] ?? 0)").monospacedDigit() }.fixedSize().accessibilityIdentifier("bundle-quantity-\(part.id)")
                             }.padding(14).background(PayTheme.cream, in: RoundedRectangle(cornerRadius: 20))
                         }
                     }.padding(.horizontal, 20)
                 }
                 Button {
-                    guard selected == required, required > 0, model.pending == nil else { return }
-                    model.quantities[item.id] = bundles; model.bundleComponents[item.id] = choices
+                    if model.pending != nil {
+                        dismiss()
+                        if let onPending { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: onPending) }
+                        return
+                    }
+                    guard selected == required, required > 0 else { return }
+                    if let existing { model.updateBundle(existing.id, quantity: bundles, components: choices) }
+                    else { model.addBundle(item, quantity: bundles, components: choices) }
                     UIImpactFeedbackGenerator(style: .light).impactOccurred(); dismiss()
-                } label: { Text("Add bundle · \(POSMoney.display(item.unitAmountMinor * bundles))").font(.headline).frame(maxWidth: .infinity).padding(18).foregroundStyle(PayTheme.cream).background(PayTheme.ink, in: Capsule()) }.disabled(selected != required || required == 0 || model.busy || item.availability == "review_required").opacity(selected == required && required > 0 ? 1 : 0.5).padding(20)
+                } label: { Text(model.pending != nil ? "Open payment status" : "\(existing == nil ? "Add bundle" : "Save bundle") · \(POSMoney.display(item.unitAmountMinor * bundles))").font(.headline).frame(maxWidth: .infinity).padding(18).foregroundStyle(PayTheme.cream).background(PayTheme.ink, in: Capsule()) }.disabled(model.pending == nil && (selected != required || required == 0 || model.busy || item.availability == "review_required")).opacity(model.pending != nil || (selected == required && required > 0) ? 1 : 0.5).padding(20)
             }.background(PayTheme.paper).foregroundStyle(PayTheme.ink).navigationTitle(item.title).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
-                .onAppear { choices = model.bundleComponents[item.id] ?? [:]; bundles = max(1, model.quantities[item.id] ?? 1) }
+                .onAppear { if let existing { choices = existing.components; bundles = existing.quantity } }
         }.preferredColorScheme(.light)
     }
 }

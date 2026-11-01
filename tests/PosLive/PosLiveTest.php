@@ -102,6 +102,30 @@ function posFixtureDevelopment($test): array
     return $settings;
 }
 
+it('enforces the durable fence through the collection and discard endpoints', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Production payment bindings require the durable MySQL journal.');
+    }
+    posFixtureDevelopment($this);
+    config(['pos_live.durable_start_claims_enabled' => true]);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk()->assertJsonPath('collection.amount_minor', 321);
+    expect(DB::table('pos_payment_start_claims')->where('sale_id', $quote['sale_id'])->value('state'))->toBe('starting');
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk()->assertJsonMissingPath('collection');
+    $this->postJson($this->base.'/requests/'.$quote['request_id'].'/discard')->assertConflict();
+    expect(DB::table('payment_core_operations')->where('sale_id', $quote['sale_id'])->where('kind', 'payment')->count())->toBe(1);
+});
+
+it('never starts collection after the durable discard endpoint wins', function (): void {
+    posFixtureDevelopment($this);
+    config(['pos_live.durable_start_claims_enabled' => true]);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/requests/'.$quote['request_id'].'/discard')->assertOk()->assertJsonPath('discarded', true);
+    expect(DB::table('pos_payment_start_claims')->where('sale_id', $quote['sale_id'])->value('state'))->toBe('cancelled');
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertConflict()->assertJsonMissingPath('collection');
+    expect(DB::table('payment_core_operations')->where('sale_id', $quote['sale_id'])->where('kind', 'payment')->count())->toBe(0);
+});
+
 it('permits one reviewed development sale with commercial gates still off and recovers it after expiry', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('Production payment bindings require the durable MySQL journal.');

@@ -258,3 +258,25 @@ behavior, spent-credit review and settlement evidence. Record selection tap coun
 and warm SDK presentation time on the physical phone. Verify shared history across
 staff web, Field and authenticated customer accounts. Rehearse a second tenant's
 shared pool separately before claiming both configurations proven.
+# Tax-location review in the source candidate (November 1)
+
+The new administrator tax-location screen and publication gate default off.
+For a show pool, a reviewed event address and end date are checked at quote and
+at collection; a collection-boundary transaction locks and checks the event and
+pool again. For a shared pool, the reviewed Shopify location is re-read at quote
+and before collection; show locations require no Shopify location request at
+payment handoff. The transaction boundary freezes the quoted terms for that attempt;
+later event changes do not retroactively recalculate an issued payment. A
+provider read is point-in-time evidence, not a guarantee against a later change.
+Older configurations without `tax_location_review` retain their previous
+expiration-only behavior and must be migrated/reviewed before claiming the
+stronger location protection. Do not activate the new flow until acceptance.
+
+An unstarted quote can be edited after restart only when this device retained
+its complete supported quote input in device-only Keychain storage and the
+server freshly reports the original quote as unstarted. The original request
+must be discarded successfully on the server before editing begins. Older
+quotes, invoices, arbitrary custom descriptions, reward redemptions and unknown
+future quote fields remain recovery-only. QR proofs, reward credentials and
+payment credentials are never stored in this draft. A payment that was
+requested or reached the SDK is never restored as editable.

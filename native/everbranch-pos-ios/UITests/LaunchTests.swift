@@ -45,6 +45,54 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.buttons["Continue with email"].exists)
     }
 
+    func testSwipeProductRequiresConfirmationAndKeepsOtherItems() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-bundle-basket-ui-tests"]; app.launch()
+        XCTAssertTrue(app.buttons["Add River Birch to basket"].waitForExistence(timeout: 10))
+        app.buttons["Add River Birch to basket"].tap()
+        app.buttons["Choose Laurel & Fig options"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Add Laurel & Fig Wax Melt"].waitForExistence(timeout: 5)); app.buttons["Add Laurel & Fig Wax Melt"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Your basket"].waitForExistence(timeout: 5))
+        let id = String(repeating: "c", count: 32)
+        let row = app.otherElements["basket-product-" + id]
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.swipeLeft()
+        let confirm = app.buttons["confirm-remove-" + id]; XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        XCTAssertTrue(row.exists); row.swipeRight(); XCTAssertFalse(confirm.exists)
+        row.swipeLeft(); XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
+        XCTAssertTrue(row.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["basket-product-" + String(repeating: "a", count: 32)].exists)
+    }
+
+    func testSwipeQuotedProductDiscardsOriginalBeforeEditing() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-bundle-basket-ui-tests"]; app.launch()
+        XCTAssertTrue(app.buttons["Add River Birch to basket"].waitForExistence(timeout: 10)); app.buttons["Add River Birch to basket"].tap()
+        app.buttons["Choose Laurel & Fig options"].firstMatch.tap(); app.buttons["Add Laurel & Fig Wax Melt"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.tap()
+        XCTAssertTrue(app.buttons["Review total"].waitForExistence(timeout: 5)); app.buttons["Review total"].tap()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        let id = String(repeating: "c", count: 32); let row = app.otherElements["basket-product-" + id]
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.swipeLeft()
+        let confirm = app.buttons["confirm-remove-" + id]; XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
+        XCTAssertTrue(app.staticTexts["Your basket"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.otherElements["basket-product-" + id].exists)
+        XCTAssertTrue(app.otherElements["basket-product-" + String(repeating: "a", count: 32)].exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Charge '")).firstMatch.exists)
+    }
+
+    func testSwipeQuotedProductKeepsSaleWhenDiscardFails() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-bundle-basket-ui-tests", "--pos-discard-fail-tests"]; app.launch()
+        XCTAssertTrue(app.buttons["Add River Birch to basket"].waitForExistence(timeout: 10)); app.buttons["Add River Birch to basket"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.tap()
+        XCTAssertTrue(app.buttons["Review total"].waitForExistence(timeout: 5)); app.buttons["Review total"].tap()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        let id = String(repeating: "c", count: 32); let row = app.otherElements["basket-product-" + id]
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.swipeLeft()
+        let confirm = app.buttons["confirm-remove-" + id]; XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
+        XCTAssertTrue(app.otherElements["status-message"].waitForExistence(timeout: 5) || app.staticTexts["status-message"].exists)
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 5))
+        XCTAssertTrue(row.exists); XCTAssertFalse(app.staticTexts["Your basket"].exists)
+    }
+
     func testMixAndMatchUsesOneSheetAndRequiresTheExactBundleQuantity() {
         let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-untracked-bundle-ui-tests"]; app.launch()
         let search = app.textFields["Search products"]; XCTAssertTrue(search.waitForExistence(timeout: 10))
@@ -58,6 +106,69 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(add.isEnabled); attach(app, name: "One mix and match sheet")
         add.tap()
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.isEnabled)
+    }
+
+    func testTwoBundleMixesRemainSeparateAndOneCanBeRemoved() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-untracked-bundle-ui-tests", "--pos-checkout-ui-tests", "--pos-bundle-basket-ui-tests"]; app.launch()
+        let search = app.textFields["Search products"]; XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap(); search.typeText("trio")
+        for component in ["a", "c"] {
+            app.buttons["Add Fictional trio to basket"].tap()
+            let add = app.buttons["Add bundle · $18.00"]; XCTAssertTrue(add.waitForExistence(timeout: 5))
+            let id = "bundle-quantity-" + String(repeating: component, count: 32)
+            let stepper = app.steppers[id]; XCTAssertTrue(stepper.exists)
+            for _ in 0..<3 { stepper.buttons[id + "-Increment"].tap() }
+            XCTAssertTrue(add.isEnabled); add.tap()
+        }
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Your basket"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["3 × Laurel & Fig · Wax Melt"].exists)
+        XCTAssertTrue(app.staticTexts["3 × River Birch · 8oz Candle"].exists)
+        XCTAssertEqual(app.buttons.matching(identifier: "Remove").count, 2)
+        app.buttons.matching(identifier: "Remove").firstMatch.tap()
+        XCTAssertFalse(app.staticTexts["3 × Laurel & Fig · Wax Melt"].exists)
+        XCTAssertTrue(app.staticTexts["3 × River Birch · 8oz Candle"].exists)
+    }
+
+    func testSavedTwoBundleQuoteReopensWithoutStartingAnotherPayment() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-untracked-bundle-ui-tests", "--pos-checkout-ui-tests", "--pos-bundle-basket-ui-tests"]; app.launch()
+        let search = app.textFields["Search products"]; XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap(); search.typeText("trio")
+        for component in ["a", "c"] {
+            app.buttons["Add Fictional trio to basket"].tap()
+            let add = app.buttons["Add bundle · $18.00"]; XCTAssertTrue(add.waitForExistence(timeout: 5))
+            let id = "bundle-quantity-" + String(repeating: component, count: 32)
+            let stepper = app.steppers[id]; XCTAssertTrue(stepper.exists)
+            for _ in 0..<3 { stepper.buttons[id + "-Increment"].tap() }
+            add.tap()
+        }
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.tap()
+        let review = app.buttons["Review total"]; XCTAssertTrue(review.waitForExistence(timeout: 5)); review.tap()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["3 × Laurel & Fig"].exists)
+        XCTAssertTrue(app.staticTexts["3 × River Birch"].exists)
+        app.buttons["Close"].tap()
+        let saved = app.buttons["Payment saved · Open status"]; XCTAssertTrue(saved.waitForExistence(timeout: 5)); saved.tap()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["3 × Laurel & Fig"].exists)
+        XCTAssertTrue(app.staticTexts["3 × River Birch"].exists)
+        XCTAssertFalse(app.staticTexts["Payment confirmed"].exists)
+        let editBasket = app.buttons["Edit basket"]; XCTAssertTrue(editBasket.exists); editBasket.tap()
+        XCTAssertTrue(app.staticTexts["Your basket"].waitForExistence(timeout: 5))
+        app.buttons.matching(identifier: "Edit").firstMatch.tap()
+        let first = "bundle-quantity-" + String(repeating: "a", count: 32)
+        let second = "bundle-quantity-" + String(repeating: "c", count: 32)
+        let firstStepper = app.steppers[first]; XCTAssertTrue(firstStepper.waitForExistence(timeout: 5))
+        firstStepper.buttons[first + "-Decrement"].tap()
+        app.steppers[second].buttons[second + "-Increment"].tap()
+        app.buttons["Save bundle · $18.00"].tap()
+        XCTAssertTrue(app.staticTexts["2 × Laurel & Fig · Wax Melt"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["3 × River Birch · 8oz Candle"].exists)
+        app.buttons["Review total"].tap()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["2 × Laurel & Fig"].exists)
+        XCTAssertTrue(app.staticTexts["3 × River Birch"].exists)
+        XCTAssertFalse(app.staticTexts["Payment confirmed"].exists)
     }
 
     func testKeypadRespondsAcrossTheWholePillAndAddsTheTypedAmount() {
@@ -76,11 +187,81 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Sign in to checkout"].waitForExistence(timeout: 5))
     }
 
+    func testOnlineOwnerReviewShowsPublicTermsAndRespectsOffGate() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-online-rules-ui-tests"]; app.launch()
+        XCTAssertTrue(app.buttons["Account & Tap to Pay"].waitForExistence(timeout: 10)); app.buttons["Account & Tap to Pay"].tap()
+        let manage = app.buttons["Manage checkout rules"]; XCTAssertTrue(manage.waitForExistence(timeout: 5)); app.swipeUp(); manage.tap()
+        let open = app.buttons["Review Five off for Shopify"]; XCTAssertTrue(open.waitForExistence(timeout: 10)); open.tap()
+        let field = app.textFields["Code"]; XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("SAVE5"); app.keyboards.buttons["Done"].tap()
+        let eligibility = app.switches["Anyone with this code can use it"]
+        eligibility.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertEqual(eligibility.value as? String, "1")
+        app.buttons["Review Shopify discount"].tap()
+        XCTAssertTrue(app.staticTexts["Store: fictional.myshopify.com"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Anyone with the code can use it. It cannot combine with other discounts."].exists)
+        XCTAssertTrue(app.staticTexts["Online publishing is off."].exists)
+        XCTAssertFalse(app.buttons["Publish this code"].exists)
+    }
+
+    private func createRestorableBundleQuote(_ app: XCUIApplication) {
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-bundle-basket-ui-tests", "--pos-restored-draft-ui-tests", "--pos-restored-draft-reset"]
+        app.launch()
+        let bundle = app.buttons["Add Fictional trio to basket"]
+        XCTAssertTrue(bundle.waitForExistence(timeout: 10)); bundle.tap()
+        let id = "bundle-quantity-" + String(repeating: "a", count: 32)
+        let count = app.steppers[id]; XCTAssertTrue(count.waitForExistence(timeout: 5))
+        for _ in 0..<3 { count.buttons[id + "-Increment"].tap() }
+        app.buttons["Add bundle · $18.00"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.tap()
+        XCTAssertTrue(app.buttons["Review total"].waitForExistence(timeout: 5)); app.buttons["Review total"].tap()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10), app.debugDescription)
+        app.terminate()
+        app.launchArguments.removeAll { $0 == "--pos-restored-draft-reset" }
+    }
+
+    func testUnstartedBundleDraftRestoresAfterRelaunchAndDiscardsBeforeEditing() {
+        let app = XCUIApplication(); createRestorableBundleQuote(app); app.launch()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        let edit = app.buttons["Edit basket"]; XCTAssertTrue(edit.waitForExistence(timeout: 5)); edit.tap()
+        XCTAssertTrue(app.staticTexts["Your basket"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["3 × Laurel & Fig · Wax Melt"].exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Charge '")).firstMatch.exists)
+    }
+
+    func testStartedPaymentRemainsNonEditableAfterRelaunch() {
+        let app = XCUIApplication(); createRestorableBundleQuote(app)
+        app.launchArguments.append("--pos-restored-draft-started"); app.launch()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Edit basket"].exists)
+        app.terminate(); app.launchArguments.removeAll { $0 == "--pos-restored-draft-started" }; app.launch()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Edit basket"].exists)
+    }
+
+    func testRestoredQuoteRemainsIntactWhenDiscardFails() {
+        let app = XCUIApplication(); createRestorableBundleQuote(app)
+        app.launchArguments.append("--pos-discard-fail-tests"); app.launch()
+        let edit = app.buttons["Edit basket"]; XCTAssertTrue(edit.waitForExistence(timeout: 10)); edit.tap()
+        XCTAssertTrue(app.otherElements["status-message"].waitForExistence(timeout: 5) || app.staticTexts["status-message"].exists)
+        XCTAssertTrue(app.staticTexts["Review before payment"].exists)
+        XCTAssertFalse(app.staticTexts["Your basket"].exists)
+    }
+
+    func testLegacySavedQuoteExplainsEditingIsUnavailableAndCanClose() {
+        let app = XCUIApplication(); createRestorableBundleQuote(app)
+        app.launchArguments.append("--pos-restored-draft-missing"); app.launch()
+        XCTAssertTrue(app.staticTexts["This saved basket can’t be edited on this phone. Check the original sale or close this screen."].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Edit basket"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 5))
+    }
+
     func testPendingPaymentCanCloseBrowseAndOpenAccountWithoutLosingTheAttempt() {
         let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-recovery-ui-tests"]; app.launch()
         XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Leave for review"].exists)
         XCTAssertTrue(app.staticTexts["Payment not confirmed"].exists)
+        XCTAssertFalse(app.buttons["Edit basket"].exists)
         XCTAssertFalse(app.staticTexts["Checking payment status"].exists)
         app.buttons["Close"].tap()
         XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 5))
@@ -97,6 +278,97 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.buttons["Check payment status"].waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Payment saved · Open status"].exists)
+    }
+
+    func testPendingPaymentRoutesProductAndBundleSelectionsToOriginalStatus() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-recovery-ui-tests"]; app.launch()
+        XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 10))
+        app.buttons["Close"].tap()
+        let search = app.textFields["Search products"]; XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("trio"); app.buttons.matching(identifier: "Done").firstMatch.tap()
+        app.buttons["Add Fictional trio to basket"].tap()
+        XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Add bundle · $18.00"].exists)
+        XCTAssertTrue(app.staticTexts["Payment not confirmed"].exists)
+        app.buttons["Close"].tap()
+        let clear = app.textFields["Search products"]; XCTAssertTrue(clear.waitForExistence(timeout: 5))
+        clear.tap(); clear.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 4) + "Laurel"); app.buttons.matching(identifier: "Done").firstMatch.tap()
+        app.buttons["Choose Laurel & Fig options"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Add Laurel & Fig Wax Melt"].exists)
+        XCTAssertTrue(app.staticTexts["Payment not confirmed"].exists)
+    }
+
+    func testRegisterRefreshesStaleReadinessAndInitializesOnce() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-readiness-ui-tests"]
+        app.launch()
+        let count = app.staticTexts["readiness-setup-count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 10))
+        let ready = NSPredicate(format: "label == 'Readiness setups 1'")
+        expectation(for: ready, evaluatedWith: count)
+        waitForExpectations(timeout: 10)
+        app.buttons["Account & Tap to Pay"].tap()
+        XCTAssertTrue(app.staticTexts["iPhone setup complete"].waitForExistence(timeout: 5))
+        app.buttons["Close"].tap()
+        XCTAssertEqual(count.label, "Readiness setups 1")
+    }
+
+    func testReadinessRefreshDoesNotInitializeDuringUncertainPayment() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-readiness-ui-tests", "--pos-recovery-ui-tests"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Payment not confirmed"].exists)
+        app.buttons["Close"].tap()
+        let count = app.staticTexts["readiness-setup-count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 5))
+        XCTAssertEqual(count.label, "Readiness setups 0")
+        app.buttons["Account & Tap to Pay"].tap()
+        XCTAssertTrue(app.navigationBars["Account & Tap to Pay"].waitForExistence(timeout: 5))
+        app.buttons["Close"].tap()
+        XCTAssertEqual(count.label, "Readiness setups 0")
+        app.buttons["Payment saved · Open status"].tap()
+        XCTAssertTrue(app.staticTexts["Payment not confirmed"].waitForExistence(timeout: 5))
+    }
+
+    func testUnstartedQuoteUsesFreshReadinessWithoutChangingSale() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-readiness-ui-tests", "--pos-readiness-quote-ui-tests"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        let charge = app.buttons["Charge $7.63"]
+        XCTAssertTrue(charge.waitForExistence(timeout: 5))
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: charge)
+        waitForExpectations(timeout: 10)
+        XCTAssertFalse(app.buttons["Set up Tap to Pay"].exists)
+        XCTAssertFalse(app.staticTexts["Payment confirmed"].exists)
+    }
+
+    func testReadinessRefreshDoesNotReinitializeAnActiveSDK() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-readiness-ui-tests", "--pos-readiness-active-sdk-ui-tests"]
+        app.launch()
+        let count = app.staticTexts["readiness-setup-count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 10))
+        let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label != 'Readiness setups 0'"), object: count)
+        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 3), .timedOut)
+        XCTAssertEqual(count.label, "Readiness setups 0")
+    }
+
+    func testResumeRefreshesAfterServerReadinessChanges() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-readiness-ui-tests", "--pos-readiness-delayed-ui-tests"]
+        app.launch()
+        let count = app.staticTexts["readiness-setup-count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 10))
+        XCTAssertEqual(count.label, "Readiness setups 0")
+        app.buttons["Enable fixture readiness"].tap()
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(count.waitForExistence(timeout: 10))
+        expectation(for: NSPredicate(format: "label == 'Readiness setups 1'"), evaluatedWith: count)
+        waitForExpectations(timeout: 10)
     }
 
     func testSwipeSavedPaymentRequiresConfirmationAndKeepsOtherEntries() {

@@ -13,7 +13,7 @@ use Illuminate\Database\QueryException;
  * Schema is installed exclusively by reviewed migrations. No network/HTTP runs
  * in these transactions, including their bounded deadlock retries.
  */
-final class MySqlPaymentJournal implements PaymentJournal
+final class MySqlPaymentJournal implements NativeAtomicPaymentJournal, PaymentJournal
 {
     public function __construct(private Connection $db, private Encrypter $crypt)
     {
@@ -54,6 +54,76 @@ final class MySqlPaymentJournal implements PaymentJournal
             $this->event($row['id'], 'reserved', 0);
 
             return $row;
+        });
+    }
+
+    /** Atomically fence one owned-stock native descriptor against cancellation. */
+    public function handoffNative(MerchantBinding $binding, SaleSnapshot $sale, string $requestId, string $claimId): array
+    {
+        Contract::id($requestId);
+        if ($binding->provider !== 'square_native' || ! preg_match('/^[a-f0-9-]{36}$/D', $claimId)) {
+            throw new DomainException('Invalid native handoff identity.');
+        }
+
+        return $this->locked($binding->tenantId, function () use ($binding, $sale, $requestId, $claimId): array {
+            $current = $this->db->table('pos_live_sales')->where('runtime_id', $binding->runtimeId)
+                ->where('tenant_id', $binding->tenantId)->where('register_id', $binding->registerId)
+                ->where('id', $sale->saleId)->lockForUpdate()->first();
+            $claim = $this->db->table('pos_payment_start_claims')->where('runtime_id', $binding->runtimeId)
+                ->where('tenant_id', $binding->tenantId)->where('sale_id', $sale->saleId)->where('id', $claimId)->lockForUpdate()->first();
+            if (! $current || ! $claim || $claim->state !== 'preparing_native_v1' || $claim->payment_request_id !== $requestId
+                || $current->payment_request_id !== $requestId || $current->state !== 'quoted'
+                || $current->commerce_source !== 'everbranch_inventory_v1' || $current->stock_state !== 'held'
+                || $current->attempt_id || $current->descriptor_issued_at || $current->source_reference
+                || strtotime($current->expires_at) <= time()) {
+                throw new DomainException('Native handoff is no longer available.');
+            }
+            $snapshot = json_decode($this->crypt->decrypt($current->snapshot, false), true, 512, JSON_THROW_ON_ERROR);
+            if (! hash_equals($current->snapshot_hash, Contract::hash($snapshot))
+                || Contract::hash($snapshot['binding'] ?? []) !== Contract::hash($binding->snapshot())
+                || Contract::hash($snapshot['sale'] ?? []) !== Contract::hash($sale->snapshot())
+                || (int) $current->amount_minor !== $sale->amountMinor || strtolower($current->currency) !== $sale->currency) {
+                throw new DomainException('Native handoff terms require review.');
+            }
+            $holdKey = 'pos:'.$binding->runtimeId.':'.$sale->saleId;
+            $stockLock = $this->db->table('commerce_stock_operations')->where('tenant_id', $binding->tenantId)
+                ->where('request_hash', hash('sha256', 'collect-lock:'.$holdKey))->where('kind', 'collection_lock')->lockForUpdate()->first();
+            $stockHolds = $this->db->table('commerce_stock_reservations')->where('tenant_id', $binding->tenantId)
+                ->where('hold_key', $holdKey)->lockForUpdate()->get();
+            if (! $stockLock || $stockHolds->contains(fn ($hold): bool => $hold->state !== 'held' || $hold->collection_locked_at === null)) {
+                throw new DomainException('Native inventory reservation requires review.');
+            }
+            $this->db->statement('INSERT INTO payment_core_bindings (tenant_id, register_id, fingerprint, binding) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE id = id',
+                [$binding->tenantId, $binding->registerId, $binding->fingerprint(), $this->encrypt($binding->snapshot())]);
+            $register = $this->db->table('payment_core_bindings')->where('tenant_id', $binding->tenantId)
+                ->where('register_id', $binding->registerId)->lockForUpdate()->first();
+            if (! $register || ! hash_equals($register->fingerprint, $binding->fingerprint())) {
+                throw new DomainException('Register merchant binding is immutable.');
+            }
+            $hash = Contract::hash([$binding->snapshot(), $sale->snapshot()]);
+            [$row, $created] = $this->insert($binding, (int) $register->id, $requestId, $sale->saleId, 'payment', $hash,
+                $sale->snapshot(), $sale->amountMinor, $sale->currency);
+            if (! $created || $this->db->table('payment_core_operations')->where('tenant_id', $binding->tenantId)
+                ->where('register_id', $binding->registerId)->where('id', '<>', $row['id'])
+                ->whereIn('state', ['reserved', 'processing', 'unknown', 'review'])
+                ->where(fn ($active) => $active->where('state', '<>', 'unknown')
+                    ->orWhereNotExists(fn ($q) => $q->selectRaw('1')->from('payment_core_events as parked')
+                        ->whereColumn('parked.operation_id', 'payment_core_operations.id')->where('parked.event_code', 'explicit_review_parked')))
+                ->lockForUpdate()->exists()) {
+                throw new DomainException('Resolve the register operation before another sale.');
+            }
+            $this->event($row['id'], 'reserved', 0);
+            $this->event($row['id'], 'dispatch_claimed', 0);
+            $this->db->table('payment_core_operations')->where('tenant_id', $binding->tenantId)->where('id', $row['id'])
+                ->update(['claimed' => true, 'state' => 'unknown']);
+            $this->db->table('pos_live_sales')->where('runtime_id', $binding->runtimeId)->where('tenant_id', $binding->tenantId)
+                ->where('id', $sale->saleId)->update(['attempt_id' => $row['id'], 'state' => 'unknown', 'descriptor_issued_at' => now()]);
+            $this->db->table('pos_payment_start_claims')->where('id', $claimId)->update(['state' => 'handed_off', 'updated_at' => now()]);
+            $this->db->table('pos_live_events')->insert(['runtime_id' => $binding->runtimeId, 'tenant_id' => $binding->tenantId,
+                'sale_id' => $sale->saleId, 'code' => 'native_descriptor_issued',
+                'details' => $this->crypt->encrypt('[]', false), 'created_at' => now()]);
+
+            return $this->load($binding->tenantId, $row['id']);
         });
     }
 

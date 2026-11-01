@@ -295,7 +295,9 @@ jobs:
         run: php ./vendor/bin/pest tests/Integration/TeamSearchMySqlRecoveryTest.php --compact
 
       - name: Verify subscription pilot evidence partial-DDL recovery
-        run: php ./vendor/bin/pest tests/Integration/BirthdayClubMySqlRecoveryTest.php tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php --compact
+        env:
+          POS_DISPOSABLE_MYSQL: '1'
+        run: php ./vendor/bin/pest tests/Integration/BirthdayClubMySqlRecoveryTest.php tests/Integration/PosBirthdayAnnualHoldMySqlRecoveryTest.php tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php --compact
 
       - name: Verify POS simulation partial-DDL recovery
         env:
@@ -318,7 +320,8 @@ jobs:
       - name: Verify live POS merchant, stock, Shopify and refund boundaries
         env:
           POS_LIVE_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/PosLive tests/Integration/PosLiveMySqlRecoveryTest.php tests/Integration/PosLiveMySqlConcurrencyTest.php --compact
+          COMMERCE_RULES_DISPOSABLE_MYSQL: '1'
+        run: php ./vendor/bin/pest tests/PosLive tests/Integration/PosLiveMySqlRecoveryTest.php tests/Integration/PosLiveMySqlConcurrencyTest.php tests/Integration/CommerceRuleSetMySqlRecoveryTest.php tests/Integration/PosCandleCashMySqlRecoveryTest.php tests/Integration/PosShopifyDiscountMySqlRecoveryTest.php --compact
 
       - name: Verify finished goods inventory recovery and concurrency
         env:
