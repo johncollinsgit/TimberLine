@@ -1622,7 +1622,7 @@ it('resolves a fully evidenced owner-attested partial allocation once or retains
     $this->getJson($url.'/status')->assertOk()->assertJsonPath('state', 'not_approved')->assertJsonPath('verification_is_point_in_time', true);
     $input = ['request_id' => (string) Str::uuid(), 'review_version' => $preview['review_version'], 'reason' => 'Customer returned one item',
         'confirmed' => true, 'allocation' => ['lines' => [['line_id' => $this->item, 'units' => [0]]], 'tax_minor' => 70]];
-    if ($scenario === 'disabled_queued') {
+    if (in_array($scenario, ['disabled_queued', 'lost_response'], true)) {
         // Simulate a crash after durable approval but before its outbox effect runs.
         $evidence = app(\App\Services\Pos\PosRefundReviewEvidence::class)->inspect($sale);
         $calculated = app(\App\Services\Pos\PosRefundAllocation::class)->validate($evidence['snapshot']['terms'], 2140, 1070, $input['allocation']);
@@ -1635,6 +1635,20 @@ it('resolves a fully evidenced owner-attested partial allocation once or retains
         ]);
         $effectKey = 'customer_refunds_review_'.substr(hash('sha256', $input['request_id']), 0, 32);
         app(\App\Services\Pos\PosService::class)->enqueue($this->tenant->id, $sale->id, $effectKey, []);
+        if ($scenario === 'lost_response') {
+            // The server committed the approval but crashed before processing or responding.
+            $afterCrash = $this->getJson($url)->assertOk()->assertJsonPath('previous_approved_allocation', $input['allocation'])->json();
+            expect($afterCrash['review_version'])->not->toBe($input['review_version']);
+            $changed = [...$input, 'reason' => 'A changed request'];
+            $this->postJson($url, $changed)->assertStatus(409)->assertJsonPath('error.code', 'refund_allocation_conflict');
+            $this->postJson($url, $input)->assertOk()->assertJsonPath('state', 'completed');
+            $this->postJson($url, $input)->assertOk()->assertJsonPath('state', 'completed');
+            expect($this->store->rows('events', $this->tenant->id)->where('sale_id', $sale->id)->where('code', 'customer_refund_allocation_approved')->count())->toBe(1)
+                ->and((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(1.0)
+                ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(2);
+
+            return;
+        }
         config(['pos_live.partial_refund_reward_review_enabled' => false, 'pos_live.partial_refund_reward_resolution_enabled' => false]);
         app(\App\Services\Pos\PosOutbox::class)->drainSale($scope, $sale->id);
         expect($this->store->rows('outbox', $this->tenant->id)->where('effect_key', $effectKey)->value('state'))->toBe('review')
@@ -1812,4 +1826,4 @@ it('resolves a fully evidenced owner-attested partial allocation once or retains
             ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(3);
     }
     Http::assertNotSent(fn ($request) => $request->method() !== 'GET');
-})->with(['normal', 'shortfall', 'race', 'stale', 'changed_after_approval', 'changed_after_write', 'postcheck_outage', 'association_changed', 'association_after_approval', 'disabled_queued']);
+})->with(['normal', 'shortfall', 'race', 'stale', 'changed_after_approval', 'changed_after_write', 'postcheck_outage', 'association_changed', 'association_after_approval', 'disabled_queued', 'lost_response']);
