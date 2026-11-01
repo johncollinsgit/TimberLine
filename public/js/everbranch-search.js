@@ -38,20 +38,28 @@
     }
     return cached;
   }
+  function matchesWord(list, term, prefix) {
+    for (let i = 0; i < list.length; i++) {
+      const word = list[i];
+      if (word === term || (prefix && word.startsWith(term))) return true;
+    }
+    return false;
+  }
   function score(document, input) {
     const query = typeof input === 'string' ? parse(input) : input;
     if (query.commandsOnly && document.type !== 'command') return null;
     const { title, compactId, combined, titleWords, allWords, idWords, updated } = prepare(document);
     const compactQuery = query.compactText ?? query.text.replace(/ /g, '');
     if (compactQuery && compactId === compactQuery) return [0, 0, document.completed || document.archived ? 1 : 0, updated, String(document.id)];
-    if (!query.phrases.every(phrase => combined.includes(phrase))) return null;
+    for (let i = 0; i < query.phrases.length; i++) {
+      if (i in query.phrases && !combined.includes(query.phrases[i])) return null;
+    }
     if (!query.terms.length) return [0, 0, 0, 0, String(document.id)];
     let typos = 0, bodyMatches = 0;
     for (let i = 0; i < query.terms.length; i++) {
       const term = query.terms[i], last = i === query.terms.length - 1;
-      const match = list => list.some(word => word === term || (last && word.startsWith(term)));
-      if (match(titleWords) || match(idWords) || (query.terms.length === 1 && compactId.startsWith(compactQuery))) continue;
-      if (match(allWords)) { bodyMatches++; continue; }
+      if (matchesWord(titleWords, term, last) || matchesWord(idWords, term, last) || (query.terms.length === 1 && compactId.startsWith(compactQuery))) continue;
+      if (matchesWord(allWords, term, last)) { bodyMatches++; continue; }
       // Never fuzzy-match identifiers. Only natural-language fields participate.
       const length = [...term].length, allowed = length >= 9 ? 2 : length >= 5 ? 1 : 0;
       if (!allowed) return null;
@@ -70,12 +78,18 @@
   const compare = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1; } return 0; };
   const labelFor = value => String(value || '').replace(/[_-]/g, ' ').replace(/^./, letter => letter.toUpperCase());
   function search(documents, input, filters = {}) {
-    const query = parse(input), seen = new Set();
-    return documents.filter(doc => {
-      if (seen.has(doc.id)) return false;
+    const query = parse(input), seen = new Set(), rows = [];
+    for (let i = 0; i < documents.length; i++) {
+      if (!(i in documents)) continue;
+      const doc = documents[i];
+      if (seen.has(doc.id)) continue;
       seen.add(doc.id);
-      return (!filters.type || doc.type === filters.type) && (!filters.project || (doc.projects || []).includes(filters.project)) && (!filters.person || (doc.people || []).includes(filters.person)) && (filters.state !== 'active' || !(doc.completed || doc.archived)) && (filters.state !== 'closed' || doc.completed || doc.archived);
-    }).map(document => ({ document, rank: score(document, query) })).filter(row => row.rank).sort((a, b) => compare(a.rank, b.rank)).map(row => row.document);
+      if ((filters.type && doc.type !== filters.type) || (filters.project && !(doc.projects || []).includes(filters.project)) || (filters.person && !(doc.people || []).includes(filters.person)) || (filters.state === 'active' && (doc.completed || doc.archived)) || (filters.state === 'closed' && !(doc.completed || doc.archived))) continue;
+      const rank = score(doc, query);
+      if (rank) rows.push({ document: doc, rank });
+    }
+    rows.sort((a, b) => compare(a.rank, b.rank));
+    return rows.map(row => row.document);
   }
   function element(tag, text, className) { const node = document.createElement(tag); if (text != null) node.textContent = text; if (className) node.className = className; return node; }
   function highlight(node, text, input) {
