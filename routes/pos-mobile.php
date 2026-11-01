@@ -9,6 +9,8 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
     Route::get('/registers', [PosController::class, 'registers'])->middleware($read)->name('registers');
     Route::prefix('/registers/{register}')->where(['register' => '[a-f0-9]{32}'])->group(function () use ($read, $write): void {
         Route::get('/customer-enrollment', [PosController::class, 'customerEnrollmentSettings'])->middleware($read)->name('customer-enrollment.settings');
+        Route::get('/wallet-link-reviews/{reference}', [PosController::class, 'walletLinkReview'])->where('reference', '[a-f0-9]{32}')->middleware($read)->name('wallet-link-reviews.show');
+        Route::post('/wallet-link-reviews/{reference}', [PosController::class, 'recordWalletLinkReview'])->where('reference', '[a-f0-9]{32}')->middleware($write)->name('wallet-link-reviews.review');
         Route::post('/customer-enrollment/settings', [PosController::class, 'configureCustomerEnrollment'])->middleware($write)->name('customer-enrollment.configure');
         Route::post('/customers/{profile}/enrollment', [PosController::class, 'enrollCustomer'])->whereNumber('profile')->middleware($write)->name('customer-enrollment.save');
         Route::get('/customers', [PosController::class, 'customers'])->middleware($read)->name('customers.search');

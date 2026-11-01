@@ -8,6 +8,7 @@ return [
     'shopify_online_discounts_enabled' => (bool) env('POS_SHOPIFY_ONLINE_DISCOUNTS_ENABLED', false),
     'tax_location_management_enabled' => (bool) env('POS_TAX_LOCATION_MANAGEMENT_ENABLED', false),
     'receipt_email_enabled' => (bool) env('POS_RECEIPT_EMAIL_ENABLED', false),
+    'existing_wallet_review_enabled' => (bool) env('POS_EXISTING_WALLET_REVIEW_ENABLED', false),
     'collection_enabled' => (bool) env('POS_LIVE_COLLECTION_ENABLED', false),
     'development_acceptance_enabled' => (bool) env('POS_DEVELOPMENT_ACCEPTANCE_ENABLED', false),
     'servicing_enabled' => (bool) env('POS_LIVE_SERVICING_ENABLED', false),

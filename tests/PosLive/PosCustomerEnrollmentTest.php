@@ -217,3 +217,42 @@ it('allows customer creation only for explicitly enabled tenant staff assigned t
     $this->actor->tenants()->updateExistingPivot($this->tenant->id, ['role' => 'member']);
     $this->postJson($this->base.'/customers', [...$create, 'request_id' => (string) Str::uuid()])->assertForbidden();
 });
+
+it('records an assigned administrator review without linking a wallet or trusting contact matches', function (): void {
+    config(['pos_live.existing_wallet_review_enabled' => true]);
+    $service = app(\App\Services\Pos\PosExistingWalletReview::class);
+    $subject = 'gid://shopify/Customer/771';
+    $request = $service->request($this->tenant->id, $subject, (string) Str::uuid());
+    $url = $this->base.'/wallet-link-reviews/'.$request['reference'];
+    $details = $this->getJson($url)->assertOk()->assertJsonPath('shopify_subject', $subject)
+        ->assertJsonPath('linked', false)->assertJsonPath('finalization_available', false)->json();
+    expect($details['disclosure'])->toContain('independently verified');
+    $this->actor->tenants()->updateExistingPivot($this->tenant->id, ['role' => 'member']);
+    $input = ['customer_profile_id' => $this->profile->id, 'evidence' => 'owner_verified_independent_evidence',
+        'confirmed' => true, 'disclosure_hash' => $details['disclosure_hash']];
+    $this->getJson($url)->assertForbidden();
+    $this->postJson($url, $input)->assertForbidden();
+    $this->actor->tenants()->updateExistingPivot($this->tenant->id, ['role' => 'admin']);
+    $this->withHeader('X-Pos-Device', 'unassigned-device')->postJson($url, $input)->assertNotFound();
+    $this->withHeader('X-Pos-Device', 'fixture_device_1234');
+    $foreignTenant = Tenant::create(['name' => 'Other', 'slug' => 'other-'.Str::lower(Str::random(8)), 'status' => 'active']);
+    $foreign = \App\Models\MarketingProfile::create(['tenant_id' => $foreignTenant->id, 'first_name' => 'Other']);
+    expect(fn () => $service->customerStatus($foreignTenant->id, $request['reference'], $subject))
+        ->toThrow(\App\Services\Pos\PosException::class, 'wallet_review_unavailable');
+    $this->postJson($url, [...$input, 'customer_profile_id' => $foreign->id])->assertNotFound();
+    $this->postJson($url, [...$input, 'confirmed' => false])->assertStatus(422);
+    $this->postJson($url, [...$input, 'disclosure_hash' => str_repeat('0', 64)])->assertStatus(422);
+    $this->postJson($url, $input)->assertOk()->assertJsonPath('state', 'review_recorded')->assertJsonPath('linked', false);
+    $this->postJson($url, $input)->assertOk();
+    $other = \App\Models\MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Other buyer']);
+    $this->postJson($url, [...$input, 'customer_profile_id' => $other->id])->assertConflict();
+    expect($this->store->rows('events', $this->tenant->id)->where('sale_id', $request['reference'])->where('code', 'wallet_link_reviewed')->count())->toBe(1)
+        ->and(\App\Models\MarketingProfileLink::where('tenant_id', $this->tenant->id)->count())->toBe(0)
+        ->and($service->customerStatus($this->tenant->id, $request['reference'], $subject)['linked'])->toBeFalse();
+    $this->travel(25)->hours();
+    expect($service->customerStatus($this->tenant->id, $request['reference'], $subject)['state'])->toBe('expired');
+    $scope = ['tenant_id' => $this->tenant->id, 'actor_id' => $this->actor->id, 'role' => 'admin',
+        'register' => $this->store->rows('registers', $this->tenant->id)->where('id', $this->register)->first()];
+    expect(fn () => $service->review($scope, $request['reference'], $this->profile->id, 'owner_verified_independent_evidence', true, $details['disclosure_hash']))
+        ->toThrow(\App\Services\Pos\PosException::class, 'wallet_review_expired');
+});

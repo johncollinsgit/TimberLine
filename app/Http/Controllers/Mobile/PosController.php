@@ -154,6 +154,21 @@ final class PosController extends Controller
         return $this->respond($r, [], fn () => app(\App\Services\Pos\PosCustomerEnrollment::class)->settings($register));
     }
 
+    public function walletLinkReview(Request $r, string $tenant, string $register, string $reference): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosExistingWalletReview::class)
+            ->reviewDetails(app(\App\Services\Pos\PosAccess::class)->register($register), $reference));
+    }
+
+    public function recordWalletLinkReview(Request $r, string $tenant, string $register, string $reference): JsonResponse
+    {
+        return $this->respond($r, ['customer_profile_id' => ['required', 'integer', 'min:1'],
+            'evidence' => ['required', 'in:owner_attests_existing_wallet_session,owner_verified_independent_evidence'],
+            'confirmed' => ['required', 'boolean'], 'disclosure_hash' => ['required', 'regex:/^[a-f0-9]{64}$/D']], fn ($input) => app(\App\Services\Pos\PosExistingWalletReview::class)
+                ->review(app(\App\Services\Pos\PosAccess::class)->register($register, 'admin'), $reference,
+                    $input['customer_profile_id'], $input['evidence'], $input['confirmed'] === true, $input['disclosure_hash']));
+    }
+
     public function configureCustomerEnrollment(Request $r, string $tenant, string $register): JsonResponse
     {
         return $this->respond($r, ['version' => ['required', 'regex:/^[a-f0-9]{64}$/D'],

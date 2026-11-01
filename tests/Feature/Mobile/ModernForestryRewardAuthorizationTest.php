@@ -128,3 +128,38 @@ it('keeps account creation disabled without a reviewed rollout', function (): vo
         ->assertStatus(503)->assertJsonPath('error.code', 'customer_account_linking_unavailable');
     expect($response->headers->get('Cache-Control'))->toContain('no-store')->and(MarketingProfile::count())->toBe($count);
 });
+
+it('accepts an explicitly disclosed existing-wallet review request only from a fresh customer subject', function (): void {
+    \Illuminate\Support\Facades\Http::preventStrayRequests();
+    config(['pos_live.runtime_id' => 'fixture_runtime', 'pos_live.existing_wallet_review_enabled' => true,
+        'services.shopify.customer_account.graphql_endpoint' => 'https://account.example.invalid/customer/graphql']);
+    \Illuminate\Support\Facades\Http::fake(function ($request) {
+        $gid = $request->hasHeader('Authorization', 'other-token') ? 'gid://shopify/Customer/772' : 'gid://shopify/Customer/771';
+
+        return \Illuminate\Support\Facades\Http::response(['data' => ['customer' => ['id' => $gid, 'emailAddress' => ['emailAddress' => 'same@example.invalid']]]]);
+    });
+    $url = '/api/mobile/v1/modern-forestry/rewards/existing-wallet-review';
+    $terms = $this->getJson($url.'-terms')->assertOk()->assertJsonPath('data.finalization_available', false)->json('data');
+    $input = ['request_id' => (string) \Illuminate\Support\Str::uuid(), 'confirmed' => true,
+        'disclosure_version' => $terms['disclosure_version'], 'disclosure_hash' => $terms['disclosure_hash']];
+    $this->withToken('fake-customer-account-token')->postJson($url, [...$input, 'confirmed' => false])->assertStatus(422);
+    $this->withToken('fake-customer-account-token')->postJson($url, [...$input, 'disclosure_hash' => str_repeat('0', 64)])->assertStatus(422);
+    $first = $this->withToken('fake-customer-account-token')->postJson($url, $input)->assertOk()
+        ->assertJsonPath('data.linked', false)->assertJsonPath('data.finalization_available', false)->assertJsonMissingPath('data.profile_id')->json('data');
+    $this->withToken('fake-customer-account-token')->postJson($url, $input)->assertOk()->assertJsonPath('data.reference', $first['reference']);
+    $this->withToken('fake-customer-account-token')->getJson($url.'/'.$first['reference'])->assertOk()->assertJsonPath('data.state', 'awaiting_review');
+    $this->withToken('other-token')->getJson($url.'/'.$first['reference'])->assertNotFound();
+    $this->withToken('mf-test-profile:'.$this->profile->id)->postJson($url, $input)->assertUnauthorized();
+    $event = app(\App\Services\Pos\PosStore::class)->rows('events', $this->tenant->id)->where('sale_id', $first['reference'])->first();
+    $details = app(\App\Services\Pos\PosStore::class)->decrypt($event->details);
+    expect($details['subject'])->toBe($this->gid)->and($details['disclosure'])->toBe($terms['disclosure'])
+        ->and($event->details)->not->toContain('fake-customer-account-token')->and($event->details)->not->toContain($this->gid)
+        ->and(\App\Models\MarketingProfileLink::where('source_type', \App\Services\Pos\PosVerifiedCustomerAccount::SOURCE)->count())->toBe(0);
+});
+
+it('keeps existing-wallet requests disabled without performing provider authentication', function (): void {
+    \Illuminate\Support\Facades\Http::preventStrayRequests();
+    $this->withToken('fake-token')->postJson('/api/mobile/v1/modern-forestry/rewards/existing-wallet-review', [])
+        ->assertStatus(503)->assertJsonPath('error.code', 'wallet_review_disabled');
+    \Illuminate\Support\Facades\Http::assertNothingSent();
+});

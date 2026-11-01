@@ -541,6 +541,75 @@ class ModernForestryProductCatalogController extends Controller
         return response()->json(['data' => ['profile_id' => $profile->id]], 200, ['Cache-Control' => 'private, no-store']);
     }
 
+    public function existingWalletReviewTerms(): JsonResponse
+    {
+        if (config('pos_live.existing_wallet_review_enabled', false) !== true) {
+            return response()->json(['data' => null, 'error' => ['code' => 'wallet_review_disabled']], 503, ['Cache-Control' => 'private, no-store']);
+        }
+
+        return response()->json(['data' => ['disclosure' => \App\Services\Pos\PosExistingWalletReview::CUSTOMER_DISCLOSURE,
+            'disclosure_version' => \App\Services\Pos\PosExistingWalletReview::CUSTOMER_DISCLOSURE_VERSION,
+            'disclosure_hash' => \App\Services\Pos\PosExistingWalletReview::customerDisclosureHash(),
+            'finalization_available' => false]], 200, ['Cache-Control' => 'private, no-store']);
+    }
+
+    /** The subject is revalidated by Shopify on every request; no customer contact matching occurs. */
+    public function requestExistingWalletReview(Request $request, ModernForestryMobileCustomerSessionService $sessions): JsonResponse
+    {
+        if (! is_string($request->bearerToken()) || trim($request->bearerToken()) === '') {
+            return $this->mobileUnauthorizedResponse()->header('Cache-Control', 'private, no-store');
+        }
+        if (config('pos_live.existing_wallet_review_enabled', false) !== true) {
+            return response()->json(['data' => null, 'error' => ['code' => 'wallet_review_disabled']], 503, ['Cache-Control' => 'private, no-store']);
+        }
+        $input = $request->all();
+        if (array_diff(array_keys($input), ['request_id', 'confirmed', 'disclosure_version', 'disclosure_hash'])
+            || \Illuminate\Support\Facades\Validator::make($input, ['request_id' => ['required', 'uuid'], 'confirmed' => ['required', 'boolean'],
+                'disclosure_version' => ['required', 'in:existing-wallet-review-v1'], 'disclosure_hash' => ['required', 'regex:/^[a-f0-9]{64}$/D']])->fails()
+            || ($input['confirmed'] ?? null) !== true
+            || ! hash_equals(\App\Services\Pos\PosExistingWalletReview::customerDisclosureHash(), $input['disclosure_hash'] ?? '')) {
+            return response()->json(['data' => null, 'error' => ['code' => 'wallet_review_confirmation_required']], 422, ['Cache-Control' => 'private, no-store']);
+        }
+        $identity = $sessions->resolveFreshShopifySubject($request);
+        if (! $identity) {
+            return $this->mobileUnauthorizedResponse()->header('Cache-Control', 'private, no-store');
+        }
+        try {
+            $tenant = \App\Models\Tenant::query()->whereKey(ModernForestryMobileCheckoutService::TENANT_ID)
+                ->where('slug', ModernForestryMobileProductCatalogService::TENANT_SLUG)->firstOrFail();
+            $status = app(\App\Services\Pos\PosExistingWalletReview::class)->request((int) $tenant->id,
+                $identity['shopify_customer_id'], $input['request_id']);
+        } catch (\App\Services\Pos\PosException $error) {
+            return response()->json(['data' => null, 'error' => ['code' => $error->blocker]], $error->status, ['Cache-Control' => 'private, no-store']);
+        }
+
+        return response()->json(['data' => $status], 200, ['Cache-Control' => 'private, no-store']);
+    }
+
+    public function existingWalletReviewStatus(Request $request, string $reference, ModernForestryMobileCustomerSessionService $sessions): JsonResponse
+    {
+        if (! is_string($request->bearerToken()) || trim($request->bearerToken()) === '') {
+            return $this->mobileUnauthorizedResponse()->header('Cache-Control', 'private, no-store');
+        }
+        if (config('pos_live.existing_wallet_review_enabled', false) !== true) {
+            return response()->json(['data' => null, 'error' => ['code' => 'wallet_review_disabled']], 503, ['Cache-Control' => 'private, no-store']);
+        }
+        $identity = $sessions->resolveFreshShopifySubject($request);
+        if (! $identity) {
+            return $this->mobileUnauthorizedResponse()->header('Cache-Control', 'private, no-store');
+        }
+        try {
+            $tenant = \App\Models\Tenant::query()->whereKey(ModernForestryMobileCheckoutService::TENANT_ID)
+                ->where('slug', ModernForestryMobileProductCatalogService::TENANT_SLUG)->firstOrFail();
+            $status = app(\App\Services\Pos\PosExistingWalletReview::class)->customerStatus((int) $tenant->id,
+                $reference, $identity['shopify_customer_id']);
+        } catch (\App\Services\Pos\PosException $error) {
+            return response()->json(['data' => null, 'error' => ['code' => $error->blocker]], $error->status, ['Cache-Control' => 'private, no-store']);
+        }
+
+        return response()->json(['data' => $status], 200, ['Cache-Control' => 'private, no-store']);
+    }
+
     public function issuePosRewardAuthorization(Request $request, ModernForestryMobileCustomerSessionService $sessions): JsonResponse
     {
         if (! is_string($request->bearerToken()) || trim($request->bearerToken()) === '') {
