@@ -260,6 +260,18 @@ a published policy. Channel and refund behavior are currently fixed to
 in-person and full-refund restoration with partial-refund review. This API
 does not edit the online rewards program or the shared wallet ledger.
 
+`POS_PARTIAL_REFUND_REWARD_REVIEW_ENABLED` defaults off. With it off,
+existing POS earning programs keep their prior proportional partial-refund
+adjustment; that estimate cannot identify which merchandise or tax was
+refunded. With it on, confirmed amount-only partial refunds leave earning
+unchanged and enter review. The Square refund itself is not blocked. A complete
+item-allocation and staff review-resolution flow does not yet exist, so leave
+this flag off until that flow is implemented and verified. Full-refund and
+spent-credit handling continue to use the original purchase evidence.
+If an effect already entered review while the flag was on, switching it off
+does not automatically retry or close that review; a later verified full refund
+may supersede it, otherwise it remains for manual review.
+
 Publication is hard-disabled regardless of feature flags. A policy recheck
 currently happens before the durable payment-start claim, so publishing a
 different cap concurrently could race a payment. Before publication can be

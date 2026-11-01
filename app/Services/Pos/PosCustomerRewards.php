@@ -131,7 +131,8 @@ final class PosCustomerRewards
                 return null;
             }
             $subtotal = $snapshot['terms']['rewardable_subtotal_minor'] ?? array_sum(array_map(fn ($line) => $line['unit_amount_minor'] * $line['quantity'], $snapshot['sale']['lines']));
-            if ($subtotal > 0 && $refunded > 0 && $refunded < (int) $sale->amount_minor) {
+            if (config('pos_live.partial_refund_reward_review_enabled', false) === true
+                && $subtotal > 0 && $refunded > 0 && $refunded < (int) $sale->amount_minor) {
                 // Square's amount-only refund does not identify returned items or tax allocation.
                 // Preserve confirmed evidence but leave the wallet untouched until allocation is reviewed.
                 $key = Contract::hash(['allocation_review', $tenant, $sale->id, $id, $refunded, (int) $sale->amount_minor, $subtotal]);

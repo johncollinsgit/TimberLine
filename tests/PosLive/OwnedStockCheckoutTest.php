@@ -1151,6 +1151,7 @@ it('binds one scanned reward to only one of two concurrent quote requests on MyS
 });
 
 it('reviews amount-only partial refunds once and reverses rewards after the full refund', function (string $scenario): void {
+    config(['pos_live.partial_refund_reward_review_enabled' => true]);
     $quote = $this->postJson($this->base.'/quotes', $this->selection)->assertOk()->json();
     $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail();
     $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($sale);
@@ -1192,6 +1193,12 @@ it('reviews amount-only partial refunds once and reverses rewards after the full
         ->toBe($scenario === 'unawarded' ? 0.0 : 3.50);
     expect(fn () => $rewards->apply($sale, $partial))->toThrow(\App\Services\Pos\PosException::class, 'customer_rewards_refund_allocation_review');
     expect($this->store->rows('events', $this->tenant->id)->where('sale_id', $sale->id)->where('code', 'customer_refund_allocation_review')->count())->toBe(1);
+    config(['pos_live.partial_refund_reward_review_enabled' => false]);
+    app(\App\Services\Pos\PosOutbox::class)->drainSale($scope, $sale->id);
+    expect($this->store->rows('outbox', $this->tenant->id)->where('id', $effect->id)->value('state'))->toBe('review')
+        ->and((float) (\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance') ?? 0))
+        ->toBe($scenario === 'unawarded' ? 0.0 : 3.50);
+    config(['pos_live.partial_refund_reward_review_enabled' => true]);
 
     if ($scenario === 'spent') {
         \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->update(['balance' => 0]);
