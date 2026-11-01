@@ -113,6 +113,46 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS '$54.50'")).firstMatch.exists)
     }
 
+    func testClosingCompletedSaleClearsBasketAndKeepsReceiptAccessible() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-completed-ui-tests"]; app.launch()
+        XCTAssertTrue(app.staticTexts["fixture-receipt"].waitForExistence(timeout: 10))
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 5))
+        let basket = app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch
+        XCTAssertFalse(basket.isEnabled)
+        XCTAssertFalse(app.buttons["Payment saved · Open status"].exists)
+        XCTAssertTrue(app.buttons["Recent sales"].waitForExistence(timeout: 5))
+        app.buttons["Recent sales"].tap()
+        XCTAssertTrue(app.staticTexts["Payment confirmed"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["$21.80"].exists)
+        app.buttons.matching(NSPredicate(format: "label CONTAINS '$21.80'")).firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["fixture-receipt"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Add customer"].exists)
+    }
+
+    func testSwipingAwayCompletedSaleClearsTheNextBasket() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-completed-ui-tests", "--pos-completed-sheet-ui-tests"]; app.launch()
+        let reopen = app.buttons["Payment saved · Open status"]
+        XCTAssertTrue(reopen.waitForExistence(timeout: 10)); reopen.tap()
+        let header = app.navigationBars["Current sale"]
+        XCTAssertTrue(header.waitForExistence(timeout: 5))
+        header.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
+        attach(app, name: "After swipe on completed sale")
+        XCTAssertTrue(header.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Recent sales"].waitForExistence(timeout: 5))
+        XCTAssertFalse(reopen.exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.isEnabled)
+    }
+
+    func testClosingPaidSaleWithUnresolvedRefundPreservesRecovery() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-completed-ui-tests", "--pos-refund-inflight-ui-tests"]; app.launch()
+        XCTAssertTrue(app.staticTexts["fixture-receipt"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Next sale"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.buttons["Payment saved · Open status"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Recent sales"].exists)
+    }
+
     func testWarmBasketReviewsTheServerTotalWithoutAnotherMenu() {
         let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests"]; app.launch()
         let basket = app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch

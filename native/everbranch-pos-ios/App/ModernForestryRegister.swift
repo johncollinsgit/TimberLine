@@ -25,10 +25,15 @@ struct EverbranchRegisterView: View {
             } else { POSView(screen: .setup, model: model) }
         }
         .background(PayTheme.paper)
-        .sheet(isPresented: $basket) { POSView(onClose: { basket = false }, screen: .checkout, model: model) }
+        .sheet(isPresented: $basket, onDismiss: {
+            if model.sale?.canLeave == true && model.pending?.refundRequestID == nil { model.nextSale() }
+        }) { POSView(onClose: { basket = false }, screen: .checkout, model: model) }
         .sheet(isPresented: $account) { POSView(onClose: { account = false }, onOpenRegister: { account = false }, screen: .setup, model: model) }
         .onChange(of: model.completedSaleGeneration) { _, _ in basket = false; showRecovery = false }
         .onChange(of: model.signedIn) { _, value in if !value { account = false; basket = false } }
+        #if DEBUG
+        .onAppear { if ProcessInfo.processInfo.arguments.contains("--pos-completed-sheet-ui-tests") { showRecovery = false } }
+        #endif
     }
 }
 
@@ -52,6 +57,7 @@ private struct NativeRegister: View {
     @State private var keypadCents = 0
     @State private var stockCounts: [String: String] = [:]
     @State private var savedPayments = false
+    @State private var recentSales = false
     @FocusState private var searchFocused: Bool
     private var favoriteKey: String { "register-favorites:\(model.selectedWorkspace?.id ?? 0):\(model.selectedRegister?.id ?? "fixture")" }
     private var groups: [ProductGroup] {
@@ -77,6 +83,7 @@ private struct NativeRegister: View {
             Picker("Register", selection: $tab) { ForEach(RegisterTab.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).padding(.horizontal, 20)
             if model.pending != nil { Button("Payment saved · Open status", action: onBasket).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
             else if !model.visibleSavedPayments.isEmpty { Button("Payments for review (\(model.visibleSavedPayments.count))") { savedPayments = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
+            if model.pending == nil && !model.visibleRecentSales.isEmpty { Button("Recent sales") { recentSales = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
             if let message = model.message { Text(message).font(.footnote).foregroundStyle(PayTheme.muted).padding(.horizontal, 20) }
             if tab == .keypad { keypad }
             else {
@@ -111,6 +118,15 @@ private struct NativeRegister: View {
                    }
                   } footer: { Text("Removing a sale hides it from this phone. Its payment remains in your records.") }
                 }.navigationTitle("Payments for review").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { savedPayments = false } } }
+            }.preferredColorScheme(.light)
+        }
+        .sheet(isPresented: $recentSales) {
+            NavigationStack {
+                List(model.visibleRecentSales) { saved in
+                    Button { recentSales = false; model.openSavedPayment(saved); DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: onBasket) } label: {
+                        VStack(alignment: .leading, spacing: 6) { Text(POSMoney.display(saved.amountMinor)).font(.headline); Text("Payment confirmed").font(.subheadline); Text(saved.savedAt, style: .time).font(.caption) }
+                    }
+                }.navigationTitle("Recent sales").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { recentSales = false } } }
             }.preferredColorScheme(.light)
         }
         .onAppear {
@@ -219,6 +235,16 @@ extension POSViewModel {
             var first = PendingSale(workspace: "fixture", register: "fixture"); first.saleID = "fixture-review-1"
             var second = PendingSale(workspace: "fixture", register: "fixture"); second.saleID = "fixture-review-2"
             savedPaymentReviews = [SavedPaymentReview(pending: first, amountMinor: 763, savedAt: Date()), SavedPaymentReview(pending: second, amountMinor: 5450, savedAt: Date())]
+        }
+        if ProcessInfo.processInfo.arguments.contains("--pos-completed-ui-tests") {
+            var completed = PendingSale(workspace: "fixture", register: "fixture")
+            completed.saleID = "fixture-completed"; completed.collectionRequested = true; completed.sdkStarted = true
+            if ProcessInfo.processInfo.arguments.contains("--pos-refund-inflight-ui-tests") { completed.refundRequestID = UUID().uuidString.lowercased() }
+            pending = completed
+            let saleData = try! JSONSerialization.data(withJSONObject: ["sale_id": "fixture-completed", "request_id": completed.requestID, "state": "succeeded", "stock_state": "committed", "amount_minor": 2180, "currency": "USD", "receipt_available": true, "canonical_confirmation": true, "recovery_required": false, "inventory_authority": "everbranch", "lines": [["title": "River Birch", "quantity": 1, "subtotal_minor": 2000]]])
+            let receiptData = try! JSONSerialization.data(withJSONObject: ["receipt_number": "fixture-receipt", "merchant_location": "Fixture", "register_name": "Fictional register", "lines": [["title": "River Birch", "quantity": 1]], "amount_minor": 2180, "payment_reference": "fixture-payment", "refunded_minor": 0, "settlement_status": "pending"])
+            sale = try? decoder.decode(Sale.self, from: saleData); receipt = try? decoder.decode(POSReceipt.self, from: receiptData)
+            POSCheckoutFixtureProtocol.setCompletedSale(saleData, receipt: receiptData)
         }
         if ProcessInfo.processInfo.arguments.contains("--pos-recovery-ui-tests") {
             signedIn = true; registerLoaded = true

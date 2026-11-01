@@ -105,7 +105,10 @@ struct POSView: View {
             .toolbar {
                 if let onClose {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button(action: onClose) { Text("Close").lineLimit(1).fixedSize() }.frame(minWidth: 64, minHeight: 44).disabled(model.collector.hasActivePayment)
+                        Button {
+                            if screen == .checkout && model.sale?.canLeave == true && model.pending?.refundRequestID == nil { model.nextSale() }
+                            else { onClose() }
+                        } label: { Text("Close").lineLimit(1).fixedSize() }.frame(minWidth: 64, minHeight: 44).disabled(model.collector.hasActivePayment || model.busy)
                     }
                 }
                 if let onAccount {
@@ -124,14 +127,14 @@ struct POSView: View {
                         .accessibilityIdentifier("payment-busy").allowsHitTesting(false)
                 }
             }
-            .interactiveDismissDisabled(model.collector.hasActivePayment)
+            .interactiveDismissDisabled(model.collector.hasActivePayment || model.busy)
             .confirmationDialog("No card was presented?", isPresented: $confirmUncollected, titleVisibility: .visible) {
                 Button("Save for review and return to register") { model.leaveUncollectedForReview() }
                 Button("Keep this payment open", role: .cancel) {}
             } message: { Text("The original attempt stays saved for Square verification. Do not charge this customer again until its status is resolved. You can start a different sale.") }
             .task {
                 #if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("--pos-recovery-ui-tests") { return }
+                if ProcessInfo.processInfo.arguments.contains("--pos-recovery-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-completed-ui-tests") { return }
                 #endif
                 guard model.signedIn else { return }
                 if screen == .checkout && model.registerLoaded && model.pending == nil && model.selectedRegister?.guestCheckout == true && quoteAllowed && !automaticQuoteRequested {
