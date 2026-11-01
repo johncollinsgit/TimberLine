@@ -103,7 +103,7 @@ private struct NativeRegister: View {
         }
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { searchFocused = false } } }
         .sheet(item: $options) { group in optionsSheet(group) }
-        .sheet(item: $bundle) { item in BundleOptions(item: item, model: model) }
+        .sheet(item: $bundle) { item in BundleOptions(item: item, model: model, onPending: onBasket) }
         .sheet(isPresented: $savedPayments) {
             NavigationStack {
                 List {
@@ -151,7 +151,7 @@ private struct NativeRegister: View {
                     Text((group.items.count > 1 ? "From " : "") + POSMoney.display(group.items[0].unitAmountMinor)).font(.headline).monospacedDigit()
                     Text(!group.available ? (group.items.contains { $0.availability == "review_required" } ? "Bundle setup needed" : model.selectedRegister?.canManageInventory == true ? "Count stock" : group.items.contains { $0.availability == "count_required" } ? "Count needed" : "Unavailable") : group.items.count > 1 ? "Choose options" : "Add to basket").font(.caption.weight(.semibold)).padding(.horizontal, 12).padding(.vertical, 10).background(PayTheme.paper, in: Capsule())
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(12).background(PayTheme.cream, in: RoundedRectangle(cornerRadius: 28)).overlay(RoundedRectangle(cornerRadius: 28).stroke(PayTheme.line, lineWidth: 1)).contentShape(RoundedRectangle(cornerRadius: 28))
-            }.disabled(!group.available && model.selectedRegister?.canManageInventory != true).accessibilityLabel(group.items.count == 1 ? "Add \(group.title) to basket" : "Choose \(group.title) options")
+            }.disabled(model.pending == nil && !group.available && model.selectedRegister?.canManageInventory != true).accessibilityLabel(group.items.count == 1 ? "Add \(group.title) to basket" : "Choose \(group.title) options")
             Button {
                 if favorites.contains(group.id) { favorites.remove(group.id) } else { favorites.insert(group.id) }
                 UserDefaults.standard.set(Array(favorites), forKey: favoriteKey)
@@ -161,6 +161,7 @@ private struct NativeRegister: View {
     }
     private func select(_ group: ProductGroup) {
         searchFocused = false
+        if model.pending != nil { onBasket(); return }
         guard group.available || model.selectedRegister?.canManageInventory == true else { return }
         if group.items.count == 1 && group.items[0].kind == "bundle" { bundle = group.items[0] }
         else if group.items.count == 1 && group.available { add(group.items[0]) } else { options = group }
@@ -177,9 +178,19 @@ private struct NativeRegister: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(group.items) { item in
-                        Button { if item.kind == "bundle" { options = nil; DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { bundle = item } } else { add(item); options = nil } } label: {
+                        Button {
+                            if model.pending != nil {
+                                options = nil
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: onBasket)
+                            } else if item.kind == "bundle" {
+                                options = nil
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    if model.pending != nil { onBasket() } else { bundle = item }
+                                }
+                            } else { add(item); options = nil }
+                        } label: {
                             HStack { VStack(alignment: .leading) { Text(item.variantLabel ?? item.title).font(.headline); Text(item.availability == "review_required" ? "Bundle setup needed" : item.kind == "bundle" ? "Mix & match" : (item.availableQuantity ?? 1) > 0 ? "Add to basket" : "Unavailable").font(.subheadline) }; Spacer(); Text(POSMoney.display(item.unitAmountMinor)).monospacedDigit() }.padding(20).background(PayTheme.cream, in: Capsule())
-                        }.disabled((item.availableQuantity ?? 1) == 0 || ["count_required", "review_required"].contains(item.availability ?? "")).accessibilityLabel("Add \(group.title) \(item.variantLabel ?? "")")
+                        }.disabled(model.pending == nil && ((item.availableQuantity ?? 1) == 0 || ["count_required", "review_required"].contains(item.availability ?? ""))).accessibilityLabel("Add \(group.title) \(item.variantLabel ?? "")")
                         if model.selectedRegister?.canManageInventory == true && item.kind != "bundle" && item.availability != "review_required" && (item.availableQuantity == 0 || item.availability == "count_required") {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Count the physical \(item.variantLabel ?? item.title) units remaining at this event. Include units held for open sales.").font(.subheadline).foregroundStyle(PayTheme.muted)
@@ -262,6 +273,7 @@ extension POSViewModel {
 private struct BundleOptions: View {
     let item: CatalogItem
     @ObservedObject var model: POSViewModel
+    let onPending: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var choices: [String: Int] = [:]
     @State private var bundles = 1
@@ -285,10 +297,15 @@ private struct BundleOptions: View {
                     }.padding(.horizontal, 20)
                 }
                 Button {
-                    guard selected == required, required > 0, model.pending == nil else { return }
+                    if model.pending != nil {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: onPending)
+                        return
+                    }
+                    guard selected == required, required > 0 else { return }
                     model.quantities[item.id] = bundles; model.bundleComponents[item.id] = choices
                     UIImpactFeedbackGenerator(style: .light).impactOccurred(); dismiss()
-                } label: { Text("Add bundle · \(POSMoney.display(item.unitAmountMinor * bundles))").font(.headline).frame(maxWidth: .infinity).padding(18).foregroundStyle(PayTheme.cream).background(PayTheme.ink, in: Capsule()) }.disabled(selected != required || required == 0 || model.busy || item.availability == "review_required").opacity(selected == required && required > 0 ? 1 : 0.5).padding(20)
+                } label: { Text(model.pending != nil ? "Open payment status" : "Add bundle · \(POSMoney.display(item.unitAmountMinor * bundles))").font(.headline).frame(maxWidth: .infinity).padding(18).foregroundStyle(PayTheme.cream).background(PayTheme.ink, in: Capsule()) }.disabled(model.pending == nil && (selected != required || required == 0 || model.busy || item.availability == "review_required")).opacity(model.pending != nil || (selected == required && required > 0) ? 1 : 0.5).padding(20)
             }.background(PayTheme.paper).foregroundStyle(PayTheme.ink).navigationTitle(item.title).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
                 .onAppear { choices = model.bundleComponents[item.id] ?? [:]; bundles = max(1, model.quantities[item.id] ?? 1) }
