@@ -7785,6 +7785,43 @@ CREATE TABLE `platform_email_messages` (
   UNIQUE KEY `pem_group_uq` (`group_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_birthday_authorizations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_birthday_authorizations` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `profile_id` bigint unsigned NOT NULL,
+  `issuance_id` bigint unsigned NOT NULL,
+  `cycle_year` smallint unsigned NOT NULL,
+  `token_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `terms_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sale_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `expires_at` timestamp NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `pos_birthday_authorizations_token_hash_unique` (`token_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_birthday_cycle_fences`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_birthday_cycle_fences` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `coverage_id` bigint unsigned NOT NULL,
+  `issuance_id` bigint unsigned NOT NULL,
+  `state` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `operation_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `online_order_hash` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `pos_birthday_cycle_fence_unique` (`tenant_id`,`coverage_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `pos_candle_cash_reservations`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -8026,12 +8063,12 @@ DROP TABLE IF EXISTS `pos_payment_start_claims`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `pos_payment_start_claims` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `sale_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `payment_request_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `state` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sale_id` char(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payment_request_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `state` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -8101,19 +8138,47 @@ DROP TABLE IF EXISTS `pos_reward_authorizations`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `pos_reward_authorizations` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
   `marketing_profile_id` bigint unsigned NOT NULL,
-  `token_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `sale_id` char(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `token_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sale_id` char(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `expires_at` timestamp NOT NULL,
   `bound_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
+  `cap_minor` int unsigned DEFAULT NULL,
+  `policy_version` char(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `disclosure_version` varchar(40) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `account_link_id` bigint unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `pos_reward_auth_token_uq` (`token_hash`),
   KEY `pos_reward_auth_customer_idx` (`runtime_id`,`tenant_id`,`marketing_profile_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_shopify_discount_publications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_shopify_discount_publications` (
+  `request_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `shopify_store_id` bigint unsigned NOT NULL,
+  `rule_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `rule_version` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `code` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `shopify_discount_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lookup_state` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lookup_discount_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lookup_at` timestamp NULL DEFAULT NULL,
+  `actor_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`request_id`),
+  UNIQUE KEY `pos_shopify_discount_code_uq` (`tenant_id`,`shopify_store_id`,`code`),
+  UNIQUE KEY `pos_shopify_discount_rule_uq` (`tenant_id`,`shopify_store_id`,`rule_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `pos_simulator_objects`;
@@ -14247,3 +14312,6 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (322,'2026_11_01_10
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (323,'2026_11_01_110000_create_pos_candle_cash_reservations',44);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (324,'2026_11_01_120000_create_pos_reward_authorizations',45);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (325,'2026_11_01_130000_create_pos_payment_start_claims',45);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (326,'2026_11_01_140000_create_pos_shopify_discount_publications',46);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (327,'2026_11_01_150000_create_pos_birthday_cycle_fences',46);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (328,'2026_11_01_160000_add_pos_reward_authorization_terms',46);
