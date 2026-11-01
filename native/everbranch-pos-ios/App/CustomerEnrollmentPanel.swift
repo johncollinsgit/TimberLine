@@ -157,3 +157,124 @@ struct CustomerEnrollmentSettingsView: View {
         }
     }
 }
+
+private struct WalletReviewDetails: Decodable {
+    let reference: String
+    let shopifySubject: String
+    let expiresAt: String
+    let state: String
+    let reviewedProfileId: Int?
+    let disclosure: String
+    let disclosureHash: String
+    let linked: Bool
+    let finalizationAvailable: Bool
+}
+
+/// An owner attestation only. The server does not link an account or verify this evidence.
+struct ExistingWalletReviewView: View {
+    @ObservedObject var model: POSViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var reference = ""
+    @State private var review: WalletReviewDetails?
+    @State private var query = ""
+    @State private var customers: [POSCustomer] = []
+    @State private var selected: POSCustomer?
+    @State private var evidence = ""
+    @State private var confirmed = false
+    @State private var busy = false
+    @State private var error: String?
+    @FocusState private var inputFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Customer request") {
+                    Text("Ask the customer for their review reference. A reference or matching contact details do not prove wallet ownership.")
+                    TextField("Review reference", text: $reference).textInputAutocapitalization(.never).autocorrectionDisabled().focused($inputFocused)
+                        .accessibilityIdentifier("wallet-review-reference")
+                        .onChange(of: reference) { _, _ in resetReview() }
+                    Button("Find request") { Task { await load() } }.disabled(busy || !validReference)
+                }
+                if let review {
+                    Section("Request details") {
+                        Text("Shopify account: \(review.shopifySubject)").textSelection(.enabled)
+                        Text("Expires: \(review.expiresAt)").font(.caption)
+                        if review.state == "expired" { Text("This request expired. Ask the customer to start a new request.") }
+                        if review.state == "review_recorded", let profileID = review.reviewedProfileId { Text("Review recorded for customer #\(profileID).") }
+                        Text("No wallet has been linked. This review does not enable rewards redemption.").font(.subheadline.weight(.semibold))
+                    }
+                    if review.state == "awaiting_review" && !review.linked && !review.finalizationAvailable {
+                        Section("Select existing customer") {
+                            TextField("Name, email or phone", text: $query).textInputAutocapitalization(.never).focused($inputFocused)
+                            Button("Search customers") { Task { await search() } }.disabled(busy || query.trimmingCharacters(in: .whitespacesAndNewlines).count < 2)
+                            ForEach(customers) { customer in
+                                Button { selected = customer; confirmed = false } label: {
+                                    VStack(alignment: .leading) {
+                                        Text(customer.name).fontWeight(selected?.id == customer.id ? .bold : .regular)
+                                        Text([customer.email, customer.phone].compactMap { $0 }.joined(separator: " · ")).font(.caption)
+                                    }
+                                }.accessibilityIdentifier("wallet-customer-\(customer.id)")
+                            }
+                            if let selected { Text("Selected: \(selected.name) (#\(selected.id))").accessibilityIdentifier("wallet-selected-customer") }
+                        }
+                        Section("Owner attestation") {
+                            Text("This is your attestation; Everbranch has not independently verified the evidence.")
+                            Text(review.disclosure).accessibilityIdentifier("wallet-review-disclosure")
+                            Picker("Evidence you checked", selection: $evidence) {
+                                Text("Choose evidence").tag("")
+                                Text("Customer authenticated their existing wallet").tag("owner_attests_existing_wallet_session")
+                                Text("Other independently verified evidence").tag("owner_verified_independent_evidence")
+                            }.accessibilityIdentifier("wallet-evidence").onChange(of: evidence) { _, _ in confirmed = false }
+                            Toggle("I confirm the disclosure above", isOn: $confirmed)
+                            Button("Record review") { Task { await save() } }
+                                .disabled(busy || selected == nil || evidence.isEmpty || !confirmed)
+                        }
+                    }
+                }
+                if let error { Section { Text(error).foregroundStyle(.red) } }
+            }.navigationTitle("Wallet review").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() }.disabled(busy) } }
+        }
+    }
+
+    private var validReference: Bool { reference.range(of: "^[a-f0-9]{32}$", options: .regularExpression) != nil }
+    private func resetReview() { review = nil; customers = []; selected = nil; evidence = ""; confirmed = false; error = nil }
+    private func load() async {
+        guard let base = model.base, validReference, !busy else { return }
+        let expected = reference
+        inputFocused = false; resetReview(); busy = true; defer { busy = false }
+        do {
+            let value: WalletReviewDetails = try await model.api.request(base + "/wallet-link-reviews/" + expected)
+            guard model.base == base, reference == expected, value.reference == expected, !value.linked, !value.finalizationAvailable else {
+                error = "This request needs administrator review."; return
+            }
+            review = value
+        } catch { self.error = "Could not find this request. Check the reference and administrator access, and ask whether wallet review is enabled." }
+    }
+    private func search() async {
+        guard let base = model.base, !busy else { return }
+        let searched = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard searched.count >= 2 else { return }
+        inputFocused = false; busy = true; defer { busy = false }
+        do {
+            let result: POSCustomerList = try await model.api.request(base + "/customers", query: ["query": searched])
+            guard model.base == base, query.trimmingCharacters(in: .whitespacesAndNewlines) == searched else { return }
+            customers = result.customers; selected = nil; confirmed = false
+            error = result.customers.isEmpty ? "No customers found. Check the search and try again." : nil
+        } catch { self.error = "Could not search customers. Try again." }
+    }
+    private func save() async {
+        guard let base = model.base, let review, let selected, !busy, confirmed, !evidence.isEmpty else { return }
+        busy = true; defer { busy = false }
+        do {
+            let value: WalletReviewDetails = try await model.api.request(base + "/wallet-link-reviews/" + review.reference, method: "POST", body: [
+                "customer_profile_id": selected.id, "evidence": evidence, "confirmed": true, "disclosure_hash": review.disclosureHash
+            ])
+            guard model.base == base, reference == review.reference, value.reference == review.reference, value.shopifySubject == review.shopifySubject,
+                  value.state == "review_recorded", value.reviewedProfileId == selected.id, !value.linked, !value.finalizationAvailable else {
+                error = "Review status needs checking. Find the original request again."; return
+            }
+            self.review = value; confirmed = false; error = nil
+        } catch { self.error = "Review was not confirmed. Find the original request again before retrying."; self.review = nil; confirmed = false }
+    }
+}

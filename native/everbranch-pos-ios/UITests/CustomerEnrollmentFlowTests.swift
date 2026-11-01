@@ -48,3 +48,36 @@ final class CustomerEnrollmentFlowTests: XCTestCase {
     }
 
 }
+
+extension CustomerEnrollmentFlowTests {
+    func testWalletReviewRecordsOnlyExplicitOwnerAttestation() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-online-rules-ui-tests", "--pos-customer-commerce-ui-tests", "--pos-wallet-review-ui-tests"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Account & Tap to Pay"].waitForExistence(timeout: 10)); app.buttons["Account & Tap to Pay"].tap()
+        let open = app.buttons["Review wallet request"]
+        app.swipeUp()
+        XCTAssertTrue(open.waitForExistence(timeout: 5)); open.tap()
+        let reference = app.textFields["wallet-review-reference"]
+        XCTAssertTrue(reference.waitForExistence(timeout: 5)); reference.tap(); reference.typeText(String(repeating: "a", count: 32))
+        app.buttons["Find request"].tap()
+        XCTAssertTrue(app.staticTexts["No wallet has been linked. This review does not enable rewards redemption."].exists)
+        let query = app.textFields["Name, email or phone"]; query.tap(); query.typeText("Ada")
+        app.buttons["Search customers"].tap()
+        XCTAssertTrue(app.buttons["wallet-customer-1"].waitForExistence(timeout: 5)); app.buttons["wallet-customer-1"].tap()
+        XCTAssertTrue(app.staticTexts["wallet-selected-customer"].exists)
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["wallet-review-disclosure"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["wallet-review-disclosure"].label, "I independently verified the selected wallet.")
+        let record = app.buttons["Record review"]; XCTAssertFalse(record.isEnabled)
+        app.buttons["wallet-evidence"].tap()
+        app.buttons["Customer authenticated their existing wallet"].tap()
+        app.swipeUp()
+        let confirmation = app.switches["I confirm the disclosure above"]
+        confirmation.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        XCTAssertEqual(confirmation.value as? String, "1")
+        XCTAssertTrue(record.isEnabled, "Selected: \(app.staticTexts["wallet-selected-customer"].label); evidence: \(app.buttons["wallet-evidence"].label); confirmation: \(String(describing: app.switches["I confirm the disclosure above"].value))"); record.tap()
+        XCTAssertTrue(app.staticTexts["Review recorded for customer #1."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["No wallet has been linked. This review does not enable rewards redemption."].exists)
+    }
+}

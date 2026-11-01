@@ -103,7 +103,20 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
         guard let url = request.url else { return }
         do {
             let data: Data
-            if ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") && url.path.hasSuffix("/checkout-rules/review") {
+            if ProcessInfo.processInfo.arguments.contains("--pos-wallet-review-ui-tests") && url.path.contains("/wallet-link-reviews/") {
+                let submitted = request.httpMethod == "POST"
+                if submitted {
+                    var body = request.httpBody ?? Data()
+                    if body.isEmpty, let stream = request.httpBodyStream {
+                        stream.open(); defer { stream.close() }; var buffer = [UInt8](repeating: 0, count: 1024)
+                        while stream.hasBytesAvailable { let count = stream.read(&buffer, maxLength: buffer.count); if count <= 0 { break }; body.append(buffer, count: count) }
+                    }
+                    let input = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+                    guard input["customer_profile_id"] as? Int == 1, input["evidence"] as? String == "owner_attests_existing_wallet_session",
+                          input["confirmed"] as? Bool == true, input["disclosure_hash"] as? String == String(repeating: "b", count: 64) else { throw URLError(.badServerResponse) }
+                }
+                data = try JSONSerialization.data(withJSONObject: ["reference": url.lastPathComponent, "shopify_subject": "gid://shopify/Customer/771", "expires_at": "2026-11-02T12:00:00Z", "state": submitted ? "review_recorded" : "awaiting_review", "reviewed_profile_id": submitted ? 1 : NSNull(), "disclosure": "I independently verified the selected wallet.", "disclosure_hash": String(repeating: "b", count: 64), "linked": false, "finalization_available": false])
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") && url.path.hasSuffix("/checkout-rules/review") {
                 data = try JSONSerialization.data(withJSONObject: ["rules": [["id": "five", "name": "Five off", "kind": "fixed", "value": 500, "scopes": ["sale"], "channels": ["online"], "active": true]], "version": String(repeating: "a", count: 64), "reviewed_version": String(repeating: "a", count: 64), "checkout_enabled": false])
             } else if ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") && url.path.hasSuffix("/checkout-rules/online/review") {
                 data = try JSONSerialization.data(withJSONObject: ["input": ["title": "Five off", "code": "SAVE5"], "shop_domain": "fictional.myshopify.com", "enabled": false, "previous": NSNull()])
