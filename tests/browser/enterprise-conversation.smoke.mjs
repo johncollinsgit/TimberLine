@@ -166,7 +166,10 @@ for(const [engine,launcher] of Object.entries({chromium,webkit})){
     // A provider-ambiguous result holds funds and pauses. Repeated GET checks cannot redispatch.
     await change(value=>value.fake_mode='timeout');await page.locator('#ask-question').fill('What work is next?');await page.locator('#ask-submit').click();await page.getByText('This turn is unconfirmed or unavailable.',{exact:false}).waitFor();assert.equal((await calls()).length,5);
     await page.locator('#conversation-check').click();await page.getByText('This turn is pending or uncertain.',{exact:false}).waitFor();assert.equal((await calls()).length,5);assert.equal(await page.locator('#ask-submit').isDisabled(),true);
-    await page.reload();await page.locator('#conversation-check').click();await page.getByText('This turn is pending or uncertain.',{exact:false}).waitFor();assert.equal((await calls()).length,5);
+    await page.reload();await waitForConversationSection(page,'ask');await page.waitForLoadState('networkidle');
+    await page.getByText('A short conversation may be available.',{exact:false}).waitFor();
+    assert.equal((await calls()).length,5,'Reloading a saved receipt must not dispatch another turn');
+    await page.locator('#conversation-check').click();await page.getByText('This turn is pending or uncertain.',{exact:false}).waitFor();assert.equal((await calls()).length,5);
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await context.close();
     await writeFile(resolve(evidence,engine+'-requests.json'),JSON.stringify({provider:'fake HTTP only',turnRequests:requests,providerReceipts:await calls(),externalRequests:external,errors},null,2));
   }catch(error){
