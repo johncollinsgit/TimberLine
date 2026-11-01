@@ -99,10 +99,17 @@ private struct NativeRegister: View {
         .sheet(item: $bundle) { item in BundleOptions(item: item, model: model) }
         .sheet(isPresented: $savedPayments) {
             NavigationStack {
-                List(model.visibleSavedPayments) { saved in
+                List {
+                  Section {
+                   ForEach(model.visibleSavedPayments) { saved in
                     Button { savedPayments = false; model.openSavedPayment(saved); DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: onBasket) } label: {
                         VStack(alignment: .leading, spacing: 6) { Text(POSMoney.display(saved.amountMinor)).font(.headline); Text("Needs Square confirmation").font(.subheadline); Text(saved.savedAt, style: .time).font(.caption) }
                     }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button("Confirm", role: .destructive) { model.removeSavedPayment(saved) }
+                    }
+                   }
+                  } footer: { Text("Removing a sale hides it from this phone. Its payment remains in your records.") }
                 }.navigationTitle("Payments for review").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { savedPayments = false } } }
             }.preferredColorScheme(.light)
         }
@@ -207,6 +214,11 @@ extension POSViewModel {
             selectedWorkspace = try? decoder.decode(Workspace.self, from: Data(#"{"id":1,"name":"Fictional","slug":"fixture"}"#.utf8))
             quantities = [String(repeating: "c", count: 32): 1]
             POSCheckoutFixtureProtocol.setCatalog(try! JSONSerialization.data(withJSONObject: ["items": rows]))
+        }
+        if ProcessInfo.processInfo.arguments.contains("--pos-saved-payments-ui-tests") {
+            var first = PendingSale(workspace: "fixture", register: "fixture"); first.saleID = "fixture-review-1"
+            var second = PendingSale(workspace: "fixture", register: "fixture"); second.saleID = "fixture-review-2"
+            savedPaymentReviews = [SavedPaymentReview(pending: first, amountMinor: 763, savedAt: Date()), SavedPaymentReview(pending: second, amountMinor: 5450, savedAt: Date())]
         }
         if ProcessInfo.processInfo.arguments.contains("--pos-recovery-ui-tests") {
             signedIn = true; registerLoaded = true

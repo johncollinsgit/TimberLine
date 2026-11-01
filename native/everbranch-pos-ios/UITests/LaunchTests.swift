@@ -99,6 +99,20 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.buttons["Payment saved · Open status"].exists)
     }
 
+    func testSwipeSavedPaymentRequiresConfirmationAndKeepsOtherEntries() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-saved-payments-ui-tests"]; app.launch()
+        let reviews = app.buttons["Payments for review (2)"]
+        XCTAssertTrue(reviews.waitForExistence(timeout: 10)); reviews.tap()
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS '$7.63'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.swipeLeft()
+        XCTAssertTrue(app.buttons["Confirm"].waitForExistence(timeout: 5))
+        row.swipeRight()
+        XCTAssertTrue(row.exists)
+        row.swipeLeft(); app.buttons["Confirm"].tap()
+        XCTAssertTrue(row.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS '$54.50'")).firstMatch.exists)
+    }
+
     func testWarmBasketReviewsTheServerTotalWithoutAnotherMenu() {
         let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests"]; app.launch()
         let basket = app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch
