@@ -211,6 +211,25 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.buttons["Payment saved · Open status"].exists)
     }
 
+    func testPendingPaymentRoutesProductAndBundleSelectionsToOriginalStatus() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-recovery-ui-tests"]; app.launch()
+        XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 10))
+        app.buttons["Close"].tap()
+        let search = app.textFields["Search products"]; XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("trio"); app.buttons.matching(identifier: "Done").firstMatch.tap()
+        app.buttons["Add Fictional trio to basket"].tap()
+        XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Add bundle · $18.00"].exists)
+        XCTAssertTrue(app.staticTexts["Payment not confirmed"].exists)
+        app.buttons["Close"].tap()
+        let clear = app.textFields["Search products"]; XCTAssertTrue(clear.waitForExistence(timeout: 5))
+        clear.tap(); clear.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 4) + "Laurel"); app.buttons.matching(identifier: "Done").firstMatch.tap()
+        app.buttons["Choose Laurel & Fig options"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Add Laurel & Fig Wax Melt"].exists)
+        XCTAssertTrue(app.staticTexts["Payment not confirmed"].exists)
+    }
+
     func testSwipeSavedPaymentRequiresConfirmationAndKeepsOtherEntries() {
         let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-saved-payments-ui-tests"]; app.launch()
         let reviews = app.buttons["Payments for review (2)"]
