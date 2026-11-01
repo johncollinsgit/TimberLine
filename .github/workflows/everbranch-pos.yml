@@ -17,9 +17,13 @@ concurrency:
   cancel-in-progress: true
 jobs:
   native:
-    name: Square SDK and native recovery
+    name: Native ${{ matrix.slice }}
     runs-on: macos-15
     timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        slice: [register, customer]
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
@@ -44,18 +48,37 @@ jobs:
           xcrun simctl bootstatus "$pos_simulator_id" -b
       - name: Run sandbox launch test
         timeout-minutes: 35
-        run: >-
-          xcodebuild test -project native/everbranch-pos-ios/EverbranchPOS.xcodeproj
-          -scheme EverbranchPOS
-          -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.device_id }}'
-          -parallel-testing-enabled NO
-          -resultBundlePath "$RUNNER_TEMP/pos-ui.xcresult"
-          -derivedDataPath "$RUNNER_TEMP/pos-simulator" CODE_SIGNING_ALLOWED=NO
+        env:
+          POS_TEST_SLICE: ${{ matrix.slice }}
+        run: |
+          # Complementary partitions retain every test while avoiding a single
+          # serial UI suite exceeding the runner's bounded execution window.
+          if [ "$POS_TEST_SLICE" = register ]; then
+            test_selection='-only-testing:EverbranchPOSUITests/LaunchTests'
+          else
+            test_selection='-skip-testing:EverbranchPOSUITests/LaunchTests'
+          fi
+          xcodebuild test -project native/everbranch-pos-ios/EverbranchPOS.xcodeproj \
+            -scheme EverbranchPOS \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.device_id }}' \
+            -parallel-testing-enabled NO "$test_selection" \
+            -resultBundlePath "$RUNNER_TEMP/pos-ui.xcresult" \
+            -derivedDataPath "$RUNNER_TEMP/pos-simulator" CODE_SIGNING_ALLOWED=NO
       - name: Retain sandbox launch diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: everbranch-pos-ui-results-${{ github.run_attempt }}
+          name: everbranch-pos-ui-results-${{ matrix.slice }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/pos-ui.xcresult
           if-no-files-found: warn
           retention-days: 3
+  native_result:
+    name: Square SDK and native recovery
+    needs: native
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require both complete native partitions
+        env:
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: test "$NATIVE_RESULT" = success
