@@ -385,6 +385,76 @@ function ownedStockOnlineBinding($test): object
     return $shop;
 }
 
+function ownedStockReviewedEventTax($test): array
+{
+    config(['pos_live.tax_location_management_enabled' => true]);
+    $shop = \App\Models\ShopifyStore::create(['tenant_id' => $test->tenant->id, 'store_key' => 'tax-event-'.$test->tenant->id,
+        'shop_domain' => 'tax-event-'.$test->tenant->id.'.myshopify.com', 'access_token' => 'fixture-token']);
+    $variant = 'gid://shopify/ProductVariant/101';
+    $test->stock->rows('provider_items', $test->tenant->id)->insert(['tenant_id' => $test->tenant->id, 'store_id' => $shop->id,
+        'item_id' => $test->item, 'variant_id' => $variant, 'location_id' => 'gid://shopify/Location/301',
+        'unit_amount_minor' => 1000, 'revision' => str_repeat('d', 64)]);
+    $test->stock->rows('pools', $test->tenant->id)->where('id', $test->pool)->update(['kind' => 'show', 'event_key' => 'event:123']);
+    $metadata = ['name' => 'Fictional show', 'address' => '123 Example St', 'city' => 'Columbus', 'state' => 'GA',
+        'postal_code' => '31901', 'end_on' => now()->addDays(30)->format('Y-m-d')];
+    $link = $test->stock->rows('event_links', $test->tenant->id)->insertGetId(['tenant_id' => $test->tenant->id,
+        'event_id' => 123, 'provider' => 'manual', 'external_id' => 'tax-fixture', 'metadata' => json_encode($metadata),
+        'reviewed_by' => $test->actor->id, 'created_at' => now(), 'updated_at' => now()]);
+    $settings = $test->store->decrypt($test->store->rows('registers', $test->tenant->id)->first()->configuration);
+    $settings['shopify'] = ['store_id' => $shop->id, 'shop_id' => 'gid://shopify/Shop/123',
+        'location_id' => 'gid://shopify/Location/301', 'tax_address' => ['countryCode' => 'US', 'zip' => '00000']];
+    $test->store->rows('registers', $test->tenant->id)->update(['catalog_source' => 'shopify', 'configuration' => $test->store->encrypt($settings)]);
+    Http::fake([
+        'https://tax-event-*.myshopify.com/*' => function ($request) use ($variant) {
+            $money = fn ($amount) => ['shopMoney' => ['amount' => $amount, 'currencyCode' => 'USD']];
+
+            return Http::response(['data' => ['draftOrderCalculate' => ['userErrors' => [], 'calculatedDraftOrder' => [
+                'taxesIncluded' => false, 'totalPriceSet' => $money('10.70'), 'totalTaxSet' => $money('0.70'),
+                'lineItems' => [['variant' => ['id' => $variant], 'quantity' => 1,
+                    'originalUnitPriceSet' => $money('10.00'), 'discountedTotalSet' => $money('10.00')]],
+            ]]]]);
+        },
+        '*/v2/locations/fixture_location' => Http::response(['location' => ['id' => 'fixture_location', 'merchant_id' => 'fixture_merchant',
+            'country' => 'US', 'currency' => 'USD', 'status' => 'ACTIVE', 'capabilities' => ['CREDIT_CARD_PROCESSING']]]),
+        '*/v2/merchants/fixture_merchant' => Http::response(['merchant' => ['id' => 'fixture_merchant', 'status' => 'ACTIVE']]),
+    ]);
+    $locations = $test->getJson($test->base.'/tax-locations')->assertOk()->json();
+    $candidate = $locations['locations'][0];
+    $test->postJson($test->base.'/tax-locations/publish', ['key' => $candidate['key'], 'version' => $candidate['version'],
+        'previous_version' => $locations['current_version'], 'valid_until' => now()->addDay()->utc()->format('Y-m-d\TH:i:s\Z'),
+        'confirmed' => true])->assertOk();
+
+    return [$link, $metadata];
+}
+
+it('rejects a changed reviewed event address before quote without creating a sale or calling the tax provider', function (): void {
+    [$link, $metadata] = ownedStockReviewedEventTax($this);
+    $providerCalls = Http::recorded()->count();
+    $this->stock->rows('event_links', $this->tenant->id)->where('id', $link)->update(['metadata' => json_encode([...$metadata, 'address' => '456 Other St'])]);
+    $this->postJson($this->base.'/quotes', $this->selection)->assertStatus(503)->assertJsonPath('error.code', 'tax_location_changed');
+    expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(0)
+        ->and($this->stock->listing($this->tenant->id, $this->pool)[0]['available_quantity'])->toBe(2)
+        ->and(Http::recorded()->count())->toBe($providerCalls);
+});
+
+it('preserves the original recoverable sale when a reviewed event address changes before collection', function (): void {
+    [$link, $metadata] = ownedStockReviewedEventTax($this);
+    $quote = $this->postJson($this->base.'/quotes', $this->selection)->assertOk()->assertJsonPath('amount_minor', 1070)->json();
+    $saleId = $quote['sale_id'];
+    $before = $this->store->rows('sales', $this->tenant->id)->where('id', $saleId)->firstOrFail();
+    $providerCalls = Http::recorded()->count();
+    $this->stock->rows('event_links', $this->tenant->id)->where('id', $link)->update(['metadata' => json_encode([...$metadata, 'address' => '456 Other St'])]);
+    $this->postJson($this->base.'/sales/'.$saleId.'/collect', [])->assertStatus(503)->assertJsonPath('error.code', 'tax_location_changed');
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $saleId)->firstOrFail();
+    expect($sale->state)->toBe('quoted')->and($sale->attempt_id)->toBeNull()->and($sale->descriptor_issued_at)->toBeNull()
+        ->and($sale->snapshot_hash)->toBe($before->snapshot_hash)->and(Http::recorded()->count())->toBe($providerCalls)
+        ->and($this->stock->listing($this->tenant->id, $this->pool)[0]['available_quantity'])->toBe(1);
+    $this->getJson($this->base.'/sales/'.$saleId)->assertOk()->assertJsonPath('state', 'quoted');
+    $this->stock->rows('event_links', $this->tenant->id)->where('id', $link)->update(['metadata' => json_encode($metadata)]);
+    $this->postJson($this->base.'/sales/'.$saleId.'/collect', [])->assertOk()->assertJsonPath('state', 'unknown')
+        ->assertJsonPath('collection.amount_minor', 1070);
+});
+
 it('quotes guests, reserves event stock once and hands off without creating a Shopify order', function (): void {
     $quote = $this->postJson($this->base.'/quotes', $this->selection)->assertOk()->assertJsonPath('customer', null)->assertJsonPath('amount_minor', 1070)->assertJsonPath('collection_ready', true)->json();
     $this->postJson($this->base.'/quotes', $this->selection)->assertOk()->assertJsonPath('sale_id', $quote['sale_id']);
