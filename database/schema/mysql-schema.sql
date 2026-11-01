@@ -7785,6 +7785,26 @@ CREATE TABLE `platform_email_messages` (
   UNIQUE KEY `pem_group_uq` (`group_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_birthday_annual_holds`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_birthday_annual_holds` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `coverage_id` bigint unsigned NOT NULL,
+  `sale_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `state` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `amount_minor` bigint unsigned NOT NULL,
+  `policy_version` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `authorization_reference` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `pos_birthday_annual_hold_cycle_uq` (`tenant_id`,`coverage_id`),
+  UNIQUE KEY `pos_birthday_annual_hold_sale_uq` (`runtime_id`,`tenant_id`,`sale_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `pos_birthday_authorizations`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -14315,3 +14335,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (325,'2026_11_01_13
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (326,'2026_11_01_140000_create_pos_shopify_discount_publications',46);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (327,'2026_11_01_150000_create_pos_birthday_cycle_fences',46);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (328,'2026_11_01_160000_add_pos_reward_authorization_terms',46);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (329,'2026_11_01_170000_create_pos_birthday_annual_holds',47);
