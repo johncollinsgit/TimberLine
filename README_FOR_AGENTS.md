@@ -3378,6 +3378,8 @@ candidate are not live acceptance. Keep new publication, birthday, proof, and
 reward gates off. A reviewed event address is checked again at the collection
 boundary; legacy expiration-only tax setups need migration before claiming that
 protection. Cross-writer Shopify identity uniqueness, existing-wallet proof,
-interrupted payment-start recovery, zero-tender sales and cross-channel birthday
-redemption remain unfinished. A signed development archive is not distribution
+legacy interrupted payment-start recovery, zero-tender sales and cross-channel
+birthday redemption remain unfinished. New owned-stock pre-handoff claims use a
+gated atomic journal transition and can be cancelled without replacing an issued
+attempt. A signed development archive is not distribution
 approval, and a simulator run is not physical Square acceptance.

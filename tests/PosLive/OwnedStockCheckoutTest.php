@@ -479,6 +479,17 @@ function ownedStockComplete($test, ?array $existing = null, string $paymentId = 
     return $quote;
 }
 
+it('recovers canonical fake Square payment evidence after the native atomic handoff', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Atomic native handoff requires the durable MySQL journal.');
+    }
+    config(['pos_live.durable_start_claims_enabled' => true]);
+    $quote = ownedStockComplete($this);
+    expect(DB::table('pos_payment_start_claims')->where('sale_id', $quote['sale_id'])->value('state'))->toBe('handed_off')
+        ->and($this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->value('state'))->toBe('succeeded')
+        ->and(DB::table('payment_core_operations')->where('sale_id', $quote['sale_id'])->where('kind', 'payment')->count())->toBe(1);
+});
+
 it('confirms from fresh Square evidence, issues its own receipt and never creates an in-person Shopify order', function (): void {
     $quote = ownedStockComplete($this);
     $receipt = $this->getJson($this->base.'/sales/'.$quote['sale_id'].'/receipt')->assertOk()->assertJsonPath('payment_reference', 'fixture_payment')
@@ -770,6 +781,200 @@ it('starts the original reward-discounted payment only once when the verified ac
     $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect', [])->assertOk()->assertJsonMissingPath('collection');
     expect(DB::table('pos_candle_cash_reservations')->where('sale_id', $quote['sale_id'])->value('state'))->toBe('held')
         ->and(DB::table('payment_core_operations')->where('sale_id', $quote['sale_id'])->where('kind', 'payment')->count())->toBe(1);
+});
+
+it('safely cancels a native preparation that stopped before the journal handoff', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Atomic native handoff requires the durable MySQL journal.');
+    }
+    $credential = ownedStockRewardCredential($this);
+    $input = [...$this->selection, 'reward_redemption' => ['proof' => $credential['qr_payload'], 'amount_minor' => 500]];
+    $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->json();
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail();
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($sale);
+    $claim = app(\App\Services\Pos\PosPaymentStartClaim::class)->beginNativePreparation($this->tenant->id, $sale->id, $snapshot['terms']['pos_candle_cash']);
+    expect($claim->state)->toBe('preparing_native_v1');
+    $this->postJson($this->base.'/requests/'.$quote['request_id'].'/discard')->assertOk();
+    expect(DB::table('pos_payment_start_claims')->where('id', $claim->id)->value('state'))->toBe('cancelled')
+        ->and((float) \App\Models\CandleCashBalance::find($this->profile->id)->balance)->toBe(10.0);
+    $binding = \App\Services\PaymentsCore\MerchantBinding::restore($snapshot['binding']);
+    $frozen = new \App\Services\PaymentsCore\SaleSnapshot($sale->id, 'usd', $snapshot['sale']['lines']);
+    expect(fn () => $this->journal->handoffNative($binding, $frozen, $sale->payment_request_id, $claim->id))
+        ->toThrow(DomainException::class, 'Native handoff is no longer available');
+    expect(DB::table('payment_core_operations')->where('sale_id', $sale->id)->count())->toBe(0);
+});
+
+it('does not upgrade or cancel an earlier legacy starting claim', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Atomic native handoff requires the durable MySQL journal.');
+    }
+    config(['pos_live.durable_start_claims_enabled' => true]);
+    $quote = $this->postJson($this->base.'/quotes', $this->selection)->assertOk()->json();
+    $claims = app(\App\Services\Pos\PosPaymentStartClaim::class);
+    $legacy = $claims->beginCollection($this->tenant->id, $quote['sale_id']);
+    expect($legacy->state)->toBe('starting');
+    expect(fn () => $claims->cancel($this->tenant->id, $quote['sale_id']))
+        ->toThrow(\App\Services\Pos\PosException::class, 'payment_claim_conflict');
+    expect(fn () => $claims->beginNativePreparation($this->tenant->id, $quote['sale_id']))
+        ->toThrow(\App\Services\Pos\PosException::class, 'payment_claim_conflict');
+    expect(DB::table('pos_payment_start_claims')->where('id', $legacy->id)->value('state'))->toBe('starting');
+});
+
+it('automatically expires an interrupted native preparation without releasing an issued payment', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Atomic native handoff requires the durable MySQL journal.');
+    }
+    $credential = ownedStockRewardCredential($this);
+    $input = [...$this->selection, 'reward_redemption' => ['proof' => $credential['qr_payload'], 'amount_minor' => 500]];
+    $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->json();
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail();
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($sale);
+    $claim = app(\App\Services\Pos\PosPaymentStartClaim::class)->beginNativePreparation($this->tenant->id, $sale->id, $snapshot['terms']['pos_candle_cash']);
+    $this->store->rows('sales', $this->tenant->id)->where('id', $sale->id)->update(['expires_at' => now()->subMinute()]);
+    app(\App\Services\Pos\PosService::class)->expireUnstarted($sale);
+    expect(DB::table('pos_payment_start_claims')->where('id', $claim->id)->value('state'))->toBe('cancelled')
+        ->and($this->store->rows('sales', $this->tenant->id)->where('id', $sale->id)->value('state'))->toBe('cancelled')
+        ->and((float) \App\Models\CandleCashBalance::find($this->profile->id)->balance)->toBe(10.0)
+        ->and(DB::table('payment_core_operations')->where('sale_id', $sale->id)->count())->toBe(0);
+});
+
+it('keeps a lost native handoff response tied to its one original payment', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Atomic native handoff requires the durable MySQL journal.');
+    }
+    config(['pos_live.durable_start_claims_enabled' => true]);
+    $quote = $this->postJson($this->base.'/quotes', $this->selection)->assertOk()->json();
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail();
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($sale);
+    $claim = app(\App\Services\Pos\PosPaymentStartClaim::class)->beginNativePreparation($this->tenant->id, $sale->id);
+    $scope = ['tenant_id' => $this->tenant->id, 'actor_id' => $this->actor->id,
+        'register' => $this->store->rows('registers', $this->tenant->id)->firstOrFail()];
+    $binding = \App\Services\PaymentsCore\MerchantBinding::restore($snapshot['binding']);
+    $frozen = new \App\Services\PaymentsCore\SaleSnapshot($sale->id, 'usd', $snapshot['sale']['lines']);
+    expect(fn () => $this->journal->handoffNative($binding, $frozen, $sale->payment_request_id, $claim->id))
+        ->toThrow(DomainException::class, 'Native inventory reservation requires review');
+    expect(DB::table('payment_core_operations')->where('sale_id', $sale->id)->count())->toBe(0);
+    app(\App\Services\Pos\StockPosCommerce::class)->lockCollection($scope, $sale, $snapshot);
+    $original = $this->journal->handoffNative($binding, $frozen, $sale->payment_request_id, $claim->id);
+    // The response is considered lost: a retry may inspect but never return a replacement descriptor.
+    $this->postJson($this->base.'/sales/'.$sale->id.'/collect', [])->assertOk()->assertJsonMissingPath('collection');
+    $this->postJson($this->base.'/requests/'.$quote['request_id'].'/discard')->assertConflict();
+    expect($original['state'])->toBe('unknown')
+        ->and(DB::table('pos_payment_start_claims')->where('id', $claim->id)->value('state'))->toBe('handed_off')
+        ->and(DB::table('payment_core_operations')->where('sale_id', $sale->id)->count())->toBe(1)
+        ->and($this->store->rows('sales', $this->tenant->id)->where('id', $sale->id)->value('attempt_id'))->toBe($original['id']);
+});
+
+it('rolls back the entire native handoff when persistence fails before commit', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Atomic native handoff requires the durable MySQL journal.');
+    }
+    config(['pos_live.durable_start_claims_enabled' => true]);
+    $quote = $this->postJson($this->base.'/quotes', $this->selection)->assertOk()->json();
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail();
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($sale);
+    $claim = app(\App\Services\Pos\PosPaymentStartClaim::class)->beginNativePreparation($this->tenant->id, $sale->id);
+    $scope = ['tenant_id' => $this->tenant->id, 'actor_id' => $this->actor->id,
+        'register' => $this->store->rows('registers', $this->tenant->id)->firstOrFail()];
+    app(\App\Services\Pos\StockPosCommerce::class)->lockCollection($scope, $sale, $snapshot);
+    $realCrypt = app('encrypter');
+    $crypt = Mockery::mock(\Illuminate\Contracts\Encryption\Encrypter::class);
+    $crypt->shouldReceive('decrypt')->andReturnUsing(fn (...$args) => $realCrypt->decrypt(...$args));
+    $crypt->shouldReceive('encrypt')->andReturnUsing(function ($value, $serialize = true) use ($realCrypt) {
+        if ($value === '[]') {
+            throw new RuntimeException('fictional late journal failure');
+        }
+
+        return $realCrypt->encrypt($value, $serialize);
+    });
+    $failing = new \App\Services\PaymentsCore\MySqlPaymentJournal(DB::connection(), $crypt);
+    $binding = \App\Services\PaymentsCore\MerchantBinding::restore($snapshot['binding']);
+    $frozen = new \App\Services\PaymentsCore\SaleSnapshot($sale->id, 'usd', $snapshot['sale']['lines']);
+    expect(fn () => $failing->handoffNative($binding, $frozen, $sale->payment_request_id, $claim->id))
+        ->toThrow(RuntimeException::class, 'fictional late journal failure');
+    $current = $this->store->rows('sales', $this->tenant->id)->where('id', $sale->id)->firstOrFail();
+    expect($current->attempt_id)->toBeNull()->and($current->descriptor_issued_at)->toBeNull()
+        ->and(DB::table('payment_core_operations')->where('sale_id', $sale->id)->count())->toBe(0)
+        ->and(DB::table('pos_payment_start_claims')->where('id', $claim->id)->value('state'))->toBe('preparing_native_v1');
+    $this->postJson($this->base.'/requests/'.$quote['request_id'].'/discard')->assertOk();
+});
+
+it('serializes native handoff against cancellation without issuing a replacement charge', function (): void {
+    $db = DB::connection();
+    if ($db->getDriverName() !== 'mysql' || getenv('POS_LIVE_DISPOSABLE_MYSQL') !== '1' || ! function_exists('pcntl_fork')) {
+        $this->markTestSkipped('Requires explicitly authorized local disposable MySQL and process forking.');
+    }
+    if (! app()->environment('testing') || ! preg_match('/(^|_)(ci|test|testing)(_|$)/i', $db->getDatabaseName())
+        || ! in_array($db->getConfig('host'), ['127.0.0.1', 'localhost'], true)) {
+        throw new RuntimeException('Refusing unsafe native handoff race.');
+    }
+    config(['pos_live.durable_start_claims_enabled' => true]);
+    $quote = $this->postJson($this->base.'/quotes', $this->selection)->assertOk()->json();
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail();
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($sale);
+    $claim = app(\App\Services\Pos\PosPaymentStartClaim::class)->beginNativePreparation($this->tenant->id, $sale->id);
+    $scope = ['tenant_id' => $this->tenant->id, 'actor_id' => $this->actor->id,
+        'register' => $this->store->rows('registers', $this->tenant->id)->firstOrFail()];
+    app(\App\Services\Pos\StockPosCommerce::class)->lockCollection($scope, $sale, $snapshot);
+    $binding = \App\Services\PaymentsCore\MerchantBinding::restore($snapshot['binding']);
+    $frozen = new \App\Services\PaymentsCore\SaleSnapshot($sale->id, 'usd', $snapshot['sale']['lines']);
+    $directory = sys_get_temp_dir().'/pos-handoff-race-'.bin2hex(random_bytes(8));
+    mkdir($directory, 0700);
+    DB::purge();
+    $pids = [];
+    try {
+        foreach (['handoff', 'cancel'] as $i => $action) {
+            $pid = pcntl_fork();
+            if ($pid === -1) {
+                throw new RuntimeException('Cannot fork native handoff race.');
+            }
+            if ($pid === 0) {
+                try {
+                    while (! file_exists($directory.'/go')) {
+                        usleep(1000);
+                        clearstatcache();
+                    }
+                    try {
+                        if ($action === 'handoff') {
+                            $journal = new \App\Services\PaymentsCore\MySqlPaymentJournal(DB::connection(), app('encrypter'));
+                            $journal->handoffNative($binding, $frozen, $sale->payment_request_id, $claim->id);
+                        } else {
+                            $claims = new \App\Services\Pos\PosPaymentStartClaim(new PosStore(DB::connection(), app('encrypter')));
+                            $claims->cancel($this->tenant->id, $sale->id);
+                        }
+                        $result = 'won';
+                    } catch (DomainException $error) {
+                        $result = 'refused';
+                    }
+                    file_put_contents($directory.'/'.$i, $result);
+                    DB::disconnect();
+                    exit(0);
+                } catch (Throwable) {
+                    exit(1);
+                }
+            }
+            $pids[] = $pid;
+        }
+        touch($directory.'/go');
+        foreach ($pids as $pid) {
+            pcntl_waitpid($pid, $status);
+            expect(pcntl_wexitstatus($status))->toBe(0);
+        }
+        $results = [file_get_contents($directory.'/0'), file_get_contents($directory.'/1')];
+        expect($results)->toBeIn([['won', 'refused'], ['refused', 'won']]);
+        $state = DB::table('pos_payment_start_claims')->where('id', $claim->id)->value('state');
+        $operationCount = DB::table('payment_core_operations')->where('sale_id', $sale->id)->count();
+        expect($state)->toBe($results[0] === 'won' ? 'handed_off' : 'cancelled')
+            ->and($operationCount)->toBe($results[0] === 'won' ? 1 : 0);
+    } finally {
+        foreach ($pids as $pid) {
+            pcntl_waitpid($pid, $status, WNOHANG);
+        }
+        foreach (glob($directory.'/*') as $file) {
+            unlink($file);
+        }
+        rmdir($directory);
+    }
 });
 
 it('does not collect a previously quoted reward after the global gate is turned off', function (): void {

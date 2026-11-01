@@ -6,6 +6,7 @@ namespace App\Services\Pos;
 
 use App\Services\PaymentsCore\Contract;
 use App\Services\PaymentsCore\MerchantBinding;
+use App\Services\PaymentsCore\NativeAtomicPaymentJournal;
 use App\Services\PaymentsCore\PaymentCore;
 use App\Services\PaymentsCore\PaymentJournal;
 use App\Services\PaymentsCore\SaleSnapshot;
@@ -267,8 +268,16 @@ final class PosService
                         throw new PosException('in_person_rewards_policy_changed', 409);
                     }
                 }
+                $nativeClaim = null;
                 if (config('pos_live.durable_start_claims_enabled', false) === true) {
-                    app(PosPaymentStartClaim::class)->beginCollection($scope['tenant_id'], $id, $rewardTerms);
+                    if ($snapshot['terms']['source'] === StockPosCommerce::VERSION) {
+                        if (! $this->journal instanceof NativeAtomicPaymentJournal) {
+                            throw new PosException('native_atomic_handoff_unavailable', 503);
+                        }
+                        $nativeClaim = app(PosPaymentStartClaim::class)->beginNativePreparation($scope['tenant_id'], $id, $rewardTerms);
+                    } else {
+                        app(PosPaymentStartClaim::class)->beginCollection($scope['tenant_id'], $id, $rewardTerms);
+                    }
                 }
                 if ($snapshot['terms']['source'] === StockPosCommerce::VERSION) {
                     app(StockPosCommerce::class)->prepare($scope, $sale, $snapshot);
@@ -287,15 +296,20 @@ final class PosService
                 if ($snapshot['terms']['source'] === StockPosCommerce::VERSION) {
                     app(StockPosCommerce::class)->assertOffersCurrent($scope, $snapshot);
                 }
-                $row = $this->core()->start($binding, new SaleSnapshot($id, 'usd', $snapshot['sale']['lines']), $sale->payment_request_id);
-                $this->store->rows('sales', $scope['tenant_id'])->where('id', $id)->update(['attempt_id' => $row['id'], 'state' => $row['state']]);
-                $this->access->assertAllowed($binding, 'collect');
-                $claimed = $this->store->rows('sales', $scope['tenant_id'])->where('id', $id)->whereNull('descriptor_issued_at')->update(['descriptor_issued_at' => now()]);
-                if ($claimed !== 1) {
-                    throw new PosException('recovery_required');
+                if ($nativeClaim) {
+                    $row = $this->journal->handoffNative($binding, new SaleSnapshot($id, 'usd', $snapshot['sale']['lines']), $sale->payment_request_id, $nativeClaim->id);
+                    $this->access->assertAllowed($binding, 'collect');
+                } else {
+                    $row = $this->core()->start($binding, new SaleSnapshot($id, 'usd', $snapshot['sale']['lines']), $sale->payment_request_id);
+                    $this->store->rows('sales', $scope['tenant_id'])->where('id', $id)->update(['attempt_id' => $row['id'], 'state' => $row['state']]);
+                    $this->access->assertAllowed($binding, 'collect');
+                    $claimed = $this->store->rows('sales', $scope['tenant_id'])->where('id', $id)->whereNull('descriptor_issued_at')->update(['descriptor_issued_at' => now()]);
+                    if ($claimed !== 1) {
+                        throw new PosException('recovery_required');
+                    }
+                    $this->store->event($scope['tenant_id'], $id, 'native_descriptor_issued');
                 }
                 $credentials = $this->store->decrypt($scope['connection']->credentials);
-                $this->store->event($scope['tenant_id'], $id, 'native_descriptor_issued');
 
                 return [...$this->projection($this->sale($scope, $id)), 'collection' => [
                     'application_id' => config('pos_live.square_application_id'), 'access_token' => $credentials['access_token'],

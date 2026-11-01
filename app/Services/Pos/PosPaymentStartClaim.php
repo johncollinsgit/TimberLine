@@ -25,6 +25,15 @@ final class PosPaymentStartClaim
         return $this->claim($tenant, $saleId, 'starting', true, $rewardTerms);
     }
 
+    public function beginNativePreparation(int $tenant, string $saleId, ?array $rewardTerms = null): object
+    {
+        if (! app(\App\Services\PaymentsCore\PaymentJournal::class) instanceof \App\Services\PaymentsCore\NativeAtomicPaymentJournal) {
+            throw new PosException('native_atomic_handoff_unavailable', 503);
+        }
+
+        return $this->claim($tenant, $saleId, 'preparing_native_v1', true, $rewardTerms);
+    }
+
     private function claim(int $tenant, string $saleId, string $requested, bool $requireNew = false, ?array $rewardTerms = null): object
     {
         if (config('pos_live.durable_start_claims_enabled', false) !== true) {
@@ -39,21 +48,24 @@ final class PosPaymentStartClaim
             $claims = $this->store->db->table('pos_payment_start_claims')->where('runtime_id', $this->store->runtime())
                 ->where('tenant_id', $tenant)->where('sale_id', $saleId);
             $existing = (clone $claims)->lockForUpdate()->first();
+            $cancelPreparing = $existing && $requested === 'cancelled' && $existing->state === 'preparing_native_v1';
             if ($existing) {
                 if ($existing->payment_request_id !== $sale->payment_request_id) {
                     throw new PosException('payment_claim_mismatch');
                 }
-                if ($existing->state !== $requested) {
+                if ($existing->state !== $requested && ! $cancelPreparing) {
                     throw new PosException('payment_claim_conflict');
                 }
-                if ($requireNew) {
+                if ($requireNew && ! $cancelPreparing) {
                     throw new PosException('payment_recovery_required');
                 }
-
-                return $existing;
+                if (! $cancelPreparing) {
+                    return $existing;
+                }
             }
             if ($sale->state !== 'quoted' || $sale->attempt_id || $sale->descriptor_issued_at || $sale->source_reference
-                || ($requested === 'starting' && strtotime($sale->expires_at) <= time())) {
+                || ($requested !== 'cancelled' && strtotime($sale->expires_at) <= time())
+                || (($requested === 'preparing_native_v1' || $cancelPreparing) && $sale->commerce_source !== StockPosCommerce::VERSION)) {
                 throw new PosException('payment_claim_unavailable');
             }
             // This direct read is inside the same DB transaction. No journal
@@ -79,11 +91,15 @@ final class PosPaymentStartClaim
                     throw new PosException('customer_identity_review_required', 409);
                 }
             }
-            $id = (string) Str::uuid();
-            $this->store->db->table('pos_payment_start_claims')->insert([
-                'id' => $id, 'runtime_id' => $this->store->runtime(), 'tenant_id' => $tenant, 'sale_id' => $saleId,
-                'payment_request_id' => $sale->payment_request_id, 'state' => $requested, 'created_at' => now(), 'updated_at' => now(),
-            ]);
+            $id = $existing->id ?? (string) Str::uuid();
+            if ($cancelPreparing) {
+                (clone $claims)->where('id', $id)->update(['state' => 'cancelled', 'updated_at' => now()]);
+            } else {
+                $this->store->db->table('pos_payment_start_claims')->insert([
+                    'id' => $id, 'runtime_id' => $this->store->runtime(), 'tenant_id' => $tenant, 'sale_id' => $saleId,
+                    'payment_request_id' => $sale->payment_request_id, 'state' => $requested, 'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
             if ($requested === 'cancelled') {
                 $this->store->rows('sales', $tenant)->where('id', $saleId)->update(['state' => 'cancelled']);
                 if ($this->store->db->table('pos_candle_cash_reservations')->where('runtime_id', $this->store->runtime())

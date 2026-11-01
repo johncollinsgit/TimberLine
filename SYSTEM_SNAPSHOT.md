@@ -8,7 +8,9 @@ restricted public, non-combining whole-sale code, not full cross-channel parity.
 Customer enrollment records separate affirmative text/email choices and does not
 automatically link identities. Account-attested customer reward proofs and holds
 are source work behind disabled gates, not a production acceptance claim. A
-zero-tender sale and interrupted-start automatic cancellation are not supported.
+zero-tender sale is not supported. New owned-stock pre-handoff claims can be
+cancelled or expired under the disabled-by-default durable-claims gate; legacy
+claims and any journaled/issued attempt remain in original-payment recovery.
 
 Birthday deactivation and annual-fence code are source-only, default-off and do
 not authorize in-person redemption. Provider usage counts can lag and uncertain
