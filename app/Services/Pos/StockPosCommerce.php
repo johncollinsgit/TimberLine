@@ -159,6 +159,16 @@ final class StockPosCommerce
         }
         $subtotal = array_sum(array_column($display, 'subtotal_minor'));
         $offers = app(PosCheckoutOffers::class)->apply($scope, $input, $catalog, $gross);
+        $reward = $scope['reward_redemption'] ?? null;
+        if ($reward !== null) {
+            if (! is_array($reward) || ! is_int($reward['amount_minor'] ?? null) || ! is_int($reward['profile_id'] ?? null)
+                || ! is_string($reward['policy_version'] ?? null) || ! is_string($reward['refund_policy'] ?? null)) {
+                throw new PosException('reward_quote_invalid', 422);
+            }
+            $eligible = array_sum($offers['lines_minor']);
+            $offers = app(PosRewardAllocation::class)->apply($offers, $reward['amount_minor']);
+            $reward['eligible_minor'] = $eligible;
+        }
         $netSubtotal = array_sum($offers['lines_minor']);
         if ($netSubtotal < 1) {
             throw new PosException('zero_total_checkout_not_supported', 422);
@@ -182,7 +192,7 @@ final class StockPosCommerce
         $total = $netSubtotal;
         if ($scope['register']->catalog_source === 'shopify') {
             $expectedUnits = [];
-            if ($offers['version'] !== null) {
+            if ($offers['version'] !== null || $reward !== null) {
                 $lines = $this->discountedProviderLines($lines, $lineKeys, $gross, $offers['lines_minor'], $offers['unit_lines_minor'] ?? null);
                 foreach ($lines as $line) {
                     $variant = $line['variantId'] ?? 'custom';
@@ -206,7 +216,7 @@ final class StockPosCommerce
             $actualNet = [];
             $actualUnits = [];
             foreach ($calculated['lineItems'] as $line) {
-                if ($offers['version'] !== null) {
+                if ($offers['version'] !== null || $reward !== null) {
                     if (! isset($line['quantity'], $line['originalUnitPriceSet']['shopMoney']['amount'], $line['discountedTotalSet']['shopMoney']['amount'])
                         || ! is_int($line['quantity']) || $line['quantity'] < 1) {
                         throw new PosException('total_unavailable', 503);
@@ -226,14 +236,14 @@ final class StockPosCommerce
                         throw new PosException('catalog_changed');
                     }
                     $actual[$variant] = ['quantity' => ($actual[$variant]['quantity'] ?? 0) + $line['quantity'], 'price' => $price];
-                    if ($offers['version'] !== null) {
+                    if ($offers['version'] !== null || $reward !== null) {
                         if (! isset($line['discountedTotalSet']['shopMoney']['amount']) || ($line['discountedTotalSet']['shopMoney']['currencyCode'] ?? null) !== 'USD'
                             || ($line['originalUnitPriceSet']['shopMoney']['currencyCode'] ?? null) !== 'USD') {
                             throw new PosException('total_unavailable', 503);
                         }
                         $actualNet[$variant] = ($actualNet[$variant] ?? 0) + ShopifyPosCommerce::minor($line['discountedTotalSet']['shopMoney']['amount']);
                     }
-                } elseif ($offers['version'] !== null) {
+                } elseif ($offers['version'] !== null || $reward !== null) {
                     if (! isset($line['discountedTotalSet']['shopMoney']['amount'], $line['originalUnitPriceSet']['shopMoney']['amount'])
                         || ($line['discountedTotalSet']['shopMoney']['currencyCode'] ?? null) !== 'USD'
                         || ($line['originalUnitPriceSet']['shopMoney']['currencyCode'] ?? null) !== 'USD') {
@@ -250,7 +260,7 @@ final class StockPosCommerce
             if ($expected !== $actual) {
                 throw new PosException('catalog_changed');
             }
-            if ($offers['version'] !== null) {
+            if ($offers['version'] !== null || $reward !== null) {
                 $expectedNet = [];
                 foreach ($lineKeys as $key) {
                     $providerKey = $key === 'custom' ? 'custom' : $providerKeys[$key];
@@ -268,7 +278,7 @@ final class StockPosCommerce
                 }
             }
             $total = ShopifyPosCommerce::minor($calculated['totalPriceSet']['shopMoney']['amount']);
-            if ($offers['version'] !== null && ($calculated['totalTaxSet']['shopMoney']['currencyCode'] ?? null) !== 'USD') {
+            if (($offers['version'] !== null || $reward !== null) && ($calculated['totalTaxSet']['shopMoney']['currencyCode'] ?? null) !== 'USD') {
                 throw new PosException('tax_unavailable', 503);
             }
             $tax = ShopifyPosCommerce::minor($calculated['totalTaxSet']['shopMoney']['amount']);
@@ -291,6 +301,7 @@ final class StockPosCommerce
             'custom_charge' => $input['custom_charge'] ?? null, 'display' => $display,
             'subtotal_minor' => $subtotal, 'discount_minor' => $offers['discount_minor'], 'applied_offers' => $offers['offers'], 'checkout_rules_version' => $offers['version'],
             'rewardable_subtotal_minor' => $netSubtotal - ($offers['lines_minor']['custom'] ?? 0),
+            ...($reward !== null ? ['pos_candle_cash' => $reward] : []),
             'lines' => [['line_id' => 'counter_basket', 'kind' => 'merchandise', 'quantity' => 1, 'unit_amount_minor' => $netSubtotal, 'tax_amount_minor' => $tax]]];
     }
 
@@ -441,6 +452,18 @@ final class StockPosCommerce
                 $this->store->db->table('tenants')->where('id', $scope['tenant_id'])->lockForUpdate()->firstOrFail();
                 $this->assertOffersCurrent($scope, $snapshot);
             }
+            $register = $this->store->rows('registers', $scope['tenant_id'])->where('id', $scope['register']->id)->where('active', true)->lockForUpdate()->first();
+            if (! $register) {
+                throw new PosException('register_unavailable', 404);
+            }
+            $current = $this->store->decrypt($register->configuration);
+            foreach (['tax_location_review', 'tax_valid_until', 'shopify.tax_address'] as $field) {
+                if (! hash_equals(\App\Services\PaymentsCore\Contract::hash([data_get($snapshot['configuration'], $field)]),
+                    \App\Services\PaymentsCore\Contract::hash([data_get($current, $field)]))) {
+                    throw new PosException('checkout_settings_changed');
+                }
+            }
+            app(PosTaxLocations::class)->assertCurrentReview([...$scope, 'register' => $register], true);
             $current = $this->store->rows('sales', $scope['tenant_id'])->where('id', $sale->id)->lockForUpdate()->firstOrFail();
             if (! $this->collectionReady($current, $snapshot)) {
                 throw new PosException('stock_availability_update_pending');
@@ -468,6 +491,28 @@ final class StockPosCommerce
             $sale = $this->store->rows('sales', $tenant)->where('id', $id)->where('state', 'quoted')->whereNull('attempt_id')->whereNull('descriptor_issued_at')->lockForUpdate()->first();
             if (! $sale || $this->stock->rows('reservations', $tenant)->where('hold_key', $hold->hold_key)->whereNotNull('collection_locked_at')->exists()) {
                 continue;
+            }
+            if (config('pos_live.durable_start_claims_enabled', false) === true) {
+                try {
+                    // Runs within the stock transaction and uses the same sale
+                    // row lock as collection before any inventory is released.
+                    app(PosPaymentStartClaim::class)->cancel($tenant, $id);
+                } catch (PosException $error) {
+                    if (in_array($error->blocker, ['payment_claim_conflict', 'payment_claim_unavailable', 'payment_recovery_required'], true)) {
+                        continue;
+                    }
+                    throw $error;
+                }
+            } else {
+                // Do not let a disabled rollout bypass an already durable
+                // claim or an existing customer reward hold.
+                $schema = $this->store->db->getSchemaBuilder();
+                if (($schema->hasTable('pos_payment_start_claims') && $this->store->db->table('pos_payment_start_claims')
+                    ->where('runtime_id', $this->store->runtime())->where('tenant_id', $tenant)->where('sale_id', $id)->exists())
+                    || ($schema->hasTable('pos_candle_cash_reservations') && $this->store->db->table('pos_candle_cash_reservations')
+                        ->where('runtime_id', $this->store->runtime())->where('tenant_id', $tenant)->where('sale_id', $id)->exists())) {
+                    continue;
+                }
             }
             $this->stock->settle($tenant, $hold->hold_key, false);
             $this->store->rows('sales', $tenant)->where('id', $id)->update(['state' => 'cancelled', 'stock_state' => 'released']);

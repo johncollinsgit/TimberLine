@@ -48,6 +48,23 @@ class ModernForestryMobileCustomerSessionService
         return $this->resolveToken($token, false, true);
     }
 
+    /** Fresh provider subject only; never fall back to cached, demo, email or profile guesses. */
+    public function resolveFreshShopifySubject(Request $request): ?array
+    {
+        $token = $this->bearerToken($request);
+        if ($token === null || str_starts_with($token, 'mf-review-demo.') || str_starts_with($token, 'mf-test-')) {
+            return null;
+        }
+        $identity = $this->remoteCustomerIdentity($token, [], true);
+        $gid = $identity['shopify_customer_id'] ?? null;
+        if (($identity['source_type'] ?? null) !== 'shopify_customer' || ! is_string($gid)
+            || ! preg_match('~^gid://shopify/Customer/[1-9][0-9]{0,19}$~D', $gid)) {
+            return null;
+        }
+
+        return $identity;
+    }
+
     public function resolveToken(string $token, bool $allowCreate = false, bool $fresh = false): ?ModernForestryMobileCustomerSession
     {
         $token = trim($token);

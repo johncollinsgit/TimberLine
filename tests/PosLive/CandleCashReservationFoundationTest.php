@@ -3,6 +3,8 @@
 use App\Models\CandleCashBalance;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
+use App\Services\Marketing\CustomerMergeException;
+use App\Services\Marketing\CustomerMergeService;
 use App\Services\Pos\PosCandleCashReservation;
 use App\Services\Pos\PosException;
 use App\Services\Pos\PosRewardRedemptionPolicy;
@@ -70,7 +72,7 @@ it('fails closed for disabled policy, authorization, sale limits and cross-tenan
     expect(fn () => $this->service->reserve($this->tenant->id, $this->sale, 100, 'customer-approved'))
         ->toThrow(PosException::class, 'customer_not_found');
     expect(CandleCashBalance::find($this->profile->id)->balance)->toBe(12.345)
-        ->and(DB::table('pos_candle_cash_reservations')->count())->toBe(0);
+        ->and(DB::table('pos_candle_cash_reservations')->where('tenant_id', $this->tenant->id)->count())->toBe(0);
 });
 
 it('holds uncertain payments and refuses a new reservation after presentation', function (): void {
@@ -97,6 +99,102 @@ it('cannot create a hold once collection was presented', function (): void {
     expect(fn () => $this->service->reserve($this->tenant->id, $this->sale, 100, 'customer-approved'))
         ->toThrow(PosException::class, 'reward_sale_not_editable');
     expect(CandleCashBalance::find($this->profile->id)->balance)->toBe(12.345);
+});
+
+it('blocks customer merge while a held or spent reward may require restoration', function (): void {
+    $other = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Other']);
+    $hold = $this->service->reserve($this->tenant->id, $this->sale, 500, 'customer-approved');
+    $merge = app(CustomerMergeService::class);
+    $create = fn () => $merge->createOperation($this->tenant->id, [$this->profile->id, $other->id], $other->id, 'retail', 'hold-merge');
+    expect($create)->toThrow(CustomerMergeException::class, 'A reward purchase or refund needs review');
+    DB::table('pos_candle_cash_reservations')->where('id', $hold->id)->update(['state' => 'spent']);
+    expect($create)->toThrow(CustomerMergeException::class, 'A reward purchase or refund needs review');
+    DB::table('pos_candle_cash_reservations')->where('id', $hold->id)->update(['state' => 'refunded']);
+    expect($create()->status)->toBe('draft');
+});
+
+it('rejects a new hold while a customer merge is unresolved', function (): void {
+    $other = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Other']);
+    app(CustomerMergeService::class)->createOperation($this->tenant->id, [$this->profile->id, $other->id], $other->id, 'retail', 'pending-merge');
+    expect(fn () => $this->service->reserve($this->tenant->id, $this->sale, 500, 'customer-approved'))
+        ->toThrow(PosException::class, 'customer_identity_review_required');
+    expect(CandleCashBalance::find($this->profile->id)->balance)->toBe(12.345);
+});
+
+it('serializes a concurrent reward hold and customer merge on MySQL', function (): void {
+    $db = DB::connection();
+    if ($db->getDriverName() !== 'mysql' || getenv('POS_LIVE_DISPOSABLE_MYSQL') !== '1' || ! function_exists('pcntl_fork')) {
+        $this->markTestSkipped('Requires explicitly authorized local disposable MySQL and process forking.');
+    }
+    if (! app()->environment('testing') || ! preg_match('/(^|_)(ci|test|testing)(_|$)/i', $db->getDatabaseName())
+        || ! in_array($db->getConfig('host'), ['127.0.0.1', 'localhost'], true)) {
+        throw new RuntimeException('Refusing unsafe reward merge race.');
+    }
+    $other = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Other']);
+    $tenantId = $this->tenant->id;
+    $profileId = $this->profile->id;
+    $saleId = $this->sale;
+    $directory = sys_get_temp_dir().'/pos-merge-race-'.bin2hex(random_bytes(8));
+    mkdir($directory, 0700);
+    DB::purge();
+    $pids = [];
+    try {
+        foreach (['reserve', 'merge'] as $i => $action) {
+            $pid = pcntl_fork();
+            if ($pid === -1) {
+                throw new RuntimeException('Cannot fork reward merge race.');
+            }
+            if ($pid === 0) {
+                try {
+                    while (! file_exists($directory.'/go')) {
+                        usleep(1000);
+                        clearstatcache();
+                    }
+                    try {
+                        if ($action === 'reserve') {
+                            $store = new PosStore(DB::connection(), app('encrypter'));
+                            $reservation = new PosCandleCashReservation($store, $this->authority, new PosRewardRedemptionPolicy);
+                            $reservation->reserve($tenantId, $saleId, 500, 'customer-approved');
+                        } else {
+                            app(CustomerMergeService::class)->createOperation($tenantId, [$profileId, $other->id], $other->id, 'retail', 'concurrent-merge');
+                        }
+                        $result = 'success';
+                    } catch (PosException $error) {
+                        $result = $error->blocker;
+                    } catch (CustomerMergeException $error) {
+                        $result = $error->publicCode();
+                    }
+                    file_put_contents($directory.'/'.$i, $result);
+                    DB::disconnect();
+                    exit(0);
+                } catch (Throwable) {
+                    exit(1);
+                }
+            }
+            $pids[] = $pid;
+        }
+        touch($directory.'/go');
+        foreach ($pids as $pid) {
+            pcntl_waitpid($pid, $status);
+            expect(pcntl_wexitstatus($status))->toBe(0);
+        }
+        $reserve = file_get_contents($directory.'/0');
+        $merge = file_get_contents($directory.'/1');
+        expect([$reserve, $merge])->toBeIn([
+            ['success', 'pos_reward_merge_review_required'],
+            ['customer_identity_review_required', 'success'],
+        ]);
+        expect(DB::table('pos_candle_cash_reservations')->where('sale_id', $saleId)->count())->toBe($reserve === 'success' ? 1 : 0)
+            ->and((float) CandleCashBalance::find($profileId)->balance)->toBe($reserve === 'success' ? 7.345 : 12.345);
+    } finally {
+        foreach ($pids as $pid) {
+            pcntl_waitpid($pid, $status, WNOHANG);
+        }
+        foreach (glob($directory.'/*') as $file) {
+            unlink($file);
+        }
+        rmdir($directory);
+    }
 });
 
 it('rejects malformed or secret authorization references and oversized policy versions', function (): void {

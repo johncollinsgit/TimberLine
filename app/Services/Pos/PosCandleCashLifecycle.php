@@ -8,7 +8,6 @@ use App\Models\CandleCashBalance;
 use App\Models\CandleCashTransaction;
 use App\Services\PaymentsCore\Contract;
 use App\Services\PaymentsCore\PaymentJournal;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * Internal lifecycle only; no controller, provider or outbox hook is installed.
@@ -16,10 +15,6 @@ use Illuminate\Support\Facades\Cache;
  */
 final class PosCandleCashLifecycle
 {
-    // A cache lease is not a durable start/cancel fence. Never enable this until
-    // every collection path enforces PosPaymentStartClaim end to end.
-    private const UNSTARTED_RELEASE_READY = false;
-
     public function __construct(private PosStore $store, private PaymentJournal $journal, private PosService $sales,
         private PosCustomerPurchases $purchases) {}
 
@@ -70,41 +65,35 @@ final class PosCandleCashLifecycle
         }, 3);
     }
 
-    /** The same register lock as collection excludes a new descriptor while checking the journal. */
+    /** Release only after the durable cancel claim excludes collection. */
     public function releaseUnstarted(int $tenant, string $saleId): string
     {
-        if (! self::UNSTARTED_RELEASE_READY) {
+        if (config('pos_live.durable_start_claims_enabled', false) !== true) {
             throw new PosException('reward_unstarted_release_not_ready', 503);
         }
-        $sale = $this->store->rows('sales', $tenant)->where('id', $saleId)->firstOrFail();
-        $key = 'pos-start-'.hash('sha256', $this->store->runtime().':'.$tenant.':'.$sale->register_id);
 
-        return Cache::lock($key, 180)->block(5, function () use ($tenant, $saleId): string {
-            $sale = $this->store->rows('sales', $tenant)->where('id', $saleId)->firstOrFail();
-            $snapshot = $this->sales->snapshot($sale);
-            if ($sale->state !== 'cancelled' || $sale->attempt_id || $sale->descriptor_issued_at || $sale->source_reference
-                || $this->journal->findByRequest($tenant, $sale->payment_request_id)) {
+        return $this->store->db->transaction(function () use ($tenant, $saleId): string {
+            $current = $this->store->rows('sales', $tenant)->where('id', $saleId)->lockForUpdate()->firstOrFail();
+            $claim = $this->store->db->table('pos_payment_start_claims')->where('runtime_id', $this->store->runtime())
+                ->where('tenant_id', $tenant)->where('sale_id', $saleId)->lockForUpdate()->first();
+            if ($current->state !== 'cancelled' || $current->attempt_id || $current->descriptor_issued_at || $current->source_reference
+                || ! $claim || $claim->state !== 'cancelled' || $claim->payment_request_id !== $current->payment_request_id
+                || $this->store->db->table('payment_core_operations')->where('tenant_id', $tenant)
+                    ->where('request_id', $current->payment_request_id)->lockForUpdate()->exists()) {
                 throw new PosException('reward_payment_uncertain', 409);
             }
+            $hold = $this->lockedHold($current, $this->sales->snapshot($current));
+            if ($hold->state === 'held') {
+                $this->credit($hold, 'pos_reservation_release', 'Released unstarted in-person reward');
+                $this->setState($hold->id, 'released');
 
-            return $this->store->db->transaction(function () use ($tenant, $saleId, $snapshot): string {
-                $current = $this->store->rows('sales', $tenant)->where('id', $saleId)->lockForUpdate()->firstOrFail();
-                if ($current->state !== 'cancelled' || $current->attempt_id || $current->descriptor_issued_at || $current->source_reference) {
-                    throw new PosException('reward_payment_uncertain', 409);
-                }
-                $hold = $this->lockedHold($current, $snapshot);
-                if ($hold->state === 'held') {
-                    $this->credit($hold, 'pos_reservation_release', 'Released unstarted in-person reward');
-                    $this->setState($hold->id, 'released');
-
-                    return 'released';
-                }
-                if ($hold->state === 'released') {
-                    return 'released';
-                }
-                throw new PosException('reward_lifecycle_review_required');
-            }, 3);
-        });
+                return 'released';
+            }
+            if ($hold->state === 'released') {
+                return 'released';
+            }
+            throw new PosException('reward_lifecycle_review_required');
+        }, 3);
     }
 
     /** Full verified refunds restore the held credit; amount-only partial refunds require review. */

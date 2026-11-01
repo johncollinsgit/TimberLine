@@ -496,13 +496,49 @@ class ModernForestryProductCatalogController extends Controller
             return $this->mobileUnauthorizedResponse();
         }
 
+        $available = app(\App\Services\Mobile\ModernForestryRewardAvailability::class)->available($session);
+        $terms = null;
+        if ($available) {
+            $policy = app(\App\Services\Pos\PosRewardRedemptionSettings::class)->tenant((int) $session->profile->tenant_id);
+            $terms = ['max_minor' => $policy['max_minor'], 'policy_version' => $policy['version'],
+                'disclosure_version' => \App\Services\Pos\PosRewardCustomerProof::DISCLOSURE_VERSION,
+                'disclosure' => 'Showing this code permits one in-person purchase to redeem rewards up to the stated limit. The code expires in two minutes.'];
+        }
+
         return response()->json([
-            'data' => [...$account->rewards($session), 'pos_authorization_available' => app(\App\Services\Mobile\ModernForestryRewardAvailability::class)->available($session)],
+            'data' => [...$account->rewards($session), 'pos_authorization_available' => $available, 'pos_authorization_terms' => $terms],
             'meta' => [
                 'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
                 'source' => 'mobile',
             ],
         ]);
+    }
+
+    public function createVerifiedRewardAccount(Request $request, ModernForestryMobileCustomerSessionService $sessions): JsonResponse
+    {
+        if (! is_string($request->bearerToken()) || trim($request->bearerToken()) === '') {
+            return $this->mobileUnauthorizedResponse()->header('Cache-Control', 'private, no-store');
+        }
+        if (config('pos_live.verified_customer_linking_enabled', false) !== true) {
+            return response()->json(['data' => null, 'error' => ['code' => 'customer_account_linking_unavailable']], 503,
+                ['Cache-Control' => 'private, no-store']);
+        }
+        if ($request->input('create_new_profile') !== true) {
+            return response()->json(['data' => null, 'error' => ['code' => 'customer_confirmation_required']], 422,
+                ['Cache-Control' => 'private, no-store']);
+        }
+        $identity = $sessions->resolveFreshShopifySubject($request);
+        if (! $identity) {
+            return $this->mobileUnauthorizedResponse()->header('Cache-Control', 'private, no-store');
+        }
+        try {
+            $profile = app(\App\Services\Mobile\ModernForestryVerifiedAccountLink::class)->forFreshSubject($identity, true);
+        } catch (\App\Services\Pos\PosException $error) {
+            return response()->json(['data' => null, 'error' => ['code' => $error->blocker]], $error->status,
+                ['Cache-Control' => 'private, no-store']);
+        }
+
+        return response()->json(['data' => ['profile_id' => $profile->id]], 200, ['Cache-Control' => 'private, no-store']);
     }
 
     public function issuePosRewardAuthorization(Request $request, ModernForestryMobileCustomerSessionService $sessions): JsonResponse
@@ -518,9 +554,19 @@ class ModernForestryProductCatalogController extends Controller
             return response()->json(['data' => null, 'error' => ['code' => 'in_person_rewards_unavailable']], 503,
                 ['Cache-Control' => 'private, no-store']);
         }
+        $accepted = $request->validate([
+            'max_minor' => ['required', 'integer', 'min:1'],
+            'policy_version' => ['required', 'string', 'regex:/^[a-f0-9]{64}$/'],
+            'disclosure_version' => ['required', 'string', 'in:capped_scan_v1'],
+        ]);
+        $attestation = app(\App\Services\Mobile\ModernForestryRewardIdentity::class)->attestationId($session);
+        if ($attestation === null) {
+            return response()->json(['data' => null, 'error' => ['code' => 'customer_identity_review_required']], 409,
+                ['Cache-Control' => 'private, no-store']);
+        }
 
         return response()->json([
-            'data' => app(\App\Services\Pos\PosRewardCustomerProof::class)->issueForAuthenticatedProfile($session->profile),
+            'data' => app(\App\Services\Pos\PosRewardCustomerProof::class)->issueForAuthenticatedProfile($session->profile, $accepted, $attestation),
             'meta' => ['tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG, 'source' => 'mobile'],
         ], 200, ['Cache-Control' => 'private, no-store']);
     }

@@ -46,6 +46,10 @@ final class PosVerifiedRewardReservationAuthority implements PosRewardReservatio
             throw new PosException('in_person_rewards_policy_changed', 409);
         }
         $proof = $this->proofs->bind($tenant, $customerProof, $sale->id);
+        if ((int) $proof->cap_minor < $amountMinor || ! hash_equals($policy['version'], $proof->policy_version)
+            || $proof->disclosure_version !== PosRewardCustomerProof::DISCLOSURE_VERSION) {
+            throw new PosException('reward_authorization_invalid', 403);
+        }
         $profileId = (int) $proof->marketing_profile_id;
         $canonical = $this->identities->byId($tenant, $profileId);
         if ($profileId !== $terms['profile_id'] || ! $canonical || (int) $canonical->id !== $profileId) {
@@ -54,6 +58,7 @@ final class PosVerifiedRewardReservationAuthority implements PosRewardReservatio
 
         return ['profile_id' => $profileId, 'expected_amount_minor' => $terms['amount_minor'],
             'limit_minor' => $policy['max_minor'], 'eligible_minor' => $terms['eligible_minor'],
-            'policy_version' => $policy['version'], 'authorization_reference' => $proof->id];
+            'policy_version' => $policy['version'], 'authorization_reference' => $proof->id,
+            'account_link_id' => (int) $proof->account_link_id];
     }
 }

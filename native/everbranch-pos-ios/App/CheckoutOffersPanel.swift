@@ -153,9 +153,12 @@ private struct CheckoutOfferPicker: View {
     @ViewBuilder private func targets(_ rule: CheckoutOfferRule) -> some View {
         List {
             if rule.kind == "addon" {
-                let otherItems = quantities.values.reduce(0, +) - addons.reduce(0) { $0 + $1.quantity } + (customAmountMinor > 0 ? 1 : 0)
-                let hasRequiredItem = rule.requiresOtherItem != true || otherItems > 0
-                if rule.requiresOtherItem == true { Text(hasRequiredItem ? "Requires another item in the sale." : "Add another item to the sale first.").font(.caption).foregroundStyle(PayTheme.muted) }
+                let regularUnits = catalog.filter { $0.kind != "bundle" }.reduce(0) { total, item in
+                    total + max(0, (quantities[item.id] ?? 0) - addons.filter { $0.itemId == item.id }.reduce(0) { $0 + $1.quantity })
+                }
+                let usedUnits = addons.filter { addon in rules.contains { $0.id == addon.ruleId && $0.requiresOtherItem == true } }.reduce(0) { $0 + $1.quantity }
+                let hasRequiredItem = rule.requiresOtherItem != true || regularUnits > usedUnits
+                if rule.requiresOtherItem == true { Text(hasRequiredItem ? "One add-on per regular product across offers." : "Add a regular product to use another add-on.").font(.caption).foregroundStyle(PayTheme.muted) }
                 let eligible = catalog.filter { item in
                     (rule.eligibleItemIds ?? []).contains(item.id) && item.kind != "bundle"
                         && (item.availableQuantity == nil || item.availableQuantity! > (quantities[item.id] ?? 0))

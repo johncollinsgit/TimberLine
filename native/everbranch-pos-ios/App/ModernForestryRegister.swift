@@ -235,9 +235,15 @@ extension POSViewModel {
         rows.append(["item_id": String(repeating: "e", count: 32), "product_key": "fixture-trio", "title": "Fictional trio", "variant_label": "Mix & match", "unit_amount_minor": 1800, "kind": "bundle", "revision": String(repeating: "f", count: 64), "available_quantity": untracked ? NSNull() : 6, "availability": "available", "bundle_quantity": 3, "bundle_items": [rows[0], rows[2]]])
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
         items = (try? decoder.decode(CatalogList.self, from: JSONSerialization.data(withJSONObject: ["items": rows])))?.items ?? []
-        selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": [], "custom_amount_enabled": true, "guest_checkout": true]))
+        selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": [], "custom_amount_enabled": true, "guest_checkout": true, "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests")]))
         if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") {
             signedIn = true; registerLoaded = true; tapReady = true
+            if ProcessInfo.processInfo.arguments.contains("--pos-enrollment-ui-tests") {
+                api.token = "fictional-test-session"
+                customerEnrollmentSettings = try? decoder.decode(CustomerEnrollmentSettings.self, from: JSONSerialization.data(withJSONObject: [
+                    "birthday_enabled": true, "birthday_configured": true, "can_manage": true, "can_create_customers": true, "cashier_create_enabled": false, "email_enabled": true, "email_wording": "I agree to promotional emails.",
+                    "sms_enabled": true, "sms_wording": "I agree to promotional texts.", "version": String(repeating: "d", count: 64)]))
+            }
             selectedWorkspace = try? decoder.decode(Workspace.self, from: Data(#"{"id":1,"name":"Fictional","slug":"fixture"}"#.utf8))
             quantities = [String(repeating: "c", count: 32): 1]
             POSCheckoutFixtureProtocol.setCatalog(try! JSONSerialization.data(withJSONObject: ["items": rows]))

@@ -99,6 +99,28 @@ it('recovers customer authorization indexes without exposing or replacing a boun
     }
 });
 
+it('preserves capped authorization evidence after partial terms migration and rollback', function (): void {
+    (require database_path('migrations/2026_11_01_120000_create_pos_reward_authorizations.php'))->up();
+    $migration = require database_path('migrations/2026_11_01_160000_add_pos_reward_authorization_terms.php');
+    $migration->up();
+    $id = (string) Str::uuid();
+    DB::table('pos_reward_authorizations')->insert(['id' => $id, 'runtime_id' => 'recovery_fixture', 'tenant_id' => 900000001,
+        'marketing_profile_id' => 900000002, 'token_hash' => hash('sha256', (string) Str::uuid()), 'cap_minor' => 500,
+        'policy_version' => str_repeat('a', 64), 'disclosure_version' => 'capped_scan_v1',
+        'expires_at' => now()->addMinutes(2), 'created_at' => now(), 'updated_at' => now()]);
+    try {
+        Schema::table('pos_reward_authorizations', fn (Blueprint $table) => $table->dropColumn(['policy_version', 'disclosure_version']));
+        $migration->up();
+        $migration->down();
+        $migration->up();
+        $row = DB::table('pos_reward_authorizations')->where('id', $id)->first();
+        expect((int) $row->cap_minor)->toBe(500)->and($row->policy_version)->toBeNull()
+            ->and(Schema::hasColumn('pos_reward_authorizations', 'disclosure_version'))->toBeTrue();
+    } finally {
+        DB::table('pos_reward_authorizations')->where('id', $id)->delete();
+    }
+});
+
 it('recovers the durable start fence indexes while retaining a starting claim', function (): void {
     $migration = require database_path('migrations/2026_11_01_130000_create_pos_payment_start_claims.php');
     $migration->up();

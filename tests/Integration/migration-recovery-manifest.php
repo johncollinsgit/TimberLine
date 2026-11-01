@@ -3,6 +3,18 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_01_140000_create_pos_shopify_discount_publications.php' => [
+        'test' => 'tests/Integration/PosShopifyDiscountMySqlRecoveryTest.php',
+        'scenarios' => ['uncertain publication evidence survives missing unique-index repair, replay and rollback; duplicate and changed indexes are rejected'],
+    ],
+    '2026_11_01_150000_create_pos_birthday_cycle_fences.php' => [
+        'test' => 'tests/Integration/PosBirthdayMySqlRecoveryTest.php',
+        'scenarios' => ['retained annual claim before authorization table creation, replay and non-destructive rollback; changed annual uniqueness fails closed'],
+    ],
+    '2026_11_01_160000_add_pos_reward_authorization_terms.php' => [
+        'test' => 'tests/Integration/PosCandleCashMySqlRecoveryTest.php',
+        'scenarios' => ['retained frozen cap survives interrupted authorization-column creation, replay and non-destructive rollback'],
+    ],
     '2026_11_01_130000_create_pos_payment_start_claims.php' => [
         'test' => 'tests/Integration/PosCandleCashMySqlRecoveryTest.php',
         'scenarios' => ['starting claim retained before trailing index creation and rollback; duplicate and altered indexes rejected'],

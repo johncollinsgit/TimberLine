@@ -1,7 +1,7 @@
 import Foundation
 
 public enum POSError: Error, Equatable, Sendable {
-    case invalidOrigin, invalidDescriptor, recoveryRequired, signInRequired, unavailable(String)
+    case invalidOrigin, invalidDescriptor, recoveryRequired, signInRequired, unavailable(String), enrollmentRejected(String)
 }
 
 public struct Workspace: Decodable, Identifiable, Sendable {

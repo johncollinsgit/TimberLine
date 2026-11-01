@@ -10,9 +10,9 @@ use App\Models\MarketingProfile;
 use Illuminate\Support\Str;
 
 /**
- * Reservation foundation only. There is deliberately no production authority,
- * route, lifecycle wiring, settlement or release. Pending payment uncertainty
- * therefore cannot inadvertently release a balance or permit a second charge.
+ * Reserves the shared customer wallet inside the sale transaction. The payment
+ * lifecycle keeps uncertain holds and uses durable claims for unstarted release.
+ * Customer-facing issuance and collection remain behind independent rollout gates.
  */
 final class PosCandleCashReservation
 {
@@ -49,8 +49,29 @@ final class PosCandleCashReservation
                 || strlen($authorization) > 128 || hash_equals($customerProof, $authorization)) {
                 throw new PosException('reward_authorization_invalid', 403);
             }
-            if (! MarketingProfile::query()->whereKey($profileId)->where('tenant_id', $tenant)->exists()) {
+            // Merge takes the same profile lock before moving the wallet. The
+            // profile cannot become an archived donor while a hold is created.
+            $profile = MarketingProfile::query()->whereKey($profileId)->where('tenant_id', $tenant)->lockForUpdate()->first();
+            if (! $profile) {
                 throw new PosException('customer_not_found', 404);
+            }
+            if ($profile->merged_at !== null || $profile->merged_into_profile_id !== null) {
+                throw new PosException('customer_identity_review_required', 409);
+            }
+            if ($this->authority instanceof PosVerifiedRewardReservationAuthority
+                && (! is_int($terms['account_link_id'] ?? null)
+                    || ! app(PosVerifiedCustomerAccount::class)->verified($profile, $terms['account_link_id']))) {
+                throw new PosException('customer_identity_review_required', 409);
+            }
+            if (! $this->store->db->getSchemaBuilder()->hasTable('customer_merge_operation_members')
+                || ! $this->store->db->getSchemaBuilder()->hasTable('customer_merge_operations')) {
+                throw new PosException('customer_identity_review_required', 409);
+            }
+            if ($this->store->db->table('customer_merge_operation_members as member')
+                ->join('customer_merge_operations as operation', 'operation.id', '=', 'member.customer_merge_operation_id')
+                ->where('operation.tenant_id', $tenant)->where('member.marketing_profile_id', $profileId)
+                ->whereNotIn('operation.status', ['completed', 'cancelled'])->lockForUpdate()->exists()) {
+                throw new PosException('customer_identity_review_required', 409);
             }
             $holds = $this->store->db->table('pos_candle_cash_reservations')
                 ->where('runtime_id', $this->store->runtime())->where('tenant_id', $tenant);
@@ -63,7 +84,10 @@ final class PosCandleCashReservation
 
                 return $existing;
             }
-            if ($sale->state !== 'quoted' || $sale->attempt_id !== null || $sale->descriptor_issued_at !== null) {
+            if ($sale->state !== 'quoted' || $sale->attempt_id !== null || $sale->descriptor_issued_at !== null
+                || $sale->source_reference !== null
+                || $this->store->db->table('pos_payment_start_claims')->where('runtime_id', $this->store->runtime())
+                    ->where('tenant_id', $tenant)->where('sale_id', $saleId)->exists()) {
                 throw new PosException('reward_sale_not_editable', 409);
             }
             $this->store->db->table('candle_cash_balances')->insertOrIgnore([

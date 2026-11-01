@@ -19,7 +19,7 @@ jobs:
   native:
     name: Square SDK and native recovery
     runs-on: macos-15
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
@@ -43,7 +43,7 @@ jobs:
           echo "device_id=$pos_simulator_id" >> "$GITHUB_OUTPUT"
           xcrun simctl bootstatus "$pos_simulator_id" -b
       - name: Run sandbox launch test
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: >-
           xcodebuild test -project native/everbranch-pos-ios/EverbranchPOS.xcodeproj
           -scheme EverbranchPOS

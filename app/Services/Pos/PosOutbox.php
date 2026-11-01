@@ -36,7 +36,7 @@ final class PosOutbox
                 } catch (\Throwable $error) {
                     $code = $error instanceof PosException ? $error->blocker : 'outbox_processing_failed';
                     $this->store->rows('outbox', $scope['tenant_id'])->where('id', $effect->id)->update([
-                        'state' => $current->attempts >= 7 || in_array($code, ['customer_rewards_shortfall_review', 'customer_identity_review_required', 'customer_rewards_historical_review', 'customer_rewards_refund_allocation_review'], true) ? 'review' : 'retry', 'error_code' => $code,
+                        'state' => $current->attempts >= 7 || in_array($code, ['customer_rewards_shortfall_review', 'customer_identity_review_required', 'customer_rewards_historical_review', 'customer_rewards_refund_allocation_review', 'reward_refund_allocation_review'], true) ? 'review' : 'retry', 'error_code' => $code,
                         'available_at' => now()->addSeconds(min(300, 5 * (2 ** min(6, $current->attempts)))),
                     ]);
                     $this->store->event($scope['tenant_id'], $effect->sale_id, 'effect_needs_reconciliation', ['effect' => $effect->effect_key, 'code' => $code]);
@@ -55,6 +55,25 @@ final class PosOutbox
         $register->configuration = $this->store->encrypt($snapshot['configuration']);
         $scope['register'] = $register;
         $payload = $this->store->decrypt($effect->payload);
+        if ($effect->effect_key === 'reward_unstarted_release') {
+            app(PosCandleCashLifecycle::class)->releaseUnstarted($scope['tenant_id'], $sale->id);
+
+            return;
+        }
+        if (str_starts_with($effect->effect_key, 'reward_payment_')) {
+            if (app(PosCandleCashLifecycle::class)->reconcile($scope['tenant_id'], $sale->id) === 'held') {
+                throw new PosException('reward_payment_uncertain');
+            }
+
+            return;
+        }
+        if (str_starts_with($effect->effect_key, 'reward_refund_') || str_starts_with($effect->effect_key, 'reward_refunds_')) {
+            if (app(PosCandleCashLifecycle::class)->reconcileRefund($scope['tenant_id'], $sale->id) === 'partial_refund_review') {
+                throw new PosException('reward_refund_allocation_review');
+            }
+
+            return;
+        }
         if (str_starts_with($effect->effect_key, 'reconcile_')) {
             $operation = $this->journal->findByRequest($scope['tenant_id'], $sale->payment_request_id);
             if ($operation) {

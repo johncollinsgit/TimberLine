@@ -38,12 +38,63 @@ final class PosController extends Controller
         return $this->respond($r, [], fn () => app(\App\Services\Pos\PosCommerceRuleStore::class)->reviewStatus($this->checkoutRuleScope($register, false), $register));
     }
 
+    public function reconcileOnlineCheckoutRule(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['rule_id' => ['required', 'regex:/^[a-z0-9][a-z0-9_-]{0,63}$/D']],
+            fn ($input) => app(\App\Services\Pos\PosShopifyOnlineDiscount::class)->reconcile($this->checkoutRuleScope($register), $register, $input['rule_id']));
+    }
+
+    public function taxLocations(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosTaxLocations::class)->options(app(\App\Services\Pos\PosAccess::class)->register($register)));
+    }
+
+    public function previewTaxLocation(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['key' => ['required', 'regex:/^(event|shopify):[0-9]+$/D']],
+            fn ($input) => app(\App\Services\Pos\PosTaxLocations::class)->preview(app(\App\Services\Pos\PosAccess::class)->register($register, 'admin'), $input['key']));
+    }
+
+    public function publishTaxLocation(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['key' => ['required', 'regex:/^(event|shopify):[0-9]+$/D'],
+            'version' => ['required', 'regex:/^[a-f0-9]{64}$/D'], 'previous_version' => ['required', 'regex:/^[a-f0-9]{64}$/D'],
+            'valid_until' => ['required', 'date_format:Y-m-d\\TH:i:s\\Z'], 'confirmed' => ['required', 'boolean']],
+            fn ($input) => app(\App\Services\Pos\PosTaxLocations::class)->publish(app(\App\Services\Pos\PosAccess::class)->register($register, 'admin'),
+                $input['key'], $input['version'], $input['previous_version'], $input['valid_until'], $input['confirmed'] === true));
+    }
+
     public function publishCheckoutRules(Request $r, string $tenant, string $register): JsonResponse
     {
         return $this->respond($r, ['version' => ['required', 'regex:/^[a-f0-9]{64}$/D'],
             'previous_reviewed_version' => ['present', 'nullable', 'regex:/^[a-f0-9]{64}$/D'], 'confirmed' => ['required', 'boolean']],
             fn ($input) => app(\App\Services\Pos\PosCommerceRuleStore::class)->publish($this->checkoutRuleScope($register), $register,
                 $input['version'], $input['previous_reviewed_version'], $input['confirmed'] === true));
+    }
+
+    public function reviewOnlineDiscount(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, $this->onlineDiscountValidation(false), fn ($input) => app(\App\Services\Pos\PosShopifyOnlineDiscount::class)
+            ->review($this->checkoutRuleScope($register, false), $register, $input['version'], $input['rule_id'], $input['code'], $input['starts_at'], $input['public_eligibility_confirmed'] === true));
+    }
+
+    public function publishOnlineDiscount(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, $this->onlineDiscountValidation(true), function ($input) use ($register): array {
+            if ($input['confirmed'] !== true) {
+                throw new PosException('checkout_rules_confirmation_required', 422);
+            }
+
+            return app(\App\Services\Pos\PosShopifyOnlineDiscount::class)->publish($this->checkoutRuleScope($register), $register,
+                $input['version'], $input['rule_id'], $input['code'], $input['starts_at'], $input['request_id'], $input['public_eligibility_confirmed'] === true);
+        });
+    }
+
+    private function onlineDiscountValidation(bool $publish): array
+    {
+        return ['version' => ['required', 'regex:/^[a-f0-9]{64}$/D'], 'rule_id' => ['required', 'regex:/^[a-z0-9][a-z0-9_-]{0,63}$/D'],
+            'code' => ['required', 'regex:/^[A-Z0-9][A-Z0-9_-]{2,31}$/D'], 'starts_at' => ['required', 'date_format:Y-m-d\\TH:i:s\\Z'],
+            'public_eligibility_confirmed' => ['required', 'boolean'], ...($publish ? ['request_id' => ['required', 'uuid'], 'confirmed' => ['required', 'boolean']] : [])];
     }
 
     public function saveCheckoutRule(Request $r, string $tenant, string $register): JsonResponse
@@ -98,6 +149,52 @@ final class PosController extends Controller
         return $this->respond($r, [], fn () => app(\App\Services\Pos\PosCustomerDirectory::class)->commerce($register, (int) $profile));
     }
 
+    public function customerEnrollmentSettings(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosCustomerEnrollment::class)->settings($register));
+    }
+
+    public function configureCustomerEnrollment(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['version' => ['required', 'regex:/^[a-f0-9]{64}$/D'],
+            'birthday_enabled' => ['required', 'boolean'], 'email_enabled' => ['required', 'boolean'],
+            'email_wording' => ['nullable', 'string', 'max:1000', 'regex:/\A[^\p{C}]*\z/u'],
+            'sms_enabled' => ['required', 'boolean'], 'sms_wording' => ['nullable', 'string', 'max:1000', 'regex:/\A[^\p{C}]*\z/u'],
+            'cashier_create_enabled' => ['sometimes', 'boolean'],
+            'confirmed' => ['required', 'boolean']], function ($input) use ($register): array {
+                foreach (['birthday_enabled', 'email_enabled', 'sms_enabled', 'confirmed'] as $key) {
+                    if (! is_bool($input[$key])) {
+                        throw new PosException('invalid_request', 422);
+                    }
+                }
+                if (isset($input['cashier_create_enabled']) && ! is_bool($input['cashier_create_enabled'])) {
+                    throw new PosException('invalid_request', 422);
+                }
+
+                return app(\App\Services\Pos\PosCustomerEnrollment::class)->configure($register, $input);
+            });
+    }
+
+    public function enrollCustomer(Request $r, string $tenant, string $register, string $profile): JsonResponse
+    {
+        return $this->respond($r, ['request_id' => ['required', 'uuid'], 'version' => ['required', 'regex:/^[a-f0-9]{64}$/D'],
+            'birthday' => ['sometimes', 'array:month,day'], 'birthday.month' => ['required_with:birthday', 'integer', 'between:1,12'],
+            'birthday.day' => ['required_with:birthday', 'integer', 'between:1,31'], 'email_opt_in' => ['sometimes', 'boolean'],
+            'sms_opt_in' => ['sometimes', 'boolean']], function ($input) use ($register, $profile): array {
+                foreach (['email_opt_in', 'sms_opt_in'] as $key) {
+                    if (isset($input[$key]) && ! is_bool($input[$key])) {
+                        throw new PosException('invalid_request', 422);
+                    }
+                }
+                if (isset($input['birthday']) && (! isset($input['birthday']['month'], $input['birthday']['day'])
+                    || ! is_int($input['birthday']['month']) || ! is_int($input['birthday']['day']))) {
+                    throw new PosException('invalid_request', 422);
+                }
+
+                return app(\App\Services\Pos\PosCustomerEnrollment::class)->enroll($register, (int) $profile, $input);
+            });
+    }
+
     public function createCustomer(Request $r, string $tenant, string $register): JsonResponse
     {
         return $this->respond($r, ['request_id' => ['required', 'uuid'],
@@ -131,7 +228,7 @@ final class PosController extends Controller
     public function quote(Request $r, string $tenant, string $register): JsonResponse
     {
         return $this->respond($r, [
-            'request_id' => ['required', 'uuid'], 'source_order_id' => ['sometimes', 'integer', 'min:1', 'prohibits:items,custom_charge,discounts,addons'],
+            'request_id' => ['required', 'uuid'], 'source_order_id' => ['sometimes', 'integer', 'min:1', 'prohibits:items,custom_charge,discounts,addons,reward_redemption'],
             'items' => ['required_without_all:source_order_id,custom_charge', 'array', 'min:1', 'max:50'],
             'custom_charge' => ['sometimes', 'array:description,amount_minor'],
             'custom_charge.description' => ['required_with:custom_charge', 'string', 'min:1', 'max:150', 'regex:/\A[^\p{C}]+\z/u'],
@@ -151,6 +248,9 @@ final class PosController extends Controller
             'addons.*.rule_id' => ['required', 'regex:/^[a-z0-9][a-z0-9_-]{0,63}$/D'],
             'addons.*.item_id' => ['required', 'regex:/^[a-f0-9]{32}$/D'], 'addons.*.quantity' => ['required', 'integer', 'min:1', 'max:99'],
             'customer_profile_id' => ['sometimes', 'integer', 'min:1'],
+            'reward_redemption' => ['sometimes', 'array:proof,amount_minor'],
+            'reward_redemption.proof' => ['required_with:reward_redemption', 'string', 'regex:/^everbranch-reward:v1:[A-Za-z0-9_-]{43}$/D'],
+            'reward_redemption.amount_minor' => ['required_with:reward_redemption', 'integer', 'min:1', 'max:100000000'],
             'customer' => ['sometimes', 'nullable', 'array:name,email'], 'customer.name' => ['sometimes', 'string', 'max:150'],
             'customer.email' => ['sometimes', 'email:rfc', 'max:254'],
         ], fn ($input) => $this->pos->quote($register, $input));
@@ -246,6 +346,9 @@ final class PosController extends Controller
                 }
             }
             if (isset($input['custom_charge']) && ! is_int($input['custom_charge']['amount_minor'])) {
+                throw new PosException('invalid_request', 422);
+            }
+            if (isset($input['reward_redemption']) && ! is_int($input['reward_redemption']['amount_minor'])) {
                 throw new PosException('invalid_request', 422);
             }
             if (isset($input['reward_evidence']) && (! is_bool($input['reward_evidence']['member_at_purchase']) || ! is_int($input['reward_evidence']['prior_confirmed_orders']))) {

@@ -18,11 +18,10 @@ class BirthdayRewardRedemptionReconciliationService
         protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder,
         protected TenantMarketingSettingsResolver $marketingSettingsResolver,
         protected TenantResolver $tenantResolver
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,int>
      */
     public function reconcileShopifyOrder(Order $order, array $options = []): array
@@ -57,9 +56,9 @@ class BirthdayRewardRedemptionReconciliationService
     }
 
     /**
-     * @param array<int,string> $codes
-     * @param array<int,int> $profileIds
-     * @param array<string,mixed> $context
+     * @param  array<int,string>  $codes
+     * @param  array<int,int>  $profileIds
+     * @param  array<string,mixed>  $context
      * @return array<string,int>
      */
     public function reconcileCodes(
@@ -91,7 +90,7 @@ class BirthdayRewardRedemptionReconciliationService
                 'endpoint' => $externalOrderSource,
                 'source_type' => $externalOrderSource,
                 'source_id' => $externalOrderId,
-                'dedupe_key' => sha1('birthday_tenant_missing|' . $externalOrderSource . '|' . $externalOrderId . '|' . implode(',', $codes)),
+                'dedupe_key' => sha1('birthday_tenant_missing|'.$externalOrderSource.'|'.$externalOrderId.'|'.implode(',', $codes)),
                 'meta' => [
                     'reward_codes' => $codes,
                     'external_order_source' => $externalOrderSource,
@@ -125,7 +124,7 @@ class BirthdayRewardRedemptionReconciliationService
                     'endpoint' => $externalOrderSource,
                     'source_type' => $externalOrderSource,
                     'source_id' => $externalOrderId,
-                    'dedupe_key' => sha1('birthday_reward_unmatched|' . $code . '|' . $externalOrderSource . '|' . $externalOrderId . '|tenant:' . $tenantId),
+                    'dedupe_key' => sha1('birthday_reward_unmatched|'.$code.'|'.$externalOrderSource.'|'.$externalOrderId.'|tenant:'.$tenantId),
                     'meta' => [
                         'reward_code' => $code,
                         'tenant_id' => $tenantId,
@@ -142,6 +141,26 @@ class BirthdayRewardRedemptionReconciliationService
                 $this->logRejected($issuance, 'profile_mismatch', $code, $externalOrderSource, $externalOrderId, $tenantId);
 
                 continue;
+            }
+
+            if (config('pos_live.birthday_channel_fence_enabled', false) === true) {
+                try {
+                    $review = DB::transaction(fn () => app(\App\Services\Pos\PosBirthdayOnlineFence::class)->recordOnlineUse(
+                        $tenantId, (int) $issuance->marketing_profile_id, (int) $issuance->cycle_year, (int) $issuance->id,
+                        $externalOrderSource.':'.$externalOrderId
+                    ), 3);
+                } catch (\App\Services\Pos\PosException) {
+                    $review = true;
+                }
+                if ($review) {
+                    $this->eventLogger->log('birthday_cross_channel_review_required', [
+                        'status' => 'error', 'issue_type' => 'birthday_cross_channel_review_required', 'source_surface' => 'ingestion',
+                        'endpoint' => $externalOrderSource, 'marketing_profile_id' => (int) $issuance->marketing_profile_id,
+                        'source_type' => $externalOrderSource, 'source_id' => $externalOrderId,
+                        'dedupe_key' => sha1('birthday_cross_channel_review|'.$tenantId.'|'.$issuance->id.'|'.$externalOrderSource.'|'.$externalOrderId),
+                        'meta' => ['tenant_id' => $tenantId, 'issuance_id' => (int) $issuance->id], 'resolution_status' => 'open',
+                    ]);
+                }
             }
 
             if ((string) $issuance->status === 'cancelled' || $issuance->isExpired()) {
@@ -170,7 +189,7 @@ class BirthdayRewardRedemptionReconciliationService
                         'marketing_profile_id' => (int) $issuance->marketing_profile_id,
                         'source_type' => $externalOrderSource,
                         'source_id' => $externalOrderId,
-                        'dedupe_key' => sha1('birthday_reward_already_redeemed|' . $issuance->id . '|' . $externalOrderSource . '|' . $externalOrderId),
+                        'dedupe_key' => sha1('birthday_reward_already_redeemed|'.$issuance->id.'|'.$externalOrderSource.'|'.$externalOrderId),
                         'meta' => [
                             'reward_code' => $code,
                             'issuance_id' => (int) $issuance->id,
@@ -238,7 +257,7 @@ class BirthdayRewardRedemptionReconciliationService
                 'marketing_profile_id' => (int) $redeemed->marketing_profile_id,
                 'source_type' => $externalOrderSource,
                 'source_id' => $externalOrderId,
-                'dedupe_key' => sha1('birthday_reward_redeemed|' . $redeemed->id . '|' . $externalOrderSource . '|' . $externalOrderId),
+                'dedupe_key' => sha1('birthday_reward_redeemed|'.$redeemed->id.'|'.$externalOrderSource.'|'.$externalOrderId),
                 'meta' => [
                     'reward_code' => $code,
                     'issuance_id' => (int) $redeemed->id,
@@ -253,7 +272,7 @@ class BirthdayRewardRedemptionReconciliationService
     }
 
     /**
-     * @param array<int,string> $codes
+     * @param  array<int,string>  $codes
      * @return array<int,string>
      */
     protected function birthdayCandidateCodes(array $codes, ?int $tenantId = null): array
@@ -265,7 +284,7 @@ class BirthdayRewardRedemptionReconciliationService
     }
 
     /**
-     * @param array<int,string> $codes
+     * @param  array<int,string>  $codes
      * @return array<int,string>
      */
     protected function normalizeCodes(array $codes): array
@@ -294,7 +313,7 @@ class BirthdayRewardRedemptionReconciliationService
             return [];
         }
 
-        preg_match_all('/\b(?:' . $patterns->implode('|') . ')-[A-Z0-9]{4,24}\b/i', strtoupper($value), $matches);
+        preg_match_all('/\b(?:'.$patterns->implode('|').')-[A-Z0-9]{4,24}\b/i', strtoupper($value), $matches);
 
         return $this->normalizeCodes((array) ($matches[0] ?? []));
     }
@@ -302,7 +321,7 @@ class BirthdayRewardRedemptionReconciliationService
     protected function looksLikeBirthdayCode(string $code, ?int $tenantId = null): bool
     {
         foreach ($this->codePrefixes($tenantId) as $prefix) {
-            if (str_starts_with($code, strtoupper($prefix) . '-')) {
+            if (str_starts_with($code, strtoupper($prefix).'-')) {
                 return true;
             }
         }
@@ -357,7 +376,7 @@ class BirthdayRewardRedemptionReconciliationService
      */
     protected function profileIdsForOrder(Order $order, ?int $tenantId = null): array
     {
-        $shopifySourceId = (string) ($order->shopify_store_key ?: $order->shopify_store ?: 'unknown') . ':' . $order->shopify_order_id;
+        $shopifySourceId = (string) ($order->shopify_store_key ?: $order->shopify_store ?: 'unknown').':'.$order->shopify_order_id;
 
         $profileIds = MarketingProfileLink::query()
             ->where(function ($query) use ($order, $shopifySourceId): void {
@@ -384,7 +403,7 @@ class BirthdayRewardRedemptionReconciliationService
     }
 
     /**
-     * @param array<int,int> $profileIds
+     * @param  array<int,int>  $profileIds
      * @return array<int,int>
      */
     protected function filterProfileIdsByTenant(array $profileIds, ?int $tenantId): array
@@ -437,7 +456,7 @@ class BirthdayRewardRedemptionReconciliationService
             'marketing_profile_id' => (int) $issuance->marketing_profile_id,
             'source_type' => $externalOrderSource,
             'source_id' => $externalOrderId,
-            'dedupe_key' => sha1('birthday_reward_reject|' . $issuance->id . '|' . $externalOrderSource . '|' . $externalOrderId . '|' . $reason),
+            'dedupe_key' => sha1('birthday_reward_reject|'.$issuance->id.'|'.$externalOrderSource.'|'.$externalOrderId.'|'.$reason),
             'meta' => [
                 'reward_code' => $code,
                 'issuance_id' => (int) $issuance->id,
@@ -448,7 +467,7 @@ class BirthdayRewardRedemptionReconciliationService
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      */
     protected function writeAudit(BirthdayRewardIssuance $issuance, string $action, array $payload = []): void
     {

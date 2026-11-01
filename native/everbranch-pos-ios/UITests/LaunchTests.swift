@@ -187,6 +187,22 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Sign in to checkout"].waitForExistence(timeout: 5))
     }
 
+    func testOnlineOwnerReviewShowsPublicTermsAndRespectsOffGate() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-online-rules-ui-tests"]; app.launch()
+        XCTAssertTrue(app.buttons["Account & Tap to Pay"].waitForExistence(timeout: 10)); app.buttons["Account & Tap to Pay"].tap()
+        let manage = app.buttons["Manage checkout rules"]; XCTAssertTrue(manage.waitForExistence(timeout: 5)); manage.tap()
+        let open = app.buttons["Review Five off for Shopify"]; XCTAssertTrue(open.waitForExistence(timeout: 10)); open.tap()
+        let field = app.textFields["Code"]; XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("SAVE5"); app.keyboards.buttons["Done"].tap()
+        let eligibility = app.switches["Anyone with this code can use it"]
+        eligibility.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertEqual(eligibility.value as? String, "1")
+        app.buttons["Review Shopify discount"].tap()
+        XCTAssertTrue(app.staticTexts["Store: fictional.myshopify.com"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Anyone with the code can use it. It cannot combine with other discounts."].exists)
+        XCTAssertTrue(app.staticTexts["Online publishing is off."].exists)
+        XCTAssertFalse(app.buttons["Publish this code"].exists)
+    }
+
     func testPendingPaymentCanCloseBrowseAndOpenAccountWithoutLosingTheAttempt() {
         let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-recovery-ui-tests"]; app.launch()
         XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 10))

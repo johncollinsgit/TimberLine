@@ -69,8 +69,7 @@ final class PosCheckoutOffers
         $entries = [];
         $taken = [];
         $addonPrices = [];
-        $addonUnits = 0;
-        $requiresOther = false;
+        $qualifiedAddonUnits = 0;
         foreach ($addons as $selection) {
             $rule = $ruleMap[$selection['rule_id']] ?? null;
             $id = $selection['item_id'];
@@ -90,13 +89,21 @@ final class PosCheckoutOffers
             foreach (range(1, $quantity) as $_) {
                 $addonPrices[$id][] = $rule['value'];
             }
-            $addonUnits += $quantity;
-            $requiresOther = $requiresOther || $rule['requires_other_item'];
+            if ($rule['requires_other_item']) {
+                $qualifiedAddonUnits += $quantity;
+            }
             $entries[] = ['rule_id' => $rule['id'], 'name' => $rule['name'], 'kind' => 'addon', 'value' => $rule['value'],
                 'requires_other_item' => $rule['requires_other_item'], 'item_id' => $id, 'quantity' => $quantity, 'amount_minor' => $amount];
         }
-        $otherUnits = array_sum(array_column($selected, 'quantity')) - $addonUnits + (isset($input['custom_charge']) ? 1 : 0);
-        if ($requiresOther && $otherUnits < 1) {
+        // A qualifying regular product unit can support one required add-on across
+        // all rules. Add-ons, bundles, and custom amounts are not qualifying units.
+        $qualifyingUnits = 0;
+        foreach ($selected as $key => $item) {
+            if ($catalogByLine[$key]['kind'] !== 'bundle') {
+                $qualifyingUnits += $item['quantity'] - ($taken[$item['item_id']] ?? 0);
+            }
+        }
+        if ($qualifiedAddonUnits > $qualifyingUnits) {
             throw new PosException('checkout_addon_requires_purchase', 422);
         }
         $unitMode = count(array_filter($discounts, fn ($selection) => array_key_exists('quantity', $selection))) > 0;

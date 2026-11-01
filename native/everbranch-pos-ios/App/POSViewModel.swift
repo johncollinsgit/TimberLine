@@ -1,4 +1,5 @@
 import SwiftUI
+import CryptoKit
 
 struct PrintingQuote: Decodable, Identifiable { let id: Int; let number: String; let amountMinor: Int }
 struct PrintingQuoteList: Decodable { let quotes: [PrintingQuote] }
@@ -147,6 +148,9 @@ struct BundleBasketLine: Identifiable {
     @Published var customerQuery = ""
     @Published var customers: [POSCustomer] = []
     @Published var selectedCustomer: POSCustomer?
+    @Published var customerEnrollmentSettings: CustomerEnrollmentSettings?
+    @Published var customerEnrollmentNotice: String?
+    @Published var pendingEnrollment: PendingCustomerEnrollment?
     @Published var customerCommerce: POSCustomerCommerce?
     @Published var customerCommerceLoading = false
     @Published var customerCommerceError: String?
@@ -165,6 +169,7 @@ struct BundleBasketLine: Identifiable {
         if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") { return }
         #endif
         if let value = SecureStore.read("pending-customer") { pendingCustomer = try? JSONDecoder().decode(PendingCustomerCreation.self, from: value) }
+        if let value = SecureStore.read("pending-enrollment") { pendingEnrollment = try? JSONDecoder().decode(PendingCustomerEnrollment.self, from: value) }
         signedIn = api.token != nil
         if let value = SecureStore.read("pending-sale") { pending = try? JSONDecoder().decode(PendingSale.self, from: value) }
         if let value = SecureStore.read("payments-for-review") { savedPaymentReviews = (try? JSONDecoder().decode([SavedPaymentReview].self, from: value)) ?? [] }
@@ -241,6 +246,7 @@ struct BundleBasketLine: Identifiable {
         guard let base else { return }
         let value: CatalogList = try await api.request(base + "/catalog")
         items = value.items
+        customerEnrollmentSettings = try? await api.request(base + "/customer-enrollment")
         // Checkout remains available if offers are unavailable or have not been reviewed.
         let offers: CheckoutOfferRuleList? = try? await api.request(base + "/checkout-rules/available")
         checkoutRulesVersion = offers?.version; checkoutRules = offers?.rules ?? []
@@ -329,6 +335,64 @@ struct BundleBasketLine: Identifiable {
                 self.customerCommerceError = "Could not load customer history. You can try again."
                 self.customerCommerceLoading = false
             }
+        }
+    }
+    private var enrollmentSessionFingerprint: String? {
+        guard let token = api.token, !token.isEmpty else { return nil }
+        return SHA256.hash(data: Data(token.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+    private func savePendingEnrollment() throws {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") { return }
+        #endif
+        try SecureStore.write("pending-enrollment", try pendingEnrollment.map { try JSONEncoder().encode($0) })
+    }
+    func saveCustomerEnrollment(_ choice: CustomerEnrollmentChoice) {
+        guard !busy, let workspace = selectedWorkspace, let register = selectedRegister, let customer = selectedCustomer,
+              let fingerprint = enrollmentSessionFingerprint, pendingEnrollment == nil else { return }
+        pendingEnrollment = PendingCustomerEnrollment(workspace: workspace.slug, register: register.id, customerID: customer.id,
+            requestID: UUID().uuidString.lowercased(), sessionFingerprint: fingerprint, choice: choice)
+        do { try savePendingEnrollment() } catch { pendingEnrollment = nil; customerEnrollmentNotice = "Could not save the request. Try again."; return }
+        retryCustomerEnrollment()
+    }
+    func stopRetryingCustomerEnrollment() {
+        guard !busy, let original = pendingEnrollment else { return }
+        pendingEnrollment = nil
+        do { try savePendingEnrollment(); customerEnrollmentNotice = "The earlier choices may already be saved. Check the customer record before submitting again." }
+        catch { pendingEnrollment = original; customerEnrollmentNotice = "Could not clear the saved request." }
+    }
+    func retryCustomerEnrollment() {
+        guard let pending = pendingEnrollment, let base, pending.workspace == selectedWorkspace?.slug,
+              pending.register == selectedRegister?.id, pending.customerID == selectedCustomer?.id,
+              pending.sessionFingerprint == enrollmentSessionFingerprint else {
+            customerEnrollmentNotice = "Return to the original customer and register with the same sign-in to retry these choices."; return
+        }
+        perform {
+            do {
+                struct Result: Decodable { let customerId: Int }
+                var body = pending.choice.body; body["request_id"] = pending.requestID
+                let result: Result = try await self.api.request(base + "/customers/\(pending.customerID)/enrollment", method: "POST", body: body)
+                guard result.customerId == pending.customerID else { throw POSError.recoveryRequired }
+                self.pendingEnrollment = nil
+                do { try self.savePendingEnrollment() } catch { self.pendingEnrollment = pending; throw error }
+                self.customerEnrollmentNotice = "Customer choices saved."
+            } catch POSError.enrollmentRejected(let code) {
+                let rejected = ["invalid_request", "invalid_birthday", "enrollment_choice_required", "birthday_enrollment_unavailable",
+                    "email_enrollment_unavailable", "sms_enrollment_unavailable", "customer_consent_review_required",
+                    "birthday_change_requires_review", "enrollment_settings_changed"]
+                guard rejected.contains(code) else { self.customerEnrollmentNotice = "These choices need review. Keep the original request."; return }
+                self.pendingEnrollment = nil
+                do { try self.savePendingEnrollment() } catch { self.pendingEnrollment = pending; throw error }
+                switch code {
+                case "customer_consent_review_required": self.customerEnrollmentNotice = "A previous opt-out needs review before updates can be enabled."
+                case "birthday_change_requires_review": self.customerEnrollmentNotice = "A different birthday is already saved; ask an administrator to review it."
+                case "enrollment_settings_changed":
+                    self.customerEnrollmentNotice = "The wording changed. Review the current options before saving again."
+                    self.customerEnrollmentSettings = try? await self.api.request(base + "/customer-enrollment")
+                default: self.customerEnrollmentNotice = "Check the customer details and choices before trying again."
+                }
+            } catch POSError.signInRequired { throw POSError.signInRequired }
+            catch { self.customerEnrollmentNotice = "Choices were not confirmed. Retry the saved choices; payment is unaffected." }
         }
     }
     func createCustomer() {
@@ -424,6 +488,20 @@ struct BundleBasketLine: Identifiable {
     var canEditBasket: Bool {
         guard !busy, let pending else { return false }
         return !pending.collectionRequested && !pending.sdkStarted && sale?.state == "quoted" && sale?.saleId == offerDraftQuoteID
+    }
+    func bindCustomerToUnstartedSale() {
+        guard canEditBasket, selectedCustomer != nil, let workspace = selectedWorkspace, let register = selectedRegister,
+              let base, let original = pending else { return }
+        perform {
+            struct DiscardResult: Decodable { let discarded: Bool }
+            let discarded: DiscardResult = try await self.api.request(base + "/requests/" + original.requestID + "/discard", method: "POST", body: [:])
+            guard discarded.discarded else { throw POSError.recoveryRequired }
+            self.availabilityPoll?.cancel(); self.pending = nil
+            do { try self.savePending() } catch { self.pending = original; throw error }
+            self.sale = nil; self.receipt = nil; self.offerDraftQuoteID = nil
+            try await self.createQuote(workspace: workspace.slug, register: register.id, base: base)
+            self.receiptUpdateGeneration += 1
+        }
     }
     func editBasket() {
         guard canEditBasket, let base, let pending else { return }

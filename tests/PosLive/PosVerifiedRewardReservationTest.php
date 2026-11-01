@@ -25,6 +25,7 @@ beforeEach(function (): void {
     config(['pos_live.runtime_id' => 'fixture_runtime', 'pos_live.in_person_rewards_enabled' => true]);
     $this->tenant = Tenant::create(['name' => 'Verified fixture', 'slug' => 'verified-'.Str::random(10), 'status' => 'active']);
     $this->profile = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Test']);
+    $this->accountLink = \Tests\Support\PosVerifiedAccountFixture::create($this->profile);
     CandleCashBalance::create(['marketing_profile_id' => $this->profile->id, 'balance' => 10]);
     foreach (['candle_cash_program_config' => ['redeem_increment_dollars' => 10],
         'candle_cash_policy_config' => ['access_state' => ['launch_state' => 'published']]] as $key => $value) {
@@ -36,6 +37,7 @@ beforeEach(function (): void {
     $programVersion = app(PosCustomerRewards::class)->policy($this->tenant->id)['version'];
     $raw = ['enabled' => true, 'max_minor' => 500, 'refund_policy' => 'restore_full_review_partial'];
     $this->version = $settings->version($raw, $programVersion);
+    $this->accepted = ['max_minor' => 500, 'policy_version' => $this->version, 'disclosure_version' => PosRewardCustomerProof::DISCLOSURE_VERSION];
     TenantMarketingSetting::create(['tenant_id' => $this->tenant->id, 'key' => PosRewardRedemptionSettings::SETTING_KEY,
         'value' => [...$raw, 'reviewed_version' => $this->version, 'reviewed_by' => 1, 'reviewed_at' => now()->toIso8601String()]]);
     $register = bin2hex(random_bytes(16));
@@ -61,7 +63,7 @@ beforeEach(function (): void {
 });
 
 it('binds verified proof to the frozen customer and exact discounted quote', function (): void {
-    $proof = $this->proofs->issueForAuthenticatedProfile($this->profile)['qr_payload'];
+    $proof = $this->proofs->issueForAuthenticatedProfile($this->profile, $this->accepted, $this->accountLink)['qr_payload'];
     $hold = $this->service->reserve($this->tenant->id, $this->saleId, 500, $proof);
     expect($hold->marketing_profile_id)->toBe($this->profile->id)
         ->and($hold->amount_minor)->toBe(500)
@@ -72,18 +74,31 @@ it('binds verified proof to the frozen customer and exact discounted quote', fun
         ->and(json_encode($hold))->not->toContain($proof);
 });
 
+it('rejects a proof if the verified account becomes conflicting before wallet reservation', function (): void {
+    $proof = $this->proofs->issueForAuthenticatedProfile($this->profile, $this->accepted, $this->accountLink)['qr_payload'];
+    $attestation = \App\Models\MarketingProfileLink::findOrFail($this->accountLink);
+    $gid = $attestation->source_meta['shopify_customer_gid'];
+    $other = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Other']);
+    \App\Models\CustomerExternalProfile::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $other->id,
+        'provider' => 'shopify', 'integration' => 'shopify_customer', 'store_key' => 'retail', 'external_customer_id' => basename($gid), 'external_customer_gid' => $gid]);
+    expect(fn () => $this->service->reserve($this->tenant->id, $this->saleId, 500, $proof))
+        ->toThrow(PosException::class, 'customer_identity_review_required');
+    expect(CandleCashBalance::find($this->profile->id)->balance)->toBe(10.0)
+        ->and($this->proofs->preview($this->tenant->id, $proof)->sale_id)->toBeNull();
+});
+
 it('rolls proof binding back when amount or customer is wrong', function (): void {
-    $proof = $this->proofs->issueForAuthenticatedProfile($this->profile)['qr_payload'];
+    $proof = $this->proofs->issueForAuthenticatedProfile($this->profile, $this->accepted, $this->accountLink)['qr_payload'];
     expect(fn () => $this->service->reserve($this->tenant->id, $this->saleId, 400, $proof))->toThrow(PosException::class, 'reward_quote_invalid');
     $other = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Other']);
-    $wrongProof = $this->proofs->issueForAuthenticatedProfile($other)['qr_payload'];
+    $wrongProof = $this->proofs->issueForAuthenticatedProfile($other, $this->accepted, \Tests\Support\PosVerifiedAccountFixture::create($other))['qr_payload'];
     expect(fn () => $this->service->reserve($this->tenant->id, $this->saleId, 500, $wrongProof))->toThrow(PosException::class, 'customer_identity_review_required');
     expect(DB::table('pos_reward_authorizations')->where('tenant_id', $this->tenant->id)->whereNotNull('sale_id')->count())->toBe(0)
         ->and(CandleCashBalance::find($this->profile->id)->balance)->toBe(10.0);
 });
 
 it('never reserves a live customer balance for a sandbox sale', function (): void {
-    $proof = $this->proofs->issueForAuthenticatedProfile($this->profile)['qr_payload'];
+    $proof = $this->proofs->issueForAuthenticatedProfile($this->profile, $this->accepted, $this->accountLink)['qr_payload'];
     $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $this->saleId)->firstOrFail();
     $snapshot = $this->store->decrypt($sale->snapshot);
     $snapshot['binding']['environment'] = 'test';
@@ -97,7 +112,7 @@ it('never reserves a live customer balance for a sandbox sale', function (): voi
 });
 
 it('rolls back proof, ledger and balance if the enclosing quote transaction fails', function (): void {
-    $proof = $this->proofs->issueForAuthenticatedProfile($this->profile)['qr_payload'];
+    $proof = $this->proofs->issueForAuthenticatedProfile($this->profile, $this->accepted, $this->accountLink)['qr_payload'];
     expect(fn () => DB::transaction(function () use ($proof): void {
         $this->service->reserve($this->tenant->id, $this->saleId, 500, $proof);
         throw new RuntimeException('fictional quote insertion failure');

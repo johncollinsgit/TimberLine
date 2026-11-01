@@ -3369,3 +3369,15 @@ for every plan/template; retain merchant program and payment activation checks.
 Do not create a second customer identity or loyalty ledger, infer linkage from
 a card tap, or label source/UI tests as physical acceptance. Explicit read-only
 source associations preserve the independent Website/Shopify/provider records.
+
+## Everbranch Pay source-candidate limits (November 1, 2026)
+
+See `SYSTEM_SNAPSHOT.md` and `docs/operations/everbranch-pay-birthday-channel-fence.md`.
+The checkout, tax, customer-enrollment, Shopify-code and reward changes on the
+candidate are not live acceptance. Keep new publication, birthday, proof, and
+reward gates off. A reviewed event address is checked again at the collection
+boundary; legacy expiration-only tax setups need migration before claiming that
+protection. Cross-writer Shopify identity uniqueness, existing-wallet proof,
+interrupted payment-start recovery, zero-tender sales and cross-channel birthday
+redemption remain unfinished. A signed development archive is not distribution
+approval, and a simulator run is not physical Square acceptance.

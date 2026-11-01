@@ -96,6 +96,8 @@ struct POSView: View {
     @State private var creatingCustomer = false
     @State private var showingCustomer = false
     @State private var showingCheckoutRules = false
+    @State private var showingTaxLocations = false
+    @State private var showingEnrollmentSettings = false
     @State private var editingBundle: BundleBasketLine?
     @State private var contactOnly = false
     @State private var automaticQuoteRequested = false
@@ -211,7 +213,11 @@ struct POSView: View {
                             } else {
                                 customer
                                 if model.selectedCustomer != nil && model.receipt?.customer == nil {
-                                    Button("Link to this purchase", action: model.attachSelectedCustomer).buttonStyle(PayButtonStyle())
+                                    if model.sale?.canonicalConfirmation == true {
+                                        Button("Link to this purchase", action: model.attachSelectedCustomer).buttonStyle(PayButtonStyle())
+                                    } else if model.canEditBasket {
+                                        Button("Add customer to this sale", action: model.bindCustomerToUnstartedSale).buttonStyle(PayButtonStyle())
+                                    }
                                 }
                                 Button("Receipt contact only") { contactOnly = true }.buttonStyle(PayButtonStyle(primary: false))
                             }
@@ -223,6 +229,8 @@ struct POSView: View {
                 }
             }
             .sheet(isPresented: $showingCheckoutRules) { CheckoutRuleManager(model: model) }
+            .sheet(isPresented: $showingTaxLocations) { TaxLocationManager(model: model) }
+            .sheet(isPresented: $showingEnrollmentSettings) { CustomerEnrollmentSettingsView(model: model) }
             .sheet(item: $editingBundle) { line in
                 if let item = model.items.first(where: { $0.id == line.itemID }) {
                     BundleOptions(item: item, model: model, existing: line)
@@ -320,9 +328,19 @@ struct POSView: View {
         VStack(spacing: 16) {
             registerSummary
             if model.selectedRegister?.canManageCheckoutRules == true {
+                PayCard(title: "Tax location", icon: "mappin.and.ellipse") {
+                    Text("Review where this register sells and its tax calculation.").font(.subheadline).foregroundStyle(PayTheme.muted)
+                    Button("Manage tax location") { showingTaxLocations = true }.buttonStyle(PayButtonStyle(primary: false))
+                }
                 PayCard(title: "Checkout rules", icon: "tag") {
                     Text("Create and manage discount and add-on drafts for your business.").font(.subheadline).foregroundStyle(PayTheme.muted)
                     Button("Manage checkout rules") { showingCheckoutRules = true }.buttonStyle(PayButtonStyle(primary: false))
+                }
+            }
+            if model.customerEnrollmentSettings?.canManage == true {
+                PayCard(title: "Birthday & updates", icon: "person.badge.plus") {
+                    Text("Review the optional enrollment wording for your business.").font(.subheadline).foregroundStyle(PayTheme.muted)
+                    Button("Manage enrollment") { showingEnrollmentSettings = true }.buttonStyle(PayButtonStyle(primary: false))
                 }
             }
             PayCard(title: "Tap to Pay on iPhone", icon: "wave.3.right") {
@@ -412,12 +430,16 @@ struct POSView: View {
             if let customer = model.selectedCustomer {
                 Text(customer.name).font(.title3.weight(.semibold))
                 if let email = customer.email { Text(email).font(.subheadline).foregroundStyle(PayTheme.muted) }
-                Text(model.receipt?.customer?.id == customer.id ? "This receipt is linked to this customer." : (model.receipt?.customer != nil ? "This receipt is linked to another customer; viewing this history does not change the link." : (model.sale?.canonicalConfirmation == true ? "Choose Link to this purchase to connect the receipt." : "This customer will be linked to the purchase when you review it."))).font(.subheadline).foregroundStyle(PayTheme.muted)
+                if let phone = customer.phone { Text(phone).font(.subheadline).foregroundStyle(PayTheme.muted) }
+                Text(model.receipt?.customer?.id == customer.id ? "This receipt is linked to this customer." : (model.receipt?.customer != nil ? "This receipt is linked to another customer; viewing this history does not change the link." : (model.sale?.canonicalConfirmation == true ? "Choose Link to this purchase to connect the receipt." : (model.sale?.state == "quoted" ? "Choose Add customer to this sale to update the unstarted basket." : "This customer will be linked to the purchase when you review it.")))).font(.subheadline).foregroundStyle(PayTheme.muted)
                 if model.customerCommerceLoading { ProgressView("Loading customer history…").font(.subheadline) }
                 else if let commerce = model.customerCommerce, commerce.customerId == customer.id { CustomerCommercePanel(commerce: commerce) }
                 else if let error = model.customerCommerceError {
                     Text(error).font(.caption).foregroundStyle(PayTheme.muted)
                     Button("Try history again", action: model.refreshCustomerCommerce).frame(minHeight: 44)
+                }
+                if let settings = model.customerEnrollmentSettings, settings.birthdayEnabled || settings.emailEnabled || settings.smsEnabled || model.pendingEnrollment != nil {
+                    CustomerEnrollmentPanel(model: model, customer: customer, settings: settings).id(customer.id)
                 }
                 Button("Choose another customer") { model.selectedCustomer = nil }.frame(minHeight: 44)
             } else {
@@ -434,7 +456,7 @@ struct POSView: View {
                         }.frame(minHeight: 52)
                     }
                 }
-                if model.selectedRegister?.canCreateCustomers == true {
+                if model.customerEnrollmentSettings?.canCreateCustomers == true || model.selectedRegister?.canCreateCustomers == true {
                     DisclosureGroup("Create a new customer", isExpanded: $creatingCustomer) {
                         VStack(spacing: 12) {
                             TextField("First name", text: $model.customerFirstName).payInput().textContentType(.givenName).focused($inputFocused)
@@ -489,7 +511,8 @@ struct POSView: View {
                         if !model.tapReady { Button("Set up Tap to Pay", action: model.setup).buttonStyle(PayButtonStyle(primary: false)) }
                         Button("Charge \(POSMoney.display(sale.amountMinor))", action: model.pay).buttonStyle(PayButtonStyle()).disabled(!model.tapReady || sale.collectionReady != true)
                     }
-                    if sale.canonicalConfirmation && model.receipt?.customer == nil { Button("Add customer") { showingCustomer = true }.buttonStyle(PayButtonStyle(primary: false)) }
+                    if model.canEditBasket && sale.customer == nil { Button("Add customer") { contactOnly = false; showingCustomer = true }.buttonStyle(PayButtonStyle(primary: false)) }
+                    if sale.canonicalConfirmation && model.receipt?.customer == nil { Button("Add customer") { contactOnly = false; showingCustomer = true }.buttonStyle(PayButtonStyle(primary: false)) }
                     if sale.canonicalConfirmation, let customer = model.receipt?.customer {
                         Button("View customer") {
                             model.selectedCustomer = POSCustomer(id: customer.id, name: customer.name, email: nil, phone: nil)

@@ -258,3 +258,15 @@ behavior, spent-credit review and settlement evidence. Record selection tap coun
 and warm SDK presentation time on the physical phone. Verify shared history across
 staff web, Field and authenticated customer accounts. Rehearse a second tenant's
 shared pool separately before claiming both configurations proven.
+# Tax-location review in the source candidate (November 1)
+
+The new administrator tax-location screen and publication gate default off.
+For a show pool, a reviewed event address and end date are checked at quote and
+at collection; a collection-boundary transaction locks and checks the event and
+pool again. For a shared pool, the reviewed Shopify location is re-read before
+collection. The transaction boundary freezes the quoted terms for that attempt;
+later event changes do not retroactively recalculate an issued payment. A
+provider read is point-in-time evidence, not a guarantee against a later change.
+Older configurations without `tax_location_review` retain their previous
+expiration-only behavior and must be migrated/reviewed before claiming the
+stronger location protection. Do not activate the new flow until acceptance.

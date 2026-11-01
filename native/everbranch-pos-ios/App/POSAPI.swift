@@ -39,6 +39,9 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
         guard (200...299).contains(http.statusCode) else {
             let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let code = (value?["error"] as? [String: Any])?["code"] as? String ?? "request_\(http.statusCode)"
+            if path.contains("/customers/") && path.hasSuffix("/enrollment") && (400...499).contains(http.statusCode) {
+                throw POSError.enrollmentRejected(code)
+            }
             let messages = ["select_existing_customer": "This contact already has a customer record. Find and select it instead.",
                 "customer_request_conflict": "The original customer request has different details. Recover that request before continuing.",
                 "customer_admin_required": "An owner or administrator can create a customer. Select an existing customer or ask your manager.",
@@ -50,6 +53,7 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
                 "checkout_settings_changed": "The register settings changed. Review a new total before charging.",
                 "checkout_rules_busy": "Checkout rules are being updated. Please try again in a moment.",
                 "checkout_rules_changed": "Checkout rules changed. Refresh the register before applying discounts.",
+                "checkout_addon_requires_purchase": "Each add-on requires a regular product. Add another product or remove an add-on.",
                 "receipt_customer_already_associated": "This receipt is already linked to a different customer. Ask a manager to review it.",
                 "customer_rewards_historical_review": "The purchase is linked. A manager needs to review its rewards eligibility.",
                 "collection_not_ready": "This register still needs its payment readiness review.",
@@ -69,6 +73,7 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
     nonisolated(unsafe) private static var completedSaleData = Data()
     nonisolated(unsafe) private static var completedReceiptData = Data()
     nonisolated(unsafe) private static var bundleSaleData = Data()
+    nonisolated(unsafe) private static var enrollmentRequestID: String?
     static func setCatalog(_ data: Data) { lock.lock(); defer { lock.unlock() }; catalogData = data }
     static func setCompletedSale(_ sale: Data, receipt: Data) { lock.lock(); defer { lock.unlock() }; completedSaleData = sale; completedReceiptData = receipt }
     private static func setBundleSale(_ data: Data) { lock.lock(); defer { lock.unlock() }; bundleSaleData = data }
@@ -82,8 +87,28 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
         guard let url = request.url else { return }
         do {
             let data: Data
-            if ProcessInfo.processInfo.arguments.contains("--pos-customer-commerce-ui-tests") && url.path.hasSuffix("/customers") {
-                data = try JSONSerialization.data(withJSONObject: ["customers": [["id": 1, "name": "Ada Buyer", "email": "ada@example.test"], ["id": 2, "name": "Mia Buyer", "email": "mia@example.test"]], "has_more": false])
+            if ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") && url.path.hasSuffix("/checkout-rules/review") {
+                data = try JSONSerialization.data(withJSONObject: ["rules": [["id": "five", "name": "Five off", "kind": "fixed", "value": 500, "scopes": ["sale"], "channels": ["online"], "active": true]], "version": String(repeating: "a", count: 64), "reviewed_version": String(repeating: "a", count: 64), "checkout_enabled": false])
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") && url.path.hasSuffix("/checkout-rules/online/review") {
+                data = try JSONSerialization.data(withJSONObject: ["input": ["title": "Five off", "code": "SAVE5"], "shop_domain": "fictional.myshopify.com", "enabled": false, "previous": NSNull()])
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-enrollment-ui-tests") && url.path.hasSuffix("/customers/1/enrollment") {
+                var body = request.httpBody ?? Data()
+                if body.isEmpty, let stream = request.httpBodyStream {
+                    stream.open(); defer { stream.close() }; var buffer = [UInt8](repeating: 0, count: 1024)
+                    while stream.hasBytesAvailable { let count = stream.read(&buffer, maxLength: buffer.count); if count <= 0 { break }; body.append(buffer, count: count) }
+                }
+                let input = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+                guard input["version"] as? String == String(repeating: "d", count: 64), input["email_opt_in"] as? Bool == true,
+                      input["sms_opt_in"] as? Bool == true, let birthday = input["birthday"] as? [String: Int],
+                      birthday["month"] == 4, birthday["day"] == 30, let requestID = input["request_id"] as? String, UUID(uuidString: requestID) != nil else { throw URLError(.badServerResponse) }
+                if ProcessInfo.processInfo.arguments.contains("--pos-enrollment-fail-once-tests") {
+                    Self.lock.lock(); let prior = Self.enrollmentRequestID; Self.enrollmentRequestID = requestID; Self.lock.unlock()
+                    if prior == nil { throw URLError(.networkConnectionLost) }
+                    if prior != requestID { throw URLError(.badServerResponse) }
+                }
+                data = Data(#"{"customer_id":1}"#.utf8)
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-customer-commerce-ui-tests") && url.path.hasSuffix("/customers") {
+                data = try JSONSerialization.data(withJSONObject: ["customers": [["id": 1, "name": "Ada Buyer", "email": "ada@example.test", "phone": "+12025550123"], ["id": 2, "name": "Mia Buyer", "email": "mia@example.test"]], "has_more": false])
             } else if ProcessInfo.processInfo.arguments.contains("--pos-customer-commerce-ui-tests") && (url.path.hasSuffix("/customers/1/commerce") || url.path.hasSuffix("/customers/2/commerce")) {
                 let first = url.path.hasSuffix("/customers/1/commerce")
                 let id = first ? 1 : 2
@@ -142,7 +167,9 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
                 let tax = (subtotal * 700 + 5000) / 10000
                 let bundleFixture = ProcessInfo.processInfo.arguments.contains("--pos-bundle-basket-ui-tests")
                 let saleID = bundleFixture ? "fixture-bundle-\(input["request_id"] as? String ?? "invalid")" : "fixture-sale"
-                data = try JSONSerialization.data(withJSONObject: ["sale_id": saleID, "request_id": input["request_id"]!, "state": "quoted", "stock_state": "held", "amount_minor": bundleFixture ? subtotal + tax : 2180, "currency": "USD", "receipt_available": false, "canonical_confirmation": false, "recovery_required": false, "collection_ready": true, "inventory_authority": "everbranch", "lines": lines])
+                var quote: [String: Any] = ["sale_id": saleID, "request_id": input["request_id"]!, "state": "quoted", "stock_state": "held", "amount_minor": bundleFixture ? subtotal + tax : 2180, "currency": "USD", "receipt_available": false, "canonical_confirmation": false, "recovery_required": false, "collection_ready": true, "inventory_authority": "everbranch", "lines": lines]
+                if ProcessInfo.processInfo.arguments.contains("--pos-enrollment-ui-tests"), let customer = input["customer_profile_id"] as? Int { quote["customer"] = ["id": customer, "name": "Ada Buyer"] }
+                data = try JSONSerialization.data(withJSONObject: quote)
                 if ProcessInfo.processInfo.arguments.contains("--pos-bundle-basket-ui-tests") { Self.setBundleSale(data) }
             } else { throw URLError(.unsupportedURL) }
             client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)

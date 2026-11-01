@@ -17,12 +17,37 @@ final class ModernForestryRewardIdentity
     public function verified(ModernForestryMobileCustomerSession $session): bool
     {
         $profile = $session->profile;
-        $tenant = ModernForestryMobileCheckoutService::TENANT_ID;
         $gid = $session->identity['shopify_customer_id'] ?? null;
-        if ((int) $profile->tenant_id !== $tenant || ($session->identity['source_type'] ?? null) !== 'shopify_customer'
-            || ! is_string($gid) || ! preg_match('~^gid://shopify/Customer/([1-9][0-9]*)$~D', $gid, $match)
+        if (($session->identity['source_type'] ?? null) !== 'shopify_customer' || ! is_string($gid)) {
+            return false;
+        }
+
+        return $this->verifiedSubject($profile, $gid);
+    }
+
+    public function attestationId(ModernForestryMobileCustomerSession $session): ?int
+    {
+        if (! $this->verified($session)) {
+            return null;
+        }
+        preg_match('~^gid://shopify/Customer/([1-9][0-9]{0,19})$~D', $session->identity['shopify_customer_id'], $match);
+        $id = MarketingProfileLink::query()->forTenantId((int) $session->profile->tenant_id)
+            ->where('source_type', ModernForestryVerifiedAccountLink::SOURCE)->where('source_id', 'retail:'.$match[1])->value('id');
+
+        return $id ? (int) $id : null;
+    }
+
+    public function verifiedSubject(\App\Models\MarketingProfile $profile, string $gid): bool
+    {
+        $tenant = ModernForestryMobileCheckoutService::TENANT_ID;
+        if ((int) $profile->tenant_id !== $tenant || ! preg_match('~^gid://shopify/Customer/([1-9][0-9]{0,19})$~D', $gid, $match)
             || ! Tenant::query()->whereKey($tenant)->where('slug', ModernForestryMobileProductCatalogService::TENANT_SLUG)->exists()
             || $this->identities->byId($tenant, (int) $profile->id)?->id !== $profile->id) {
+            return false;
+        }
+        $attestation = MarketingProfileLink::query()->forTenantId($tenant)->where('source_type', ModernForestryVerifiedAccountLink::SOURCE)
+            ->where('source_id', 'retail:'.$match[1])->first();
+        if (! $attestation || ! app(ModernForestryVerifiedAccountLink::class)->validAttestation($attestation, $profile, $gid)) {
             return false;
         }
         $ids = [$gid, $match[1], 'retail:'.$gid, 'retail:'.$match[1], 'shopify:'.$gid, 'shopify:'.$match[1]];
@@ -34,18 +59,9 @@ final class ModernForestryRewardIdentity
         if ($links->isEmpty() || $links->count() > 20) {
             return false;
         }
-        $verified = false;
         foreach ($links as $link) {
             if ($this->identities->byId($tenant, (int) $link->marketing_profile_id)?->id !== $profile->id) {
                 return false;
-            }
-            $meta = $link->source_meta ?? [];
-            if ($link->match_method === 'customer_verified_account_link'
-                && ($meta['verification_method'] ?? null) === 'authenticated_customer_account'
-                && ($meta['shopify_store_key'] ?? null) === 'retail'
-                && ($meta['shopify_customer_gid'] ?? null) === $gid
-                && is_string($meta['verified_at'] ?? null) && strtotime($meta['verified_at']) !== false) {
-                $verified = true;
             }
         }
 
@@ -64,6 +80,6 @@ final class ModernForestryRewardIdentity
             }
         }
 
-        return $verified;
+        return app(\App\Services\Pos\PosVerifiedCustomerAccount::class)->verified($profile, (int) $attestation->id);
     }
 }

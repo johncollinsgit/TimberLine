@@ -12,6 +12,107 @@ private struct CheckoutRule: Decodable, Identifiable {
     let requiresOtherItem: Bool?
 }
 
+private struct ShopifyOnlineDiscountReview: Decodable {
+    struct Input: Decodable { let title: String; let code: String }
+    struct Previous: Decodable { let status: String; let code: String; let lookupState: String? }
+    let input: Input
+    let shopDomain: String
+    let enabled: Bool
+    let previous: Previous?
+}
+
+private struct ShopifyOnlineDiscountSheet: View {
+    @ObservedObject var model: POSViewModel
+    let rule: CheckoutRule
+    let version: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var code = ""
+    @State private var anyoneCanUse = false
+    @State private var busy = false
+    @State private var review: ShopifyOnlineDiscountReview?
+    @State private var error: String?
+    @State private var status: String?
+    @State private var requestID = UUID().uuidString.lowercased()
+    @State private var startsAt = ISO8601DateFormatter().string(from: Date())
+    @FocusState private var codeFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Online code") {
+                    Text(rule.name)
+                    TextField("Code", text: $code).textInputAutocapitalization(.characters).autocorrectionDisabled().focused($codeFocused)
+                        .submitLabel(.done).onSubmit { codeFocused = false }
+                        .onChange(of: code) { _, value in code = value.uppercased(); review = nil }
+                    Toggle("Anyone with this code can use it", isOn: $anyoneCanUse).onChange(of: anyoneCanUse) { _, _ in review = nil }
+                    Button("Review Shopify discount") { loadReview() }.disabled(busy || !anyoneCanUse || code.isEmpty)
+                }
+                if let review {
+                    Section("Review before publishing") {
+                        Text("Store: \(review.shopDomain)")
+                        Text("Code: \(review.input.code)")
+                        Text(rule.kind == "percent" ? String(format: "%.2f%% off the whole sale", Double(rule.value) / 100) : "\(POSMoney.display(rule.value)) off the whole sale")
+                        Text("Anyone with the code can use it. It cannot combine with other discounts.").font(.footnote)
+                        if let previous = review.previous {
+                            Text(previous.status == "published" ? "This rule already has an online code: \(previous.code)." : "This code needs review before another can be published.").font(.footnote)
+                            if previous.status != "published" {
+                                Button("Check Shopify for this code") { reconcile() }.disabled(busy || !review.enabled)
+                                if let lookup = previous.lookupState { Text("Lookup: \(lookup.replacingOccurrences(of: "_", with: " "))").font(.caption) }
+                            }
+                        } else if review.enabled {
+                            Button("Publish this code") { publish(review) }.disabled(busy)
+                        } else { Text("Online publishing is off.").font(.footnote) }
+                    }
+                }
+                if let status { Section { Text(status).font(.footnote) } }
+                if let error { Section { Text(error).foregroundStyle(.red) } }
+            }
+            .navigationTitle("Shopify discount")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() }.disabled(busy) } }
+            .disabled(busy).overlay { if busy { ProgressView() } }
+        }
+    }
+
+    private func bodyData() -> [String: Any] {
+        ["version": version, "rule_id": rule.id, "code": code, "starts_at": startsAt, "public_eligibility_confirmed": anyoneCanUse]
+    }
+    private func loadReview() {
+        guard let base = model.base, !busy else { return }; busy = true
+        Task {
+            defer { busy = false }
+            do { let result: ShopifyOnlineDiscountReview = try await model.api.request(base + "/checkout-rules/online/review", method: "POST", body: bodyData()); review = result; error = nil }
+            catch { self.error = "Could not review this code. Check the rule, store and code, then try again." }
+        }
+    }
+    private func publish(_ reviewed: ShopifyOnlineDiscountReview) {
+        guard let base = model.base, !busy, reviewed.input.code == code, reviewed.enabled, reviewed.previous == nil else { return }; busy = true
+        Task {
+            defer { busy = false }
+            do {
+                struct Result: Decodable { let status: String }
+                var body = bodyData(); body["request_id"] = requestID; body["confirmed"] = true
+                let result: Result = try await model.api.request(base + "/checkout-rules/online/publish", method: "POST", body: body)
+                status = result.status == "published" ? "Shopify code published." : "Check this code before trying again."
+                review = nil; error = nil
+            } catch { review = nil; self.error = "Publication was not confirmed. Review this rule before trying again." }
+        }
+    }
+    private func reconcile() {
+        guard let base = model.base, !busy else { return }; busy = true
+        Task {
+            defer { busy = false }
+            do {
+                struct Result: Decodable { let status: String; let lookupState: String?; let lookupDiscountId: String? }
+                let result: Result = try await model.api.request(base + "/checkout-rules/online/reconcile", method: "POST", body: ["rule_id": rule.id])
+                if result.status == "published" { status = "Shopify code published." }
+                else if let id = result.lookupDiscountId { status = "Shopify found \(id). A matching code alone does not prove this publication; an administrator must review it." }
+                else { status = "Lookup recorded as \((result.lookupState ?? "unavailable").replacingOccurrences(of: "_", with: " ")). The original publication remains in review." }
+                review = nil; error = nil
+            } catch { self.error = "Could not check Shopify. The original publication stays in review." }
+        }
+    }
+}
+
 private struct CheckoutRuleList: Decodable { let rules: [CheckoutRule]; let version: String }
 private struct CheckoutRuleReview: Decodable, Identifiable {
     let rules: [CheckoutRule]
@@ -30,6 +131,7 @@ struct CheckoutRuleManager: View {
     @State private var reviewedVersion: String?
     @State private var checkoutEnabled = false
     @State private var review: CheckoutRuleReview?
+    @State private var onlineRule: CheckoutRule?
     @State private var busy = false
     @State private var error: String?
     @State private var editor = false
@@ -67,6 +169,13 @@ struct CheckoutRuleManager: View {
                     }
                     Button("Add rule") { reset(); editor = true }
                 }
+                Section("Online discounts") {
+                    Text("Only a single public, whole-sale discount can be published. It cannot combine with other discounts.").font(.footnote).foregroundStyle(.secondary)
+                    ForEach(rules.filter { $0.active && $0.channels.contains("online") && $0.scopes == ["sale"] && ["fixed", "percent"].contains($0.kind) }) { rule in
+                        Button("Review \(rule.name) for Shopify") { onlineRule = rule }.disabled(reviewedVersion != version)
+                    }
+                    if reviewedVersion != version { Text("Publish the reviewed rule version first.").font(.caption).foregroundStyle(.secondary) }
+                }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
             }
             .navigationTitle("Checkout rules")
@@ -76,6 +185,7 @@ struct CheckoutRuleManager: View {
             .task { await reload() }
             .sheet(isPresented: $editor) { editForm }
             .sheet(item: $review) { snapshot in reviewSheet(snapshot) }
+            .sheet(item: $onlineRule) { rule in ShopifyOnlineDiscountSheet(model: model, rule: rule, version: version) }
         }
     }
 
@@ -93,12 +203,13 @@ struct CheckoutRuleManager: View {
                 Section("Where it applies") {
                     if kind != "addon" { Toggle("Individual item", isOn: $itemScope); Toggle("Whole sale", isOn: $saleScope) }
                     Toggle("In person", isOn: $inPerson)
-                    Toggle("Online (not available yet)", isOn: $online).disabled(true)
-                    Text("Online checkout rules are not connected yet.").font(.caption).foregroundStyle(.secondary)
+                    Toggle("Online draft", isOn: $online)
+                    Text("Online rules are drafts. They will not affect Shopify checkout until online publishing is available and approved.").font(.caption).foregroundStyle(.secondary)
                 }
                 if kind == "addon" {
                     Section("Eligible products") {
-                        Toggle("Requires another item", isOn: $requiresOtherItem)
+                        Toggle("One add-on per regular product", isOn: $requiresOtherItem)
+                        Text("Each regular product can qualify one add-on across all offers. Bundles, custom amounts, and add-ons do not qualify.").font(.caption).foregroundStyle(.secondary)
                         ForEach(model.items.filter { $0.kind != "bundle" }) { item in
                             Toggle(item.title + ((item.variantLabel ?? "").isEmpty ? "" : " · " + item.variantLabel!), isOn: Binding(get: { eligible.contains(item.id) }, set: { if $0 { eligible.insert(item.id) } else { eligible.remove(item.id) } }))
                         }
@@ -166,7 +277,7 @@ struct CheckoutRuleManager: View {
                             Text("Channels: " + rule.channels.map { $0 == "in_person" ? "in person" : "online (not available yet)" }.joined(separator: ", "))
                                 .font(.caption).foregroundStyle(.secondary)
                             if rule.kind == "addon" {
-                                Text(rule.requiresOtherItem == true ? "Requires another item" : "No other item required").font(.caption)
+                                Text(rule.requiresOtherItem == true ? "One add-on per regular product across all offers" : "No qualifying product required").font(.caption)
                                 ForEach(rule.eligibleItemIds ?? [], id: \.self) { id in
                                     Text(model.items.first(where: { $0.id == id }).map { item in
                                         item.title + ((item.variantLabel ?? "").isEmpty ? "" : " · " + item.variantLabel!)

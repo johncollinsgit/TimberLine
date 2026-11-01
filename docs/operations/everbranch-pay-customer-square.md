@@ -250,3 +250,52 @@ Only a selected, authorized Modern Forestry register opens that merchant's photo
 catalog. Other businesses use the same native customer/basket controls with their
 own register items. Restoring a previous register rechecks current membership and
 device assignment. No business selection enables collection or publishing.
+
+### Candle Cash payment safety candidate
+
+The source candidate adds a durable, non-expiring claim that lets exactly one
+collection start or unstarted cancellation win for the original sale. Discard,
+expiry and online-order stock preemption use the same fence when its internal
+gate is enabled. A second start never receives a new descriptor. If a start
+fails before a payment operation is recorded, retain the claim and route the
+original sale to recovery; do not issue a replacement charge or return held
+rewards on the assumption that a cache lease has expired.
+
+An unstarted cancellation records a retryable reward-release effect atomically
+with its claim. Confirmed payment and refund effects reconcile the same shared
+Candle Cash wallet once. Unknown outcomes keep the hold, and partial refunds
+require allocation review. Customer merges are blocked while a hold is active
+or a spent reward can still be restored, and a pending merge prevents a new
+hold. Original POS authorization and reservation records remain immutable.
+
+These paths are source work and stay default-off. They do not provide a live
+checkout redemption. The candidate includes a freshly authenticated Shopify
+subject linking to a newly created, separate profile only; email-derived or
+otherwise ambiguous existing wallet mappings still require independent proof and
+review. Its signed attestation fails closed on conflict, customer merge or app
+key rotation. The proof freezes the signed account link and original profile;
+hold creation and collection recheck that link, and a later conflicting import
+cannot redirect the existing hold to the import's profile. Existing import and
+webhook writers do not all share a subject lock or canonical uniqueness key,
+so they can still create a conflicting mapping after a check. This remains a
+rollout blocker: implement a bounded, durable canonical-subject fence across
+all writers before claiming one unified customer identity or enabling rewards.
+The proposed QR is a two-minute, one-use bearer authorization for
+one purchase up to the disclosed, versioned cap. It is not approval of a
+specific sale or amount. The customer app still needs a clear consent/disclosure
+screen and physical acceptance. Quote, customer link, proof and wallet hold are
+inserted atomically; total-zero sales still require a separate verified
+zero-tender lifecycle. No other tenant's account provider is proven yet.
+
+Interrupted starts remain in review rather than being automatically released.
+The journal refuses caller-owned transactions because a provider might be
+contacted after its methods return. A safe recoverable handoff therefore needs a
+new, narrowly scoped native-only journal operation that owns one database
+transaction, serializes its admission and the original sale/start claim,
+atomically records the original payment operation and descriptor issuance, and
+performs no provider calls. Cancellation must win under the same locks before
+that handoff, and every preparation path must recheck the cancelled sale. Test
+the real MySQL races, lost responses and original-only recovery before enabling.
+Coordinated rollout must ensure every worker enforces the fence before any
+reward sale is admitted; never turn it off while a fenced sale or hold remains
+unresolved. Existing uncertain and presented payments remain held for recovery.

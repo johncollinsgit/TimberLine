@@ -319,7 +319,7 @@ jobs:
         env:
           POS_LIVE_DISPOSABLE_MYSQL: '1'
           COMMERCE_RULES_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/PosLive tests/Integration/PosLiveMySqlRecoveryTest.php tests/Integration/PosLiveMySqlConcurrencyTest.php tests/Integration/CommerceRuleSetMySqlRecoveryTest.php tests/Integration/PosCandleCashMySqlRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/PosLive tests/Integration/PosLiveMySqlRecoveryTest.php tests/Integration/PosLiveMySqlConcurrencyTest.php tests/Integration/CommerceRuleSetMySqlRecoveryTest.php tests/Integration/PosCandleCashMySqlRecoveryTest.php tests/Integration/PosShopifyDiscountMySqlRecoveryTest.php --compact
 
       - name: Verify finished goods inventory recovery and concurrency
         env:

@@ -18,6 +18,8 @@ final class StockShopifyApi
 
     public const LEVEL = 'query StockLevel($item:ID!,$location:ID!){inventoryItem(id:$item){id tracked inventoryLevel(locationId:$location){quantities(names:["available","committed"]){name quantity}}}}';
 
+    public const TAX_LOCATIONS = 'query TaxLocations($cursor:String){shop{id} locations(first:100,after:$cursor){pageInfo{hasNextPage endCursor} nodes{id name isActive address{address1 city provinceCode countryCode zip}}}}';
+
     public function __construct(private StockLedger $stock) {}
 
     /** Fresh stock-only evidence for a reviewed opening order; never imports a commerce order. */
@@ -52,7 +54,7 @@ final class StockShopifyApi
         if (! $store || ! preg_match('/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/D', $store->shop_domain) || ! $store->access_token) {
             throw new StockException('stock_store_unavailable', 503);
         }
-        if (! in_array($query, [self::CATALOG, self::CALCULATE, self::PUBLISH, self::LEVEL], true)) {
+        if (! in_array($query, [self::CATALOG, self::CALCULATE, self::PUBLISH, self::LEVEL, self::TAX_LOCATIONS], true)) {
             throw new StockException('stock_operation_not_allowed');
         }
         try {

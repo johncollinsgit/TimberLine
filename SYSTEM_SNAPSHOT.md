@@ -1,3 +1,22 @@
+## Everbranch Pay checkout and rewards (November 1; source candidate)
+
+Tenant administrators can draft and review checkout rules, customer enrollment
+wording and register tax locations; the new online discount and tax publishing
+gates default off. Discount add-ons share one qualifying regular unit per add-on;
+tax is calculated after ordered discounts. Shopify online publishing supports a
+restricted public, non-combining whole-sale code, not full cross-channel parity.
+Customer enrollment records separate affirmative text/email choices and does not
+automatically link identities. Account-attested customer reward proofs and holds
+are source work behind disabled gates, not a production acceptance claim. A
+zero-tender sale and interrupted-start automatic cancellation are not supported.
+
+Birthday deactivation and annual-fence code are source-only, default-off and do
+not authorize in-person redemption. Provider usage counts can lag and uncertain
+online or payment outcomes require review. Do not equate evidence of an inactive
+Shopify code with exclusive redemption. Phone installation and physical Square
+acceptance were deferred. See `docs/operations/everbranch-pay-birthday-channel-fence.md`
+and `docs/operations/everbranch-pay-processor-and-zoho-review.md`.
+
 ## Uncharged basket cancellation (November 1 UTC; source candidate)
 
 Cancel of an uncollected quote clears its basket and customer selection, retains other

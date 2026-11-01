@@ -184,9 +184,21 @@ it('binds one customer proof to exactly one of two simultaneous sales', function
         throw new RuntimeException('Refusing unsafe reward proof contention test.');
     }
     config(['pos_live.runtime_id' => 'proof_race_fixture', 'pos_live.in_person_rewards_enabled' => true]);
+    (require database_path('migrations/2026_11_01_160000_add_pos_reward_authorization_terms.php'))->up();
     $tenant = \App\Models\Tenant::create(['name' => 'Proof race', 'slug' => 'proof-race-'.Str::random(10), 'status' => 'active']);
     $profile = \App\Models\MarketingProfile::create(['tenant_id' => $tenant->id, 'first_name' => 'Fixture']);
-    $proof = app(\App\Services\Pos\PosRewardCustomerProof::class)->issueForAuthenticatedProfile($profile)['qr_payload'];
+    foreach (['candle_cash_program_config' => ['redeem_increment_dollars' => 10],
+        'candle_cash_policy_config' => ['access_state' => ['launch_state' => 'published']]] as $key => $value) {
+        \App\Models\TenantMarketingSetting::create(['tenant_id' => $tenant->id, 'key' => $key, 'value' => $value]);
+    }
+    $programVersion = app(\App\Services\Pos\PosCustomerRewards::class)->policy($tenant->id)['version'];
+    $raw = ['enabled' => true, 'max_minor' => 500, 'refund_policy' => 'restore_full_review_partial'];
+    $version = app(\App\Services\Pos\PosRewardRedemptionSettings::class)->version($raw, $programVersion);
+    \App\Models\TenantMarketingSetting::create(['tenant_id' => $tenant->id, 'key' => \App\Services\Pos\PosRewardRedemptionSettings::SETTING_KEY,
+        'value' => [...$raw, 'reviewed_version' => $version, 'reviewed_by' => 1, 'reviewed_at' => now()->toIso8601String()]]);
+    $accepted = ['max_minor' => 500, 'policy_version' => $version, 'disclosure_version' => \App\Services\Pos\PosRewardCustomerProof::DISCLOSURE_VERSION];
+    $accountLink = \Tests\Support\PosVerifiedAccountFixture::create($profile);
+    $proof = app(\App\Services\Pos\PosRewardCustomerProof::class)->issueForAuthenticatedProfile($profile, $accepted, $accountLink)['qr_payload'];
     $sales = [bin2hex(random_bytes(16)), bin2hex(random_bytes(16))];
     $directory = sys_get_temp_dir().'/pos-proof-race-'.bin2hex(random_bytes(8));
     mkdir($directory, 0700);
@@ -272,7 +284,7 @@ it('durably fences a simultaneous payment start and cancellation', function (): 
                     $child = new PosStore(DB::connection(), app('encrypter'));
                     $claims = new \App\Services\Pos\PosPaymentStartClaim($child);
                     try {
-                        $result = $action === 'starting' ? $claims->start($tenant, $sale)->state : $claims->cancel($tenant, $sale)->state;
+                        $result = $action === 'starting' ? $claims->beginCollection($tenant, $sale)->state : $claims->cancel($tenant, $sale)->state;
                     } catch (PosException $error) {
                         $result = $error->blocker;
                     }
@@ -296,6 +308,72 @@ it('durably fences a simultaneous payment start and cancellation', function (): 
         $state = DB::table('pos_live_sales')->where('id', $sale)->value('state');
         expect($claim->state)->toBe(in_array('starting', $results, true) ? 'starting' : 'cancelled')
             ->and($state)->toBe($claim->state === 'cancelled' ? 'cancelled' : 'quoted');
+    } finally {
+        foreach ($pids as $pid) {
+            pcntl_waitpid($pid, $status, WNOHANG);
+        }
+        DB::table('pos_payment_start_claims')->where('sale_id', $sale)->delete();
+        DB::table('pos_live_sales')->where('id', $sale)->delete();
+        foreach (glob($directory.'/*') as $file) {
+            unlink($file);
+        }
+        rmdir($directory);
+    }
+});
+
+it('allows only one simultaneous start to proceed beyond the durable fence', function (): void {
+    $db = DB::connection();
+    if ($db->getDriverName() !== 'mysql' || getenv('POS_LIVE_DISPOSABLE_MYSQL') !== '1' || ! function_exists('pcntl_fork')) {
+        $this->markTestSkipped('Requires explicitly authorized local disposable MySQL and process forking.');
+    }
+    if (! app()->environment('testing') || ! preg_match('/(^|_)(ci|test|testing)(_|$)/i', $db->getDatabaseName())
+        || ! in_array($db->getConfig('host'), ['127.0.0.1', 'localhost'], true)) {
+        throw new RuntimeException('Refusing unsafe start claim contention test.');
+    }
+    config(['pos_live.runtime_id' => 'duplicate_start_race_fixture', 'pos_live.durable_start_claims_enabled' => true]);
+    $store = app(PosStore::class);
+    $tenant = 900000001;
+    $sale = bin2hex(random_bytes(16));
+    $store->rows('sales', $tenant)->insert($store->values($tenant, ['id' => $sale, 'register_id' => bin2hex(random_bytes(16)),
+        'location_id' => 'fixture', 'actor_id' => 1, 'request_id' => (string) Str::uuid(), 'payment_request_id' => (string) Str::uuid(),
+        'sdk_attempt_id' => (string) Str::uuid(), 'snapshot' => 'fixture', 'snapshot_hash' => str_repeat('b', 64),
+        'amount_minor' => 1000, 'currency' => 'usd', 'commerce_source' => 'native', 'state' => 'quoted',
+        'created_at' => now(), 'expires_at' => now()->addMinutes(5)]));
+    $directory = sys_get_temp_dir().'/pos-double-start-'.bin2hex(random_bytes(8));
+    mkdir($directory, 0700);
+    DB::purge();
+    $pids = [];
+    try {
+        foreach (range(0, 1) as $i) {
+            $pid = pcntl_fork();
+            if ($pid === -1) {
+                throw new RuntimeException('Cannot fork start race.');
+            }
+            if ($pid === 0) {
+                try {
+                    $claims = new \App\Services\Pos\PosPaymentStartClaim(new PosStore(DB::connection(), app('encrypter')));
+                    try {
+                        $result = $claims->beginCollection($tenant, $sale)->state;
+                    } catch (PosException $error) {
+                        $result = $error->blocker;
+                    }
+                    file_put_contents($directory.'/'.$i, $result);
+                    DB::disconnect();
+                    exit(0);
+                } catch (Throwable) {
+                    exit(1);
+                }
+            }
+            $pids[] = $pid;
+        }
+        foreach ($pids as $pid) {
+            pcntl_waitpid($pid, $status);
+            expect(pcntl_wexitstatus($status))->toBe(0);
+        }
+        $results = array_map(fn ($i) => file_get_contents($directory.'/'.$i), range(0, 1));
+        sort($results);
+        expect($results)->toBe(['payment_recovery_required', 'starting'])
+            ->and(DB::table('pos_payment_start_claims')->where('sale_id', $sale)->count())->toBe(1);
     } finally {
         foreach ($pids as $pid) {
             pcntl_waitpid($pid, $status, WNOHANG);
