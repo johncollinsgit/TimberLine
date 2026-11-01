@@ -320,7 +320,8 @@ struct RewardsRedemptionSettingsView: View {
             Form {
                 Section("Availability") {
                     if let settings {
-                        Text(settings.redemptionEnabled ? "The in-person redemption gate is on. The program, register and customer authorization must also be ready." : "In-person redemption is off. Saving or publishing this policy does not activate it.")
+                        Text(settings.redemptionEnabled ? "The global in-person redemption gate is on." : "The global in-person redemption gate is off.")
+                        Text("End-to-end in-person redemption is not available. Customer authorization and other required steps are not yet enabled. Saving a draft does not change the published policy or activate redemption.").accessibilityIdentifier("rewards-unavailable-explanation")
                         Text(settings.managementEnabled ? "An administrator can review this register's policy." : "Rewards policy management is currently off.").font(.caption)
                         if let published = settings.published {
                             Text(published.enabled ? "Published policy: up to \(POSMoney.display(published.maxMinor)) per in-person sale." : "Published policy: in-person redemption disabled.")

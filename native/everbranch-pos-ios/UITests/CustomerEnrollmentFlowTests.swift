@@ -83,9 +83,10 @@ extension CustomerEnrollmentFlowTests {
 }
 
 extension CustomerEnrollmentFlowTests {
-    private func openRewardsSettings(_ app: XCUIApplication, disabled: Bool = false) {
+    private func openRewardsSettings(_ app: XCUIApplication, disabled: Bool = false, globalOn: Bool = false) {
         app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-online-rules-ui-tests", "--pos-reward-settings-ui-tests"]
         if disabled { app.launchArguments.append("--pos-reward-settings-disabled-ui-tests") }
+        if globalOn { app.launchArguments.append("--pos-redemption-global-on-tests") }
         app.launch()
         XCTAssertTrue(app.buttons["Account & Tap to Pay"].waitForExistence(timeout: 10)); app.buttons["Account & Tap to Pay"].tap()
         app.swipeUp()
@@ -99,9 +100,16 @@ extension CustomerEnrollmentFlowTests {
         XCTAssertFalse(app.textFields["rewards-cap"].isEnabled)
         XCTAssertFalse(app.buttons["Save draft"].isEnabled)
     }
+    func testGlobalGateAloneDoesNotClaimRedemptionIsAvailable() {
+        let app = XCUIApplication(); openRewardsSettings(app, disabled: true, globalOn: true)
+        XCTAssertTrue(app.staticTexts["The global in-person redemption gate is on."].exists)
+        let explanation = app.staticTexts["rewards-unavailable-explanation"]
+        XCTAssertTrue(explanation.exists)
+        XCTAssertEqual(explanation.label, "End-to-end in-person redemption is not available. Customer authorization and other required steps are not yet enabled. Saving a draft does not change the published policy or activate redemption.")
+    }
     func testAdminReviewsDraftWithoutActivatingRedemption() {
         let app = XCUIApplication(); openRewardsSettings(app)
-        XCTAssertTrue(app.staticTexts["In-person redemption is off. Saving or publishing this policy does not activate it."].exists)
+        XCTAssertTrue(app.staticTexts["The global in-person redemption gate is off."].exists)
         let cap = app.textFields["rewards-cap"]; cap.tap()
         let old = (cap.value as? String) ?? ""
         cap.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count) + "6.00")

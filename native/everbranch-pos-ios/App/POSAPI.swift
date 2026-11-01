@@ -127,7 +127,7 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
                 data = try JSONSerialization.data(withJSONObject: ["draft": ["enabled": false, "max_minor": (draft || publish) ? 600 : 500,
                     "channel": "in_person", "refund_policy": "restore_full_review_partial"], "draft_version": String(repeating: (draft || publish) ? "b" : "a", count: 64),
                     "published_version": publish ? (String(repeating: "c", count: 64) as Any) : (NSNull() as Any), "register_reviewed_version": NSNull(),
-                    "program_version": NSNull(), "management_enabled": management, "redemption_enabled": false])
+                    "program_version": NSNull(), "management_enabled": management, "redemption_enabled": ProcessInfo.processInfo.arguments.contains("--pos-redemption-global-on-tests")])
             } else if ProcessInfo.processInfo.arguments.contains("--pos-wallet-review-ui-tests") && url.path.contains("/wallet-link-reviews/") {
                 let submitted = request.httpMethod == "POST"
                 if submitted {
