@@ -5,6 +5,7 @@ return [
     'owned_inventory_enabled' => (bool) env('POS_OWNED_INVENTORY_ENABLED', false),
     'inventory_publication_enabled' => (bool) env('POS_INVENTORY_PUBLICATION_ENABLED', false),
     'checkout_rules_enabled' => (bool) env('POS_CHECKOUT_RULES_ENABLED', false),
+    'reward_policy_management_enabled' => (bool) env('POS_REWARD_POLICY_MANAGEMENT_ENABLED', false),
     'shopify_online_discounts_enabled' => (bool) env('POS_SHOPIFY_ONLINE_DISCOUNTS_ENABLED', false),
     'tax_location_management_enabled' => (bool) env('POS_TAX_LOCATION_MANAGEMENT_ENABLED', false),
     'receipt_email_enabled' => (bool) env('POS_RECEIPT_EMAIL_ENABLED', false),

@@ -18,6 +18,9 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
         Route::post('/customers', [PosController::class, 'createCustomer'])->middleware($write)->name('customers.create');
         Route::get('/customer-requests/{requestId}', [PosController::class, 'customerRequest'])->whereUuid('requestId')->middleware($read)->name('customers.request');
         Route::get('/catalog', [PosController::class, 'catalog'])->middleware($read)->name('catalog');
+        Route::get('/reward-redemption', [PosController::class, 'rewardRedemption'])->middleware($read)->name('reward-redemption.show');
+        Route::post('/reward-redemption/draft', [PosController::class, 'saveRewardRedemption'])->middleware($write)->name('reward-redemption.draft');
+        Route::post('/reward-redemption/publish', [PosController::class, 'publishRewardRedemption'])->middleware($write)->name('reward-redemption.publish');
         Route::get('/checkout-rules/available', [PosController::class, 'availableCheckoutRules'])->middleware($read)->name('checkout-rules.available');
         Route::post('/checkout-rules/online/reconcile', [PosController::class, 'reconcileOnlineCheckoutRule'])->middleware($write)->name('checkout-rules.online.reconcile');
         Route::get('/tax-locations', [PosController::class, 'taxLocations'])->middleware($read)->name('tax-locations.index');

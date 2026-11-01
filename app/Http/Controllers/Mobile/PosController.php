@@ -28,6 +28,33 @@ final class PosController extends Controller
         return $this->respond($r, [], fn () => app(\App\Services\Pos\PosCommerceRuleStore::class)->get($this->checkoutRuleScope($register, false)));
     }
 
+    public function rewardRedemption(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosRewardPolicyManager::class)->get(
+            app(\App\Services\Pos\PosAccess::class)->register($register, 'admin')));
+    }
+
+    public function saveRewardRedemption(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['draft' => ['required', 'array:enabled,max_minor,channel,refund_policy'],
+            'draft.enabled' => ['required', 'boolean'], 'draft.max_minor' => ['required', 'integer', 'min:1', 'max:100000000'],
+            'draft.channel' => ['required', 'in:in_person'], 'draft.refund_policy' => ['required', 'in:restore_full_review_partial'],
+            'expected_draft_version' => ['required', 'regex:/^[a-f0-9]{64}$/D']],
+            fn ($input) => app(\App\Services\Pos\PosRewardPolicyManager::class)->save(
+                app(\App\Services\Pos\PosAccess::class)->register($register, 'admin'), $input['draft'], $input['expected_draft_version']));
+    }
+
+    public function publishRewardRedemption(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['draft_version' => ['required', 'regex:/^[a-f0-9]{64}$/D'],
+            'expected_published_version' => ['present', 'nullable', 'regex:/^[a-f0-9]{64}$/D'],
+            'expected_register_version' => ['present', 'nullable', 'regex:/^[a-f0-9]{64}$/D'],
+            'expected_program_version' => ['present', 'nullable', 'regex:/^[a-f0-9]{64}$/D'],
+            'confirmed' => ['required', 'boolean']], fn ($input) => app(\App\Services\Pos\PosRewardPolicyManager::class)->publish(
+                app(\App\Services\Pos\PosAccess::class)->register($register, 'admin'), $input['draft_version'],
+                $input['expected_published_version'], $input['expected_register_version'], $input['expected_program_version'], $input['confirmed'] === true));
+    }
+
     public function availableCheckoutRules(Request $r, string $tenant, string $register): JsonResponse
     {
         return $this->respond($r, [], fn () => app(\App\Services\Pos\PosCheckoutOffers::class)->available(app(\App\Services\Pos\PosAccess::class)->register($register)));

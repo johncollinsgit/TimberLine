@@ -253,6 +253,23 @@ device assignment. No business selection enables collection or publishing.
 
 ### Candle Cash payment safety candidate
 
+The register's owner-only reward-policy API can read the tenant's current
+policy and save an optimistic, tenant-scoped in-person draft when the separate
+management flag is enabled. The initial disabled $5 draft is an example, not
+a published policy. Channel and refund behavior are currently fixed to
+in-person and full-refund restoration with partial-refund review. This API
+does not edit the online rewards program or the shared wallet ledger.
+
+Publication is hard-disabled regardless of feature flags. A policy recheck
+currently happens before the durable payment-start claim, so publishing a
+different cap concurrently could race a payment. Before publication can be
+implemented, serialize policy changes and the native payment handoff through
+the same durable admission boundary, recheck the fresh tenant program, policy
+and register review while holding the necessary database locks, account for
+all other program writers, and verify both ordering outcomes with real MySQL
+concurrency and fake-provider tests. Preserve already initiated or uncertain
+payments and held rewards. This work does not enable customer redemption.
+
 The source candidate adds a durable, non-expiring claim that lets exactly one
 collection start or unstarted cancellation win for the original sale. Discard,
 expiry and online-order stock preemption use the same fence when its internal
