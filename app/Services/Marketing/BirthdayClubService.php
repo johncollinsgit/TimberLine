@@ -168,6 +168,58 @@ class BirthdayClubService
         });
     }
 
+    /**
+     * Preserve legacy non-club issuance behavior unless POS hold evidence exists
+     * (or the future POS feature is enabled). This is a defensive guard, not an
+     * authority to create or redeem a POS birthday benefit.
+     */
+    public function needsPosAnnualHoldGuard(int $tenantId): bool
+    {
+        if (! Schema::hasTable('pos_birthday_annual_holds') || ! Schema::hasTable('birthday_cycle_coverage')) {
+            if (config('pos_live.in_person_birthday_enabled', false) === true) {
+                throw new RuntimeException('Birthday annual hold schema is unavailable.');
+            }
+
+            return false;
+        }
+
+        return config('pos_live.in_person_birthday_enabled', false) === true
+            || DB::table('pos_birthday_annual_holds')->where('tenant_id', $tenantId)->exists();
+    }
+
+    /** Hold the same annual coverage lock through the legacy issuance transaction. */
+    public function withPosAnnualHoldGuard(CustomerBirthdayProfile $birthday, int $tenantId, int $year, callable $callback): array
+    {
+        $profile = $birthday->marketingProfile;
+        if (! $profile || (int) $profile->tenant_id !== $tenantId) {
+            throw new RuntimeException('Birthday tenant context does not match its customer.');
+        }
+        $identity = $this->identity($profile);
+        if ($identity['tenant_id'] !== $tenantId) {
+            throw new RuntimeException('Birthday tenant context does not match its customer.');
+        }
+
+        return DB::transaction(function () use ($profile, $tenantId, $year, $identity, $callback): array {
+            // Match merge's deterministic profile lock order, then recheck aliases.
+            $locked = MarketingProfile::query()->where('tenant_id', $tenantId)->whereIn('id', $identity['profile_ids'])
+                ->orderBy('id')->lockForUpdate()->get();
+            if ($locked->count() !== count($identity['profile_ids']) || $this->identity($profile->fresh()) !== $identity) {
+                throw new RuntimeException('Birthday customer identity requires review.');
+            }
+            $key = ['tenant_id' => $tenantId, 'canonical_profile_id' => $identity['canonical_profile_id'], 'cycle_year' => $year];
+            DB::table('birthday_cycle_coverage')->insertOrIgnore([...$key, 'created_at' => now(), 'updated_at' => now()]);
+            $coverageIds = DB::table('birthday_cycle_coverage')->where('tenant_id', $tenantId)
+                ->whereIn('canonical_profile_id', $identity['profile_ids'])->where('cycle_year', $year)
+                ->orderBy('id')->lockForUpdate()->pluck('id');
+            if (DB::table('pos_birthday_annual_holds')->where('tenant_id', $tenantId)
+                ->whereIn('coverage_id', $coverageIds)->lockForUpdate()->exists()) {
+                return ['ok' => false, 'state' => 'birthday_review_required', 'error' => 'birthday_pos_hold_exists', 'issuance' => null];
+            }
+
+            return $callback();
+        }, 3);
+    }
+
     public function registerExisting(CustomerBirthdayProfile $birthday, int $year): array
     {
         return $this->withCycleLock($birthday, $year, fn () => ['ok' => true, 'state' => 'uncovered', 'issuance' => null]);
