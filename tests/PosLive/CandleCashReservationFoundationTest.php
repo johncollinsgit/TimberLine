@@ -27,14 +27,14 @@ beforeEach(function (): void {
         'created_at' => now(), 'expires_at' => now()->addMinutes(5),
     ]));
     $this->authority = Mockery::mock(PosRewardReservationAuthority::class);
-    $this->terms = ['profile_id' => $this->profile->id, 'limit_minor' => 500, 'eligible_minor' => 800,
+    $this->terms = ['profile_id' => $this->profile->id, 'expected_amount_minor' => 500, 'limit_minor' => 500, 'eligible_minor' => 800,
         'policy_version' => 'published-policy-v1', 'authorization_reference' => 'verified-proof-1'];
-    $this->authority->shouldReceive('authorize')->andReturnUsing(function ($tenant, $sale, $proof) {
+    $this->authority->shouldReceive('authorize')->andReturnUsing(function ($tenant, $sale, $proof, $amount) {
         if ($proof !== 'customer-approved') {
             throw new PosException('reward_authorization_invalid', 403);
         }
 
-        return $this->terms;
+        return [...$this->terms, 'expected_amount_minor' => $amount];
     });
     $this->service = new PosCandleCashReservation($this->store, $this->authority, new PosRewardRedemptionPolicy);
 });

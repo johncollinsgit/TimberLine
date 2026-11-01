@@ -37,7 +37,18 @@ class ModernForestryMobileCustomerSessionService
         return $this->resolveToken($token, $allowCreate);
     }
 
-    public function resolveToken(string $token, bool $allowCreate = false): ?ModernForestryMobileCustomerSession
+    /** Money-authorizing actions must revalidate the account with Shopify, not the identity cache. */
+    public function resolveFreshFromRequest(Request $request): ?ModernForestryMobileCustomerSession
+    {
+        $token = $this->bearerToken($request);
+        if ($token === null) {
+            return null;
+        }
+
+        return $this->resolveToken($token, false, true);
+    }
+
+    public function resolveToken(string $token, bool $allowCreate = false, bool $fresh = false): ?ModernForestryMobileCustomerSession
     {
         $token = trim($token);
         if ($token === '') {
@@ -45,7 +56,7 @@ class ModernForestryMobileCustomerSessionService
         }
 
         $claims = $this->jwtClaims($token) ?? [];
-        $identity = $this->appReviewDemoIdentity($token) ?? $this->testingIdentity($token) ?? $this->remoteCustomerIdentity($token, $claims);
+        $identity = $this->appReviewDemoIdentity($token) ?? $this->testingIdentity($token) ?? $this->remoteCustomerIdentity($token, $claims, $fresh);
         if ($identity === null) {
             return null;
         }
@@ -513,7 +524,7 @@ class ModernForestryMobileCustomerSessionService
     /**
      * @return array<string,mixed>|null
      */
-    protected function remoteCustomerIdentity(string $token, array $claims = []): ?array
+    protected function remoteCustomerIdentity(string $token, array $claims = [], bool $fresh = false): ?array
     {
         $endpoint = $this->graphqlEndpoint();
         if ($endpoint === '') {
@@ -522,7 +533,7 @@ class ModernForestryMobileCustomerSessionService
 
         $cacheKey = $this->customerIdentityCacheKey($token);
         $cacheTtlSeconds = $this->customerIdentityCacheTtlSeconds($claims);
-        if ($cacheTtlSeconds > 0) {
+        if (! $fresh && $cacheTtlSeconds > 0) {
             $cached = Cache::get($cacheKey);
             if (is_array($cached)) {
                 return $cached;
@@ -588,6 +599,11 @@ GRAPHQL,
                 'duration_ms' => $durationMs,
                 'graphql_errors' => $graphqlErrors,
             ]);
+            if ($fresh) {
+                Cache::forget($cacheKey);
+
+                return null;
+            }
         }
 
         $customer = $response->json('data.customer');

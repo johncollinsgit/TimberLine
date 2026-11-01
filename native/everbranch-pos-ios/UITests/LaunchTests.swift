@@ -45,6 +45,54 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.buttons["Continue with email"].exists)
     }
 
+    func testSwipeProductRequiresConfirmationAndKeepsOtherItems() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-bundle-basket-ui-tests"]; app.launch()
+        XCTAssertTrue(app.buttons["Add River Birch to basket"].waitForExistence(timeout: 10))
+        app.buttons["Add River Birch to basket"].tap()
+        app.buttons["Choose Laurel & Fig options"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Add Laurel & Fig Wax Melt"].waitForExistence(timeout: 5)); app.buttons["Add Laurel & Fig Wax Melt"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Your basket"].waitForExistence(timeout: 5))
+        let id = String(repeating: "c", count: 32)
+        let row = app.otherElements["basket-product-" + id]
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.swipeLeft()
+        let confirm = app.buttons["confirm-remove-" + id]; XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        XCTAssertTrue(row.exists); row.swipeRight(); XCTAssertFalse(confirm.exists)
+        row.swipeLeft(); XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
+        XCTAssertTrue(row.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["basket-product-" + String(repeating: "a", count: 32)].exists)
+    }
+
+    func testSwipeQuotedProductDiscardsOriginalBeforeEditing() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-bundle-basket-ui-tests"]; app.launch()
+        XCTAssertTrue(app.buttons["Add River Birch to basket"].waitForExistence(timeout: 10)); app.buttons["Add River Birch to basket"].tap()
+        app.buttons["Choose Laurel & Fig options"].firstMatch.tap(); app.buttons["Add Laurel & Fig Wax Melt"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.tap()
+        XCTAssertTrue(app.buttons["Review total"].waitForExistence(timeout: 5)); app.buttons["Review total"].tap()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        let id = String(repeating: "c", count: 32); let row = app.otherElements["basket-product-" + id]
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.swipeLeft()
+        let confirm = app.buttons["confirm-remove-" + id]; XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
+        XCTAssertTrue(app.staticTexts["Your basket"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.otherElements["basket-product-" + id].exists)
+        XCTAssertTrue(app.otherElements["basket-product-" + String(repeating: "a", count: 32)].exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Charge '")).firstMatch.exists)
+    }
+
+    func testSwipeQuotedProductKeepsSaleWhenDiscardFails() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-bundle-basket-ui-tests", "--pos-discard-fail-tests"]; app.launch()
+        XCTAssertTrue(app.buttons["Add River Birch to basket"].waitForExistence(timeout: 10)); app.buttons["Add River Birch to basket"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.tap()
+        XCTAssertTrue(app.buttons["Review total"].waitForExistence(timeout: 5)); app.buttons["Review total"].tap()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        let id = String(repeating: "c", count: 32); let row = app.otherElements["basket-product-" + id]
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.swipeLeft()
+        let confirm = app.buttons["confirm-remove-" + id]; XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
+        XCTAssertTrue(app.otherElements["status-message"].waitForExistence(timeout: 5) || app.staticTexts["status-message"].exists)
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 5))
+        XCTAssertTrue(row.exists); XCTAssertFalse(app.staticTexts["Your basket"].exists)
+    }
+
     func testMixAndMatchUsesOneSheetAndRequiresTheExactBundleQuantity() {
         let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-untracked-bundle-ui-tests"]; app.launch()
         let search = app.textFields["Search products"]; XCTAssertTrue(search.waitForExistence(timeout: 10))

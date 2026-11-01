@@ -41,6 +41,41 @@ private struct PayCard<Content: View>: View {
     }
 }
 
+private struct BasketSwipeRemove<Content: View>: View {
+    let itemID: String
+    let confirm: () -> Void
+    @ViewBuilder let content: Content
+    @State private var revealed = false
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            content
+                .frame(maxWidth: .infinity, alignment: .leading).background(PayTheme.cream)
+                .offset(x: revealed ? -96 : 0).contentShape(Rectangle())
+                .simultaneousGesture(DragGesture(minimumDistance: 28).onEnded { value in
+                    guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
+                    if value.translation.width < -35 { withAnimation(.easeOut(duration: 0.18)) { revealed = true } }
+                    if value.translation.width > 35 { withAnimation(.easeOut(duration: 0.18)) { revealed = false } }
+                })
+            if revealed {
+                Button {
+                    confirm()
+                    revealed = false
+                } label: {
+                    Text("Confirm").font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                        .frame(width: 86).frame(minHeight: 48).background(Color.red, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("confirm-remove-" + itemID)
+            }
+        }
+        .clipped()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("basket-product-" + itemID)
+        .accessibilityAction(named: Text("Show remove option")) { revealed = true }
+    }
+}
+
 private extension View {
     func payInput() -> some View {
         font(.body).padding(14).background(PayTheme.paper, in: RoundedRectangle(cornerRadius: 10))
@@ -331,7 +366,10 @@ struct POSView: View {
                     Button("Choose available products", action: { model.chooseAvailableProducts(); addingProducts = true })
                         .buttonStyle(PayButtonStyle(primary: false))
                 } else {
-                    ForEach(model.items.filter { (model.quantities[$0.id] ?? 0) > 0 }) { item in itemRow(item) }
+                    ForEach(model.items.filter { (model.quantities[$0.id] ?? 0) > 0 }) { item in
+                        if item.kind == "bundle" { itemRow(item) }
+                        else { BasketSwipeRemove(itemID: item.id, confirm: { model.removeProduct(item.id) }) { itemRow(item) } }
+                    }
                     if model.customAmountMinor > 0 { HStack { Text(model.customDescription); Spacer(); Text(POSMoney.display(model.customAmountMinor)) } }
                     if model.quantities.values.reduce(0, +) == 0 && model.invoiceID.isEmpty {
                         Text("Choose an available product to start this sale.").font(.subheadline).foregroundStyle(PayTheme.muted)
@@ -420,7 +458,15 @@ struct POSView: View {
                 if let sale = model.sale {
                     Text(POSMoney.display(sale.amountMinor)).font(.system(size: 44, weight: .regular, design: .serif)).monospacedDigit()
                     ForEach(Array((sale.lines ?? []).enumerated()), id: \.offset) { _, line in
-                        HStack { Text("\(line.quantity) × \(line.title)"); Spacer(); if let amount = line.subtotalMinor { Text(POSMoney.display(amount)).monospacedDigit() } }
+                        if model.canEditBasket, let id = line.itemId,
+                           (sale.lines ?? []).filter({ $0.itemId == id }).count == 1,
+                           model.items.contains(where: { $0.id == id && $0.kind != "bundle" }) {
+                            BasketSwipeRemove(itemID: id, confirm: { model.removeQuotedProduct(id) }) {
+                                HStack { Text("\(line.quantity) × \(line.title)"); Spacer(); if let amount = line.subtotalMinor { Text(POSMoney.display(amount)).monospacedDigit() } }
+                            }
+                        } else {
+                            HStack { Text("\(line.quantity) × \(line.title)"); Spacer(); if let amount = line.subtotalMinor { Text(POSMoney.display(amount)).monospacedDigit() } }
+                        }
                         ForEach(Array((line.components ?? []).enumerated()), id: \.offset) { _, part in Text("\(part.quantity) × \(part.title)").font(.caption).foregroundStyle(PayTheme.muted) }
                     }
                     if let subtotal = sale.subtotalMinor { HStack { Text("Subtotal"); Spacer(); Text(POSMoney.display(subtotal)).monospacedDigit() }.font(.subheadline) }

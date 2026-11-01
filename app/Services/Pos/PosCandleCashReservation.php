@@ -37,13 +37,14 @@ final class PosCandleCashReservation
             if (! $sale) {
                 throw new PosException('sale_not_found', 404);
             }
-            $terms = $this->authority->authorize($tenant, $sale, $customerProof);
+            $terms = $this->authority->authorize($tenant, $sale, $customerProof, $amountMinor);
             $profileId = (int) ($terms['profile_id'] ?? 0);
+            $expectedAmount = $terms['expected_amount_minor'] ?? null;
             $limit = (int) ($terms['limit_minor'] ?? -1);
             $eligible = (int) ($terms['eligible_minor'] ?? -1);
             $version = $terms['policy_version'] ?? null;
             $authorization = $terms['authorization_reference'] ?? null;
-            if ($profileId < 1 || $limit < 0 || $eligible < 0 || ! is_string($version) || $version === ''
+            if ($profileId < 1 || ! is_int($expectedAmount) || $expectedAmount !== $amountMinor || $limit < 0 || $eligible < 0 || ! is_string($version) || $version === ''
                 || strlen($version) > 64 || ! is_string($authorization) || $authorization === ''
                 || strlen($authorization) > 128 || hash_equals($customerProof, $authorization)) {
                 throw new PosException('reward_authorization_invalid', 403);

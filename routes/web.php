@@ -720,6 +720,10 @@ Route::post('/api/mobile/v1/modern-forestry/social-share/claim', [ModernForestry
 Route::get('/api/mobile/v1/modern-forestry/rewards', [ModernForestryProductCatalogController::class, 'rewards'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.rewards');
+Route::post('/api/mobile/v1/modern-forestry/rewards/pos-authorization', [ModernForestryProductCatalogController::class, 'issuePosRewardAuthorization'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.rewards.pos-authorization');
 Route::post('/api/mobile/v1/modern-forestry/rewards/redeem', [ModernForestryProductCatalogController::class, 'redeemReward'])
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')

@@ -3,6 +3,14 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_01_130000_create_pos_payment_start_claims.php' => [
+        'test' => 'tests/Integration/PosCandleCashMySqlRecoveryTest.php',
+        'scenarios' => ['starting claim retained before trailing index creation and rollback; duplicate and altered indexes rejected'],
+    ],
+    '2026_11_01_120000_create_pos_reward_authorizations.php' => [
+        'test' => 'tests/Integration/PosCandleCashMySqlRecoveryTest.php',
+        'scenarios' => ['bound proof retained before trailing index creation and rollback; duplicate token and altered indexes rejected'],
+    ],
     '2026_11_01_110000_create_pos_candle_cash_reservations.php' => [
         'test' => 'tests/Integration/PosCandleCashMySqlRecoveryTest.php',
         'scenarios' => ['held redemption evidence retained before trailing index creation and rollback; duplicate sales and altered indexes rejected'],

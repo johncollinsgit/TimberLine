@@ -15,6 +15,7 @@
 <key>POSSquareApplicationID</key><string>$(POS_SQUARE_APPLICATION_ID)</string>
 <key>POSPaymentEnvironment</key><string>$(POS_PAYMENT_ENVIRONMENT)</string>
 <key>NSLocationWhenInUseUsageDescription</key><string>Your payment provider uses your location to verify where this business accepts payments.</string>
+<key>NSCameraUsageDescription</key><string>Scan a customer’s temporary rewards code at checkout.</string>
 <key>NSBluetoothAlwaysUsageDescription</key><string>Square may use Bluetooth to manage supported payment accessories.</string>
 <key>ITSAppUsesNonExemptEncryption</key><false/>
 </dict></plist>

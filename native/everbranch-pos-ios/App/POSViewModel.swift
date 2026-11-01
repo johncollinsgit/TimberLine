@@ -96,6 +96,13 @@ struct BundleBasketLine: Identifiable {
         checkoutDiscounts.removeAll { $0.itemId == id }
     }
 
+    func removeProduct(_ id: String) {
+        guard pending == nil, items.contains(where: { $0.id == id && $0.kind != "bundle" }) else { return }
+        quantities[id] = 0
+        checkoutDiscounts.removeAll { $0.scope == "item" && $0.itemId == id }
+        checkoutAddons.removeAll { $0.itemId == id }
+    }
+
     func updateBundle(_ id: String, quantity: Int, components: [String: Int]) {
         guard pending == nil, quantity > 0, let index = bundleLines.firstIndex(where: { $0.id == id }) else { return }
         let previous = bundleLines[index]
@@ -428,6 +435,22 @@ struct BundleBasketLine: Identifiable {
             self.pending = nil
             do { try self.savePending() } catch { self.pending = pending; throw error }
             self.sale = nil; self.receipt = nil; self.offerDraftQuoteID = nil; self.editingBasket = true
+        }
+    }
+    func removeQuotedProduct(_ itemID: String) {
+        guard canEditBasket, let base, let pending, (quantities[itemID] ?? 0) > 0,
+              items.contains(where: { $0.id == itemID && $0.kind != "bundle" }),
+              sale?.lines?.filter({ $0.itemId == itemID }).count == 1 else { return }
+        perform {
+            struct DiscardResult: Decodable { let discarded: Bool }
+            let result: DiscardResult = try await self.api.request(base + "/requests/" + pending.requestID + "/discard", method: "POST", body: [:])
+            guard result.discarded else { throw POSError.recoveryRequired }
+            self.availabilityPoll?.cancel()
+            self.pending = nil
+            do { try self.savePending() } catch { self.pending = pending; throw error }
+            self.sale = nil; self.receipt = nil; self.offerDraftQuoteID = nil
+            self.removeProduct(itemID)
+            self.editingBasket = true
         }
     }
     func changeOffer(_ change: CheckoutOfferChange) {

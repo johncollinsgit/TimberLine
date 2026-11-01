@@ -17,7 +17,7 @@ namespace App\Services\Pos;
 interface PosRewardReservationAuthority
 {
     /**
-     * @return array{profile_id:int, limit_minor:int, eligible_minor:int, policy_version:string, authorization_reference:string}
+     * @return array{profile_id:int, expected_amount_minor:int, limit_minor:int, eligible_minor:int, policy_version:string, authorization_reference:string}
      */
-    public function authorize(int $tenant, object $sale, string $customerProof): array;
+    public function authorize(int $tenant, object $sale, string $customerProof, int $amountMinor): array;
 }

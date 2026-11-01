@@ -58,3 +58,82 @@ it('restores missing indexes and preserves held evidence through replay and roll
         DB::table('pos_candle_cash_reservations')->where('id', $id)->delete();
     }
 });
+
+it('recovers customer authorization indexes without exposing or replacing a bound proof', function (): void {
+    $migration = require database_path('migrations/2026_11_01_120000_create_pos_reward_authorizations.php');
+    $migration->up();
+    $id = (string) Str::uuid();
+    $row = ['id' => $id, 'runtime_id' => 'recovery_fixture', 'tenant_id' => 900000001,
+        'marketing_profile_id' => 900000002, 'token_hash' => hash('sha256', (string) Str::uuid()),
+        'sale_id' => bin2hex(random_bytes(16)), 'bound_at' => now(), 'expires_at' => now()->addMinutes(2),
+        'created_at' => now(), 'updated_at' => now()];
+    DB::table('pos_reward_authorizations')->insert($row);
+    try {
+        $before = (array) DB::table('pos_reward_authorizations')->where('id', $id)->first();
+        Schema::table('pos_reward_authorizations', function (Blueprint $table): void {
+            $table->dropUnique('pos_reward_auth_token_uq');
+            $table->dropIndex('pos_reward_auth_customer_idx');
+        });
+        $migration->up();
+        $migration->down();
+        $migration->up();
+        expect((array) DB::table('pos_reward_authorizations')->where('id', $id)->first())->toBe($before)
+            ->and(Schema::hasIndex('pos_reward_authorizations', 'pos_reward_auth_token_uq'))->toBeTrue()
+            ->and(Schema::hasIndex('pos_reward_authorizations', 'pos_reward_auth_customer_idx'))->toBeTrue();
+        $duplicate = $row;
+        $duplicate['id'] = (string) Str::uuid();
+        expect(fn () => DB::table('pos_reward_authorizations')->insert($duplicate))->toThrow(QueryException::class);
+        Schema::table('pos_reward_authorizations', function (Blueprint $table): void {
+            $table->dropUnique('pos_reward_auth_token_uq');
+            $table->index('tenant_id', 'pos_reward_auth_token_uq');
+        });
+        try {
+            expect(fn () => $migration->up())->toThrow(RuntimeException::class, 'POS reward authorization index definition changed');
+            expect(DB::table('pos_reward_authorizations')->where('id', $id)->value('sale_id'))->toBe($row['sale_id']);
+        } finally {
+            Schema::table('pos_reward_authorizations', fn (Blueprint $table) => $table->dropIndex('pos_reward_auth_token_uq'));
+            $migration->up();
+        }
+    } finally {
+        DB::table('pos_reward_authorizations')->where('id', $id)->delete();
+    }
+});
+
+it('recovers the durable start fence indexes while retaining a starting claim', function (): void {
+    $migration = require database_path('migrations/2026_11_01_130000_create_pos_payment_start_claims.php');
+    $migration->up();
+    $id = (string) Str::uuid();
+    $row = ['id' => $id, 'runtime_id' => 'recovery_fixture', 'tenant_id' => 900000001,
+        'sale_id' => bin2hex(random_bytes(16)), 'payment_request_id' => (string) Str::uuid(), 'state' => 'starting',
+        'created_at' => now(), 'updated_at' => now()];
+    DB::table('pos_payment_start_claims')->insert($row);
+    try {
+        $before = (array) DB::table('pos_payment_start_claims')->where('id', $id)->first();
+        Schema::table('pos_payment_start_claims', function (Blueprint $table): void {
+            $table->dropUnique('pos_start_claim_sale_uq');
+            $table->dropUnique('pos_start_claim_request_uq');
+        });
+        $migration->up();
+        $migration->down();
+        $migration->up();
+        expect((array) DB::table('pos_payment_start_claims')->where('id', $id)->first())->toBe($before)
+            ->and(Schema::hasIndex('pos_payment_start_claims', 'pos_start_claim_sale_uq'))->toBeTrue()
+            ->and(Schema::hasIndex('pos_payment_start_claims', 'pos_start_claim_request_uq'))->toBeTrue();
+        $duplicate = $row;
+        $duplicate['id'] = (string) Str::uuid();
+        expect(fn () => DB::table('pos_payment_start_claims')->insert($duplicate))->toThrow(QueryException::class);
+        Schema::table('pos_payment_start_claims', function (Blueprint $table): void {
+            $table->dropUnique('pos_start_claim_sale_uq');
+            $table->index('tenant_id', 'pos_start_claim_sale_uq');
+        });
+        try {
+            expect(fn () => $migration->up())->toThrow(RuntimeException::class, 'POS payment start claim index definition changed');
+            expect(DB::table('pos_payment_start_claims')->where('id', $id)->value('state'))->toBe('starting');
+        } finally {
+            Schema::table('pos_payment_start_claims', fn (Blueprint $table) => $table->dropIndex('pos_start_claim_sale_uq'));
+            $migration->up();
+        }
+    } finally {
+        DB::table('pos_payment_start_claims')->where('id', $id)->delete();
+    }
+});

@@ -497,12 +497,32 @@ class ModernForestryProductCatalogController extends Controller
         }
 
         return response()->json([
-            'data' => $account->rewards($session),
+            'data' => [...$account->rewards($session), 'pos_authorization_available' => app(\App\Services\Mobile\ModernForestryRewardAvailability::class)->available($session)],
             'meta' => [
                 'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
                 'source' => 'mobile',
             ],
         ]);
+    }
+
+    public function issuePosRewardAuthorization(Request $request, ModernForestryMobileCustomerSessionService $sessions): JsonResponse
+    {
+        if (! is_string($request->bearerToken()) || trim($request->bearerToken()) === '') {
+            return $this->mobileUnauthorizedResponse()->header('Cache-Control', 'private, no-store');
+        }
+        $session = $sessions->resolveFreshFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse()->header('Cache-Control', 'private, no-store');
+        }
+        if (! app(\App\Services\Mobile\ModernForestryRewardAvailability::class)->available($session)) {
+            return response()->json(['data' => null, 'error' => ['code' => 'in_person_rewards_unavailable']], 503,
+                ['Cache-Control' => 'private, no-store']);
+        }
+
+        return response()->json([
+            'data' => app(\App\Services\Pos\PosRewardCustomerProof::class)->issueForAuthenticatedProfile($session->profile),
+            'meta' => ['tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG, 'source' => 'mobile'],
+        ], 200, ['Cache-Control' => 'private, no-store']);
     }
 
     public function redeemReward(

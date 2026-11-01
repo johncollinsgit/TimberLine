@@ -16,6 +16,23 @@ class PosLiveTestCase extends \Tests\TestCase
             }
             \App\Services\Pos\PosSchema::install();
             \App\Services\Inventory\StockSchema::install();
+            // The MySQL recovery job builds its domain schemas directly, rather
+            // than migrating the entire application before this suite. Install
+            // these additive dependencies as well; never run their down methods.
+            foreach ([
+                '2026_11_01_100000_create_tenant_commerce_rule_sets.php',
+                '2026_11_01_110000_create_pos_candle_cash_reservations.php',
+                '2026_11_01_120000_create_pos_reward_authorizations.php',
+                '2026_11_01_130000_create_pos_payment_start_claims.php',
+            ] as $migration) {
+                $path = database_path('migrations/'.$migration);
+                // The proof and start-claim migrations may land separately from the initial POS release.
+                if (in_array($migration, ['2026_11_01_120000_create_pos_reward_authorizations.php',
+                    '2026_11_01_130000_create_pos_payment_start_claims.php'], true) && ! is_file($path)) {
+                    continue;
+                }
+                (require $path)->up();
+            }
             foreach (['events', 'outbox', 'holds', 'sales', 'items', 'assignments', 'registers', 'connections', 'merchants'] as $name) {
                 $db->table('pos_live_'.$name)->delete();
             }

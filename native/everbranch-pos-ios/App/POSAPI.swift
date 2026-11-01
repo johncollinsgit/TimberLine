@@ -101,7 +101,10 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
                 let state = request.httpMethod == "POST" ? "queued" : "not_requested"
                 data = try JSONSerialization.data(withJSONObject: ["state": state, "enabled": enabled])
             } else if url.path.hasSuffix("/catalog") { data = Self.catalog() }
-            else if url.path.hasSuffix("/discard") { data = Data(#"{"discarded":true}"#.utf8) }
+            else if url.path.hasSuffix("/discard") {
+                if ProcessInfo.processInfo.arguments.contains("--pos-discard-fail-tests") { throw URLError(.networkConnectionLost) }
+                data = Data(#"{"discarded":true}"#.utf8)
+            }
             else if url.path == "/api/mobile/v1/workspaces" { data = Data(#"{"workspaces":[{"id":1,"name":"Fictional","slug":"fixture"}]}"#.utf8) }
             else if url.path == "/api/mobile/v1/workspaces/fixture/pos/registers" { data = Data(#"{"runtime_id":"fixture","registers":[{"id":"fixture","name":"Fictional register","location":"Fixture","catalog_source":"shopify","environment":"sandbox","blockers":[],"guest_checkout":true}]}"#.utf8) }
             else if url.path.hasSuffix("/sales/fixture-completed") { data = Self.completedSale() }

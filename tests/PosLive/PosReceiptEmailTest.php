@@ -19,10 +19,12 @@ beforeEach(function (): void {
     config(['pos_live.receipt_email_enabled' => true, 'ses_migration.platform_enabled' => true,
         'ses_migration.platform_key' => 'fixture-key', 'ses_migration.platform_secret' => 'fixture-secret',
         'ses_migration.platform_from' => 'no-reply@theeverbranch.com', 'ses_migration.platform_configuration_set' => 'everbranch-platform-fixture',
-        'ses_migration.platform_recipients' => ['ada@example.invalid', 'other@example.invalid'],
         'ses_migration.approved_attempt_cost_micros' => 1000, 'ses_migration.max_per_second' => 100,
         'ses_migration.platform_daily_attempts' => 100, 'ses_migration.account_daily_attempts' => 100]);
     $this->tenant = Tenant::create(['name' => 'Fictional POS shop', 'slug' => 'pos-fixture-'.Str::lower(Str::random(8)), 'status' => 'active']);
+    // Outbox suppression is global to a recipient; avoid collisions with other tests' addresses.
+    $this->receiptEmail = 'pos-receipt-'.$this->tenant->id.'@example.invalid';
+    config(['ses_migration.platform_recipients' => [$this->receiptEmail]]);
     $this->actor = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
     $this->actor->tenants()->attach($this->tenant, ['role' => 'admin', 'membership_active' => true]);
     TenantModuleEntitlement::create(['tenant_id' => $this->tenant->id, 'module_key' => 'pos',
@@ -71,7 +73,7 @@ beforeEach(function (): void {
             'country' => 'US', 'currency' => 'USD', 'status' => 'ACTIVE', 'capabilities' => ['CREDIT_CARD_PROCESSING']]]),
         '*/v2/merchants/fixture_merchant' => Http::response(['merchant' => ['id' => 'fixture_merchant', 'status' => 'ACTIVE']]),
     ]);
-    $this->profile = \App\Models\MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Ada', 'last_name' => 'Buyer', 'email' => 'ada@example.invalid']);
+    $this->profile = \App\Models\MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Ada', 'last_name' => 'Buyer', 'email' => $this->receiptEmail]);
     $this->selection = ['customer_profile_id' => $this->profile->id, 'request_id' => (string) Str::uuid(), 'items' => [['item_id' => $this->item, 'quantity' => 1, 'revision' => str_repeat('d', 64)]]];
 });
 
@@ -121,10 +123,10 @@ function emailPosContact($test, object $sale, string $email): void
 
 it('queues exactly one receipt to an explicitly supplied address and returns its durable status on replay', function (): void {
     $sale = emailPosConfirm($this);
-    emailPosContact($this, $sale, 'ADA@example.invalid');
+    emailPosContact($this, $sale, strtoupper($this->receiptEmail));
     $url = $this->base.'/sales/'.$sale->id.'/receipt/email';
     $this->getJson($url)->assertOk()->assertJsonPath('state', 'not_requested');
-    expect(\App\Models\PlatformEmailDelivery::count())->toBe(0);
+    expect(\App\Models\PlatformEmailMessage::where('tenant_id', $this->tenant->id)->count())->toBe(0);
     $first = $this->postJson($url)->assertOk()->json();
     $this->getJson($url)->assertOk()->assertJsonPath('state', 'queued');
     expect($first['state'])->toBe('queued');
@@ -133,12 +135,14 @@ it('queues exactly one receipt to an explicitly supplied address and returns its
     $again = $this->postJson($url)->assertOk()->json();
     config(['app.key' => $oldKey, 'app.previous_keys' => []]);
     expect($again['delivery_id'])->toBe($first['delivery_id'])
-        ->and(\App\Models\PlatformEmailMessage::count())->toBe(1)
-        ->and(\App\Models\PlatformEmailDelivery::count())->toBe(1);
-    $message = \App\Models\PlatformEmailMessage::sole();
+        ->and(\App\Models\PlatformEmailMessage::where('tenant_id', $this->tenant->id)->count())->toBe(1);
+    $delivery = \App\Models\PlatformEmailDelivery::whereKey($first['delivery_id'])->firstOrFail();
+    $message = $delivery->message;
+    expect($message->deliveries()->count())->toBe(1)
+        ->and($delivery->recipient)->toBe($this->receiptEmail);
     expect($message->tenant_id)->toBe($this->tenant->id)
         ->and(quoted_printable_decode($message->mime))->toContain('Fictional merchandise', 'fixture_payment', 'Paid: $10.70')
-        ->and(DB::table('platform_email_messages')->value('mime'))->not->toContain('fixture_payment');
+        ->and(DB::table('platform_email_messages')->where('id', $message->id)->value('mime'))->not->toContain('fixture_payment');
     \Illuminate\Support\Facades\Bus::assertDispatchedTimes(\App\Jobs\SendPlatformEmail::class, 1);
     // An uncertain provider result stays held on replay; later evidence may establish acceptance.
     DB::table('platform_email_deliveries')->where('id', $first['delivery_id'])->update(['state' => 'unknown']);
@@ -157,16 +161,16 @@ it('rejects missing contact and unconfirmed provider evidence without queuing ma
     $url = $this->base.'/sales/'.$sale->id.'/receipt/email';
     $this->getJson($url)->assertOk()->assertJsonPath('state', 'contact_required');
     $this->postJson($url)->assertStatus(422)->assertJsonPath('error.code', 'receipt_email_contact_required');
-    emailPosContact($this, $sale, 'ada@example.invalid');
+    emailPosContact($this, $sale, $this->receiptEmail);
     $this->operations['payment-operation']['state'] = 'unknown';
     $this->postJson($url)->assertStatus(409)->assertJsonPath('error.code', 'paid_receipt_required');
-    expect(\App\Models\PlatformEmailMessage::count())->toBe(0);
+    expect(\App\Models\PlatformEmailMessage::where('tenant_id', $this->tenant->id)->count())->toBe(0);
     \Illuminate\Support\Facades\Bus::assertNotDispatched(\App\Jobs\SendPlatformEmail::class);
 });
 
 it('keeps receipt sending disabled by default and never queues from status reads', function (): void {
     $sale = emailPosConfirm($this);
-    emailPosContact($this, $sale, 'ada@example.invalid');
+    emailPosContact($this, $sale, $this->receiptEmail);
     $url = $this->base.'/sales/'.$sale->id.'/receipt/email';
     config(['pos_live.receipt_email_enabled' => false]);
     $this->getJson($url)->assertOk()->assertJsonPath('state', 'not_requested')->assertJsonPath('enabled', false);
@@ -178,6 +182,6 @@ it('keeps receipt sending disabled by default and never queues from status reads
     $this->getJson($url)->assertOk()->assertJsonPath('state', 'not_requested');
     auth()->forgetGuards();
     $this->postJson($url)->assertForbidden();
-    expect(\App\Models\PlatformEmailMessage::count())->toBe(0);
+    expect(\App\Models\PlatformEmailMessage::where('tenant_id', $this->tenant->id)->count())->toBe(0);
     \Illuminate\Support\Facades\Bus::assertNotDispatched(\App\Jobs\SendPlatformEmail::class);
 });
