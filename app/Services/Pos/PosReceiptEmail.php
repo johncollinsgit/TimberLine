@@ -59,7 +59,9 @@ final class PosReceiptEmail
             }
             $identity = $this->identity($scope['tenant_id'], $sale->id, $this->outbox->recipientHash($email));
             $merchant = $this->safe(Tenant::query()->whereKey($scope['tenant_id'])->value('name'));
-            if ($merchant === '') { throw new PosException('receipt_merchant_unavailable', 503); }
+            if ($merchant === '') {
+                throw new PosException('receipt_merchant_unavailable', 503);
+            }
             $message = (new Email)->from((string) config('ses_migration.platform_from'))->to($email)
                 ->subject('Your receipt from '.$merchant)->text($this->text($receipt, $merchant));
             $message->getHeaders()->addTextHeader('X-Everbranch-Logical-Message-ID', $identity);
@@ -85,6 +87,7 @@ final class PosReceiptEmail
             return ['state' => 'contact_required', 'enabled' => config('pos_live.receipt_email_enabled') === true];
         }
         $delivery = $this->findDelivery($scope['tenant_id'], $sale->id, $email);
+
         return $delivery ? $this->statusBody($delivery) : ['state' => 'not_requested', 'enabled' => config('pos_live.receipt_email_enabled') === true];
     }
 
@@ -96,12 +99,18 @@ final class PosReceiptEmail
             $identity = $this->identity($tenantId, $saleId, $recipientHash);
             $existing = PlatformEmailMessage::where('group_key', hash('sha256', 'explicit:'.$identity))->first();
             if ($existing) {
-                if ((int) $existing->tenant_id !== $tenantId) { throw new PosException('receipt_email_identity_conflict'); }
+                if ((int) $existing->tenant_id !== $tenantId) {
+                    throw new PosException('receipt_email_identity_conflict');
+                }
                 $delivery = $existing->deliveries()->whereIn('recipient_hash', $hashes)->first();
-                if (! $delivery) { throw new PosException('receipt_email_identity_conflict'); }
+                if (! $delivery) {
+                    throw new PosException('receipt_email_identity_conflict');
+                }
+
                 return $delivery;
             }
         }
+
         return null;
     }
 
@@ -135,15 +144,25 @@ final class PosReceiptEmail
                 $lines[] = '  '.(int) $component['quantity'].' × '.$this->safe($component['title']);
             }
         }
-        if (isset($receipt['subtotal_minor'])) { $lines[] = 'Subtotal: '.$this->money((int) $receipt['subtotal_minor']); }
-        if (($receipt['discount_minor'] ?? 0) > 0) { $lines[] = 'Discounts: −'.$this->money((int) $receipt['discount_minor']); }
-        if (isset($receipt['tax_minor'])) { $lines[] = 'Tax: '.$this->money((int) $receipt['tax_minor']); }
+        if (isset($receipt['subtotal_minor'])) {
+            $lines[] = 'Subtotal: '.$this->money((int) $receipt['subtotal_minor']);
+        }
+        if (($receipt['discount_minor'] ?? 0) > 0) {
+            $lines[] = 'Discounts: −'.$this->money((int) $receipt['discount_minor']);
+        }
+        if (isset($receipt['tax_minor'])) {
+            $lines[] = 'Tax: '.$this->money((int) $receipt['tax_minor']);
+        }
         $lines[] = 'Paid: '.$this->money((int) $receipt['amount_minor']);
-        if (($receipt['refunded_minor'] ?? 0) > 0) { $lines[] = 'Refunded: '.$this->money((int) $receipt['refunded_minor']); }
+        if (($receipt['refunded_minor'] ?? 0) > 0) {
+            $lines[] = 'Refunded: '.$this->money((int) $receipt['refunded_minor']);
+        }
         $lines[] = 'Payment reference: '.$this->safe($receipt['payment_reference']);
         $details = $receipt['payment_details'] ?? [];
         foreach (['card_brand', 'last_four', 'entry_method', 'application_name', 'application_identifier'] as $field) {
-            if (! empty($details[$field])) { $lines[] = $this->safe($details[$field]); }
+            if (! empty($details[$field])) {
+                $lines[] = $this->safe($details[$field]);
+            }
         }
 
         return implode("\n", $lines)."\n";

@@ -64,7 +64,8 @@ final class StockPosCommerce
     {
         // Explicit line identities keep multiple configurations of the same bundle
         // separate; legacy clients continue to use their catalog ID as the key.
-        $seenItems = []; $seenLines = [];
+        $seenItems = [];
+        $seenLines = [];
         foreach ($input['items'] ?? [] as $selection) {
             $itemId = $selection['item_id'] ?? null;
             $lineId = $selection['line_id'] ?? $itemId;
@@ -72,7 +73,8 @@ final class StockPosCommerce
                 || isset($seenLines[$lineId]) || (isset($seenItems[$itemId]) && (! isset($selection['line_id']) || ! $seenItems[$itemId]))) {
                 throw new PosException('duplicate_catalog_item', 422);
             }
-            $seenItems[$itemId] = isset($selection['line_id']); $seenLines[$lineId] = true;
+            $seenItems[$itemId] = isset($selection['line_id']);
+            $seenLines[$lineId] = true;
         }
         foreach ($input['items'] ?? [] as $selection) {
             if (isset($selection['line_id']) && isset($seenItems[$selection['line_id']])) {
@@ -211,7 +213,9 @@ final class StockPosCommerce
                     }
                     $original = ShopifyPosCommerce::minor($line['originalUnitPriceSet']['shopMoney']['amount']);
                     $net = ShopifyPosCommerce::minor($line['discountedTotalSet']['shopMoney']['amount']);
-                    if ($net % $line['quantity'] !== 0) { throw new PosException('total_changed'); }
+                    if ($net % $line['quantity'] !== 0) {
+                        throw new PosException('total_changed');
+                    }
                     $signature = ($line['variant']['id'] ?? 'custom').'|'.$original.'|'.intdiv($net, $line['quantity']);
                     $actualUnits[$signature] = ($actualUnits[$signature] ?? 0) + $line['quantity'];
                 }
@@ -257,8 +261,11 @@ final class StockPosCommerce
                 if ($expectedNet !== $actualNet) {
                     throw new PosException('total_changed');
                 }
-                ksort($expectedUnits); ksort($actualUnits);
-                if ($expectedUnits !== $actualUnits) { throw new PosException('total_changed'); }
+                ksort($expectedUnits);
+                ksort($actualUnits);
+                if ($expectedUnits !== $actualUnits) {
+                    throw new PosException('total_changed');
+                }
             }
             $total = ShopifyPosCommerce::minor($calculated['totalPriceSet']['shopMoney']['amount']);
             if ($offers['version'] !== null && ($calculated['totalTaxSet']['shopMoney']['currencyCode'] ?? null) !== 'USD') {

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Pos;
 
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 /** Explicitly scoped draft configuration; saving rules does not activate checkout. */
 final class PosCommerceRuleStore
@@ -16,10 +16,14 @@ final class PosCommerceRuleStore
     {
         $this->authorize($scope);
         $row = DB::table('tenant_commerce_rule_sets')->where('tenant_id', $scope['tenant_id'])->first();
-        if (! $row) { return $this->rules->validate([]); }
+        if (! $row) {
+            return $this->rules->validate([]);
+        }
         $rules = json_decode($row->rules, true, 512, JSON_THROW_ON_ERROR);
         $result = $this->rules->validate($rules);
-        if (! hash_equals($row->version, $result['version'])) { throw new PosException('checkout_rules_corrupt', 503); }
+        if (! hash_equals($row->version, $result['version'])) {
+            throw new PosException('checkout_rules_corrupt', 503);
+        }
 
         return $result;
     }
@@ -39,7 +43,9 @@ final class PosCommerceRuleStore
     {
         $this->authorize($scope);
         $row = $this->pos->rows('registers', $scope['tenant_id'])->where('id', $register)->where('active', true)->first();
-        if (! $row) { throw new PosException('register_unavailable', 404); }
+        if (! $row) {
+            throw new PosException('register_unavailable', 404);
+        }
         $settings = $this->pos->decrypt($row->configuration);
 
         return [...$this->get($scope), 'reviewed_version' => $settings['checkout_rules_reviewed_version'] ?? null,
@@ -50,12 +56,19 @@ final class PosCommerceRuleStore
     public function publish(array $scope, string $register, string $version, ?string $previousVersion, bool $confirmed): array
     {
         $this->authorize($scope);
-        if (! $confirmed) { throw new PosException('checkout_rules_confirmation_required', 422); }
+        if (! $confirmed) {
+            throw new PosException('checkout_rules_confirmation_required', 422);
+        }
+
         return $this->withLock($scope['tenant_id'], fn () => $this->pos->db->transaction(function () use ($scope, $register, $version, $previousVersion): array {
             $tenant = $this->pos->db->table('tenants')->where('id', $scope['tenant_id'])->lockForUpdate()->first();
-            if (! $tenant) { throw new PosException('tenant_unavailable', 404); }
+            if (! $tenant) {
+                throw new PosException('tenant_unavailable', 404);
+            }
             $row = $this->pos->rows('registers', $scope['tenant_id'])->where('id', $register)->where('active', true)->lockForUpdate()->first();
-            if (! $row) { throw new PosException('register_unavailable', 404); }
+            if (! $row) {
+                throw new PosException('register_unavailable', 404);
+            }
             $draft = $this->get($scope);
             $settings = $this->pos->decrypt($row->configuration);
             $current = $settings['checkout_rules_reviewed_version'] ?? null;
@@ -63,10 +76,14 @@ final class PosCommerceRuleStore
                 throw new PosException('checkout_rules_changed');
             }
             foreach ($draft['rules'] as $rule) {
-                if ($rule['kind'] !== 'addon') { continue; }
+                if ($rule['kind'] !== 'addon') {
+                    continue;
+                }
                 $found = app(\App\Services\Inventory\StockLedger::class)->rows('items', $scope['tenant_id'])
                     ->whereIn('id', $rule['eligible_item_ids'])->where('active', true)->count();
-                if ($found !== count($rule['eligible_item_ids'])) { throw new PosException('checkout_rule_item_unavailable', 422); }
+                if ($found !== count($rule['eligible_item_ids'])) {
+                    throw new PosException('checkout_rule_item_unavailable', 422);
+                }
             }
             if ($current !== $version || ($settings['checkout_rules_review']['version'] ?? null) !== $version
                 || ($settings['checkout_rules_review']['rules'] ?? null) !== $draft['rules']) {
@@ -90,15 +107,21 @@ final class PosCommerceRuleStore
 
         return $this->withLock($scope['tenant_id'], fn () => DB::transaction(function () use ($scope, $operation): array {
             $tenant = DB::table('tenants')->where('id', $scope['tenant_id'])->lockForUpdate()->first();
-            if (! $tenant) { throw new PosException('tenant_unavailable', 404); }
+            if (! $tenant) {
+                throw new PosException('tenant_unavailable', 404);
+            }
             $before = $this->get($scope);
             $after = $operation($before['rules']);
             foreach ($after['rules'] as $rule) {
-                if ($rule['kind'] !== 'addon') { continue; }
+                if ($rule['kind'] !== 'addon') {
+                    continue;
+                }
                 $items = $rule['eligible_item_ids'];
                 $found = app(\App\Services\Inventory\StockLedger::class)->rows('items', $scope['tenant_id'])
                     ->whereIn('id', $items)->where('active', true)->count();
-                if ($found !== count($items)) { throw new PosException('checkout_rule_item_unavailable', 422); }
+                if ($found !== count($items)) {
+                    throw new PosException('checkout_rule_item_unavailable', 422);
+                }
             }
             $values = ['rules' => json_encode($after['rules'], JSON_THROW_ON_ERROR), 'version' => $after['version'],
                 'updated_by' => $scope['actor_id'], 'updated_at' => now()];

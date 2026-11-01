@@ -26,7 +26,9 @@ it('replays rule-set creation and rollback without deleting existing tenant rule
         DB::table('tenant_commerce_rule_sets')->insert(['tenant_id' => $tenant, 'rules' => '[]', 'version' => str_repeat('a', 64),
             'updated_by' => 12, 'created_at' => now(), 'updated_at' => now()]);
         $before = (array) DB::table('tenant_commerce_rule_sets')->where('tenant_id', $tenant)->first();
-        $migration->up(); $migration->down(); $migration->up();
+        $migration->up();
+        $migration->down();
+        $migration->up();
         expect((array) DB::table('tenant_commerce_rule_sets')->where('tenant_id', $tenant)->first())->toBe($before)
             ->and(Schema::hasIndex('tenant_commerce_rule_sets', 'tenant_commerce_rules_tenant_unique'))->toBeTrue();
         expect(fn () => DB::table('tenant_commerce_rule_sets')->insert(['tenant_id' => $tenant, 'rules' => '[]',

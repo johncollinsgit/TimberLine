@@ -24,10 +24,17 @@ final class PosBirthdayEntitlementEvidence
             throw new PosException('birthday_evidence_invalid', 422);
         }
         $profile = MarketingProfile::query()->where('tenant_id', $tenant)->whereKey($profileId)->first();
-        if (! $profile) { throw new PosException('customer_not_found', 404); }
-        if (! $this->club->enabled($tenant)) { return ['state' => 'birthday_club_unavailable', 'redeemable' => false]; }
-        try { $identity = $this->club->identity($profile); }
-        catch (\RuntimeException) { return ['state' => 'identity_review_required', 'redeemable' => false]; }
+        if (! $profile) {
+            throw new PosException('customer_not_found', 404);
+        }
+        if (! $this->club->enabled($tenant)) {
+            return ['state' => 'birthday_club_unavailable', 'redeemable' => false];
+        }
+        try {
+            $identity = $this->club->identity($profile);
+        } catch (\RuntimeException) {
+            return ['state' => 'identity_review_required', 'redeemable' => false];
+        }
         // An alias graph can include a historical catch-up identity; do not infer a POS
         // entitlement from it until an explicit, audited customer link is reviewed.
         if ((int) $identity['tenant_id'] !== $tenant || (int) $identity['canonical_profile_id'] !== $profileId

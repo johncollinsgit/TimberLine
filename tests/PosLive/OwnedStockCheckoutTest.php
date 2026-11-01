@@ -79,7 +79,8 @@ function configureCheckoutOffers($test): array
     DB::table('tenant_commerce_rule_sets')->insert(['tenant_id' => $test->tenant->id, 'rules' => json_encode($rules),
         'version' => $version, 'updated_by' => $test->actor->id, 'created_at' => now(), 'updated_at' => now()]);
     $register = $test->store->rows('registers', $test->tenant->id)->first();
-    $settings = $test->store->decrypt($register->configuration); $settings['checkout_rules_reviewed_version'] = $version;
+    $settings = $test->store->decrypt($register->configuration);
+    $settings['checkout_rules_reviewed_version'] = $version;
     $test->store->rows('registers', $test->tenant->id)->update(['configuration' => $test->store->encrypt($settings)]);
     config(['pos_live.checkout_rules_enabled' => true]);
 
@@ -89,7 +90,8 @@ function configureCheckoutOffers($test): array
 
 it('freezes server rules, taxes the discounted price and reserves both addon and ordinary units', function (): void {
     $offers = configureCheckoutOffers($this);
-    $input = [...$this->selection, ...$offers]; $input['items'][0]['quantity'] = 2;
+    $input = [...$this->selection, ...$offers];
+    $input['items'][0]['quantity'] = 2;
     $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->assertJsonPath('amount_minor', 1637)->json();
     $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail();
     $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($sale);
@@ -102,19 +104,23 @@ it('freezes server rules, taxes the discounted price and reserves both addon and
 
 it('blocks a new collection if reviewed offers are disabled or changed after the quote', function (): void {
     $offers = configureCheckoutOffers($this);
-    $input = [...$this->selection, ...$offers]; $input['items'][0]['quantity'] = 2;
+    $input = [...$this->selection, ...$offers];
+    $input['items'][0]['quantity'] = 2;
     $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->json();
-    $id = $quote['sale_id']; $before = $this->store->rows('sales', $this->tenant->id)->where('id', $id)->first()->snapshot_hash;
+    $id = $quote['sale_id'];
+    $before = $this->store->rows('sales', $this->tenant->id)->where('id', $id)->first()->snapshot_hash;
     config(['pos_live.checkout_rules_enabled' => false]);
     $this->postJson($this->base.'/sales/'.$id.'/collect', [])->assertStatus(503)->assertJsonPath('error.code', 'checkout_rules_unavailable');
     config(['pos_live.checkout_rules_enabled' => true]);
     $row = DB::table('tenant_commerce_rule_sets')->where('tenant_id', $this->tenant->id)->first();
-    $rules = json_decode($row->rules, true); $rules[1]['value'] = 200;
+    $rules = json_decode($row->rules, true);
+    $rules[1]['value'] = 200;
     $version = app(\App\Services\Pos\PosCommerceRules::class)->validate($rules)['version'];
     DB::table('tenant_commerce_rule_sets')->where('tenant_id', $this->tenant->id)->update(['rules' => json_encode($rules), 'version' => $version]);
     $this->postJson($this->base.'/sales/'.$id.'/collect', [])->assertStatus(503)->assertJsonPath('error.code', 'checkout_rules_review_required');
     $register = $this->store->rows('registers', $this->tenant->id)->first();
-    $settings = $this->store->decrypt($register->configuration); $settings['checkout_rules_reviewed_version'] = $version;
+    $settings = $this->store->decrypt($register->configuration);
+    $settings['checkout_rules_reviewed_version'] = $version;
     $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
     $this->postJson($this->base.'/sales/'.$id.'/collect', [])->assertStatus(409)->assertJsonPath('error.code', 'checkout_rules_changed');
     $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $id)->first();
@@ -124,11 +130,14 @@ it('blocks a new collection if reviewed offers are disabled or changed after the
 it('serializes rule changes and offer collection with the database tenant lock', function (): void {
     config(['cache.default' => 'database']);
     $offers = configureCheckoutOffers($this);
-    $input = [...$this->selection, ...$offers]; $input['items'][0]['quantity'] = 2;
+    $input = [...$this->selection, ...$offers];
+    $input['items'][0]['quantity'] = 2;
     $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->json();
     $rules = app(\App\Services\Pos\PosCommerceRuleStore::class);
     $scope = ['tenant_id' => $this->tenant->id, 'actor_id' => $this->actor->id, 'admin' => true];
-    $existing = $rules->get($scope); $changed = $existing['rules'][1]; $changed['value'] = 200;
+    $existing = $rules->get($scope);
+    $changed = $existing['rules'][1];
+    $changed['value'] = 200;
     $held = \Illuminate\Support\Facades\Cache::lock($rules->lockKey($this->tenant->id), 30);
     expect($held->get())->toBeTrue();
     try {
@@ -161,7 +170,8 @@ it('does not activate draft offers or allow a standalone addon', function (): vo
     $this->postJson($this->base.'/quotes', $input)->assertStatus(409)->assertJsonPath('error.code', 'checkout_rules_changed');
     $input['checkout_rules_version'] = $offers['checkout_rules_version'];
     $register = $this->store->rows('registers', $this->tenant->id)->first();
-    $settings = $this->store->decrypt($register->configuration); unset($settings['checkout_rules_reviewed_version']);
+    $settings = $this->store->decrypt($register->configuration);
+    unset($settings['checkout_rules_reviewed_version']);
     $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
     $this->postJson($this->base.'/quotes', $input)->assertStatus(503)->assertJsonPath('error.code', 'checkout_rules_review_required');
     expect($this->stock->listing($this->tenant->id, $this->pool)[0]['available_quantity'])->toBe(2);
@@ -179,15 +189,18 @@ it('applies repeated percentage discounts in their selected order', function ():
 
 it('targets selected units in order, including a mixed regular and addon variant', function (): void {
     $offers = configureCheckoutOffers($this);
-    $input = [...$this->selection, ...$offers]; $input['items'][0]['quantity'] = 2;
+    $input = [...$this->selection, ...$offers];
+    $input['items'][0]['quantity'] = 2;
     $input['discounts'] = [
         ['rule_id' => 'fixed', 'scope' => 'item', 'item_id' => $this->item, 'quantity' => 1],
         ['rule_id' => 'percent', 'scope' => 'sale'],
         ['rule_id' => 'fixed', 'scope' => 'item', 'item_id' => $this->item, 'quantity' => 1],
     ];
-    $invalid = $input; $invalid['discounts'][0]['quantity'] = 3;
+    $invalid = $input;
+    $invalid['discounts'][0]['quantity'] = 3;
     $this->postJson($this->base.'/quotes', $invalid)->assertStatus(422)->assertJsonPath('error.code', 'checkout_discount_invalid');
-    $invalid = $input; $invalid['discounts'][1]['quantity'] = 1;
+    $invalid = $input;
+    $invalid['discounts'][1]['quantity'] = 1;
     $this->postJson($this->base.'/quotes', $invalid)->assertStatus(422)->assertJsonPath('error.code', 'checkout_discount_invalid');
     $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->assertJsonPath('amount_minor', 1530)->json();
     $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail());
@@ -212,6 +225,7 @@ it('sends exact selected-unit discounts to Shopify tax calculation', function ()
     Http::fake(['https://unit-test-*.myshopify.com/*' => function ($request) use (&$received, $variant) {
         $received = $request['variables']['input'];
         $money = fn ($amount) => ['shopMoney' => ['amount' => $amount, 'currencyCode' => 'USD']];
+
         return Http::response(['data' => ['draftOrderCalculate' => ['userErrors' => [], 'calculatedDraftOrder' => [
             'taxesIncluded' => false, 'totalPriceSet' => $money('20.33'), 'totalTaxSet' => $money('1.33'),
             'lineItems' => [
@@ -258,7 +272,8 @@ it('discounts a typed amount before calculating tax without treating it as rewar
 it('sends per-unit allocated offers to Shopify and verifies discounted tax totals', function (): void {
     $offers = configureCheckoutOffers($this);
     $row = DB::table('tenant_commerce_rule_sets')->where('tenant_id', $this->tenant->id)->first();
-    $rules = json_decode($row->rules, true); $rules[1]['value'] = 101;
+    $rules = json_decode($row->rules, true);
+    $rules[1]['value'] = 101;
     $version = app(\App\Services\Pos\PosCommerceRules::class)->validate($rules)['version'];
     DB::table('tenant_commerce_rule_sets')->where('tenant_id', $this->tenant->id)->update(['rules' => json_encode($rules), 'version' => $version]);
     $shop = \App\Models\ShopifyStore::create(['tenant_id' => $this->tenant->id, 'store_key' => 'offer-test-'.$this->tenant->id,
@@ -271,10 +286,12 @@ it('sends per-unit allocated offers to Shopify and verifies discounted tax total
     $settings['checkout_rules_reviewed_version'] = $version;
     $settings['shopify'] = ['store_id' => $shop->id, 'location_id' => 'gid://shopify/Location/301', 'tax_address' => ['countryCode' => 'US', 'zip' => '00000']];
     $this->store->rows('registers', $this->tenant->id)->update(['catalog_source' => 'shopify', 'configuration' => $this->store->encrypt($settings)]);
-    $received = []; $wrong = true;
+    $received = [];
+    $wrong = true;
     Http::fake(['https://offer-test-*.myshopify.com/*' => function ($request) use (&$received, &$wrong, $variant) {
         $received = $request['variables']['input'];
         $money = fn ($amount) => ['shopMoney' => ['amount' => $amount, 'currencyCode' => 'USD']];
+
         return Http::response(['data' => ['draftOrderCalculate' => ['userErrors' => [], 'calculatedDraftOrder' => [
             'taxesIncluded' => false, 'totalPriceSet' => $money('16.36'), 'totalTaxSet' => $money('1.07'),
             'lineItems' => [
@@ -283,7 +300,8 @@ it('sends per-unit allocated offers to Shopify and verifies discounted tax total
             ],
         ]]]]);
     }]);
-    $input = [...$this->selection, ...$offers, 'checkout_rules_version' => $version]; $input['items'][0]['quantity'] = 2;
+    $input = [...$this->selection, ...$offers, 'checkout_rules_version' => $version];
+    $input['items'][0]['quantity'] = 2;
     $this->postJson($this->base.'/quotes', $input)->assertStatus(409)->assertJsonPath('error.code', 'total_changed');
     expect($this->stock->listing($this->tenant->id, $this->pool)[0]['available_quantity'])->toBe(2);
     $wrong = false;
@@ -637,7 +655,9 @@ it('reviews amount-only partial refunds once and reverses rewards after the full
     });
     app()->instance(\App\Services\PaymentsCore\PaymentJournal::class, $journal);
     $rewards = app(\App\Services\Pos\PosCustomerRewards::class);
-    if ($scenario !== 'unawarded') { $rewards->apply($sale); }
+    if ($scenario !== 'unawarded') {
+        $rewards->apply($sale);
+    }
     expect((float) (\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance') ?? 0))
         ->toBe($scenario === 'unawarded' ? 0.0 : 3.50);
 
@@ -792,7 +812,8 @@ it('parks an explicitly ended no-card interaction without financial cancellation
 });
 
 it('keeps two mixes of one bundle distinct while pricing, discounting and reserving shared stock', function (): void {
-    $parent = bin2hex(random_bytes(16)); $other = bin2hex(random_bytes(16));
+    $parent = bin2hex(random_bytes(16));
+    $other = bin2hex(random_bytes(16));
     foreach ([$parent => ['Bundle', 2500], $other => ['Other candle', 1000]] as $id => [$title, $price]) {
         $this->stock->rows('items', $this->tenant->id)->insert(['id' => $id, 'tenant_id' => $this->tenant->id, 'title' => $title,
             'sku' => $id, 'product_key' => $id, 'unit_amount_minor' => $price, 'revision' => str_repeat('e', 64)]);
@@ -802,7 +823,8 @@ it('keeps two mixes of one bundle distinct while pricing, discounting and reserv
     app(\App\Services\Inventory\StockBundles::class)->review($this->tenant->id, 'multiple-mix-review', $this->actor->id,
         $parent, 3, [$this->item, $other], str_repeat('e', 64));
     $catalog = collect($this->getJson($this->base.'/catalog')->assertOk()->json('items'))->keyBy('item_id');
-    $firstId = bin2hex(random_bytes(16)); $secondId = bin2hex(random_bytes(16));
+    $firstId = bin2hex(random_bytes(16));
+    $secondId = bin2hex(random_bytes(16));
     $first = ['item_id' => $parent, 'line_id' => $firstId, 'quantity' => 1, 'revision' => $catalog[$parent]['revision'],
         'components' => [['item_id' => $this->item, 'quantity' => 3, 'revision' => $catalog[$this->item]['revision']]]];
     $second = ['item_id' => $parent, 'line_id' => $secondId, 'quantity' => 1, 'revision' => $catalog[$parent]['revision'],
@@ -811,13 +833,21 @@ it('keeps two mixes of one bundle distinct while pricing, discounting and reserv
     $input = ['request_id' => (string) Str::uuid(), 'items' => [$first, $second, $this->selection['items'][0]],
         'checkout_rules_version' => $offers['checkout_rules_version'],
         'discounts' => [['rule_id' => 'fixed', 'scope' => 'item', 'item_id' => $firstId, 'quantity' => 1]]];
-    $ambiguous = $input; $ambiguous['request_id'] = (string) Str::uuid(); $ambiguous['discounts'][0]['item_id'] = $parent;
+    $ambiguous = $input;
+    $ambiguous['request_id'] = (string) Str::uuid();
+    $ambiguous['discounts'][0]['item_id'] = $parent;
     $this->postJson($this->base.'/quotes', $ambiguous)->assertStatus(422)->assertJsonPath('error.code', 'checkout_discount_line_ambiguous');
-    $duplicate = $input; $duplicate['request_id'] = (string) Str::uuid(); $duplicate['items'][1]['line_id'] = $firstId;
+    $duplicate = $input;
+    $duplicate['request_id'] = (string) Str::uuid();
+    $duplicate['items'][1]['line_id'] = $firstId;
     $this->postJson($this->base.'/quotes', $duplicate)->assertStatus(422);
-    $stale = $input; $stale['request_id'] = (string) Str::uuid(); $stale['items'][1]['revision'] = str_repeat('0', 64);
+    $stale = $input;
+    $stale['request_id'] = (string) Str::uuid();
+    $stale['items'][1]['revision'] = str_repeat('0', 64);
     $this->postJson($this->base.'/quotes', $stale)->assertConflict()->assertJsonPath('error.code', 'catalog_changed');
-    $insufficient = $input; $insufficient['request_id'] = (string) Str::uuid(); $insufficient['items'][2]['quantity'] = 2;
+    $insufficient = $input;
+    $insufficient['request_id'] = (string) Str::uuid();
+    $insufficient['items'][2]['quantity'] = 2;
     $this->postJson($this->base.'/quotes', $insufficient)->assertConflict()->assertJsonPath('error.code', 'stock_unavailable');
     expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(0);
     $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->assertJsonPath('amount_minor', 6313)->json();
@@ -847,7 +877,8 @@ it('keeps two mixes of one bundle distinct while pricing, discounting and reserv
 });
 
 it('checks each Shopify-priced bundle line and rejects wrong aggregate tax totals', function (): void {
-    $parent = bin2hex(random_bytes(16)); $other = bin2hex(random_bytes(16));
+    $parent = bin2hex(random_bytes(16));
+    $other = bin2hex(random_bytes(16));
     foreach ([$parent => ['Bundle', 2500], $other => ['Other candle', 1000]] as $id => [$title, $price]) {
         $this->stock->rows('items', $this->tenant->id)->insert(['id' => $id, 'tenant_id' => $this->tenant->id, 'title' => $title,
             'sku' => $id, 'product_key' => $id, 'unit_amount_minor' => $price, 'revision' => str_repeat('e', 64)]);
@@ -868,7 +899,8 @@ it('checks each Shopify-priced bundle line and rejects wrong aggregate tax total
     $settings['shopify'] = ['store_id' => $shop->id, 'location_id' => 'gid://shopify/Location/301', 'tax_address' => ['countryCode' => 'US', 'zip' => '00000']];
     $this->store->rows('registers', $this->tenant->id)->update(['catalog_source' => 'shopify', 'configuration' => $this->store->encrypt($settings)]);
     $catalog = collect($this->getJson($this->base.'/catalog')->assertOk()->json('items'))->keyBy('item_id');
-    $firstId = bin2hex(random_bytes(16)); $secondId = bin2hex(random_bytes(16));
+    $firstId = bin2hex(random_bytes(16));
+    $secondId = bin2hex(random_bytes(16));
     $input = ['request_id' => (string) Str::uuid(), 'items' => [
         ['item_id' => $parent, 'line_id' => $firstId, 'quantity' => 1, 'revision' => $catalog[$parent]['revision'],
             'components' => [['item_id' => $this->item, 'quantity' => 3, 'revision' => $catalog[$this->item]['revision']]]],
@@ -876,10 +908,12 @@ it('checks each Shopify-priced bundle line and rejects wrong aggregate tax total
             'components' => [['item_id' => $other, 'quantity' => 3, 'revision' => $catalog[$other]['revision']]]],
     ], 'checkout_rules_version' => $offers['checkout_rules_version'],
         'discounts' => [['rule_id' => 'fixed', 'scope' => 'item', 'item_id' => $firstId, 'quantity' => 1]]];
-    $received = []; $wrong = true;
+    $received = [];
+    $wrong = true;
     Http::fake(['https://mix-test-*.myshopify.com/*' => function ($request) use (&$received, &$wrong, $parentVariant) {
         $received = $request['variables']['input'];
         $money = fn ($amount) => ['shopMoney' => ['amount' => $amount, 'currencyCode' => 'USD']];
+
         return Http::response(['data' => ['draftOrderCalculate' => ['userErrors' => [], 'calculatedDraftOrder' => [
             'taxesIncluded' => false, 'totalPriceSet' => $money('52.43'), 'totalTaxSet' => $money('3.43'),
             'lineItems' => [

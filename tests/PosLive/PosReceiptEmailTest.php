@@ -110,7 +110,6 @@ function emailPosConfirm($test, array $rules = [], array $programOverrides = [])
     return $sale;
 }
 
-
 function emailPosContact($test, object $sale, string $email): void
 {
     DB::table('commerce_stock_receipt_associations')->insert([

@@ -25,7 +25,9 @@ final class PosCommerceRules
                 break;
             }
         }
-        if (! $found) { $rules[] = $rule; }
+        if (! $found) {
+            $rules[] = $rule;
+        }
 
         return $this->validate($rules);
     }
@@ -88,9 +90,13 @@ final class PosCommerceRules
 
     private function normalize(array $value): array
     {
-        if (! array_is_list($value)) { ksort($value, SORT_STRING); }
+        if (! array_is_list($value)) {
+            ksort($value, SORT_STRING);
+        }
         foreach ($value as $key => $child) {
-            if (is_array($child)) { $value[$key] = $this->normalize($child); }
+            if (is_array($child)) {
+                $value[$key] = $this->normalize($child);
+            }
         }
 
         return $value;

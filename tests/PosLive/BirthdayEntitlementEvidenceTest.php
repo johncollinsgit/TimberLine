@@ -14,7 +14,8 @@ use Illuminate\Support\Str;
 uses(Tests\Support\PosLiveTestCase::class);
 
 it('keeps birthday evidence default-off and never treats an online issuance as POS redeemable', function (): void {
-    Http::preventStrayRequests(); Http::fake();
+    Http::preventStrayRequests();
+    Http::fake();
     $reader = app(PosBirthdayEntitlementEvidence::class);
     expect($reader->inspect(0, 0, 0))->toBe(['state' => 'disabled', 'redeemable' => false]);
     config(['pos_live.birthday_pos_evidence_enabled' => true]);

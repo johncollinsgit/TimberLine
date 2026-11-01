@@ -11,10 +11,12 @@ it('validates independently configurable discount and candle add-on rules', func
     $service = new PosCommerceRules;
     expect($service->validate($rules)['rules'])->toEqual($rules)
         ->and($service->validate($rules)['version'])->toBe($service->validate($rules)['version']);
-    $changed = $rules; $changed[0]['value'] = 1500;
+    $changed = $rules;
+    $changed[0]['value'] = 1500;
     expect($service->validate($changed)['version'])->not->toBe($service->validate($rules)['version']);
     expect(fn () => $service->validate([$rules[0], $rules[0]]))->toThrow(PosException::class);
-    $changed = $rules; $changed[1]['eligible_item_ids'] = ['not-an-item'];
+    $changed = $rules;
+    $changed[1]['eligible_item_ids'] = ['not-an-item'];
     expect(fn () => $service->validate($changed))->toThrow(PosException::class);
 });
 

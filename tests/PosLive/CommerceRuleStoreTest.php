@@ -43,7 +43,9 @@ it('allows only assigned tenant administrators to edit rule sets through the mob
     $tenant = Tenant::create(['name' => 'Fixture', 'slug' => 'rules-api-'.Str::lower(Str::random(8)), 'status' => 'active']);
     $admin = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
     $admin->tenants()->attach($tenant, ['role' => 'admin', 'membership_active' => true]);
-    $store = app(PosStore::class); $register = str_repeat('a', 32); $connection = str_repeat('b', 32);
+    $store = app(PosStore::class);
+    $register = str_repeat('a', 32);
+    $connection = str_repeat('b', 32);
     $store->rows('connections', $tenant->id)->insert($store->values($tenant->id, ['id' => $connection,
         'merchant_id' => 'fictional', 'provider_location_id' => 'fictional', 'environment' => 'sandbox',
         'credentials' => $store->encrypt([]), 'active' => true]));
@@ -97,14 +99,17 @@ it('keeps mysql json rule versions and reviewed snapshots stable across round tr
     $tenant = Tenant::create(['name' => 'MySQL rules', 'slug' => 'rules-mysql-'.Str::lower(Str::random(8)), 'status' => 'active']);
     $actor = User::factory()->create();
     $scope = ['tenant_id' => (int) $tenant->id, 'actor_id' => (int) $actor->id, 'admin' => true];
-    $pos = app(PosStore::class); $register = str_repeat('c', 32); $connection = str_repeat('d', 32);
+    $pos = app(PosStore::class);
+    $register = str_repeat('c', 32);
+    $connection = str_repeat('d', 32);
     $pos->rows('connections', $tenant->id)->insert($pos->values($tenant->id, ['id' => $connection,
         'merchant_id' => 'fictional', 'provider_location_id' => 'fictional', 'environment' => 'sandbox',
         'credentials' => $pos->encrypt([]), 'active' => true]));
     $pos->rows('registers', $tenant->id)->insert($pos->values($tenant->id, ['id' => $register, 'name' => 'Fixture',
         'location_id' => 'fixture', 'location_name' => 'Fixture', 'connection_id' => $connection,
         'catalog_source' => 'native', 'configuration' => $pos->encrypt(['unrelated' => 'retained']), 'active' => true]));
-    $store = app(PosCommerceRuleStore::class); $initial = $store->get($scope);
+    $store = app(PosCommerceRuleStore::class);
+    $initial = $store->get($scope);
     $rule = ['name' => 'Teacher', 'value' => 1000, 'active' => true, 'channels' => ['in_person'],
         'id' => 'teacher', 'scopes' => ['item', 'sale'], 'kind' => 'percent'];
     $saved = $store->save($scope, $rule, $initial['version']);
