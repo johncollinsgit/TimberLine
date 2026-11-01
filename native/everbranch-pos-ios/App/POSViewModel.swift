@@ -7,6 +7,11 @@ struct POSCustomerList: Decodable { let customers: [POSCustomer]; let hasMore: B
 struct POSCustomerResponse: Decodable { let customer: POSCustomer }
 struct PendingCustomerCreation: Codable { let workspace: String; let register: String; let requestID: String }
 struct RefundResponse: Decodable { let refundId: String; let state: String; let sale: Sale }
+struct ReceiptEmailStatus: Decodable {
+    let state: String
+    let eventState: String?
+    let enabled: Bool
+}
 private struct SavedRegister: Codable { let workspace: String; let register: String }
 struct SavedPaymentReview: Codable, Identifiable {
     var id: String { pending.requestID }
@@ -16,7 +21,7 @@ struct SavedPaymentReview: Codable, Identifiable {
     var confirmed: Bool? = nil
 }
 struct POSReceipt: Decodable {
-    struct Line: Decodable { let title: String; let quantity: Int; let subtotalMinor: Int?; let taxMinor: Int?; let components: [SaleComponent]? }
+    struct Line: Decodable { let itemId: String?; let lineId: String?; let title: String; let quantity: Int; let subtotalMinor: Int?; let taxMinor: Int?; let components: [SaleComponent]? }
     struct PaymentDetails: Decodable {
         let cardholderName: String?; let cardBrand: String?; let lastFour: String?; let entryMethod: String?
         let applicationIdentifier: String?; let applicationName: String?
@@ -51,6 +56,13 @@ struct POSReceipt: Decodable {
     }
 }
 
+struct BundleBasketLine: Identifiable {
+    let id: String
+    let itemID: String
+    let quantity: Int
+    let components: [String: Int]
+}
+
 @MainActor final class POSViewModel: ObservableObject {
     let api = POSAPI()
     let signIn = POSSignIn()
@@ -61,7 +73,36 @@ struct POSReceipt: Decodable {
     @Published var printingQuotes: [PrintingQuote] = []
     @Published var items: [CatalogItem] = []
     @Published var quantities: [String: Int] = [:]
+    @Published var checkoutRules: [CheckoutOfferRule] = []
+    @Published var checkoutRulesVersion: String?
+    @Published var checkoutDiscounts: [CheckoutDiscountSelection] = []
+    @Published var checkoutAddons: [CheckoutAddonSelection] = []
+    private var offerDraftQuoteID: String?
     @Published var bundleComponents: [String: [String: Int]] = [:]
+    @Published var bundleLines: [BundleBasketLine] = []
+    @Published var editingBasket = false
+
+    func addBundle(_ item: CatalogItem, quantity: Int, components: [String: Int]) {
+        guard pending == nil, quantity > 0 else { return }
+        let id = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        bundleLines.append(BundleBasketLine(id: id, itemID: item.id, quantity: quantity, components: components))
+        quantities[item.id, default: 0] += quantity
+    }
+
+    func removeBundle(_ id: String) {
+        guard pending == nil, let line = bundleLines.first(where: { $0.id == id }) else { return }
+        bundleLines.removeAll { $0.id == id }
+        quantities[line.itemID] = max(0, (quantities[line.itemID] ?? 0) - line.quantity)
+        checkoutDiscounts.removeAll { $0.itemId == id }
+    }
+
+    func updateBundle(_ id: String, quantity: Int, components: [String: Int]) {
+        guard pending == nil, quantity > 0, let index = bundleLines.firstIndex(where: { $0.id == id }) else { return }
+        let previous = bundleLines[index]
+        bundleLines[index] = BundleBasketLine(id: id, itemID: previous.itemID, quantity: quantity, components: components)
+        quantities[previous.itemID] = max(0, (quantities[previous.itemID] ?? 0) - previous.quantity + quantity)
+        checkoutDiscounts.removeAll { $0.itemId == id && ($0.quantity ?? quantity) > quantity }
+    }
     @Published var selectedWorkspace: Workspace?
     @Published var selectedRegister: Register?
     @Published var registerLoaded = false
@@ -84,6 +125,8 @@ struct POSReceipt: Decodable {
     @Published var receiptContactPhone = ""
     @Published var receiptContactEmail = ""
     @Published var receiptUpdateGeneration = 0
+    @Published var receiptEmailStatus: ReceiptEmailStatus?
+    @Published var receiptEmailError: String?
     @Published var stockCountGeneration = 0
     @Published var rewardMemberAtPurchase = false
     @Published var rewardPriorOrders = ""
@@ -97,6 +140,10 @@ struct POSReceipt: Decodable {
     @Published var customerQuery = ""
     @Published var customers: [POSCustomer] = []
     @Published var selectedCustomer: POSCustomer?
+    @Published var customerCommerce: POSCustomerCommerce?
+    @Published var customerCommerceLoading = false
+    @Published var customerCommerceError: String?
+    private var customerCommerceTask: Task<Void, Never>?
     @Published var customerFirstName = ""
     @Published var customerLastName = ""
     @Published var customerPhone = ""
@@ -125,7 +172,7 @@ struct POSReceipt: Decodable {
                 try? SecureStore.write("session", nil)
                 api.token = nil; signedIn = false; tapReady = false; registerLoaded = false
                 selectedWorkspace = nil; selectedRegister = nil; selectedCustomer = nil; customers = []
-                workspaces = []; registers = []; items = []; printingQuotes = []; quantities = [:]; bundleComponents = [:]; sale = nil; receipt = nil
+                workspaces = []; registers = []; items = []; printingQuotes = []; quantities = [:]; bundleComponents = [:]; bundleLines = []; sale = nil; receipt = nil
                 customerQuery = ""; customerFirstName = ""; customerLastName = ""; customerEmail = ""; customerPhone = ""; customerName = ""
                 invoiceID = ""; refundAmount = ""; initialBasket = []; basketIssue = nil
                 clearReceiptInputs()
@@ -161,7 +208,7 @@ struct POSReceipt: Decodable {
         let saved = SecureStore.read("selected-register").flatMap { try? JSONDecoder().decode(SavedRegister.self, from: $0) }
         let slug = pending?.workspace ?? selectedWorkspace?.slug ?? saved?.workspace
         guard let workspace = workspaces.first(where: { $0.slug == slug }) else {
-            selectedWorkspace = nil; selectedRegister = nil; registerLoaded = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; bundleComponents = [:]; tapReady = false
+            selectedWorkspace = nil; selectedRegister = nil; registerLoaded = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; bundleComponents = [:]; bundleLines = []; tapReady = false
             return
         }
         selectedWorkspace = workspace
@@ -169,30 +216,33 @@ struct POSReceipt: Decodable {
         registers = result.registers
         let registerID = pending?.register ?? selectedRegister?.id ?? saved?.register
         guard let register = registers.first(where: { $0.id == registerID }) else {
-            selectedRegister = nil; registerLoaded = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; bundleComponents = [:]; tapReady = false
+            selectedRegister = nil; registerLoaded = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; bundleComponents = [:]; bundleLines = []; tapReady = false
             return
         }
         try await loadRegister(register)
     }
     func begin(basket: [RegisterBasketLine]) {
         guard pending == nil, !busy else { return }
-        initialBasket = basket; quantities = [:]; bundleComponents = [:]; basketIssue = nil; message = nil
+        initialBasket = basket; quantities = [:]; bundleComponents = [:]; bundleLines = []; basketIssue = nil; message = nil; clearOfferDraft()
         selectedCustomer = nil; customers = []; customerQuery = ""; invoiceID = ""
     }
     private func loadRegister(_ register: Register) async throws {
         if selectedRegister?.id != register.id {
-            registerLoaded = false; tapReady = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; bundleComponents = [:]; invoiceID = ""
+            registerLoaded = false; tapReady = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; bundleComponents = [:]; bundleLines = []; invoiceID = ""
         }
         selectedRegister = register
         guard let base else { return }
         let value: CatalogList = try await api.request(base + "/catalog")
         items = value.items
+        // Checkout remains available if offers are unavailable or have not been reviewed.
+        let offers: CheckoutOfferRuleList? = try? await api.request(base + "/checkout-rules/available")
+        checkoutRulesVersion = offers?.version; checkoutRules = offers?.rules ?? []
         registerLoaded = true
         if !initialBasket.isEmpty {
             guard register.catalogSource == "shopify", initialBasket.allSatisfy({ line in
                 value.items.contains(where: { $0.id == line.variantID && line.quantity <= ($0.availableQuantity ?? 99) })
             }) else {
-                quantities = [:]; bundleComponents = [:]
+                quantities = [:]; bundleComponents = [:]; bundleLines = []
                 basketIssue = "Your basket includes products that this register cannot sell. Return to products or choose from the available items below."
                 return
             }
@@ -206,11 +256,11 @@ struct POSReceipt: Decodable {
         let blockers = register.setupBlockers ?? register.blockers
         if !tapReady && pending?.collectionRequested != true && !blockers.contains(where: { $0 != "merchant_evidence_stale" }) { await initializeTapToPay() }
     }
-    func chooseAvailableProducts() { initialBasket = []; basketIssue = nil; quantities = [:]; bundleComponents = [:] }
+    func chooseAvailableProducts() { initialBasket = []; basketIssue = nil; quantities = [:]; bundleComponents = [:]; bundleLines = [] }
     func choose(_ workspace: Workspace) {
         guard pending == nil else { return }
         perform {
-            self.selectedWorkspace = workspace; self.selectedRegister = nil; self.registerLoaded = false; self.tapReady = false; self.selectedCustomer = nil; self.customers = []; self.items = []; self.quantities = [:]; self.bundleComponents = [:]; self.invoiceID = ""
+            self.selectedWorkspace = workspace; self.selectedRegister = nil; self.registerLoaded = false; self.tapReady = false; self.selectedCustomer = nil; self.customers = []; self.items = []; self.quantities = [:]; self.bundleComponents = [:]; self.bundleLines = []; self.invoiceID = ""
             let result: RegisterList = try await self.api.request("api/mobile/v1/workspaces/\(workspace.slug)/pos/registers")
             self.registers = result.registers
         }
@@ -218,7 +268,7 @@ struct POSReceipt: Decodable {
     func chooseRegister(_ register: Register) {
         guard pending == nil else { return }
         perform {
-            self.quantities = [:]; self.bundleComponents = [:]
+            self.quantities = [:]; self.bundleComponents = [:]; self.bundleLines = []
             try await self.loadRegister(register)
             self.selectedCustomer = nil; self.customers = []
             if let workspace = self.selectedWorkspace {
@@ -248,6 +298,30 @@ struct POSReceipt: Decodable {
             let result: POSCustomerList = try await self.api.request(base + "/customers", query: ["query": self.customerQuery])
             self.customers = result.customers
             if result.customers.isEmpty { self.message = "No matching customer. You can create a new record below." }
+        }
+    }
+    func refreshCustomerCommerce() {
+        customerCommerceTask?.cancel()
+        customerCommerce = nil; customerCommerceError = nil; customerCommerceLoading = false
+        guard let base, let customer = selectedCustomer else { return }
+        let customerID = customer.id
+        customerCommerceLoading = true
+        customerCommerceTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let response: POSCustomerCommerceResponse = try await self.api.request(base + "/customers/\(customerID)/commerce")
+                guard !Task.isCancelled, self.base == base, self.selectedCustomer?.id == customerID else { return }
+                guard response.customer.id == customerID, response.commerce.customerId == customerID else {
+                    self.customerCommerceError = "Customer history needs review."
+                    self.customerCommerceLoading = false; return
+                }
+                self.customerCommerce = response.commerce
+                self.customerCommerceLoading = false
+            } catch {
+                guard !Task.isCancelled, self.base == base, self.selectedCustomer?.id == customerID else { return }
+                self.customerCommerceError = "Could not load customer history. You can try again."
+                self.customerCommerceLoading = false
+            }
         }
     }
     func createCustomer() {
@@ -283,32 +357,106 @@ struct POSReceipt: Decodable {
     func quote() {
         guard pending == nil, basketIssue == nil, let workspace = selectedWorkspace, let register = selectedRegister, let base,
               register.guestCheckout == true || selectedCustomer != nil else { return }
-        perform {
-            self.pending = PendingSale(workspace: workspace.slug, register: register.id)
-            try self.savePending() // Persist the request BEFORE sending it.
-            var body: [String: Any] = ["request_id": self.pending!.requestID]
-            if let id = Int(self.invoiceID), !self.invoiceID.isEmpty { body["source_order_id"] = id }
-            else {
-                body["items"] = self.items.compactMap { item -> [String: Any]? in
-                    let quantity = self.quantities[item.id] ?? 0
-                    guard quantity > 0 else { return nil }
-                    var line: [String: Any] = ["item_id": item.id, "quantity": quantity, "revision": item.revision]
-                    if item.kind == "bundle" {
-                        line["components"] = (item.bundleItems ?? []).compactMap { part -> [String: Any]? in
-                            let units = self.bundleComponents[item.id]?[part.id] ?? 0
-                            return units > 0 ? ["item_id": part.id, "quantity": units, "revision": part.revision] : nil
-                        }
-                    }
-                    return line
-                }
-            }
-            if let customer = self.selectedCustomer { body["customer_profile_id"] = customer.id }
-            if self.customAmountMinor > 0 { body["custom_charge"] = ["description": self.customDescription, "amount_minor": self.customAmountMinor] }
-            if (body["items"] as? [[String: Any]])?.isEmpty == true { body.removeValue(forKey: "items") }
-            let result: Sale = try await self.api.request(base + "/quotes", method: "POST", body: body)
-            self.sale = result; self.pending?.saleID = result.saleId; try self.savePending()
-            self.pollAvailabilityIfNeeded()
+        perform { try await self.createQuote(workspace: workspace.slug, register: register.id, base: base); self.editingBasket = false }
+    }
+    private func createQuote(workspace: String, register: String, base: String) async throws {
+        guard pending == nil else { throw POSError.recoveryRequired }
+        if (!checkoutDiscounts.isEmpty || !checkoutAddons.isEmpty) && checkoutRulesVersion == nil {
+            throw POSError.unavailable("Discounts need a fresh rule list. Please reload the register.")
         }
+        guard bundleLines.allSatisfy({ line in items.contains(where: { $0.id == line.itemID && $0.kind == "bundle" }) }) else {
+            throw POSError.unavailable("A bundle is no longer available. Please check your basket.")
+        }
+        pending = PendingSale(workspace: workspace, register: register)
+        try savePending() // Persist the request BEFORE sending it.
+        var body: [String: Any] = ["request_id": pending!.requestID]
+        if let id = Int(invoiceID), !invoiceID.isEmpty { body["source_order_id"] = id }
+        else {
+            var itemLines = items.compactMap { item -> [String: Any]? in
+                let quantity = quantities[item.id] ?? 0
+                guard quantity > 0 else { return nil }
+                if item.kind == "bundle" && self.bundleLines.contains(where: { $0.itemID == item.id }) { return nil }
+                var line: [String: Any] = ["item_id": item.id, "quantity": quantity, "revision": item.revision]
+                if item.kind == "bundle" {
+                    line["components"] = (item.bundleItems ?? []).compactMap { part -> [String: Any]? in
+                        let units = bundleComponents[item.id]?[part.id] ?? 0
+                        return units > 0 ? ["item_id": part.id, "quantity": units, "revision": part.revision] : nil
+                    }
+                }
+                return line
+            }
+            for bundle in bundleLines {
+                guard let item = items.first(where: { $0.id == bundle.itemID && $0.kind == "bundle" }) else { throw POSError.unavailable("A bundle is no longer available. Please check your basket.") }
+                let components: [[String: Any]] = (item.bundleItems ?? []).compactMap { part in
+                    let units = bundle.components[part.id] ?? 0
+                    return units > 0 ? ["item_id": part.id, "quantity": units, "revision": part.revision] : nil
+                }
+                itemLines.append(["item_id": item.id, "line_id": bundle.id, "quantity": bundle.quantity, "revision": item.revision, "components": components])
+            }
+            body["items"] = itemLines
+        }
+        if let customer = selectedCustomer { body["customer_profile_id"] = customer.id }
+        if customAmountMinor > 0 { body["custom_charge"] = ["description": customDescription, "amount_minor": customAmountMinor] }
+        if (body["items"] as? [[String: Any]])?.isEmpty == true { body.removeValue(forKey: "items") }
+        if !checkoutDiscounts.isEmpty || !checkoutAddons.isEmpty {
+            guard let version = checkoutRulesVersion else { throw POSError.unavailable("Discounts need a fresh rule list. Please reload the register.") }
+            body["checkout_rules_version"] = version
+            body["discounts"] = checkoutDiscounts.map(\.request)
+            body["addons"] = checkoutAddons.map(\.request)
+        }
+        let result: Sale = try await api.request(base + "/quotes", method: "POST", body: body)
+        sale = result; pending?.saleID = result.saleId; try savePending()
+        offerDraftQuoteID = result.saleId
+        pollAvailabilityIfNeeded()
+    }
+    var canChangeOffers: Bool {
+        guard !busy, checkoutRulesVersion != nil, invoiceID.isEmpty else { return false }
+        guard let pending else { return true }
+        return !pending.collectionRequested && !pending.sdkStarted && sale?.state == "quoted" && sale?.saleId == offerDraftQuoteID
+    }
+    var canEditBasket: Bool {
+        guard !busy, let pending else { return false }
+        return !pending.collectionRequested && !pending.sdkStarted && sale?.state == "quoted" && sale?.saleId == offerDraftQuoteID
+    }
+    func editBasket() {
+        guard canEditBasket, let base, let pending else { return }
+        perform {
+            struct DiscardResult: Decodable { let discarded: Bool }
+            let result: DiscardResult = try await self.api.request(base + "/requests/" + pending.requestID + "/discard", method: "POST", body: [:])
+            guard result.discarded else { throw POSError.recoveryRequired }
+            self.availabilityPoll?.cancel()
+            self.pending = nil
+            do { try self.savePending() } catch { self.pending = pending; throw error }
+            self.sale = nil; self.receipt = nil; self.offerDraftQuoteID = nil; self.editingBasket = true
+        }
+    }
+    func changeOffer(_ change: CheckoutOfferChange) {
+        guard canChangeOffers, let workspace = selectedWorkspace, let register = selectedRegister, let base else { return }
+        perform {
+            if let pending = self.pending {
+                guard !pending.collectionRequested, !pending.sdkStarted, self.sale?.state == "quoted", self.sale?.saleId == self.offerDraftQuoteID else { throw POSError.recoveryRequired }
+                struct DiscardResult: Decodable { let discarded: Bool }
+                let result: DiscardResult = try await self.api.request(base + "/requests/" + pending.requestID + "/discard", method: "POST", body: [:])
+                guard result.discarded else { throw POSError.recoveryRequired }
+                // The original is known to be unstarted and discarded; keep the basket in memory.
+                self.availabilityPoll?.cancel()
+                self.pending = nil
+                do { try self.savePending() } catch { self.pending = pending; throw error }
+                self.sale = nil; self.offerDraftQuoteID = nil
+            }
+            switch change {
+            case .addDiscount(let value): self.checkoutDiscounts.append(value)
+            case .removeDiscount(let id): self.checkoutDiscounts.removeAll { $0.id == id }
+            case .addAddon(let value):
+                self.quantities[value.itemId, default: 0] += value.quantity
+                self.checkoutAddons.append(value)
+            case .removeAddon(let id): self.checkoutAddons.removeAll { $0.id == id }
+            }
+            try await self.createQuote(workspace: workspace.slug, register: register.id, base: base)
+        }
+    }
+    private func clearOfferDraft() {
+        checkoutDiscounts = []; checkoutAddons = []; offerDraftQuoteID = nil; editingBasket = false
     }
     private var availabilityPoll: Task<Void, Never>?
     private func pollAvailabilityIfNeeded() {
@@ -361,7 +509,10 @@ struct POSReceipt: Decodable {
         } else { result = try await api.request(base + "/requests/\(pending.requestID)") }
         if result.state == "quoted" && !result.recoveryRequired { self.pending?.collectionRequested = false }
         sale = result; self.pending?.saleID = result.saleId; try savePending()
-        if result.receiptAvailable { receipt = try await api.request(base + "/sales/\(result.saleId)/receipt") }
+        if result.receiptAvailable {
+            receipt = try await api.request(base + "/sales/\(result.saleId)/receipt")
+            await refreshReceiptEmailStatus(base: base, saleID: result.saleId)
+        }
     }
     func refund() {
         guard let base, let id = sale?.saleId, receipt != nil else { return }
@@ -393,9 +544,10 @@ struct POSReceipt: Decodable {
             guard result.discarded else { throw POSError.recoveryRequired }
             self.pending = nil; try self.savePending(); self.sale = nil; self.receipt = nil
             self.selectedCustomer = nil; self.customers = []; self.customerQuery = ""; self.customerName = ""; self.customerEmail = ""
-            self.quantities = [:]; self.bundleComponents = [:]; self.initialBasket = []; self.basketIssue = nil; self.invoiceID = ""
+            self.quantities = [:]; self.bundleComponents = [:]; self.bundleLines = []; self.initialBasket = []; self.basketIssue = nil; self.invoiceID = ""
             self.customAmountMinor = 0; self.customDescription = "Custom amount"
             self.associationRequestID = nil; self.associationCustomerID = nil; self.clearReceiptInputs()
+            self.clearOfferDraft()
             self.completedSaleGeneration += 1
             if let register = self.selectedRegister { try await self.loadRegister(register) }
         }
@@ -419,7 +571,8 @@ struct POSReceipt: Decodable {
             self.pending = nil
             do { try self.savePending() } catch { self.pending = originalPending; throw error }
             self.sale = nil; self.receipt = nil
-            self.selectedCustomer = nil; self.customers = []; self.customerQuery = ""; self.customerName = ""; self.customerEmail = ""; self.invoiceID = ""; self.quantities = [:]; self.bundleComponents = [:]
+            self.selectedCustomer = nil; self.customers = []; self.customerQuery = ""; self.customerName = ""; self.customerEmail = ""; self.invoiceID = ""; self.quantities = [:]; self.bundleComponents = [:]; self.bundleLines = []
+            self.clearOfferDraft()
             self.completedSaleGeneration += 1
             self.customAmountMinor = 0; self.customDescription = "Custom amount"
             self.associationRequestID = nil; self.associationCustomerID = nil
@@ -453,7 +606,8 @@ struct POSReceipt: Decodable {
                 try self.savePaymentReviews()
             }
             self.pending = nil; try self.savePending(); self.sale = nil; self.receipt = nil
-            self.selectedCustomer = nil; self.customers = []; self.quantities = [:]; self.bundleComponents = [:]; self.customAmountMinor = 0; self.invoiceID = ""
+            self.selectedCustomer = nil; self.customers = []; self.quantities = [:]; self.bundleComponents = [:]; self.bundleLines = []; self.customAmountMinor = 0; self.invoiceID = ""
+            self.clearOfferDraft()
             self.completedSaleGeneration += 1
             self.message = "Original payment saved for review. Start a different sale; do not recharge the original customer."
         }
@@ -486,7 +640,63 @@ struct POSReceipt: Decodable {
             for (key, value) in ["name": self.receiptContactName, "phone": self.receiptContactPhone, "email": self.receiptContactEmail] where !value.isEmpty { body[key] = value }
             struct Result: Decodable { let receipt: POSReceipt }
             let result: Result = try await self.api.request(base + "/sales/\(sale.saleId)/receipt/customer", method: "POST", body: body)
-            self.receipt = result.receipt; self.receiptContactRequestID = nil; self.receiptUpdateGeneration += 1
+            self.receipt = result.receipt; self.receiptContactRequestID = nil
+            // Only an email explicitly entered in this contact form requests delivery.
+            let suppliedEmail = self.receiptContactEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !suppliedEmail.isEmpty, result.receipt.contact?.email?.caseInsensitiveCompare(suppliedEmail) == .orderedSame {
+                await self.refreshReceiptEmailStatus(base: base, saleID: sale.saleId)
+                if self.receiptEmailStatus?.enabled == true && self.receiptEmailStatus?.state == "not_requested" {
+                    await self.queueReceiptEmail(base: base, saleID: sale.saleId)
+                }
+            } else {
+                await self.refreshReceiptEmailStatus(base: base, saleID: sale.saleId)
+            }
+            self.receiptUpdateGeneration += 1
+        }
+    }
+    private func refreshReceiptEmailStatus(base: String, saleID: String) async {
+        guard receipt?.contact?.email?.isEmpty == false else { receiptEmailStatus = nil; receiptEmailError = nil; return }
+        do {
+            let status: ReceiptEmailStatus = try await api.request(base + "/sales/\(saleID)/receipt/email")
+            receiptEmailStatus = status; receiptEmailError = nil
+        } catch {
+            receiptEmailStatus = nil
+            receiptEmailError = "Could not check the receipt email. Check its status before trying again."
+        }
+    }
+    private func queueReceiptEmail(base: String, saleID: String) async {
+        do {
+            let status: ReceiptEmailStatus = try await api.request(base + "/sales/\(saleID)/receipt/email", method: "POST", body: [:])
+            receiptEmailStatus = status; receiptEmailError = nil
+        } catch {
+            // The saved receipt and payment remain complete even if the email request is uncertain.
+            receiptEmailStatus = nil
+            receiptEmailError = "Receipt email request not confirmed. Check its status before trying again."
+        }
+    }
+    func checkReceiptEmail() {
+        guard let base, let sale, sale.canonicalConfirmation, receipt?.contact?.email?.isEmpty == false else { return }
+        perform { await self.refreshReceiptEmailStatus(base: base, saleID: sale.saleId) }
+    }
+    func sendReceiptEmail() {
+        guard let base, let sale, sale.canonicalConfirmation, receiptEmailStatus?.enabled == true,
+              receiptEmailStatus?.state == "not_requested", receipt?.contact?.email?.isEmpty == false else { return }
+        perform { await self.queueReceiptEmail(base: base, saleID: sale.saleId) }
+    }
+    var receiptEmailSummary: String? {
+        if let receiptEmailError { return receiptEmailError }
+        guard let status = receiptEmailStatus else { return nil }
+        if status.eventState == "delivered" { return "Receipt email delivered." }
+        if ["hard_bounce", "complaint"].contains(status.eventState ?? "") { return "Receipt email could not be delivered. Check the address." }
+        switch status.state {
+        case "contact_required": return nil
+        case "not_requested": return status.enabled ? "Receipt email not sent yet." : "Receipt email is not available for this register yet."
+        case "queued": return "Receipt email queued. Delivery is not yet confirmed."
+        case "submitting": return "Receipt email is being sent."
+        case "accepted": return "Email provider accepted the receipt. Delivery is not yet confirmed."
+        case "unknown": return "Receipt email status needs review. Check status before trying again."
+        case "held", "rejected": return "Receipt email could not be sent. Check the address or ask an administrator."
+        default: return "Receipt email status needs review."
         }
     }
     func refreshProducts() {
@@ -521,6 +731,7 @@ struct POSReceipt: Decodable {
     }
     private func clearReceiptInputs() {
         receiptContactName = ""; receiptContactPhone = ""; receiptContactEmail = ""; receiptContactRequestID = nil
+        receiptEmailStatus = nil; receiptEmailError = nil
         rewardMemberAtPurchase = false; rewardPriorOrders = ""; rewardReviewReason = ""; rewardReviewRequestID = nil
     }
     func logout() {
@@ -528,9 +739,9 @@ struct POSReceipt: Decodable {
             await self.collector.signOut(); try SecureStore.write("session", nil)
             try SecureStore.write("selected-register", nil)
             self.api.token = nil; self.signedIn = false; self.tapReady = false
-            self.selectedWorkspace = nil; self.selectedRegister = nil; self.registerLoaded = false; self.quantities = [:]; self.bundleComponents = [:]; self.initialBasket = []; self.basketIssue = nil
+            self.selectedWorkspace = nil; self.selectedRegister = nil; self.registerLoaded = false; self.quantities = [:]; self.bundleComponents = [:]; self.bundleLines = []; self.initialBasket = []; self.basketIssue = nil
             self.workspaces = []; self.registers = []; self.items = []; self.sale = nil; self.receipt = nil; self.selectedCustomer = nil; self.customers = []; self.customerQuery = ""; self.customerFirstName = ""; self.customerLastName = ""; self.customerEmail = ""; self.customerPhone = ""
-            self.clearReceiptInputs()
+            self.clearReceiptInputs(); self.clearOfferDraft(); self.checkoutRules = []; self.checkoutRulesVersion = nil
             // Pending recovery identifiers remain in Keychain; signing out never clears payment uncertainty.
         }
     }

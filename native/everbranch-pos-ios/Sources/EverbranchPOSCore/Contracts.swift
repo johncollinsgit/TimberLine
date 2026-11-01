@@ -36,6 +36,7 @@ public struct Register: Decodable, Identifiable, Sendable {
     public let guestCheckout: Bool?
     public let customAmountEnabled: Bool?
     public let canManageInventory: Bool?
+    public let canManageCheckoutRules: Bool?
 }
 public struct RegisterList: Decodable, Sendable {
     public let registers: [Register]
@@ -63,6 +64,8 @@ public struct CatalogList: Decodable, Sendable { public let items: [CatalogItem]
 public struct SaleCustomer: Decodable, Sendable { public let id: Int; public let name: String }
 public struct SaleComponent: Decodable, Sendable { public let title: String; public let quantity: Int }
 public struct SaleLine: Decodable, Sendable {
+    public let itemId: String?
+    public let lineId: String?
     public let title: String
     public let quantity: Int
     public let subtotalMinor: Int?
@@ -76,6 +79,9 @@ public struct Sale: Decodable, Sendable {
     public let state: String
     public let stockState: String
     public let amountMinor: Int
+    public let subtotalMinor: Int?
+    public let discountMinor: Int?
+    public let taxMinor: Int?
     public let currency: String
     public let receiptAvailable: Bool
     public let canonicalConfirmation: Bool

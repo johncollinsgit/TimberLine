@@ -60,6 +60,69 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.isEnabled)
     }
 
+    func testTwoBundleMixesRemainSeparateAndOneCanBeRemoved() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-untracked-bundle-ui-tests", "--pos-checkout-ui-tests", "--pos-bundle-basket-ui-tests"]; app.launch()
+        let search = app.textFields["Search products"]; XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap(); search.typeText("trio")
+        for component in ["a", "c"] {
+            app.buttons["Add Fictional trio to basket"].tap()
+            let add = app.buttons["Add bundle · $18.00"]; XCTAssertTrue(add.waitForExistence(timeout: 5))
+            let id = "bundle-quantity-" + String(repeating: component, count: 32)
+            let stepper = app.steppers[id]; XCTAssertTrue(stepper.exists)
+            for _ in 0..<3 { stepper.buttons[id + "-Increment"].tap() }
+            XCTAssertTrue(add.isEnabled); add.tap()
+        }
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Your basket"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["3 × Laurel & Fig · Wax Melt"].exists)
+        XCTAssertTrue(app.staticTexts["3 × River Birch · 8oz Candle"].exists)
+        XCTAssertEqual(app.buttons.matching(identifier: "Remove").count, 2)
+        app.buttons.matching(identifier: "Remove").firstMatch.tap()
+        XCTAssertFalse(app.staticTexts["3 × Laurel & Fig · Wax Melt"].exists)
+        XCTAssertTrue(app.staticTexts["3 × River Birch · 8oz Candle"].exists)
+    }
+
+    func testSavedTwoBundleQuoteReopensWithoutStartingAnotherPayment() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-untracked-bundle-ui-tests", "--pos-checkout-ui-tests", "--pos-bundle-basket-ui-tests"]; app.launch()
+        let search = app.textFields["Search products"]; XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap(); search.typeText("trio")
+        for component in ["a", "c"] {
+            app.buttons["Add Fictional trio to basket"].tap()
+            let add = app.buttons["Add bundle · $18.00"]; XCTAssertTrue(add.waitForExistence(timeout: 5))
+            let id = "bundle-quantity-" + String(repeating: component, count: 32)
+            let stepper = app.steppers[id]; XCTAssertTrue(stepper.exists)
+            for _ in 0..<3 { stepper.buttons[id + "-Increment"].tap() }
+            add.tap()
+        }
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.tap()
+        let review = app.buttons["Review total"]; XCTAssertTrue(review.waitForExistence(timeout: 5)); review.tap()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["3 × Laurel & Fig"].exists)
+        XCTAssertTrue(app.staticTexts["3 × River Birch"].exists)
+        app.buttons["Close"].tap()
+        let saved = app.buttons["Payment saved · Open status"]; XCTAssertTrue(saved.waitForExistence(timeout: 5)); saved.tap()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["3 × Laurel & Fig"].exists)
+        XCTAssertTrue(app.staticTexts["3 × River Birch"].exists)
+        XCTAssertFalse(app.staticTexts["Payment confirmed"].exists)
+        let editBasket = app.buttons["Edit basket"]; XCTAssertTrue(editBasket.exists); editBasket.tap()
+        XCTAssertTrue(app.staticTexts["Your basket"].waitForExistence(timeout: 5))
+        app.buttons.matching(identifier: "Edit").firstMatch.tap()
+        let first = "bundle-quantity-" + String(repeating: "a", count: 32)
+        let second = "bundle-quantity-" + String(repeating: "c", count: 32)
+        let firstStepper = app.steppers[first]; XCTAssertTrue(firstStepper.waitForExistence(timeout: 5))
+        firstStepper.buttons[first + "-Decrement"].tap()
+        app.steppers[second].buttons[second + "-Increment"].tap()
+        app.buttons["Save bundle · $18.00"].tap()
+        XCTAssertTrue(app.staticTexts["2 × Laurel & Fig · Wax Melt"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["3 × River Birch · 8oz Candle"].exists)
+        app.buttons["Review total"].tap()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["2 × Laurel & Fig"].exists)
+        XCTAssertTrue(app.staticTexts["3 × River Birch"].exists)
+        XCTAssertFalse(app.staticTexts["Payment confirmed"].exists)
+    }
+
     func testKeypadRespondsAcrossTheWholePillAndAddsTheTypedAmount() {
         let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests"]; app.launch()
         XCTAssertTrue(app.segmentedControls.buttons["Keypad"].waitForExistence(timeout: 10))
@@ -81,6 +144,7 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.buttons["Check payment status"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Leave for review"].exists)
         XCTAssertTrue(app.staticTexts["Payment not confirmed"].exists)
+        XCTAssertFalse(app.buttons["Edit basket"].exists)
         XCTAssertFalse(app.staticTexts["Checking payment status"].exists)
         app.buttons["Close"].tap()
         XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 5))

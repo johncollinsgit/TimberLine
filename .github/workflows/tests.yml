@@ -318,7 +318,8 @@ jobs:
       - name: Verify live POS merchant, stock, Shopify and refund boundaries
         env:
           POS_LIVE_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/PosLive tests/Integration/PosLiveMySqlRecoveryTest.php tests/Integration/PosLiveMySqlConcurrencyTest.php --compact
+          COMMERCE_RULES_DISPOSABLE_MYSQL: '1'
+        run: php ./vendor/bin/pest tests/PosLive tests/Integration/PosLiveMySqlRecoveryTest.php tests/Integration/PosLiveMySqlConcurrencyTest.php tests/Integration/CommerceRuleSetMySqlRecoveryTest.php tests/Integration/PosCandleCashMySqlRecoveryTest.php --compact
 
       - name: Verify finished goods inventory recovery and concurrency
         env:

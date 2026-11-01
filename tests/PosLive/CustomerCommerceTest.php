@@ -166,6 +166,37 @@ it('freezes canonical identity and rejects a replay selecting someone else', fun
     $this->postJson($this->base.'/quotes', $this->selection)->assertConflict();
 });
 
+it('shows an explicitly selected customer’s connected purchase summary and balance only within the assigned tenant', function (): void {
+    \Illuminate\Support\Facades\Route::get('/api/mobile/v1/workspaces/{tenant}/pos/registers/{register}/fixture-customer-commerce/{profile}',
+        fn (string $tenant, string $register, int $profile) => response()->json(app(\App\Services\Pos\PosCustomerDirectory::class)->commerce($register, $profile)))
+        ->middleware(['auth:sanctum', 'mobile.tenant', 'abilities:mobile:read,payments:read']);
+    $sale = customerPosConfirm($this, ['first_order_reward_amount' => 5.25]);
+    app(\App\Services\Pos\PosCustomerRewards::class)->apply($sale);
+    $order = \App\Models\Order::create(['tenant_id' => $this->tenant->id, 'source' => 'shopify',
+        'shopify_order_id' => '9001', 'shopify_store_key' => 'fixture_online', 'ordered_at' => now()->subDay(),
+        'total_price' => '25.00', 'currency_code' => 'USD', 'attribution_meta' => ['customer_commerce' => [
+            'financial_status' => 'paid', 'tenant_id' => $this->tenant->id, 'shopify_order_id' => '9001',
+            'store_key' => 'fixture_online', 'source_name' => 'web', 'total_price' => '25.00', 'currency' => 'USD',
+        ]]]);
+    \App\Models\MarketingProfileLink::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $this->profile->id,
+        'source_type' => 'order', 'source_id' => (string) $order->id]);
+    $transactions = \App\Models\CandleCashTransaction::count();
+    $links = \App\Models\MarketingProfileLink::count();
+    $url = $this->base.'/fixture-customer-commerce/'.$this->profile->id;
+    $view = $this->getJson($url)->assertOk()->json();
+    expect($view['customer']['id'])->toBe($this->profile->id)
+        ->and($view['commerce']['customer_id'])->toBe($this->profile->id)
+        ->and($view['commerce']['purchases'])->toHaveCount(2)
+        ->and(collect($view['commerce']['purchases'])->pluck('channel')->sort()->values()->all())->toBe(['in_person', 'online'])
+        ->and($view['commerce']['rewards']['balance'])->toBe('5.25')
+        ->and(\App\Models\CandleCashTransaction::count())->toBe($transactions)
+        ->and(\App\Models\MarketingProfileLink::count())->toBe($links);
+    $other = Tenant::create(['name' => 'Other', 'slug' => 'other-'.Str::lower(Str::random(8)), 'status' => 'active']);
+    $foreign = \App\Models\MarketingProfile::create(['tenant_id' => $other->id, 'first_name' => 'Other person']);
+    $this->getJson($this->base.'/fixture-customer-commerce/'.$foreign->id)->assertNotFound();
+    $this->withHeader('X-Pos-Device', 'wrong-device')->getJson($url)->assertNotFound();
+});
+
 it('posts decimal rewards once and reverses only the original sale earning', function (): void {
     $sale = customerPosConfirm($this, ['first_order_reward_amount' => 5.25]);
     $service = app(\App\Services\Pos\PosCustomerRewards::class);

@@ -23,6 +23,49 @@ final class PosController extends Controller
         return $this->respond($r, [], fn () => $this->pos->catalog($register));
     }
 
+    public function checkoutRules(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosCommerceRuleStore::class)->get($this->checkoutRuleScope($register, false)));
+    }
+
+    public function availableCheckoutRules(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosCheckoutOffers::class)->available(app(\App\Services\Pos\PosAccess::class)->register($register)));
+    }
+
+    public function reviewCheckoutRules(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosCommerceRuleStore::class)->reviewStatus($this->checkoutRuleScope($register, false), $register));
+    }
+
+    public function publishCheckoutRules(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['version' => ['required', 'regex:/^[a-f0-9]{64}$/D'],
+            'previous_reviewed_version' => ['present', 'nullable', 'regex:/^[a-f0-9]{64}$/D'], 'confirmed' => ['required', 'boolean']],
+            fn ($input) => app(\App\Services\Pos\PosCommerceRuleStore::class)->publish($this->checkoutRuleScope($register), $register,
+                $input['version'], $input['previous_reviewed_version'], $input['confirmed'] === true));
+    }
+
+    public function saveCheckoutRule(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['version' => ['required', 'regex:/^[a-f0-9]{64}$/D'], 'rule' => ['required', 'array']],
+            fn ($input) => app(\App\Services\Pos\PosCommerceRuleStore::class)->save($this->checkoutRuleScope($register), $input['rule'], $input['version']));
+    }
+
+    public function deleteCheckoutRule(Request $r, string $tenant, string $register, string $rule): JsonResponse
+    {
+        return $this->respond($r, ['version' => ['required', 'regex:/^[a-f0-9]{64}$/D']],
+            fn ($input) => app(\App\Services\Pos\PosCommerceRuleStore::class)->delete($this->checkoutRuleScope($register), $rule, $input['version']));
+    }
+
+    private function checkoutRuleScope(string $register, bool $write = true): array
+    {
+        $scope = app(\App\Services\Pos\PosAccess::class)->register($register, $write ? 'admin' : 'read');
+
+        return ['tenant_id' => (int) $scope['tenant_id'], 'actor_id' => (int) $scope['actor_id'],
+            'admin' => in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true)];
+    }
+
     public function countStock(Request $r, string $tenant, string $register): JsonResponse
     {
         return $this->respond($r, ['request_id' => ['required', 'uuid'], 'item_id' => ['required', 'regex:/^[a-f0-9]{32}$/D'],
@@ -48,6 +91,11 @@ final class PosController extends Controller
     {
         return $this->respond($r, ['query' => ['required', 'string', 'min:2', 'max:120', 'regex:/\A[^\p{C}]+\z/u']],
             fn ($input) => app(\App\Services\Pos\PosCustomerDirectory::class)->search($register, $input['query']));
+    }
+
+    public function customerCommerce(Request $r, string $tenant, string $register, string $profile): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosCustomerDirectory::class)->commerce($register, (int) $profile));
     }
 
     public function createCustomer(Request $r, string $tenant, string $register): JsonResponse
@@ -83,16 +131,25 @@ final class PosController extends Controller
     public function quote(Request $r, string $tenant, string $register): JsonResponse
     {
         return $this->respond($r, [
-            'request_id' => ['required', 'uuid'], 'source_order_id' => ['sometimes', 'integer', 'min:1', 'prohibits:items,custom_charge'],
+            'request_id' => ['required', 'uuid'], 'source_order_id' => ['sometimes', 'integer', 'min:1', 'prohibits:items,custom_charge,discounts,addons'],
             'items' => ['required_without_all:source_order_id,custom_charge', 'array', 'min:1', 'max:50'],
             'custom_charge' => ['sometimes', 'array:description,amount_minor'],
             'custom_charge.description' => ['required_with:custom_charge', 'string', 'min:1', 'max:150', 'regex:/\A[^\p{C}]+\z/u'],
             'custom_charge.amount_minor' => ['required_with:custom_charge', 'integer', 'min:1', 'max:100000000'],
-            'items.*' => ['array:item_id,quantity,revision,components'], 'items.*.item_id' => ['required', 'string', 'max:100', 'distinct'],
+            'items.*' => ['array:item_id,line_id,quantity,revision,components'], 'items.*.item_id' => ['required', 'string', 'max:100'],
+            'items.*.line_id' => ['sometimes', 'regex:/^[a-f0-9]{32}$/D', 'distinct'],
             'items.*.components' => ['sometimes', 'array', 'min:1', 'max:100'], 'items.*.components.*' => ['array:item_id,quantity,revision'],
             'items.*.components.*.item_id' => ['required', 'regex:/^[a-f0-9]{32}$/D'],
             'items.*.components.*.quantity' => ['required', 'integer', 'min:1', 'max:9900'], 'items.*.components.*.revision' => ['required', 'regex:/^[a-f0-9]{64}$/D'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:99'], 'items.*.revision' => ['required', 'regex:/^[a-f0-9]{64}$/D'],
+            'checkout_rules_version' => ['required_with:discounts,addons', 'regex:/^[a-f0-9]{64}$/D'],
+            'discounts' => ['sometimes', 'array', 'max:50'], 'discounts.*' => ['array:rule_id,scope,item_id,quantity'],
+            'discounts.*.rule_id' => ['required', 'regex:/^[a-z0-9][a-z0-9_-]{0,63}$/D'],
+            'discounts.*.scope' => ['required', 'in:item,sale'], 'discounts.*.item_id' => ['sometimes', 'regex:/^(?:[a-f0-9]{32}|custom)$/D'],
+            'discounts.*.quantity' => ['sometimes', 'integer', 'min:1', 'max:99'],
+            'addons' => ['sometimes', 'array', 'max:50'], 'addons.*' => ['array:rule_id,item_id,quantity'],
+            'addons.*.rule_id' => ['required', 'regex:/^[a-z0-9][a-z0-9_-]{0,63}$/D'],
+            'addons.*.item_id' => ['required', 'regex:/^[a-f0-9]{32}$/D'], 'addons.*.quantity' => ['required', 'integer', 'min:1', 'max:99'],
             'customer_profile_id' => ['sometimes', 'integer', 'min:1'],
             'customer' => ['sometimes', 'nullable', 'array:name,email'], 'customer.name' => ['sometimes', 'string', 'max:150'],
             'customer.email' => ['sometimes', 'email:rfc', 'max:254'],
@@ -141,6 +198,16 @@ final class PosController extends Controller
     public function receipt(Request $r, string $tenant, string $register, string $sale): JsonResponse
     {
         return $this->respond($r, [], fn () => $this->pos->receipt($register, $sale));
+    }
+
+    public function receiptEmailStatus(Request $r, string $tenant, string $register, string $sale): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosReceiptEmail::class)->status($register, $sale));
+    }
+
+    public function sendReceiptEmail(Request $r, string $tenant, string $register, string $sale): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosReceiptEmail::class)->queue($register, $sale));
     }
 
     public function reconcile(Request $r, string $tenant, string $register, string $sale): JsonResponse

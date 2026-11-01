@@ -55,6 +55,16 @@ final class PosCustomerDirectory
             ->map(fn ($p) => $this->summary($p))->values()->all(), 'has_more' => $found->count() > 20];
     }
 
+    /** Explicitly selected customer only; this reads existing source records and never links identities. */
+    public function commerce(string $register, int $profileId): array
+    {
+        $scope = $this->access->register($register, 'catalog');
+        $profile = $this->profile($scope['tenant_id'], $profileId);
+
+        return ['customer' => $this->summary($profile),
+            'commerce' => app(\App\Services\Marketing\CustomerCommerceSnapshotService::class)->forProfile($profile, $scope['tenant_id'])];
+    }
+
     public function create(string $register, array $input): array
     {
         $scope = $this->access->register($register, 'quote');

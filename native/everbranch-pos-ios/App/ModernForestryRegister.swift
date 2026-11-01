@@ -259,14 +259,20 @@ extension POSViewModel {
 #endif
 
 
-private struct BundleOptions: View {
+struct BundleOptions: View {
     let item: CatalogItem
     @ObservedObject var model: POSViewModel
+    var existing: BundleBasketLine? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var choices: [String: Int] = [:]
     @State private var bundles = 1
     private var required: Int { (item.bundleQuantity ?? 0) * bundles }
     private var selected: Int { choices.values.reduce(0, +) }
+    private func available(_ part: CatalogItem) -> Int {
+        guard let stock = part.availableQuantity else { return required }
+        let alreadyBundled = model.bundleLines.filter { $0.id != existing?.id }.reduce(0) { $0 + ($1.components[part.id] ?? 0) }
+        return max(0, stock - alreadyBundled - (model.quantities[part.id] ?? 0))
+    }
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
@@ -279,19 +285,20 @@ private struct BundleOptions: View {
                                 AsyncImage(url: part.imageUrl.flatMap(URL.init(string:))) { image in image.resizable().scaledToFill() } placeholder: { PayTheme.line }.frame(width: 56, height: 56).clipped().clipShape(RoundedRectangle(cornerRadius: 12))
                                 VStack(alignment: .leading) { Text(part.title).font(.headline); Text(part.variantLabel ?? "").font(.caption); if part.availability == "count_required" { Text("Count needed").font(.caption) } }
                                 Spacer()
-                                Stepper(value: Binding(get: { choices[part.id] ?? 0 }, set: { choices[part.id] = $0 }), in: 0...max(choices[part.id] ?? 0, min(required - selected + (choices[part.id] ?? 0), part.availableQuantity ?? required))) { Text("\(choices[part.id] ?? 0)").monospacedDigit() }.fixedSize().accessibilityIdentifier("bundle-quantity-\(part.id)")
+                                Stepper(value: Binding(get: { choices[part.id] ?? 0 }, set: { choices[part.id] = $0 }), in: 0...max(choices[part.id] ?? 0, min(required - selected + (choices[part.id] ?? 0), available(part)))) { Text("\(choices[part.id] ?? 0)").monospacedDigit() }.fixedSize().accessibilityIdentifier("bundle-quantity-\(part.id)")
                             }.padding(14).background(PayTheme.cream, in: RoundedRectangle(cornerRadius: 20))
                         }
                     }.padding(.horizontal, 20)
                 }
                 Button {
                     guard selected == required, required > 0, model.pending == nil else { return }
-                    model.quantities[item.id] = bundles; model.bundleComponents[item.id] = choices
+                    if let existing { model.updateBundle(existing.id, quantity: bundles, components: choices) }
+                    else { model.addBundle(item, quantity: bundles, components: choices) }
                     UIImpactFeedbackGenerator(style: .light).impactOccurred(); dismiss()
-                } label: { Text("Add bundle · \(POSMoney.display(item.unitAmountMinor * bundles))").font(.headline).frame(maxWidth: .infinity).padding(18).foregroundStyle(PayTheme.cream).background(PayTheme.ink, in: Capsule()) }.disabled(selected != required || required == 0 || model.busy || item.availability == "review_required").opacity(selected == required && required > 0 ? 1 : 0.5).padding(20)
+                } label: { Text("\(existing == nil ? "Add bundle" : "Save bundle") · \(POSMoney.display(item.unitAmountMinor * bundles))").font(.headline).frame(maxWidth: .infinity).padding(18).foregroundStyle(PayTheme.cream).background(PayTheme.ink, in: Capsule()) }.disabled(selected != required || required == 0 || model.busy || item.availability == "review_required").opacity(selected == required && required > 0 ? 1 : 0.5).padding(20)
             }.background(PayTheme.paper).foregroundStyle(PayTheme.ink).navigationTitle(item.title).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
-                .onAppear { choices = model.bundleComponents[item.id] ?? [:]; bundles = max(1, model.quantities[item.id] ?? 1) }
+                .onAppear { if let existing { choices = existing.components; bundles = existing.quantity } }
         }.preferredColorScheme(.light)
     }
 }

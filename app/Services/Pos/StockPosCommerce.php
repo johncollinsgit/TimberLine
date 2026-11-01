@@ -62,17 +62,41 @@ final class StockPosCommerce
 
     public function quote(array $scope, array $input): array
     {
+        // Explicit line identities keep multiple configurations of the same bundle
+        // separate; legacy clients continue to use their catalog ID as the key.
+        $seenItems = []; $seenLines = [];
+        foreach ($input['items'] ?? [] as $selection) {
+            $itemId = $selection['item_id'] ?? null;
+            $lineId = $selection['line_id'] ?? $itemId;
+            if (! is_string($itemId) || ! is_string($lineId) || ! preg_match('/^[a-f0-9]{32}$/D', $lineId)
+                || isset($seenLines[$lineId]) || (isset($seenItems[$itemId]) && (! isset($selection['line_id']) || ! $seenItems[$itemId]))) {
+                throw new PosException('duplicate_catalog_item', 422);
+            }
+            $seenItems[$itemId] = isset($selection['line_id']); $seenLines[$lineId] = true;
+        }
+        foreach ($input['items'] ?? [] as $selection) {
+            if (isset($selection['line_id']) && isset($seenItems[$selection['line_id']])) {
+                throw new PosException('basket_line_invalid', 422);
+            }
+        }
         $settings = $this->settings($scope);
         $catalog = array_column($this->catalog($scope), null, 'item_id');
         $quantities = [];
         $lines = [];
         $display = [];
         $expected = [];
-        $taxableSubtotal = 0;
+        $gross = [];
+        $taxable = [];
+        $lineKeys = [];
+        $providerKeys = [];
         foreach ($input['items'] ?? [] as $selection) {
             $item = $catalog[$selection['item_id']] ?? null;
             if (! $item || $selection['revision'] !== $item['revision']) {
                 throw new PosException('catalog_changed');
+            }
+            $key = $selection['line_id'] ?? $item['item_id'];
+            if ($key !== $item['item_id'] && $item['kind'] !== 'bundle') {
+                throw new PosException('basket_line_invalid', 422);
             }
             if ($item['availability'] === 'review_required') {
                 throw new StockException('stock_bundle_components_review_required');
@@ -94,16 +118,20 @@ final class StockPosCommerce
                 $quantities[$item['item_id']] = ($quantities[$item['item_id']] ?? 0) + $selection['quantity'];
             }
             $metadata = json_decode($this->stock->item($scope['tenant_id'], $item['item_id'])->metadata ?? '{}', true);
-            if (($metadata['taxable'] ?? true) === true) {
-                $taxableSubtotal += $item['unit_amount_minor'] * $selection['quantity'];
-            }
-            $display[] = ['item_id' => $item['item_id'], 'title' => $item['title'].($item['variant_label'] && $item['variant_label'] !== 'Default Title' ? ' · '.$item['variant_label'] : ''),
+            $gross[$key] = $item['unit_amount_minor'] * $selection['quantity'];
+            $taxable[$key] = ($metadata['taxable'] ?? true) === true;
+            $display[] = ['item_id' => $item['item_id'], 'line_id' => $key, 'title' => $item['title'].($item['variant_label'] && $item['variant_label'] !== 'Default Title' ? ' · '.$item['variant_label'] : ''),
                 'sku' => $item['sku'], 'quantity' => $selection['quantity'], 'subtotal_minor' => $item['unit_amount_minor'] * $selection['quantity'], 'components' => $components];
             if ($scope['register']->catalog_source === 'shopify') {
                 $m = $this->stock->rows('provider_items', $scope['tenant_id'])->where('store_id', $settings['shopify']['store_id'])
                     ->where('item_id', $item['item_id'])->where('active', true)->firstOrFail();
                 $lines[] = ['variantId' => $m->variant_id, 'quantity' => $selection['quantity']];
-                $expected[$m->variant_id] = ['quantity' => $selection['quantity'], 'price' => $item['unit_amount_minor']];
+                $lineKeys[] = $key;
+                $providerKeys[$key] = $m->variant_id;
+                if (isset($expected[$m->variant_id]) && $expected[$m->variant_id]['price'] !== $item['unit_amount_minor']) {
+                    throw new PosException('catalog_changed');
+                }
+                $expected[$m->variant_id] = ['quantity' => ($expected[$m->variant_id]['quantity'] ?? 0) + $selection['quantity'], 'price' => $item['unit_amount_minor']];
             }
         }
         if (isset($input['custom_charge'])) {
@@ -114,10 +142,10 @@ final class StockPosCommerce
             }
             $lines[] = ['title' => $custom['description'], 'quantity' => 1, 'originalUnitPrice' => number_format($custom['amount_minor'] / 100, 2, '.', ''),
                 'taxable' => $settings['custom_taxable'] ?? true, 'requiresShipping' => false];
+            $lineKeys[] = 'custom';
+            $gross['custom'] = $custom['amount_minor'];
+            $taxable['custom'] = ($settings['custom_taxable'] ?? true) === true;
             $display[] = ['title' => $custom['description'], 'quantity' => 1, 'subtotal_minor' => $custom['amount_minor'], 'custom_charge' => true];
-            if (($settings['custom_taxable'] ?? true) === true) {
-                $taxableSubtotal += $custom['amount_minor'];
-            }
         }
         foreach ($quantities as $id => $quantity) {
             if (($catalog[$id]['available_quantity'] ?? PHP_INT_MAX) < $quantity) {
@@ -128,9 +156,40 @@ final class StockPosCommerce
             throw new PosException('basket_required', 422);
         }
         $subtotal = array_sum(array_column($display, 'subtotal_minor'));
+        $offers = app(PosCheckoutOffers::class)->apply($scope, $input, $catalog, $gross);
+        $netSubtotal = array_sum($offers['lines_minor']);
+        if ($netSubtotal < 1) {
+            throw new PosException('zero_total_checkout_not_supported', 422);
+        }
+        foreach ($display as &$displayLine) {
+            $key = $displayLine['line_id'] ?? 'custom';
+            $displayLine['discount_minor'] = $gross[$key] - $offers['lines_minor'][$key];
+            $displayLine['net_subtotal_minor'] = $offers['lines_minor'][$key];
+            if (($offers['unit_lines_minor'] ?? null) !== null) {
+                $displayLine['unit_net_minor'] = $offers['unit_lines_minor'][$key];
+            }
+        }
+        unset($displayLine);
+        $taxableSubtotal = 0;
+        foreach ($offers['lines_minor'] as $key => $amount) {
+            if ($taxable[$key]) {
+                $taxableSubtotal += $amount;
+            }
+        }
         $tax = 0;
-        $total = $subtotal;
+        $total = $netSubtotal;
         if ($scope['register']->catalog_source === 'shopify') {
+            $expectedUnits = [];
+            if ($offers['version'] !== null) {
+                $lines = $this->discountedProviderLines($lines, $lineKeys, $gross, $offers['lines_minor'], $offers['unit_lines_minor'] ?? null);
+                foreach ($lines as $line) {
+                    $variant = $line['variantId'] ?? 'custom';
+                    $original = $variant === 'custom' ? $gross['custom'] : $expected[$variant]['price'];
+                    $discount = isset($line['appliedDiscount']) ? ShopifyPosCommerce::minor(number_format($line['appliedDiscount']['value'], 2, '.', '')) : 0;
+                    $signature = $variant.'|'.$original.'|'.($original - $discount);
+                    $expectedUnits[$signature] = ($expectedUnits[$signature] ?? 0) + $line['quantity'];
+                }
+            }
             $draft = ['lineItems' => $lines, 'shippingAddress' => $settings['shopify']['tax_address'], 'acceptAutomaticDiscounts' => false];
             $result = $this->shopify->request($scope['tenant_id'], $settings['shopify']['store_id'], StockShopifyApi::CALCULATE, ['input' => $draft]);
             $payload = $result['draftOrderCalculate'] ?? [];
@@ -142,9 +201,44 @@ final class StockPosCommerce
                 throw new PosException('tax_unavailable', 503);
             }
             $actual = [];
+            $actualNet = [];
+            $actualUnits = [];
             foreach ($calculated['lineItems'] as $line) {
+                if ($offers['version'] !== null) {
+                    if (! isset($line['quantity'], $line['originalUnitPriceSet']['shopMoney']['amount'], $line['discountedTotalSet']['shopMoney']['amount'])
+                        || ! is_int($line['quantity']) || $line['quantity'] < 1) {
+                        throw new PosException('total_unavailable', 503);
+                    }
+                    $original = ShopifyPosCommerce::minor($line['originalUnitPriceSet']['shopMoney']['amount']);
+                    $net = ShopifyPosCommerce::minor($line['discountedTotalSet']['shopMoney']['amount']);
+                    if ($net % $line['quantity'] !== 0) { throw new PosException('total_changed'); }
+                    $signature = ($line['variant']['id'] ?? 'custom').'|'.$original.'|'.intdiv($net, $line['quantity']);
+                    $actualUnits[$signature] = ($actualUnits[$signature] ?? 0) + $line['quantity'];
+                }
                 if (isset($line['variant']['id'])) {
-                    $actual[$line['variant']['id']] = ['quantity' => $line['quantity'], 'price' => ShopifyPosCommerce::minor($line['originalUnitPriceSet']['shopMoney']['amount'])];
+                    $variant = $line['variant']['id'];
+                    $price = ShopifyPosCommerce::minor($line['originalUnitPriceSet']['shopMoney']['amount']);
+                    if (isset($actual[$variant]) && $actual[$variant]['price'] !== $price) {
+                        throw new PosException('catalog_changed');
+                    }
+                    $actual[$variant] = ['quantity' => ($actual[$variant]['quantity'] ?? 0) + $line['quantity'], 'price' => $price];
+                    if ($offers['version'] !== null) {
+                        if (! isset($line['discountedTotalSet']['shopMoney']['amount']) || ($line['discountedTotalSet']['shopMoney']['currencyCode'] ?? null) !== 'USD'
+                            || ($line['originalUnitPriceSet']['shopMoney']['currencyCode'] ?? null) !== 'USD') {
+                            throw new PosException('total_unavailable', 503);
+                        }
+                        $actualNet[$variant] = ($actualNet[$variant] ?? 0) + ShopifyPosCommerce::minor($line['discountedTotalSet']['shopMoney']['amount']);
+                    }
+                } elseif ($offers['version'] !== null) {
+                    if (! isset($line['discountedTotalSet']['shopMoney']['amount'], $line['originalUnitPriceSet']['shopMoney']['amount'])
+                        || ($line['discountedTotalSet']['shopMoney']['currencyCode'] ?? null) !== 'USD'
+                        || ($line['originalUnitPriceSet']['shopMoney']['currencyCode'] ?? null) !== 'USD') {
+                        throw new PosException('total_unavailable', 503);
+                    }
+                    $actualNet['custom'] = ($actualNet['custom'] ?? 0) + ShopifyPosCommerce::minor($line['discountedTotalSet']['shopMoney']['amount']);
+                    if (! isset($gross['custom']) || ShopifyPosCommerce::minor($line['originalUnitPriceSet']['shopMoney']['amount']) * $line['quantity'] !== $gross['custom']) {
+                        throw new PosException('total_changed');
+                    }
                 }
             }
             ksort($expected);
@@ -152,9 +246,26 @@ final class StockPosCommerce
             if ($expected !== $actual) {
                 throw new PosException('catalog_changed');
             }
+            if ($offers['version'] !== null) {
+                $expectedNet = [];
+                foreach ($lineKeys as $key) {
+                    $providerKey = $key === 'custom' ? 'custom' : $providerKeys[$key];
+                    $expectedNet[$providerKey] = ($expectedNet[$providerKey] ?? 0) + $offers['lines_minor'][$key];
+                }
+                ksort($expectedNet);
+                ksort($actualNet);
+                if ($expectedNet !== $actualNet) {
+                    throw new PosException('total_changed');
+                }
+                ksort($expectedUnits); ksort($actualUnits);
+                if ($expectedUnits !== $actualUnits) { throw new PosException('total_changed'); }
+            }
             $total = ShopifyPosCommerce::minor($calculated['totalPriceSet']['shopMoney']['amount']);
+            if ($offers['version'] !== null && ($calculated['totalTaxSet']['shopMoney']['currencyCode'] ?? null) !== 'USD') {
+                throw new PosException('tax_unavailable', 503);
+            }
             $tax = ShopifyPosCommerce::minor($calculated['totalTaxSet']['shopMoney']['amount']);
-            if ($total - $tax !== $subtotal) {
+            if ($total - $tax !== $netSubtotal) {
                 throw new PosException('total_changed');
             }
         } else {
@@ -171,12 +282,61 @@ final class StockPosCommerce
         return ['source' => self::VERSION, 'adapter_version' => self::VERSION, 'stock_pool_id' => $settings['inventory_pool_id'],
             'stock' => $quantities, 'selections' => $input['items'] ?? [], 'total_minor' => $total, 'tax_minor' => $tax,
             'custom_charge' => $input['custom_charge'] ?? null, 'display' => $display,
-            'rewardable_subtotal_minor' => $subtotal - ($input['custom_charge']['amount_minor'] ?? 0),
-            'lines' => [['line_id' => 'counter_basket', 'kind' => 'merchandise', 'quantity' => 1, 'unit_amount_minor' => $subtotal, 'tax_amount_minor' => $tax]]];
+            'subtotal_minor' => $subtotal, 'discount_minor' => $offers['discount_minor'], 'applied_offers' => $offers['offers'], 'checkout_rules_version' => $offers['version'],
+            'rewardable_subtotal_minor' => $netSubtotal - ($offers['lines_minor']['custom'] ?? 0),
+            'lines' => [['line_id' => 'counter_basket', 'kind' => 'merchandise', 'quantity' => 1, 'unit_amount_minor' => $netSubtotal, 'tax_amount_minor' => $tax]]];
+    }
+
+    /** Shopify's fixed line discount is per unit; preserve exact unit prices when specific units are discounted. */
+    private function discountedProviderLines(array $lines, array $keys, array $gross, array $net, ?array $unitLines = null): array
+    {
+        $result = [];
+        foreach ($lines as $index => $line) {
+            $key = $keys[$index];
+            $quantity = $line['quantity'];
+            if ($unitLines !== null) {
+                $units = $unitLines[$key] ?? [];
+                if (count($units) !== $quantity || array_sum($units) !== $net[$key] || $gross[$key] % $quantity !== 0) {
+                    throw new PosException('total_unavailable', 503);
+                }
+                $original = intdiv($gross[$key], $quantity);
+                $groups = [];
+                foreach ($units as $unit) {
+                    if (! is_int($unit) || $unit < 0 || $unit > $original) {
+                        throw new PosException('total_unavailable', 503);
+                    }
+                    $discount = $original - $unit;
+                    $groups[$discount] = ($groups[$discount] ?? 0) + 1;
+                }
+                $parts = [];
+                foreach ($groups as $unitDiscount => $count) {
+                    $parts[] = [$count, $unitDiscount];
+                }
+            } else {
+                $discount = $gross[$key] - $net[$key];
+                $perUnit = intdiv($discount, $quantity);
+                $extra = $discount % $quantity;
+                $parts = [[$quantity - $extra, $perUnit], [$extra, $perUnit + 1]];
+            }
+            foreach ($parts as [$count, $unitDiscount]) {
+                if ($count === 0) {
+                    continue;
+                }
+                $part = $line;
+                $part['quantity'] = $count;
+                if ($unitDiscount > 0) {
+                    $part['appliedDiscount'] = ['valueType' => 'FIXED_AMOUNT', 'value' => $unitDiscount / 100, 'description' => 'Everbranch checkout offers'];
+                }
+                $result[] = $part;
+            }
+        }
+
+        return $result;
     }
 
     public function prepare(array $scope, object $sale, array $snapshot): void
     {
+        $this->assertOffersCurrent($scope, $snapshot);
         $settings = $this->settings($scope);
         if ($snapshot['terms']['stock_pool_id'] !== $settings['inventory_pool_id']) {
             throw new PosException('inventory_binding_changed');
@@ -211,6 +371,26 @@ final class StockPosCommerce
 
                 return ['held' => true];
             });
+    }
+
+    /** Validate a frozen offer quote before a new collection attempt; never modify an existing attempt. */
+    public function assertOffersCurrent(array $scope, array $snapshot): void
+    {
+        $version = $snapshot['terms']['checkout_rules_version'] ?? null;
+        if ($version === null) {
+            return;
+        }
+        if (! is_string($version) || config('pos_live.checkout_rules_enabled') !== true) {
+            throw new PosException('checkout_rules_unavailable', 503);
+        }
+        $register = $this->store->rows('registers', $scope['tenant_id'])->where('id', $scope['register']->id)->first();
+        if (! $register) {
+            throw new PosException('register_unavailable', 404);
+        }
+        $available = app(PosCheckoutOffers::class)->available([...$scope, 'register' => $register]);
+        if (! is_string($available['version']) || ! hash_equals($version, $available['version'])) {
+            throw new PosException('checkout_rules_changed');
+        }
     }
 
     /** Shared-stock projections are confirmed during basket review, never in the Square handoff. */
@@ -249,6 +429,11 @@ final class StockPosCommerce
     public function lockCollection(array $scope, object $sale, array $snapshot): void
     {
         $this->stock->operation($scope['tenant_id'], 'collect-lock:'.$this->hold($sale), 'collection_lock', (int) $sale->actor_id, [$sale->id], function () use ($scope, $sale, $snapshot): array {
+            // Rule edits lock the same tenant row; authorize frozen offers at the stock collection boundary.
+            if (($snapshot['terms']['checkout_rules_version'] ?? null) !== null) {
+                $this->store->db->table('tenants')->where('id', $scope['tenant_id'])->lockForUpdate()->firstOrFail();
+                $this->assertOffersCurrent($scope, $snapshot);
+            }
             $current = $this->store->rows('sales', $scope['tenant_id'])->where('id', $sale->id)->lockForUpdate()->firstOrFail();
             if (! $this->collectionReady($current, $snapshot)) {
                 throw new PosException('stock_availability_update_pending');

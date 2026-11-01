@@ -40,6 +40,7 @@ final class PosService
             $rows[] = ['id' => $register->id, 'name' => $register->name, 'location' => $register->location_name,
                 'catalog_source' => $register->catalog_source, 'environment' => $scope['connection']->environment,
                 'can_create_customers' => in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
+                'can_manage_checkout_rules' => ! config('enterprise.runtime') && in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
                 'can_manage_inventory' => app(StockPosCommerce::class)->enabled($register) && in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
                 'guest_checkout' => app(StockPosCommerce::class)->enabled($register),
                 'custom_amount_enabled' => app(StockPosCommerce::class)->enabled($register) && ($this->store->decrypt($register->configuration)['custom_amount_enabled'] ?? false) === true,
@@ -112,6 +113,12 @@ final class PosService
             throw new PosException('tax_review_expired', 503);
         }
         $stockCore = app(StockPosCommerce::class)->enabled($scope['register']);
+        if (! $stockCore && count(array_column($input['items'] ?? [], 'item_id')) !== count(array_unique(array_column($input['items'] ?? [], 'item_id')))) {
+            throw new PosException('duplicate_catalog_item', 422);
+        }
+        if (! $stockCore && (! empty($input['discounts']) || ! empty($input['addons']))) {
+            throw new PosException('checkout_offers_not_supported', 422);
+        }
         if (! $stockCore && ($settings['customer_required'] ?? $scope['register']->catalog_source === 'shopify') && empty($input['customer_profile_id'])) {
             throw new PosException('customer_selection_required', 422);
         }
@@ -172,6 +179,7 @@ final class PosService
                 // Never issue another native collection descriptor on an HTTP retry.
                 return $this->inspect($register, $id);
             }
+            $collect = function () use ($scope, $register, $id, $sale, $snapshot, $binding): array {
             $scope = $this->refreshStaleMerchant($scope, (int) $sale->amount_minor);
             $blockers = $this->readiness->blockers($scope['register'], $scope['connection'], (int) $sale->amount_minor, $scope);
             if ($blockers) {
@@ -210,6 +218,9 @@ final class PosService
                 $this->native->prepare($sale, $snapshot);
             }
             $this->access->assertAllowed($binding, 'collect');
+            if ($snapshot['terms']['source'] === StockPosCommerce::VERSION) {
+                app(StockPosCommerce::class)->assertOffersCurrent($scope, $snapshot);
+            }
             $row = $this->core()->start($binding, new SaleSnapshot($id, 'usd', $snapshot['sale']['lines']), $sale->payment_request_id);
             $this->store->rows('sales', $scope['tenant_id'])->where('id', $id)->update(['attempt_id' => $row['id'], 'state' => $row['state']]);
             $this->access->assertAllowed($binding, 'collect');
@@ -228,6 +239,12 @@ final class PosService
                 'sale_id' => $id, 'expires_at' => now()->addSeconds(90)->toIso8601String(),
                 'online_only' => true, 'application_fee_minor' => 0, 'tips_enabled' => false,
             ]];
+            };
+            if (! empty($snapshot['terms']['checkout_rules_version'])) {
+                return app(PosCommerceRuleStore::class)->withLock($scope['tenant_id'], $collect);
+            }
+
+            return $collect();
         });
     }
 
@@ -417,6 +434,8 @@ final class PosService
         return ['receipt_number' => 'EB-'.strtoupper(substr($id, 0, 12)), 'created_at' => $sale->created_at,
             'merchant_location' => $snapshot['location_name'], 'register_name' => $snapshot['register_name'],
             'lines' => $snapshot['terms']['display'], 'amount_minor' => (int) $sale->amount_minor, 'currency' => 'USD',
+            'subtotal_minor' => $snapshot['terms']['subtotal_minor'] ?? null, 'discount_minor' => $snapshot['terms']['discount_minor'] ?? 0, 'tax_minor' => $snapshot['terms']['tax_minor'] ?? null,
+            'applied_offers' => $snapshot['terms']['applied_offers'] ?? [],
             'payment_reference' => $operation['provider_id'], 'customer' => $snapshot['customer'],
             'payment_details' => app(PosReceiptDetails::class)->forSale($sale) ?: null,
             'contact' => ($association = app(PosReceiptCustomers::class)->association($sale)) ? ($this->store->decrypt($association->contact) ?: null) : null,
@@ -476,6 +495,8 @@ final class PosService
             'inventory_authority' => $snapshot['terms']['source'] === StockPosCommerce::VERSION ? 'everbranch' : 'legacy',
             'operational_review_closed' => app(PosUncollectedClosure::class)->closed($sale),
             'lines' => $snapshot['terms']['display'], 'expires_at' => $sale->expires_at,
+            'subtotal_minor' => $snapshot['terms']['subtotal_minor'] ?? null, 'discount_minor' => $snapshot['terms']['discount_minor'] ?? 0, 'tax_minor' => $snapshot['terms']['tax_minor'] ?? null,
+            'applied_offers' => $snapshot['terms']['applied_offers'] ?? [], 'checkout_rules_version' => $snapshot['terms']['checkout_rules_version'] ?? null,
             'canonical_confirmation' => $sale->state === 'succeeded',
             'collection_ready' => $this->readiness->blockers($this->access->register($sale->register_id)['register'], $this->access->register($sale->register_id)['connection'], (int) $sale->amount_minor) === []
                 && ($snapshot['terms']['source'] !== StockPosCommerce::VERSION || app(StockPosCommerce::class)->collectionReady($sale, $snapshot)),

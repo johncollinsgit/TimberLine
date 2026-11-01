@@ -3,6 +3,14 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_01_110000_create_pos_candle_cash_reservations.php' => [
+        'test' => 'tests/Integration/PosCandleCashMySqlRecoveryTest.php',
+        'scenarios' => ['held redemption evidence retained before trailing index creation and rollback; duplicate sales and altered indexes rejected'],
+    ],
+    '2026_11_01_100000_create_tenant_commerce_rule_sets.php' => [
+        'test' => 'tests/Integration/CommerceRuleSetMySqlRecoveryTest.php',
+        'scenarios' => ['replayed atomic table creation and non-destructive rollback retain tenant rules and reject duplicate tenants'],
+    ],
     '2026_10_31_190000_create_finished_goods_stock_tables.php' => [
         'test' => 'tests/Integration/StockMySqlRecoveryTest.php',
         'scenarios' => ['retained stock before trailing receipt-association DDL and named index replay; altered index rejected; non-destructive rollback'],

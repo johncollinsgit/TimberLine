@@ -36,7 +36,7 @@ final class PosOutbox
                 } catch (\Throwable $error) {
                     $code = $error instanceof PosException ? $error->blocker : 'outbox_processing_failed';
                     $this->store->rows('outbox', $scope['tenant_id'])->where('id', $effect->id)->update([
-                        'state' => $current->attempts >= 7 || in_array($code, ['customer_rewards_shortfall_review', 'customer_identity_review_required', 'customer_rewards_historical_review'], true) ? 'review' : 'retry', 'error_code' => $code,
+                        'state' => $current->attempts >= 7 || in_array($code, ['customer_rewards_shortfall_review', 'customer_identity_review_required', 'customer_rewards_historical_review', 'customer_rewards_refund_allocation_review'], true) ? 'review' : 'retry', 'error_code' => $code,
                         'available_at' => now()->addSeconds(min(300, 5 * (2 ** min(6, $current->attempts)))),
                     ]);
                     $this->store->event($scope['tenant_id'], $effect->sale_id, 'effect_needs_reconciliation', ['effect' => $effect->effect_key, 'code' => $code]);

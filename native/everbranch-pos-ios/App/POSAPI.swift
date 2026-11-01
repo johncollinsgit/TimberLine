@@ -48,6 +48,8 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
                 "stock_count_changed_by_activity": "Stock changed while you were counting. Refresh Products and check the remaining physical units again.",
                 "catalog_changed": "A product or price changed. Return to Products and review the basket.",
                 "checkout_settings_changed": "The register settings changed. Review a new total before charging.",
+                "checkout_rules_busy": "Checkout rules are being updated. Please try again in a moment.",
+                "checkout_rules_changed": "Checkout rules changed. Refresh the register before applying discounts.",
                 "receipt_customer_already_associated": "This receipt is already linked to a different customer. Ask a manager to review it.",
                 "customer_rewards_historical_review": "The purchase is linked. A manager needs to review its rewards eligibility.",
                 "collection_not_ready": "This register still needs its payment readiness review.",
@@ -66,8 +68,11 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
     nonisolated(unsafe) private static var catalogData = Data(#"{"items":[]}"#.utf8)
     nonisolated(unsafe) private static var completedSaleData = Data()
     nonisolated(unsafe) private static var completedReceiptData = Data()
+    nonisolated(unsafe) private static var bundleSaleData = Data()
     static func setCatalog(_ data: Data) { lock.lock(); defer { lock.unlock() }; catalogData = data }
     static func setCompletedSale(_ sale: Data, receipt: Data) { lock.lock(); defer { lock.unlock() }; completedSaleData = sale; completedReceiptData = receipt }
+    private static func setBundleSale(_ data: Data) { lock.lock(); defer { lock.unlock() }; bundleSaleData = data }
+    private static func bundleSale() -> Data { lock.lock(); defer { lock.unlock() }; return bundleSaleData }
     private static func catalog() -> Data { lock.lock(); defer { lock.unlock() }; return catalogData }
     private static func completedSale() -> Data { lock.lock(); defer { lock.unlock() }; return completedSaleData }
     private static func completedReceipt() -> Data { lock.lock(); defer { lock.unlock() }; return completedReceiptData }
@@ -77,13 +82,32 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
         guard let url = request.url else { return }
         do {
             let data: Data
-            if url.path.hasSuffix("/catalog") { data = Self.catalog() }
+            if ProcessInfo.processInfo.arguments.contains("--pos-customer-commerce-ui-tests") && url.path.hasSuffix("/customers") {
+                data = try JSONSerialization.data(withJSONObject: ["customers": [["id": 1, "name": "Ada Buyer", "email": "ada@example.test"], ["id": 2, "name": "Mia Buyer", "email": "mia@example.test"]], "has_more": false])
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-customer-commerce-ui-tests") && (url.path.hasSuffix("/customers/1/commerce") || url.path.hasSuffix("/customers/2/commerce")) {
+                let first = url.path.hasSuffix("/customers/1/commerce")
+                let id = first ? 1 : 2
+                let rows: [[String: Any]] = first ? [
+                    ["id": "online:1", "number": "Online order 1", "channel": "online", "status": "paid", "confirmed": true, "amount_minor": 2500, "refunded_minor": 0, "currency": "USD", "currency_scale": 2, "occurred_at": "2026-10-30T00:00:00Z"],
+                    ["id": "pos:2", "number": "Show purchase 2", "channel": "in_person", "status": "partially_refunded", "confirmed": true, "amount_minor": 1000, "refunded_minor": 300, "currency": "USD", "currency_scale": 2, "occurred_at": "2026-10-31T00:00:00Z"]
+                ] : []
+                data = try JSONSerialization.data(withJSONObject: ["customer": ["id": id, "name": first ? "Ada Buyer" : "Mia Buyer"], "commerce": ["customer_id": id, "purchases": rows, "has_more": false, "issues": [], "rewards": ["available": true, "label": "Candle Cash", "balance": first ? "8.50" : "2.00", "program_status": "configured"]]])
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-email-ui-tests") && url.path.hasSuffix("/receipt/customer") {
+                let body: [String: Any] = ["receipt_number": "fixture-receipt", "merchant_location": "Fixture", "register_name": "Fictional register", "lines": [["title": "River Birch", "quantity": 1]], "amount_minor": 2180, "payment_reference": "fixture-payment", "refunded_minor": 0, "settlement_status": "pending", "contact": ["email": "buyer@example.test"]]
+                data = try JSONSerialization.data(withJSONObject: ["receipt": body])
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-email-ui-tests") && url.path.hasSuffix("/receipt/email") {
+                let enabled = !ProcessInfo.processInfo.arguments.contains("--pos-email-disabled-tests")
+                if request.httpMethod == "POST" && (!enabled || ProcessInfo.processInfo.arguments.contains("--pos-email-fail-tests")) { throw URLError(.badServerResponse) }
+                let state = request.httpMethod == "POST" ? "queued" : "not_requested"
+                data = try JSONSerialization.data(withJSONObject: ["state": state, "enabled": enabled])
+            } else if url.path.hasSuffix("/catalog") { data = Self.catalog() }
             else if url.path.hasSuffix("/discard") { data = Data(#"{"discarded":true}"#.utf8) }
             else if url.path == "/api/mobile/v1/workspaces" { data = Data(#"{"workspaces":[{"id":1,"name":"Fictional","slug":"fixture"}]}"#.utf8) }
             else if url.path == "/api/mobile/v1/workspaces/fixture/pos/registers" { data = Data(#"{"runtime_id":"fixture","registers":[{"id":"fixture","name":"Fictional register","location":"Fixture","catalog_source":"shopify","environment":"sandbox","blockers":[],"guest_checkout":true}]}"#.utf8) }
             else if url.path.hasSuffix("/sales/fixture-completed") { data = Self.completedSale() }
             else if url.path.hasSuffix("/sales/fixture-completed/reconcile") { data = Self.completedSale() }
             else if url.path.hasSuffix("/sales/fixture-completed/receipt") { data = Self.completedReceipt() }
+            else if ProcessInfo.processInfo.arguments.contains("--pos-bundle-basket-ui-tests") && request.httpMethod == "GET" && url.lastPathComponent.hasPrefix("fixture-bundle-") { data = Self.bundleSale() }
             else if url.path.hasSuffix("/quotes") {
                 var body = request.httpBody ?? Data()
                 if body.isEmpty, let stream = request.httpBodyStream {
@@ -95,7 +119,28 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
                     }
                 }
                 let input = try JSONSerialization.jsonObject(with: body) as! [String: Any]
-                data = try JSONSerialization.data(withJSONObject: ["sale_id": "fixture-sale", "request_id": input["request_id"]!, "state": "quoted", "stock_state": "held", "amount_minor": 2180, "currency": "USD", "receipt_available": false, "canonical_confirmation": false, "recovery_required": false, "collection_ready": true, "inventory_authority": "everbranch", "lines": [["title": "River Birch", "quantity": 1, "subtotal_minor": 2000]]])
+                var lines: [[String: Any]] = [["title": "River Birch", "quantity": 1, "subtotal_minor": 2000]]
+                if ProcessInfo.processInfo.arguments.contains("--pos-bundle-basket-ui-tests") {
+                    let catalog = try JSONSerialization.jsonObject(with: Self.catalog()) as! [String: Any]
+                    let items = catalog["items"] as! [[String: Any]]
+                    lines = (input["items"] as? [[String: Any]] ?? []).compactMap { line in
+                        guard let id = line["item_id"] as? String, let item = items.first(where: { $0["item_id"] as? String == id }),
+                              let quantity = line["quantity"] as? Int, let price = item["unit_amount_minor"] as? Int else { return nil }
+                        let components: [[String: Any]] = (line["components"] as? [[String: Any]] ?? []).compactMap { part in
+                            guard let partID = part["item_id"] as? String, let product = items.first(where: { $0["item_id"] as? String == partID }),
+                                  let amount = part["quantity"] as? Int else { return nil }
+                            return ["title": product["title"] as? String ?? "", "quantity": amount]
+                        }
+                        return ["item_id": id, "line_id": line["line_id"] ?? id, "title": item["title"] ?? "", "quantity": quantity,
+                                "subtotal_minor": price * quantity, "components": components]
+                    }
+                }
+                let subtotal = lines.reduce(0) { $0 + ($1["subtotal_minor"] as? Int ?? 0) }
+                let tax = (subtotal * 700 + 5000) / 10000
+                let bundleFixture = ProcessInfo.processInfo.arguments.contains("--pos-bundle-basket-ui-tests")
+                let saleID = bundleFixture ? "fixture-bundle-\(input["request_id"] as? String ?? "invalid")" : "fixture-sale"
+                data = try JSONSerialization.data(withJSONObject: ["sale_id": saleID, "request_id": input["request_id"]!, "state": "quoted", "stock_state": "held", "amount_minor": bundleFixture ? subtotal + tax : 2180, "currency": "USD", "receipt_available": false, "canonical_confirmation": false, "recovery_required": false, "collection_ready": true, "inventory_authority": "everbranch", "lines": lines])
+                if ProcessInfo.processInfo.arguments.contains("--pos-bundle-basket-ui-tests") { Self.setBundleSale(data) }
             } else { throw URLError(.unsupportedURL) }
             client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data); client?.urlProtocolDidFinishLoading(self)

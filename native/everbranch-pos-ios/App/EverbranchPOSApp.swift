@@ -60,6 +60,8 @@ struct POSView: View {
     @State private var addingProducts = false
     @State private var creatingCustomer = false
     @State private var showingCustomer = false
+    @State private var showingCheckoutRules = false
+    @State private var editingBundle: BundleBasketLine?
     @State private var contactOnly = false
     @State private var automaticQuoteRequested = false
     @State private var confirmUncollected = false
@@ -73,6 +75,12 @@ struct POSView: View {
     private var quoteAllowed: Bool {
         (model.selectedRegister?.guestCheckout == true || model.selectedCustomer != nil) && model.basketIssue == nil &&
         (model.quantities.values.reduce(0, +) > 0 || model.customAmountMinor > 0 || !model.invoiceID.isEmpty)
+    }
+    private var shouldAutoQuote: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-bundle-basket-ui-tests") { return false }
+        #endif
+        return true
     }
 
     var body: some View {
@@ -137,7 +145,7 @@ struct POSView: View {
                 if ProcessInfo.processInfo.arguments.contains("--pos-recovery-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-completed-ui-tests") { return }
                 #endif
                 guard model.signedIn else { return }
-                if screen == .checkout && model.registerLoaded && model.pending == nil && model.selectedRegister?.guestCheckout == true && quoteAllowed && !automaticQuoteRequested {
+                if shouldAutoQuote && !model.editingBasket && screen == .checkout && model.registerLoaded && model.pending == nil && model.selectedRegister?.guestCheckout == true && quoteAllowed && !automaticQuoteRequested {
                     automaticQuoteRequested = true; model.quote(); return
                 }
                 model.perform {
@@ -147,7 +155,7 @@ struct POSView: View {
             }
             .onChange(of: model.completedSaleGeneration) { _, _ in onClose?() }
             .onChange(of: model.busy) { _, value in
-                if !value && screen == .checkout && model.selectedRegister?.guestCheckout == true && quoteAllowed && model.pending == nil && !automaticQuoteRequested {
+                if shouldAutoQuote && !model.editingBasket && !value && screen == .checkout && model.selectedRegister?.guestCheckout == true && quoteAllowed && model.pending == nil && !automaticQuoteRequested {
                     automaticQuoteRequested = true; model.quote()
                 }
             }
@@ -161,13 +169,15 @@ struct POSView: View {
                                     TextField("Phone", text: $model.receiptContactPhone).payInput().keyboardType(.phonePad)
                                     TextField("Email (optional)", text: $model.receiptContactEmail).payInput().keyboardType(.emailAddress).textInputAutocapitalization(.never)
                                     if let name = model.receipt?.paymentDetails?.cardholderName { Button("Use \(name) for this receipt") { model.receiptContactName = name }.buttonStyle(PayButtonStyle(primary: false)) }
-                                    Text("Saves contact details on this receipt. Find or create a customer to connect history and rewards.").font(.caption).foregroundStyle(PayTheme.muted)
+                                    Text("When available, saving an email requests a receipt email to that address. Find or create a customer to connect history and rewards.").font(.caption).foregroundStyle(PayTheme.muted)
                                     Button("Save receipt contact", action: model.saveReceiptContact).buttonStyle(PayButtonStyle())
                                     Button("Find a customer") { contactOnly = false }.buttonStyle(PayButtonStyle(primary: false))
                                 }
                             } else {
                                 customer
-                                if model.selectedCustomer != nil { Button("Link to this purchase", action: model.attachSelectedCustomer).buttonStyle(PayButtonStyle()) }
+                                if model.selectedCustomer != nil && model.receipt?.customer == nil {
+                                    Button("Link to this purchase", action: model.attachSelectedCustomer).buttonStyle(PayButtonStyle())
+                                }
                                 Button("Receipt contact only") { contactOnly = true }.buttonStyle(PayButtonStyle(primary: false))
                             }
                             if let message = model.message { Text(message).font(.subheadline) }
@@ -177,6 +187,13 @@ struct POSView: View {
                         .disabled(model.busy)
                 }
             }
+            .sheet(isPresented: $showingCheckoutRules) { CheckoutRuleManager(model: model) }
+            .sheet(item: $editingBundle) { line in
+                if let item = model.items.first(where: { $0.id == line.itemID }) {
+                    BundleOptions(item: item, model: model, existing: line)
+                }
+            }
+            .onChange(of: model.selectedCustomer?.id, initial: true) { _, _ in model.refreshCustomerCommerce() }
             .onChange(of: model.receipt?.customer?.id) { _, value in if value != nil { showingCustomer = false } }
             .onChange(of: model.receiptUpdateGeneration) { _, _ in showingCustomer = false; contactOnly = false }
         }
@@ -267,6 +284,12 @@ struct POSView: View {
     private var setup: some View {
         VStack(spacing: 16) {
             registerSummary
+            if model.selectedRegister?.canManageCheckoutRules == true {
+                PayCard(title: "Checkout rules", icon: "tag") {
+                    Text("Create and manage discount and add-on drafts for your business.").font(.subheadline).foregroundStyle(PayTheme.muted)
+                    Button("Manage checkout rules") { showingCheckoutRules = true }.buttonStyle(PayButtonStyle(primary: false))
+                }
+            }
             PayCard(title: "Tap to Pay on iPhone", icon: "wave.3.right") {
                 Label(model.tapReady ? "iPhone setup complete" : "Connect this iPhone", systemImage: model.tapReady ? "checkmark.circle.fill" : "iphone")
                     .font(.body.weight(.semibold))
@@ -319,7 +342,7 @@ struct POSView: View {
                 }
                 if model.selectedRegister?.catalogSource == "native" {
                     ForEach(model.printingQuotes) { quote in
-                        Button { model.invoiceID = String(quote.id); model.quantities = [:] } label: {
+                        Button { model.invoiceID = String(quote.id); model.quantities = [:]; model.bundleComponents = [:]; model.bundleLines = [] } label: {
                             HStack { Text(quote.number); Spacer(); Text(POSMoney.display(quote.amountMinor)); if model.invoiceID == String(quote.id) { Image(systemName: "checkmark") } }.frame(minHeight: 44)
                         }
                     }
@@ -333,9 +356,11 @@ struct POSView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(item.title).font(.body.weight(.medium))
             if item.kind == "bundle" {
-                HStack { Text("\(model.quantities[item.id] ?? 0) × \(POSMoney.display(item.unitAmountMinor))"); Spacer(); Button("Remove") { model.quantities[item.id] = 0; model.bundleComponents[item.id] = nil }.padding(12).background(PayTheme.cream, in: Capsule()) }
-                ForEach(item.bundleItems ?? []) { part in
-                    if let quantity = model.bundleComponents[item.id]?[part.id], quantity > 0 { Text("\(quantity) × \(part.title) · \(part.variantLabel ?? "")").font(.caption) }
+                ForEach(model.bundleLines.filter { $0.itemID == item.id }) { line in
+                    HStack { Text("\(line.quantity) × \(POSMoney.display(item.unitAmountMinor))"); Spacer(); Button("Edit") { editingBundle = line }.padding(12).background(PayTheme.paper, in: Capsule()); Button("Remove") { model.removeBundle(line.id) }.padding(12).background(PayTheme.cream, in: Capsule()) }
+                    ForEach(item.bundleItems ?? []) { part in
+                        if let quantity = line.components[part.id], quantity > 0 { Text("\(quantity) × \(part.title) · \(part.variantLabel ?? "")").font(.caption) }
+                    }
                 }
             } else { Stepper(value: Binding(get: { model.quantities[item.id] ?? 0 }, set: { model.quantities[item.id] = $0 }), in: 0...min(99, item.availableQuantity ?? 99)) {
                 Text("\(model.quantities[item.id] ?? 0) × \(POSMoney.display(item.unitAmountMinor))").font(.subheadline).monospacedDigit()
@@ -349,7 +374,13 @@ struct POSView: View {
             if let customer = model.selectedCustomer {
                 Text(customer.name).font(.title3.weight(.semibold))
                 if let email = customer.email { Text(email).font(.subheadline).foregroundStyle(PayTheme.muted) }
-                Text("This purchase will be linked to this customer. Rewards can be used online.").font(.subheadline).foregroundStyle(PayTheme.muted)
+                Text(model.receipt?.customer?.id == customer.id ? "This receipt is linked to this customer." : (model.receipt?.customer != nil ? "This receipt is linked to another customer; viewing this history does not change the link." : (model.sale?.canonicalConfirmation == true ? "Choose Link to this purchase to connect the receipt." : "This customer will be linked to the purchase when you review it."))).font(.subheadline).foregroundStyle(PayTheme.muted)
+                if model.customerCommerceLoading { ProgressView("Loading customer history…").font(.subheadline) }
+                else if let commerce = model.customerCommerce, commerce.customerId == customer.id { CustomerCommercePanel(commerce: commerce) }
+                else if let error = model.customerCommerceError {
+                    Text(error).font(.caption).foregroundStyle(PayTheme.muted)
+                    Button("Try history again", action: model.refreshCustomerCommerce).frame(minHeight: 44)
+                }
                 Button("Choose another customer") { model.selectedCustomer = nil }.frame(minHeight: 44)
             } else {
                 TextField("Name, email or phone", text: $model.customerQuery).payInput().textInputAutocapitalization(.never)
@@ -392,9 +423,20 @@ struct POSView: View {
                         HStack { Text("\(line.quantity) × \(line.title)"); Spacer(); if let amount = line.subtotalMinor { Text(POSMoney.display(amount)).monospacedDigit() } }
                         ForEach(Array((line.components ?? []).enumerated()), id: \.offset) { _, part in Text("\(part.quantity) × \(part.title)").font(.caption).foregroundStyle(PayTheme.muted) }
                     }
+                    if let subtotal = sale.subtotalMinor { HStack { Text("Subtotal"); Spacer(); Text(POSMoney.display(subtotal)).monospacedDigit() }.font(.subheadline) }
+                    if !model.checkoutRules.isEmpty && model.canChangeOffers {
+                        CheckoutOffersPanel(rules: model.checkoutRules, catalog: model.items, quantities: model.quantities, bundleLines: model.bundleLines,
+                                            customAmountMinor: model.customAmountMinor, discounts: model.checkoutDiscounts,
+                                            addons: model.checkoutAddons, authoritativeDiscountMinor: sale.discountMinor,
+                                            canChange: model.canChangeOffers, onChange: model.changeOffer)
+                    } else if let discount = sale.discountMinor, discount > 0 {
+                        HStack { Text("Discounts"); Spacer(); Text("−" + POSMoney.display(discount)).monospacedDigit() }.font(.subheadline)
+                    }
+                    if let tax = sale.taxMinor { HStack { Text("Tax"); Spacer(); Text(POSMoney.display(tax)).monospacedDigit() }.font(.subheadline) }
                     if let customer = sale.customer { Label(customer.name, systemImage: "person.crop.circle.fill") }
                     Text(sale.canonicalConfirmation ? "Payment confirmed" : sale.operationalReviewClosed == true ? "Uncollected sale closed after review" : sale.state == "quoted" ? "Review before payment" : sale.state == "cancelled" ? "Payment cancelled" : sale.state == "failed" ? "Payment unsuccessful" : "Payment not confirmed")
                         .font(.headline)
+                    if model.canEditBasket { Button("Edit basket", action: model.editBasket).frame(minHeight: 44) }
                     if sale.collectionReady != true && sale.state == "quoted" { Text(sale.inventoryAuthority == "everbranch" ? "Updating availability or awaiting register approval. You can check this basket again; no payment has started." : "Payment collection is awaiting setup or approval.").font(.subheadline).foregroundStyle(PayTheme.muted) }
                     if sale.canonicalConfirmation && !sale.receiptAvailable { Text("Payment received. Order finalization needs review. Do not charge again.").font(.subheadline) }
                     if model.pending?.collectionRequested == false && sale.state == "quoted" {
@@ -402,6 +444,12 @@ struct POSView: View {
                         Button("Charge \(POSMoney.display(sale.amountMinor))", action: model.pay).buttonStyle(PayButtonStyle()).disabled(!model.tapReady || sale.collectionReady != true)
                     }
                     if sale.canonicalConfirmation && model.receipt?.customer == nil { Button("Add customer") { showingCustomer = true }.buttonStyle(PayButtonStyle(primary: false)) }
+                    if sale.canonicalConfirmation, let customer = model.receipt?.customer {
+                        Button("View customer") {
+                            model.selectedCustomer = POSCustomer(id: customer.id, name: customer.name, email: nil, phone: nil)
+                            contactOnly = false; showingCustomer = true
+                        }.buttonStyle(PayButtonStyle(primary: false))
+                    }
                     if sale.canLeave && model.pending?.refundRequestID == nil { Button("Next sale", action: model.nextSale).buttonStyle(PayButtonStyle()) }
                 } else { Text(model.pending?.collectionRequested == true ? "Recover this sale before starting another payment." : "Preparing total…").font(.subheadline) }
                 if model.pending?.collectionRequested == true || (model.sale == nil && !model.busy) || model.sale?.collectionReady == false {
@@ -433,6 +481,19 @@ struct POSView: View {
                     if receipt.customerRewardsStatus == "pending" { Text("Rewards update pending. Do not run the payment again.").font(.subheadline) }
                     ShareLink("Share or print receipt", item: receipt.shareText).frame(minHeight: 44)
                     if let contact = receipt.contact { Text([contact.name, contact.phone, contact.email].compactMap { $0 }.joined(separator: " · ")).font(.subheadline) }
+                    if receipt.contact?.email?.isEmpty == false {
+                        if let summary = model.receiptEmailSummary { Text(summary).font(.subheadline).foregroundStyle(PayTheme.muted) }
+                        if model.receiptEmailStatus?.enabled == true && model.receiptEmailStatus?.state == "not_requested" {
+                            Button("Send receipt email", action: model.sendReceiptEmail).frame(minHeight: 44).disabled(model.busy)
+                        }
+                        Button("Check email status", action: model.checkReceiptEmail).frame(minHeight: 44).disabled(model.busy)
+                    }
+                    Button(receipt.contact == nil ? "Add receipt contact" : "Edit receipt contact") {
+                        model.receiptContactName = receipt.contact?.name ?? ""
+                        model.receiptContactPhone = receipt.contact?.phone ?? ""
+                        model.receiptContactEmail = receipt.contact?.email ?? ""
+                        contactOnly = true; showingCustomer = true
+                    }.frame(minHeight: 44)
                 }
                 if model.sale?.managerRefundsAllowed == true {
                     PayCard(title: "Manager refund", icon: "arrow.uturn.backward") {
