@@ -30,6 +30,7 @@ struct EverbranchRegisterView: View {
         }) { POSView(onClose: { basket = false }, screen: .checkout, model: model) }
         .sheet(isPresented: $account) { POSView(onClose: { account = false }, onOpenRegister: { account = false }, screen: .setup, model: model) }
         .onChange(of: model.completedSaleGeneration) { _, _ in basket = false; showRecovery = false }
+        .onChange(of: model.editingBasket) { _, editing in if editing { showRecovery = false; basket = true } }
         .onChange(of: model.signedIn) { _, value in if !value { account = false; basket = false } }
         .modifier(ReadinessRefreshObserver(model: model, account: $account, basket: $basket))
         #if DEBUG

@@ -4,6 +4,13 @@ import Security
 enum SecureStore {
     private static let service = "com.everbranch.pos.secure"
     static func read(_ key: String) -> Data? {
+        #if DEBUG
+        // Unsigned simulator fixtures cannot use Keychain entitlements. These
+        // synthetic-only records exercise restart behavior without real data.
+        if ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-ui-tests"), ["pending-sale", "quote-draft"].contains(key) {
+            return UserDefaults.standard.data(forKey: "pos-test-" + key)
+        }
+        #endif
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
             kSecAttrAccount as String: key, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
         var item: CFTypeRef?
@@ -11,6 +18,12 @@ enum SecureStore {
         return item as? Data
     }
     static func write(_ key: String, _ value: Data?) throws {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-ui-tests"), ["pending-sale", "quote-draft"].contains(key) {
+            if let value { UserDefaults.standard.set(value, forKey: "pos-test-" + key) } else { UserDefaults.standard.removeObject(forKey: "pos-test-" + key) }
+            return
+        }
+        #endif
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: key]
         guard let value else { SecItemDelete(query as CFDictionary); return }
         let updated = SecItemUpdate(query as CFDictionary, [kSecValueData as String: value] as CFDictionary)

@@ -54,6 +54,7 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
                 "checkout_rules_busy": "Checkout rules are being updated. Please try again in a moment.",
                 "checkout_rules_changed": "Checkout rules changed. Refresh the register before applying discounts.",
                 "checkout_addon_requires_purchase": "Each add-on requires a regular product. Add another product or remove an add-on.",
+                "tax_location_changed": "The tax location changed. Ask an administrator to review it before charging.",
                 "receipt_customer_already_associated": "This receipt is already linked to a different customer. Ask a manager to review it.",
                 "customer_rewards_historical_review": "The purchase is linked. A manager needs to review its rewards eligibility.",
                 "collection_not_ready": "This register still needs its payment readiness review.",
@@ -78,8 +79,17 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
     nonisolated(unsafe) private static var readinessEnabled = false
     static func setCatalog(_ data: Data) { lock.lock(); defer { lock.unlock() }; catalogData = data }
     static func setCompletedSale(_ sale: Data, receipt: Data) { lock.lock(); defer { lock.unlock() }; completedSaleData = sale; completedReceiptData = receipt }
-    private static func setBundleSale(_ data: Data) { lock.lock(); defer { lock.unlock() }; bundleSaleData = data }
-    private static func bundleSale() -> Data { lock.lock(); defer { lock.unlock() }; return bundleSaleData }
+    private static func setBundleSale(_ data: Data) {
+        lock.lock(); defer { lock.unlock() }; bundleSaleData = data
+        if ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-ui-tests") { UserDefaults.standard.set(data, forKey: "pos-restored-fixture-sale") }
+    }
+    private static func bundleSale() -> Data {
+        lock.lock(); defer { lock.unlock() }
+        if bundleSaleData.isEmpty && ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-ui-tests") {
+            return UserDefaults.standard.data(forKey: "pos-restored-fixture-sale") ?? Data()
+        }
+        return bundleSaleData
+    }
     static func setReadinessQuote(_ sale: Data) { lock.lock(); defer { lock.unlock() }; readinessQuoteData = sale }
     static func setReadinessEnabled(_ enabled: Bool) { lock.lock(); defer { lock.unlock() }; readinessEnabled = enabled }
     private static func catalog() -> Data { lock.lock(); defer { lock.unlock() }; return catalogData }
@@ -140,7 +150,7 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
             else if url.path == "/api/mobile/v1/workspaces/fixture/pos/registers" {
                 let blocked = ProcessInfo.processInfo.arguments.contains("--pos-readiness-delayed-ui-tests") && !Self.isReadinessEnabled()
                 let blockers = blocked ? ["old_setup"] : []
-                data = try JSONSerialization.data(withJSONObject: ["runtime_id": "fixture", "registers": [["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": blockers, "setup_blockers": blockers, "guest_checkout": true]]])
+                data = try JSONSerialization.data(withJSONObject: ["runtime_id": "fixture", "registers": [["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": blockers, "setup_blockers": blockers, "guest_checkout": true, "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests")]]])
             }
             else if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") && url.path.hasSuffix("/authorize-device") {
                 data = Data(#"{"application_id":"fixture","access_token":"fixture","location_id":"fixture","merchant_id":"fixture","environment":"sandbox","can_link_apple_account":false}"#.utf8)

@@ -150,6 +150,7 @@ public struct PendingSale: Codable, Equatable, Sendable {
     public var requestID: String
     public var saleID: String?
     public var collectionRequested = false
+    public var collectionAttempted: Bool?
     public var sdkStarted = false
     public var refundRequestID: String?
     public var refundAmountMinor: Int?

@@ -271,3 +271,12 @@ provider read is point-in-time evidence, not a guarantee against a later change.
 Older configurations without `tax_location_review` retain their previous
 expiration-only behavior and must be migrated/reviewed before claiming the
 stronger location protection. Do not activate the new flow until acceptance.
+
+An unstarted quote can be edited after restart only when this device retained
+its complete supported quote input in device-only Keychain storage and the
+server freshly reports the original quote as unstarted. The original request
+must be discarded successfully on the server before editing begins. Older
+quotes, invoices, arbitrary custom descriptions, reward redemptions and unknown
+future quote fields remain recovery-only. QR proofs, reward credentials and
+payment credentials are never stored in this draft. A payment that was
+requested or reached the SDK is never restored as editable.

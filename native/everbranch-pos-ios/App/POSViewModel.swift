@@ -64,6 +64,30 @@ struct BundleBasketLine: Identifiable {
     let components: [String: Int]
 }
 
+// Only the exact, allowlisted quote request is retained. This never stores a
+// reward proof, payment credential, receipt contact, or arbitrary description.
+private struct SavedQuoteDraft: Codable {
+    let workspace: String
+    let register: String
+    let requestID: String
+    let payload: Data
+}
+
+private struct RestorableQuote: Decodable {
+    struct Component: Decodable { let itemId: String; let quantity: Int; let revision: String }
+    struct Item: Decodable { let itemId: String; let lineId: String?; let quantity: Int; let revision: String; let components: [Component]? }
+    struct Custom: Decodable { let description: String; let amountMinor: Int }
+    struct Discount: Decodable { let ruleId: String; let scope: String; let itemId: String?; let quantity: Int? }
+    struct Addon: Decodable { let ruleId: String; let itemId: String; let quantity: Int }
+    let requestId: String
+    let items: [Item]?
+    let customCharge: Custom?
+    let customerProfileId: Int?
+    let checkoutRulesVersion: String?
+    let discounts: [Discount]?
+    let addons: [Addon]?
+}
+
 @MainActor final class POSViewModel: ObservableObject {
     let api = POSAPI()
     let signIn = POSSignIn()
@@ -172,7 +196,18 @@ struct BundleBasketLine: Identifiable {
     init(basket: [RegisterBasketLine] = []) {
         initialBasket = basket
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") { return }
+        if ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-ui-tests") {
+            if ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-reset") {
+                try? SecureStore.write("pending-sale", nil); try? SecureStore.write("quote-draft", nil)
+                UserDefaults.standard.removeObject(forKey: "pos-restored-fixture-sale")
+            }
+            if ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-missing") { try? SecureStore.write("quote-draft", nil) }
+            if let value = SecureStore.read("pending-sale") { pending = try? JSONDecoder().decode(PendingSale.self, from: value) }
+            if ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-started") { pending?.collectionRequested = true }
+            loadCatalogFixture()
+            return
+        }
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") && !ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-ui-tests") { return }
         #endif
         if let value = SecureStore.read("pending-customer") { pendingCustomer = try? JSONDecoder().decode(PendingCustomerCreation.self, from: value) }
         if let value = SecureStore.read("pending-enrollment") { pendingEnrollment = try? JSONDecoder().decode(PendingCustomerEnrollment.self, from: value) }
@@ -203,9 +238,10 @@ struct BundleBasketLine: Identifiable {
     }
     func savePending() throws {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") { return }
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") && !ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-ui-tests") { return }
         #endif
         try SecureStore.write("pending-sale", try pending.map { try JSONEncoder().encode($0) })
+        if pending == nil { try SecureStore.write("quote-draft", nil) }
     }
     var base: String? {
         let workspace = pending?.workspace ?? selectedWorkspace?.slug
@@ -508,9 +544,8 @@ struct BundleBasketLine: Identifiable {
         guard bundleLines.allSatisfy({ line in items.contains(where: { $0.id == line.itemID && $0.kind == "bundle" }) }) else {
             throw POSError.unavailable("A bundle is no longer available. Please check your basket.")
         }
-        pending = PendingSale(workspace: workspace, register: register)
-        try savePending() // Persist the request BEFORE sending it.
-        var body: [String: Any] = ["request_id": pending!.requestID]
+        let original = PendingSale(workspace: workspace, register: register)
+        var body: [String: Any] = ["request_id": original.requestID]
         if let id = Int(invoiceID), !invoiceID.isEmpty { body["source_order_id"] = id }
         else {
             var itemLines = items.compactMap { item -> [String: Any]? in
@@ -545,19 +580,122 @@ struct BundleBasketLine: Identifiable {
             body["discounts"] = checkoutDiscounts.map(\.request)
             body["addons"] = checkoutAddons.map(\.request)
         }
+        // Save only a fully understood request before it can reach the server.
+        // Unsupported forms remain recovery-only and never persist credentials.
+        try saveQuoteDraft(body, pending: original)
+        pending = original
+        do { try savePending() } catch { pending = nil; try? SecureStore.write("quote-draft", nil); throw error }
         let result: Sale = try await api.request(base + "/quotes", method: "POST", body: body)
         sale = result; pending?.saleID = result.saleId; try savePending()
         offerDraftQuoteID = result.saleId
         pollAvailabilityIfNeeded()
     }
+
+    private func saveQuoteDraft(_ body: [String: Any], pending: PendingSale) throws {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") && !ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-ui-tests") { return }
+        #endif
+        func accepts(_ object: [String: Any], _ allowed: Set<String>) -> Bool { Set(object.keys).isSubset(of: allowed) }
+        guard accepts(body, ["request_id", "items", "customer_profile_id", "custom_charge", "checkout_rules_version", "discounts", "addons"]),
+              (body["items"] as? [[String: Any]] ?? []).allSatisfy({ line in
+                  accepts(line, ["item_id", "line_id", "quantity", "revision", "components"]) &&
+                  (line["components"] as? [[String: Any]] ?? []).allSatisfy { accepts($0, ["item_id", "quantity", "revision"]) }
+              }),
+              (body["discounts"] as? [[String: Any]] ?? []).allSatisfy({ accepts($0, ["rule_id", "scope", "item_id", "quantity"]) }),
+              (body["addons"] as? [[String: Any]] ?? []).allSatisfy({ accepts($0, ["rule_id", "item_id", "quantity"]) }),
+              (body["custom_charge"] == nil || ((body["custom_charge"] as? [String: Any]).map { accepts($0, ["description", "amount_minor"]) && $0["description"] as? String == "Custom amount" } ?? false)) else {
+            try SecureStore.write("quote-draft", nil)
+            return
+        }
+        let payload = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
+        func isID(_ value: String) -> Bool { value.range(of: "^[a-f0-9]{32}$", options: .regularExpression) != nil }
+        func isRule(_ value: String) -> Bool { value.range(of: "^[a-z0-9][a-z0-9_-]{0,63}$", options: .regularExpression) != nil }
+        guard let input = try? decoder.decode(RestorableQuote.self, from: payload), input.requestId == pending.requestID,
+              (input.items ?? []).allSatisfy({ line in isID(line.itemId) && (line.lineId.map(isID) ?? true) &&
+                  line.revision.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil &&
+                  (line.components ?? []).allSatisfy { isID($0.itemId) && $0.revision.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil } }),
+              (input.discounts ?? []).allSatisfy({ isRule($0.ruleId) && ["item", "sale"].contains($0.scope) && ($0.itemId.map { $0 == "custom" || isID($0) } ?? true) }),
+              (input.addons ?? []).allSatisfy({ isRule($0.ruleId) && isID($0.itemId) }),
+              input.checkoutRulesVersion.map({ $0.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil }) ?? true else {
+            try SecureStore.write("quote-draft", nil)
+            return
+        }
+        let draft = SavedQuoteDraft(workspace: pending.workspace, register: pending.register, requestID: pending.requestID, payload: payload)
+        try SecureStore.write("quote-draft", try JSONEncoder().encode(draft))
+    }
+
+    private func restoreQuoteDraft(_ recovered: Sale, pending original: PendingSale) {
+        guard !original.collectionRequested, original.collectionAttempted != true, !original.sdkStarted, original.refundRequestID == nil,
+              recovered.state == "quoted", !recovered.recoveryRequired, !recovered.canonicalConfirmation,
+              recovered.requestId == original.requestID, original.saleID == nil || original.saleID == recovered.saleId,
+              let data = SecureStore.read("quote-draft"), let saved = try? JSONDecoder().decode(SavedQuoteDraft.self, from: data),
+              saved.workspace == original.workspace, saved.register == original.register, saved.requestID == original.requestID else { return }
+        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
+        guard let input = try? decoder.decode(RestorableQuote.self, from: saved.payload), input.requestId == original.requestID,
+              input.customerProfileId == recovered.customer?.id,
+              (input.discounts ?? []).isEmpty && (input.addons ?? []).isEmpty || input.checkoutRulesVersion == checkoutRulesVersion else { return }
+        var nextQuantities: [String: Int] = [:], nextComponents: [String: [String: Int]] = [:]
+        var nextBundles: [BundleBasketLine] = []
+        for line in input.items ?? [] {
+            guard line.quantity > 0, line.quantity <= 99, let item = items.first(where: { $0.id == line.itemId }) else { return }
+            if item.kind == "bundle" {
+                let available = Set((item.bundleItems ?? []).map(\.id)), parts = line.components ?? []
+                guard !parts.isEmpty, Set(parts.map(\.itemId)).count == parts.count,
+                      parts.allSatisfy({ $0.quantity > 0 && available.contains($0.itemId) }),
+                      parts.reduce(0, { $0 + $1.quantity }) == (item.bundleQuantity ?? 0) * line.quantity else { return }
+                let choices = Dictionary(uniqueKeysWithValues: parts.map { ($0.itemId, $0.quantity) })
+                if let id = line.lineId {
+                    guard !nextBundles.contains(where: { $0.id == id }) else { return }
+                    nextBundles.append(BundleBasketLine(id: id, itemID: item.id, quantity: line.quantity, components: choices))
+                } else {
+                    guard nextComponents[item.id] == nil else { return }
+                    nextComponents[item.id] = choices
+                }
+                nextQuantities[item.id, default: 0] += line.quantity
+            } else {
+                guard line.lineId == nil, line.components == nil, nextQuantities[item.id] == nil else { return }
+                nextQuantities[item.id] = line.quantity
+            }
+        }
+        if let custom = input.customCharge, custom.description != "Custom amount" || custom.amountMinor <= 0 { return }
+        var nextDiscounts: [CheckoutDiscountSelection] = [], nextAddons: [CheckoutAddonSelection] = []
+        func itemTitle(_ id: String) -> String? {
+            if id == "custom" { return "Custom amount" }
+            let catalogID = nextBundles.first(where: { $0.id == id })?.itemID ?? id
+            guard let item = items.first(where: { $0.id == catalogID }) else { return nil }
+            return item.title + ((item.variantLabel ?? "").isEmpty ? "" : " · " + item.variantLabel!)
+        }
+        for selection in input.discounts ?? [] {
+            guard let rule = checkoutRules.first(where: { $0.id == selection.ruleId }),
+                  ["item", "sale"].contains(selection.scope), selection.scope == "sale" || selection.itemId.flatMap(itemTitle) != nil else { return }
+            nextDiscounts.append(CheckoutDiscountSelection(ruleId: rule.id, name: rule.name, scope: selection.scope,
+                itemId: selection.itemId, itemName: selection.itemId.flatMap(itemTitle), quantity: selection.quantity))
+        }
+        for selection in input.addons ?? [] {
+            guard let rule = checkoutRules.first(where: { $0.id == selection.ruleId }), let name = itemTitle(selection.itemId),
+                  selection.quantity > 0, selection.quantity <= (nextQuantities[selection.itemId] ?? 0) else { return }
+            nextAddons.append(CheckoutAddonSelection(ruleId: rule.id, name: rule.name, itemId: selection.itemId, itemName: name, quantity: selection.quantity))
+        }
+        guard !nextQuantities.isEmpty || input.customCharge != nil else { return }
+        quantities = nextQuantities; bundleComponents = nextComponents; bundleLines = nextBundles
+        checkoutDiscounts = nextDiscounts; checkoutAddons = nextAddons
+        customAmountMinor = input.customCharge?.amountMinor ?? 0; customDescription = "Custom amount"; invoiceID = ""
+        if let customer = recovered.customer { selectedCustomer = POSCustomer(id: customer.id, name: customer.name, email: nil, phone: nil) }
+        else { selectedCustomer = nil }
+        offerDraftQuoteID = recovered.saleId
+    }
     var canChangeOffers: Bool {
         guard !busy, checkoutRulesVersion != nil, invoiceID.isEmpty else { return false }
         guard let pending else { return true }
-        return !pending.collectionRequested && !pending.sdkStarted && sale?.state == "quoted" && sale?.saleId == offerDraftQuoteID
+        return !pending.collectionRequested && pending.collectionAttempted != true && !pending.sdkStarted && sale?.state == "quoted" && sale?.saleId == offerDraftQuoteID
     }
     var canEditBasket: Bool {
         guard !busy, let pending else { return false }
-        return !pending.collectionRequested && !pending.sdkStarted && sale?.state == "quoted" && sale?.saleId == offerDraftQuoteID
+        return !pending.collectionRequested && pending.collectionAttempted != true && !pending.sdkStarted && sale?.state == "quoted" && sale?.saleId == offerDraftQuoteID
+    }
+    var savedBasketUnavailable: Bool {
+        !busy && pending != nil && sale?.state == "quoted" && sale?.saleId != offerDraftQuoteID
     }
     func bindCustomerToUnstartedSale() {
         guard canEditBasket, selectedCustomer != nil, let workspace = selectedWorkspace, let register = selectedRegister,
@@ -652,7 +790,7 @@ struct BundleBasketLine: Identifiable {
         perform {
             _ = try self.collector.preflight()
             self.paymentPhase = "Preparing payment…"
-            self.pending?.collectionRequested = true; try self.savePending()
+            self.pending?.collectionRequested = true; self.pending?.collectionAttempted = true; try self.savePending()
             let result: Sale = try await self.api.request(base + "/sales/\(id)/collect", method: "POST", body: [:])
             self.sale = result
             guard let descriptor = result.collection, self.pending?.sdkStarted == false else { throw POSError.recoveryRequired }
@@ -678,6 +816,8 @@ struct BundleBasketLine: Identifiable {
                 }
             }
         } else { result = try await api.request(base + "/requests/\(pending.requestID)") }
+        restoreQuoteDraft(result, pending: pending)
+        if pending.collectionRequested { self.pending?.collectionAttempted = true }
         if result.state == "quoted" && !result.recoveryRequired { self.pending?.collectionRequested = false }
         sale = result; self.pending?.saleID = result.saleId; try savePending()
         if result.receiptAvailable {

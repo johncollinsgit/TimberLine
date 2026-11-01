@@ -190,7 +190,7 @@ final class LaunchTests: XCTestCase {
     func testOnlineOwnerReviewShowsPublicTermsAndRespectsOffGate() {
         let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-online-rules-ui-tests"]; app.launch()
         XCTAssertTrue(app.buttons["Account & Tap to Pay"].waitForExistence(timeout: 10)); app.buttons["Account & Tap to Pay"].tap()
-        let manage = app.buttons["Manage checkout rules"]; XCTAssertTrue(manage.waitForExistence(timeout: 5)); manage.tap()
+        let manage = app.buttons["Manage checkout rules"]; XCTAssertTrue(manage.waitForExistence(timeout: 5)); app.swipeUp(); manage.tap()
         let open = app.buttons["Review Five off for Shopify"]; XCTAssertTrue(open.waitForExistence(timeout: 10)); open.tap()
         let field = app.textFields["Code"]; XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("SAVE5"); app.keyboards.buttons["Done"].tap()
         let eligibility = app.switches["Anyone with this code can use it"]
@@ -201,6 +201,59 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Anyone with the code can use it. It cannot combine with other discounts."].exists)
         XCTAssertTrue(app.staticTexts["Online publishing is off."].exists)
         XCTAssertFalse(app.buttons["Publish this code"].exists)
+    }
+
+    private func createRestorableBundleQuote(_ app: XCUIApplication) {
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-bundle-basket-ui-tests", "--pos-restored-draft-ui-tests", "--pos-restored-draft-reset"]
+        app.launch()
+        let bundle = app.buttons["Add Fictional trio to basket"]
+        XCTAssertTrue(bundle.waitForExistence(timeout: 10)); bundle.tap()
+        let id = "bundle-quantity-" + String(repeating: "a", count: 32)
+        let count = app.steppers[id]; XCTAssertTrue(count.waitForExistence(timeout: 5))
+        for _ in 0..<3 { count.buttons[id + "-Increment"].tap() }
+        app.buttons["Add bundle · $18.00"].tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.tap()
+        XCTAssertTrue(app.buttons["Review total"].waitForExistence(timeout: 5)); app.buttons["Review total"].tap()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10), app.debugDescription)
+        app.terminate()
+        app.launchArguments.removeAll { $0 == "--pos-restored-draft-reset" }
+    }
+
+    func testUnstartedBundleDraftRestoresAfterRelaunchAndDiscardsBeforeEditing() {
+        let app = XCUIApplication(); createRestorableBundleQuote(app); app.launch()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        let edit = app.buttons["Edit basket"]; XCTAssertTrue(edit.waitForExistence(timeout: 5)); edit.tap()
+        XCTAssertTrue(app.staticTexts["Your basket"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["3 × Laurel & Fig · Wax Melt"].exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Charge '")).firstMatch.exists)
+    }
+
+    func testStartedPaymentRemainsNonEditableAfterRelaunch() {
+        let app = XCUIApplication(); createRestorableBundleQuote(app)
+        app.launchArguments.append("--pos-restored-draft-started"); app.launch()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Edit basket"].exists)
+        app.terminate(); app.launchArguments.removeAll { $0 == "--pos-restored-draft-started" }; app.launch()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Edit basket"].exists)
+    }
+
+    func testRestoredQuoteRemainsIntactWhenDiscardFails() {
+        let app = XCUIApplication(); createRestorableBundleQuote(app)
+        app.launchArguments.append("--pos-discard-fail-tests"); app.launch()
+        let edit = app.buttons["Edit basket"]; XCTAssertTrue(edit.waitForExistence(timeout: 10)); edit.tap()
+        XCTAssertTrue(app.otherElements["status-message"].waitForExistence(timeout: 5) || app.staticTexts["status-message"].exists)
+        XCTAssertTrue(app.staticTexts["Review before payment"].exists)
+        XCTAssertFalse(app.staticTexts["Your basket"].exists)
+    }
+
+    func testLegacySavedQuoteExplainsEditingIsUnavailableAndCanClose() {
+        let app = XCUIApplication(); createRestorableBundleQuote(app)
+        app.launchArguments.append("--pos-restored-draft-missing"); app.launch()
+        XCTAssertTrue(app.staticTexts["This saved basket can’t be edited on this phone. Check the original sale or close this screen."].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Edit basket"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 5))
     }
 
     func testPendingPaymentCanCloseBrowseAndOpenAccountWithoutLosingTheAttempt() {

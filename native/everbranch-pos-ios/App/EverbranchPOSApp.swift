@@ -505,6 +505,7 @@ struct POSView: View {
                     Text(sale.canonicalConfirmation ? "Payment confirmed" : sale.operationalReviewClosed == true ? "Uncollected sale closed after review" : sale.state == "quoted" ? "Review before payment" : sale.state == "cancelled" ? "Payment cancelled" : sale.state == "failed" ? "Payment unsuccessful" : "Payment not confirmed")
                         .font(.headline)
                     if model.canEditBasket { Button("Edit basket", action: model.editBasket).frame(minHeight: 44) }
+                    if model.savedBasketUnavailable { Text("This saved basket can’t be edited on this phone. Check the original sale or close this screen.").font(.subheadline).foregroundStyle(PayTheme.muted) }
                     if sale.collectionReady != true && sale.state == "quoted" { Text(sale.inventoryAuthority == "everbranch" ? "Updating availability or awaiting register approval. You can check this basket again; no payment has started." : "Payment collection is awaiting setup or approval.").font(.subheadline).foregroundStyle(PayTheme.muted) }
                     if sale.canonicalConfirmation && !sale.receiptAvailable { Text("Payment received. Order finalization needs review. Do not charge again.").font(.subheadline) }
                     if model.pending?.collectionRequested == false && sale.state == "quoted" {
