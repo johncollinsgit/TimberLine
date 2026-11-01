@@ -13,6 +13,7 @@ struct SavedPaymentReview: Codable, Identifiable {
     let pending: PendingSale
     let amountMinor: Int
     let savedAt: Date
+    var confirmed: Bool? = nil
 }
 struct POSReceipt: Decodable {
     struct Line: Decodable { let title: String; let quantity: Int; let subtotalMinor: Int?; let taxMinor: Int?; let components: [SaleComponent]? }
@@ -68,7 +69,8 @@ struct POSReceipt: Decodable {
     @Published var receipt: POSReceipt?
     @Published var pending: PendingSale?
     @Published var savedPaymentReviews: [SavedPaymentReview] = []
-    var visibleSavedPayments: [SavedPaymentReview] { savedPaymentReviews.filter { $0.pending.workspace == selectedWorkspace?.slug && $0.pending.register == selectedRegister?.id } }
+    var visibleSavedPayments: [SavedPaymentReview] { savedPaymentReviews.filter { $0.pending.workspace == selectedWorkspace?.slug && $0.pending.register == selectedRegister?.id && $0.confirmed != true } }
+    var visibleRecentSales: [SavedPaymentReview] { savedPaymentReviews.filter { $0.pending.workspace == selectedWorkspace?.slug && $0.pending.register == selectedRegister?.id && $0.confirmed == true } }
     @Published var busy = false
     @Published var message: String?
     @Published var tapReady = false
@@ -402,8 +404,21 @@ struct POSReceipt: Decodable {
         guard sale?.canLeave == true, pending?.refundRequestID == nil else { return }
         perform {
             try self.collector.releaseVerifiedAttempt()
-            if let request = self.pending?.requestID { self.savedPaymentReviews.removeAll { $0.pending.requestID == request }; try self.savePaymentReviews() }
-            self.pending = nil; try self.savePending(); self.sale = nil; self.receipt = nil
+            if let pending = self.pending, let sale = self.sale {
+                let old = self.savedPaymentReviews
+                self.savedPaymentReviews.removeAll { $0.pending.requestID == pending.requestID }
+                if sale.state == "succeeded" && sale.canonicalConfirmation && self.receipt != nil {
+                    self.savedPaymentReviews.append(SavedPaymentReview(pending: pending, amountMinor: sale.amountMinor, savedAt: Date(), confirmed: true))
+                } else if sale.state == "succeeded" {
+                    self.savedPaymentReviews = old
+                    throw POSError.recoveryRequired
+                }
+                do { try self.savePaymentReviews() } catch { self.savedPaymentReviews = old; throw error }
+            }
+            let originalPending = self.pending
+            self.pending = nil
+            do { try self.savePending() } catch { self.pending = originalPending; throw error }
+            self.sale = nil; self.receipt = nil
             self.selectedCustomer = nil; self.customers = []; self.customerQuery = ""; self.customerName = ""; self.customerEmail = ""; self.invoiceID = ""; self.quantities = [:]; self.bundleComponents = [:]
             self.completedSaleGeneration += 1
             self.customAmountMinor = 0; self.customDescription = "Custom amount"
@@ -414,7 +429,7 @@ struct POSReceipt: Decodable {
     }
     private func savePaymentReviews() throws {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--pos-saved-payments-ui-tests") { return }
+        if ProcessInfo.processInfo.arguments.contains("--pos-saved-payments-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-completed-ui-tests") { return }
         #endif
         try SecureStore.write("payments-for-review", try JSONEncoder().encode(savedPaymentReviews))
     }

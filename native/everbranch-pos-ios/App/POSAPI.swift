@@ -64,8 +64,13 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
 final class POSCheckoutFixtureProtocol: URLProtocol {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var catalogData = Data(#"{"items":[]}"#.utf8)
+    nonisolated(unsafe) private static var completedSaleData = Data()
+    nonisolated(unsafe) private static var completedReceiptData = Data()
     static func setCatalog(_ data: Data) { lock.lock(); defer { lock.unlock() }; catalogData = data }
+    static func setCompletedSale(_ sale: Data, receipt: Data) { lock.lock(); defer { lock.unlock() }; completedSaleData = sale; completedReceiptData = receipt }
     private static func catalog() -> Data { lock.lock(); defer { lock.unlock() }; return catalogData }
+    private static func completedSale() -> Data { lock.lock(); defer { lock.unlock() }; return completedSaleData }
+    private static func completedReceipt() -> Data { lock.lock(); defer { lock.unlock() }; return completedReceiptData }
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
@@ -74,6 +79,11 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
             let data: Data
             if url.path.hasSuffix("/catalog") { data = Self.catalog() }
             else if url.path.hasSuffix("/discard") { data = Data(#"{"discarded":true}"#.utf8) }
+            else if url.path == "/api/mobile/v1/workspaces" { data = Data(#"{"workspaces":[{"id":1,"name":"Fictional","slug":"fixture"}]}"#.utf8) }
+            else if url.path == "/api/mobile/v1/workspaces/fixture/pos/registers" { data = Data(#"{"runtime_id":"fixture","registers":[{"id":"fixture","name":"Fictional register","location":"Fixture","catalog_source":"shopify","environment":"sandbox","blockers":[],"guest_checkout":true}]}"#.utf8) }
+            else if url.path.hasSuffix("/sales/fixture-completed") { data = Self.completedSale() }
+            else if url.path.hasSuffix("/sales/fixture-completed/reconcile") { data = Self.completedSale() }
+            else if url.path.hasSuffix("/sales/fixture-completed/receipt") { data = Self.completedReceipt() }
             else if url.path.hasSuffix("/quotes") {
                 var body = request.httpBody ?? Data()
                 if body.isEmpty, let stream = request.httpBodyStream {
