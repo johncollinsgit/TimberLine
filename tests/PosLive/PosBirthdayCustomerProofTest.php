@@ -20,6 +20,12 @@ it('keeps birthday proof default off and binds only explicitly accepted separate
     TenantMarketingSetting::create(['tenant_id' => $tenant->id, 'key' => 'birthday_club_config', 'value' => ['enabled' => true]]);
     $profile = MarketingProfile::create(['tenant_id' => $tenant->id, 'first_name' => 'Test']);
     $birthday = CustomerBirthdayProfile::create(['marketing_profile_id' => $profile->id, 'birth_month' => 4, 'birth_day' => 30]);
+    // The current proof foundation cannot create or authorize an unissued
+    // POS-only entitlement. An enabled flag must not manufacture annual value.
+    config(['pos_live.birthday_authorization_enabled' => true]);
+    expect(fn () => app(PosBirthdayCustomerProof::class)->termsForAuthenticatedProfile($profile, 2026))
+        ->toThrow(PosException::class, 'birthday_authorization_unavailable');
+    config(['pos_live.birthday_authorization_enabled' => false]);
     $issuance = BirthdayRewardIssuance::create(['customer_birthday_profile_id' => $birthday->id, 'marketing_profile_id' => $profile->id,
         'cycle_year' => 2026, 'reward_type' => 'discount_code', 'status' => 'issued', 'reward_value' => '10.00', 'expires_at' => now()->addDay()]);
     DB::table('birthday_cycle_coverage')->insert(['tenant_id' => $tenant->id, 'canonical_profile_id' => $profile->id, 'cycle_year' => 2026,
