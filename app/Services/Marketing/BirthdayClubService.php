@@ -10,6 +10,7 @@ use App\Models\MarketingProfileLink;
 use App\Services\Tenancy\TenantMarketingSettingsResolver;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 class BirthdayClubService
@@ -140,6 +141,17 @@ class BirthdayClubService
             $key = ['tenant_id' => $identity['tenant_id'], 'canonical_profile_id' => $identity['canonical_profile_id'], 'cycle_year' => $year];
             DB::table('birthday_cycle_coverage')->insertOrIgnore([...$key, 'created_at' => now(), 'updated_at' => now()]);
             $coverage = DB::table('birthday_cycle_coverage')->where($key)->lockForUpdate()->first();
+            // Durable POS evidence is authoritative even after a feature is
+            // switched off. A released hold also needs review until a verified
+            // payment lifecycle and reuse policy are wired.
+            if (! Schema::hasTable('pos_birthday_annual_holds')) {
+                if (config('pos_live.in_person_birthday_enabled', false) === true) {
+                    throw new RuntimeException('Birthday annual hold schema is unavailable.');
+                }
+            } elseif (DB::table('pos_birthday_annual_holds')->where('tenant_id', $identity['tenant_id'])
+                ->where('coverage_id', $coverage->id)->lockForUpdate()->exists()) {
+                return ['ok' => false, 'state' => 'birthday_review_required', 'error' => 'birthday_pos_hold_exists', 'issuance' => null];
+            }
             $existing = BirthdayRewardIssuance::query()->whereIn('marketing_profile_id', $identity['profile_ids'])->where('cycle_year', $year)->orderBy('id')->lockForUpdate()->first();
             $legacyCovered = CustomerBirthdayProfile::query()->whereIn('marketing_profile_id', $identity['profile_ids'])->where('reward_last_issued_year', $year)->exists();
             if ($existing || $coverage->legacy_covered || $coverage->issuance_id || $legacyCovered) {

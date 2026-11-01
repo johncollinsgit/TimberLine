@@ -37,3 +37,28 @@ it('serializes annual online operation claims and holds unknown results for revi
         ->and(fn () => $fence->finish($tenant->id, $profile->id, 2026, $issuance->id, $operation, true))->toThrow(PosException::class, 'birthday_fence_review_required');
     Http::assertNothingSent();
 });
+
+it('blocks online activation and records late online use for review when pos annual evidence exists', function (): void {
+    Http::preventStrayRequests();
+    config(['pos_live.birthday_channel_fence_enabled' => true, 'pos_live.in_person_birthday_enabled' => false]);
+    $tenant = Tenant::create(['name' => 'Fictional birthday shop', 'slug' => 'birthday-'.Str::lower(Str::random(10)), 'status' => 'active']);
+    $profile = MarketingProfile::create(['tenant_id' => $tenant->id, 'first_name' => 'Test']);
+    $birthday = CustomerBirthdayProfile::create(['marketing_profile_id' => $profile->id, 'birth_month' => 4, 'birth_day' => 30]);
+    $issuance = BirthdayRewardIssuance::create(['customer_birthday_profile_id' => $birthday->id, 'marketing_profile_id' => $profile->id,
+        'cycle_year' => 2026, 'reward_type' => 'discount_code', 'status' => 'issued']);
+    $coverage = DB::table('birthday_cycle_coverage')->insertGetId(['tenant_id' => $tenant->id, 'canonical_profile_id' => $profile->id,
+        'cycle_year' => 2026, 'issuance_id' => $issuance->id, 'legacy_covered' => false, 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('pos_birthday_annual_holds')->insert(['runtime_id' => 'fixture_runtime', 'tenant_id' => $tenant->id,
+        'coverage_id' => $coverage, 'sale_id' => str_repeat('a', 32), 'state' => 'held', 'amount_minor' => 500,
+        'policy_version' => str_repeat('b', 64), 'authorization_reference' => str_repeat('c', 64), 'created_at' => now(), 'updated_at' => now()]);
+    $fence = app(PosBirthdayOnlineFence::class);
+    expect(fn () => $fence->begin($tenant->id, $profile->id, 2026, $issuance->id, (string) Str::uuid()))
+        ->toThrow(PosException::class, 'birthday_fence_review_required');
+    $review = DB::transaction(fn () => $fence->recordOnlineUse($tenant->id, $profile->id, 2026, $issuance->id, 'shopify:fake-order'));
+    expect($review)->toBeTrue()->and(DB::table('pos_birthday_cycle_fences')->where('tenant_id', $tenant->id)->value('state'))->toBe('review');
+    // A replay cannot hide POS evidence added after an earlier online observation.
+    DB::table('pos_birthday_cycle_fences')->where('tenant_id', $tenant->id)->update(['state' => 'online_consumed']);
+    $review = DB::transaction(fn () => $fence->recordOnlineUse($tenant->id, $profile->id, 2026, $issuance->id, 'shopify:fake-order'));
+    expect($review)->toBeTrue()->and(DB::table('pos_birthday_cycle_fences')->where('tenant_id', $tenant->id)->value('state'))->toBe('review');
+    Http::assertNothingSent();
+});

@@ -38,6 +38,26 @@ function clubGift(MarketingProfile $profile, CustomerBirthdayProfile $birthday, 
     ]);
 }
 
+test('durable pos annual evidence blocks online issuance even with the pos feature disabled', function () {
+    config(['pos_live.in_person_birthday_enabled' => false]);
+    [$tenant, $profile, $birthday] = clubCustomer();
+    $coverage = DB::table('birthday_cycle_coverage')->insertGetId([
+        'tenant_id' => $tenant->id, 'canonical_profile_id' => $profile->id, 'cycle_year' => now()->year,
+        'legacy_covered' => false, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $hold = DB::table('pos_birthday_annual_holds')->insertGetId([
+        'runtime_id' => 'fixture_runtime', 'tenant_id' => $tenant->id, 'coverage_id' => $coverage, 'sale_id' => str_repeat('a', 32),
+        'state' => 'held', 'amount_minor' => 500, 'policy_version' => str_repeat('b', 64), 'authorization_reference' => str_repeat('c', 64),
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+    foreach (['held', 'consumed', 'review', 'released', 'unknown'] as $state) {
+        DB::table('pos_birthday_annual_holds')->where('id', $hold)->update(['state' => $state]);
+        $result = app(BirthdayRewardEngineService::class)->issueAnnualReward($birthday, ['send_email' => false]);
+        expect($result['ok'])->toBeFalse()->and($result['error'])->toBe('birthday_pos_hold_exists')
+            ->and(BirthdayRewardIssuance::count())->toBe(0);
+    }
+});
+
 test('club annual coverage preserves different reward types and prevents a replacement', function () {
     [$tenant, $profile, $birthday] = clubCustomer();
     $old = clubGift($profile, $birthday, ['reward_type' => 'candle_cash', 'status' => 'claimed', 'reward_code' => null, 'candle_cash_awarded' => 50]);

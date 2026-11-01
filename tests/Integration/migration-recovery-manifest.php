@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_01_170000_create_pos_birthday_annual_holds.php' => [
+        'test' => 'tests/Integration/PosBirthdayAnnualHoldMySqlRecoveryTest.php',
+        'scenarios' => ['held annual evidence survives missing indexes, repeated recovery and rollback; duplicate and altered indexes fail closed'],
+    ],
     '2026_11_01_140000_create_pos_shopify_discount_publications.php' => [
         'test' => 'tests/Integration/PosShopifyDiscountMySqlRecoveryTest.php',
         'scenarios' => ['uncertain publication evidence survives missing unique-index repair, replay and rollback; duplicate and changed indexes are rejected'],

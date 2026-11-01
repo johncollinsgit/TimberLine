@@ -7,6 +7,7 @@ namespace App\Services\Pos;
 use App\Models\BirthdayRewardIssuance;
 use App\Models\MarketingProfile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -21,6 +22,9 @@ final class PosBirthdayOnlineFence
         $this->assertEnabled($operationId);
         DB::transaction(function () use ($tenantId, $profileId, $cycleYear, $issuanceId, $operationId): void {
             $coverage = $this->lockCycle($tenantId, $profileId, $cycleYear, $issuanceId);
+            if ($this->hasPosAnnualEvidence($tenantId, (int) $coverage->id)) {
+                throw new PosException('birthday_fence_review_required');
+            }
             DB::table('pos_birthday_cycle_fences')->insertOrIgnore(['tenant_id' => $tenantId, 'coverage_id' => $coverage->id,
                 'issuance_id' => $issuanceId, 'state' => 'idle', 'created_at' => now(), 'updated_at' => now()]);
             $fence = DB::table('pos_birthday_cycle_fences')->where('tenant_id', $tenantId)->where('coverage_id', $coverage->id)->lockForUpdate()->first();
@@ -69,10 +73,13 @@ final class PosBirthdayOnlineFence
             throw new PosException('birthday_fence_review_required');
         }
         $hash = hash('sha256', $orderKey);
-        if ($fence->state === 'online_consumed' && is_string($fence->online_order_hash) && hash_equals($fence->online_order_hash, $hash)) {
+        $posEvidence = $this->hasPosAnnualEvidence($tenantId, (int) $coverage->id);
+        if (! $posEvidence && $fence->state === 'online_consumed' && is_string($fence->online_order_hash) && hash_equals($fence->online_order_hash, $hash)) {
             return false;
         }
-        $review = $fence->state !== 'idle';
+        // A late online purchase is retained as evidence; it can no longer
+        // authorize an additional POS benefit or silently look unopposed.
+        $review = $fence->state !== 'idle' || $posEvidence;
         DB::table('pos_birthday_cycle_fences')->where('id', $fence->id)->update([
             'state' => $review ? 'review' : 'online_consumed', 'online_order_hash' => $fence->online_order_hash ?: $hash, 'updated_at' => now(),
         ]);
@@ -95,6 +102,20 @@ final class PosBirthdayOnlineFence
         }
 
         return $coverage;
+    }
+
+    private function hasPosAnnualEvidence(int $tenantId, int $coverageId): bool
+    {
+        if (! Schema::hasTable('pos_birthday_annual_holds')) {
+            if (config('pos_live.in_person_birthday_enabled', false) === true) {
+                throw new PosException('birthday_fence_review_required');
+            }
+
+            return false;
+        }
+
+        return DB::table('pos_birthday_annual_holds')->where('tenant_id', $tenantId)
+            ->where('coverage_id', $coverageId)->lockForUpdate()->exists();
     }
 
     private function assertEnabled(string $operationId): void
