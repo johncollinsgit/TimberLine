@@ -18,7 +18,7 @@ beforeEach(function (): void {
     (require database_path('migrations/2026_11_01_140000_create_pos_shopify_discount_publications.php'))->up();
     Http::preventStrayRequests();
     config(['pos_live.runtime_id' => 'online_discount_test', 'pos_live.shopify_online_discounts_enabled' => false]);
-    $this->tenant = Tenant::create(['name' => 'Online fixture', 'slug' => 'online-fixture-'.Str::random(8), 'status' => 'active']);
+    $this->tenant = Tenant::create(['name' => 'Online fixture', 'slug' => 'online-fixture-'.Str::lower(Str::random(8)), 'status' => 'active']);
     $this->actor = User::factory()->create();
     $this->scope = ['tenant_id' => (int) $this->tenant->id, 'actor_id' => (int) $this->actor->id, 'admin' => true];
     $this->pos = app(PosStore::class);
