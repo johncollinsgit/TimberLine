@@ -105,6 +105,9 @@ struct POSReceipt: Decodable {
     @Published var refundAmount = ""
     init(basket: [RegisterBasketLine] = []) {
         initialBasket = basket
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") { return }
+        #endif
         if let value = SecureStore.read("pending-customer") { pendingCustomer = try? JSONDecoder().decode(PendingCustomerCreation.self, from: value) }
         signedIn = api.token != nil
         if let value = SecureStore.read("pending-sale") { pending = try? JSONDecoder().decode(PendingSale.self, from: value) }
@@ -132,6 +135,9 @@ struct POSReceipt: Decodable {
         }
     }
     func savePending() throws {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") { return }
+        #endif
         try SecureStore.write("pending-sale", try pending.map { try JSONEncoder().encode($0) })
     }
     var base: String? {
@@ -383,8 +389,13 @@ struct POSReceipt: Decodable {
             struct Result: Decodable { let discarded: Bool }
             let result: Result = try await self.api.request(base + "/requests/\(pending.requestID)/discard", method: "POST", body: [:])
             guard result.discarded else { throw POSError.recoveryRequired }
-            try SecureStore.write("pending-sale", nil)
-            self.pending = nil; self.sale = nil
+            self.pending = nil; try self.savePending(); self.sale = nil; self.receipt = nil
+            self.selectedCustomer = nil; self.customers = []; self.customerQuery = ""; self.customerName = ""; self.customerEmail = ""
+            self.quantities = [:]; self.bundleComponents = [:]; self.initialBasket = []; self.basketIssue = nil; self.invoiceID = ""
+            self.customAmountMinor = 0; self.customDescription = "Custom amount"
+            self.associationRequestID = nil; self.associationCustomerID = nil; self.clearReceiptInputs()
+            self.completedSaleGeneration += 1
+            if let register = self.selectedRegister { try await self.loadRegister(register) }
         }
     }
     func nextSale() {

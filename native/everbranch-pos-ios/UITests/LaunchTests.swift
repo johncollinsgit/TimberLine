@@ -99,6 +99,35 @@ final class LaunchTests: XCTestCase {
         XCTAssertTrue(app.buttons["Payment saved · Open status"].exists)
     }
 
+    func testWarmBasketReviewsTheServerTotalWithoutAnotherMenu() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests"]; app.launch()
+        let basket = app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch
+        XCTAssertTrue(basket.waitForExistence(timeout: 10)); basket.tap()
+        XCTAssertTrue(app.buttons["Charge $21.80"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Review total"].exists)
+        XCTAssertFalse(app.buttons["Check payment status"].exists)
+        app.buttons["Cancel this sale"].tap()
+        XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 5))
+    }
+
+    func testCancellingAnUnchargedQuoteClearsItsBasketAndDoesNotRequote() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests"]; app.launch()
+        let basket = app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch
+        XCTAssertTrue(basket.waitForExistence(timeout: 10)); basket.tap()
+        if app.buttons["Review total"].waitForExistence(timeout: 1) { app.buttons["Review total"].tap() }
+        XCTAssertTrue(app.buttons["Charge $21.80"].waitForExistence(timeout: 5))
+        app.buttons["Cancel this sale"].tap()
+        XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 5))
+        XCTAssertFalse(basket.isEnabled)
+        XCTAssertFalse(app.buttons["Charge $21.80"].exists)
+        app.buttons["Add River Birch to basket"].tap(); basket.tap()
+        XCTAssertTrue(app.buttons["Charge $21.80"].waitForExistence(timeout: 5))
+        app.buttons["Cancel this sale"].tap()
+        XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 5))
+        XCTAssertFalse(basket.isEnabled)
+        attach(app, name: "Cancel returns to empty Products without another quote")
+    }
+
     private func attach(_ app: XCUIApplication, name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name
         attachment.lifetime = .keepAlways; add(attachment)

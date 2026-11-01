@@ -1,3 +1,13 @@
+## Uncharged basket cancellation (November 1 UTC; source candidate)
+
+Cancel of an uncollected quote clears its basket and customer selection, retains other
+saved payment reviews, and returns directly to Products. It must not quote the
+same basket again on the busy-state callback. A warm guest basket requests its
+server total directly without a workspace/catalog reload or an extra Review total
+menu. Lost quote responses and pending availability retain explicit basket
+recovery; payment-status recovery appears after collection starts. The debug-only
+checkout UI transport intercepts every request and uses no provider or real API.
+
 ## Pending payment navigation (October 31; source candidate)
 
 Close returns to the register without erasing a pending payment; Account remains

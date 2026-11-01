@@ -134,6 +134,9 @@ struct POSView: View {
                 if ProcessInfo.processInfo.arguments.contains("--pos-recovery-ui-tests") { return }
                 #endif
                 guard model.signedIn else { return }
+                if screen == .checkout && model.registerLoaded && model.pending == nil && model.selectedRegister?.guestCheckout == true && quoteAllowed && !automaticQuoteRequested {
+                    automaticQuoteRequested = true; model.quote(); return
+                }
                 model.perform {
                     if !model.registerLoaded { try await model.loadWorkspaces() }
                     if model.pending != nil { try await model.recover() }
@@ -397,8 +400,10 @@ struct POSView: View {
                     }
                     if sale.canonicalConfirmation && model.receipt?.customer == nil { Button("Add customer") { showingCustomer = true }.buttonStyle(PayButtonStyle(primary: false)) }
                     if sale.canLeave && model.pending?.refundRequestID == nil { Button("Next sale", action: model.nextSale).buttonStyle(PayButtonStyle()) }
-                } else { Text("Recover this sale before starting another payment.").font(.subheadline) }
-                Button("Check payment status") { model.perform { try await model.recover() } }.buttonStyle(PayButtonStyle(primary: false))
+                } else { Text(model.pending?.collectionRequested == true ? "Recover this sale before starting another payment." : "Preparing total…").font(.subheadline) }
+                if model.pending?.collectionRequested == true || (model.sale == nil && !model.busy) || model.sale?.collectionReady == false {
+                    Button(model.pending?.collectionRequested == true ? "Check payment status" : "Check basket") { model.perform { try await model.recover() } }.buttonStyle(PayButtonStyle(primary: false))
+                }
                 if model.sale?.state == "unknown" && model.pending?.refundRequestID == nil {
                     Button("Leave for review") { confirmUncollected = true }.buttonStyle(PayButtonStyle(primary: false))
                 }
