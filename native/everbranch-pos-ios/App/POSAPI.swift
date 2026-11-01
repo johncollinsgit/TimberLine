@@ -103,7 +103,32 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
         guard let url = request.url else { return }
         do {
             let data: Data
-            if ProcessInfo.processInfo.arguments.contains("--pos-wallet-review-ui-tests") && url.path.contains("/wallet-link-reviews/") {
+            if ProcessInfo.processInfo.arguments.contains("--pos-reward-settings-ui-tests") && url.path.contains("/reward-redemption") {
+                let draft = url.path.hasSuffix("/draft"), publish = url.path.hasSuffix("/publish")
+                let management = !ProcessInfo.processInfo.arguments.contains("--pos-reward-settings-disabled-ui-tests")
+                if draft || publish {
+                    guard management else { throw URLError(.badServerResponse) }
+                    var body = request.httpBody ?? Data()
+                    if body.isEmpty, let stream = request.httpBodyStream {
+                        stream.open(); defer { stream.close() }; var buffer = [UInt8](repeating: 0, count: 1024)
+                        while stream.hasBytesAvailable { let count = stream.read(&buffer, maxLength: buffer.count); if count <= 0 { break }; body.append(buffer, count: count) }
+                    }
+                    let input = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+                    if draft {
+                        guard input["expected_draft_version"] as? String == String(repeating: "a", count: 64), let item = input["draft"] as? [String: Any],
+                              item["max_minor"] as? Int == 600, item["enabled"] as? Bool == false,
+                              item["channel"] as? String == "in_person", item["refund_policy"] as? String == "restore_full_review_partial" else { throw URLError(.badServerResponse) }
+                    } else {
+                        guard input["draft_version"] as? String == String(repeating: "b", count: 64), input["confirmed"] as? Bool == true,
+                              input["expected_published_version"] is NSNull, input["expected_register_version"] is NSNull,
+                              input["expected_program_version"] is NSNull else { throw URLError(.badServerResponse) }
+                    }
+                }
+                data = try JSONSerialization.data(withJSONObject: ["draft": ["enabled": false, "max_minor": (draft || publish) ? 600 : 500,
+                    "channel": "in_person", "refund_policy": "restore_full_review_partial"], "draft_version": String(repeating: (draft || publish) ? "b" : "a", count: 64),
+                    "published_version": publish ? (String(repeating: "c", count: 64) as Any) : (NSNull() as Any), "register_reviewed_version": NSNull(),
+                    "program_version": NSNull(), "management_enabled": management, "redemption_enabled": false])
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-wallet-review-ui-tests") && url.path.contains("/wallet-link-reviews/") {
                 let submitted = request.httpMethod == "POST"
                 if submitted {
                     var body = request.httpBody ?? Data()

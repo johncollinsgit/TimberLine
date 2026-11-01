@@ -81,3 +81,34 @@ extension CustomerEnrollmentFlowTests {
         XCTAssertTrue(app.staticTexts["No wallet has been linked. This review does not enable rewards redemption."].exists)
     }
 }
+
+extension CustomerEnrollmentFlowTests {
+    private func openRewardsSettings(_ app: XCUIApplication, disabled: Bool = false) {
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-online-rules-ui-tests", "--pos-reward-settings-ui-tests"]
+        if disabled { app.launchArguments.append("--pos-reward-settings-disabled-ui-tests") }
+        app.launch()
+        XCTAssertTrue(app.buttons["Account & Tap to Pay"].waitForExistence(timeout: 10)); app.buttons["Account & Tap to Pay"].tap()
+        app.swipeUp()
+        let open = app.buttons["Manage in-person rewards"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5)); open.tap()
+        XCTAssertTrue(app.textFields["rewards-cap"].waitForExistence(timeout: 5))
+    }
+    func testRewardsManagementGateKeepsPolicyReadOnly() {
+        let app = XCUIApplication(); openRewardsSettings(app, disabled: true)
+        XCTAssertTrue(app.staticTexts["Rewards policy management is currently off."].exists)
+        XCTAssertFalse(app.textFields["rewards-cap"].isEnabled)
+        XCTAssertFalse(app.buttons["Save draft"].isEnabled)
+    }
+    func testAdminReviewsDraftWithoutActivatingRedemption() {
+        let app = XCUIApplication(); openRewardsSettings(app)
+        XCTAssertTrue(app.staticTexts["In-person redemption is off. Saving or publishing this policy does not activate it."].exists)
+        let cap = app.textFields["rewards-cap"]; cap.tap()
+        let old = (cap.value as? String) ?? ""
+        cap.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count) + "6.00")
+        app.buttons["Save draft"].tap()
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["Draft saved. Review it before publishing."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Publishing is temporarily unavailable while payment safety checks are being completed."].exists)
+        XCTAssertFalse(app.buttons["Publish reviewed policy"].isEnabled)
+    }
+}

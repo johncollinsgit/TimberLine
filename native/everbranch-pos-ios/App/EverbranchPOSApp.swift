@@ -99,6 +99,7 @@ struct POSView: View {
     @State private var showingTaxLocations = false
     @State private var showingEnrollmentSettings = false
     @State private var showingWalletReview = false
+    @State private var showingRewardsSettings = false
     @State private var editingBundle: BundleBasketLine?
     @State private var contactOnly = false
     @State private var automaticQuoteRequested = false
@@ -233,6 +234,7 @@ struct POSView: View {
             .sheet(isPresented: $showingTaxLocations) { TaxLocationManager(model: model) }
             .sheet(isPresented: $showingEnrollmentSettings) { CustomerEnrollmentSettingsView(model: model) }
             .sheet(isPresented: $showingWalletReview) { ExistingWalletReviewView(model: model) }
+            .sheet(isPresented: $showingRewardsSettings) { RewardsRedemptionSettingsView(model: model) }
             .sheet(item: $editingBundle) { line in
                 if let item = model.items.first(where: { $0.id == line.itemID }) {
                     BundleOptions(item: item, model: model, existing: line)
@@ -333,6 +335,10 @@ struct POSView: View {
                 PayCard(title: "Tax location", icon: "mappin.and.ellipse") {
                     Text("Review where this register sells and its tax calculation.").font(.subheadline).foregroundStyle(PayTheme.muted)
                     Button("Manage tax location") { showingTaxLocations = true }.buttonStyle(PayButtonStyle(primary: false))
+                }
+                PayCard(title: "Rewards at checkout", icon: "gift") {
+                    Text("Review your in-person rewards rules and per-sale limit.").font(.subheadline).foregroundStyle(PayTheme.muted)
+                    Button("Manage in-person rewards") { showingRewardsSettings = true }.buttonStyle(PayButtonStyle(primary: false))
                 }
                 PayCard(title: "Existing rewards wallet", icon: "person.crop.circle.badge.questionmark") {
                     Text("Review a customer-provided request. Recording a review does not link a wallet.").font(.subheadline).foregroundStyle(PayTheme.muted)

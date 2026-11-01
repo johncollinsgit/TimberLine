@@ -278,3 +278,122 @@ struct ExistingWalletReviewView: View {
         } catch { self.error = "Review was not confirmed. Find the original request again before retrying."; self.review = nil; confirmed = false }
     }
 }
+
+private struct RedemptionDraft: Decodable {
+    let enabled: Bool
+    let maxMinor: Int
+    let channel: String
+    let refundPolicy: String
+}
+
+private struct RedemptionPublished: Decodable {
+    let enabled: Bool
+    let maxMinor: Int
+    let refundPolicy: String
+    let reviewedVersion: String?
+}
+
+private struct RedemptionSettings: Decodable {
+    let draft: RedemptionDraft
+    let published: RedemptionPublished?
+    let draftVersion: String
+    let publishedVersion: String?
+    let registerReviewedVersion: String?
+    let programVersion: String?
+    let managementEnabled: Bool
+    let redemptionEnabled: Bool
+}
+
+/// Reviews the limited POS policy; online program editing and activation use separate controls.
+struct RewardsRedemptionSettingsView: View {
+    @ObservedObject var model: POSViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var settings: RedemptionSettings?
+    @State private var enabled = false
+    @State private var amount = ""
+    @State private var busy = false
+    @State private var message: String?
+    @FocusState private var amountFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Availability") {
+                    if let settings {
+                        Text(settings.redemptionEnabled ? "The in-person redemption gate is on. The program, register and customer authorization must also be ready." : "In-person redemption is off. Saving or publishing this policy does not activate it.")
+                        Text(settings.managementEnabled ? "An administrator can review this register's policy." : "Rewards policy management is currently off.").font(.caption)
+                        if let published = settings.published {
+                            Text(published.enabled ? "Published policy: up to \(POSMoney.display(published.maxMinor)) per in-person sale." : "Published policy: in-person redemption disabled.")
+                            if published.enabled {
+                                Text(published.reviewedVersion != nil && published.reviewedVersion == settings.registerReviewedVersion ? "This register has reviewed the published policy." : "This register has not reviewed the published policy.").font(.caption)
+                            }
+                        } else { Text("No in-person policy has been published.").font(.caption) }
+                    } else { Text("Loading rewards settings…") }
+                    Text("Online rewards are managed separately. Birthday rewards and existing-wallet links are not activated here.").font(.caption)
+                }
+                if let settings {
+                    Section("In-person policy draft") {
+                        Toggle("Allow in-person redemption in this policy", isOn: $enabled).disabled(!settings.managementEnabled)
+                        TextField("Maximum per sale", text: $amount).keyboardType(.decimalPad).focused($amountFocused)
+                            .disabled(!settings.managementEnabled).accessibilityIdentifier("rewards-cap")
+                        Text("This is a per-sale maximum, not a customer's balance.").font(.caption)
+                        Text("Channel: in person")
+                        Text("Full refund: restore redeemed rewards. Partial refund: review required.").font(.caption)
+                        Button("Save draft") { Task { await save() } }.disabled(!settings.managementEnabled || busy || !dirty)
+                    }
+                    Section("Review and publish") {
+                        if dirty { Text("Save your changes before reviewing this policy.") }
+                        else {
+                            Text(enabled ? "Allow up to \(POSMoney.display(settings.draft.maxMinor)) per in-person sale." : "Do not allow in-person redemption under this policy.")
+                            Text("Full refunds restore redeemed rewards; partial refunds require review.")
+                            if enabled && settings.programVersion == nil { Text("A published rewards program is required before this policy can be reviewed.") }
+                            Text("Publishing is temporarily unavailable while payment safety checks are being completed.").font(.footnote)
+                            Button("Publish reviewed policy") {}.disabled(true)
+                        }
+                        Text("Publishing records this reviewed policy. It does not turn on redemption or change online rewards.").font(.caption)
+                    }
+                }
+                if let message { Section { Text(message).font(.footnote) } }
+            }.navigationTitle("In-person rewards").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() }.disabled(busy) } }
+                .disabled(busy).overlay { if busy { ProgressView() } }
+                .task { await load() }
+        }
+    }
+    private var dirty: Bool {
+        guard let settings else { return false }
+        return enabled != settings.draft.enabled || (try? POSMoney.minor(amount)) != settings.draft.maxMinor
+    }
+    private func apply(_ result: RedemptionSettings) -> Bool {
+        guard result.draft.channel == "in_person", result.draft.refundPolicy == "restore_full_review_partial",
+              result.published == nil || result.published?.refundPolicy == "restore_full_review_partial" else {
+            settings = nil; message = "This policy cannot be reviewed in this version of Pay."; return false
+        }
+        settings = result; enabled = result.draft.enabled; amount = String(format: "%d.%02d", result.draft.maxMinor / 100, result.draft.maxMinor % 100)
+        return true
+    }
+    private func load() async {
+        guard let base = model.base else { message = "Choose a register first."; return }
+        busy = true; defer { busy = false }
+        do {
+            let result: RedemptionSettings = try await model.api.request(base + "/reward-redemption")
+            guard model.base == base else { return }
+            if apply(result) { message = nil }
+        } catch { message = "Rewards settings are unavailable. Check your administrator access and whether policy management is enabled." }
+    }
+    private func save() async {
+        guard let base = model.base, let settings, settings.managementEnabled, !busy else { return }
+        guard let minor = try? POSMoney.minor(amount) else { message = "Enter a per-sale amount greater than zero, with up to two decimal places."; return }
+        amountFocused = false; busy = true; defer { busy = false }
+        do {
+            let result: RedemptionSettings = try await model.api.request(base + "/reward-redemption/draft", method: "POST", body: [
+                "draft": ["enabled": enabled, "max_minor": minor, "channel": "in_person", "refund_policy": "restore_full_review_partial"],
+                "expected_draft_version": settings.draftVersion
+            ])
+            guard model.base == base, result.draft.enabled == enabled, result.draft.maxMinor == minor else {
+                self.settings = nil; message = "Draft status needs checking. Reopen settings before trying again."; return
+            }
+            if apply(result) { message = "Draft saved. Review it before publishing." }
+        } catch { self.settings = nil; message = "Draft was not confirmed. Reopen settings and review the latest version before trying again." }
+    }
+}
