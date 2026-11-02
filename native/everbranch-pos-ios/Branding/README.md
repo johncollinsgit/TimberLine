@@ -49,3 +49,8 @@ stored in `App/Assets.xcassets/RegisterMountainHero.imageset`.
 
 Verified with an unsigned simulator build and a fictional register screenshot.
 Physical installation and protected release are separate verification steps.
+
+While product search has keyboard focus, compact result rows keep product and
+bundle selection above the keyboard without moving the header or search field.
+Closing search restores the photo grid. The existing four search/bundle UI
+regressions pass with the larger header and compact results.
