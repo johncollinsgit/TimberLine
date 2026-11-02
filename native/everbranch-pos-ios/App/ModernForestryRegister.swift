@@ -98,9 +98,15 @@ private struct NativeRegister: View {
                 }
                 Spacer()
                 Button(action: onAccount) { Text("Account").font(.subheadline.weight(.semibold)).padding(14).frame(minHeight: 48).foregroundStyle(PayTheme.ink).background(PayTheme.cream, in: Capsule()).contentShape(Capsule()) }.accessibilityLabel("Account & Tap to Pay")
-            }.padding(.horizontal, 20).frame(height: 96).foregroundStyle(PayTheme.cream)
-                .background { ZStack(alignment: .bottom) { PayTheme.ink; Image("RegisterMountains").resizable().scaledToFit().opacity(0.85) } }
-                .clipped()
+            }.padding(.horizontal, 20).frame(height: 168).foregroundStyle(PayTheme.cream)
+                .background {
+                    Image("RegisterMountainHero")
+                        .resizable().scaledToFill()
+                        .overlay(LinearGradient(colors: [.clear, .black.opacity(0.38)], startPoint: .top, endPoint: .bottom))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                        .ignoresSafeArea(.container, edges: .top)
+                }
             Picker("Register", selection: $tab) { ForEach(RegisterTab.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).padding(.horizontal, 20)
             if model.pending != nil { Button("Payment saved · Open status", action: onBasket).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
             else if !model.visibleSavedPayments.isEmpty { Button("Payments for review (\(model.visibleSavedPayments.count))") { savedPayments = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }

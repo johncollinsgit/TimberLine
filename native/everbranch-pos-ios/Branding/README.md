@@ -32,3 +32,20 @@ the iOS asset catalog. Generation prompt:
 This asset update does not establish payment acceptance or Apple distribution
 approval. Each installed candidate retains a unique build number and the normal
 signing, onboarding and commercial collection gates.
+
+## Register mountain header
+
+Owner direction, November 2, 2026: enlarge the trees/mountain scene, extend it to
+all the way to the top, and remove the solid green strip. The register uses the
+new `RegisterMountainHero` asset with a 168-point content area and a background
+extending behind the top safe area. Controls stay below the status bar. The
+original `RegisterMountains` panorama remains available unchanged.
+
+The built-in image generation tool expanded the original panorama into taller
+artwork, preserving its evergreen/ivory engraved-paper look. The light upper area
+keeps dark status text readable; a lower gradient supports the white register
+labels. The exact prompt is in `register-header-prompt.txt`; the selected PNG is
+stored in `App/Assets.xcassets/RegisterMountainHero.imageset`.
+
+Verified with an unsigned simulator build and a fictional register screenshot.
+Physical installation and protected release are separate verification steps.
