@@ -35,7 +35,7 @@ signing, onboarding and commercial collection gates.
 
 ## Register mountain header
 
-Owner direction, November 2, 2026: enlarge the trees/mountain scene, extend it to
+Owner direction, November 2, 2026: enlarge the trees/mountain scene, extend it
 all the way to the top, and remove the solid green strip. The register uses the
 new `RegisterMountainHero` asset with a 168-point content area and a background
 extending behind the top safe area. Controls stay below the status bar. The
