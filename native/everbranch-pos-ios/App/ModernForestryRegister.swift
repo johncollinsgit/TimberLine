@@ -98,9 +98,15 @@ private struct NativeRegister: View {
                 }
                 Spacer()
                 Button(action: onAccount) { Text("Account").font(.subheadline.weight(.semibold)).padding(14).frame(minHeight: 48).foregroundStyle(PayTheme.ink).background(PayTheme.cream, in: Capsule()).contentShape(Capsule()) }.accessibilityLabel("Account & Tap to Pay")
-            }.padding(.horizontal, 20).frame(height: 96).foregroundStyle(PayTheme.cream)
-                .background { ZStack(alignment: .bottom) { PayTheme.ink; Image("RegisterMountains").resizable().scaledToFit().opacity(0.85) } }
-                .clipped()
+            }.padding(.horizontal, 20).frame(height: 168).foregroundStyle(PayTheme.cream)
+                .background {
+                    Image("RegisterMountainHero")
+                        .resizable().scaledToFill()
+                        .overlay(LinearGradient(colors: [.clear, .black.opacity(0.38)], startPoint: .top, endPoint: .bottom))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                        .ignoresSafeArea(.container, edges: .top)
+                }
             Picker("Register", selection: $tab) { ForEach(RegisterTab.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).padding(.horizontal, 20)
             if model.pending != nil { Button("Payment saved · Open status", action: onBasket).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
             else if !model.visibleSavedPayments.isEmpty { Button("Payments for review (\(model.visibleSavedPayments.count))") { savedPayments = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
@@ -118,9 +124,15 @@ private struct NativeRegister: View {
             else {
                 HStack { Image(systemName: "magnifyingglass"); TextField("Search products", text: $search).focused($searchFocused).submitLabel(.done).onSubmit { searchFocused = false }.textInputAutocapitalization(.never).autocorrectionDisabled() }.padding(14).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20)
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                        ForEach(groups) { group in product(group) }
-                    }.padding(.horizontal, 20).padding(.bottom, 16)
+                    if searchFocused {
+                        LazyVStack(spacing: 12) {
+                            ForEach(groups) { group in product(group) }
+                        }.padding(.horizontal, 20).padding(.bottom, 16)
+                    } else {
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                            ForEach(groups) { group in product(group) }
+                        }.padding(.horizontal, 20).padding(.bottom, 16)
+                    }
                     if groups.isEmpty { ContentUnavailableView(tab == .favorites ? "Your favorites" : "No matching products", systemImage: tab == .favorites ? "star" : "magnifyingglass", description: Text(tab == .favorites ? "Use the star on a product to keep it here." : "Try another name or refresh the catalog.")) }
                 }.scrollDismissesKeyboard(.interactively).refreshable { model.refreshProducts() }
             }
@@ -172,21 +184,45 @@ private struct NativeRegister: View {
     private func product(_ group: ProductGroup) -> some View {
         ZStack(alignment: .topTrailing) {
             Button { select(group) } label: {
-                VStack(alignment: .leading, spacing: 10) {
-                    AsyncImage(url: group.items[0].imageUrl.flatMap(URL.init(string:))) { image in image.resizable().scaledToFill() }
-                        placeholder: { ZStack { PayTheme.line.opacity(0.5); Image(systemName: "leaf").font(.largeTitle).foregroundStyle(PayTheme.muted) } }
-                        .frame(maxWidth: .infinity).frame(height: 142).clipped().clipShape(RoundedRectangle(cornerRadius: 20))
-                    Text(group.title).font(.system(.title3, design: .serif)).lineLimit(2).frame(minHeight: 48, alignment: .top)
-                    Text((group.items.count > 1 ? "From " : "") + POSMoney.display(group.items[0].unitAmountMinor)).font(.headline).monospacedDigit()
-                    Text(!group.available ? (group.items.contains { $0.availability == "review_required" } ? "Bundle setup needed" : model.selectedRegister?.canManageInventory == true ? "Count stock" : group.items.contains { $0.availability == "count_required" } ? "Count needed" : "Unavailable") : group.items.count > 1 ? "Choose options" : "Add to basket").font(.caption.weight(.semibold)).padding(.horizontal, 12).padding(.vertical, 10).background(PayTheme.paper, in: Capsule())
+                Group {
+                    if searchFocused {
+                        HStack(spacing: 12) {
+                            productPhoto(group).frame(width: 54, height: 54).clipped().clipShape(RoundedRectangle(cornerRadius: 12))
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(group.title).font(.system(.body, design: .serif).weight(.semibold)).lineLimit(2)
+                                HStack(spacing: 8) {
+                                    Text(productPrice(group)).font(.caption.weight(.semibold)).monospacedDigit()
+                                    Text(productAction(group)).font(.caption2.weight(.semibold)).padding(.horizontal, 8).padding(.vertical, 4).background(PayTheme.paper, in: Capsule())
+                                }.lineLimit(1)
+                            }.padding(.trailing, 48)
+                            Spacer(minLength: 0)
+                        }.frame(minHeight: 64)
+                    } else {
+                        VStack(alignment: .leading, spacing: 10) {
+                            productPhoto(group).frame(maxWidth: .infinity).frame(height: 142).clipped().clipShape(RoundedRectangle(cornerRadius: 20))
+                            Text(group.title).font(.system(.title3, design: .serif)).lineLimit(2).frame(minHeight: 48, alignment: .top)
+                            Text(productPrice(group)).font(.headline).monospacedDigit()
+                            Text(productAction(group)).font(.caption.weight(.semibold)).padding(.horizontal, 12).padding(.vertical, 10).background(PayTheme.paper, in: Capsule())
+                        }
+                    }
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(12).background(PayTheme.cream, in: RoundedRectangle(cornerRadius: 28)).overlay(RoundedRectangle(cornerRadius: 28).stroke(PayTheme.line, lineWidth: 1)).contentShape(RoundedRectangle(cornerRadius: 28))
             }.disabled(model.pending == nil && !group.available && model.selectedRegister?.canManageInventory != true).accessibilityLabel(group.items.count == 1 ? "Add \(group.title) to basket" : "Choose \(group.title) options")
             Button {
                 if favorites.contains(group.id) { favorites.remove(group.id) } else { favorites.insert(group.id) }
                 UserDefaults.standard.set(Array(favorites), forKey: favoriteKey)
-            } label: { Image(systemName: favorites.contains(group.id) ? "star.fill" : "star").frame(width: 44, height: 44).background(PayTheme.cream.opacity(0.95), in: Circle()).contentShape(Circle()) }.padding(20)
+            } label: { Image(systemName: favorites.contains(group.id) ? "star.fill" : "star").frame(width: 44, height: 44).background(PayTheme.cream.opacity(0.95), in: Circle()).contentShape(Circle()) }.padding(searchFocused ? 12 : 20)
                 .accessibilityLabel(favorites.contains(group.id) ? "Remove \(group.title) from favorites" : "Favorite \(group.title)")
         }
+    }
+    private func productPhoto(_ group: ProductGroup) -> some View {
+        AsyncImage(url: group.items[0].imageUrl.flatMap(URL.init(string:))) { image in image.resizable().scaledToFill() }
+            placeholder: { ZStack { PayTheme.line.opacity(0.5); Image(systemName: "leaf").font(.title2).foregroundStyle(PayTheme.muted) } }
+    }
+    private func productPrice(_ group: ProductGroup) -> String {
+        (group.items.count > 1 ? "From " : "") + POSMoney.display(group.items[0].unitAmountMinor)
+    }
+    private func productAction(_ group: ProductGroup) -> String {
+        !group.available ? (group.items.contains { $0.availability == "review_required" } ? "Bundle setup needed" : model.selectedRegister?.canManageInventory == true ? "Count stock" : group.items.contains { $0.availability == "count_required" } ? "Count needed" : "Unavailable") : group.items.count > 1 ? "Choose options" : "Add to basket"
     }
     private func select(_ group: ProductGroup) {
         searchFocused = false
