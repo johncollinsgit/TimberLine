@@ -353,6 +353,115 @@ it('sends per-unit allocated offers to Shopify and verifies discounted tax total
     expect($snapshot['terms']['discount_minor'])->toBe(471)->and($snapshot['terms']['tax_minor'])->toBe(107);
 });
 
+function configureProtectedAddon($test, int $fixed = 100, bool $allowAdditionalDiscounts = false): array
+{
+    $offers = configureCheckoutOffers($test);
+    $row = DB::table('tenant_commerce_rule_sets')->where('tenant_id', $test->tenant->id)->first();
+    $rules = json_decode($row->rules, true);
+    $rules[0]['allow_additional_discounts'] = $allowAdditionalDiscounts;
+    $rules[1]['value'] = $fixed;
+    $rules[1]['scopes'] = ['item', 'sale'];
+    $version = app(\App\Services\Pos\PosCommerceRules::class)->validate($rules)['version'];
+    DB::table('tenant_commerce_rule_sets')->where('tenant_id', $test->tenant->id)->update(['rules' => json_encode($rules), 'version' => $version]);
+    $row = $test->store->rows('registers', $test->tenant->id)->first();
+    $settings = $test->store->decrypt($row->configuration);
+    $settings['checkout_rules_reviewed_version'] = $version;
+    $test->store->rows('registers', $test->tenant->id)->update(['configuration' => $test->store->encrypt($settings)]);
+    $offers['checkout_rules_version'] = $version;
+
+    return $offers;
+}
+
+it('protects the add-on unit while ordered item and sale discounts affect the regular unit and tax', function (): void {
+    $offers = configureProtectedAddon($this);
+    $input = [...$this->selection, ...$offers];
+    $input['items'][0]['quantity'] = 2;
+    $input['discounts'][] = ['rule_id' => 'fixed', 'scope' => 'item', 'item_id' => $this->item, 'quantity' => 2];
+    $input['discounts'][] = ['rule_id' => 'percent', 'scope' => 'sale'];
+    $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->assertJsonPath('amount_minor', 1540)->json();
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail());
+    expect(array_column($snapshot['terms']['applied_offers'], 'amount_minor'))->toBe([200, 100, 90, 100, 71])
+        ->and($snapshot['terms']['display'][0]['unit_net_minor'])->toBe([639, 800])
+        ->and($snapshot['terms']['tax_minor'])->toBe(101);
+});
+
+it('allows an owner-configured add-on to receive later discounts when stacking is explicitly enabled', function (): void {
+    $offers = configureProtectedAddon($this, 100, true);
+    $input = [...$this->selection, ...$offers];
+    $input['items'][0]['quantity'] = 2;
+    $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->assertJsonPath('amount_minor', 1637)->json();
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail());
+    expect(array_column($snapshot['terms']['applied_offers'], 'amount_minor'))->toBe([200, 100, 170]);
+});
+
+it('clamps sale and item discounts to regular units without discounting the protected add-on', function (): void {
+    $offers = configureProtectedAddon($this, 5000);
+    $input = [...$this->selection, ...$offers];
+    $input['items'][0]['quantity'] = 2;
+    $input['discounts'] = [['rule_id' => 'fixed', 'scope' => 'sale'],
+        ['rule_id' => 'fixed', 'scope' => 'item', 'item_id' => $this->item, 'quantity' => 2],
+        ['rule_id' => 'percent', 'scope' => 'sale']];
+    $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->assertJsonPath('amount_minor', 856)->json();
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail());
+    expect(array_column($snapshot['terms']['applied_offers'], 'amount_minor'))->toBe([200, 1000, 0, 0])
+        ->and($snapshot['terms']['display'][0]['unit_net_minor'])->toBe([0, 800])
+        ->and($snapshot['terms']['tax_minor'])->toBe(56);
+});
+
+it('records a zero sale discount when every unit is protected', function (): void {
+    $offers = configureProtectedAddon($this);
+    $row = DB::table('tenant_commerce_rule_sets')->where('tenant_id', $this->tenant->id)->first();
+    $rules = json_decode($row->rules, true);
+    $rules[0]['requires_other_item'] = false;
+    $version = app(\App\Services\Pos\PosCommerceRules::class)->validate($rules)['version'];
+    DB::table('tenant_commerce_rule_sets')->where('tenant_id', $this->tenant->id)->update(['rules' => json_encode($rules), 'version' => $version]);
+    $row = $this->store->rows('registers', $this->tenant->id)->first();
+    $settings = $this->store->decrypt($row->configuration);
+    $settings['checkout_rules_reviewed_version'] = $version;
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    $input = [...$this->selection, ...$offers, 'checkout_rules_version' => $version,
+        'discounts' => [['rule_id' => 'percent', 'scope' => 'sale']]];
+    $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->assertJsonPath('amount_minor', 856)->json();
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail());
+    expect(array_column($snapshot['terms']['applied_offers'], 'amount_minor'))->toBe([200, 0])
+        ->and($snapshot['terms']['display'][0]['unit_net_minor'])->toBe([800]);
+});
+
+it('sends separate protected add-on and regular prices to Shopify for tax calculation', function (): void {
+    $offers = configureProtectedAddon($this);
+    $shop = \App\Models\ShopifyStore::create(['tenant_id' => $this->tenant->id, 'store_key' => 'protected-addon-'.$this->tenant->id,
+        'shop_domain' => 'protected-addon-'.$this->tenant->id.'.myshopify.com', 'access_token' => 'fixture-token']);
+    $variant = 'gid://shopify/ProductVariant/101';
+    $this->stock->rows('provider_items', $this->tenant->id)->insert(['tenant_id' => $this->tenant->id, 'store_id' => $shop->id,
+        'item_id' => $this->item, 'variant_id' => $variant, 'location_id' => 'gid://shopify/Location/301',
+        'unit_amount_minor' => 1000, 'revision' => str_repeat('d', 64)]);
+    $settings = $this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration);
+    $settings['shopify'] = ['store_id' => $shop->id, 'location_id' => 'gid://shopify/Location/301', 'tax_address' => ['countryCode' => 'US', 'zip' => '00000']];
+    $this->store->rows('registers', $this->tenant->id)->update(['catalog_source' => 'shopify', 'configuration' => $this->store->encrypt($settings)]);
+    $received = [];
+    Http::fake(['https://protected-addon-*.myshopify.com/*' => function ($request) use (&$received, $variant) {
+        $received = $request['variables']['input'];
+        $money = fn ($amount) => ['shopMoney' => ['amount' => $amount, 'currencyCode' => 'USD']];
+
+        return Http::response(['data' => ['draftOrderCalculate' => ['userErrors' => [], 'calculatedDraftOrder' => [
+            'taxesIncluded' => false, 'totalPriceSet' => $money('17.23'), 'totalTaxSet' => $money('1.13'),
+            'lineItems' => [
+                ['variant' => ['id' => $variant], 'quantity' => 1, 'originalUnitPriceSet' => $money('10.00'), 'discountedTotalSet' => $money('8.10')],
+                ['variant' => ['id' => $variant], 'quantity' => 1, 'originalUnitPriceSet' => $money('10.00'), 'discountedTotalSet' => $money('8.00')],
+            ],
+        ]]]]);
+    }]);
+    $input = [...$this->selection, ...$offers];
+    $input['items'][0]['quantity'] = 2;
+    $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->assertJsonPath('amount_minor', 1723)->json();
+    $values = array_column(array_column($received['lineItems'], 'appliedDiscount'), 'value');
+    sort($values);
+    expect($values)->toEqual([1.9, 2.0]);
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail());
+    expect($snapshot['terms']['display'][0]['unit_net_minor'])->toBe([810, 800])
+        ->and($snapshot['terms']['tax_minor'])->toBe(113);
+});
+
 beforeEach(function (): void {
     \Illuminate\Support\Facades\Queue::fake([\App\Jobs\StockSyncTenant::class]);
     config(['pos_live.owned_inventory_enabled' => true, 'pos_live.inventory_publication_enabled' => true]);

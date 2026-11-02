@@ -87,7 +87,8 @@ final class PosCheckoutOffers
             $amount = ($catalog[$id]['unit_amount_minor'] - $rule['value']) * $quantity;
             $net[$id] -= $amount;
             foreach (range(1, $quantity) as $_) {
-                $addonPrices[$id][] = $rule['value'];
+                $addonPrices[$id][] = ['price' => $rule['value'],
+                    'protected' => ($rule['allow_additional_discounts'] ?? true) === false];
             }
             if ($rule['requires_other_item']) {
                 $qualifiedAddonUnits += $quantity;
@@ -106,22 +107,32 @@ final class PosCheckoutOffers
         if ($qualifiedAddonUnits > $qualifyingUnits) {
             throw new PosException('checkout_addon_requires_purchase', 422);
         }
-        $unitMode = count(array_filter($discounts, fn ($selection) => array_key_exists('quantity', $selection))) > 0;
+        $hasProtected = false;
+        foreach ($addonPrices as $prices) {
+            foreach ($prices as $price) {
+                $hasProtected = $hasProtected || $price['protected'];
+            }
+        }
+        $unitMode = $hasProtected || count(array_filter($discounts, fn ($selection) => array_key_exists('quantity', $selection))) > 0;
         $unitGroups = [];
         $unitLines = [];
+        $protectedUnits = [];
         if ($unitMode) {
             foreach ($net as $id => $amount) {
                 $quantity = $id === 'custom' ? 1 : $selected[$id]['quantity'];
                 $original = $id === 'custom' ? $gross[$id] : $catalogByLine[$id]['unit_amount_minor'];
                 $addPrices = $addonPrices[$id] ?? [];
-                $prices = [...array_fill(0, $quantity - count($addPrices), $original), ...$addPrices];
-                if (array_sum($prices) !== $amount) {
+                $prices = [...array_fill(0, $quantity - count($addPrices), ['price' => $original, 'protected' => false]), ...$addPrices];
+                if (array_sum(array_column($prices, 'price')) !== $amount) {
                     throw new PosException('checkout_discount_invalid', 422);
                 }
                 foreach ($prices as $index => $price) {
                     $key = $id.':'.$index;
                     $unitGroups[$id][] = $key;
-                    $unitLines[$key] = $price;
+                    $unitLines[$key] = $price['price'];
+                    if ($price['protected']) {
+                        $protectedUnits[$key] = true;
+                    }
                 }
             }
         }
@@ -146,17 +157,35 @@ final class PosCheckoutOffers
                 throw new PosException('checkout_discount_invalid', 422);
             }
             $spec = ['scope' => $scopeName, 'item_id' => $item, 'kind' => $rule['kind'], 'value' => $rule['value']];
-            if ($unitMode && $scopeName === 'item') {
-                $quantity = $selection['quantity'] ?? count($unitGroups[$item]);
-                if (! is_int($quantity) || $quantity < 1 || $quantity > count($unitGroups[$item])) {
-                    throw new PosException('checkout_discount_invalid', 422);
+            if ($unitMode) {
+                if ($scopeName === 'item') {
+                    $quantity = $selection['quantity'] ?? count($unitGroups[$item]);
+                    if (! is_int($quantity) || $quantity < 1 || $quantity > count($unitGroups[$item])) {
+                        throw new PosException('checkout_discount_invalid', 422);
+                    }
+                    $eligibleKeys = array_slice($unitGroups[$item], 0, $quantity);
+                } else {
+                    $eligibleKeys = array_keys($unitLines);
                 }
-                $spec['item_ids'] = array_slice($unitGroups[$item], 0, $quantity);
+                $spec['scope'] = 'item';
+                $spec['item_ids'] = array_values(array_filter($eligibleKeys, fn ($key) => ! isset($protectedUnits[$key])));
             }
             $specifications[] = $spec;
         }
         if ($specifications) {
-            $calculated = $this->math->apply($unitMode ? $unitLines : $net, $specifications);
+            $working = $unitMode ? $unitLines : $net;
+            $applications = [];
+            foreach ($specifications as $spec) {
+                if ($unitMode && ! $spec['item_ids']) {
+                    $applications[] = ['amount_minor' => 0];
+
+                    continue;
+                }
+                $step = $this->math->apply($working, [$spec]);
+                $working = $step['lines_minor'];
+                $applications[] = $step['applications'][0];
+            }
+            $calculated = ['lines_minor' => $working, 'applications' => $applications];
             if ($unitMode) {
                 $unitLines = $calculated['lines_minor'];
                 foreach ($unitGroups as $id => $keys) {

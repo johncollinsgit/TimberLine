@@ -1,3 +1,13 @@
+## Add-on discount settings (November 1; source candidate)
+
+Seller admins can configure `allow_additional_discounts` per add-on in the
+checkout-rule editor. New add-ons default false. Selected protected units retain
+their promotional price through later fixed/percentage item or sale discounts;
+regular units of the same variant remain eligible and tax uses final unit prices.
+Absent fields in existing rule versions retain legacy behavior. Modern Forestry's
+two candle add-ons are temporarily disabled pending the protected release and a
+reviewed version explicitly setting this field false. Other discounts remain on.
+
 ## Uncharged basket cancellation (November 1 UTC; source candidate)
 
 Cancel of an uncollected quote clears its basket and customer selection, retains other

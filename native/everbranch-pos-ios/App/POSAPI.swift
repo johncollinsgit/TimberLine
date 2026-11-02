@@ -215,6 +215,20 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
                           input["confirmed"] as? Bool == true, input["disclosure_hash"] as? String == String(repeating: "b", count: 64) else { throw URLError(.badServerResponse) }
                 }
                 data = try JSONSerialization.data(withJSONObject: ["reference": url.lastPathComponent, "shopify_subject": "gid://shopify/Customer/771", "expires_at": "2026-11-02T12:00:00Z", "state": submitted ? "review_recorded" : "awaiting_review", "reviewed_profile_id": submitted ? 1 : NSNull(), "disclosure": "I independently verified the selected wallet.", "disclosure_hash": String(repeating: "b", count: 64), "linked": false, "finalization_available": false])
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests") && url.path.hasSuffix("/checkout-rules/review") {
+                data = try JSONSerialization.data(withJSONObject: ["rules": [["id": "legacy", "name": "Legacy add-on", "kind": "addon", "value": 1500, "scopes": ["item"], "channels": ["in_person"], "active": true, "eligible_item_ids": [String(repeating: "a", count: 32)], "requires_other_item": true]], "version": String(repeating: "a", count: 64), "reviewed_version": NSNull(), "checkout_enabled": false])
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests") && url.path.hasSuffix("/checkout-rules") && request.httpMethod == "POST" {
+                var body = request.httpBody ?? Data()
+                if body.isEmpty, let stream = request.httpBodyStream {
+                    stream.open(); defer { stream.close() }; var buffer = [UInt8](repeating: 0, count: 1024)
+                    while stream.hasBytesAvailable { let count = stream.read(&buffer, maxLength: buffer.count); if count <= 0 { break }; body.append(buffer, count: count) }
+                }
+                let input = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+                guard let rule = input["rule"] as? [String: Any], rule["id"] as? String == "legacy" else { throw URLError(.badServerResponse) }
+                if ProcessInfo.processInfo.arguments.contains("--pos-addon-protect-ui-tests") {
+                    guard rule["allow_additional_discounts"] as? Bool == false else { throw URLError(.badServerResponse) }
+                } else if rule["allow_additional_discounts"] != nil { throw URLError(.badServerResponse) }
+                data = try JSONSerialization.data(withJSONObject: ["rules": [rule], "version": String(repeating: "b", count: 64)])
             } else if ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") && url.path.hasSuffix("/checkout-rules/review") {
                 data = try JSONSerialization.data(withJSONObject: ["rules": [["id": "five", "name": "Five off", "kind": "fixed", "value": 500, "scopes": ["sale"], "channels": ["online"], "active": true]], "version": String(repeating: "a", count: 64), "reviewed_version": String(repeating: "a", count: 64), "checkout_enabled": false])
             } else if ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") && url.path.hasSuffix("/checkout-rules/online/review") {
@@ -262,7 +276,7 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
             else if url.path == "/api/mobile/v1/workspaces/fixture/pos/registers" {
                 let blocked = ProcessInfo.processInfo.arguments.contains("--pos-readiness-delayed-ui-tests") && !Self.isReadinessEnabled()
                 let blockers = blocked ? ["old_setup"] : []
-                data = try JSONSerialization.data(withJSONObject: ["runtime_id": "fixture", "registers": [["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": blockers, "setup_blockers": blockers, "guest_checkout": true, "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests")]]])
+                data = try JSONSerialization.data(withJSONObject: ["runtime_id": "fixture", "registers": [["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": blockers, "setup_blockers": blockers, "guest_checkout": true, "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests")]]])
             }
             else if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") && url.path.hasSuffix("/authorize-device") {
                 data = Data(#"{"application_id":"fixture","access_token":"fixture","location_id":"fixture","merchant_id":"fixture","environment":"sandbox","can_link_apple_account":false}"#.utf8)

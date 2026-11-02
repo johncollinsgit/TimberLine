@@ -10,6 +10,7 @@ private struct CheckoutRule: Decodable, Identifiable {
     let active: Bool
     let eligibleItemIds: [String]?
     let requiresOtherItem: Bool?
+    let allowAdditionalDiscounts: Bool?
 }
 
 private struct ShopifyOnlineDiscountReview: Decodable {
@@ -145,6 +146,9 @@ struct CheckoutRuleManager: View {
     @State private var online = false
     @State private var active = true
     @State private var requiresOtherItem = true
+    @State private var allowAdditionalDiscounts = false
+    @State private var legacyAddon = false
+    @State private var additionalDiscountsChanged = false
     @State private var eligible = Set<String>()
 
     var body: some View {
@@ -210,6 +214,10 @@ struct CheckoutRuleManager: View {
                     Section("Eligible products") {
                         Toggle("One add-on per regular product", isOn: $requiresOtherItem)
                         Text("Each regular product can qualify one add-on across all offers. Bundles, custom amounts, and add-ons do not qualify.").font(.caption).foregroundStyle(.secondary)
+                        Toggle("Allow additional discounts", isOn: $allowAdditionalDiscounts)
+                            .onChange(of: allowAdditionalDiscounts) { _, _ in additionalDiscountsChanged = true }
+                        Text(legacyAddon && !additionalDiscountsChanged ? "This existing add-on allows additional discounts. Change this setting to update it." : "When off, item and whole-sale discounts do not reduce this add-on price.")
+                            .font(.caption).foregroundStyle(.secondary)
                         ForEach(model.items.filter { $0.kind != "bundle" }) { item in
                             Toggle(item.title + ((item.variantLabel ?? "").isEmpty ? "" : " · " + item.variantLabel!), isOn: Binding(get: { eligible.contains(item.id) }, set: { if $0 { eligible.insert(item.id) } else { eligible.remove(item.id) } }))
                         }
@@ -230,11 +238,14 @@ struct CheckoutRuleManager: View {
         if rule.kind == "percent" { return String(format: "%.2f%% off", Double(rule.value) / 100) }
         return POSMoney.display(rule.value) + (rule.kind == "addon" ? " add-on" : " off")
     }
-    private func reset() { editingID = nil; name = ""; kind = "fixed"; value = ""; itemScope = true; saleScope = true; inPerson = true; online = false; active = true; requiresOtherItem = true; eligible = []; error = nil }
+    private func reset() { editingID = nil; name = ""; kind = "fixed"; value = ""; itemScope = true; saleScope = true; inPerson = true; online = false; active = true; requiresOtherItem = true; allowAdditionalDiscounts = false; legacyAddon = false; additionalDiscountsChanged = false; eligible = []; error = nil }
     private func edit(_ rule: CheckoutRule) {
         editingID = rule.id; name = rule.name; kind = rule.kind; value = String(format: "%.2f", Double(rule.value) / 100)
         itemScope = rule.scopes.contains("item"); saleScope = rule.scopes.contains("sale"); inPerson = rule.channels.contains("in_person"); online = rule.channels.contains("online")
-        active = rule.active; requiresOtherItem = rule.requiresOtherItem ?? true; eligible = Set(rule.eligibleItemIds ?? []); error = nil; editor = true
+        active = rule.active; requiresOtherItem = rule.requiresOtherItem ?? true
+        legacyAddon = rule.kind == "addon" && rule.allowAdditionalDiscounts == nil
+        allowAdditionalDiscounts = rule.kind == "addon" ? (rule.allowAdditionalDiscounts ?? true) : false
+        additionalDiscountsChanged = false; eligible = Set(rule.eligibleItemIds ?? []); error = nil; editor = true
     }
     private func reload() async {
         guard let base = model.base else { error = "Choose a register first."; return }
@@ -278,6 +289,7 @@ struct CheckoutRuleManager: View {
                                 .font(.caption).foregroundStyle(.secondary)
                             if rule.kind == "addon" {
                                 Text(rule.requiresOtherItem == true ? "One add-on per regular product across all offers" : "No qualifying product required").font(.caption)
+                                Text((rule.allowAdditionalDiscounts ?? true) ? "Additional discounts allowed" : "Additional discounts excluded").font(.caption)
                                 ForEach(rule.eligibleItemIds ?? [], id: \.self) { id in
                                     Text(model.items.first(where: { $0.id == id }).map { item in
                                         item.title + ((item.variantLabel ?? "").isEmpty ? "" : " · " + item.variantLabel!)
@@ -322,7 +334,10 @@ struct CheckoutRuleManager: View {
             guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !scopes.isEmpty, !channels.isEmpty,
                   kind != "percent" || amount <= 10000, kind != "addon" || !eligible.isEmpty else { error = "Complete the name, amount and where the rule applies."; return }
             var rule: [String: Any] = ["id": editingID ?? UUID().uuidString.lowercased(), "name": name.trimmingCharacters(in: .whitespacesAndNewlines), "kind": kind, "value": amount, "scopes": scopes, "channels": channels, "active": active]
-            if kind == "addon" { rule["eligible_item_ids"] = eligible.sorted(); rule["requires_other_item"] = requiresOtherItem }
+            if kind == "addon" {
+                rule["eligible_item_ids"] = eligible.sorted(); rule["requires_other_item"] = requiresOtherItem
+                if !legacyAddon || additionalDiscountsChanged { rule["allow_additional_discounts"] = allowAdditionalDiscounts }
+            }
             busy = true
             Task {
                 defer { busy = false }

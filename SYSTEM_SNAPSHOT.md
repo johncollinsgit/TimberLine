@@ -3,7 +3,11 @@
 Tenant administrators can draft and review checkout rules, customer enrollment
 wording and register tax locations; the new online discount and tax publishing
 gates default off. Discount add-ons share one qualifying regular unit per add-on;
-tax is calculated after ordered discounts. Shopify online publishing supports a
+new add-ons default to excluding additional item/sale discounts, with a seller
+setting to allow them. Protection follows selected units even when regular units
+of the same variant share a line. Existing rules without that setting retain
+their legacy behavior until explicitly changed. Tax is calculated after ordered
+discounts on the resulting unit prices. Shopify online publishing supports a
 restricted public, non-combining whole-sale code, not full cross-channel parity.
 Customer enrollment records separate affirmative text/email choices and does not
 automatically link identities. Account-attested customer reward proofs and holds
