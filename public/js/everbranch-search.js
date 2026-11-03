@@ -48,7 +48,10 @@
   function score(document, input) {
     const query = typeof input === 'string' ? parse(input) : input;
     if (query.commandsOnly && document.type !== 'command') return null;
-    const { title, compactId, combined, titleWords, allWords, idWords, updated } = prepare(document);
+    return scorePrepared(document, query, prepare(document));
+  }
+  function scorePrepared(document, query, fields) {
+    const { title, compactId, combined, titleWords, allWords, idWords, updated } = fields;
     const compactQuery = query.compactText ?? query.text.replace(/ /g, '');
     if (compactQuery && compactId === compactQuery) return [0, 0, document.completed || document.archived ? 1 : 0, updated, String(document.id)];
     for (let i = 0; i < query.phrases.length; i++) {
@@ -77,15 +80,25 @@
   }
   const compare = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1; } return 0; };
   const labelFor = value => String(value || '').replace(/[_-]/g, ' ').replace(/^./, letter => letter.toUpperCase());
+  const ranked = new WeakMap();
   function search(documents, input, filters = {}) {
-    const query = parse(input), seen = new Set(), rows = [];
+    const query = parse(input), key = JSON.stringify(query), seen = new Set(), rows = [];
     for (let i = 0; i < documents.length; i++) {
       if (!(i in documents)) continue;
       const doc = documents[i];
       if (seen.has(doc.id)) continue;
       seen.add(doc.id);
       if ((filters.type && doc.type !== filters.type) || (filters.project && !(doc.projects || []).includes(filters.project)) || (filters.person && !(doc.people || []).includes(filters.person)) || (filters.state === 'active' && (doc.completed || doc.archived)) || (filters.state === 'closed' && !(doc.completed || doc.archived))) continue;
-      const rank = score(doc, query);
+      if (query.commandsOnly && doc.type !== 'command') continue;
+      const fields = prepare(doc), closed = Boolean(doc.completed || doc.archived);
+      let entry = ranked.get(doc);
+      // One private rank per document avoids repeated allocations for an unchanged
+      // query. Source conversion, state/type and every filter remain checked live.
+      if (!entry || entry.fields !== fields || entry.key !== key || entry.type !== doc.type || entry.closed !== closed) {
+        entry = { fields, key, type: doc.type, closed, rank: scorePrepared(doc, query, fields) };
+        ranked.set(doc, entry);
+      }
+      const rank = entry.rank;
       if (rank) rows.push({ document: doc, rank });
     }
     rows.sort((a, b) => compare(a.rank, b.rank));
