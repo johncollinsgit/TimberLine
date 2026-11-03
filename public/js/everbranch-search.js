@@ -1,7 +1,8 @@
 /* Everbranch search v1. Shared by Teams and the standalone campus demo. No dependencies. */
 (function (global) {
   'use strict';
-  const normalize = value => String(value ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+  const textValue = value => value == null ? '' : typeof value === 'string' ? value : String(value);
+  const normalize = value => textValue(value).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
   const words = value => normalize(value).split(' ').filter(Boolean);
   function parse(value) {
     const raw = String(value || '').trim().slice(0, 500), commandsOnly = raw.startsWith('>');
@@ -28,7 +29,7 @@
   function prepare(document) {
     // Compare source strings before allocating a combined signature on every keystroke.
     // String conversion also observes in-place changes to non-string input values.
-    const sourceTitle = String(document.title ?? ''), sourceBody = String(document.body ?? ''), sourceIdentifier = String(document.identifier ?? ''), sourceId = String(document.id ?? ''), sourceUpdated = String(document.updated_at ?? ''), effectiveId = String(document.identifier || document.id || '');
+    const sourceTitle = textValue(document.title), sourceBody = textValue(document.body), sourceIdentifier = textValue(document.identifier), sourceId = textValue(document.id), sourceUpdated = textValue(document.updated_at), effectiveId = textValue(document.identifier || document.id || '');
     let cached = prepared.get(document);
     if (!cached || cached.sourceTitle !== sourceTitle || cached.sourceBody !== sourceBody || cached.sourceIdentifier !== sourceIdentifier || cached.sourceId !== sourceId || cached.sourceUpdated !== sourceUpdated || cached.effectiveId !== effectiveId) {
       const title = normalize(sourceTitle), body = normalize(sourceBody), id = normalize(document.identifier || document.id);
