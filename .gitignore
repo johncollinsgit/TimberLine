@@ -42,3 +42,6 @@ yarn-error.log
 /extensions/wholesale-order-notes/dist/
 
 /extensions/forestry-marketing-pixel/dist/
+
+# Machine-local synthetic preview and validation artifacts.
+/work/mac-runtime/

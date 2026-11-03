@@ -14,7 +14,7 @@ class SubscriptionShopifyBillingProtocol
 
     public const RECEIPT_FIELDS = SubscriptionShopifyBillingTransport::ORDER_FIELDS.' createdAt displayFulfillmentStatus currentTotalPriceSet { shopMoney { amount currencyCode } } totalDiscountsSet { shopMoney { amount currencyCode } } refunds(first: 1) { id } disputes { id status } transactions(first: 50) { '.self::TRANSACTION_FIELDS.' }';
 
-    public const ATTEMPT_FIELDS = 'id idempotencyKey createdAt completedAt originTime respectInventoryPolicy subscriptionContract { id app { id } customer { id } } state { __typename ... on SubscriptionBillingAttemptPendingState { processing } ... on SubscriptionBillingAttemptFailedState { error { __typename } } ... on SubscriptionBillingAttemptActionRequiredState { action { __typename } } ... on SubscriptionBillingAttemptSuccessState { order { '.self::RECEIPT_FIELDS.' } } } transactions(first: 50) { nodes { '.self::TRANSACTION_FIELDS.' } pageInfo { hasNextPage } }';
+    public const ATTEMPT_FIELDS = 'id idempotencyKey createdAt completedAt originTime respectInventoryPolicy subscriptionContract { id app { id } customer { id } } state { __typename ... on SubscriptionBillingAttemptPendingState { processing } ... on SubscriptionBillingAttemptFailedState { error { __typename } } ... on SubscriptionBillingAttemptActionRequiredState { action { __typename ... on SubscriptionBillingAttemptPaymentChallenge { nextActionUrl status } } } ... on SubscriptionBillingAttemptSuccessState { order { '.self::RECEIPT_FIELDS.' } } } transactions(first: 50) { nodes { '.self::TRANSACTION_FIELDS.' } pageInfo { hasNextPage } }';
 
     public static function document(string $operation): string
     {
@@ -100,7 +100,8 @@ class SubscriptionShopifyBillingProtocol
                 || ($t['status'] ?? null) === 'FAILURE'), 409, 'Payment evidence conflicts with the pending, challenged or failed attempt.');
             abort_unless($status !== 'processing' || data_get($attempt, 'state.processing') === true, 409);
 
-            return ['status' => $status, 'attempt_id' => $attempt['id'], 'checked_at' => now()->toISOString()];
+            return ['status' => $status, 'attempt_id' => $attempt['id'], 'checked_at' => now()->toISOString()]
+                + ($status === 'requires_action' ? ['customer_action' => self::paymentChallenge(data_get($attempt, 'state.action', []))] : []);
         }
         $order = data_get($attempt, 'state.order');
         abort_unless(is_array($order) && preg_match('#\Agid://shopify/Order/[1-9][0-9]*\z#', (string) ($order['id'] ?? ''))
@@ -137,6 +138,28 @@ class SubscriptionShopifyBillingProtocol
         abort_unless($payments === self::payments($order['transactions'] ?? [], $cycle) && count($payments) === 1, 409, 'Order and attempt payment coverage differs or contains multiple collections.');
 
         return $receipt + ['status' => 'succeeded', 'paid_at' => $attempt['completedAt'], 'payment_ids' => array_keys($payments)];
+    }
+
+    /** The original Shopify response supplies this URL; incomplete/unsafe challenges stay unresolved. */
+    public static function paymentChallenge(array $action): ?array
+    {
+        $url = $action['nextActionUrl'] ?? null;
+        if (($action['__typename'] ?? null) !== 'SubscriptionBillingAttemptPaymentChallenge'
+            || ! in_array($action['status'] ?? null, ['OFF_SESSION_REJECTED', 'ON_SESSION_CHALLENGED'], true)
+            || ! is_string($url) || strlen($url) > 4096 || preg_match('/[\x00-\x20\x7f\\\\]/', $url)
+            || filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return null;
+        }
+        $parts = parse_url($url);
+        $host = strtolower($parts['host'] ?? '');
+        if (($parts['scheme'] ?? null) !== 'https' || isset($parts['user']) || isset($parts['pass'])
+            || isset($parts['port']) && $parts['port'] !== 443 || filter_var($host, FILTER_VALIDATE_IP)
+            || ! preg_match('/\A(?=.{1,253}\z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\z/D', $host)
+            || preg_match('/\.(?:localhost|local|internal|invalid|test|example)\z/D', $host)) {
+            return null;
+        }
+
+        return ['type' => 'shopify_payment_challenge', 'url' => $url, 'status' => $action['status']];
     }
 
     private static function payments(array $transactions, SubscriptionBillingCycle $cycle): array

@@ -1,3 +1,22 @@
+## Native customer payment challenge (October 31; source candidate)
+
+`SubscriptionCustomerPaymentRecoveryService` supports the original native
+`SubscriptionBillingAttemptPaymentChallenge` only. Its separate customer recovery
+gate defaults off and keeps exact tenant/member rollout. The private payment
+status GET reads/reconciles an already-started owned cycle; it cannot collect,
+adopt or submit a new attempt. Explicit verification POST binds the reviewed
+profile/cycle/attempt/amount/terms/method/challenge hash, rechecks current authority
+after the provider read, then issues a private HTTPS redirect. No provider URL
+comes from the request or appears in the member page or ordinary DTO.
+
+`shopify_challenge_link_issued` is signed, encrypted and idempotent per original
+challenge/profile. It records link issuance, not successful authentication or
+payment. Original provider receipt/source checks decide payment success. Newer
+stops and frozen billing attempts remain; collection/editing withdrawal does not
+resubmit them. Setup/current owner/credential/module/profile still gate access.
+Never convert an unsupported or unsafe challenge into a new payment or card
+request. See the runbook and real-MySQL recovery/concurrent-request cases.
+
 ## Native review operator recovery (October 31; source candidate)
 
 Use `subscriptions:shopify-amend --action=inspect --request-id=UUID` for local

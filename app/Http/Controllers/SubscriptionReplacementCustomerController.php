@@ -6,6 +6,7 @@ use App\Models\SubscriptionBillingCycle;
 use App\Models\Tenant;
 use App\Services\Subscriptions\SubscriptionBillingAgreementService;
 use App\Services\Subscriptions\SubscriptionCustomerAmendmentService;
+use App\Services\Subscriptions\SubscriptionCustomerPaymentRecoveryService;
 use App\Services\Subscriptions\SubscriptionReplacementCustomerAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -23,6 +24,7 @@ class SubscriptionReplacementCustomerController extends Controller
             'actions' => collect(['pause', 'resume', 'skip', 'cancel'])->mapWithKeys(fn ($kind) => [$kind => $access->canChange($row, $kind)])->all(),
             'requestId' => (string) Str::uuid(), 'memberName' => $session->profile->first_name,
             'deliveryRequestId' => (string) Str::uuid(), 'deliveryOptions' => app(SubscriptionCustomerAmendmentService::class)->options($session),
+            'paymentRecoveryEnabled' => app(SubscriptionCustomerPaymentRecoveryService::class)->enabled($row),
             'cycles' => SubscriptionBillingCycle::query()->forTenantId($row->tenant_id)->where('agreement_id', $row->id)->orderByDesc('cycle_date')->limit(12)->get(),
         ]));
     }
@@ -52,6 +54,54 @@ class SubscriptionReplacementCustomerController extends Controller
         } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
             return $this->deliveryError($error, $token);
         }
+    }
+
+    public function paymentStatus(Request $request, string $token, string $cycleId, SubscriptionReplacementCustomerAccess $access, SubscriptionCustomerPaymentRecoveryService $recovery)
+    {
+        $this->host($request);
+        $session = $access->session($token);
+        try {
+            return $this->paymentResponse($access->agreement($session), $token, $recovery->status($session, $cycleId));
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+            return $this->paymentError($error, $token);
+        }
+    }
+
+    public function verifyPayment(Request $request, string $token, string $cycleId, SubscriptionReplacementCustomerAccess $access, SubscriptionCustomerPaymentRecoveryService $recovery)
+    {
+        $this->host($request);
+        $session = $access->session($token);
+        try {
+            $data = $request->validate(['review_hash' => ['required', 'string', 'regex:/\A[a-f0-9]{64}\z/']]);
+            $result = $recovery->begin($session, $cycleId, $data['review_hash']);
+            if (isset($result['redirect_url'])) {
+                return $this->private(redirect()->away($result['redirect_url'], 303));
+            }
+
+            return $this->paymentResponse($access->agreement($session), $token, $result);
+        } catch (\Illuminate\Validation\ValidationException) {
+            return $this->private(redirect()->route('subscriptions.replacement.customer.payment.status', ['token' => $token, 'cycleId' => $cycleId])
+                ->withErrors(['subscription' => 'Check the original payment before continuing verification.']));
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+            return $this->paymentError($error, $token);
+        }
+    }
+
+    private function paymentResponse($row, string $token, array $payment)
+    {
+        return $this->private(response()->view('subscriptions.replacement-payment-recovery', [
+            'tenant' => Tenant::findOrFail($row->tenant_id), 'token' => $token, 'payment' => $payment,
+        ]));
+    }
+
+    private function paymentError(\Symfony\Component\HttpKernel\Exception\HttpException $error, string $token)
+    {
+        if (! in_array($error->getStatusCode(), [403, 409, 422, 423, 502, 503], true)) {
+            throw $error;
+        }
+
+        return $this->private(redirect()->route('subscriptions.replacement.customer', ['token' => $token])
+            ->withErrors(['subscription' => 'We could not finish checking this payment. Please check again or contact us before paying another way.']));
     }
 
     public function confirmDelivery(Request $request, string $token, SubscriptionReplacementCustomerAccess $access, SubscriptionCustomerAmendmentService $delivery)

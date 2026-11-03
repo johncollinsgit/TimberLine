@@ -34,6 +34,8 @@ class ShopifyExecutionScenario extends ShopifyAdoptionScenario
 
     public ?\Closure $beforeBill = null;
 
+    public ?\Closure $beforeAttemptRead = null;
+
     public ?\Closure $beforeBillingCapabilities = null;
 
     public ?string $billingMarkerPath = null;
@@ -213,7 +215,8 @@ class ShopifyExecutionScenario extends ShopifyAdoptionScenario
                 'subscriptionContract' => ['id' => $this->contract['id'], 'app' => $this->contract['app'], 'customer' => $this->contract['customer']],
                 'state' => match ($this->attemptState) {
                     'processing' => ['__typename' => 'SubscriptionBillingAttemptPendingState', 'processing' => true],
-                    'requires_action' => ['__typename' => 'SubscriptionBillingAttemptActionRequiredState', 'action' => ['__typename' => 'SubscriptionBillingAttemptPaymentChallenge']],
+                    'requires_action' => ['__typename' => 'SubscriptionBillingAttemptActionRequiredState', 'action' => ['__typename' => 'SubscriptionBillingAttemptPaymentChallenge',
+                        'nextActionUrl' => 'https://authentication.shopify.com/fictional-payment-challenge?token=FICTIONAL_CHALLENGE_TOKEN', 'status' => 'OFF_SESSION_REJECTED']],
                     'declined' => ['__typename' => 'SubscriptionBillingAttemptFailedState', 'error' => ['__typename' => 'SubscriptionBillingAttemptPaymentError']],
                     default => [],
                 }, 'transactions' => ['nodes' => [], 'pageInfo' => ['hasNextPage' => false]]];
@@ -229,6 +232,10 @@ class ShopifyExecutionScenario extends ShopifyAdoptionScenario
             }
             $data = ['subscriptionBillingAttemptCreate' => ['subscriptionBillingAttempt' => $this->returnedAttempt($this->attempts[$id]), 'userErrors' => []]];
         } elseif (str_starts_with($query, 'query ReplacementOriginalBillingAttempt')) {
+            if ($hook = $this->beforeAttemptRead) {
+                $this->beforeAttemptRead = null;
+                $hook();
+            }
             $attempt = $this->attempts[$request['variables']['id']] ?? null;
             $data = $identity + ['subscriptionBillingAttempt' => $attempt ? $this->returnedAttempt($attempt) : null];
         } else {

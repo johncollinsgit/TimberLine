@@ -62,6 +62,10 @@
 @if($cycles->isNotEmpty())<section class="payment-history" aria-labelledby="history-title"><h2 id="history-title">Payments and orders</h2>
 @foreach($cycles as $cycle)<div class="paper-card cycle-card"><h3>{{ $cycle->cycle_date->format('F j, Y') }} · {{ $cycle->currency }} {{ number_format($cycle->amount_cents/100,2) }}</h3>
 <p>{{ ($cycle->method_binding['environment'] ?? null) === 'sandbox' ? 'Test payment' : 'Payment' }}: {{ match($cycle->payment_status) { 'succeeded'=>'confirmed', 'sending','unknown'=>'being verified', 'review'=>'our team is reviewing this payment', default=>str_replace('_',' ',$cycle->payment_status) } }}.</p>
-<p>Order: {{ $cycle->handoff_status === 'confirmed' ? 'received for fulfillment' : 'awaiting confirmation' }}.</p></div>@endforeach</section>@endif
+<p>Order: {{ $cycle->handoff_status === 'confirmed' ? 'received for fulfillment' : 'awaiting confirmation' }}.</p>
+@if(($paymentRecoveryEnabled ?? false) && $cycle->processor === 'shopify' && $cycle->payment_status === 'requires_action' && $cycle->payment_started_at && $cycle->provider_reference)
+<a class="club-button secondary-button" href="{{ route('subscriptions.replacement.customer.payment.status', ['token' => $token, 'cycleId' => $cycle->public_id]) }}">Check payment verification</a>
+@endif
+</div>@endforeach</section>@endif
 <footer class="club-footer"><p>{{ $modernForestry ? 'Made with care. Enjoyed at home.' : $tenant->name }}</p>@if($modernForestry)<a href="mailto:info@theforestrystudio.com">Need a hand? Contact Modern Forestry</a>@endif<p class="member-link-note">This private link expires after 15 minutes. Reopen it from your signed-in account.</p></footer>
 </main></body></html>

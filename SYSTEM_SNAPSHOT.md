@@ -1,3 +1,22 @@
+## Native customer payment verification (October 31; source candidate)
+
+The default-off `replacement_customer_payment_recovery_enabled` gate now connects
+an already-started native attempt's documented payment challenge to the private
+member portal. `SubscriptionCustomerPaymentRecoveryService` rereads/reconciles
+only the original attempt, presents its frozen amount and rechecks current
+profile, canonical access, original owner/credential and exact cycle before an
+explicit POST can return Shopify's current HTTPS authentication URL. The signed
+link-issuance audit is idempotent and does not claim issuer completion or payment.
+Raw provider URLs stay out of the member page, ordinary DTO and audit payload.
+
+Unknown/unsafe/changed challenges cannot redirect. A completed original payment
+returns its verified receipt instead, without another billing attempt. Verification
+after a future pause/cancel retains that stop and schedule even when new collection
+or editing is frozen. The bank redirect/return never marks payment successful;
+original-attempt/order/transaction and source coverage still do. API fields/types
+match the retained original-app 2026-10 capture. No DDL or native app change.
+Braintree authentication, reviewed dunning/refunds and actual acceptance remain.
+
 ## Native delivery review operations (October 31; source candidate)
 
 `subscriptions:shopify-amend --action=inspect` now reports the bounded local

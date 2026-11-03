@@ -7,6 +7,64 @@ access can be verified. Stripe setup is an explicit fallback, not a universal
 migration requirement. The first rollout is the two already prepared members;
 all other members retain Recharge billing until separately reviewed.
 
+## Customer verification of an original native payment (source candidate; gated)
+
+Shopify can return `SubscriptionBillingAttemptActionRequiredState` with a
+`SubscriptionBillingAttemptPaymentChallenge`, its `nextActionUrl` and challenge
+status. The actual original-app 2026-10 schema capture contains those fields and
+both documented statuses; the pinned projection and query now include them.
+See [payment challenges](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/SubscriptionBillingAttemptPaymentChallenge)
+and [action-required attempts](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/SubscriptionBillingAttemptActionRequiredState).
+This is verification of an already-started saved-method payment. It does not
+establish that every migrated member needs verification or a new payment method.
+
+`SUBSCRIPTIONS_REPLACEMENT_CUSTOMER_PAYMENT_RECOVERY_ENABLED=false` is an
+independent default-off gate with the existing exact tenant/member allowlists.
+It exposes a payment-verification link only for a recorded native action-required
+cycle that already has its original dispatch and provider attempt ID. The existing
+15-minute authenticated host/profile/store/member-scoped account grant opens a
+branded status page with that cycle's frozen date, currency and amount. The page
+makes no new billing/adoption request, contains no provider challenge URL or card
+entry, and never treats a browser return as payment confirmation.
+
+`SubscriptionCustomerPaymentRecoveryService` first checks the current customer,
+original cycle, verified owner, canonical entitlement and original credential;
+it then calls existing original-attempt reconciliation. Final locked checks repeat
+after the read. A verification POST must supply the exact keyed review hash for
+the profile, cycle, original attempt, frozen amount/terms/method and current
+challenge. An unchanged review can continue; changed URL/status requires review
+again. The server, not posted input, selects the URL. It accepts documented
+challenge types/statuses and bounded HTTPS URLs without credentials, control
+characters, backslashes, alternate ports, local/internal/reserved hosts or IP
+addresses. Other or incomplete actions remain unresolved for support. The server
+does not fetch the authentication URL.
+
+The POST issues a 303 to Shopify's current returned authentication URL in a new
+tab, with no-store/private, no-referrer, noindex and frame-denial headers. A signed
+encrypted `shopify_challenge_link_issued` action retains original cycle/attempt,
+profile/customer, amount/currency and review hash. Its deterministic key makes
+concurrent or repeated link requests idempotent; it contains no raw challenge URL
+and is not evidence that the customer reached or completed the bank's challenge.
+The original attempt remains the only charge instruction. No email or SMS is sent.
+
+The customer returns to check status. Payment success still requires the original
+owned attempt, exact order/transactions and source/duplicate checks; the existing
+native receipt projection handles fulfillment. A completed payment seen before
+the button is pressed returns its status without a redirect or another charge.
+Unknown, declined, refunded, disputed or incomplete results cannot create another
+attempt. Missing or unsafe challenge details remain action-required without an
+authentication link. A later pause/cancel stays in place after original payment
+recovery; new collection/servicing/editing gates may be frozen while the original
+setup/owner/credential/module/profile authority remains valid. The account grant
+can be reopened from the signed-in account after expiry.
+
+This supports native Shopify issuer verification only. It does not replace a
+revoked method, add Braintree 3DS, authorize dunning retries/refunds, restore
+withdrawn setup authority or prove actual bank/customer/merchant acceptance.
+Real provider, source, customer/Shopify backend and two-tester acceptance remain.
+No production gate, credential, source schedule, contract, order or payment was
+changed by implementing or testing this source capability.
+
 ## Operator inspection and closure of native delivery reviews (source candidate)
 
 A current verified workspace owner/admin can inspect a native customer or staff

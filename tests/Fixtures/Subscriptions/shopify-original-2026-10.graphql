@@ -564,6 +564,11 @@ enum SubscriptionBillingAttemptInventoryPolicy {
   ALLOW_OVERSELLING
 }
 
+enum SubscriptionBillingAttemptPaymentChallengeStatus {
+  OFF_SESSION_REJECTED
+  ON_SESSION_CHALLENGED
+}
+
 enum SubscriptionBillingAttemptPaymentErrorCode {
   PAYMENT_METHOD_DECLINED
   EXPIRED_PAYMENT_METHOD
@@ -1213,6 +1218,7 @@ type SubscriptionBillingAttemptInventoryError {
 
 type SubscriptionBillingAttemptPaymentChallenge {
   nextActionUrl: URL!
+  status: SubscriptionBillingAttemptPaymentChallengeStatus!
 }
 
 type SubscriptionBillingAttemptPaymentError {
