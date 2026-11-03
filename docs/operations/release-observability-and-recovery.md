@@ -10,6 +10,9 @@ checkout, customer data, rewards, or fulfillment behavior.
 - GitHub releases only after the protected test/build and MySQL migration gates
   pass. Forge activates a fresh release atomically, and GitHub accepts it only
   when `/ready` reports the exact candidate commit.
+  Readiness polling allows a cold clone and dependency install to finish, checking
+  every ten seconds for up to twenty minutes. A timeout requires investigation
+  of the original Forge attempt; do not trigger overlapping releases to clear it.
 - Every release reports whether the optional Forge failure observer is fully
   configured. On an exact-SHA readiness failure, it makes one GET-only Forge
   API request and writes an allowlisted deployment summary to GitHub Actions.
