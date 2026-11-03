@@ -206,12 +206,17 @@ test('native stock allocations are scoped atomic idempotent and exclude reserved
     $site = TenantSite::create(['tenant_id' => $tenant->id, 'subdomain' => $tenant->slug, 'status' => 'draft', 'settings' => []]);
     $product = WebsiteProduct::create(['tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'handle' => 'mug', 'title' => 'Mug', 'product_type' => 'physical', 'track_inventory' => true]);
     $variant = WebsiteProductVariant::create(['tenant_id' => $tenant->id, 'website_product_id' => $product->id, 'title' => 'Default', 'price_cents' => 5000, 'inventory_quantity' => 10]);
+    $heldOrder = \App\Models\WebsiteOrder::create(['tenant_id' => $tenant->id, 'tenant_site_id' => $site->id,
+        'number' => 'WEB-HELD', 'lookup_token' => Str::random(56), 'subtotal_cents' => 25000, 'total_cents' => 25000]);
+    \App\Models\WebsiteInventoryReservation::create(['tenant_id' => $tenant->id, 'website_product_variant_id' => $variant->id,
+        'website_order_id' => $heldOrder->id, 'quantity' => 5, 'status' => 'active', 'expires_at' => now()->subHour()]);
     $f['listing']->update(['source_variant_id' => $variant->id]);
     $catalog = app(MarketplaceCatalog::class);
     $uuid = (string) Str::uuid();
     $catalog->allocate($f['listing'], 3, $f['listing']->shipping_location_gid, $uuid, $actor, null);
     $catalog->allocate($f['listing'], 3, $f['listing']->shipping_location_gid, $uuid, $actor, null);
     expect($variant->fresh()->inventory_quantity)->toBe(7)->and(InventoryAllocation::count())->toBe(1);
+    expect(fn () => $catalog->allocate($f['listing'], 3, $f['listing']->shipping_location_gid, (string) Str::uuid(), $actor, null))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
     expect(fn () => $catalog->allocate($f['listing'], 8, $f['listing']->shipping_location_gid, (string) Str::uuid(), $actor, null))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
     $other = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
     expect(fn () => $catalog->allocate($f['listing'], 1, $f['listing']->shipping_location_gid, (string) Str::uuid(), $other, null))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);

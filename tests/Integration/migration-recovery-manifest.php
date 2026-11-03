@@ -3,6 +3,14 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_03_100000_create_website_shop_pay_connections_table.php' => [
+        'test' => 'tests/Integration/WebsiteShopPayMySqlRecoveryTest.php',
+        'scenarios' => ['encrypted merchant retained before missing unique index repair and rollback; altered index rejected'],
+    ],
+    '2026_11_03_100100_create_website_shop_pay_attempts_table.php' => [
+        'test' => 'tests/Integration/WebsiteShopPayMySqlRecoveryTest.php',
+        'scenarios' => ['encrypted original attempt retained before missing named indexes; replay and rollback preserve evidence; duplicate source rejected'],
+    ],
     '2026_11_01_170000_create_pos_birthday_annual_holds.php' => [
         'test' => 'tests/Integration/PosBirthdayAnnualHoldMySqlRecoveryTest.php',
         'scenarios' => ['held annual evidence survives missing indexes, repeated recovery and rollback; duplicate and altered indexes fail closed'],

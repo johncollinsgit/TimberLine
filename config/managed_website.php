@@ -16,6 +16,9 @@ $tenantIds = static function (string $key): array {
 };
 
 return [
+    'shop_pay_wallet_enabled' => $bool('MANAGED_WEBSITE_SHOP_PAY_WALLET_ENABLED'),
+    'shop_pay_wallet_tenant_ids' => $tenantIds('MANAGED_WEBSITE_SHOP_PAY_WALLET_TENANT_IDS'),
+    'shop_pay_api_version' => '2026-10',
     'invoices_enabled' => $bool('MANAGED_WEBSITE_INVOICES_ENABLED'),
     'invoice_tenant_ids' => $tenantIds('MANAGED_WEBSITE_INVOICE_TENANT_IDS'),
     'invoice_bank_payments_enabled' => $bool('MANAGED_WEBSITE_INVOICE_BANK_PAYMENTS_ENABLED'),

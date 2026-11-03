@@ -5,6 +5,11 @@
     @if(!$canManageOrders)<p class="mt-2 text-sm text-amber-800">New checkout is paused. Existing payments can still be cancelled, checked, or refunded.</p>@endif
     <p class="mt-2 text-xs text-zinc-600">Confirmed refunds appear in the timeline. Unconfirmed refunds reserve their balance. Refunds do not restock inventory.</p>
     <div class="mt-3 grid gap-3">
+        @if($walletPayment ?? null)
+            <p class="text-sm">This order was paid through its own Shop Pay Wallet store. Issue refunds in that original store, then check status here. Everbranch does not create a second payment or restock refunded goods.</p>
+            @if($walletAdminUrl)<a class="fb-btn fb-btn-secondary" href="{{ $walletAdminUrl }}" target="_blank" rel="noopener noreferrer">Open original Wallet payment ↗</a>@endif
+            <form method="POST" action="{{ route('managed-website.orders.refunds.check', $order) }}">@csrf<button class="fb-btn fb-btn-secondary" type="submit">Check Shop Pay payment and refunds</button></form>
+        @endif
         @foreach(($pendingRefunds ?? collect()) as $operation)
             <div class="border border-amber-200 bg-amber-50 p-3 text-sm" data-refund-request="{{ $operation['request_id'] }}">
                 <p>${{ number_format($operation['amount_cents'] / 100, 2) }} refund · {{ str($operation['status'])->headline() }}</p>

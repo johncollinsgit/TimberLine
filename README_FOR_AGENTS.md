@@ -1,3 +1,15 @@
+## Retail Shop Pay Wallet (November 3; source candidate)
+
+Every retail owner/admin can open Shop Pay setup and choose Shopify-managed
+checkout or an independently connected native Website Wallet. Merchant secrets
+and original attempts are encrypted. Native stock reservations, server tax,
+captured-payment verification, signed event-triggered reconciliation and
+original-store refund/tax recovery retain their independent authority. A browser
+return never proves payment. Existing Website entitlement and launch checks
+remain; native Wallet collection also defaults off. Live acceptance, merchant
+setup and protected deployment are distinct from source tests. See
+`docs/operations/retail-shop-pay-wallet.md`.
+
 ## Add-on discount settings (November 1; source candidate)
 
 Seller admins can configure `allow_additional_discounts` per add-on in the
