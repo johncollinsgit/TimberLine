@@ -123,7 +123,10 @@ class MarketplaceCatalog
                 $tenant = app(MarketplaceAccess::class)->assertWorkspaceManager($actor, (int) $listing->maker->tenant_id);
                 $source = WebsiteProductVariant::query()->where('tenant_id', $tenant->id)->lockForUpdate()->findOrFail($listing->source_variant_id);
                 abort_unless($source->product?->track_inventory && $source->inventory_quantity !== null, 422, 'Native inventory must be tracked before allocation.');
-                $reserved = (int) WebsiteInventoryReservation::query()->where('tenant_id', $tenant->id)->where('website_product_variant_id', $source->id)->where('expires_at', '>', now())->sum('quantity');
+                // Expired-time holds can still back an uncertain payment. Only
+                // original-provider reconciliation may release those units.
+                $reserved = (int) WebsiteInventoryReservation::query()->where('tenant_id', $tenant->id)->where('website_product_variant_id', $source->id)
+                    ->where('status', 'active')->lockForUpdate()->get()->sum('quantity');
                 abort_unless($quantity < 0 || $quantity <= $source->inventory_quantity - $reserved, 422, 'The available native stock is already sold or reserved.');
                 // A reduction is held in the marketplace until Shopify confirms withdrawal.
                 if ($quantity > 0) {
