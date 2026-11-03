@@ -280,6 +280,18 @@ test('one authorized cycle creates one Stripe charge and one paid external-payme
         ->and($row->fresh()->next_billing_date->toDateString())->toBe('2026-12-02');
 });
 
+test('an activated replacement agreement blocks the old Stripe collector from acquiring billing again', function () {
+    $row = enrollmentForPilot($this);
+    \App\Models\SubscriptionBillingAgreement::create(['tenant_id' => $this->tenant->id, 'member_id' => $this->member->id,
+        'processor' => 'braintree', 'status' => 'active', 'terms' => [], 'terms_hash' => str_repeat('a', 64),
+        'method_binding' => [], 'authorization_evidence' => [], 'prepared_by' => $this->actor->id,
+        'billing_anchor_date' => '2026-11-02', 'activated_at' => now()]);
+    $this->travelTo(now('America/New_York')->setDate(2026, 11, 2)->setTime(10, 0));
+    // Even a stale legacy ownership flag cannot authorize the old collector.
+    expect(fn () => $this->execution->collect($row->fresh()))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect($this->paymentCreates)->toBe([])->and($this->orderCreates)->toBe([]);
+});
+
 test('unknown Stripe response retains one immutable request and cannot create another cycle payment', function () {
     $row = enrollmentForPilot($this);
     $this->travelTo(now('America/New_York')->setDate(2026, 11, 2)->setTime(9, 1));
@@ -580,3 +592,27 @@ test('additional Shopify collection after a Stripe handoff stays flagged in the 
         ->and($report['members'][0]['duplicate_status'])->toBe('Possible duplicate')
         ->and($this->paymentCreates)->toHaveCount(1)->and($this->orderCreates)->toHaveCount(1);
 });
+
+test('private authorization page scopes branding and keeps feature previews separate from consent', function (bool $modernForestry) {
+    $terms = $this->execution->preview($this->tenant->id, $this->actor, $this->member->id, $this->economics);
+    $row = $this->execution->prepare($this->tenant->id, $this->actor, $this->member->id, $this->economics, $terms['terms_hash']);
+    $url = $this->execution->issueAccess($row);
+    if ($modernForestry) {
+        $this->tenant->update(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    }
+    $requests = count(Http::recorded());
+    $response = $this->get($url)->assertOk()->assertHeader('Referrer-Policy', 'no-referrer')
+        ->assertSee('USD 25.00')->assertSee('November 2, 2026')->assertSee('name="accepted"', false)
+        ->assertSee('Saving a card does not activate new billing.');
+    if ($modernForestry) {
+        $response->assertSee('modern-forestry-logo-white.png')->assertSee('COMING SOON')
+            ->assertSee('Share your scent notes')->assertSee('Make room for a skip')
+            ->assertSee('Candle Cash, your way')->assertSee('$10 for your birthday')
+            ->assertSee('Recurring Candle Club charges are excluded.');
+    } else {
+        $response->assertDontSee('modern-forestry-logo-white.png')->assertDontSee('COMING SOON')->assertDontSee('$10 for your birthday');
+    }
+    $this->post($url.'/authorize', ['terms_hash' => $row->terms_hash])->assertSessionHasErrors('accepted');
+    expect(count(Http::recorded()))->toBe($requests)
+        ->and($row->fresh()->status)->toBe('draft')->and($this->member->fresh()->billing_owner)->toBe('recharge');
+})->with([true, false]);

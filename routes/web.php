@@ -829,6 +829,22 @@ Route::prefix('signup/classes/{tenant:slug}')
 
 Route::get('/subscriptions/manage/{token}', [\App\Http\Controllers\SubscriptionPilotCustomerController::class, 'show'])
     ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:60,1')->name('subscriptions.pilot.customer');
+Route::get('/subscriptions/member/{token}', [\App\Http\Controllers\SubscriptionReplacementCustomerController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:60,1')->name('subscriptions.replacement.customer');
+Route::post('/subscriptions/member/{token}', [\App\Http\Controllers\SubscriptionReplacementCustomerController::class, 'change'])
+    ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:10,1')->name('subscriptions.replacement.customer.change');
+Route::post('/subscriptions/member/{token}/delivery/review', [\App\Http\Controllers\SubscriptionReplacementCustomerController::class, 'reviewDelivery'])
+    ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:6,1')->name('subscriptions.replacement.customer.delivery.review');
+Route::post('/subscriptions/member/{token}/delivery/confirm', [\App\Http\Controllers\SubscriptionReplacementCustomerController::class, 'confirmDelivery'])
+    ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:6,1')->name('subscriptions.replacement.customer.delivery.confirm');
+Route::get('/subscriptions/member/{token}/delivery/{requestId}', [\App\Http\Controllers\SubscriptionReplacementCustomerController::class, 'deliveryStatus'])
+    ->where('token', '[A-Za-z0-9]{64}')->whereUuid('requestId')->middleware('throttle:30,1')->name('subscriptions.replacement.customer.delivery.status');
+Route::post('/subscriptions/member/{token}/delivery/{requestId}/discard', [\App\Http\Controllers\SubscriptionReplacementCustomerController::class, 'discardDelivery'])
+    ->where('token', '[A-Za-z0-9]{64}')->whereUuid('requestId')->middleware('throttle:6,1')->name('subscriptions.replacement.customer.delivery.discard');
+Route::get('/subscriptions/member/{token}/payments/{cycleId}', [\App\Http\Controllers\SubscriptionReplacementCustomerController::class, 'paymentStatus'])
+    ->where('token', '[A-Za-z0-9]{64}')->whereUuid('cycleId')->middleware('throttle:12,1')->name('subscriptions.replacement.customer.payment.status');
+Route::post('/subscriptions/member/{token}/payments/{cycleId}/verify', [\App\Http\Controllers\SubscriptionReplacementCustomerController::class, 'verifyPayment'])
+    ->where('token', '[A-Za-z0-9]{64}')->whereUuid('cycleId')->middleware('throttle:6,1')->name('subscriptions.replacement.customer.payment.verify');
 Route::post('/api/mobile/v1/modern-forestry/account/subscriptions/manage', [\App\Http\Controllers\SubscriptionPilotCustomerController::class, 'mobileManage'])
     ->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:10,1')->name('subscriptions.pilot.mobile-manage');
 Route::post('/subscriptions/manage/{token}/authorize', [\App\Http\Controllers\SubscriptionPilotCustomerController::class, 'authorizePayment'])
@@ -1120,6 +1136,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/shop-pay/verify', [\App\Http\Controllers\Billing\ShopPaySetupController::class, 'verify'])->middleware('throttle:3,1')->name('shop-pay.verify');
         Route::post('/shop-pay/availability', [\App\Http\Controllers\Billing\ShopPaySetupController::class, 'availability'])->middleware('throttle:5,1')->name('shop-pay.availability');
         Route::get('/', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'index'])->name('index');
+        Route::post('/braintree/connect', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'braintreeConnect'])->middleware('throttle:5,1')->name('braintree.connect');
+        Route::post('/braintree/{connection}/refresh', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'braintreeRefresh'])->whereNumber('connection')->middleware('throttle:5,1')->name('braintree.refresh');
         Route::post('/stripe/start', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeStart'])->middleware('throttle:5,1')->name('stripe.start');
         Route::post('/stripe/connect', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeConnect'])->middleware('throttle:5,1')->name('stripe.connect');
         Route::post('/stripe/session', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeSession'])->middleware('throttle:10,1')->name('stripe.session');
