@@ -15,6 +15,10 @@ beforeEach(function () {
         || ! in_array(config('database.connections.mysql.host'), ['localhost', '127.0.0.1'], true)) {
         throw new RuntimeException('Refusing subscription recovery outside disposable local MySQL.');
     }
+    Schema::dropIfExists('subscription_member_votes');
+    Schema::dropIfExists('subscription_billing_actions');
+    Schema::dropIfExists('subscription_billing_cycles');
+    Schema::dropIfExists('subscription_billing_agreements');
     Schema::dropIfExists('subscription_pilot_cycles');
     Schema::dropIfExists('subscription_pilot_enrollments');
     Schema::dropIfExists('subscription_pilot_events');

@@ -1,0 +1,9 @@
+{
+  "api_version": "2026-10",
+  "checked_at": "2026-10-31T06:02:16.095686Z",
+  "source": "Read-only original retail app endpoint introspection, pinned response header and exact store verified",
+  "schema_sha256": "a644320a46f0ddff839f785b2b70d5dcc857d8f705990711f3555e3cb30146e1",
+  "projected_sdl_sha256": "080636dd99acc836bd49117cfc36d89d7408847943572efe1671be8d77950392",
+  "documents": 21,
+  "scope": "Actual schema syntax/type evidence only. No mutation, saved-method or merchant cutover acceptance."
+}

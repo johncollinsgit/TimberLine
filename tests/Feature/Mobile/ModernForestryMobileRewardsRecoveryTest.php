@@ -33,6 +33,38 @@ beforeEach(function (): void {
     ]);
 });
 
+test('mobile rewards label in person codes with their issued value and keep them out of online checkout', function () {
+    $profile = MarketingProfile::factory()->create(['tenant_id' => Tenant::where('slug', 'modern-forestry')->value('id')]);
+    $reward = CandleCashReward::create(['name' => '$10 coupon', 'candle_cash_cost' => 10, 'reward_type' => 'coupon', 'reward_value' => '10USD', 'is_active' => true]);
+    $service = app(\App\Services\Marketing\CandleCashService::class);
+    $service->addPoints($profile, 20, 'earn', 'test', 'fictional');
+    $service->redeemReward($profile, $reward, 'square');
+    $this->withToken('mf-test-profile:'.$profile->id)->getJson('/api/mobile/v1/modern-forestry/rewards')
+        ->assertOk()->assertJsonPath('data.redemptions.0.name', '$5 Candle Cash · In person')
+        ->assertJsonPath('data.redemptions.0.usableOnline', false)
+        ->assertJsonPath('data.rules.in_person_max_redeemable_per_order_dollars', 5)
+        ->assertJsonPath('data.rules.max_redeemable_per_order_dollars', 10)
+        ->assertJsonPath('data.rules.recurring_charges_allowed', false)
+        ->assertJsonPath('data.rules.birthday_reward_amount_formatted', '$10')
+        ->assertJsonPath('data.rules.birthday_reward_coming_soon', true);
+});
+
+test('mobile birthday benefit reuses the enabled annual program without issuing a gift or crediting the wallet', function () {
+    $tenantId = Tenant::where('slug', 'modern-forestry')->value('id');
+    foreach (['birthday_club_config' => ['enabled' => true, 'signup_bonus_enabled' => false],
+        'birthday_reward_config' => ['enabled' => true, 'reward_type' => 'discount_code', 'reward_value' => 10, 'claim_window_days_after' => 30]] as $key => $value) {
+        \App\Models\TenantMarketingSetting::create(['tenant_id' => $tenantId, 'key' => $key, 'value' => $value]);
+    }
+    $profile = MarketingProfile::factory()->create(['tenant_id' => $tenantId]);
+    CandleCashBalance::create(['marketing_profile_id' => $profile->id, 'balance' => 20]);
+    $this->withToken('mf-test-profile:'.$profile->id)->getJson('/api/mobile/v1/modern-forestry/rewards')
+        ->assertOk()->assertJsonPath('data.rules.birthday_reward_amount_formatted', '$10')
+        ->assertJsonPath('data.rules.birthday_reward_coming_soon', false);
+    expect(\App\Models\BirthdayRewardIssuance::count())->toBe(0)
+        ->and((float) $profile->candleCashBalance()->value('balance'))->toBe(20.0);
+    Http::assertNothingSent();
+});
+
 test('mobile rewards redeem reuses an existing issued storefront code when the account is otherwise blocked', function (): void {
     $profile = MarketingProfile::factory()->create([
         'tenant_id' => 1,
@@ -85,6 +117,7 @@ test('mobile rewards redeem reuses an existing issued storefront code when the a
                             'title' => 'Reward Credit Applied',
                             'startsAt' => now()->toIso8601String(),
                             'endsAt' => now()->addDays(7)->toIso8601String(),
+                            'customerGets' => ['appliesOnOneTimePurchase' => true, 'appliesOnSubscription' => false],
                             'combinesWith' => [
                                 'orderDiscounts' => false,
                                 'productDiscounts' => false,

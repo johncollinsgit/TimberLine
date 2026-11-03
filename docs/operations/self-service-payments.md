@@ -1,6 +1,6 @@
 # Self-service payments, bank feeds, quotes and invoices
 
-This is the native tenant commerce lane. Stripe/PayPal accounts, payout banking,
+This is the native tenant commerce lane. Stripe/PayPal/Braintree accounts, payout banking,
 optional bank feeds and accounting are separate purposes. A connection never
 purchases a module, grants a capability, starts an Everbranch subscription or
 proves a customer paid. Canonical entitlements and exact pilot allowlists remain.
@@ -260,3 +260,57 @@ Local verification: 170 payment-setup, soccer PayPal, Trajectory and Wallet
 preflight tests passed (817 assertions), including pilot isolation, disabled
 spaces, existing-feed sync and issued-session completion while new sign-ins are
 paused. No schema or customer collection setting changed.
+
+## Existing Braintree merchant connection
+
+`TENANT_BRAINTREE_SETUP_ENABLED` and exact `TENANT_BRAINTREE_SETUP_TENANT_IDS`
+separately expose the Braintree section of `/payments?tenant=WORKSPACE`. Existing
+payment-setup and entitled-module gates still apply. Only verified active
+owners/admins can connect or recheck an account. Opening the page is offline.
+These rollout flags authorize setup reads only and cannot enable collection.
+
+The owner selects the original gateway merchant ID, merchant account ID and
+explicit sandbox/production environment, then enters the original API keys into
+the authenticated private form. API keys are encrypted in the tenant-owned
+IntegrationConnection, hidden from serialization, excluded from flash input,
+and never returned to the page. Global services.braintree credentials are not
+fallback authority. The official SDK is pinned to 6.33.1 with its current CA
+bundle; each isolated gateway has a 15-second timeout and fixed provider hosts.
+
+Verification uses MerchantAccount Find only and requires the exact requested
+active account and known ISO currency. It creates no customer, card, authorization
+hold, transaction or subscription. The retained identity includes environment,
+gateway and merchant account. Replays of the same credential converge; changed
+credentials cannot overwrite the original connection. Reconnection/rotation and
+complete lifecycle audit are later work. Account rechecks pin the credential
+revision and never select another workspace's connection. Provider exceptions
+are replaced with a generic safe message without a raw error chain.
+
+`TenantBraintreeConnectionService::inspectVault` uses explicit reviewed IDs to
+read the existing customer and payment method, requires their exact relationship,
+and returns only supported instrument type, masked last four and expiration
+state. It neither persists tokens in ordinary metadata nor turns this observation
+into proof that Recharge stopped billing. Names/emails can locate a candidate;
+only exact source/provider mappings can authorize a future handoff.
+
+This is a connection and verification foundation, not a Braintree charge adapter.
+It does not replace TenantPaymentAccount, change Stripe readiness or make Website,
+POS, invoice or subscription collection use Braintree. Implementing payments
+requires durable immutable attempt identity, no blind retry after uncertainty,
+original-transaction reconciliation, signed callback/settlement acceptance and
+rail-specific paid Shopify handoff. Existing Stripe-specific fields and verifier
+must not be repurposed as Braintree transaction storage. No raw vaulted card
+export or Stripe forwarding is needed when the original Braintree rail is kept.
+
+Modern Forestry's owner selected this reuse path to avoid unnecessary customer
+reauthorization. A signed-in October 30 portal inspection identified the merchant
+as Modern Forestry Soy Candles. Rynda Baker's default PayPal method and settled
+monthly transaction history match the Recharge-linked Shopify payment references;
+older saved cards in that record are expired. This browser evidence identifies a
+strong candidate, not current API verification or authority to charge. API
+credentials, continued authorization, exact source mapping and a controlled
+source-stop/activation review remain required before customer billing changes.
+Jennifer DeWeil's observed source method is Shop Pay. A last-name-only Braintree
+vault search returned no matches; this is not an exhaustive vault lookup and
+does not establish whether another saved method exists. Do not apply Rynda's
+mapping or Braintree reuse assumption to Jennifer.

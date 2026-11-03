@@ -3,6 +3,9 @@
 namespace App\Services\Subscriptions;
 
 use App\Models\ShopifyStore;
+use App\Models\SubscriptionBillingAction;
+use App\Models\SubscriptionBillingAgreement;
+use App\Models\SubscriptionBillingCycle;
 use App\Models\SubscriptionPilotCycle;
 use App\Models\SubscriptionPilotMember;
 use App\Services\Shopify\ShopifyGraphqlClient;
@@ -24,8 +27,11 @@ id processedAt createdAt updatedAt test cancelledAt displayFinancialStatus displ
 customer { id }
 customAttributes { key value }
 totalPriceSet { shopMoney { amount currencyCode } }
+totalShippingPriceSet { shopMoney { amount currencyCode } }
+totalTaxSet { shopMoney { amount currencyCode } }
+shippingAddress { firstName lastName company address1 address2 city provinceCode countryCodeV2 zip phone }
 lineItems(first: 25) { nodes { variant { id } quantity originalUnitPriceSet { shopMoney { amount currencyCode } } } pageInfo { hasNextPage } }
-transactions(first: 50) { id gateway paymentId kind status amountSet { shopMoney { amount currencyCode } } }
+transactions(first: 50) { id gateway paymentId authorizationCode kind status amountSet { shopMoney { amount currencyCode } } }
 GRAPHQL;
 
     public const CREATE_MUTATION = <<<'GRAPHQL'
@@ -43,7 +49,7 @@ GRAPHQL;
         $scopes = collect(data_get($result, 'currentAppInstallation.accessScopes', []))->pluck('handle');
         abort_unless(data_get($result, 'shop.myshopifyDomain') === $store->shop_domain && $scopes->contains('write_orders')
             && ($scopes->contains('read_customers') || $scopes->contains('write_customers'))
-            && ($scopes->contains('read_products') || $scopes->contains('write_products')), 423, 'Shopify order creation and customer/product read permissions are required before Stripe billing.');
+            && ($scopes->contains('read_products') || $scopes->contains('write_products')), 423, 'Shopify order creation and customer/product read permissions are required before subscription billing.');
     }
 
     public function quote(SubscriptionPilotMember $member): array
@@ -74,16 +80,23 @@ GRAPHQL;
         return ['shopify_store_id' => $store->id, 'shop_domain' => $store->shop_domain, 'shipping_address' => $address, 'lines' => $lines];
     }
 
-    public function handoff(SubscriptionPilotCycle $cycle): SubscriptionPilotCycle
+    public function handoff(SubscriptionPilotCycle|SubscriptionBillingCycle $cycle): SubscriptionPilotCycle|SubscriptionBillingCycle
     {
-        abort_unless($cycle->payment_status === 'succeeded' && $cycle->paid_at && $cycle->payment_intent_id, 409, 'A confirmed Stripe payment is required.');
-        $verifier = app(SubscriptionPilotPaymentVerifier::class);
-        abort_unless($verifier->captured($cycle, $verifier->read($cycle)), 409, 'The original payment is no longer a complete captured payment.');
+        abort_unless(! $cycle instanceof SubscriptionBillingCycle || $cycle->handoff_started_at || DB::transactionLevel() === 0,
+            409, 'A new replacement Shopify receipt must start outside an enclosing transaction.');
+        $mapping = $this->paymentMapping($cycle);
+        abort_unless($cycle->payment_status === 'succeeded' && $cycle->paid_at && $mapping['reference'], 409, 'A confirmed original payment is required.');
+        if ($cycle instanceof SubscriptionBillingCycle) {
+            abort_unless(app(SubscriptionBraintreeExecutionService::class)->confirmed($cycle), 409, 'The original Braintree payment is no longer settled and clear.');
+        } else {
+            $verifier = app(SubscriptionPilotPaymentVerifier::class);
+            abort_unless($verifier->captured($cycle, $verifier->read($cycle)), 409, 'The original payment is no longer a complete captured payment.');
+        }
         $terms = $cycle->terms;
         $store = $this->store($cycle->tenant_id, $terms['shopify_store_id'], $terms['shop_domain']);
         // Always look for an existing original result before any mutation.
         $query = 'query PilotOrderRecovery($query: String!) { shop { myshopifyDomain } orders(first: 10, query: $query) { nodes { '.self::ORDER_FIELDS.' } pageInfo { hasNextPage } } }';
-        $result = $this->reader($store)->query($query, ['query' => 'tag:everbranch-pilot-'.$cycle->public_id]);
+        $result = $this->reader($store)->query($query, ['query' => 'tag:'.$mapping['tag']]);
         abort_unless(data_get($result, 'shop.myshopifyDomain') === $store->shop_domain && data_get($result, 'orders.pageInfo.hasNextPage') === false, 409, 'Shopify handoff coverage needs review.');
         $orders = data_get($result, 'orders.nodes', []);
         abort_unless(is_array($orders) && count($orders) <= 1, 409, 'More than one Shopify order may exist for this payment.');
@@ -95,15 +108,20 @@ GRAPHQL;
 
             return $cycle->fresh();
         }
-        abort_unless((bool) config('subscriptions.pilot_handoff_enabled') && in_array($cycle->tenant_id, config('subscriptions.pilot_tenant_ids', []), true), 423, 'The pilot Shopify handoff is paused.');
+        if ($cycle instanceof SubscriptionBillingCycle) {
+            $agreement = SubscriptionBillingAgreement::query()->forTenantId($cycle->tenant_id)->findOrFail($cycle->agreement_id);
+            app(SubscriptionReplacementAccess::class)->owner($cycle->tenant_id, \App\Models\User::findOrFail($agreement->activated_by), $agreement->member_id, 'handoff');
+        } else {
+            abort_unless((bool) config('subscriptions.pilot_handoff_enabled') && in_array($cycle->tenant_id, config('subscriptions.pilot_tenant_ids', []), true), 423, 'The pilot Shopify handoff is paused.');
+        }
         $variables = $this->payload($cycle);
-        $claimed = DB::transaction(function () use ($cycle, $variables) {
-            $row = SubscriptionPilotCycle::query()->forTenantId($cycle->tenant_id)->whereKey($cycle->id)->lockForUpdate()->firstOrFail();
+        $claimed = DB::transaction(function () use ($cycle, $variables, $mapping) {
+            $row = $cycle::query()->forTenantId($cycle->tenant_id)->whereKey($cycle->id)->lockForUpdate()->firstOrFail();
             if ($row->handoff_started_at) {
                 return false;
             }
-            abort_unless($row->payment_status === 'succeeded' && $row->payment_intent_id === $cycle->payment_intent_id, 409);
-            $row->update(['shopify_payload' => $variables, 'handoff_started_at' => now(), 'handoff_status' => 'sending']);
+            abort_unless($row->payment_status === 'succeeded' && $this->paymentMapping($row)['reference'] === $mapping['reference'], 409);
+            $row->update([($cycle instanceof SubscriptionBillingCycle ? 'shopify_request' : 'shopify_payload') => $variables, 'handoff_started_at' => now(), 'handoff_status' => 'sending']);
 
             return true;
         });
@@ -134,46 +152,76 @@ GRAPHQL;
         }
     }
 
-    public function payload(SubscriptionPilotCycle $cycle): array
+    public function payload(SubscriptionPilotCycle|SubscriptionBillingCycle $cycle): array
     {
         $terms = $cycle->terms;
+        $mapping = $this->paymentMapping($cycle);
         $money = fn (int $amount) => ['shopMoney' => ['amount' => self::decimal($amount), 'currencyCode' => $cycle->currency]];
         $lines = array_map(fn ($line) => ['variantId' => 'gid://shopify/ProductVariant/'.$line['variant_id'], 'quantity' => $line['quantity'],
             'priceSet' => $money($line['unit_price_cents']), 'requiresShipping' => true], $terms['lines']);
-        $rate = intdiv($terms['tax_rate_bps'], 10000).'.'.str_pad((string) ($terms['tax_rate_bps'] % 10000), 4, '0', STR_PAD_LEFT);
+        $rate = $terms['tax_rate_bps'] / 10000;
         $tax = $terms['tax_cents'] > 0 ? [['title' => 'Sales tax', 'rate' => $rate, 'priceSet' => $money($terms['tax_cents'])]] : [];
+        if (array_key_exists('tax_lines', $terms)) {
+            $tax = array_map(fn ($line) => ['title' => $line['title'], 'rate' => $line['rate'], 'priceSet' => $money($line['price_cents'])], $terms['tax_lines']);
+        }
 
         return ['order' => ['currency' => $cycle->currency, 'customer' => ['toAssociate' => ['id' => 'gid://shopify/Customer/'.$terms['shopify_customer_id']]],
             'lineItems' => $lines, 'shippingAddress' => $terms['shipping_address'], 'shippingLines' => [['title' => 'Subscription shipping', 'priceSet' => $money($terms['shipping_cents'])]],
             'taxLines' => $tax, 'taxesIncluded' => false, 'financialStatus' => 'PAID', 'sourceName' => 'everbranch_subscriptions', 'sourceIdentifier' => $cycle->public_id,
-            'test' => ! $terms['merchant']['livemode'], 'tags' => ['Everbranch subscription', 'everbranch-pilot-'.$cycle->public_id],
-            'customAttributes' => [['key' => 'everbranch_pilot_cycle', 'value' => $cycle->public_id], ['key' => 'everbranch_stripe_payment_intent', 'value' => $cycle->payment_intent_id],
-                ['key' => 'everbranch_stripe_account', 'value' => $terms['merchant']['account_id']], ['key' => 'everbranch_terms_hash', 'value' => $terms['terms_hash']]],
-            'transactions' => [['kind' => 'SALE', 'status' => 'SUCCESS', 'gateway' => 'everbranch_stripe', 'authorizationCode' => $cycle->payment_intent_id,
-                'amountSet' => $money($cycle->amount_cents), 'test' => ! $terms['merchant']['livemode']]]],
+            'test' => ! $mapping['live'], 'tags' => ['Everbranch subscription', $mapping['tag']],
+            'customAttributes' => [['key' => $mapping['cycle_key'], 'value' => $cycle->public_id], ['key' => $mapping['payment_key'], 'value' => $mapping['reference']],
+                ['key' => $mapping['account_key'], 'value' => $mapping['account']], ['key' => 'everbranch_terms_hash', 'value' => $terms['terms_hash']]],
+            'transactions' => [['kind' => 'SALE', 'status' => 'SUCCESS', 'gateway' => $mapping['gateway'], 'authorizationCode' => $mapping['reference'],
+                'amountSet' => $money($cycle->amount_cents), 'test' => ! $mapping['live']]]],
             'options' => ['inventoryBehaviour' => 'DECREMENT_OBEYING_POLICY', 'sendReceipt' => false, 'sendFulfillmentReceipt' => false]];
     }
 
-    private function confirm(SubscriptionPilotCycle $cycle, array $order): SubscriptionPilotCycle
+    private function confirm(SubscriptionPilotCycle|SubscriptionBillingCycle $cycle, array $order): SubscriptionPilotCycle|SubscriptionBillingCycle
     {
+        $mapping = $this->paymentMapping($cycle);
         $attributes = collect($order['customAttributes'] ?? [])->pluck('value', 'key')->all();
-        abort_unless(($attributes['everbranch_pilot_cycle'] ?? null) === $cycle->public_id
-            && ($attributes['everbranch_stripe_payment_intent'] ?? null) === $cycle->payment_intent_id
-            && ($attributes['everbranch_stripe_account'] ?? null) === $cycle->terms['merchant']['account_id']
+        abort_unless(($attributes[$mapping['cycle_key']] ?? null) === $cycle->public_id
+            && ($attributes[$mapping['payment_key']] ?? null) === $mapping['reference']
+            && ($attributes[$mapping['account_key']] ?? null) === $mapping['account']
             && ($attributes['everbranch_terms_hash'] ?? null) === $cycle->terms['terms_hash']
             && data_get($order, 'customer.id') === 'gid://shopify/Customer/'.$cycle->terms['shopify_customer_id']
             && ($order['displayFinancialStatus'] ?? null) === 'PAID' && empty($order['cancelledAt'])
-            && ($order['test'] ?? null) === ! $cycle->terms['merchant']['livemode']
+            && ($order['test'] ?? null) === ! $mapping['live']
             && data_get($order, 'totalPriceSet.shopMoney.currencyCode') === $cycle->currency
             && self::cents((string) data_get($order, 'totalPriceSet.shopMoney.amount')) === $cycle->amount_cents
             && data_get($order, 'lineItems.pageInfo.hasNextPage') === false, 409, 'Shopify returned different payment or order terms.');
         $actual = collect(data_get($order, 'lineItems.nodes', []))->map(fn ($line) => [data_get($line, 'variant.id'), $line['quantity'], self::cents((string) data_get($line, 'originalUnitPriceSet.shopMoney.amount'))])->sort()->values()->all();
         $expected = collect($cycle->terms['lines'])->map(fn ($line) => ['gid://shopify/ProductVariant/'.$line['variant_id'], $line['quantity'], $line['unit_price_cents']])->sort()->values()->all();
         abort_unless($actual === $expected && preg_match('#^gid://shopify/Order/[1-9][0-9]+$#D', $order['id'] ?? ''), 409, 'Shopify product lines differ from the paid terms.');
+        if ($cycle instanceof SubscriptionBillingCycle) {
+            $address = $order['shippingAddress'] ?? [];
+            $address['countryCode'] = $address['countryCodeV2'] ?? null;
+            unset($address['countryCodeV2']);
+            abort_unless(SubscriptionBillingShopifySource::address($address) === SubscriptionBillingShopifySource::address($cycle->terms['shipping_address']), 409, 'The Shopify delivery address differs from the paid terms.');
+            foreach (['totalShippingPriceSet' => 'shipping_cents', 'totalTaxSet' => 'tax_cents'] as $field => $term) {
+                abort_unless(data_get($order, $field.'.shopMoney.currencyCode') === $cycle->currency
+                    && self::cents((string) data_get($order, $field.'.shopMoney.amount')) === $cycle->terms[$term], 409, 'The Shopify shipping or tax differs from the paid terms.');
+            }
+            $collections = collect($order['transactions'] ?? [])->filter(fn ($transaction) => in_array($transaction['kind'] ?? null, ['SALE', 'CAPTURE'], true)
+                && ($transaction['status'] ?? null) === 'SUCCESS');
+            $receipts = collect($order['transactions'] ?? [])->filter(fn ($transaction) => ($transaction['kind'] ?? null) === 'SALE'
+                && ($transaction['status'] ?? null) === 'SUCCESS' && ($transaction['gateway'] ?? null) === $mapping['gateway']);
+            $receipt = $receipts->first();
+            abort_unless($collections->count() === 1 && $receipts->count() === 1 && in_array($mapping['reference'], [$receipt['paymentId'] ?? null, $receipt['authorizationCode'] ?? null], true)
+                && data_get($receipt, 'amountSet.shopMoney.currencyCode') === $cycle->currency
+                && self::cents((string) data_get($receipt, 'amountSet.shopMoney.amount')) === $cycle->amount_cents, 409, 'The Shopify external payment receipt differs from the original Braintree payment.');
+        }
         $id = basename($order['id']);
         $cycle->update(['shopify_order_id' => $id, 'handoff_status' => 'confirmed', 'last_error_code' => null]);
+        if ($cycle instanceof SubscriptionBillingCycle) {
+            SubscriptionBillingAction::firstOrCreate(['tenant_id' => $cycle->tenant_id, 'agreement_id' => $cycle->agreement_id, 'request_uuid' => $cycle->public_id],
+                ['kind' => 'shopify_order_confirmed', 'actor_type' => 'provider', 'actor_reference' => 'shopify', 'expected_revision' => $cycle->agreement_revision,
+                    'request' => ['cycle_id' => $cycle->public_id, 'provider_reference' => $mapping['reference']], 'before_state' => [],
+                    'after_state' => ['shopify_order_id' => $id, 'handoff_status' => 'confirmed', 'processor' => $cycle->processor]]);
+
+        }
         // Same owned-source projector as normal Shopify ingestion. The external
-        // transaction records a Stripe receipt and never another collection.
+        // transaction records the original processor receipt, never another collection.
         $store = $this->store($cycle->tenant_id, $cycle->terms['shopify_store_id'], $cycle->terms['shop_domain']);
         app(SubscriptionPilotService::class)->projectShopifyOrder($cycle->tenant_id, $store->store_key, [
             'id' => $id, 'customer' => ['id' => $cycle->terms['shopify_customer_id']], 'test' => $order['test'],
@@ -187,6 +235,21 @@ GRAPHQL;
         ], 'shopify_read');
 
         return $cycle->fresh();
+    }
+
+    private function paymentMapping(SubscriptionPilotCycle|SubscriptionBillingCycle $cycle): array
+    {
+        if ($cycle instanceof SubscriptionBillingCycle) {
+            abort_unless($cycle->processor === 'braintree', 409, 'This processor creates its own Shopify orders.');
+
+            return ['reference' => $cycle->provider_reference, 'account' => $cycle->merchant_fingerprint, 'live' => $cycle->method_binding['environment'] === 'production',
+                'tag' => 'everbranch-billing-'.$cycle->public_id, 'cycle_key' => 'everbranch_billing_cycle',
+                'payment_key' => 'everbranch_braintree_transaction', 'account_key' => 'everbranch_processor_account', 'gateway' => 'everbranch_braintree'];
+        }
+
+        return ['reference' => $cycle->payment_intent_id, 'account' => $cycle->terms['merchant']['account_id'], 'live' => $cycle->terms['merchant']['livemode'],
+            'tag' => 'everbranch-pilot-'.$cycle->public_id, 'cycle_key' => 'everbranch_pilot_cycle',
+            'payment_key' => 'everbranch_stripe_payment_intent', 'account_key' => 'everbranch_stripe_account', 'gateway' => 'everbranch_stripe'];
     }
 
     private function store(int $tenantId, int $storeId, string $domain): ShopifyStore

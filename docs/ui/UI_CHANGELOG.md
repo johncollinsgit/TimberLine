@@ -1,6 +1,6 @@
 ## 2026-11-03 — Field tablet/native presentation candidate
 
-Field web .13 shares the native Field home presentation, materials and nested bottom navigation. iPad uses compact operation rows and a bounded sign-in form. Missing tenant logos use the tenant name. Shared source: mobile PR 64 at ba0672c; deployment and native store acceptance are tracked separately.
+Field web .13 shares the native Field home presentation, materials and nested bottom navigation. iPad uses compact operation rows and a bounded sign-in form. Missing tenant logos use the tenant name. Shared source: mobile PR 64 at 59da1c2; deployment and native store acceptance are tracked separately.
 
 ## 2026-10-31 — Everbranch Pay customer-linked checkout (source candidate)
 
@@ -9,6 +9,69 @@ Assigned owners/admins can create or recover one customer request. Quote recover
 shows the frozen customer, and receipts distinguish pending/review rewards. Native
 setup has a privacy link. Merchant, Apple, exact-build and physical collection
 gates remain visible and unchanged for charging; unsupported bundles fail closed.
+
+## 2026-10-30 — Modern Forestry Candle Cash by purchase channel (source candidate)
+
+- Customer rewards show $5 in person and $10 online, excluding recurring Candle
+  Club charges. Staff issuance and the paired native rewards copy use these rules.
+- The $10 annual birthday benefit appears in native rewards and the Modern
+  Forestry Coming soon page. It reuses Birthday Club without issuing another gift.
+- New Square codes retain their $5 value, cannot apply to online bags and require
+  a Square order ID for reconciliation. Old issued values remain unchanged.
+- Square register discounts remain staff-applied; no live deployment or balance
+  change was performed.
+
+## 2026-10-30 — Private subscription schedule controls (source candidate)
+
+- The exact activated member can review existing terms/history and pause, resume,
+  skip or cancel future billing on a short private page. Modern Forestry branding
+  is scoped to its workspace; existing payment details are never requested.
+- A paired native Manage subscription button opens a fresh authenticated private
+  link and refreshes the account on return. Other members retain existing menus.
+- Address/scent amendments, membership parity and hosted/device acceptance remain
+  outstanding. No billing activation or customer release was performed.
+
+## 2026-10-30 — Braintree replacement payment and fulfillment readouts (source candidate)
+
+- The pilot dashboard reads the new original Braintree cycle alongside existing
+  provider observations. Captured production payments and sandbox acceptance
+  have distinct labels; sandbox, refunded and disputed amounts are excluded
+  from collection totals. Uncertain/source-duplicate outcomes require review.
+- Owned external Shopify orders and fulfillment appear only after their saved
+  cycle, customer, merchant, original receipt and terms match. Their external
+  payment receipt never counts as another collection. Report viewing stays offline.
+- Gated Braintree verification/activation/collection and polling source are
+  implemented; customer-facing replacement controls and hosted acceptance remain
+  outstanding. No live customer billing or source ownership was changed.
+
+## 2026-10-30 — Customer gateway badges and replacement preparation (source candidate)
+
+- Everbranch customer purchase history displays locally bundled payment gateway
+  icons with readable labels, multiple badges for split payments and Not recorded
+  for missing evidence. Shop Pay is shown only when explicitly reported.
+- The subscription pilot presents payment-method reuse before optional Stripe
+  setup. Candidate processor preparation is separate from the current billing
+  owner. Neither report nor customer page performs new provider reads.
+- A fictional local gateway preview was inspected in Safari. Hosted acceptance
+  and optional history enrichment remain separate from source preparation.
+
+## 2026-10-30 — Existing Braintree account verification (source candidate)
+
+- The owner payment-setup page can show a separately gated Braintree account
+  connection form, masked account status and an explicit collection-disabled
+  message. Opening the page makes no provider request; stored API keys never
+  return to the page. This adds verification setup, not a billing switch.
+
+## 2026-10-30 — Candle Club authorization and scent notes
+
+- Modern Forestry's private authorization page has forest/cream styling, the
+  existing brand mark, exact subscription terms, explicit card consent and a
+  separate Coming soon feature preview. Setup still does not charge or activate.
+- The paired native update adds ratings and scent notes with retained text on
+  failure, discard confirmation and one stable identity for unchanged retries.
+  Feedback uses the existing private moderation lane, with tenant/member checks.
+- Existing payment, fulfillment, other-merchant branding and provider gates remain
+  unchanged. Native distribution and actual hosted acceptance are separate.
 
 ## 2026-10-28 — Controlled subscription enrollment
 
