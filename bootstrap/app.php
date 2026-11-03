@@ -69,7 +69,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->dontFlash(['api_token', 'admin_token', 'storefront_token', 'admin_access_token', 'storefront_access_token', 'webhook_secret', 'payment_method_token', 'reward_redemption']);
+        $exceptions->dontFlash(['api_token', 'admin_token', 'storefront_token', 'admin_access_token', 'storefront_access_token', 'webhook_secret', 'payment_method_token', 'braintree_public_key', 'reward_redemption']);
         $exceptions->respond(function (\Symfony\Component\HttpFoundation\Response $response, Throwable $exception, Request $request) {
             if ($response->getStatusCode() !== 419
                 || ! $request->isMethod('POST')

@@ -1,3 +1,18 @@
+for (const form of document.querySelectorAll('[data-authorization-form]')) {
+  form.addEventListener('submit', () => {
+    const button = form.querySelector('[data-authorization-submit]');
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    form.querySelector('[data-authorization-status]').textContent = 'Opening secure card setup…';
+  });
+}
+window.addEventListener('pageshow', () => {
+  for (const button of document.querySelectorAll('[data-authorization-submit]')) {
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+    button.form.querySelector('[data-authorization-status]').textContent = '';
+  }
+});
 let stripeScript;
 function loadStripe() {
   if (window.Stripe) return Promise.resolve(window.Stripe);

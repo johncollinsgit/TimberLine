@@ -31,6 +31,10 @@ class SubscriptionPilotCustomerController extends Controller
     {
         $session = $sessions->resolveFromRequest($request);
         abort_unless($session, 401);
+        $replacement = app(\App\Services\Subscriptions\SubscriptionReplacementCustomerAccess::class);
+        if ($replacement->agreement($session)) {
+            return $this->private(response()->json(['url' => $replacement->issue($session)]));
+        }
         $row = app(\App\Services\Subscriptions\SubscriptionPilotMobileAccess::class)->enrollment($session);
         abort_unless($row, 404);
 

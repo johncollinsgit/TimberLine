@@ -33,7 +33,7 @@ function candleCashShopifyDiscountFixture(array $redemptionRules): CandleCashRed
 
     $tenant = Tenant::query()->create([
         'name' => 'Candle Cash Discount Tenant',
-        'slug' => 'candle-cash-discount-tenant-' . str()->lower(str()->random(8)),
+        'slug' => 'candle-cash-discount-tenant-'.str()->lower(str()->random(8)),
     ]);
 
     TenantMarketingSetting::query()->create([
@@ -74,7 +74,7 @@ function candleCashShopifyDiscountFixture(array $redemptionRules): CandleCashRed
         'candle_cash_spent' => 10,
         'platform' => 'shopify',
         'status' => 'issued',
-        'redemption_code' => 'CC-' . strtoupper(str()->random(10)),
+        'redemption_code' => 'CC-'.strtoupper(str()->random(10)),
         'issued_at' => now()->subMinute(),
         'expires_at' => now()->addDays(30),
         'redemption_context' => [
@@ -83,6 +83,37 @@ function candleCashShopifyDiscountFixture(array $redemptionRules): CandleCashRed
         ],
     ])->fresh(['reward', 'profile']);
 }
+
+test('modern forestry online rewards apply only to one time purchases and keep existing code amounts', function (bool $existing) {
+    $redemption = candleCashShopifyDiscountFixture([]);
+    Tenant::whereKey($redemption->profile->tenant_id)->update(['slug' => 'modern-forestry']);
+    Http::preventStrayRequests();
+    Http::fake(function (Request $request) use ($existing) {
+        $query = $request['query'];
+        $discount = ['id' => 'gid://shopify/DiscountCodeNode/fictional', 'codeDiscount' => [
+            '__typename' => 'DiscountCodeBasic', 'title' => 'Reward Credit Applied', 'startsAt' => now()->toISOString(),
+            'endsAt' => null, 'combinesWith' => ['orderDiscounts' => false, 'productDiscounts' => false, 'shippingDiscounts' => true],
+            'customerGets' => ['appliesOnOneTimePurchase' => true, 'appliesOnSubscription' => true],
+        ]];
+        if (str_contains($query, 'CandleCashDiscountByCode')) {
+            return Http::response(['data' => ['codeDiscountNodeByCode' => $existing ? $discount : null]]);
+        }
+        $input = $request['variables']['basicCodeDiscount'];
+        expect($input['customerGets'])->toMatchArray(['appliesOnOneTimePurchase' => true, 'appliesOnSubscription' => false]);
+        if ($existing) {
+            expect($input['customerGets'])->not->toHaveKey('value');
+        } else {
+            expect(data_get($input, 'customerGets.value.discountAmount.amount'))->toBe('10.00');
+        }
+        $discount['codeDiscount']['customerGets'] = ['appliesOnOneTimePurchase' => true, 'appliesOnSubscription' => false];
+        $operation = $existing ? 'discountCodeBasicUpdate' : 'discountCodeBasicCreate';
+
+        return Http::response(['data' => [$operation => ['codeDiscountNode' => $discount, 'userErrors' => []]]]);
+    });
+    app(CandleCashShopifyDiscountService::class)->ensureDiscountForRedemption($redemption, 'retail');
+    Http::assertSentCount(2);
+    expect($redemption->fresh()->candle_cash_spent)->toBe(10);
+})->with([false, true]);
 
 test('candle cash shopify discount sync uses no stacking combinesWith defaults', function () {
     $redemption = candleCashShopifyDiscountFixture([
@@ -394,7 +425,7 @@ test('candle cash shopify discount tenant sync updates issued shopify codes and 
         'candle_cash_spent' => 10,
         'platform' => 'square',
         'status' => 'issued',
-        'redemption_code' => 'CC-' . strtoupper(str()->random(10)),
+        'redemption_code' => 'CC-'.strtoupper(str()->random(10)),
         'issued_at' => now()->subMinute(),
         'expires_at' => now()->addDays(30),
         'redemption_context' => [

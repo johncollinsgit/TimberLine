@@ -100,6 +100,11 @@ class CandleCashService
             ? (bool) data_get($fallback, 'candle_club_free_shipping_enabled', false)
             : (bool) data_get($configured, 'candle_club_free_shipping_enabled', data_get($fallback, 'candle_club_free_shipping_enabled', false));
 
+        $channelRules = app(CandleCashChannelPolicy::class)->rules($tenantId);
+        if ($channelRules !== null) {
+            $redeemIncrement = $maxRedeemablePerOrder = (float) $channelRules['online_amount'];
+        }
+
         return $this->programConfigCache[$cacheKey] = [
             'candle_cash_units_per_dollar' => self::CANONICAL_CANDLE_CASH_UNITS_PER_DOLLAR,
             'legacy_points_per_candle_cash' => max(1, $legacyPointsPerCandleCash),
@@ -112,6 +117,7 @@ class CandleCashService
             'candle_club_multiplier_enabled' => $candleClubMultiplierEnabled,
             'candle_club_multiplier_value' => round(max(1, $candleClubMultiplierValue), 2),
             'candle_club_free_shipping_enabled' => $candleClubFreeShippingEnabled,
+            'channel_rules' => $channelRules,
         ];
     }
 
@@ -270,7 +276,7 @@ class CandleCashService
      */
     public function redemptionRulesPayload(?int $tenantId = null): array
     {
-        return [
+        $payload = [
             'canonical_measurement_label' => '1 reward credit = $1.00',
             'redeem_increment_dollars' => $this->fixedRedemptionAmount($tenantId),
             'redeem_increment_formatted' => $this->formatRewardCurrency($this->fixedRedemptionAmount($tenantId)),
@@ -280,6 +286,15 @@ class CandleCashService
             'max_redeemable_per_order_formatted' => $this->formatRewardCurrency($this->maxRedeemablePerOrderAmount($tenantId)),
             'max_redemptions_per_order' => 1,
         ];
+        $channels = $this->programConfig($tenantId)['channel_rules'];
+        if ($channels !== null) {
+            $payload['in_person_max_redeemable_per_order_dollars'] = (float) $channels['in_person_amount'];
+            $payload['recurring_charges_allowed'] = false;
+            $payload['channel_summary'] = 'Use up to '.$this->formatRewardCurrency($channels['in_person_amount']).' Candle Cash per in-person purchase or '
+                .$this->fixedRedemptionFormatted($tenantId).' online. Rewards apply to other purchases, excluding recurring Candle Club charges.';
+        }
+
+        return $payload;
     }
 
     public function rewardValueAmount(CandleCashReward|array|null $reward): float
@@ -361,6 +376,10 @@ class CandleCashService
         ?CandleCashReward $reward = null,
         ?int $tenantId = null
     ): float {
+        $issuedAmount = app(CandleCashChannelPolicy::class)->issuedAmount($redemption);
+        if ($issuedAmount !== null) {
+            return $issuedAmount;
+        }
         $reward = $reward ?: $redemption->reward;
         $tenantId = $this->resolvedTenantId($tenantId, null, $redemption);
 
@@ -403,9 +422,10 @@ class CandleCashService
 
     public function cancelIssuedRedemptionAndRestoreBalance(
         CandleCashRedemption $redemption,
-        string $reason = 'Canceled automatically because Shopify could not prepare the reward discount.'
+        string $reason = 'Canceled automatically because Shopify could not prepare the reward discount.',
+        string $reasonCode = 'shopify_discount_sync_failed'
     ): array {
-        return DB::transaction(function () use ($redemption, $reason): array {
+        return DB::transaction(function () use ($redemption, $reason, $reasonCode): array {
             /** @var CandleCashRedemption|null $lockedRedemption */
             $lockedRedemption = CandleCashRedemption::query()
                 ->lockForUpdate()
@@ -455,7 +475,7 @@ class CandleCashService
 
             $lockedRedemption->forceFill([
                 'redemption_context' => $this->mergeRedemptionContext((array) $lockedRedemption->redemption_context, [
-                    'cancellation_reason_code' => 'shopify_discount_sync_failed',
+                    'cancellation_reason_code' => $reasonCode,
                     'restoration_applied' => true,
                     'restoration_transaction_id' => (int) $restoreTransaction->id,
                     'restored_candle_cash_points' => $restorePoints,
@@ -623,7 +643,9 @@ class CandleCashService
         return [
             'id' => (int) $reward->id,
             'name' => 'Redeem '.$this->formatRewardCurrency($amount).' Reward Credit',
-            'description' => 'Apply '.$this->formatRewardCurrency($amount).' off this order. Reward credit is redeemed in $10 increments, with a limit of $10 per order.',
+            'description' => $this->redemptionRulesPayload($tenantId)['channel_summary'] ?? ('Apply '.$this->formatRewardCurrency($amount)
+                .' off this order. Reward credit is redeemed in '.$this->fixedRedemptionFormatted($tenantId).' increments, with a limit of '
+                .$this->formatRewardCurrency($this->maxRedeemablePerOrderAmount($tenantId)).' per order.'),
             'reward_type' => (string) $reward->reward_type,
             'reward_value' => $reward->reward_value !== null ? (string) $reward->reward_value : null,
             'candle_cash_cost' => $amount,
@@ -803,15 +825,35 @@ class CandleCashService
         }
 
         return DB::transaction(function () use ($profile, $reward, $platform): array {
+            $profile = MarketingProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
             $balance = CandleCashBalance::query()->lockForUpdate()->firstOrCreate(
                 ['marketing_profile_id' => $profile->id],
                 ['balance' => 0]
             );
 
             $normalizedPlatform = strtolower(trim((string) $platform));
+            $tenantId = $this->resolvedTenantId(null, $profile);
+            $channels = $this->programConfig($tenantId)['channel_rules'];
+            $inPerson = $normalizedPlatform === 'square' && $channels !== null;
+            if ($inPerson && ! $this->isStorefrontReward($reward, $tenantId)) {
+                return ['ok' => false, 'balance' => (float) $balance->balance, 'redemption_id' => null, 'code' => null, 'error' => 'in_person_reward_unavailable'];
+            }
+            if ($inPerson) {
+                $active = CandleCashRedemption::query()->where('marketing_profile_id', $profile->id)->where('platform', 'square')
+                    ->where('status', 'issued')->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))->first();
+                if ($active) {
+                    $samePolicy = app(CandleCashChannelPolicy::class)->isInPersonCode($active);
+
+                    return ['ok' => $samePolicy, 'balance' => (float) $balance->balance, 'redemption_id' => $samePolicy ? $active->id : null,
+                        'code' => $samePolicy ? $active->redemption_code : null, 'error' => $samePolicy ? null : 'existing_in_person_redemption'];
+                }
+            }
             $cost = in_array($normalizedPlatform, ['shopify', 'public_lookup', 'modern_forestry_ios'], true)
-                ? $this->storefrontRewardPointsCost($reward)
+                ? $this->storefrontRewardPointsCost($reward, $tenantId)
                 : (int) $reward->candle_cash_cost;
+            if ($inPerson) {
+                $cost = (int) $channels['in_person_amount'];
+            }
             $current = CandleCashMeasurement::normalizeStoredAmount($balance->balance);
             if ($current < $cost) {
                 return [
@@ -838,6 +880,11 @@ class CandleCashService
                 'issued_at' => now(),
                 'expires_at' => now()->addDays($expiryDays),
                 'redeemed_at' => null,
+                'redemption_context' => $channels !== null && $this->isStorefrontReward($reward, $tenantId) ? [
+                    'tenant_id' => $tenantId,
+                    'channel_policy' => ['version' => 1, 'tenant_id' => $tenantId, 'channel' => $inPerson ? 'in_person' : 'online',
+                        'amount_cents' => $cost * 100, 'max_per_order_cents' => $cost * 100, 'recurring_charges_allowed' => false],
+                ] : null,
             ]);
 
             CandleCashTransaction::query()->create([

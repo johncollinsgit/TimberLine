@@ -5,7 +5,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 pb-4">
         <div>
             <h2 class="text-lg font-semibold text-zinc-950">Subscription pilot</h2>
-            <p class="mt-1 text-sm text-zinc-600">Recharge remains primary. Stripe pilot members require individual activation.</p>
+            <p class="mt-1 text-sm text-zinc-600">Recharge remains primary until each member completes a reviewed handoff. Check existing payment method reuse before requesting new authorization.</p>
         </div>
         @if(isset($pilotTenant))
             <form action="{{ route('subscriptions.pilot.index') }}" method="GET" class="flex items-center gap-2">
@@ -29,8 +29,8 @@
     @else
         <div class="grid gap-3 sm:grid-cols-3" aria-label="Pilot overview">
             <div class="border-l-2 border-emerald-800 pl-4"><p class="text-xs text-zinc-500">Prepared members</p><p class="mt-1 text-2xl font-semibold">{{ $pilot['total_prepared'] }}</p></div>
-            <div class="border-l-2 border-zinc-300 pl-4"><p class="text-xs text-zinc-500">Stripe merchant account</p><p class="mt-1 text-base font-semibold">{{ $pilot['payment_ready'] ? 'Account ready, member approval required' : 'Setup required' }}</p></div>
-            <div class="border-l-2 border-amber-400 pl-4"><p class="text-xs text-zinc-500">Double-charge verification</p><p class="mt-1 text-base font-semibold">{{ collect($pilot['members'])->contains('duplicate_alert', true) ? 'Review required' : 'Incomplete provider coverage' }}</p></div>
+            <div class="border-l-2 border-zinc-300 pl-4"><p class="text-xs text-zinc-500">Optional Stripe fallback</p><p class="mt-1 text-base font-semibold">{{ $pilot['payment_ready'] ? 'Account ready; separate customer setup' : 'Account setup incomplete' }}</p></div>
+            <div class="border-l-2 border-amber-400 pl-4"><p class="text-xs text-zinc-500">Double-charge verification</p><p class="mt-1 text-base font-semibold">{{ collect($pilot['members'])->contains('duplicate_alert', true) ? 'Review required' : (collect($pilot['members'])->every(fn ($member) => $member['coverage_current'] ?? false) ? 'No additional payments observed' : 'Incomplete provider coverage') }}</p></div>
         </div>
         <div class="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
             <table class="w-full text-left text-sm">
@@ -41,7 +41,7 @@
                     <tr>
                         <td class="px-4 py-4"><p class="font-semibold text-zinc-950">{{ $member['name'] }}</p><p class="mt-1 text-xs text-zinc-500">{{ $member['status'] === 'prepared' ? 'Prepared for review' : ucfirst($member['status']) }}</p></td>
                         <td class="whitespace-nowrap px-4 py-4">{{ \Carbon\CarbonImmutable::parse($member['target_date'])->format('M j, Y') }}<p class="mt-1 text-xs text-zinc-500">{{ $member['expected_amount_cents'] !== null ? $member['currency'].' '.number_format($member['expected_amount_cents'] / 100, 2) : 'Amount needs review' }}</p></td>
-                        <td class="px-4 py-4">{{ ucfirst($member['billing_owner']) }}</td>
+                        <td class="px-4 py-4">{{ ucfirst($member['billing_owner']) }}@if($member['replacement_processor'] ?? null)<p class="mt-1 text-xs text-zinc-500">{{ ucfirst($member['replacement_processor']) }} reuse: {{ str_replace('_', ' ', $member['replacement_status']) }}</p>@endif</td>
                         <td class="px-4 py-4">{{ $member['payment_status'] }}</td><td class="px-4 py-4">{{ $member['shopify_status'] }}</td><td class="px-4 py-4">{{ $member['fulfillment_status'] }}</td>
                         <td class="px-4 py-4 {{ $member['duplicate_alert'] ? 'font-semibold text-red-800' : 'text-zinc-600' }}">{{ $member['duplicate_status'] }}</td>
                     </tr>
@@ -53,7 +53,7 @@
             <section class="rounded-lg border border-zinc-200 bg-white p-4">
                 <h3 class="font-semibold text-zinc-950">Observed subscription payments</h3>
                 <p class="mt-1 text-xs text-zinc-500">{{ $pilot['currency'] ?? 'Select one currency to compare amounts.' }} · Source observations, not reconciled revenue. Missing feeds appear as gaps.</p>
-                <div class="relative mt-4 h-64"><canvas data-pilot-payments role="img" aria-label="Observed Recharge, Stripe and Shopify Payments by billing month"></canvas></div>
+                <div class="relative mt-4 h-64"><canvas data-pilot-payments role="img" aria-label="Observed Recharge, Stripe, Shopify Payments and Braintree collections by billing month"></canvas></div>
                 <details class="mt-3 text-xs text-zinc-600"><summary class="cursor-pointer">View payment chart data</summary>
                     <table class="mt-2 w-full text-left"><thead><tr><th>Month</th>@foreach($pilot['chart']['datasets'] as $dataset)<th>{{ $dataset['label'] }}</th>@endforeach</tr></thead><tbody>
                     @foreach($pilot['chart']['labels'] as $i => $month)<tr><td>{{ $month }}</td>@foreach($pilot['chart']['datasets'] as $dataset)<td>{{ isset($dataset['data'][$i]) ? number_format($dataset['data'][$i], 2) : 'Not verified' }}</td>@endforeach</tr>@endforeach
@@ -64,7 +64,7 @@
                 <h3 class="font-semibold text-zinc-950">Target-cycle outcomes</h3>
                 <p class="mt-1 text-xs text-zinc-500">Payment, order and shipment evidence are tracked independently.</p>
                 <div class="relative mt-4 h-64"><canvas data-pilot-outcomes role="img" aria-label="Pilot members with observed payment, order and fulfillment results"></canvas></div>
-                <p class="mt-3 text-xs text-zinc-500">Prepared members have no confirmed Stripe charge until provider evidence is received.</p>
+                <p class="mt-3 text-xs text-zinc-500">Payments require current processor evidence. Sandbox amounts are excluded from real collections.</p>
             </section>
         </div>
         <section class="rounded-lg border border-zinc-200 bg-white">
@@ -75,7 +75,7 @@
                 <div class="grid gap-3 p-4 md:grid-cols-2">
                     <div><p class="font-medium">{{ $member['name'] }}</p>
                         @foreach($member['lines'] as $line)<p class="mt-1 text-sm text-zinc-600">{{ $line['quantity'] }} × {{ $line['label'] }} · {{ $member['currency'] }} {{ number_format($line['unit_price_cents'] / 100, 2) }} · bills every {{ $line['billing_months'] }} month(s), ships every {{ $line['delivery_months'] }} month(s)</p>@endforeach
-                        @if(isset($pilotTenant) && ($member['can_review_execution'] ?? false))<a class="mt-2 inline-block text-sm font-medium text-emerald-900" href="{{ route('subscriptions.pilot.enrollment.review',['member'=>$member['id'],'tenant'=>$pilotTenant->slug]) }}">Review Stripe pilot setup</a><br>@endif
+                        @if(isset($pilotTenant) && ($member['can_review_execution'] ?? false))<a class="mt-2 inline-block text-sm font-medium text-emerald-900" href="{{ route('subscriptions.pilot.enrollment.review',['member'=>$member['id'],'tenant'=>$pilotTenant->slug]) }}">Review optional Stripe setup</a><br>@endif
                         <a href="{{ $member['source_url'] }}" target="_blank" rel="noopener noreferrer" class="mt-2 inline-block text-sm font-medium text-emerald-900">Review in Recharge ↗</a>
                         @if(isset($pilotTenant))<form method="POST" action="{{ route('subscriptions.pilot.refresh-orders', ['member' => $member['id'], 'tenant' => $pilotTenant->slug]) }}" class="mt-2">@csrf<button class="text-sm font-medium text-emerald-900">Refresh Shopify order evidence</button></form>@endif
                         <p class="mt-1 text-xs text-zinc-500">Merchant-portal observation: {{ \Carbon\CarbonImmutable::parse($member['source_observed_at'])->format('M j, Y g:i a T') }}</p>
