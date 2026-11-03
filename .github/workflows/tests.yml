@@ -297,6 +297,11 @@ jobs:
           TEAM_WORK_DISPOSABLE_MYSQL: '1'
         run: php ./vendor/bin/pest tests/Integration/TeamSearchMySqlRecoveryTest.php --compact
 
+      - name: Recover native Shop Pay Wallet migrations
+        env:
+          WEBSITE_WALLET_DISPOSABLE_MYSQL: '1'
+        run: php ./vendor/bin/pest tests/Integration/WebsiteShopPayMySqlRecoveryTest.php --compact
+
       - name: Verify subscription pilot evidence partial-DDL recovery
         env:
           POS_DISPOSABLE_MYSQL: '1'

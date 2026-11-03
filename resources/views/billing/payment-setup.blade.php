@@ -18,6 +18,7 @@
         </style>
         <div data-payment-setup class="mx-auto max-w-6xl space-y-6 pb-10">
             <x-ui.operational-header title="Accept payments" :description="'Receive customer payments for '.$tenant->name.'.'" />
+            <a href="{{ route('tenant-payments.shop-pay.index', ['tenant'=>$tenant->slug]) }}" class="fb-btn fb-btn-secondary inline-flex">Shop Pay setup & checkout options</a>
             @if(session('status'))<div role="status" class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">{{ session('status') }}</div>@endif
             @if($errors->any())<div role="alert" class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950">{{ $errors->first() }}</div>@endif
             <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm" aria-labelledby="card-setup-title">

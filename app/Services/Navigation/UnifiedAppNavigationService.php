@@ -339,6 +339,9 @@ class UnifiedAppNavigationService
             && app(\App\Services\Billing\TenantPaymentSetupAccess::class)->allows($tenant, $user)) {
             $items[] = ['key' => 'payments', 'icon' => 'credit-card', 'href' => route('tenant-payments.index', ['tenant' => $tenant->slug]), 'label' => 'Payments', 'current' => request()->routeIs('tenant-payments.*')];
         }
+        if ($tenant && app(\App\Services\ManagedWebsite\ShopPayWalletConnectionService::class)->setupVisibleFor($tenant, $user)) {
+            $items[] = ['key' => 'shop-pay', 'icon' => 'credit-card', 'href' => route('tenant-payments.shop-pay.index', ['tenant' => $tenant->slug]), 'label' => 'Shop Pay', 'current' => request()->routeIs('tenant-payments.shop-pay.*')];
+        }
 
         $items = $this->normalizeNavigationItems($items);
 
@@ -405,6 +408,9 @@ class UnifiedAppNavigationService
         if (app(\App\Services\Billing\TenantPaymentSetupAccess::class)->enabledFor($tenant)
             && app(\App\Services\Billing\TenantPaymentSetupAccess::class)->allows($tenant, $user)) {
             $add('payments', 'Payments', 'tenant-payments.index', 'credit-card');
+        }
+        if (app(\App\Services\ManagedWebsite\ShopPayWalletConnectionService::class)->setupVisibleFor($tenant, $user)) {
+            $add('shop-pay', 'Shop Pay', 'tenant-payments.shop-pay.index', 'credit-card');
         }
         $add('account-help', 'Account Help', 'account-help.index', 'lifebuoy');
         $add('workspace-settings', 'Settings', 'workspace-settings.index', 'cog-6-tooth');

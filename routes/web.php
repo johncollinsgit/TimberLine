@@ -799,6 +799,9 @@ Route::post('/cart/lines/{item}', [WebsiteCommerceController::class, 'updateCart
 Route::post('/checkout/website/resume', [WebsiteCommerceController::class, 'resumeCheckout'])->middleware('throttle:10,1')->name('managed-website.store.checkout.resume');
 Route::post('/checkout/website/cancel', [WebsiteCommerceController::class, 'cancelCheckout'])->middleware('throttle:10,1')->name('managed-website.store.checkout.cancel');
 Route::post('/checkout/website', [WebsiteCommerceController::class, 'checkout'])->middleware('throttle:10,1')->name('managed-website.store.checkout');
+Route::get('/checkout/website/shop-pay/{uuid}', [\App\Http\Controllers\WebsiteShopPayController::class, 'show'])->whereUuid('uuid')->middleware('throttle:60,1')->name('managed-website.store.shop-pay');
+Route::post('/checkout/website/shop-pay/{uuid}', [\App\Http\Controllers\WebsiteShopPayController::class, 'event'])->whereUuid('uuid')->middleware('throttle:30,1')->name('managed-website.store.shop-pay.event');
+Route::post('/webhooks/website-shop-pay', [\App\Http\Controllers\WebsiteShopPayController::class, 'webhook'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('managed-website.store.shop-pay.webhook');
 Route::post('/cart/shipping-rates', [WebsiteCommerceController::class, 'shippingRates'])->middleware('throttle:10,1')->name('managed-website.store.shipping-rates');
 Route::get('/checkout/website/success', [WebsiteCommerceController::class, 'success'])->name('managed-website.store.success');
 Route::get('/invoices/{token}', [\App\Http\Controllers\WebsiteInvoicePaymentController::class, 'show'])->middleware('throttle:60,1')->name('website-invoices.public.show');
@@ -1128,6 +1131,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/payments/stripe/return', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeReturn'])->middleware('throttle:10,1')->name('tenant-payments.stripe.return');
 
     Route::middleware(['tenant.access'])->prefix('payments')->name('tenant-payments.')->group(function (): void {
+        Route::get('/shop-pay', [\App\Http\Controllers\Billing\ShopPaySetupController::class, 'index'])->name('shop-pay.index');
+        Route::post('/shop-pay', [\App\Http\Controllers\Billing\ShopPaySetupController::class, 'save'])->middleware('throttle:5,1')->name('shop-pay.save');
+        Route::post('/shop-pay/verify', [\App\Http\Controllers\Billing\ShopPaySetupController::class, 'verify'])->middleware('throttle:3,1')->name('shop-pay.verify');
+        Route::post('/shop-pay/availability', [\App\Http\Controllers\Billing\ShopPaySetupController::class, 'availability'])->middleware('throttle:5,1')->name('shop-pay.availability');
         Route::get('/', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'index'])->name('index');
         Route::post('/braintree/connect', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'braintreeConnect'])->middleware('throttle:5,1')->name('braintree.connect');
         Route::post('/braintree/{connection}/refresh', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'braintreeRefresh'])->whereNumber('connection')->middleware('throttle:5,1')->name('braintree.refresh');
