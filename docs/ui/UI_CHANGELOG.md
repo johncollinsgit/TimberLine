@@ -1,3 +1,7 @@
+## 2026-11-03 — Field tablet/native presentation candidate
+
+Field web .13 shares the native Field home presentation, materials and nested bottom navigation. iPad uses compact operation rows and a bounded sign-in form. Missing tenant logos use the tenant name. Shared source: mobile PR 64 at ba0672c; deployment and native store acceptance are tracked separately.
+
 ## 2026-10-31 — Everbranch Pay customer-linked checkout (source candidate)
 
 Modern Forestry's catalog opens native live-basket review and customer selection.

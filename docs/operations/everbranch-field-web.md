@@ -1,5 +1,11 @@
 # Everbranch Field installable web application
 
+## Paired tablet/native presentation, web.13 candidate
+
+Field web `2.3.30-web.13`, fingerprint `254759f9fdb613b9`, comes from mobile PR 64 source `ba0672cfd7dc80732c97cad0e57c0becb082586c`. It shares the native candidate's home hero, operation shortcuts, materials list, document preview layout and bottom navigation. Tablet sign-in is bounded and operation cards use compact rows; missing branding falls back to the tenant name. Browser session/install/update and native bridges retain their original transports. No API/provider settings or workspace rollout change.
+
+Actual checks: 101 shared frontend tests, production native/web builds, manifest/worker asset integrity, and WebKit portrait/landscape iPad plus phone and Chromium Android-size native-layout rendering with read-only fictional reviewer data. No page errors, failed authorized reads or overflow. Old fingerprinted assets are retained for existing clients. The protected deploy, exact `/ready` SHA and `/field/version.json` still gate the web live claim. Store signing/export, device acceptance and App Review remain separate.
+
 ## Customer purchases and rewards, web.12 candidate
 
 Every tenant includes the capability to associate a customer with online and
