@@ -405,13 +405,16 @@ jobs:
           curl --fail --silent --show-error --max-time 30 --request POST "$FORGE_DEPLOY_HOOK_URL"
 
       - name: Verify the activated Forge release
+        timeout-minutes: 20
         env:
           EXPECTED_RELEASE: ${{ github.sha }}
           READY_URL: https://app.theeverbranch.com/ready
         run: |
           set -euo pipefail
 
-          for attempt in $(seq 1 40); do
+          # A cold Forge clone plus dependency installation can outlast two minutes.
+          # Keep checking the exact approved SHA without triggering another release.
+          for attempt in $(seq 1 90); do
             response="$(curl --fail --silent --show-error --max-time 15 "$READY_URL" || true)"
 
             if printf '%s' "$response" | grep --fixed-strings --quiet "\"release\":\"$EXPECTED_RELEASE\""; then
@@ -419,8 +422,8 @@ jobs:
               exit 0
             fi
 
-            echo "Waiting for Forge to activate $EXPECTED_RELEASE (attempt $attempt/40; response: $response)"
-            sleep 3
+            echo "Waiting for Forge to activate $EXPECTED_RELEASE (attempt $attempt/90; response: $response)"
+            sleep 10
           done
 
           echo "::error::Forge did not activate the expected release $EXPECTED_RELEASE. Production remains protected, but this deployment must be investigated before it can be called live."
