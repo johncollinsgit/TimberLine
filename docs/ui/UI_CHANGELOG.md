@@ -1,3 +1,7 @@
+## 2026-11-03 — Field tablet/native presentation candidate
+
+Field web .13 shares the native Field home presentation, materials and nested bottom navigation. iPad uses compact operation rows and a bounded sign-in form. Missing tenant logos use the tenant name. Shared source: mobile PR 64 at 59da1c2; deployment and native store acceptance are tracked separately.
+
 ## November 3 · native shipping recovery candidate
 
 Add private printable order invoices/packing slips, state-aware customer shipping
