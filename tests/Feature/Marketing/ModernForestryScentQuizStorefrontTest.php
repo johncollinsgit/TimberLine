@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Middleware\VerifyMarketingStorefrontRequest;
 use App\Mail\ModernForestryScentQuizWeeklyReportMail;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
@@ -12,7 +11,8 @@ use App\Models\Tenant;
 use Illuminate\Support\Facades\Mail;
 
 test('customer dashboard renders the scent quiz for a linked Shopify customer and saves the result to the account', function (): void {
-    $this->withoutMiddleware(VerifyMarketingStorefrontRequest::class);
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'scent-quiz-account-test');
 
     $tenant = modernForestryScentQuizTenant();
     $profile = MarketingProfile::query()->create([
@@ -34,10 +34,14 @@ test('customer dashboard renders the scent quiz for a linked Shopify customer an
     ]);
 
     $query = [
+        'shop' => 'modernforestry.myshopify.com',
         'store_key' => 'retail',
         'logged_in_customer_id' => '777',
         'scent_quiz' => 1,
+        'timestamp' => (string) time(),
     ];
+    ksort($query);
+    $query['signature'] = hash_hmac('sha256', collect($query)->map(fn ($value, $key) => $key.'='.$value)->implode(''), 'scent-quiz-account-test');
 
     $this->get(route('marketing.shopify.account', $query))
         ->assertOk()

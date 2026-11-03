@@ -330,6 +330,12 @@ return [
         'stores' => [
 
             'retail' => [
+                'pos_inventory' => true,
+                'excluded_scopes' => [
+                    'read_discounts_allocator_functions',
+                    'write_discounts_allocator_functions',
+                    'unauthenticated_read_collection_listings',
+                ],
                 'shop' => env('SHOPIFY_RETAIL_SHOP'),
                 'access_token' => env('SHOPIFY_RETAIL_ACCESS_TOKEN'),
                 'storefront_access_token' => env('SHOPIFY_RETAIL_STOREFRONT_ACCESS_TOKEN'),

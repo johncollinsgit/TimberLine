@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 
 beforeEach(function (): void {
+    // Tomorrow's job must remain in the default calendar month under test.
+    $this->travelTo(now()->startOfMonth()->addDays(9)->setTime(12, 0));
     $this->withoutVite();
 });
 

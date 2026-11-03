@@ -1,3 +1,107 @@
+## Everbranch Pay checkout and rewards (November 1; source candidate)
+
+Tenant administrators can draft and review checkout rules, customer enrollment
+wording and register tax locations; the new online discount and tax publishing
+gates default off. Discount add-ons share one qualifying regular unit per add-on;
+new add-ons default to excluding additional item/sale discounts, with a seller
+setting to allow them. Protection follows selected units even when regular units
+of the same variant share a line. Existing rules without that setting retain
+their legacy behavior until explicitly changed. Tax is calculated after ordered
+discounts on the resulting unit prices. Shopify online publishing supports a
+restricted public, non-combining whole-sale code, not full cross-channel parity.
+Customer enrollment records separate affirmative text/email choices and does not
+automatically link identities. Account-attested customer reward proofs and holds
+are source work behind disabled gates, not a production acceptance claim. A
+tenant administrator may draft the in-person cap through a separately gated
+screen; publication is hard-disabled until it shares a verified payment-start
+fence. Existing-wallet review is only an attestation, never a completed link. A
+zero-tender sale is not supported. New owned-stock pre-handoff claims can be
+cancelled or expired under the disabled-by-default durable-claims gate; legacy
+claims and any journaled/issued attempt remain in original-payment recovery.
+
+Birthday deactivation and annual-fence code are source-only, default-off and do
+not authorize in-person redemption. Provider usage counts can lag and uncertain
+online or payment outcomes require review. Do not equate evidence of an inactive
+Shopify code with exclusive redemption. Phone installation and physical Square
+acceptance were deferred. See `docs/operations/everbranch-pay-birthday-channel-fence.md`
+and `docs/operations/everbranch-pay-processor-and-zoho-review.md`.
+
+Partial-refund review and resolution are separately default-off. The candidate
+staff screen records explicit owner-attested cumulative item/tax allocation,
+and retains an uncertain request on the device for exact retry. Square evidence
+and post-write verification are point-in-time; later provider changes need
+observation. A stale or conflicting saved request cannot yet be cleared safely
+in-app and requires administrator reconciliation. Refunds do not restock goods.
+
+## Uncharged basket cancellation (November 1 UTC; source candidate)
+
+Cancel of an uncollected quote clears its basket and customer selection, retains other
+saved payment reviews, and returns directly to Products. It must not quote the
+same basket again on the busy-state callback. A warm guest basket requests its
+server total directly without a workspace/catalog reload or an extra Review total
+menu. Lost quote responses and pending availability retain explicit basket
+recovery; payment-status recovery appears after collection starts. The debug-only
+checkout UI transport intercepts every request and uses no provider or real API.
+
+## Pending payment navigation (October 31; source candidate)
+
+Close returns to the register without erasing a pending payment; Account remains
+accessible. After the SDK interaction ends, the original operator/device may
+explicitly confirm no card was presented and leave that attempt for review.
+Fresh Square retrieval is required. An empty result is not financial cancellation:
+the original remains unknown, with its stock reservation and immutable request.
+An audited parked event allows a different sale; the original can never receive
+a replacement descriptor. Saved reviews remain accessible and late provider
+confirmation still reconciles the original receipt once. The SDK watchdog treats
+an active payment handle as presentation, including Apple's system scene.
+Opening a warm basket reuses the chosen register/catalog, and known payment
+recovery makes one fresh reconciliation request. Background work uses a compact
+progress banner; unresolved status reads Payment not confirmed, never a permanent
+Checking label. Server quote/payment verification and mutation locks remain.
+
+## Everbranch Pay: finished goods and guest checkout (October 31; source candidate)
+
+The owner follow-up preserves the original mountain/photo styling, completes
+keypad and mix-and-match selling, and scopes Columbus to the pictured scents in
+8oz/16oz cotton wick and wax melts plus their reviewed bundles. No mugs, wood
+wicks or 4oz variants belong in that register. Explicitly untracked stock keeps
+remaining balances unknown; original packing boxes do not establish today's
+stock. Per-register `catalog_item_ids` does not deactivate the full tenant catalog.
+
+The owner explicitly requested removal of Everbranch rehearsal dollar/time and
+single-sale limits on the exact registered phone. `pos:activate --registered-owner`
+requires private owner-request evidence in addition to the unchanged installed
+build, signing, merchant, membership and device checks. Apple publishing approval
+remains unverified and no extra devices are authorized. Read the follow-up section
+in `docs/operations/everbranch-pay-owned-inventory.md` before changing these gates.
+
+The new explicitly assigned `everbranch_inventory_v1` lane keeps finished-goods
+stock, in-person sales and receipts in Everbranch, with Square financial authority
+and no new Shopify order mirror. The native register uses Products/Favorites/
+Keypad, photo grids, variant/bundle sheets and labeled pills. Guest checkout
+precedes optional customer lookup/association and original-term rewards.
+
+Existing event/retail plans mean **to produce**; confirmed ready units, physical
+counts and transfers establish goods available to sell. Modern Forestry uses
+separate event pools; Columbus is the reviewed October 30–November 1 Asana event.
+After earlier show sales, begin from remaining physical counts, not original
+packing totals or guessed deductions. Owners can count a few pilot products on
+the phone; uncounted products remain visible and unavailable. Materials and
+historical production remain intact.
+
+All tenants retain this included capability with their own merchant/program/pool
+setup. Shared Shopify stock requires a reviewed opening baseline, exact mappings,
+matching current commitments, tracked DENY policy and permissions. Unknown online
+bundle behavior blocks activation. Native Website stock/subscriptions retain
+existing adapters; do not claim a native Website shared-stock cutover. Both new
+inventory flags default off. Legacy attempts retain original-provider recovery.
+
+Read `docs/operations/everbranch-pay-owned-inventory.md` and
+`docs/architecture/finished-goods-stock.md` before setup or release. Protected
+migration/build release, exact signed installation, physical payment/refund/rewards
+and settlement acceptance remain required. Apple registered-device development
+access does not establish distribution approval or normal commercial readiness.
+
 ## Native customer payment verification (October 31; source candidate)
 
 The default-off `replacement_customer_payment_recovery_enabled` gate now connects
@@ -4394,3 +4498,14 @@ The old native-WebKit wizard gate failed on hidden Next after a click. Two exact
 local unchanged runs passed; an assumed catalog race was not reproduced. No
 speculative product/test workaround is added. The repaired-head WebKit gate must
 pass. No runtime, provider, publication, merge or deployment action occurred.
+## Unified customer commerce direction (October 30, 2026)
+
+Every tenant should have one canonical customer entry connecting its confirmed
+online/in-person purchases and the existing rewards history. This is included
+shared capability, with Modern Forestry as the first pilot. Explicit source
+associations preserve Website/Shopify/provider identity and order authority;
+they do not merge records or grant marketing consent. The implementation plan,
+surface inventory, acceptance matrix and truthful launch boundary are in
+`docs/architecture/unified-customer-commerce.md`. The phone catalog build and
+the separate draft live POS candidate have not established real cross-channel
+customer/rewards acceptance.

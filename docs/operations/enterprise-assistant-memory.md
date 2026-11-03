@@ -21,3 +21,12 @@ Local tests use fictional managed runtime fixtures, empty env placeholders and f
 Commands: `php vendor/bin/phpunit -c phpunit.enterprise.xml`; for the guarded disposable MySQL instance, set `ENTERPRISE_DISPOSABLE_MYSQL=1`, `ENTERPRISE_DB_DRIVER=mysql`, loopback connection fields and the exact database `everbranch_enterprise_ci`, then run the same suite. Focused tests are `EnterprisePrivateMemoryTest.php` and `tests/Integration/EnterpriseMemoryMySqlConcurrencyTest.php`. Node: `node --test tests/e2e/enterprise-private-memory.test.mjs tests/e2e/enterprise-conversation.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs`. Build/install pinned browsers before `ENTERPRISE_TEST_PHP=php node tests/browser/enterprise-conversation.smoke.mjs`.
 
 This old-base branch remains source only. Integrate only after a coordinated final-main rebase, independent review/CI and explicit published-review edition transition. Exact provider/key source/account/model/rate/expiry/current ledger/baseline approval remains separate. No production, credentials, paid API, grant, external send or business-record write has been performed by this milestone; two-way voice remains queued.
+
+## Shared provider review reference
+
+The owner-requested [provider terms and publishing flags](provider-terms-and-publishing.md)
+also apply to future Enterprise assistant source/memory changes. Do not import
+Square payment content into model training/enhancement or silently broaden
+private memory into cross-tenant knowledge. Review each proposed provider-data
+use and retain the existing permission and current-source checks. This reference
+does not enable an adapter, change a prompt or deploy runtime filtering.

@@ -12,6 +12,8 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Schedule::command('stock:sync')->everyMinute()->withoutOverlapping(5)->runInBackground();
+
 // Square -> canonical marketing profile sync cadence.
 Schedule::command('marketing:sync-square-customers')
     ->dailyAt('01:10')

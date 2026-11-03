@@ -37,7 +37,35 @@ class ModernForestryMobileCustomerSessionService
         return $this->resolveToken($token, $allowCreate);
     }
 
-    public function resolveToken(string $token, bool $allowCreate = false): ?ModernForestryMobileCustomerSession
+    /** Money-authorizing actions must revalidate the account with Shopify, not the identity cache. */
+    public function resolveFreshFromRequest(Request $request): ?ModernForestryMobileCustomerSession
+    {
+        $token = $this->bearerToken($request);
+        if ($token === null) {
+            return null;
+        }
+
+        return $this->resolveToken($token, false, true);
+    }
+
+    /** Fresh provider subject only; never fall back to cached, demo, email or profile guesses. */
+    public function resolveFreshShopifySubject(Request $request): ?array
+    {
+        $token = $this->bearerToken($request);
+        if ($token === null || str_starts_with($token, 'mf-review-demo.') || str_starts_with($token, 'mf-test-')) {
+            return null;
+        }
+        $identity = $this->remoteCustomerIdentity($token, [], true);
+        $gid = $identity['shopify_customer_id'] ?? null;
+        if (($identity['source_type'] ?? null) !== 'shopify_customer' || ! is_string($gid)
+            || ! preg_match('~^gid://shopify/Customer/[1-9][0-9]{0,19}$~D', $gid)) {
+            return null;
+        }
+
+        return $identity;
+    }
+
+    public function resolveToken(string $token, bool $allowCreate = false, bool $fresh = false): ?ModernForestryMobileCustomerSession
     {
         $token = trim($token);
         if ($token === '') {
@@ -45,7 +73,7 @@ class ModernForestryMobileCustomerSessionService
         }
 
         $claims = $this->jwtClaims($token) ?? [];
-        $identity = $this->appReviewDemoIdentity($token) ?? $this->testingIdentity($token) ?? $this->remoteCustomerIdentity($token, $claims);
+        $identity = $this->appReviewDemoIdentity($token) ?? $this->testingIdentity($token) ?? $this->remoteCustomerIdentity($token, $claims, $fresh);
         if ($identity === null) {
             return null;
         }
@@ -513,7 +541,7 @@ class ModernForestryMobileCustomerSessionService
     /**
      * @return array<string,mixed>|null
      */
-    protected function remoteCustomerIdentity(string $token, array $claims = []): ?array
+    protected function remoteCustomerIdentity(string $token, array $claims = [], bool $fresh = false): ?array
     {
         $endpoint = $this->graphqlEndpoint();
         if ($endpoint === '') {
@@ -522,7 +550,7 @@ class ModernForestryMobileCustomerSessionService
 
         $cacheKey = $this->customerIdentityCacheKey($token);
         $cacheTtlSeconds = $this->customerIdentityCacheTtlSeconds($claims);
-        if ($cacheTtlSeconds > 0) {
+        if (! $fresh && $cacheTtlSeconds > 0) {
             $cached = Cache::get($cacheKey);
             if (is_array($cached)) {
                 return $cached;
@@ -588,6 +616,11 @@ GRAPHQL,
                 'duration_ms' => $durationMs,
                 'graphql_errors' => $graphqlErrors,
             ]);
+            if ($fresh) {
+                Cache::forget($cacheKey);
+
+                return null;
+            }
         }
 
         $customer = $response->json('data.customer');

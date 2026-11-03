@@ -31,7 +31,7 @@ test('default resolver grants starter plan modules', function () {
 
     expect($resolved['plan_key'])->toBe('starter')
         ->and($resolved['modules']['customers']['has_access'])->toBeTrue()
-        ->and($resolved['modules']['rewards']['has_access'])->toBeFalse()
+        ->and($resolved['modules']['rewards']['has_access'])->toBeTrue()
         ->and($resolved['modules']['birthdays']['has_access'])->toBeFalse()
         ->and($resolved['modules']['reviews']['has_access'])->toBeTrue()
         ->and($resolved['modules']['wishlist']['has_access'])->toBeFalse()

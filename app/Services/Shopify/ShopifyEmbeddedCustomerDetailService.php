@@ -11,11 +11,11 @@ use App\Models\MarketingConsentEvent;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
 use App\Models\User;
+use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\CandleClubMembershipService;
 use App\Services\Marketing\TwilioSenderConfigService;
-use App\Services\Marketing\CandleCashService;
-use App\Support\Schema\SchemaCapabilityMap;
 use App\Support\Diagnostics\ShopifyEmbeddedDeepProfile;
+use App\Support\Schema\SchemaCapabilityMap;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
@@ -31,8 +31,7 @@ class ShopifyEmbeddedCustomerDetailService
         protected CandleCashService $candleCashService,
         protected CandleClubMembershipService $membershipService,
         protected SchemaCapabilityMap $schemaCapabilities
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{
@@ -122,6 +121,7 @@ class ShopifyEmbeddedCustomerDetailService
 
         return [
             'summary' => $summary,
+            'customer_commerce' => $tenantId ? app(\App\Services\Marketing\CustomerCommerceSnapshotService::class)->forProfile($profile, $tenantId) : null,
             'statuses' => $statuses,
             'consent' => ShopifyEmbeddedDeepProfile::time(
                 'customer_detail.consent_snapshot',
@@ -198,7 +198,7 @@ class ShopifyEmbeddedCustomerDetailService
             return;
         }
 
-        $exception = new ModelNotFoundException();
+        $exception = new ModelNotFoundException;
         $exception->setModel(MarketingProfile::class, [$profileId]);
 
         throw $exception;
@@ -419,18 +419,18 @@ class ShopifyEmbeddedCustomerDetailService
                     $actor = $this->resolveActorLabel($transaction->source_id, $actorLabels);
                     $giftDetailParts = [$transaction->description ?: 'Sent reward credit'];
                     if ($transaction->gift_intent !== null && trim((string) $transaction->gift_intent) !== '') {
-                        $giftDetailParts[] = 'Intent: ' . Str::headline(str_replace('_', ' ', (string) $transaction->gift_intent));
+                        $giftDetailParts[] = 'Intent: '.Str::headline(str_replace('_', ' ', (string) $transaction->gift_intent));
                     }
                     if ($transaction->gift_origin !== null && trim((string) $transaction->gift_origin) !== '') {
-                        $giftDetailParts[] = 'Origin: ' . Str::headline(str_replace('_', ' ', (string) $transaction->gift_origin));
+                        $giftDetailParts[] = 'Origin: '.Str::headline(str_replace('_', ' ', (string) $transaction->gift_origin));
                     }
                     if ($transaction->campaign_key !== null && trim((string) $transaction->campaign_key) !== '') {
-                        $giftDetailParts[] = 'Campaign: ' . $transaction->campaign_key;
+                        $giftDetailParts[] = 'Campaign: '.$transaction->campaign_key;
                     }
                     if ($transaction->notification_status !== null && trim((string) $transaction->notification_status) !== '') {
                         $notificationLabel = Str::headline(str_replace('_', ' ', (string) $transaction->notification_status));
-                        $via = $transaction->notified_via ? ' via ' . Str::headline(str_replace('_', ' ', (string) $transaction->notified_via)) : '';
-                        $giftDetailParts[] = 'Notification: ' . $notificationLabel . $via;
+                        $via = $transaction->notified_via ? ' via '.Str::headline(str_replace('_', ' ', (string) $transaction->notified_via)) : '';
+                        $giftDetailParts[] = 'Notification: '.$notificationLabel.$via;
                     }
                 } elseif ($transaction->type === 'earn') {
                     $type = 'Reward Earned';
@@ -484,7 +484,7 @@ class ShopifyEmbeddedCustomerDetailService
                 return [
                     'occurred_at' => $redemption->issued_at ?: $redemption->created_at,
                     'type' => 'Redemption',
-                    'label' => $redemption->reward?->name ?: ('Reward #' . $redemption->reward_id),
+                    'label' => $redemption->reward?->name ?: ('Reward #'.$redemption->reward_id),
                     'candle_cash_display' => $this->candleCashService->candleCashAmountLabelFromPoints(-1 * (int) ($redemption->candle_cash_spent ?? 0), true),
                     'status' => (string) ($redemption->status ?: 'issued'),
                     'detail' => $redemption->redemption_code ?: '—',
@@ -551,7 +551,7 @@ class ShopifyEmbeddedCustomerDetailService
                     'candle_cash' => $completion->reward_candle_cash !== null ? $this->candleCashService->amountFromPoints($completion->reward_candle_cash) : null,
                     'candle_cash_display' => $completion->reward_candle_cash !== null
                         ? $this->candleCashService->candleCashAmountLabelFromPoints($completion->reward_candle_cash, true)
-                        : ($completion->reward_amount !== null ? '+' . $this->candleCashService->formatRewardCurrency((float) $completion->reward_amount) : null),
+                        : ($completion->reward_amount !== null ? '+'.$this->candleCashService->formatRewardCurrency((float) $completion->reward_amount) : null),
                     'status' => (string) ($completion->status ?: 'submitted'),
                     'detail' => $completion->task?->handle ?: '—',
                     'actor' => null,
@@ -672,7 +672,7 @@ class ShopifyEmbeddedCustomerDetailService
     }
 
     /**
-     * @param array<int|string|null> $sourceIds
+     * @param  array<int|string|null>  $sourceIds
      * @return array<int,string>
      */
     protected function resolveActorLabels(array $sourceIds): array
@@ -726,7 +726,7 @@ class ShopifyEmbeddedCustomerDetailService
     }
 
     /**
-     * @param array<int,array<string,mixed>> $activity
+     * @param  array<int,array<string,mixed>>  $activity
      */
     protected function latestActivityTimestamp(array $activity): ?CarbonImmutable
     {

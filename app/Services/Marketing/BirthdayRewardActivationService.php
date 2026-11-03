@@ -233,9 +233,34 @@ GRAPHQL;
         /** @var array<string,mixed> $store */
         $store = $prepared['store'];
 
+        // Claim the annual operation before any provider request. If the worker
+        // crashes, the durable in-flight claim remains for review.
+        $fence = null;
+        $fenceOperation = null;
+        $fenceTenant = null;
+        if (config('pos_live.birthday_channel_fence_enabled', false) === true) {
+            $fence = app(\App\Services\Pos\PosBirthdayOnlineFence::class);
+            $fenceOperation = (string) \Illuminate\Support\Str::uuid();
+            $fenceTenant = $this->tenantIdForIssuance($preparedIssuance);
+            try {
+                $fence->begin((int) $fenceTenant, (int) $preparedIssuance->marketing_profile_id,
+                    (int) $preparedIssuance->cycle_year, (int) $preparedIssuance->id, $fenceOperation);
+            } catch (\App\Services\Pos\PosException) {
+                return ['ok' => false, 'state' => 'birthday_reward_activation_failed', 'error' => 'birthday_fence_review_required', 'issuance' => $preparedIssuance];
+            }
+        }
+
         try {
             $sync = $this->ensureShopifyDiscount($preparedIssuance, $store);
         } catch (\Throwable $e) {
+            if ($fence && $fenceOperation) {
+                try {
+                    $fence->finish((int) $fenceTenant, (int) $preparedIssuance->marketing_profile_id,
+                        (int) $preparedIssuance->cycle_year, (int) $preparedIssuance->id, $fenceOperation, false);
+                } catch (\App\Services\Pos\PosException) {
+                    // A concurrent observed online use may already have placed it in review.
+                }
+            }
             $failed = DB::transaction(function () use ($preparedIssuance, $e): BirthdayRewardIssuance {
                 /** @var BirthdayRewardIssuance $locked */
                 $locked = BirthdayRewardIssuance::query()
@@ -312,6 +337,15 @@ GRAPHQL;
             return $locked->fresh();
         });
 
+        if ($fence && $fenceOperation) {
+            try {
+                $fence->finish((int) $fenceTenant, (int) $preparedIssuance->marketing_profile_id,
+                    (int) $preparedIssuance->cycle_year, (int) $preparedIssuance->id, $fenceOperation, true);
+            } catch (\App\Services\Pos\PosException) {
+                return ['ok' => false, 'state' => 'birthday_reward_activation_failed', 'error' => 'birthday_fence_review_required', 'issuance' => $activated];
+            }
+        }
+
         $this->writeAudit($activated, 'birthday_reward_discount_synced', [
             'reward_code' => $activated->reward_code,
             'shopify_store_key' => $activated->shopify_store_key,
@@ -351,7 +385,9 @@ GRAPHQL;
      */
     protected function ensureShopifyDiscount(BirthdayRewardIssuance $issuance, array $store): array
     {
-        $client = new ShopifyGraphqlClient(
+        $clientClass = config('pos_live.birthday_channel_fence_enabled', false) === true
+            ? \App\Services\Pos\PosBirthdayShopifyClient::class : ShopifyGraphqlClient::class;
+        $client = new $clientClass(
             trim((string) ($store['shop'] ?? '')),
             trim((string) ($store['token'] ?? '')),
             trim((string) ($store['api_version'] ?? '')) ?: '2026-01'

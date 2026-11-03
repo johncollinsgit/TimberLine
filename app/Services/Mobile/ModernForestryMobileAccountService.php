@@ -143,6 +143,11 @@ class ModernForestryMobileAccountService
 
         return [
             'customer' => $customer,
+            'customerCommerce' => $this->safeAccountSection(
+                section: 'customerCommerce', profile: $profile, tenantId: $tenantId,
+                resolver: fn (): array => app(\App\Services\Marketing\CustomerCommerceSnapshotService::class)->forProfile($profile, $tenantId),
+                fallback: null
+            ),
             'orders' => $orders instanceof Collection ? $orders->take(10)->values()->all() : [],
             'support' => $support,
             'rewards' => $rewards,

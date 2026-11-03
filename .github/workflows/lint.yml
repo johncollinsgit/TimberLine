@@ -16,6 +16,7 @@ on:
       - codex/enterprise-painpoint-demo
       - codex/enterprise-executive-visibility
       - codex/enterprise-voice-finale
+      - 'codex/evergrove-payments-iphone-*'
   workflow_dispatch:
 
 concurrency:

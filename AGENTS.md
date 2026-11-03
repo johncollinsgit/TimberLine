@@ -1,3 +1,93 @@
+## Uncharged basket cancellation (November 1 UTC; source candidate)
+
+Cancel of an uncollected quote clears its basket and customer selection, retains other
+saved payment reviews, and returns directly to Products. It must not quote the
+same basket again on the busy-state callback. A warm guest basket requests its
+server total directly without a workspace/catalog reload or an extra Review total
+menu. Lost quote responses and pending availability retain explicit basket
+recovery; payment-status recovery appears after collection starts. The debug-only
+checkout UI transport intercepts every request and uses no provider or real API.
+
+## Pending payment navigation (October 31; source candidate)
+
+Close returns to the register without erasing a pending payment; Account remains
+accessible. After the SDK interaction ends, the original operator/device may
+explicitly confirm no card was presented and leave that attempt for review.
+Fresh Square retrieval is required. An empty result is not financial cancellation:
+the original remains unknown, with its stock reservation and immutable request.
+An audited parked event allows a different sale; the original can never receive
+a replacement descriptor. Saved reviews remain accessible and late provider
+confirmation still reconciles the original receipt once. The SDK watchdog treats
+an active payment handle as presentation, including Apple's system scene.
+Opening a warm basket reuses the chosen register/catalog, and known payment
+recovery makes one fresh reconciliation request. Background work uses a compact
+progress banner; unresolved status reads Payment not confirmed, never a permanent
+Checking label. Server quote/payment verification and mutation locks remain.
+
+## Everbranch Pay inventory and guest checkout (owner direction, 2026-10-31)
+
+- Follow-up owner direction: preserve the original mountain banner/photo register,
+  use only the show's reviewed scents and cotton-wick sizes/wax melts, finish
+  bundles/keypad, and remove Everbranch's rehearsal dollar/time/single-sale caps
+  on the exactly reviewed registered owner phone. `pos:activate --registered-owner`
+  needs explicit private owner-request evidence. Keep registered-device, merchant,
+  membership, signing, tax, original-attempt and duplicate-payment checks. This
+  does not establish Apple publishing approval or allow additional devices.
+- An owner may explicitly choose untracked show stock after earlier sales. Keep
+  remaining quantities unknown; never invent balances from original box totals.
+  Reviewed bundles may use untracked components; counted components retain their
+  actual availability limits. Scope the show's catalog with `catalog_item_ids`.
+
+- Everbranch owns finished-goods inventory, customers, in-person sales, receipts
+  and rewards. Square owns payment/refund/settlement evidence. New POS sales must
+  not create Shopify orders; Shopify remains the existing catalog/price source
+  and receives online availability from Everbranch through explicit adapters.
+- Tenant owners configure shared or separate stock pools. Modern Forestry uses
+  confirmed ready/packed stock per show. Existing event plans mean to produce,
+  not units available to sell. After prior show sales, use remaining physical
+  counts; never seed original packing totals or deduct historical Square sales
+  again. Read `docs/operations/everbranch-pay-owned-inventory.md`.
+- Customer selection is optional at checkout. After confirmed payment, staff may
+  explicitly associate the receipt with an Everbranch customer by phone/name/email
+  lookup. Preserve original financial snapshots, audit associations and earn once
+  through the existing ledger. Never infer identity from a card or contact match.
+- Preserve legacy original-attempt recovery, materials inventory and domain
+  boundaries. New authority and new native controls require protected release,
+  reviewed opening counts/mappings and physical acceptance before activation.
+
+## Shared AI provider and publishing flags (2026-10-24)
+
+- Read `docs/operations/provider-terms-and-publishing.md` when changing Apple
+  app publishing, Tap to Pay, provider-data retrieval or AI memory/training.
+  Flag its applicable requirements and missing evidence in other Everbranch
+  work. Publishing disclosures can remain a later milestone; live pilot
+  entitlement, merchant and signing requirements still apply before collection.
+- Do not repurpose Apple Tap to Pay data for marketing/customer profiling or
+  use Square-derived content (even anonymized) to train or enhance AI. Proposed
+  Square-data context/embedding/memory use requires provider/legal review.
+  Review seller revocation/deletion and record-retention duties together; do not
+  silently delete payment evidence or promise that provider content is permanent.
+- Verify current terms at release. Agreement acceptance, a developer app and
+  passing tests are distinct from legal approval and physical acceptance.
+
+## Universal customer commerce capability (owner direction, 2026-10-30)
+
+- Every tenant must have the included capability to associate confirmed online
+  and in-person purchases and rewards with one tenant-scoped canonical customer.
+  Modern Forestry is the first pilot, not a hardcoded tenant exception. Read
+  `docs/architecture/unified-customer-commerce.md` before customer/POS/rewards work.
+- Reuse MarketingProfile, CanonicalMarketingProfileResolver, explicit source
+  links and the existing Candle Cash ledger. Keep provider/Website customers and
+  orders authoritative in their original domains; an explicit read-only identity
+  association is not a customer merge, order copy, marketing consent or paid sale.
+- Treat shared customer purchase/rewards capability as core for all plans and
+  templates. Merchant program setup and normal payment/permission gates remain
+  necessary. Do not invent earn rates, copy balances or silently publish programs.
+- Acceptance must prove the same customer across online/in-person purchases,
+  replay/refund correctness, customer-facing visibility and tenant isolation.
+  Do not claim live readiness from a catalog preview, source tests or a payment
+  that has not also proved the identity/history/rewards connections.
+
 ## Self-service payment accounts, bank linking and native invoices (2026-10-19)
 
 - New Stripe accounts use full Dashboard access and direct charges; owner-session OAuth can connect an existing Standard account. Frozen request/routing/environment/account context prevents cross-merchant retries. Existing Express reservations and Wren routing stay unchanged. Direct payments require their own connected-event signing secret and live proof gate; new direct attempts use stable platform-account/environment fingerprints across key rotation.

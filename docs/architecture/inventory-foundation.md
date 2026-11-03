@@ -2,6 +2,8 @@
 
 Date: 2026-03-07
 
+Finished sellable goods use the additive [finished-goods ledger](finished-goods-stock.md). The materials authority below remains unchanged; event production demand is not finished inventory.
+
 ## Goal
 Provide deterministic inventory truth for oils + wax with signed adjustment history and reusable reorder evaluation logic.
 

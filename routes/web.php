@@ -1,5 +1,19 @@
 <?php
 
+\Illuminate\Support\Facades\Route::middleware(['auth', 'verified', 'throttle:10,1'])->group(function (): void {
+    \Illuminate\Support\Facades\Route::post('/pos/setup/square', [\App\Http\Controllers\PosSquareSetupController::class, 'start'])->name('pos.square.start');
+    \Illuminate\Support\Facades\Route::get('/pos/setup/square/callback', [\App\Http\Controllers\PosSquareSetupController::class, 'callback'])->name('pos.square.callback');
+});
+
+\Illuminate\Support\Facades\Route::prefix('pos/admin')->middleware(['auth', 'verified', \App\Http\Middleware\ResolvePosTenant::class])->name('pos.admin.')->group(function (): void {
+    \Illuminate\Support\Facades\Route::get('/', [\App\Http\Controllers\PosAdminController::class, 'index'])->name('index');
+    \Illuminate\Support\Facades\Route::get('/report', [\App\Http\Controllers\PosAdminController::class, 'report'])->name('report');
+    \Illuminate\Support\Facades\Route::get('/stock', [\App\Http\Controllers\StockAdministrationController::class, 'index'])->name('stock.index');
+    \Illuminate\Support\Facades\Route::post('/stock', [\App\Http\Controllers\StockAdministrationController::class, 'update'])->middleware('throttle:30,1')->name('stock.update');
+    \Illuminate\Support\Facades\Route::post('/items/{item}/adjust', [\App\Http\Controllers\PosAdminController::class, 'adjust'])->where('item', '[a-f0-9]{32}')->name('stock.adjust');
+    \Illuminate\Support\Facades\Route::post('/pause', [\App\Http\Controllers\PosAdminController::class, 'pause'])->name('pause');
+});
+
 require __DIR__.'/highlevel.php';
 require __DIR__.'/marketing-desk.php';
 require __DIR__.'/marketplace.php';
@@ -706,6 +720,20 @@ Route::post('/api/mobile/v1/modern-forestry/social-share/claim', [ModernForestry
 Route::get('/api/mobile/v1/modern-forestry/rewards', [ModernForestryProductCatalogController::class, 'rewards'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.rewards');
+Route::post('/api/mobile/v1/modern-forestry/rewards/verified-account', [ModernForestryProductCatalogController::class, 'createVerifiedRewardAccount'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:10,1')
+    ->name('mobile.modern-forestry.rewards.verified-account');
+Route::post('/api/mobile/v1/modern-forestry/rewards/existing-wallet-review', [ModernForestryProductCatalogController::class, 'requestExistingWalletReview'])
+    ->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:10,1')->name('mobile.modern-forestry.rewards.wallet-review.request');
+Route::get('/api/mobile/v1/modern-forestry/rewards/existing-wallet-review-terms', [ModernForestryProductCatalogController::class, 'existingWalletReviewTerms'])
+    ->middleware('throttle:30,1')->name('mobile.modern-forestry.rewards.wallet-review.terms');
+Route::get('/api/mobile/v1/modern-forestry/rewards/existing-wallet-review/{reference}', [ModernForestryProductCatalogController::class, 'existingWalletReviewStatus'])
+    ->where('reference', '[a-f0-9]{32}')->middleware('throttle:30,1')->name('mobile.modern-forestry.rewards.wallet-review.status');
+Route::post('/api/mobile/v1/modern-forestry/rewards/pos-authorization', [ModernForestryProductCatalogController::class, 'issuePosRewardAuthorization'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.rewards.pos-authorization');
 Route::post('/api/mobile/v1/modern-forestry/rewards/redeem', [ModernForestryProductCatalogController::class, 'redeemReward'])
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
@@ -1525,6 +1553,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/customers/{marketingProfile}/email-deliveries/export', [MarketingCustomersController::class, 'exportEmailDeliveries'])
                     ->name('customers.email-deliveries.export');
                 Route::patch('/customers/{marketingProfile}', [MarketingCustomersController::class, 'update'])->name('customers.update');
+                Route::post('/customers/{marketingProfile}/commerce-sources', [MarketingCustomersController::class, 'linkCommerceSource'])->name('customers.commerce-sources.store');
                 Route::post('/customers/{marketingProfile}/birthday', [MarketingCustomersController::class, 'updateBirthday'])->name('customers.update-birthday');
                 Route::post('/customers/{marketingProfile}/consent', [MarketingCustomersController::class, 'updateConsent'])->name('customers.update-consent');
                 Route::post('/customers/{marketingProfile}/candle-cash/grant', [MarketingCustomersController::class, 'grantCandleCash'])->name('customers.candle-cash.grant');

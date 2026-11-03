@@ -31,7 +31,7 @@ const fixture = (...args) => {
   return JSON.parse(result.stdout);
 };
 let server, proxy, browser, currentPage, serial = Promise.resolve(), dispatched = 0, serverLog='';
-const errors = [], external = [], posts = [], results = [];
+const errors = [], external = [], posts = [], results = [], isolatedResponses = [];
 const keyFile = database+'.key', certFile = database+'.crt';
 try {
   const seed = fixture('seed');
@@ -186,11 +186,22 @@ try {
   await page.emulateMedia({media:'print'});assert.equal(await page.locator('#usage-estimator').isVisible(),false);await page.emulateMedia({media:'screen'});
   const isolated=await browser.newContext({ignoreHTTPSErrors:true});
   await isolated.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
-  const other=await isolated.newPage();await other.goto(url);await other.getByLabel('Proposal password').fill(seed.password);
-  await other.getByRole('button',{name:'Open proposal',exact:true}).click();await other.goto(url+'?section=scope');
-  assert.equal(await other.locator('[data-financial-result]').count(),0);
+  const other=await isolated.newPage(); currentPage=other;
+  other.on('response',response=>{if(response.request().isNavigationRequest())isolatedResponses.push({status:response.status(),path:new URL(response.url()).pathname,method:response.request().method()});});
+  other.on('pageerror',error=>errors.push(error.message));
+  const lockedResponse=await other.goto(url);assert.equal(lockedResponse.status(),200,'Isolated proposal password page is available');
+  await other.getByLabel('Proposal password').fill(seed.password);
+  const [unlockResponse]=await Promise.all([
+    other.waitForNavigation({waitUntil:'load'}),
+    other.getByRole('button',{name:'Open proposal',exact:true}).click()
+  ]);
+  assert.equal(unlockResponse.status(),200,'Isolated customer unlock must finish successfully');
+  await other.locator('#financial-management').waitFor({state:'attached'});
+  const isolatedScopeResponse=await other.goto(url+'?section=scope');
+  assert.equal(isolatedScopeResponse.status(),200,'Isolated scope page must load successfully');
   assert.equal(await other.locator('#financial-management').inputValue(),'');
-  await isolated.close();
+  assert.equal(await other.locator('[data-financial-result]').count(),0);
+  await isolated.close(); currentPage=page;
   assert.deepEqual(inspect(),before,'Planning must not change any encrypted proposal/access/business row');
   assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
   assert.deepEqual(await page.evaluate(()=>globalThis.financialPolicyViolations),[]);
@@ -204,7 +215,7 @@ try {
   console.log(JSON.stringify({engine,status:'pass',viewports:results.length,comparisonCount:3,exactBusinessRowsUnchanged:true,external:0},null,2));
 }catch(error){
   if(currentPage)await currentPage.screenshot({path:resolve(evidence,'failure.png'),fullPage:true}).catch(()=>{});
-  await writeFile(resolve(evidence,'failure.txt'),error.stack+'\n'+JSON.stringify({url:currentPage?.url(),errors,external,posts:posts.length},null,2));throw error;
+  await writeFile(resolve(evidence,'failure.txt'),error.stack+'\n'+JSON.stringify({url:currentPage?.url(),errors,external,posts:posts.length,isolatedResponses},null,2));throw error;
 }finally{
   await writeFile(resolve(evidence,'server.log'),serverLog);
   await browser?.close();if(proxy)await new Promise(done=>proxy.close(done));

@@ -1,0 +1,831 @@
+<?php
+
+use App\Models\Tenant;
+use App\Models\TenantModuleEntitlement;
+use App\Models\User;
+use App\Services\PaymentsCore\PaymentJournal;
+use App\Services\PaymentsCore\SqlitePaymentJournal;
+use App\Services\Pos\PosStore;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
+
+// Real provider boundaries must be exercised without a test-owned outer transaction.
+uses(Tests\Support\PosLiveTestCase::class);
+
+beforeEach(function (): void {
+    Http::preventStrayRequests();
+    $this->tenant = Tenant::create(['name' => 'Fictional POS shop', 'slug' => 'pos-fixture-'.Str::lower(Str::random(8)), 'status' => 'active']);
+    $this->actor = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    $this->actor->tenants()->attach($this->tenant, ['role' => 'admin', 'membership_active' => true]);
+    TenantModuleEntitlement::create(['tenant_id' => $this->tenant->id, 'module_key' => 'pos',
+        'availability_status' => 'available', 'enabled_status' => 'enabled', 'billing_status' => 'add_on_comped',
+        'entitlement_source' => 'test', 'price_source' => 'catalog']);
+    config()->set(['pos_live.enabled' => true, 'pos_live.collection_enabled' => true, 'pos_live.servicing_enabled' => true,
+        'pos_live.native_client_enabled' => true, 'pos_live.runtime_id' => 'fixture_runtime',
+        'pos_live.square_application_id' => 'sandbox-synthetic-app', 'pos_live.square_environment' => 'sandbox',
+        'pos_live.tenant_ids' => [$this->tenant->id]]);
+    $this->store = app(PosStore::class);
+    $this->connection = str_repeat('c', 32);
+    $this->register = str_repeat('a', 32);
+    $this->item = str_repeat('b', 32);
+    $this->store->rows('connections', $this->tenant->id)->insert($this->store->values($this->tenant->id, [
+        'id' => $this->connection, 'merchant_id' => 'fixture_merchant', 'provider_location_id' => 'fixture_location',
+        'environment' => 'sandbox', 'credentials' => $this->store->encrypt(['access_token' => 'fixture-token', 'expires_at' => now()->addDay()->toIso8601String()]),
+        'active' => true, 'verified_at' => now(),
+    ]));
+    $this->store->rows('registers', $this->tenant->id)->insert($this->store->values($this->tenant->id, [
+        'id' => $this->register, 'name' => 'Fictional counter', 'location_id' => 'fixture_counter', 'location_name' => 'Fictional store',
+        'connection_id' => $this->connection, 'catalog_source' => 'native', 'active' => true, 'collection_enabled' => true,
+        'servicing_enabled' => true, 'configuration' => $this->store->encrypt(['catalog_reviewed' => true, 'tax_reviewed' => true,
+            'tax_valid_until' => now()->addDay()->toIso8601String()]),
+    ]));
+    $this->store->rows('assignments', $this->tenant->id)->insert($this->store->values($this->tenant->id, [
+        'register_id' => $this->register, 'user_id' => $this->actor->id, 'device_id' => 'fixture_device_1234', 'role' => 'admin', 'active' => true,
+    ]));
+    $this->store->rows('items', $this->tenant->id)->insert($this->store->values($this->tenant->id, [
+        'id' => $this->item, 'location_id' => 'fixture_counter', 'sku' => 'FICTIONAL-1', 'title' => 'Fictional merchandise',
+        'kind' => 'merchandise', 'unit_amount_minor' => 1000, 'tax_bps' => 700, 'tax_basis' => 'Fictional test rate, not merchant tax advice',
+        'tax_reviewed_at' => now(), 'reviewed_by' => $this->actor->id, 'revision' => str_repeat('d', 64), 'tracked' => true, 'quantity' => 1, 'active' => true,
+    ]));
+    $journal = DB::connection()->getDriverName() === 'mysql'
+        ? new \App\Services\PaymentsCore\MySqlPaymentJournal(DB::connection(), app('encrypter'))
+        : new SqlitePaymentJournal(new PDO('sqlite::memory:'));
+    if ($journal instanceof SqlitePaymentJournal) {
+        $journal->installForTesting();
+    }
+    app()->instance(PaymentJournal::class, $journal);
+    $this->journal = $journal;
+    $this->token = $this->actor->createToken('POS fixture', ['mobile:read', 'mobile:write', 'payments:read', 'payments:write'], now()->addDay())->plainTextToken;
+    $this->withToken($this->token)->withHeader('X-Pos-Device', 'fixture_device_1234');
+    $this->base = '/api/mobile/v1/workspaces/'.$this->tenant->slug.'/pos/registers/'.$this->register;
+    Http::fake([
+        '*/v2/locations/fixture_location' => Http::response(['location' => ['id' => 'fixture_location', 'merchant_id' => 'fixture_merchant',
+            'country' => 'US', 'currency' => 'USD', 'status' => 'ACTIVE', 'capabilities' => ['CREDIT_CARD_PROCESSING']]]),
+        '*/v2/merchants/fixture_merchant' => Http::response(['merchant' => ['id' => 'fixture_merchant', 'status' => 'ACTIVE']]),
+    ]);
+    $this->selection = ['request_id' => (string) Str::uuid(), 'items' => [['item_id' => $this->item, 'quantity' => 1, 'revision' => str_repeat('d', 64)]]];
+});
+
+function posFixtureQuote($test): array
+{
+    return $test->postJson($test->base.'/quotes', $test->selection)->assertOk()->json();
+}
+
+function posFixtureDevelopment($test): array
+{
+    config()->set(['pos_live.square_environment' => 'production', 'pos_live.apple_team_id' => 'FICTIONALTEAM',
+        'pos_live.onboarding_build' => 'development_build', 'pos_live.development_acceptance_enabled' => true,
+        'pos_live.distribution_verified' => false, 'pos_live.collection_enabled' => false,
+        'pos_live.tap_entitlement_verified' => true, 'pos_live.square_signature_verified' => true,
+        'pos_live.webhooks_verified' => true, 'cache.default' => 'database']);
+    $test->withHeader('X-Pos-Build', 'development_build');
+    $test->store->rows('connections', $test->tenant->id)->update(['environment' => 'production']);
+    $test->store->rows('items', $test->tenant->id)->update(['unit_amount_minor' => 300]);
+    $review = ['tenant_id' => $test->tenant->id, 'register_id' => $test->register,
+        'merchant_id' => 'fixture_merchant', 'location_id' => 'fixture_location',
+        'application_id' => config('pos_live.square_application_id'), 'bundle_id' => config('pos_live.bundle_id'),
+        'apple_team_id' => 'FICTIONALTEAM', 'build' => 'development_build', 'device_id' => 'fixture_device_1234',
+        'development_profile_verified' => true, 'registered_device_verified' => true, 'installed_build_verified' => true,
+        'apple_case_id' => 'FICTIONAL', 'profile_uuid' => 'FICTIONAL', 'profile_expires_at' => now()->addDay()->toIso8601String()];
+    foreach (['grant_sha256', 'signature_report_sha256', 'installed_build_report_sha256', 'ipa_sha256', 'registered_udid_sha256'] as $key) {
+        $review[$key] = str_repeat('f', 64);
+    }
+    $settings = $test->store->decrypt($test->store->rows('registers', $test->tenant->id)->first()->configuration);
+    $settings['merchant_review'] = ['document_hash' => str_repeat('a', 64), 'markup_minor' => 0];
+    $settings['shopify_acceptance_verified'] = false;
+    $settings['development_acceptance'] = ['id' => str_repeat('e', 32), 'actor_id' => $test->actor->id,
+        'device_id' => 'fixture_device_1234', 'build' => 'development_build', 'max_amount_minor' => 500,
+        'issued_at' => now()->toIso8601String(), 'expires_at' => now()->addHour()->toIso8601String(), 'evidence' => $review];
+    $test->store->rows('registers', $test->tenant->id)->update(['collection_enabled' => false, 'configuration' => $test->store->encrypt($settings)]);
+
+    return $settings;
+}
+
+it('enforces the durable fence through the collection and discard endpoints', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Production payment bindings require the durable MySQL journal.');
+    }
+    posFixtureDevelopment($this);
+    config(['pos_live.durable_start_claims_enabled' => true]);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk()->assertJsonPath('collection.amount_minor', 321);
+    expect(DB::table('pos_payment_start_claims')->where('sale_id', $quote['sale_id'])->value('state'))->toBe('starting');
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk()->assertJsonMissingPath('collection');
+    $this->postJson($this->base.'/requests/'.$quote['request_id'].'/discard')->assertConflict();
+    expect(DB::table('payment_core_operations')->where('sale_id', $quote['sale_id'])->where('kind', 'payment')->count())->toBe(1);
+});
+
+it('never starts collection after the durable discard endpoint wins', function (): void {
+    posFixtureDevelopment($this);
+    config(['pos_live.durable_start_claims_enabled' => true]);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/requests/'.$quote['request_id'].'/discard')->assertOk()->assertJsonPath('discarded', true);
+    expect(DB::table('pos_payment_start_claims')->where('sale_id', $quote['sale_id'])->value('state'))->toBe('cancelled');
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertConflict()->assertJsonMissingPath('collection');
+    expect(DB::table('payment_core_operations')->where('sale_id', $quote['sale_id'])->where('kind', 'payment')->count())->toBe(0);
+});
+
+it('permits one reviewed development sale with commercial gates still off and recovers it after expiry', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Production payment bindings require the durable MySQL journal.');
+    }
+    posFixtureDevelopment($this);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk()->assertJsonPath('collection.amount_minor', 321);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk()->assertJsonMissingPath('collection');
+    $this->selection['request_id'] = (string) Str::uuid();
+    $second = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$second['sale_id'].'/collect')->assertConflict();
+    expect(config('pos_live.collection_enabled'))->toBeFalse()->and(config('pos_live.distribution_verified'))->toBeFalse()
+        ->and((bool) $this->store->rows('registers', $this->tenant->id)->first()->collection_enabled)->toBeFalse();
+    $settings = $this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration);
+    $settings['development_acceptance']['expires_at'] = now()->subMinute()->toIso8601String();
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    posFixtureSquarePayment($this, $quote['sale_id'], changes: ['amount_money' => ['amount' => 321], 'total_money' => ['amount' => 321]]);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()->assertJsonPath('state', 'succeeded');
+    $this->postJson($this->base.'/sales/'.$second['sale_id'].'/collect')->assertStatus(503);
+});
+
+it('retains development owner device build tenant evidence and budget boundaries', function (string $change): void {
+    $settings = posFixtureDevelopment($this);
+    if ($change === 'flag') {
+        config()->set('pos_live.development_acceptance_enabled', false);
+    } elseif ($change === 'build') {
+        $this->withHeader('X-Pos-Build', 'other_build');
+    } elseif ($change === 'amount') {
+        $settings['development_acceptance']['max_amount_minor'] = 300;
+    } elseif ($change === 'expiry') {
+        $settings['development_acceptance']['expires_at'] = now()->subMinute()->toIso8601String();
+    } elseif ($change === 'duration') {
+        $settings['development_acceptance']['expires_at'] = now()->addHours(3)->toIso8601String();
+    } elseif ($change === 'merchant') {
+        $settings['development_acceptance']['evidence']['merchant_id'] = 'other_merchant';
+    } elseif ($change === 'tenant') {
+        $settings['development_acceptance']['evidence']['tenant_id']++;
+    } elseif ($change === 'profile') {
+        $settings['development_acceptance']['evidence']['profile_expires_at'] = now()->subMinute()->toIso8601String();
+    } elseif ($change === 'proof') {
+        unset($settings['development_acceptance']['evidence']['grant_sha256']);
+    } elseif ($change === 'signature') {
+        config()->set('pos_live.square_signature_verified', false);
+    } elseif ($change === 'device') {
+        $this->store->rows('assignments', $this->tenant->id)->insert($this->store->values($this->tenant->id, [
+            'register_id' => $this->register, 'user_id' => $this->actor->id, 'device_id' => 'another_assigned_device', 'role' => 'admin', 'active' => true]));
+        $this->withHeader('X-Pos-Device', 'another_assigned_device');
+    } elseif ($change === 'actor') {
+        $settings['development_acceptance']['actor_id']++;
+    }
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertStatus(503);
+    Http::assertNothingSent();
+})->with(['flag', 'build', 'amount', 'expiry', 'duration', 'merchant', 'tenant', 'profile', 'proof', 'signature', 'device', 'actor']);
+
+it('removes rehearsal amount duration and single-sale restrictions only for an explicitly reviewed registered owner', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Production payment bindings require the durable MySQL journal.');
+    }
+    $settings = posFixtureDevelopment($this);
+    $settings['development_acceptance']['owner_requested'] = true;
+    $settings['development_acceptance']['max_amount_minor'] = null;
+    $settings['development_acceptance']['expires_at'] = now()->addHours(6)->toIso8601String();
+    $settings['development_acceptance']['evidence'] += ['owner_requested_unrestricted_collection' => true,
+        'owner_actor_id' => $this->actor->id, 'owner_request_sha256' => str_repeat('a', 64)];
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    $this->store->rows('items', $this->tenant->id)->update(['unit_amount_minor' => 15000, 'quantity' => 2]);
+    $first = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$first['sale_id'].'/collect')->assertOk()->assertJsonPath('collection.amount_minor', 16050);
+    posFixtureSquarePayment($this, $first['sale_id'], changes: ['amount_money' => ['amount' => 16050], 'total_money' => ['amount' => 16050]]);
+    $this->postJson($this->base.'/sales/'.$first['sale_id'].'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()->assertJsonPath('state', 'succeeded');
+    $this->selection['request_id'] = (string) Str::uuid();
+    $second = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$second['sale_id'].'/collect')->assertOk()->assertJsonPath('collection.amount_minor', 16050);
+    expect($this->store->rows('events', $this->tenant->id)->where('code', 'registered_owner_collection')->count())->toBe(2)
+        ->and(config('pos_live.collection_enabled'))->toBeFalse()->and(config('pos_live.distribution_verified'))->toBeFalse();
+});
+
+it('does not accept an unrestricted session without the exact owner request evidence', function (): void {
+    $settings = posFixtureDevelopment($this);
+    $settings['development_acceptance']['owner_requested'] = true;
+    $settings['development_acceptance']['max_amount_minor'] = null;
+    $settings['development_acceptance']['expires_at'] = now()->addHours(6)->toIso8601String();
+    $settings['development_acceptance']['evidence'] += ['owner_requested_unrestricted_collection' => true,
+        'owner_actor_id' => $this->actor->id + 1, 'owner_request_sha256' => str_repeat('a', 64)];
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertStatus(503);
+    Http::assertNothingSent();
+});
+
+it('requires quotes from the same development session before any reservation', function (): void {
+    posFixtureDevelopment($this);
+    $quote = posFixtureQuote($this);
+    $settings = $this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration);
+    $settings['development_acceptance']['id'] = str_repeat('a', 32);
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertStatus(503);
+    Http::assertNothingSent();
+});
+
+it('previews and audits development activation without marking commercial or physical acceptance true', function (): void {
+    $settings = posFixtureDevelopment($this);
+    $merchantPath = tempnam(sys_get_temp_dir(), 'pos-merchant-');
+    $developmentPath = tempnam(sys_get_temp_dir(), 'pos-development-');
+    try {
+        file_put_contents($merchantPath, json_encode(['tenant_id' => $this->tenant->id, 'merchant_id' => 'fixture_merchant',
+            'location_id' => 'fixture_location', 'actual_processing_rate' => 'Fictional reviewed test rate',
+            'everbranch_markup_minor' => 0, 'paid_square_subscription_added' => false]));
+        file_put_contents($developmentPath, json_encode($settings['development_acceptance']['evidence']));
+        chmod($merchantPath, 0600);
+        chmod($developmentPath, 0600);
+        $options = ['tenant' => $this->tenant->id, 'register' => $this->register, '--actor' => $this->actor->id,
+            '--review' => $merchantPath, '--development-review' => $developmentPath, '--build' => 'development_build',
+            '--acceptance-device' => 'fixture_device_1234', '--acceptance-cap' => 500];
+        $this->artisan('pos:activate', $options)->assertExitCode(0);
+        expect($this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration)['development_acceptance']['id'])->toBe(str_repeat('e', 32));
+        $this->artisan('pos:activate', [...$options, '--apply' => true])->assertExitCode(0);
+        $register = $this->store->rows('registers', $this->tenant->id)->first();
+        expect((bool) $register->collection_enabled)->toBeFalse()
+            ->and($this->store->rows('connections', $this->tenant->id)->first()->acceptance_at)->toBeNull()
+            ->and($this->store->rows('events', $this->tenant->id)->where('code', 'development_acceptance_activated')->count())->toBe(1);
+        $saved = $this->store->decrypt($register->configuration);
+        $saved['development_acceptance']['sale_id'] = 'claimed-original-sale';
+        $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($saved)]);
+        expect(fn () => \Illuminate\Support\Facades\Artisan::call('pos:activate', [...$options, '--apply' => true]))
+            ->toThrow(\App\Services\Pos\PosException::class, 'private_unused_development_review_required');
+    } finally {
+        unlink($merchantPath);
+        unlink($developmentPath);
+    }
+});
+
+it('keeps real Shopify preparation in development acceptance and cannot replace an ambiguous order', function (): void {
+    posFixtureShopify($this, loseCreate: true, small: true);
+    posFixtureDevelopment($this);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertStatus(503)->assertJsonMissingPath('collection');
+    $this->selection['request_id'] = (string) Str::uuid();
+    $second = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$second['sale_id'].'/collect')->assertConflict();
+    expect($this->shopifyCreates)->toBe(1)->and($this->journal->findByRequest($this->tenant->id,
+        $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->first()->payment_request_id))->toBeNull();
+});
+
+it('requires the separate owner review flag to activate registered-device operation without rehearsal caps', function (): void {
+    $settings = posFixtureDevelopment($this);
+    $merchantPath = tempnam(sys_get_temp_dir(), 'pos-owner-merchant-');
+    $developmentPath = tempnam(sys_get_temp_dir(), 'pos-owner-review-');
+    try {
+        file_put_contents($merchantPath, json_encode(['tenant_id' => $this->tenant->id, 'merchant_id' => 'fixture_merchant',
+            'location_id' => 'fixture_location', 'actual_processing_rate' => 'Fictional reviewed test rate',
+            'everbranch_markup_minor' => 0, 'paid_square_subscription_added' => false]));
+        $evidence = $settings['development_acceptance']['evidence'];
+        $evidence += ['owner_requested_unrestricted_collection' => true, 'owner_actor_id' => $this->actor->id,
+            'owner_request_sha256' => str_repeat('a', 64)];
+        file_put_contents($developmentPath, json_encode($evidence));
+        chmod($merchantPath, 0600);
+        chmod($developmentPath, 0600);
+        $options = ['tenant' => $this->tenant->id, 'register' => $this->register, '--actor' => $this->actor->id,
+            '--review' => $merchantPath, '--development-review' => $developmentPath, '--build' => 'development_build',
+            '--acceptance-device' => 'fixture_device_1234', '--registered-owner' => true];
+        $this->artisan('pos:activate', $options)->assertExitCode(0);
+        $this->artisan('pos:activate', [...$options, '--apply' => true])->assertExitCode(0);
+        $saved = $this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration)['development_acceptance'];
+        expect($saved['max_amount_minor'])->toBeNull()->and($saved['owner_requested'])->toBeTrue()
+            ->and($saved['expires_at'])->toBe($evidence['profile_expires_at'])
+            ->and(config('pos_live.collection_enabled'))->toBeFalse()->and(config('pos_live.distribution_verified'))->toBeFalse();
+    } finally {
+        unlink($merchantPath);
+        unlink($developmentPath);
+    }
+});
+
+it('prepares and finalizes the original Shopify order in a development acceptance sale without claiming prior inventory proof', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Production payment bindings require the durable MySQL journal.');
+    }
+    posFixtureShopify($this, small: true);
+    posFixtureDevelopment($this);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk()->assertJsonPath('stock_state', 'held');
+    posFixtureSquarePayment($this, $quote['sale_id'], changes: ['amount_money' => ['amount' => 321], 'total_money' => ['amount' => 321]]);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()->assertJsonPath('stock_state', 'committed');
+    expect($this->shopifyCreates)->toBe(1)->and($this->shopifyPaid)->toBeTrue()->and($this->shopifyFulfilled)->toBeTrue()
+        ->and($this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration)['shopify_acceptance_verified'])->toBeFalse();
+});
+
+function posFixtureSquarePayment($test, string $sale, string $status = 'COMPLETED', array $changes = []): void
+{
+    $row = $test->store->rows('sales', $test->tenant->id)->where('id', $sale)->first();
+    Http::fake(['*/v2/payments/fixture_payment' => Http::response(['payment' => array_replace_recursive([
+        'id' => 'fixture_payment', 'reference_id' => $row->payment_request_id, 'location_id' => 'fixture_location',
+        'amount_money' => ['amount' => 1070, 'currency' => 'USD'], 'total_money' => ['amount' => 1070, 'currency' => 'USD'],
+        'status' => $status, 'source_type' => 'CARD',
+    ], $changes)])]);
+}
+
+it('allows its own entitlement without granting Managed Website access', function (): void {
+    $this->getJson($this->base.'/catalog')->assertOk()->assertJsonPath('items.0.sku', 'FICTIONAL-1');
+    expect(DB::table('tenant_module_entitlements')->where('tenant_id', $this->tenant->id)->where('module_key', 'managed_website')->exists())->toBeFalse();
+});
+
+it('requires an assigned device even for a tenant administrator', function (): void {
+    $this->withHeader('X-Pos-Device', 'unassigned_device')->getJson($this->base.'/catalog')->assertNotFound();
+});
+
+it('rejects wildcard-only tokens and freshly revoked memberships', function (): void {
+    $token = $this->actor->createToken('Wildcard fixture', ['*'], now()->addDay())->plainTextToken;
+    $this->withToken($token)->getJson($this->base.'/catalog')->assertForbidden();
+    $this->withToken($this->token);
+    DB::table('tenant_user')->where('tenant_id', $this->tenant->id)->update(['membership_active' => false]);
+    $this->getJson($this->base.'/catalog')->assertNotFound();
+});
+
+it('denies an expired explicit token', function (): void {
+    $token = $this->actor->createToken('Expired fixture', ['mobile:read', 'payments:read'], now()->subMinute())->plainTextToken;
+    $this->withToken($token)->getJson($this->base.'/catalog')->assertUnauthorized();
+});
+
+it('rejects client prices and string quantities before making an order', function (): void {
+    $value = $this->selection;
+    $value['items'][0]['unit_amount_minor'] = 1;
+    $this->postJson($this->base.'/quotes', $value)->assertUnprocessable();
+    $value = $this->selection;
+    $value['items'][0]['quantity'] = '1';
+    $this->postJson($this->base.'/quotes', $value)->assertUnprocessable();
+    expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(0);
+    Http::assertNothingSent();
+});
+
+it('freezes integer tax and encrypted optional customer contact with exact request replay', function (): void {
+    $this->selection['customer'] = ['name' => 'Private fictional buyer', 'email' => 'buyer@example.invalid'];
+    $first = posFixtureQuote($this);
+    $again = $this->postJson($this->base.'/quotes', $this->selection)->assertOk()->json();
+    expect($first['sale_id'])->toBe($again['sale_id'])->and($first['amount_minor'])->toBe(1070);
+    $raw = $this->store->rows('sales', $this->tenant->id)->first()->snapshot;
+    expect($raw)->not->toContain('Private fictional buyer')->and($raw)->not->toContain('buyer@example.invalid');
+    $this->selection['customer']['name'] = 'Changed';
+    $this->postJson($this->base.'/quotes', $this->selection)->assertConflict();
+});
+
+it('issues one collection descriptor and never trusts a native callback as paid', function (): void {
+    $quote = posFixtureQuote($this);
+    $response = $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk();
+    $response->assertJsonPath('state', 'unknown')->assertJsonPath('canonical_confirmation', false)
+        ->assertJsonPath('collection.application_fee_minor', 0)->assertJsonPath('collection.online_only', true);
+    expect($response->json('collection.payment_attempt_id'))->not->toBe($response->json('collection.reference_id'));
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk()->assertJsonMissingPath('collection');
+    $this->getJson($this->base.'/sales/'.$quote['sale_id'].'/receipt')->assertConflict();
+    expect((int) $this->store->rows('holds', $this->tenant->id)->where('state', 'held')->sum('quantity'))->toBe(1);
+});
+
+it('commits stock once only after a current matching Square retrieval', function (): void {
+    $quote = posFixtureQuote($this);
+    $id = $quote['sale_id'];
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk();
+    posFixtureSquarePayment($this, $id);
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()
+        ->assertJsonPath('state', 'succeeded')->assertJsonPath('stock_state', 'committed')->assertJsonPath('receipt_available', true);
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile')->assertOk();
+    expect((int) $this->store->rows('items', $this->tenant->id)->first()->quantity)->toBe(0)
+        ->and($this->store->rows('outbox', $this->tenant->id)->where('effect_key', 'finalize')->count())->toBe(1);
+    $this->getJson($this->base.'/sales/'.$id.'/receipt')->assertOk()->assertJsonPath('payment_reference', 'fixture_payment');
+});
+
+it('retains holds on missing or mismatched canonical payment evidence', function (array $changes): void {
+    $quote = posFixtureQuote($this);
+    $id = $quote['sale_id'];
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk();
+    posFixtureSquarePayment($this, $id, 'COMPLETED', $changes);
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()
+        ->assertJsonPath('state', 'unknown')->assertJsonPath('receipt_available', false);
+    expect((int) $this->store->rows('items', $this->tenant->id)->first()->quantity)->toBe(1)
+        ->and($this->store->rows('holds', $this->tenant->id)->where('state', 'held')->count())->toBe(1);
+})->with([
+    [['amount_money' => ['amount' => 1]]], [['reference_id' => 'foreign_reference']], [['location_id' => 'foreign_location']],
+    [['source_type' => 'CASH']], [['tip_money' => ['amount' => 1]]], [['total_money' => ['amount' => 1071]]],
+]);
+
+it('releases inventory only after canonical failed or cancelled outcomes', function (string $status): void {
+    $quote = posFixtureQuote($this);
+    $id = $quote['sale_id'];
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk();
+    posFixtureSquarePayment($this, $id, $status);
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()->assertJsonPath('stock_state', 'released');
+    expect((int) $this->store->rows('holds', $this->tenant->id)->where('state', 'held')->count())->toBe(0);
+})->with(['FAILED', 'CANCELED']);
+
+it('prevents two reserved baskets from selling the same final stock unit', function (): void {
+    $first = posFixtureQuote($this);
+    $this->selection['request_id'] = (string) Str::uuid();
+    $second = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$first['sale_id'].'/collect')->assertOk();
+    $this->postJson($this->base.'/sales/'.$second['sale_id'].'/collect')->assertConflict();
+    expect((int) $this->store->rows('holds', $this->tenant->id)->where('state', 'held')->sum('quantity'))->toBe(1);
+});
+
+it('keeps recovery available while new collection is paused', function (): void {
+    $quote = posFixtureQuote($this);
+    $id = $quote['sale_id'];
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk();
+    config()->set('pos_live.collection_enabled', false);
+    posFixtureSquarePayment($this, $id);
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()->assertJsonPath('state', 'succeeded');
+});
+
+it('blocks a live binding without Apple distribution and physical acceptance proof', function (): void {
+    $this->store->rows('connections', $this->tenant->id)->update(['environment' => 'production']);
+    config()->set('pos_live.square_environment', 'production');
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertStatus(503);
+    Http::assertNothingSent();
+});
+
+it('rejects unsigned webhook hints before recording any work', function (): void {
+    config()->set(['pos_live.square_webhook_signature_key' => 'fixture-key', 'pos_live.square_webhook_url' => 'https://example.invalid/api/pos/square/webhook']);
+    $this->postJson('/api/pos/square/webhook', ['event_id' => 'fake_event', 'merchant_id' => 'fixture_merchant'])->assertForbidden();
+    expect($this->store->rows('outbox', $this->tenant->id)->count())->toBe(0);
+});
+
+it('isolates records even when a second runtime has the same tenant identity', function (): void {
+    config()->set('pos_live.runtime_id', 'another_fixture_runtime');
+    $this->getJson($this->base.'/catalog')->assertNotFound();
+});
+
+it('discards an unstarted quote while refusing to clear an issued native attempt', function (): void {
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/requests/'.$quote['request_id'].'/discard')->assertOk()->assertJsonPath('discarded', true);
+    $this->getJson($this->base.'/sales/'.$quote['sale_id'])->assertOk()->assertJsonPath('state', 'cancelled')->assertJsonPath('stock_state', 'released');
+    $this->selection['request_id'] = (string) Str::uuid();
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk();
+    $this->postJson($this->base.'/requests/'.$quote['request_id'].'/discard')->assertConflict();
+});
+
+it('expires an unstarted quote without releasing an uncertain native collection', function (): void {
+    $quote = posFixtureQuote($this);
+    $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->update(['expires_at' => now()->subMinute()]);
+    app(\App\Services\Pos\PosService::class)->expireUnstarted($this->store->rows('sales', $this->tenant->id)->first());
+    expect($this->store->rows('sales', $this->tenant->id)->first()->state)->toBe('cancelled');
+    $this->selection['request_id'] = (string) Str::uuid();
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk();
+    $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->update(['expires_at' => now()->subMinute()]);
+    app(\App\Services\Pos\PosService::class)->expireUnstarted($this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->first());
+    expect($this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->first()->stock_state)->toBe('held');
+});
+
+it('serializes partial refunds against the original paid budget without restocking', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Durable refund receipt requires the MySQL journal.');
+    }
+    $quote = posFixtureQuote($this);
+    $id = $quote['sale_id'];
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk();
+    posFixtureSquarePayment($this, $id);
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk();
+    $request = (string) Str::uuid();
+    $refund = ['id' => 'fixture_refund', 'payment_id' => 'fixture_payment', 'location_id' => 'fixture_location',
+        'reason' => 'Everbranch '.$request, 'amount_money' => ['amount' => 500, 'currency' => 'USD'], 'status' => 'COMPLETED'];
+    Http::fake(['*/v2/refunds' => Http::response(['refund' => $refund, 'refunds' => [$refund]]),
+        '*/v2/refunds?*' => Http::response(['refunds' => [$refund]]), '*/v2/refunds/fixture_refund' => Http::response(['refund' => $refund])]);
+    $input = ['request_id' => $request, 'amount_minor' => 500, 'reason' => 'requested_by_customer'];
+    $this->postJson($this->base.'/sales/'.$id.'/refunds', $input)->assertOk()->assertJsonPath('state', 'succeeded');
+    $this->postJson($this->base.'/sales/'.$id.'/refunds', $input)->assertOk()->assertJsonPath('state', 'succeeded');
+    $this->getJson($this->base.'/sales/'.$id.'/receipt')->assertOk()->assertJsonPath('refunded_minor', 500);
+    $input['request_id'] = (string) Str::uuid();
+    $input['amount_minor'] = 571;
+    $this->postJson($this->base.'/sales/'.$id.'/refunds', $input)->assertConflict();
+    expect((int) $this->store->rows('items', $this->tenant->id)->first()->quantity)->toBe(0);
+    Http::assertSentCount(6); // Three original-payment audits, one refund POST, list and canonical refund GET.
+});
+
+function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation = false, bool $small = false): void
+{
+    $shop = \App\Models\ShopifyStore::create(['tenant_id' => $test->tenant->id, 'store_key' => 'fixture-store-'.$test->tenant->id,
+        'shop_domain' => 'fictional-pos-'.$test->tenant->id.'.myshopify.com', 'access_token' => 'fixture-shopify-token']);
+    $settings = $test->store->decrypt($test->store->rows('registers', $test->tenant->id)->first()->configuration);
+    $settings['shopify_acceptance_verified'] = true;
+    $settings['shopify'] = ['store_id' => $shop->id, 'shop_id' => 'gid://shopify/Shop/1', 'shop_domain' => $shop->shop_domain,
+        'location_id' => 'gid://shopify/Location/2', 'variant_ids' => ['gid://shopify/ProductVariant/3'],
+        'tax_address' => ['address1' => 'Fictional test address', 'city' => 'Test', 'provinceCode' => 'SC', 'countryCode' => 'US', 'zip' => '00000']];
+    $test->store->rows('registers', $test->tenant->id)->update(['catalog_source' => 'shopify', 'configuration' => $test->store->encrypt($settings)]);
+    $profile = \App\Models\MarketingProfile::create(['tenant_id' => $test->tenant->id, 'first_name' => 'Fictional buyer']);
+    $test->selection['customer_profile_id'] = $profile->id;
+    $test->shopifyCustomerID = null;
+    $test->shopifyCreates = 0;
+    $test->shopifyPaid = false;
+    $test->shopifyFulfilled = false;
+    $test->shopifyCancelled = false;
+    Http::fake(['https://fictional-pos-*.myshopify.com/*' => function ($request) use ($test, $loseCreate, $wrongLocation, $small) {
+        // Shopify rejects [] as the variables parameter, including the shop
+        // identity query before every mutation. Exercise the actual JSON body.
+        $wire = json_decode($request->body());
+        if (property_exists($wire, 'variables') && ! is_object($wire->variables)) {
+            return Http::response(['errors' => [['message' => 'Invalid variables parameter.']]]);
+        }
+        $query = $request['query'];
+        $shop = ['id' => 'gid://shopify/Shop/1', 'currencyCode' => 'USD'];
+        $money = fn ($value) => ['shopMoney' => ['amount' => $small ? (['10.70' => '3.21', '0.70' => '0.21', '10.00' => '3.00'][$value] ?? $value) : $value, 'currencyCode' => 'USD']];
+        $sale = $test->store->rows('sales', $test->tenant->id)->first();
+        $order = fn () => ['customer' => $test->shopifyCustomerID ? ['id' => $test->shopifyCustomerID] : null, 'id' => 'gid://shopify/Order/4', 'displayFinancialStatus' => $test->shopifyPaid ? 'PAID' : 'PENDING', 'cancelledAt' => $test->shopifyCancelled ? '2026-10-31T19:00:00Z' : null,
+            'totalPriceSet' => $money('10.70'), 'totalTaxSet' => $money('0.70'), 'totalOutstandingSet' => $money($test->shopifyPaid ? '0.00' : '10.70'),
+            'tags' => ['EverbranchPOS-'.$sale?->id], 'transactions' => $test->shopifyPaid ? [['id' => 'gid://shopify/OrderTransaction/5',
+                'kind' => 'SALE', 'status' => 'SUCCESS', 'gateway' => 'manual', 'amountSet' => $money('10.70')]] : [],
+            'fulfillmentOrders' => ['pageInfo' => ['hasNextPage' => false], 'nodes' => [['id' => 'gid://shopify/FulfillmentOrder/6',
+                'status' => $test->shopifyFulfilled ? 'CLOSED' : 'OPEN', 'assignedLocation' => ['location' => ['id' => $wrongLocation ? 'gid://shopify/Location/999' : 'gid://shopify/Location/2']],
+                'lineItems' => ['pageInfo' => ['hasNextPage' => false], 'nodes' => [['id' => 'gid://shopify/FulfillmentOrderLineItem/7',
+                    'remainingQuantity' => 1, 'totalQuantity' => 1, 'lineItem' => ['variant' => ['id' => 'gid://shopify/ProductVariant/3']]]]]]]]];
+        if (str_contains($query, 'PosCatalog')) {
+            $data = ['shop' => $shop, 'nodes' => [['id' => 'gid://shopify/ProductVariant/3', 'title' => 'Default', 'sku' => 'FICTIONAL-SHOPIFY',
+                'price' => $small ? '3.00' : '10.00', 'updatedAt' => '2026-10-24T00:00:00Z', 'inventoryPolicy' => 'DENY',
+                'product' => ['id' => 'gid://shopify/Product/8', 'title' => 'Fictional Shopify product', 'status' => 'ACTIVE', 'isGiftCard' => false],
+                'inventoryItem' => ['tracked' => true, 'inventoryLevel' => ['quantities' => [['name' => 'available', 'quantity' => 1]]]]]]];
+        } elseif (str_contains($query, 'PosCalculate')) {
+            $data = ['draftOrderCalculate' => ['userErrors' => [], 'calculatedDraftOrder' => ['taxesIncluded' => false, 'totalPriceSet' => $money('10.70'), 'totalTaxSet' => $money('0.70'),
+                'taxLines' => [['title' => 'Fictional tax', 'rate' => 0.07, 'priceSet' => $money('0.70')]],
+                'lineItems' => [['variant' => ['id' => 'gid://shopify/ProductVariant/3'], 'quantity' => 1, 'originalUnitPriceSet' => $money('10.00')]]]]];
+        } elseif (str_contains($query, 'mutation PosOrder')) {
+            $test->shopifyCreates++;
+            expect($request['variables']['options']['inventoryBehaviour'])->toBe('DECREMENT_OBEYING_POLICY');
+            expect($request['variables']['order']['financialStatus'])->toBe('PENDING');
+            if ($loseCreate) {
+                throw new \Illuminate\Http\Client\ConnectionException('Fictional response lost after commit');
+            }
+            $data = ['orderCreate' => ['order' => $order(), 'userErrors' => []]];
+        } elseif (str_contains($query, 'PosRecover')) {
+            $data = ['shop' => $shop, 'orders' => ['nodes' => [$order()]]];
+        } elseif (str_contains($query, 'PosOrderStatus')) {
+            $data = ['shop' => $shop, 'order' => $order()];
+        } elseif (str_contains($query, 'PosCancel')) {
+            expect($request['query'])->toContain('refund:false,restock:true');
+            $test->shopifyCancelled = true;
+            $data = ['orderCancel' => ['job' => ['id' => 'fixture-cancel', 'done' => true], 'userErrors' => []]];
+        } elseif (str_contains($query, 'PosPaid')) {
+            $test->shopifyPaid = true;
+            $data = ['orderMarkAsPaid' => ['order' => ['id' => 'gid://shopify/Order/4'], 'userErrors' => []]];
+        } elseif (str_contains($query, 'PosFulfill')) {
+            $test->shopifyFulfilled = true;
+            $data = ['fulfillmentCreate' => ['fulfillment' => ['id' => 'gid://shopify/Fulfillment/9', 'status' => 'SUCCESS'], 'userErrors' => []]];
+        } else {
+            $data = ['shop' => $shop];
+        }
+
+        return Http::response(['data' => $data]);
+    }]);
+    $item = $test->getJson($test->base.'/catalog')->assertOk()->json('items.0');
+    $test->selection['items'] = [['item_id' => $item['item_id'], 'revision' => $item['revision'], 'quantity' => 1]];
+}
+
+it('correlates one pending Shopify order with Square and finalizes the same order without native stock mutations', function (): void {
+    posFixtureShopify($this);
+    $quote = posFixtureQuote($this);
+    $id = $quote['sale_id'];
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk()->assertJsonPath('stock_state', 'held');
+    expect($this->shopifyCreates)->toBe(1)->and($this->shopifyPaid)->toBeFalse();
+    \App\Models\Order::create(['tenant_id' => $this->tenant->id, 'source' => 'shopify', 'shopify_order_id' => 4,
+        'shopify_store_key' => 'fixture-store-'.$this->tenant->id, 'ordered_at' => now(), 'total_price' => '10.70']);
+    $summary = app(\App\Services\Reporting\SalesChannelSummaryService::class);
+    expect($summary->forTenant($this->tenant, now()->subDay(), now()->addDay())['order_count'])->toBe(0);
+    posFixtureSquarePayment($this, $id);
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()->assertJsonPath('stock_state', 'committed');
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile')->assertOk();
+    expect($summary->forTenant($this->tenant, now()->subDay(), now()->addDay())['order_count'])->toBe(1);
+    expect($this->shopifyCreates)->toBe(1)->and($this->shopifyPaid)->toBeTrue()->and($this->shopifyFulfilled)->toBeTrue()
+        ->and((int) $this->store->rows('items', $this->tenant->id)->first()->quantity)->toBe(1)
+        ->and($this->store->rows('holds', $this->tenant->id)->count())->toBe(0);
+});
+
+it('recovers an ambiguous Shopify creation by correlation without creating another order', function (): void {
+    posFixtureShopify($this, loseCreate: true);
+    $quote = posFixtureQuote($this);
+    $id = $quote['sale_id'];
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertStatus(503);
+    expect($this->shopifyCreates)->toBe(1)->and($this->journal->findByRequest($this->tenant->id, $this->store->rows('sales', $this->tenant->id)->first()->payment_request_id))->toBeNull();
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk();
+    expect($this->shopifyCreates)->toBe(1);
+});
+
+it('blocks collection when Shopify commits fulfillment to a different location', function (): void {
+    posFixtureShopify($this, wrongLocation: true);
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertConflict();
+    expect($this->store->rows('sales', $this->tenant->id)->first()->descriptor_issued_at)->toBeNull();
+});
+
+function posFixtureUncollectedReview($test): array
+{
+    posFixtureShopify($test);
+    $quote = posFixtureQuote($test);
+    $test->postJson($test->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk();
+    $test->store->rows('sales', $test->tenant->id)->where('id', $quote['sale_id'])->update(['descriptor_issued_at' => gmdate('Y-m-d H:i:s', time() - 900)]);
+    $test->lateSquarePayment = false;
+    Http::fake(['*/v2/payments*' => function ($request) use ($test, $quote) {
+        $sale = $test->store->rows('sales', $test->tenant->id)->where('id', $quote['sale_id'])->first();
+        $payment = ['id' => 'fixture_payment', 'reference_id' => $sale->payment_request_id, 'location_id' => 'fixture_location',
+            'source_type' => 'CARD', 'status' => 'COMPLETED', 'amount_money' => ['amount' => 1070, 'currency' => 'USD'], 'total_money' => ['amount' => 1070, 'currency' => 'USD']];
+        if (str_contains($request->url(), '/payments/fixture_payment')) {
+            return Http::response(['payment' => $payment]);
+        }
+
+        return Http::response(['payments' => $test->lateSquarePayment ? [$payment] : []]);
+    }]);
+
+    return [$quote, ['app_terminated_at' => gmdate('c', time() - 360), 'app_process_absent_at' => gmdate('c'),
+        'owner_confirmed_no_card_presented' => true, 'app_device_id' => 'fixture_device_1234', 'process_evidence_sha256' => str_repeat('e', 64)]];
+}
+
+it('closes a reviewed unpaid legacy order without inventing a terminal financial result and preserves late payment recovery', function (): void {
+    [$quote, $proof] = posFixtureUncollectedReview($this);
+    $review = app(\App\Services\Pos\PosUncollectedClosure::class);
+    expect($review->review($this->tenant->id, $quote['sale_id'], $this->actor->id, $proof)['applied'])->toBeFalse()
+        ->and($this->shopifyCancelled)->toBeFalse();
+    $review->review($this->tenant->id, $quote['sale_id'], $this->actor->id, $proof, true);
+    $sale = $this->store->rows('sales', $this->tenant->id)->first();
+    expect($sale->state)->toBe('unknown')->and($sale->stock_state)->toBe('released')
+        ->and($this->journal->get($this->tenant->id, $sale->attempt_id)['provider_id'])->toBeNull()
+        ->and((bool) $this->store->rows('registers', $this->tenant->id)->first()->active)->toBeFalse()
+        ->and($this->shopifyCancelled)->toBeTrue();
+    $this->getJson($this->base.'/sales/'.$sale->id)->assertOk()->assertJsonPath('operational_review_closed', true)->assertJsonPath('canonical_confirmation', false);
+    $this->lateSquarePayment = true;
+    $this->postJson($this->base.'/sales/'.$sale->id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()
+        ->assertJsonPath('canonical_confirmation', true)->assertJsonPath('operational_review_closed', false);
+    expect($this->store->rows('events', $this->tenant->id)->where('code', 'late_payment_after_reviewed_closure')->count())->toBe(1)
+        ->and($this->shopifyCreates)->toBe(1);
+});
+
+it('refuses uncollected cleanup without fresh device evidence or when the Shopify order has payment activity', function (): void {
+    [$quote, $proof] = posFixtureUncollectedReview($this);
+    $review = app(\App\Services\Pos\PosUncollectedClosure::class);
+    expect(fn () => $review->review($this->tenant->id, $quote['sale_id'], $this->actor->id, [...$proof, 'owner_confirmed_no_card_presented' => false], true))
+        ->toThrow(\App\Services\Pos\PosException::class, 'fresh_device_end_evidence_required');
+    $this->shopifyPaid = true;
+    expect(fn () => $review->review($this->tenant->id, $quote['sale_id'], $this->actor->id, $proof, true))
+        ->toThrow(\App\Services\Pos\PosException::class, 'shopify_cancel_payment_review');
+    expect($this->shopifyCancelled)->toBeFalse()->and((bool) $this->store->rows('registers', $this->tenant->id)->first()->active)->toBeTrue();
+});
+
+function posFixturePrintingQuote($test): \App\Models\WebsiteOrder
+{
+    $site = \App\Models\TenantSite::create(['tenant_id' => $test->tenant->id, 'subdomain' => $test->tenant->slug, 'status' => 'draft', 'settings' => []]);
+    $settings = $test->store->decrypt($test->store->rows('registers', $test->tenant->id)->first()->configuration);
+    $settings['website_site_id'] = $site->id;
+    $test->store->rows('registers', $test->tenant->id)->update(['configuration' => $test->store->encrypt($settings)]);
+    $order = \App\Models\WebsiteOrder::create(['tenant_id' => $test->tenant->id, 'tenant_site_id' => $site->id,
+        'number' => 'FICTIONAL-PRINT-'.Str::random(12), 'lookup_token' => Str::random(56), 'source' => 'staff_quote', 'currency' => 'usd',
+        'subtotal_cents' => 1000, 'tax_cents' => 70, 'total_cents' => 1070, 'shipping_cents' => 0, 'refunded_cents' => 0,
+        'service_request' => ['invoice' => ['version' => 1, 'issued_at' => now()->toIso8601String(), 'accepted_at' => now()->toIso8601String(),
+            'manual_tax_confirmed' => true, 'tax_basis' => 'Fictional reviewed printing policy', 'inventory_committed' => false]]]);
+    $order->lines()->create(['tenant_id' => $test->tenant->id, 'title' => 'Fictional printing service', 'product_type' => 'quote',
+        'quantity' => 1, 'unit_price_cents' => 1000, 'line_total_cents' => 1000, 'snapshot' => ['track_inventory' => false]]);
+    $test->selection = ['request_id' => (string) Str::uuid(), 'source_order_id' => $order->id];
+
+    return $order;
+}
+
+it('collects one immutable accepted printing quote in full with no merchandise decrement', function (): void {
+    $order = posFixturePrintingQuote($this);
+    $quote = posFixtureQuote($this);
+    $id = $quote['sale_id'];
+    $this->selection['request_id'] = (string) Str::uuid();
+    $this->postJson($this->base.'/quotes', $this->selection)->assertConflict();
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk()->assertJsonPath('collection.amount_minor', 1070);
+    expect(data_get($order->fresh()->service_request, 'invoice.pos_sale_id'))->toBe($id);
+    posFixtureSquarePayment($this, $id);
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()->assertJsonPath('stock_state', 'committed');
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile')->assertOk();
+    expect($order->fresh()->payment_status)->toBe('paid')->and($order->payments()->count())->toBe(1)
+        ->and(app(\App\Services\ManagedWebsite\WebsiteInvoicePaymentService::class)->balance($order->fresh()))->toBe(0)
+        ->and((int) $this->store->rows('items', $this->tenant->id)->first()->quantity)->toBe(1);
+});
+
+it('blocks counter collection when an online payment already owns the printing quote', function (): void {
+    $order = posFixturePrintingQuote($this);
+    $quote = posFixtureQuote($this);
+    $order->payments()->create(['tenant_id' => $this->tenant->id, 'provider' => 'stripe', 'status' => 'unknown',
+        'amount_cents' => 1070, 'currency' => 'usd', 'metadata' => ['checkout_version' => 2]]);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertConflict();
+    expect($this->store->rows('sales', $this->tenant->id)->first()->descriptor_issued_at)->toBeNull();
+});
+
+it('rejects changed accepted printing terms before invoking native collection', function (): void {
+    $order = posFixturePrintingQuote($this);
+    $quote = posFixtureQuote($this);
+    $order->update(['total_cents' => 2070]);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertConflict();
+    expect($this->store->rows('sales', $this->tenant->id)->first()->descriptor_issued_at)->toBeNull();
+});
+
+it('deduplicates signed event delivery while reconciling with current credentials after rotation', function (): void {
+    $quote = posFixtureQuote($this);
+    $id = $quote['sale_id'];
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk();
+    $sale = $this->store->rows('sales', $this->tenant->id)->first();
+    config()->set(['pos_live.square_webhook_signature_key' => 'fictional-webhook-key',
+        'pos_live.square_webhook_url' => 'https://app.theeverbranch.com/api/pos/square/webhook']);
+    $raw = json_encode(['event_id' => 'fictional_event', 'merchant_id' => 'fixture_merchant',
+        'data' => ['object' => ['payment' => ['reference_id' => $sale->payment_request_id, 'status' => 'COMPLETED']]]]);
+    $signature = base64_encode(hash_hmac('sha256', config('pos_live.square_webhook_url').$raw, config('pos_live.square_webhook_signature_key'), true));
+    for ($i = 0; $i < 2; $i++) {
+        $this->call('POST', '/api/pos/square/webhook', [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_X_SQUARE_HMACSHA256_SIGNATURE' => $signature], $raw)->assertOk();
+    }
+    expect($this->store->rows('outbox', $this->tenant->id)->count())->toBe(1)
+        ->and($this->store->rows('sales', $this->tenant->id)->first()->state)->toBe('unknown');
+    $this->store->rows('connections', $this->tenant->id)->update(['credentials' => $this->store->encrypt([
+        'access_token' => 'rotated-fictional-token', 'expires_at' => now()->addDay()->toIso8601String()])]);
+    posFixtureSquarePayment($this, $id);
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()->assertJsonPath('state', 'succeeded');
+    Http::assertSent(fn ($r) => str_ends_with($r->url(), '/v2/payments/fixture_payment') && $r->hasHeader('Authorization', 'Bearer rotated-fictional-token'));
+});
+
+it('counts a native sale and its Square order representation once in consolidated reporting', function (): void {
+    $quote = posFixtureQuote($this);
+    $id = $quote['sale_id'];
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk();
+    posFixtureSquarePayment($this, $id, 'COMPLETED', ['order_id' => 'fixture_square_order']);
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk();
+    \App\Models\SquareOrder::create(['tenant_id' => $this->tenant->id, 'square_order_id' => 'fixture_square_order',
+        'state' => 'COMPLETED', 'location_id' => 'fixture_location', 'total_money_amount' => 1070, 'total_money_currency' => 'USD', 'closed_at' => now()]);
+    $report = app(\App\Services\Reporting\SalesChannelSummaryService::class)->forTrajectory($this->tenant, now()->subDay(), now()->addDay());
+    expect($report['order_count'])->toBe(1)->and($report['revenue_cents'])->toBe(1070);
+});
+
+it('connects a verified owner merchant without enabling collection or assigning staff', function (): void {
+    config()->set(['pos_live.square_oauth_redirect_uri' => 'https://app.theeverbranch.com/pos/setup/square/callback',
+        'pos_live.square_application_secret' => 'fictional-client-secret']);
+    $this->actingAs($this->actor);
+    $response = $this->post('/pos/setup/square', ['tenant_id' => $this->tenant->id])->assertRedirect();
+    parse_str(parse_url($response->headers->get('Location'), PHP_URL_QUERY), $params);
+    expect($params['scope'])->toContain('PAYOUTS_READ')->and($params['state'])->not->toBeEmpty();
+    Http::fake(['*/oauth2/token' => Http::response(['access_token' => 'fictional-owner-token', 'refresh_token' => 'fictional-refresh',
+        'expires_at' => now()->addDays(30)->toIso8601String(), 'merchant_id' => 'fixture_merchant']),
+        '*/v2/locations' => Http::response(['locations' => [['id' => 'fixture_location', 'merchant_id' => 'fixture_merchant',
+            'status' => 'ACTIVE', 'country' => 'US', 'currency' => 'USD']]])]);
+    $this->getJson('/pos/setup/square/callback?'.http_build_query(['state' => $params['state'], 'code' => 'fictional-code']))
+        ->assertOk()->assertJsonPath('collection_enabled', false)->assertJsonPath('connected_locations', 1);
+    expect($this->store->rows('merchants', $this->tenant->id)->count())->toBe(1)
+        ->and($this->store->rows('assignments', $this->tenant->id)->count())->toBe(1);
+    $this->getJson('/pos/setup/square/callback?'.http_build_query(['state' => $params['state'], 'code' => 'fictional-code']))->assertForbidden();
+});
+
+it('audits terminal payments against Square without rewriting paid evidence on a discrepancy', function (): void {
+    $quote = posFixtureQuote($this);
+    $id = $quote['sale_id'];
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk();
+    posFixtureSquarePayment($this, $id);
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk();
+    Http::swap(new \Illuminate\Http\Client\Factory);
+    Http::preventStrayRequests();
+    posFixtureSquarePayment($this, $id, 'FAILED');
+    $this->artisan('pos:reconcile', ['--tenant' => $this->tenant->id, '--all' => true])->assertExitCode(1);
+    expect($this->store->rows('sales', $this->tenant->id)->first()->state)->toBe('succeeded')
+        ->and($this->store->rows('events', $this->tenant->id)->where('code', 'reconciliation_needs_review')->exists())->toBeTrue();
+});
+
+it('renews stale merchant evidence through provider retrieval while retaining independent production gates', function (): void {
+    config()->set(['pos_live.square_environment' => 'production', 'pos_live.apple_team_id' => 'FICTIONALTEAM',
+        'pos_live.distribution_verified' => true, 'pos_live.tap_entitlement_verified' => true,
+        'pos_live.square_signature_verified' => true, 'pos_live.webhooks_verified' => true, 'cache.default' => 'database']);
+    $this->withHeader('X-Pos-Build', 'fixture_build');
+    $this->store->rows('connections', $this->tenant->id)->update(['environment' => 'production', 'verified_at' => now()->subDays(2),
+        'acceptance_at' => now(), 'acceptance_build' => 'fixture_build']);
+    $settings = $this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration);
+    $settings['merchant_review'] = ['document_hash' => str_repeat('a', 64), 'markup_minor' => 0];
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    $this->postJson($this->base.'/authorize-device')->assertOk()->assertJsonPath('merchant_id', 'fixture_merchant');
+    expect(strtotime($this->store->rows('connections', $this->tenant->id)->first()->verified_at))->toBeGreaterThan(time() - 60);
+    config()->set('pos_live.tap_entitlement_verified', false);
+    $this->postJson($this->base.'/authorize-device')->assertStatus(503);
+});
+
+it('associates only the explicitly linked Shopify customer and leaves marketing consent untouched', function (): void {
+    posFixtureShopify($this);
+    $shop = \App\Models\ShopifyStore::forTenantId($this->tenant->id)->firstOrFail();
+    \App\Models\MarketingProfileLink::create(['tenant_id' => $this->tenant->id,
+        'marketing_profile_id' => $this->selection['customer_profile_id'], 'source_type' => 'shopify_customer',
+        'source_id' => $shop->store_key.':77', 'match_method' => 'manual_review']);
+    $this->shopifyCustomerID = 'gid://shopify/Customer/77';
+    $quote = posFixtureQuote($this);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect')->assertOk();
+    Http::assertSent(fn ($r) => str_contains((string) ($r['query'] ?? ''), 'mutation PosOrder')
+        && data_get($r->data(), 'variables.order.customer.toAssociate.id') === 'gid://shopify/Customer/77'
+        && ! array_key_exists('buyerAcceptsMarketing', data_get($r->data(), 'variables.order', []))
+        && ! array_key_exists('toUpsert', data_get($r->data(), 'variables.order.customer', [])));
+});
+
+it('recovers the same full refund request after its remaining payment budget reaches zero', function (): void {
+    $id = posFixtureQuote($this)['sale_id'];
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk();
+    posFixtureSquarePayment($this, $id);
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk();
+    $request = (string) Str::uuid();
+    $value = ['id' => 'full_refund', 'payment_id' => 'fixture_payment', 'location_id' => 'fixture_location',
+        'reason' => 'Everbranch '.$request, 'amount_money' => ['amount' => 1070, 'currency' => 'USD'], 'status' => 'COMPLETED'];
+    Http::fake(['*/v2/refunds*' => fn ($r) => Http::response($r->method() === 'POST' ? ['refund' => ['id' => 'full_refund']]
+        : (str_contains($r->url(), '/full_refund') ? ['refund' => $value] : ['refunds' => [$value]]))]);
+    $body = ['request_id' => $request, 'amount_minor' => 1070, 'reason' => 'requested_by_customer'];
+    $this->postJson($this->base.'/sales/'.$id.'/refunds', $body)->assertOk()->assertJsonPath('state', 'succeeded');
+    $this->postJson($this->base.'/sales/'.$id.'/refunds', $body)->assertOk()->assertJsonPath('state', 'succeeded');
+    Http::assertSentCount(5);
+});

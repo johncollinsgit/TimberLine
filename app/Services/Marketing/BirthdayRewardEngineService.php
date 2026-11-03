@@ -189,7 +189,7 @@ class BirthdayRewardEngineService
             ];
         }
 
-        $result = DB::transaction(function () use ($birthdayProfile, $cycleYear, $rewardType, $config, $window, $now, $options): array {
+        $issue = fn () => DB::transaction(function () use ($birthdayProfile, $cycleYear, $rewardType, $config, $window, $now, $options): array {
             $locked = CustomerBirthdayProfile::query()
                 ->whereKey($birthdayProfile->id)
                 ->lockForUpdate()
@@ -322,6 +322,9 @@ class BirthdayRewardEngineService
                 'claim_window' => $window,
             ];
         });
+
+        $guardLegacy = ! $club->enabled($tenantId) && is_int($tenantId) && $tenantId > 0 && $club->needsPosAnnualHoldGuard($tenantId);
+        $result = $guardLegacy ? $club->withPosAnnualHoldGuard($birthdayProfile, $tenantId, $cycleYear, $issue) : $issue();
 
         return $this->dispatchResultEmail($result, $options);
     }

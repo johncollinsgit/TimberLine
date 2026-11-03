@@ -37,6 +37,15 @@ class CustomerMergeService
         $this->assertFieldSources($profiles, $fieldSources);
 
         return DB::transaction(function () use ($tenantId, $profiles, $survivorProfileId, $storeKey, $idempotencyKey, $fieldSources, $context, $shopifyIds): CustomerMergeOperation {
+            // Serialize merge initiation with POS reward holds. The operation
+            // members then prevent new holds until the merge is resolved.
+            $lockedProfiles = MarketingProfile::query()->whereIn('id', $profiles->pluck('id'))
+                ->orderBy('id')->lockForUpdate()->get();
+            if ($lockedProfiles->count() !== $profiles->count() || $lockedProfiles->contains(fn (MarketingProfile $profile): bool => $profile->merged_at !== null || ($profile->tenant_id !== null && (int) $profile->tenant_id !== $tenantId)
+                    || ($profile->tenant_id === null && ! $this->legacyProfileMatches($profile, $lockedProfiles, $tenantId)))) {
+                throw new CustomerMergeException('Customer records changed. Review the merge again.', 'customer_identity_review_required');
+            }
+            $this->assertNoPosRewardReservations($tenantId, $lockedProfiles);
             $operation = CustomerMergeOperation::query()->firstOrCreate(
                 ['tenant_id' => $tenantId, 'idempotency_key' => $idempotencyKey],
                 [
@@ -92,8 +101,10 @@ class CustomerMergeService
 
             $profiles = MarketingProfile::query()
                 ->whereIn('id', $locked->members->pluck('marketing_profile_id'))
+                ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
+            $this->assertNoPosRewardReservations((int) $locked->tenant_id, $profiles);
             $survivor = $profiles->firstWhere('id', (int) $locked->survivor_profile_id);
             if (! $survivor || (int) $survivor->tenant_id !== (int) $locked->tenant_id) {
                 throw new CustomerMergeException('The selected surviving customer is outside this tenant.', 'tenant_scope_mismatch');
@@ -137,6 +148,20 @@ class CustomerMergeService
 
             return $locked->fresh('members');
         });
+    }
+
+    /** A spent hold can still be restored on a future full refund. */
+    private function assertNoPosRewardReservations(int $tenantId, EloquentCollection $profiles): void
+    {
+        if (! DB::getSchemaBuilder()->hasTable('pos_candle_cash_reservations')) {
+            return;
+        }
+        $pending = DB::table('pos_candle_cash_reservations')->where('tenant_id', $tenantId)
+            ->whereIn('marketing_profile_id', $profiles->pluck('id'))->whereIn('state', ['held', 'spent'])
+            ->lockForUpdate()->exists();
+        if ($pending) {
+            throw new CustomerMergeException('A reward purchase or refund needs review before these customers can be merged.', 'pos_reward_merge_review_required');
+        }
     }
 
     /** @param array<int,int> $profileIds */

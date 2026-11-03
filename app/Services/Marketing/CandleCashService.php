@@ -727,7 +727,19 @@ class CandleCashService
         ?string $description = null,
         array $extraAttributes = []
     ): array {
-        $points = (int) $points;
+        return $this->addRewardAmountIdempotent($profile, $points, $source, $sourceId, $type, $description, $extraAttributes);
+    }
+
+    public function addRewardAmountIdempotent(
+        MarketingProfile $profile,
+        float|int|string $points,
+        string $source,
+        string $sourceId,
+        string $type = 'gift',
+        ?string $description = null,
+        array $extraAttributes = []
+    ): array {
+        $points = CandleCashMeasurement::normalizeStoredAmount($points);
         $source = trim($source);
         $sourceId = trim($sourceId);
 
@@ -782,6 +794,7 @@ class CandleCashService
             $transaction = CandleCashTransaction::query()->create(array_merge([
                 'marketing_profile_id' => $profile->id,
                 'type' => $type,
+                'points' => (int) round($points),
                 'candle_cash_delta' => $points,
                 'source' => $source,
                 'source_id' => $sourceId,

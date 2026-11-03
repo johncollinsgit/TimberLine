@@ -1,5 +1,17 @@
 # Everbranch Field installable web application
 
+## Customer purchases and rewards, web.12 candidate
+
+Every tenant includes the capability to associate a customer with online and
+in-person purchases and the existing rewards history. Field consumes the
+tenant-authorized `customer_commerce` v1 snapshot; connections and program setup
+determine coverage. The paired source candidate is `2.3.30-web.12`, fingerprint
+`f0319c0bbbeffd35`. It adds no device-side payment or rewards mutation. Read
+`docs/architecture/unified-customer-commerce.md` for the platform contract,
+remaining payment adapters and two-tenant live acceptance. The protected backend
+release, `/ready` and `/field/version.json` remain required before claiming it
+is live; a native App Store release is a separate step.
+
 The shared Field client is served at `https://app.theeverbranch.com/field/` by the existing production site. This source candidate is not a live-release claim: verify the normal protected deployment and `/field/version.json` before distributing its link.
 
 The first build is `2.3.30-web.1`, based on the newest local Field Showcase release 2.3.29 plus the scoped crew assistant. Source is `johncollinsgit/everbranch-mobile`, branch `codex/collins-field-webapp-showcase-20261028`, commit `1ea26a4`. It remains the shared Field source; Collins branding and access come from its existing workspace. No native binary is submitted and no other workspace is migrated or activated.

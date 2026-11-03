@@ -1,3 +1,82 @@
+## Add-on discount settings (November 1; source candidate)
+
+Seller admins can configure `allow_additional_discounts` per add-on in the
+checkout-rule editor. New add-ons default false. Selected protected units retain
+their promotional price through later fixed/percentage item or sale discounts;
+regular units of the same variant remain eligible and tax uses final unit prices.
+Absent fields in existing rule versions retain legacy behavior. Modern Forestry's
+two candle add-ons are temporarily disabled pending the protected release and a
+reviewed version explicitly setting this field false. Other discounts remain on.
+
+## Uncharged basket cancellation (November 1 UTC; source candidate)
+
+Cancel of an uncollected quote clears its basket and customer selection, retains other
+saved payment reviews, and returns directly to Products. It must not quote the
+same basket again on the busy-state callback. A warm guest basket requests its
+server total directly without a workspace/catalog reload or an extra Review total
+menu. Lost quote responses and pending availability retain explicit basket
+recovery; payment-status recovery appears after collection starts. The debug-only
+checkout UI transport intercepts every request and uses no provider or real API.
+
+## Pending payment navigation (October 31; source candidate)
+
+Close returns to the register without erasing a pending payment; Account remains
+accessible. After the SDK interaction ends, the original operator/device may
+explicitly confirm no card was presented and leave that attempt for review.
+Fresh Square retrieval is required. An empty result is not financial cancellation:
+the original remains unknown, with its stock reservation and immutable request.
+An audited parked event allows a different sale; the original can never receive
+a replacement descriptor. Saved reviews remain accessible and late provider
+confirmation still reconciles the original receipt once. The SDK watchdog treats
+an active payment handle as presentation, including Apple's system scene.
+Opening a warm basket reuses the chosen register/catalog, and known payment
+recovery makes one fresh reconciliation request. Background work uses a compact
+progress banner; unresolved status reads Payment not confirmed, never a permanent
+Checking label. Server quote/payment verification and mutation locks remain.
+
+## Everbranch Pay: finished goods and guest checkout (October 31; source candidate)
+
+The owner follow-up preserves the original mountain/photo styling, completes
+keypad and mix-and-match selling, and scopes Columbus to the pictured scents in
+8oz/16oz cotton wick and wax melts plus their reviewed bundles. No mugs, wood
+wicks or 4oz variants belong in that register. Explicitly untracked stock keeps
+remaining balances unknown; original packing boxes do not establish today's
+stock. Per-register `catalog_item_ids` does not deactivate the full tenant catalog.
+
+The owner explicitly requested removal of Everbranch rehearsal dollar/time and
+single-sale limits on the exact registered phone. `pos:activate --registered-owner`
+requires private owner-request evidence in addition to the unchanged installed
+build, signing, merchant, membership and device checks. Apple publishing approval
+remains unverified and no extra devices are authorized. Read the follow-up section
+in `docs/operations/everbranch-pay-owned-inventory.md` before changing these gates.
+
+The new explicitly assigned `everbranch_inventory_v1` lane keeps finished-goods
+stock, in-person sales and receipts in Everbranch, with Square financial authority
+and no new Shopify order mirror. The native register uses Products/Favorites/
+Keypad, photo grids, variant/bundle sheets and labeled pills. Guest checkout
+precedes optional customer lookup/association and original-term rewards.
+
+Existing event/retail plans mean **to produce**; confirmed ready units, physical
+counts and transfers establish goods available to sell. Modern Forestry uses
+separate event pools; Columbus is the reviewed October 30–November 1 Asana event.
+After earlier show sales, begin from remaining physical counts, not original
+packing totals or guessed deductions. Owners can count a few pilot products on
+the phone; uncounted products remain visible and unavailable. Materials and
+historical production remain intact.
+
+All tenants retain this included capability with their own merchant/program/pool
+setup. Shared Shopify stock requires a reviewed opening baseline, exact mappings,
+matching current commitments, tracked DENY policy and permissions. Unknown online
+bundle behavior blocks activation. Native Website stock/subscriptions retain
+existing adapters; do not claim a native Website shared-stock cutover. Both new
+inventory flags default off. Legacy attempts retain original-provider recovery.
+
+Read `docs/operations/everbranch-pay-owned-inventory.md` and
+`docs/architecture/finished-goods-stock.md` before setup or release. Protected
+migration/build release, exact signed installation, physical payment/refund/rewards
+and settlement acceptance remain required. Apple registered-device development
+access does not establish distribution approval or normal commercial readiness.
+
 ## Native customer payment challenge (October 31; source candidate)
 
 `SubscriptionCustomerPaymentRecoveryService` supports the original native
@@ -3720,3 +3799,26 @@ The old native-WebKit wizard gate failed on hidden Next after a click. Two exact
 local unchanged runs passed; an assumed catalog race was not reproduced. No
 speculative product/test workaround is added. The repaired-head WebKit gate must
 pass. No runtime, provider, publication, merge or deployment action occurred.
+## Every-tenant customer commerce requirement (October 30, 2026)
+
+Read `docs/architecture/unified-customer-commerce.md` for the owner's universal
+customer requirement: one tenant-scoped identity, linked confirmed online and
+in-person purchases, and one existing rewards history. Include this capability
+for every plan/template; retain merchant program and payment activation checks.
+Do not create a second customer identity or loyalty ledger, infer linkage from
+a card tap, or label source/UI tests as physical acceptance. Explicit read-only
+source associations preserve the independent Website/Shopify/provider records.
+
+## Everbranch Pay source-candidate limits (November 1, 2026)
+
+See `SYSTEM_SNAPSHOT.md` and `docs/operations/everbranch-pay-birthday-channel-fence.md`.
+The checkout, tax, customer-enrollment, Shopify-code and reward changes on the
+candidate are not live acceptance. Keep new publication, birthday, proof, and
+reward gates off. A reviewed event address is checked again at the collection
+boundary; legacy expiration-only tax setups need migration before claiming that
+protection. Cross-writer Shopify identity uniqueness, existing-wallet proof,
+legacy interrupted payment-start recovery, zero-tender sales and cross-channel
+birthday redemption remain unfinished. New owned-stock pre-handoff claims use a
+gated atomic journal transition and can be cancelled without replacing an issued
+attempt. A signed development archive is not distribution
+approval, and a simulator run is not physical Square acceptance.

@@ -606,7 +606,7 @@ class MarketingPublicEventController extends Controller
         ModernForestryScentQuizAnalyticsService $scentQuizAnalytics
     ): View|RedirectResponse {
         $tenantContext = $this->resolveTenantContext($request, $this->tenantResolver);
-        if (! is_numeric($tenantContext['tenant_id'] ?? null) || (int) ($tenantContext['tenant_id'] ?? 0) !== 1) {
+        if (! is_numeric($tenantContext['tenant_id'] ?? null) || (int) ($tenantContext['tenant_id'] ?? 0) <= 0) {
             abort(404);
         }
 
@@ -615,6 +615,18 @@ class MarketingPublicEventController extends Controller
         $lookupState = $resolution['state'];
         $tenantId = $this->resolvedTenantId($profile, $tenantContext) ?? 1;
         $displayLabels = $this->displayLabelsForTenantId($tenantId);
+        $customerCommerce = $profile
+            ? app(\App\Services\Marketing\CustomerCommerceSnapshotService::class)->forProfile($profile, $tenantId)
+            : null;
+        if ($tenantId !== 1) {
+            return view('marketing/public/customer-commerce-account', [
+                'brandName' => \App\Models\Tenant::query()->findOrFail($tenantId)->name,
+                'profile' => $profile,
+                'lookupState' => $lookupState,
+                'customerCommerce' => $customerCommerce,
+                'rewardsLabel' => trim((string) ($displayLabels['rewards_label'] ?? 'Rewards')) ?: 'Rewards',
+            ]);
+        }
         $content = $appContentService->forTenant(1);
 
         [
@@ -693,6 +705,7 @@ class MarketingPublicEventController extends Controller
             'lastGrowaveSyncAt' => $lastGrowaveSyncAt,
             'reviewDataSource' => $reviewDataSource,
             'orders' => $orders,
+            'customerCommerce' => $customerCommerce,
             'messages' => $messages,
             'displayLabels' => $displayLabels,
             'redemptionAccess' => $this->candleCashAccessGate->storefrontRedeemAccessPayload($profile),
@@ -1761,11 +1774,17 @@ class MarketingPublicEventController extends Controller
             return ['profile' => null, 'state' => 'missing_tenant_context'];
         }
 
+        $mode = (string) $request->attributes->get('marketing_storefront_auth_mode', 'unknown');
+        if (! in_array($mode, ['app_proxy', 'hmac'], true)) {
+            return ['profile' => null, 'state' => 'customer_login_required'];
+        }
+        // Shopify signs arbitrary visitor query parameters too. Only its signed
+        // logged-in identity authenticates a shopper through the app proxy.
         $shopifyCustomerId = trim((string) ($request->query('logged_in_customer_id', '')));
-        if ($shopifyCustomerId === '') {
+        if ($shopifyCustomerId === '' && $mode === 'hmac') {
             $shopifyCustomerId = trim((string) ($request->query('shopify_customer_id', '')));
         }
-        if ($shopifyCustomerId === '') {
+        if ($shopifyCustomerId === '' && $mode === 'hmac') {
             $shopifyCustomerId = trim((string) ($request->query('customer_id', '')));
         }
 
@@ -1789,58 +1808,36 @@ class MarketingPublicEventController extends Controller
     protected function profileForShopifyCustomerId(int $tenantId, string $shopifyCustomerId, ?string $storeKey = null): ?MarketingProfile
     {
         $normalized = trim($shopifyCustomerId);
-        if ($normalized === '') {
+        if ($storeKey === null || preg_match('/^(?:gid:\/\/shopify\/Customer\/)?([0-9]+)$/D', $normalized, $matches) !== 1) {
+            return null;
+        }
+        $digits = $matches[1];
+        $links = MarketingProfileLink::query()
+            ->where('tenant_id', $tenantId)
+            ->where('source_type', 'shopify_customer')
+            ->where(function ($query) use ($storeKey, $digits): void {
+                $query->whereIn('source_id', [$storeKey.':'.$digits, $storeKey.':gid://shopify/Customer/'.$digits])
+                    ->orWhere(function ($query) use ($storeKey, $digits): void {
+                        $query->whereIn('source_id', [$digits, 'shopify:'.$digits, 'gid://shopify/Customer/'.$digits])
+                            ->where('source_meta->shopify_store_key', $storeKey);
+                    });
+            })
+            ->pluck('marketing_profile_id');
+        $externalIds = CustomerExternalProfile::query()
+            ->where('tenant_id', $tenantId)
+            ->where('provider', 'shopify')->where('store_key', $storeKey)
+            ->where(function ($query) use ($digits): void {
+                $query->where('external_customer_id', $digits)
+                    ->orWhere('external_customer_gid', 'gid://shopify/Customer/'.$digits);
+            })
+            ->pluck('marketing_profile_id');
+        $profileIds = $links->merge($externalIds)->unique();
+        $profiles = MarketingProfile::query()->whereIn('id', $profileIds)->get();
+        if ($profiles->count() !== $profileIds->count()) {
             return null;
         }
 
-        $digits = preg_match('/(\d+)(?!.*\d)/', $normalized, $matches) === 1
-            ? (string) $matches[1]
-            : null;
-
-        $possibleSourceIds = array_values(array_unique(array_filter([
-            $normalized,
-            $digits,
-            $storeKey !== null && $digits !== null ? $storeKey.':'.$digits : null,
-            $storeKey !== null ? $storeKey.':'.$normalized : null,
-        ])));
-
-        $profileId = MarketingProfileLink::query()
-            ->where('tenant_id', $tenantId)
-            ->where('source_type', 'shopify_customer')
-            ->where(function ($query) use ($possibleSourceIds): void {
-                foreach ($possibleSourceIds as $value) {
-                    $query->orWhere('source_id', $value)
-                        ->orWhere('source_id', 'retail:'.$value)
-                        ->orWhere('source_id', 'shopify:'.$value);
-                }
-            })
-            ->orderByDesc('id')
-            ->value('marketing_profile_id');
-
-        if (is_numeric($profileId) && (int) $profileId > 0) {
-            return MarketingProfile::query()
-                ->where('tenant_id', $tenantId)
-                ->find((int) $profileId);
-        }
-
-        $externalProfile = CustomerExternalProfile::query()
-            ->where('tenant_id', $tenantId)
-            ->where(function ($query) use ($possibleSourceIds): void {
-                foreach ($possibleSourceIds as $value) {
-                    $query->orWhere('external_customer_id', $value)
-                        ->orWhere('external_customer_gid', $value);
-                }
-            })
-            ->latest('id')
-            ->first();
-
-        if ($externalProfile instanceof CustomerExternalProfile) {
-            return $externalProfile->marketingProfile()
-                ->where('tenant_id', $tenantId)
-                ->first();
-        }
-
-        return null;
+        return app(\App\Services\Marketing\CanonicalMarketingProfileResolver::class)->oneCanonical($profiles, $tenantId);
     }
 
     /**
@@ -2188,6 +2185,17 @@ class MarketingPublicEventController extends Controller
      */
     protected function resolveTenantContext(Request $request, TenantResolver $tenantResolver): array
     {
+        if ($request->attributes->get('marketing_storefront_auth_mode') === 'app_proxy') {
+            // The proxy supplies shop and logged_in_customer_id. Visitor-provided
+            // store_key hints cannot choose another tenant's customer namespace.
+            $shop = trim((string) $request->query('shop', ''));
+            $stores = preg_match('/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/iD', $shop)
+                ? \App\Models\ShopifyStore::query()->where('shop_domain', strtolower($shop))->whereNotNull('installed_at')->get()
+                : collect();
+            $key = $stores->count() === 1 ? trim((string) $stores->first()->store_key) : '';
+
+            return ['store_key' => $key ?: null, 'tenant_id' => $key !== '' ? $tenantResolver->resolveTenantIdForStoreKey($key) : null];
+        }
         $storeKey = strtolower(trim((string) ($request->input('store_key', $request->query('store_key', '')))));
         if ($storeKey === '') {
             $shop = trim((string) ($request->input('shop', $request->query('shop', ''))));

@@ -90,6 +90,11 @@ class MarketingProfileMergeReferenceRegistry
             'subscription_pilot_members' => ['marketing_profile_id'],
             // Accepted neutral ballots retain their original author; another profile cannot grant another member vote.
             'subscription_member_votes' => ['marketing_profile_id'],
+            // POS authorization and original wallet evidence remain bound to
+            // the identity and sale that created them. Unsettled/refundable
+            // holds prevent the merge; terminal evidence is not reassigned.
+            'pos_candle_cash_reservations' => ['marketing_profile_id'],
+            'pos_reward_authorizations' => ['marketing_profile_id'],
         ];
     }
 

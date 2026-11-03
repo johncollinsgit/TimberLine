@@ -3,14 +3,14 @@
 require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
 use App\Jobs\DispatchTenantRewardsReminderJob;
-use App\Models\CandleCashReward;
 use App\Models\CandleCashRedemption;
+use App\Models\CandleCashReward;
 use App\Models\CandleCashTask;
 use App\Models\CandleCashTransaction;
 use App\Models\LandlordOperatorAction;
+use App\Models\MarketingAutomationEvent;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignConversion;
-use App\Models\MarketingAutomationEvent;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
@@ -27,11 +27,10 @@ use App\Services\Marketing\MarketingDeliveryTrackingService;
 use App\Services\Marketing\MarketingEmailReadiness;
 use App\Services\Marketing\SendGridEmailService;
 use App\Services\Marketing\TenantRewardsOperationsService;
-use App\Services\Marketing\TenantRewardsReminderLogService;
-use App\Services\Marketing\TenantRewardsReminderDispatchService;
-use App\Services\Marketing\TenantRewardsReminderAnalyticsService;
-use App\Services\Marketing\TenantRewardsReminderScheduleService;
 use App\Services\Marketing\TenantRewardsPolicyService;
+use App\Services\Marketing\TenantRewardsReminderDispatchService;
+use App\Services\Marketing\TenantRewardsReminderLogService;
+use App\Services\Marketing\TenantRewardsReminderScheduleService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Marketing\TwilioSmsService;
 use Illuminate\Support\Facades\Cache;
@@ -49,7 +48,7 @@ function retailRewardsApiHeaders(array $headers = []): array
 
 function parseRewardsCsv(string $csv): array
 {
-    $lines = preg_split("/\\r\\n|\\n|\\r/", trim($csv)) ?: [];
+    $lines = preg_split('/\\r\\n|\\n|\\r/', trim($csv)) ?: [];
     $rows = array_map(fn (string $line): array => str_getcsv($line), $lines);
     $header = array_shift($rows);
 
@@ -147,7 +146,7 @@ test('shopify embedded rewards route renders verified rewards admin page for map
         ->assertSeeText('Ways to Redeem')
         ->assertDontSee('<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>', false)
         ->assertDontSeeText('This embedded program editor is unavailable for tenant-scoped stores until earn rows, redeem rows, and program settings are isolated per tenant.')
-        ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
+        ->assertHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;');
 });
 
 test('shopify embedded rewards editor route uses bearer-token bootstrap without legacy context tokens', function () {
@@ -1206,7 +1205,7 @@ test('shopify embedded rewards policy update enforces validation guardrails', fu
         ->assertJsonFragment(['Reminder timing must occur before the expiration window.']);
 });
 
-test('shopify embedded rewards policy is read only when rewards module access is locked', function () {
+test('shopify embedded rewards policy respects an explicit module disable even though rewards are included', function () {
     $lockedTenant = Tenant::query()->create([
         'name' => 'Locked Tenant',
         'slug' => 'locked-tenant-'.Str::lower(Str::random(8)),
@@ -1221,6 +1220,11 @@ test('shopify embedded rewards policy is read only when rewards module access is
     ]);
 
     configureEmbeddedRetailStore($lockedTenant->id);
+
+    \App\Models\TenantModuleState::query()->create([
+        'tenant_id' => $lockedTenant->id, 'module_key' => 'rewards', 'enabled_override' => false,
+        'setup_status' => 'configured',
+    ]);
 
     $this
         ->withHeaders(retailRewardsApiHeaders())

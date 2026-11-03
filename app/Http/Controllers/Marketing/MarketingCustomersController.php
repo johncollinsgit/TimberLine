@@ -649,6 +649,12 @@ class MarketingCustomersController extends Controller
         $this->assertProfileInTenantScope($marketingProfile, $request);
         $tenantId = $this->currentTenantId($request);
 
+        if ($tenantId) {
+            $canonical = app(\App\Services\Marketing\CanonicalMarketingProfileResolver::class)->canonical($marketingProfile, $tenantId);
+            abort_unless($canonical, 404);
+            $marketingProfile = $canonical;
+        }
+
         if ($this->usesOperationalCustomerDirectory($request)) {
             $jobs = FieldServiceJob::query()
                 ->forTenantId((int) $tenantId)
@@ -663,6 +669,7 @@ class MarketingCustomersController extends Controller
                 'profile' => $marketingProfile,
                 'jobs' => $jobs,
                 'isArchived' => $marketingProfile->archived_at !== null,
+                'customerCommerce' => $tenantId ? app(\App\Services\Marketing\CustomerCommerceSnapshotService::class)->forProfile($marketingProfile, (int) $tenantId) : null,
             ]);
         }
 
@@ -1048,6 +1055,7 @@ class MarketingCustomersController extends Controller
             'section' => MarketingSectionRegistry::section('customers'),
             'sections' => $this->navigationItems(),
             'profile' => $marketingProfile,
+            'customerCommerce' => $tenantId ? app(\App\Services\Marketing\CustomerCommerceSnapshotService::class)->forProfile($marketingProfile, (int) $tenantId) : null,
             'orders' => $orders,
             'eventOrders' => $eventOrders,
             'squareOrders' => $squareOrders,
@@ -1101,6 +1109,22 @@ class MarketingCustomersController extends Controller
             'birthdayProfile' => $birthdayProfile,
             'birthdayRewardStatus' => $birthdayRewardStatus,
         ]);
+    }
+
+    public function linkCommerceSource(Request $request, MarketingProfile $marketingProfile, \App\Services\Marketing\CustomerCommerceLinkService $links): RedirectResponse
+    {
+        $this->assertProfileInTenantScope($marketingProfile, $request);
+        $tenantId = $this->currentTenantId($request);
+        abort_unless($tenantId && $request->user() instanceof \App\Models\User, 403);
+        $data = $request->validate([
+            'source_type' => ['required', 'in:order,square_order,square_payment,website_customer,website_order'],
+            'source_id' => ['required', 'string', 'max:190'],
+            'reason' => ['required', 'string', 'min:8', 'max:1000'],
+            'identity_confirmed' => ['required', 'accepted'],
+        ]);
+        $links->link($request->user(), $tenantId, $marketingProfile, $data['source_type'], trim($data['source_id']), $data['reason']);
+
+        return back()->with('status', 'Customer source connected. Purchase records remain in their original system.');
     }
 
     public function bulkArchive(Request $request): JsonResponse

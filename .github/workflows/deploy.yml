@@ -99,7 +99,7 @@ jobs:
           if [ "$verification_mode" = "verified_pr_tree" ]; then
             if [ -n "$PUSH_BEFORE" ] && ! printf '%s' "$PUSH_BEFORE" | grep -q '^0\{40\}$'; then
               if changed_files="$(gh api --paginate "repos/${REPOSITORY}/compare/${PUSH_BEFORE}...${RELEASE_SHA}" --jq '.files[].filename' 2>/dev/null)"; then
-                if ! printf '%s\n' "$changed_files" | grep -Eq '^(database/(migrations|schema)/|scripts/ci/(lint-migrations|rehearse-migrations|verify-mysql-schema-baseline|legacy-migration)|tests/Integration/(MarketingDesk(MySqlRecovery|Concurrency)Test\.php|WorkflowStudioMySqlMigrationRecoveryTest\.php|HighLevelFleetMySqlMigrationRecoveryTest\.php|TenantMailMySqlMigrationRecoveryTest\.php|FleetOperationsMySqlMigrationRecoveryTest\.php|SoccerMySqlMigrationRecoveryTest\.php|ReviewedSchemaDriftRecoveryTest\.php|migration-recovery-manifest\.php)|app/Services/Marketing/Desk/|app/Services/Billing/TenantAiUsageService\.php$|tests/Support/MarketingDeskAiConcurrencyWorker\.php|app/Services/Operations/(MySqlSchemaFingerprint|ReviewedMySqlSchemaCompatibility)\.php$|resources/schema/reviewed-mysql-compatibility\.json$|tests/(Support/ObservedSchemaDriftFixture\.php$|Fixtures/SchemaDrift/|Unit/Infrastructure/(ReviewedMySqlSchemaCompatibility|ObservedSchemaDriftFixture)Test\.php$)|composer\.(json|lock)$|config/database\.php$)'; then
+                if ! printf '%s\n' "$changed_files" | grep -Eq '^(database/(migrations|schema)/|scripts/ci/(lint-migrations|rehearse-migrations|verify-mysql-schema-baseline|legacy-migration)|tests/Integration/(PosShopifyDiscountMySqlRecoveryTest\.php|PosBirthdayAnnualHoldMySqlRecoveryTest\.php|PosCandleCashMySqlRecoveryTest\.php|CommerceRuleSetMySqlRecoveryTest\.php|StockMySql(Recovery|Concurrency)Test\.php|MarketingDesk(MySqlRecovery|Concurrency)Test\.php|WorkflowStudioMySqlMigrationRecoveryTest\.php|HighLevelFleetMySqlMigrationRecoveryTest\.php|TenantMailMySqlMigrationRecoveryTest\.php|FleetOperationsMySqlMigrationRecoveryTest\.php|SoccerMySqlMigrationRecoveryTest\.php|ReviewedSchemaDriftRecoveryTest\.php|migration-recovery-manifest\.php)|app/Services/Inventory/Stock[^/]*\.php$|app/Services/Marketing/Desk/|app/Services/Billing/TenantAiUsageService\.php$|tests/Support/MarketingDeskAiConcurrencyWorker\.php|app/Services/Operations/(MySqlSchemaFingerprint|ReviewedMySqlSchemaCompatibility)\.php$|resources/schema/reviewed-mysql-compatibility\.json$|tests/(Support/ObservedSchemaDriftFixture\.php$|Fixtures/SchemaDrift/|Unit/Infrastructure/(ReviewedMySqlSchemaCompatibility|ObservedSchemaDriftFixture)Test\.php$)|composer\.(json|lock)$|config/database\.php$)'; then
                   run_migration_safety=false
                 fi
               fi
@@ -297,12 +297,38 @@ jobs:
         run: php ./vendor/bin/pest tests/Integration/TeamSearchMySqlRecoveryTest.php --compact
 
       - name: Verify subscription pilot evidence partial-DDL recovery
-        run: php ./vendor/bin/pest tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php tests/Integration/SubscriptionBillingLedgerMySqlRecoveryTest.php tests/Integration/SubscriptionMemberVotesMySqlRecoveryTest.php --compact
 
       - name: Verify POS simulation partial-DDL recovery
         env:
           POS_DISPOSABLE_MYSQL: '1'
         run: php ./vendor/bin/pest tests/Integration/PointOfSaleMySqlRecoveryTest.php --compact
+
+      - name: Verify payment journal and quote recovery and concurrency
+        env:
+          PAYMENTS_CORE_DISPOSABLE_MYSQL: '1'
+          APP_ENV: testing
+          APP_KEY: 'base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI='
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          MAIL_MAILER: array
+          LOG_CHANNEL: 'null'
+        run: |
+          php ./vendor/bin/pest tests/Integration/PaymentsCoreMySqlRecoveryTest.php tests/Integration/PaymentsCoreQuotesMySqlRecoveryTest.php tests/Integration/PaymentsCoreMySqlConcurrencyTest.php --compact
+          php tests/PaymentsCore/security-mysql-integrity.php
+
+      - name: Verify finished goods inventory recovery and concurrency
+        env:
+          STOCK_DISPOSABLE_MYSQL: '1'
+          POS_LIVE_DISPOSABLE_MYSQL: '1'
+        run: php ./vendor/bin/pest tests/Stock tests/Integration/StockMySqlRecoveryTest.php tests/Integration/StockMySqlConcurrencyTest.php --compact
+
+      - name: Verify checkout rule migration recovery
+        env:
+          POS_DISPOSABLE_MYSQL: '1'
+          COMMERCE_RULES_DISPOSABLE_MYSQL: '1'
+          POS_LIVE_DISPOSABLE_MYSQL: '1'
+        run: php ./vendor/bin/pest tests/Integration/CommerceRuleSetMySqlRecoveryTest.php tests/Integration/PosCandleCashMySqlRecoveryTest.php tests/Integration/PosShopifyDiscountMySqlRecoveryTest.php tests/Integration/PosBirthdayAnnualHoldMySqlRecoveryTest.php --compact
 
       - name: Rehearse prior production schema upgrade
         run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"

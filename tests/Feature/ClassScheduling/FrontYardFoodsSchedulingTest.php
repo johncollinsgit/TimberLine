@@ -22,6 +22,8 @@ use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 
 beforeEach(function (): void {
+    // Keep relative demo classes inside the default calendar month at month end.
+    $this->travelTo(now()->startOfMonth()->addDays(9)->setTime(12, 0));
     $this->withoutVite();
     Storage::fake('local');
     Http::fake(['*' => Http::response('demo-image-bytes', 200, ['Content-Type' => 'image/jpeg'])]);

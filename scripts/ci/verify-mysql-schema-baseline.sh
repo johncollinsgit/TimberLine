@@ -18,6 +18,10 @@ php artisan schema:fingerprint --expect-file=database/schema/mysql-schema.sha256
 # Then prove Laravel can boot a blank MySQL database from the committed dump
 # and finish with the same schema. The database-name guard above prevents this
 # destructive setup from targeting any production-like database.
-MYSQL_PWD="${DB_PASSWORD:-}" mysql --protocol=TCP --host="${DB_HOST:-127.0.0.1}" --port="${DB_PORT:-3306}" --user="${DB_USERNAME:-root}" -e "DROP DATABASE IF EXISTS \`${database_name}\`; CREATE DATABASE \`${database_name}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql_connection=(--protocol=TCP --host="${DB_HOST:-127.0.0.1}" --port="${DB_PORT:-3306}")
+if [ -n "${DB_SOCKET:-}" ]; then
+  mysql_connection=(--protocol=SOCKET --socket="$DB_SOCKET")
+fi
+MYSQL_PWD="${DB_PASSWORD:-}" mysql "${mysql_connection[@]}" --user="${DB_USERNAME:-root}" -e "DROP DATABASE IF EXISTS \`${database_name}\`; CREATE DATABASE \`${database_name}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 php artisan migrate --force --no-interaction
 php artisan schema:fingerprint --expect-file=database/schema/mysql-schema.sha256 --no-interaction
