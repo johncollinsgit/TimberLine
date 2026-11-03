@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Billing;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
+use App\Services\Billing\TenantBraintreeConnectionService;
 use App\Services\Billing\TenantPaymentSetupAccess;
 use App\Services\Billing\TenantPaymentsReadinessService;
 use App\Services\Billing\TenantPayPalConnectionService;
@@ -16,7 +17,7 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class TenantPaymentSetupController extends Controller
 {
-    public function index(Request $request, TenantPayPalConnectionService $paypal, TenantPaymentsReadinessService $stripe)
+    public function index(Request $request, TenantPayPalConnectionService $paypal, TenantPaymentsReadinessService $stripe, TenantBraintreeConnectionService $braintree)
     {
         $tenant = $this->tenant($request);
         $account = $tenant->paymentAccount()->first();
@@ -24,6 +25,8 @@ class TenantPaymentSetupController extends Controller
 
         return response()->view('billing.payment-setup', [
             'tenant' => $tenant, 'account' => $account, 'paypalConnection' => $connection,
+            'braintreeAvailable' => $braintree->enabledFor($tenant),
+            'braintreeConnections' => $braintree->enabledFor($tenant) ? $braintree->connections($tenant) : collect(),
             'stripeCanStart' => $stripe->canStartOnboarding($tenant),
             'stripeCollectionReady' => $stripe->canCollectCustomerPayments($tenant),
             'stripeEmbedded' => config('tenant_payments.stripe_embedded_enabled') && filled(config('services.stripe.publishable_key')),
@@ -35,6 +38,24 @@ class TenantPaymentSetupController extends Controller
             'bankSpace' => app(\App\Services\Trajectory\FinanceAccess::class)->spaces($request->user())
                 ->first(fn ($space) => $space->kind === 'business' && (int) $space->tenant_id === (int) $tenant->id),
         ])->header('Cache-Control', 'no-store, private')->header('Referrer-Policy', 'no-referrer');
+    }
+
+    public function braintreeConnect(Request $request, TenantBraintreeConnectionService $braintree)
+    {
+        $tenant = $this->tenant($request);
+        $this->provider(fn () => $braintree->connect($tenant, $request->user(), $request->only([
+            'environment', 'merchant_id', 'merchant_account_id', 'braintree_public_key', 'password', 'label', 'reviewed',
+        ])));
+
+        return to_route('tenant-payments.index', ['tenant' => $tenant->slug])->with('status', 'Braintree account verified. Customer billing has not been switched or activated.');
+    }
+
+    public function braintreeRefresh(Request $request, int $connection, TenantBraintreeConnectionService $braintree)
+    {
+        $tenant = $this->tenant($request);
+        $this->provider(fn () => $braintree->refresh($tenant, $request->user(), $connection));
+
+        return to_route('tenant-payments.index', ['tenant' => $tenant->slug])->with('status', 'Braintree account status checked. Customer billing remains unchanged.');
     }
 
     public function stripeStart(Request $request, TenantStripeConnectionService $stripe)

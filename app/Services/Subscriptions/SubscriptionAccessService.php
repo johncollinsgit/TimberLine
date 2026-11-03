@@ -73,7 +73,7 @@ class SubscriptionAccessService
             abort_if(trim((string) $row->shopify_store_key) !== '' && (string) $row->shopify_store_key !== $identity['store_key'], 409, 'Existing subscription store routing requires review before binding another store.');
             $metadata = $this->json($row->metadata);
             $existing = $metadata['provider_binding'] ?? null;
-            abort_if($existing !== null && $existing !== $identity, 409, 'The subscription store binding has changed. Review the original installation.');
+            abort_if($existing !== null && SubscriptionEvidence::canonical($existing) !== SubscriptionEvidence::canonical($identity), 409, 'The subscription store binding has changed. Review the original installation.');
             if ($existing === null) {
                 $metadata['provider_binding'] = $identity;
                 DB::table('subscription_module_settings')->where('id', $row->id)->update([
@@ -105,7 +105,7 @@ class SubscriptionAccessService
         $binding = $this->binding($tenantId);
         abort_unless($binding, 409, 'Subscription store setup is required before recording a request.');
         $store ??= ShopifyStores::find((string) ($binding['store_key'] ?? ''), true);
-        abort_unless($store && $this->storeIdentity($tenantId, $store) === $binding, 409, 'The original subscription store or app is unavailable.');
+        abort_unless($store && SubscriptionEvidence::canonical($this->storeIdentity($tenantId, $store)) === SubscriptionEvidence::canonical($binding), 409, 'The original subscription store or app is unavailable.');
 
         return $binding;
     }

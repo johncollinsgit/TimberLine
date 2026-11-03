@@ -302,7 +302,7 @@ jobs:
         run: php ./vendor/bin/pest tests/Integration/WebsiteShopPayMySqlRecoveryTest.php --compact
 
       - name: Verify subscription pilot evidence partial-DDL recovery
-        run: php ./vendor/bin/pest tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php tests/Integration/SubscriptionBillingLedgerMySqlRecoveryTest.php tests/Integration/SubscriptionMemberVotesMySqlRecoveryTest.php --compact
 
       - name: Verify POS simulation partial-DDL recovery
         env:

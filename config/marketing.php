@@ -247,6 +247,10 @@ return [
         'max_open_codes' => (int) env('MARKETING_CANDLE_CASH_MAX_OPEN_CODES', 1),
         'storefront_reward_type' => env('MARKETING_CANDLE_CASH_STOREFRONT_REWARD_TYPE', 'coupon'),
         'storefront_reward_value' => env('MARKETING_CANDLE_CASH_STOREFRONT_REWARD_VALUE', '10USD'),
+        // Resolved from the persisted profile's tenant, never a shopper-supplied channel or brand.
+        'tenant_channel_rules' => [
+            'modern-forestry' => ['online_amount' => 10, 'in_person_amount' => 5, 'birthday_reward_amount' => 10, 'recurring_charges_allowed' => false],
+        ],
         // Legacy beta rollout knob retained for compatibility only; storefront access is now GA and this value is ignored.
         'temporary_storefront_live_email_allowlist' => array_values(array_filter(array_map(
             static fn ($value) => strtolower(trim((string) $value)),

@@ -88,6 +88,8 @@ class MarketingProfileMergeReferenceRegistry
             'marketing_delivery_attempts' => ['marketing_profile_id'],
             // Reviewed pilot identities and payment authority never follow a customer merge.
             'subscription_pilot_members' => ['marketing_profile_id'],
+            // Accepted neutral ballots retain their original author; another profile cannot grant another member vote.
+            'subscription_member_votes' => ['marketing_profile_id'],
             // POS authorization and original wallet evidence remain bound to
             // the identity and sale that created them. Unsettled/refundable
             // holds prevent the merge; terminal evidence is not reassigned.
