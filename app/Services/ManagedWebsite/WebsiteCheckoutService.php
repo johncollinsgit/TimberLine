@@ -18,19 +18,25 @@ use Illuminate\Validation\ValidationException;
 
 class WebsiteCheckoutService
 {
-    public function begin(WebsiteCart $cart, array $buyer, string $successUrl, string $cancelUrl): array
+    public function begin(WebsiteCart $cart, array $buyer, string $successUrl, string $cancelUrl, string $provider = 'stripe'): array
     {
+        abort_unless(in_array($provider, ['stripe', 'shop_pay'], true), 422);
         $site = TenantSite::query()->forTenantId($cart->tenant_id)->findOrFail($cart->tenant_site_id);
         $tenant = Tenant::query()->findOrFail($cart->tenant_id);
         $readiness = app(WebsiteCommerceService::class)->checkoutReadiness($tenant);
         abort_unless($readiness['ready'], 423, implode(' ', $readiness['blockers']));
-        $payment = DB::transaction(function () use ($cart, $site, $buyer, $successUrl, $cancelUrl): WebsitePayment {
+        if ($provider === 'shop_pay') {
+            abort_unless(app(ShopPayWalletConnectionService::class)->availableFor($tenant, $site), 423, 'Shop Pay is not ready for this business.');
+            abort_unless(in_array($buyer['fulfillment_method'] ?? '', ['ship', 'pickup'], true), 422, 'Choose shipping or pickup to use Shop Pay.');
+        }
+        $payment = DB::transaction(function () use ($cart, $site, $buyer, $successUrl, $cancelUrl, $provider): WebsitePayment {
             $site = TenantSite::query()->forTenantId($cart->tenant_id)->lockForUpdate()->findOrFail($site->id);
             $cart = WebsiteCart::query()->lockForUpdate()->with('items.variant.product')->findOrFail($cart->id);
             abort_if($cart->status !== 'active' || $cart->items->isEmpty(), 422, 'Your cart is empty or no longer active.');
             $fingerprint = $this->fingerprint($cart, $buyer, $site);
             $existing = $this->activePayment($cart);
             if ($existing) {
+                abort_unless($existing->provider === $provider, 409, 'Resume or cancel the original payment before choosing another method.');
                 if (! hash_equals((string) data_get($existing->metadata, 'fingerprint', ''), $fingerprint)) {
                     throw ValidationException::withMessages(['cart' => 'A checkout is already open for this cart. Cancel that checkout before using changed details.']);
                 }
@@ -128,7 +134,7 @@ class WebsiteCheckoutService
             abort_unless($feeBps >= 0 && $feeBps <= 10000, 423, 'Review the merchant platform fee.');
             abort_if($order->total_cents <= 0 || count($lines) > 100, 422, 'This cart cannot use the paid retail checkout.');
             $payment = WebsitePayment::query()->create([
-                'tenant_id' => $order->tenant_id, 'website_order_id' => $order->id, 'provider' => 'stripe',
+                'tenant_id' => $order->tenant_id, 'website_order_id' => $order->id, 'provider' => $provider,
                 'status' => 'creating', 'amount_cents' => $order->total_cents, 'currency' => $order->currency,
                 'metadata' => ['checkout_version' => 1, 'api_version' => WebsiteStripeService::API_VERSION, 'cart_id' => $cart->id, 'fingerprint' => $fingerprint,
                     'nonce' => Str::random(40), 'expires_at' => $expiresAt->timestamp,
@@ -139,12 +145,18 @@ class WebsiteCheckoutService
                     'application_fee_cents' => intdiv($order->total_cents * $feeBps, 10000)],
             ]);
             $this->freeze($order->load('lines'), $payment, $successUrl, $cancelUrl);
+            if ($provider === 'shop_pay') {
+                app(WebsiteShopPayCheckoutService::class)->prepare($payment);
+            }
 
             return $payment;
         });
 
         if (in_array($payment->status, ['paid_review', 'payment_review'], true)) {
             throw ValidationException::withMessages(['cart' => 'This payment needs staff review. Do not submit another payment.']);
+        }
+        if ($provider === 'shop_pay') {
+            return ['order' => WebsiteOrder::findOrFail($payment->website_order_id), 'url' => app(WebsiteShopPayCheckoutService::class)->url($payment)];
         }
         if ($payment->provider_session_id && (int) data_get($payment->metadata, 'expires_at') <= now()->timestamp) {
             app(WebsitePaymentService::class)->reconcile($payment);
@@ -156,7 +168,7 @@ class WebsiteCheckoutService
 
     public function activePayment(WebsiteCart $cart): ?WebsitePayment
     {
-        return WebsitePayment::query()->forTenantId($cart->tenant_id)->where('provider', 'stripe')
+        return WebsitePayment::query()->forTenantId($cart->tenant_id)->whereIn('provider', ['stripe', 'shop_pay'])
             ->where('metadata->checkout_version', 1)->where('metadata->cart_id', $cart->id)
             ->whereNotIn('status', ['paid', 'partially_refunded', 'refunded', 'failed', 'expired', 'cancelled'])->latest('id')->first();
     }
@@ -247,6 +259,7 @@ class WebsiteCheckoutService
 
     public function ensureSession(WebsitePayment $payment): array
     {
+        abort_unless($payment->provider === 'stripe', 422, 'Recover this payment with its original provider.');
         $stripe = app(WebsiteStripeService::class);
         $stripe->client($payment);
         $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($payment->tenant_id)->with('lines')->findOrFail($payment->website_order_id);
@@ -311,6 +324,11 @@ class WebsiteCheckoutService
 
     public function cancelPayment(WebsitePayment $payment): void
     {
+        if ($payment->provider === 'shop_pay') {
+            app(WebsiteShopPayCheckoutService::class)->cancel($payment);
+
+            return;
+        }
         abort_if(data_get($payment->metadata, 'paid_confirmed') || in_array($payment->status, ['payment_review', 'paid_review'], true), 422, 'This payment needs a refund or staff review before cancellation.');
         $this->ensureSession($payment);
         $payment->refresh();

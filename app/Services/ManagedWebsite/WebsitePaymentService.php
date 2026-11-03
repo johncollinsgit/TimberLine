@@ -22,8 +22,11 @@ class WebsitePaymentService
     {
         $order->assertNotPosSimulation();
         abort_unless($order->payment_status === 'paid' && $order->cancelled_at === null, 422, 'Only paid Website orders can be fulfilled.');
-        $payment = $order->payments()->forTenantId($order->tenant_id)->where('provider', 'stripe')->latest('id')->first();
+        $payment = $order->payments()->forTenantId($order->tenant_id)->whereIn('provider', ['stripe', 'shop_pay'])->latest('id')->first();
         if ($payment && in_array(data_get($payment->metadata, 'checkout_version'), [1, 2], true)) {
+            if ($payment->provider === 'shop_pay') {
+                abort_unless(data_get($payment->metadata, 'wallet_tax_recorded'), 422, 'Reconcile the original Shop Pay tax transaction before fulfillment.');
+            }
             abort_unless(data_get($payment->metadata, 'paid_confirmed') && data_get($payment->metadata, 'inventory_committed'), 422, 'Payment and inventory verification is required before fulfillment.');
             $pending = collect((array) data_get($payment->metadata, 'refunds', []))->contains(fn ($operation) => ! in_array($operation['status'], ['succeeded', 'failed', 'canceled'], true));
             abort_if($pending, 422, 'Resolve the pending refund before fulfillment.');

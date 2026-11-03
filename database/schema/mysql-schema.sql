@@ -13430,6 +13430,70 @@ CREATE TABLE `website_shipping_rate_quotes` (
   CONSTRAINT `website_shipping_rate_quotes_website_cart_id_foreign` FOREIGN KEY (`website_cart_id`) REFERENCES `website_carts` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `website_shop_pay_attempts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `website_shop_pay_attempts` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `website_cart_id` bigint unsigned NOT NULL,
+  `website_order_id` bigint unsigned DEFAULT NULL,
+  `website_payment_id` bigint unsigned DEFAULT NULL,
+  `source_identifier` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `idempotency_key` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `session_token` text COLLATE utf8mb4_unicode_ci,
+  `receipt_token` text COLLATE utf8mb4_unicode_ci,
+  `shopify_order_id` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shopify_order_name` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shopify_transaction_id` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'created',
+  `amount_cents` int unsigned NOT NULL,
+  `currency` varchar(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'usd',
+  `cart_fingerprint` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `checkout_state` text COLLATE utf8mb4_unicode_ci,
+  `failure_code` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `failure_message` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `reconciliation_attempts` tinyint unsigned NOT NULL DEFAULT '0',
+  `submitted_at` timestamp NULL DEFAULT NULL,
+  `reconciled_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `wsp_attempt_uuid_uq` (`uuid`),
+  UNIQUE KEY `wsp_attempt_source_uq` (`source_identifier`),
+  UNIQUE KEY `wsp_attempt_idempotency_uq` (`idempotency_key`),
+  KEY `wsp_attempt_tenant_status_idx` (`tenant_id`,`status`,`created_at`),
+  KEY `wsp_attempt_order_ref_idx` (`tenant_id`,`shopify_order_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `website_shop_pay_connections`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `website_shop_pay_connections` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `environment` varchar(8) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'test',
+  `shop_id` bigint unsigned NOT NULL,
+  `client_id` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `shop_domain` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `storefront_access_token` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `admin_access_token` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `webhook_secret` text COLLATE utf8mb4_unicode_ci,
+  `api_version` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `connection_status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'unverified',
+  `verified_origin` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `last_verified_at` timestamp NULL DEFAULT NULL,
+  `last_error` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `setup` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `wsp_connections_shop_domain_uq` (`shop_domain`),
+  UNIQUE KEY `wsp_connections_tenant_uq` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `website_stripe_webhook_events`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -14336,3 +14400,5 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (326,'2026_11_01_14
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (327,'2026_11_01_150000_create_pos_birthday_cycle_fences',46);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (328,'2026_11_01_160000_add_pos_reward_authorization_terms',46);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (329,'2026_11_01_170000_create_pos_birthday_annual_holds',47);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (330,'2026_11_03_100000_create_website_shop_pay_connections_table',48);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (331,'2026_11_03_100100_create_website_shop_pay_attempts_table',48);

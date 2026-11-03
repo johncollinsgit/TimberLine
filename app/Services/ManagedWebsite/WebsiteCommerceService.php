@@ -338,11 +338,11 @@ class WebsiteCommerceService
     public function cancel(WebsiteOrder $order, User $actor, string $reason = ''): WebsiteOrder
     {
         $order->assertNotPosSimulation();
-        $payment = $order->payments()->forTenantId($order->tenant_id)->where('provider', 'stripe')->latest('id')->first();
+        $payment = $order->payments()->forTenantId($order->tenant_id)->whereIn('provider', ['stripe', 'shop_pay'])->latest('id')->first();
         if ($payment) {
             abort_unless(data_get($payment->metadata, 'checkout_version') === 1, 422, 'Review this earlier checkout in Stripe before cancellation.');
             app(WebsiteCheckoutService::class)->cancelPayment($payment);
-            $this->event($order, 'cancelled', 'Checkout cancelled after Stripe confirmation.'.(trim($reason) !== '' ? ' '.trim($reason) : ''), $actor);
+            $this->event($order, 'cancelled', 'Original checkout cancelled without a confirmed payment.'.(trim($reason) !== '' ? ' '.trim($reason) : ''), $actor);
 
             return $order->fresh();
         }

@@ -247,10 +247,18 @@ class WebsiteCommerceController extends Controller
                 ->values();
         });
         $refundableCents = max(0, $order->total_cents - $order->refunded_cents - $pendingRefunds->sum('amount_cents'));
+        $walletPayment = $order->payments->firstWhere('provider', 'shop_pay');
+        $walletAttempt = $walletPayment ? app(\App\Services\ManagedWebsite\WebsiteShopPayCheckoutService::class)->attempt($walletPayment) : null;
+        $walletMerchant = $walletAttempt ? app(\App\Services\ManagedWebsite\WebsiteShopPayCheckoutService::class)->merchant($walletAttempt) : null;
+        $walletAdminUrl = $walletAttempt?->shopify_order_id
+            ? 'https://'.$walletMerchant->shop_domain.'/admin/orders/'.Str::afterLast($walletAttempt->shopify_order_id, '/') : null;
+        if ($walletPayment) {
+            $refundableCents = 0; // Wallet refunds belong to their original store.
+        }
 
-        return view('managed-website.commerce.order', compact('tenant', 'order', 'pendingRefunds', 'refundableCents') + [
+        return view('managed-website.commerce.order', compact('tenant', 'order', 'pendingRefunds', 'refundableCents', 'walletPayment', 'walletAdminUrl') + [
             'shippingInstructions' => app(\App\Services\ManagedWebsite\WebsiteShippingInstructionsService::class)->forOrder($order),
-            'canManageOrders' => $commerce->enabledFor($tenant), 'canServicePayments' => $nativePayments->isNotEmpty(),
+            'canManageOrders' => $commerce->enabledFor($tenant), 'canServicePayments' => $nativePayments->isNotEmpty() || $walletPayment !== null,
             'canManageShipping' => app(WebsiteShippingAccessService::class)->canManage($tenant, $request->user()),
             'shippingEnabled' => app(WebsiteCommerceShippingService::class)->enabledFor($tenant),
         ]);
@@ -308,6 +316,11 @@ class WebsiteCommerceController extends Controller
         $order->assertNotPosSimulation();
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
+        if ($wallet = $order->payments()->forTenantId($tenant->id)->where('provider', 'shop_pay')->first()) {
+            app(\App\Services\ManagedWebsite\WebsiteShopPayCheckoutService::class)->reconcile($wallet);
+
+            return back()->with('status', 'Original Shop Pay payment and refund status checked.');
+        }
         $payments = $order->payments()->forTenantId($tenant->id)->where('provider', 'stripe')
             ->whereIn('metadata->checkout_version', [1, 2])->where('metadata->paid_confirmed', true)->get();
         abort_if($payments->isEmpty(), 404);
@@ -519,6 +532,7 @@ class WebsiteCommerceController extends Controller
             'shippingEnabled' => $shipping->enabledFor($tenant) && $cart->loadMissing('items.variant.product')->items->contains(fn ($item) => $item->variant?->product?->product_type === 'physical'),
             'checkoutReady' => $commerce->checkoutReadiness($tenant)['ready'],
             'requiresFreight' => $cart->loadMissing('items.variant.product')->items->contains(fn ($item) => $item->variant?->product?->product_type === 'physical' && data_get($item->variant?->options, 'shipping_mode', 'parcel') !== 'parcel'),
+            'shopPayReady' => app(\App\Services\ManagedWebsite\ShopPayWalletConnectionService::class)->availableFor($tenant, $site),
             'missingShippingWeights' => app(\App\Services\ManagedWebsite\WebsiteShippingReadinessService::class)->missingCartWeights($cart),
         ]);
     }
@@ -574,12 +588,13 @@ class WebsiteCommerceController extends Controller
         $this->requireCommerce($tenant, $commerce);
         $cart = $commerce->cartFor($site, $request->session()->get($this->cartSessionKey($site)));
         $data = $request->validate([
+            'payment_provider' => ['nullable', 'in:stripe,shop_pay'],
             'name' => ['required', 'string', 'max:190'], 'email' => ['required', 'email:rfc,dns', 'max:190'], 'phone' => ['nullable', 'string', 'max:80'],
             'fulfillment_method' => ['required', 'in:ship,pickup,local_delivery'], 'shipping_rate_quote_id' => ['nullable', 'integer', 'required_if:fulfillment_method,ship'],
             'shipping_address' => ['nullable', 'array', 'required_if:fulfillment_method,ship,local_delivery'], 'shipping_address.name' => ['nullable', 'string', 'max:190'], 'shipping_address.street1' => ['nullable', 'string', 'max:190'], 'shipping_address.street2' => ['nullable', 'string', 'max:190'], 'shipping_address.city' => ['nullable', 'string', 'max:120'], 'shipping_address.state' => ['nullable', 'string', 'size:2'], 'shipping_address.zip' => ['nullable', 'string', 'max:10'], 'shipping_address.country' => ['nullable', 'string', 'size:2'],
             'preferred_at' => ['nullable', 'string', 'max:80'], 'notes' => ['nullable', 'string', 'max:2000'],
         ]);
-        $result = $commerce->beginCheckout($cart, $data + ['first_name' => Str::before($data['name'], ' '), 'last_name' => Str::after($data['name'], ' ')], route('managed-website.store.success'), route('managed-website.store.cart'));
+        $result = app(\App\Services\ManagedWebsite\WebsiteCheckoutService::class)->begin($cart, $data + ['first_name' => Str::before($data['name'], ' '), 'last_name' => Str::after($data['name'], ' ')], route('managed-website.store.success'), route('managed-website.store.cart'), $data['payment_provider'] ?? 'stripe');
 
         return redirect()->away($result['url']);
     }
@@ -588,12 +603,15 @@ class WebsiteCommerceController extends Controller
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
         $this->requireCommerce($tenant, $commerce);
-        abort_unless($commerce->checkoutReadiness($tenant)['ready'], 423, 'Website checkout is not ready.');
         $cart = \App\Models\WebsiteCart::query()->forTenantId($tenant->id)->where('tenant_site_id', $site->id)
             ->where('token', (string) $request->session()->get($this->cartSessionKey($site)))->where('status', 'active')->firstOrFail();
         $checkout = app(\App\Services\ManagedWebsite\WebsiteCheckoutService::class);
         $payment = $checkout->activePayment($cart);
         abort_unless($payment, 422, 'No open checkout was found.');
+        if ($payment->provider === 'shop_pay') {
+            return redirect(app(\App\Services\ManagedWebsite\WebsiteShopPayCheckoutService::class)->url($payment));
+        }
+        abort_unless($commerce->checkoutReadiness($tenant)['ready'], 423, 'Website checkout is not ready.');
         abort_if(in_array($payment->status, ['paid_review', 'payment_review'], true), 422, 'This payment needs staff review. Contact the store.');
         abort_unless($tenant->paymentAccount()->value('provider_account_id') === data_get($payment->metadata, 'account_id'), 423, 'The merchant payment account changed. Contact the store.');
 

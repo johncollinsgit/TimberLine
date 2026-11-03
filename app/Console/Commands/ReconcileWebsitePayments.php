@@ -16,12 +16,18 @@ class ReconcileWebsitePayments extends Command
     public function handle(WebsitePaymentService $payments): int
     {
         $failed = 0;
-        $attempts = WebsitePayment::query()->where('provider', 'stripe')->whereIn('metadata->checkout_version', [1, 2])
-            ->whereNotIn('status', ['expired', 'cancelled', 'failed', 'refunded'])
+        $attempts = WebsitePayment::query()->whereIn('provider', ['stripe', 'shop_pay'])->whereIn('metadata->checkout_version', [1, 2])
+            ->where(function ($query) {
+                $query->whereNotIn('status', ['expired', 'cancelled', 'failed', 'refunded'])
+                    ->orWhere(fn ($wallet) => $wallet->where('provider', 'shop_pay')->where('status', 'refunded')
+                        ->where(fn ($pending) => $pending->whereNull('metadata->wallet_recovery_complete')->orWhere('metadata->wallet_recovery_complete', false)));
+            })
             ->orderBy('updated_at')->orderBy('id')->limit(max(1, min(500, (int) $this->option('limit'))))->get();
         foreach ($attempts as $payment) {
             try {
-                if (data_get($payment->metadata, 'checkout_version') === 2) {
+                if ($payment->provider === 'shop_pay') {
+                    app(\App\Services\ManagedWebsite\WebsiteShopPayCheckoutService::class)->reconcile($payment);
+                } elseif (data_get($payment->metadata, 'checkout_version') === 2) {
                     app(\App\Services\ManagedWebsite\WebsiteInvoicePaymentService::class)->reconcile($payment);
                     $payments->reconcileRefunds($payment);
                 } else {
