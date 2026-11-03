@@ -21,7 +21,7 @@ class WebsiteProductCsvService
 
         return response()->streamDownload(function () use ($site): void {
             $output = fopen('php://output', 'wb');
-            fputcsv($output, ['handle', 'title', 'product_type', 'description', 'status', 'retail_price', 'wholesale_price', 'sku', 'image_url', 'track_inventory', 'inventory_quantity', 'is_available', 'variant_id', 'variant_title', 'shipping_weight_ounces', 'shipping_length_inches', 'shipping_width_inches', 'shipping_height_inches']);
+            fputcsv($output, ['handle', 'title', 'product_type', 'description', 'status', 'retail_price', 'wholesale_price', 'sku', 'image_url', 'track_inventory', 'inventory_quantity', 'is_available', 'variant_id', 'variant_title', 'shipping_weight_ounces', 'shipping_length_inches', 'shipping_width_inches', 'shipping_height_inches', 'shipping_mode']);
 
             WebsiteProduct::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->with('variants')->orderBy('title')->each(function (WebsiteProduct $product) use ($output): void {
                 foreach ($product->variants->isEmpty() ? collect([null]) : $product->variants as $variant) {
@@ -44,6 +44,7 @@ class WebsiteProductCsvService
                         $variant?->shipping_length_inches,
                         $variant?->shipping_width_inches,
                         $variant?->shipping_height_inches,
+                        data_get($variant?->options, 'shipping_mode', 'parcel'),
                     ]);
                 }
             });
@@ -155,6 +156,12 @@ class WebsiteProductCsvService
                         throw ValidationException::withMessages(['catalog' => "Row {$rowNumber}: ".$validation->errors()->first()]);
                     }
                     $data += $validation->validated();
+                    if (filled($row['shipping_mode'] ?? null)) {
+                        if (! in_array($row['shipping_mode'], ['parcel', 'ltl'], true)) {
+                            throw ValidationException::withMessages(['catalog' => "Row {$rowNumber}: choose parcel or ltl shipping."]);
+                        }
+                        $data['shipping_mode'] = $row['shipping_mode'];
+                    }
                     if ($product) {
                         $data['id'] = $product->id;
                     }

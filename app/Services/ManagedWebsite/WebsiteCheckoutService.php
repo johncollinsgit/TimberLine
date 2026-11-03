@@ -78,7 +78,8 @@ class WebsiteCheckoutService
                 $lines[] = compact('variant', 'item', 'lineTotal');
             }
             $freeShippingThreshold = (int) data_get($site->publishedSiteVersion?->settings, 'free_shipping_threshold_cents', 0);
-            $shippingCents = $shippingQuote && ($freeShippingThreshold === 0 || $subtotal < $freeShippingThreshold) ? $shippingQuote->amount_cents : 0;
+            $shippingCents = $shippingQuote && ($freeShippingThreshold === 0 || $subtotal < $freeShippingThreshold)
+                ? app(WebsiteShippingPolicyService::class)->buyerCharge($site, $shippingQuote->destination['state'], $shippingQuote->amount_cents) : 0;
             $order = WebsiteOrder::query()->create([
                 'tenant_id' => $site->tenant_id,
                 'tenant_site_id' => $site->id,

@@ -1,3 +1,35 @@
+## November 3 Mac recovery source candidate
+
+Recovered the unpublished invoice/packing-slip documents, staff instructions,
+freight-only variant option, customer shipping-charge choice and US state policy
+onto the current shipping lifecycle. The older whole service and JSON cast were
+not copied over newer original-account purchase, print, refund, replacement,
+packing, handoff and notification protections.
+
+- `/website/orders/{order}/print?document=invoice` requires financial access;
+  `document=packing-slip` excludes prices. Both require tenant/module access and
+  reject POS simulation orders. Printouts preserve draft/unpaid/cancelled truth,
+  use private no-store responses and never create an issued billing request.
+- Product variants and CSV support `shipping_mode=parcel|ltl`. Missing CSV cells
+  preserve the current choice. Freight requires merchant arrangements or pickup;
+  no automatic parcel rate, card payment for parcel delivery or truck booking is
+  implied. Staff instructions distinguish uncertain purchases and retired labels.
+- Existing `shipping.mode=test|production` continues to select the carrier
+  environment. Optional `shipping.charge_mode=calculated|free` and `shipping.states`
+  are separate audited financial settings. Carrier services/packages and their
+  existing keys are preserved. An empty state selection is rejected.
+- New unpaid quotes bind the customer policy in their plan fingerprint. Changing
+  it requires a new quote. Paid orders retain the original plan. Quote records and
+  postage approval keep the real carrier cost even when customer shipping is zero;
+  only the customer-facing quote/order/Stripe shipping charge is reduced.
+- The existing Website/shipping/merchant/tax/launch gates remain. No credentials,
+  rollout, legacy Shopify fulfillment or Enterprise behavior changes are included.
+
+Local acceptance uses fictional providers and private synthetic printouts. Normal
+exact-head GitHub/Forge release and merchant-specific physical label/packing/
+handoff acceptance remain distinct. Carrier links point to official USPS/FedEx
+pickup/drop-off instructions and require their current eligibility checks.
+
 # Native Website Commerce Shipping Operations
 
 ## Scope

@@ -945,6 +945,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/orders/create', [WebsiteCommerceController::class, 'createOrder'])->name('orders.create');
             Route::post('/orders/drafts', [WebsiteCommerceController::class, 'storeDraftOrder'])->name('orders.drafts.store');
             Route::get('/orders/{order}', [WebsiteCommerceController::class, 'showOrder'])->name('orders.show');
+            Route::get('/orders/{order}/print', [WebsiteCommerceController::class, 'printOrder'])->name('orders.print');
             Route::post('/orders/{order}/fulfill', [WebsiteCommerceController::class, 'fulfill'])->name('orders.fulfill');
             Route::post('/orders/{order}/cancel', [WebsiteCommerceController::class, 'cancel'])->name('orders.cancel');
             Route::post('/orders/{order}/refund', [WebsiteCommerceController::class, 'refund'])->name('orders.refund');

@@ -19,7 +19,12 @@ class WebsiteShippingSetupService
     public function savePolicy(TenantSite $site, array $data, User $actor): void
     {
         app(WebsiteCatalogService::class)->assertEditor($site, $actor);
+        if (array_key_exists('charge_mode', $data) || array_key_exists('states', $data)) {
+            abort_unless(app(\App\Services\Tenancy\TenantFinancialAccess::class)->allows($actor, $site->tenant_id), 403);
+        }
         $data = Validator::make($data, ['mode' => ['required', Rule::in(['test', 'production'])],
+            'charge_mode' => ['sometimes', 'required', Rule::in(['calculated', 'free'])],
+            'states' => ['required_with:charge_mode', 'array', 'min:1', 'max:51'], 'states.*' => ['required', 'distinct', Rule::in(WebsiteShippingPolicyService::STATES)],
             'services' => ['required', 'array', 'min:1', 'max:3'], 'services.*' => ['required', 'distinct', Rule::in(self::SERVICES)]])->validate();
         DB::transaction(function () use ($site, $data, $actor): void {
             $site = TenantSite::query()->forTenantId($site->tenant_id)->lockForUpdate()->findOrFail($site->id);

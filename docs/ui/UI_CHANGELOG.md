@@ -1,3 +1,10 @@
+## November 3 · native shipping recovery candidate
+
+Add private printable order invoices/packing slips, state-aware customer shipping
+charges, freight-only variant controls and shipment-status instructions. Retain
+current native packing, label and handoff protections. Existing merchant rollout
+and financial permissions remain required; this note is source evidence only.
+
 ## 2026-10-31 — Everbranch Pay customer-linked checkout (source candidate)
 
 Modern Forestry's catalog opens native live-basket review and customer selection.

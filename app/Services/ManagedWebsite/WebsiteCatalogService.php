@@ -61,6 +61,7 @@ class WebsiteCatalogService
                 'variants.*.shipping_width_inches' => ['nullable', 'integer', 'between:1,1000'],
                 'variants.*.shipping_height_inches' => ['nullable', 'integer', 'between:1,1000'],
                 'variants.*.shipping_separately' => ['sometimes', 'boolean'],
+                'variants.*.shipping_mode' => ['sometimes', Rule::in(['parcel', 'ltl'])],
                 'image_alt' => ['nullable', 'string', 'max:500'], 'details' => ['nullable', 'string', 'max:8000'],
                 'vendor' => ['nullable', 'string', 'max:190'], 'category' => ['nullable', 'string', 'max:190'], 'tags' => ['nullable', 'string', 'max:1000'],
                 'seo_title' => ['nullable', 'string', 'max:190'], 'seo_description' => ['nullable', 'string', 'max:320'],
@@ -98,6 +99,9 @@ class WebsiteCatalogService
                 }
                 if (array_key_exists('shipping_separately', $row)) {
                     $variant->options = array_merge($variant->options ?? [], ['shipping_separately' => (bool) $row['shipping_separately']]);
+                }
+                if (array_key_exists('shipping_mode', $row)) {
+                    $variant->options = array_merge($variant->options ?? [], ['shipping_mode' => $row['shipping_mode']]);
                 }
                 $variant->save();
                 if ($product->track_inventory && $oldQuantity !== $variant->inventory_quantity) {

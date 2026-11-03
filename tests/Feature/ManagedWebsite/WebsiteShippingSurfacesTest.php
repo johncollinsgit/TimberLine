@@ -52,6 +52,27 @@ beforeEach(function (): void {
     $this->trackingUrl = 'https://shipping-surfaces.theeverbranch.com/orders/track?'.http_build_query(['order' => $this->order->number, 'token' => $this->order->lookup_token]);
 });
 
+test('private order printouts retain draft payment truth and packing slips exclude prices', function (): void {
+    $this->order->update(['order_status' => 'draft', 'payment_status' => 'pending']);
+    $url = route('managed-website.orders.print', ['order' => $this->order, 'tenant' => $this->tenant->id]);
+    $this->actingAs($this->actor)->get($url.'&document=packing-slip')->assertOk()->assertSeeText('Packing slip')
+        ->assertSeeText('No payment has been collected')->assertDontSeeText('Unit price')->assertDontSeeText('Private staff note')
+        ->assertHeader('X-Robots-Tag', 'noindex, nofollow');
+    $this->get($url.'&document=invoice')->assertOk()->assertSeeText('Payment: Pending')->assertSeeText('Unit price');
+    $this->order->update(['source' => 'pos_simulation']);
+    $this->get($url.'&document=invoice')->assertNotFound();
+    Http::assertNothingSent();
+});
+
+test('retired or uncertain postage instructions never advise using the original label', function (): void {
+    $this->shipment->update(['parcel' => ['_native' => ['refund_state' => 'unknown', 'retired' => true]]]);
+    $instructions = app(\App\Services\ManagedWebsite\WebsiteShippingInstructionsService::class)->forOrder($this->order->fresh());
+    expect($instructions['heading'])->toBe('Review carrier refund')->and(implode(' ', $instructions['steps']))->toContain('Do not use this retired label');
+    $this->shipment->update(['status' => 'purchase_unknown', 'parcel' => []]);
+    $instructions = app(\App\Services\ManagedWebsite\WebsiteShippingInstructionsService::class)->forOrder($this->order->fresh());
+    expect($instructions['heading'])->toBe('Check carrier purchase')->and(implode(' ', $instructions['steps']))->toContain('Do not buy another label');
+});
+
 test('carrier credentials are tenant encrypted retained on rotation and never enable a rollout', function (): void {
     $payload = ['api_key' => 'EZTK_first_fixture_key', 'webhook_secret' => 'first_fixture_webhook_secret', 'mode' => 'test', 'label' => 'Test carrier'];
     $url = route('managed-website.commerce.shipping.connection.store', ['tenant' => $this->tenant->id]);

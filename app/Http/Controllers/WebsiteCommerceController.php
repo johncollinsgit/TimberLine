@@ -249,6 +249,7 @@ class WebsiteCommerceController extends Controller
         $refundableCents = max(0, $order->total_cents - $order->refunded_cents - $pendingRefunds->sum('amount_cents'));
 
         return view('managed-website.commerce.order', compact('tenant', 'order', 'pendingRefunds', 'refundableCents') + [
+            'shippingInstructions' => app(\App\Services\ManagedWebsite\WebsiteShippingInstructionsService::class)->forOrder($order),
             'canManageOrders' => $commerce->enabledFor($tenant), 'canServicePayments' => $nativePayments->isNotEmpty(),
             'canManageShipping' => app(WebsiteShippingAccessService::class)->canManage($tenant, $request->user()),
             'shippingEnabled' => app(WebsiteCommerceShippingService::class)->enabledFor($tenant),
@@ -264,6 +265,20 @@ class WebsiteCommerceController extends Controller
         $commerce->fulfill($order, $request->user(), (string) $request->validate(['note' => ['nullable', 'string', 'max:1000']])['note']);
 
         return back()->with('status', 'Order marked fulfilled.');
+    }
+
+    public function printOrder(Request $request, WebsiteOrder $order, WebsiteCommerceService $commerce)
+    {
+        $order->assertNotPosSimulation();
+        $tenant = $this->tenant($request);
+        abort_unless((int) $order->tenant_id === (int) $tenant->id && (int) $order->tenant_site_id === (int) $this->site($tenant)->id, 404);
+        $document = $request->validate(['document' => ['required', 'in:invoice,packing-slip']])['document'];
+        abort_if($document === 'invoice' && ! app(\App\Services\Tenancy\TenantFinancialAccess::class)->allows($request->user(), $tenant), 403);
+        $order->load('lines');
+
+        return response()->view('managed-website.commerce.print-order', compact('tenant', 'order', 'document'))
+            ->header('Cache-Control', 'private, no-store, max-age=0')->header('Referrer-Policy', 'no-referrer')
+            ->header('X-Robots-Tag', 'noindex, nofollow');
     }
 
     public function cancel(Request $request, WebsiteOrder $order, WebsiteCommerceService $commerce): RedirectResponse
@@ -503,6 +518,7 @@ class WebsiteCommerceController extends Controller
             'checkoutAttempt' => app(\App\Services\ManagedWebsite\WebsiteCheckoutService::class)->activePayment($cart),
             'shippingEnabled' => $shipping->enabledFor($tenant) && $cart->loadMissing('items.variant.product')->items->contains(fn ($item) => $item->variant?->product?->product_type === 'physical'),
             'checkoutReady' => $commerce->checkoutReadiness($tenant)['ready'],
+            'requiresFreight' => $cart->loadMissing('items.variant.product')->items->contains(fn ($item) => $item->variant?->product?->product_type === 'physical' && data_get($item->variant?->options, 'shipping_mode', 'parcel') !== 'parcel'),
             'missingShippingWeights' => app(\App\Services\ManagedWebsite\WebsiteShippingReadinessService::class)->missingCartWeights($cart),
         ]);
     }
@@ -635,7 +651,7 @@ class WebsiteCommerceController extends Controller
         $data = $request->validate(['shipping_address' => ['required', 'array'], 'shipping_address.name' => ['required', 'string', 'max:190'], 'shipping_address.street1' => ['required', 'string', 'max:190'], 'shipping_address.street2' => ['nullable', 'string', 'max:190'], 'shipping_address.city' => ['required', 'string', 'max:120'], 'shipping_address.state' => ['required', 'string', 'size:2'], 'shipping_address.zip' => ['required', 'string', 'max:10'], 'shipping_address.country' => ['required', 'string', 'size:2']]);
         $quotes = $shipping->quote($cart, $data['shipping_address']);
 
-        return response()->json(['quotes' => collect($quotes)->map(fn (WebsiteShippingRateQuote $quote) => ['id' => $quote->id, 'carrier' => $quote->carrier, 'service' => $quote->service, 'amount_cents' => $quote->amount_cents, 'currency' => $quote->currency, 'delivery_days' => $quote->delivery_days, 'expires_at' => $quote->expires_at->toIso8601String(), 'mode' => data_get($quote->parcel, '_shipping_plan.mode')])->values()]);
+        return response()->json(['quotes' => collect($quotes)->map(fn (WebsiteShippingRateQuote $quote) => ['id' => $quote->id, 'carrier' => $quote->carrier, 'service' => $quote->service, 'amount_cents' => app(\App\Services\ManagedWebsite\WebsiteShippingPolicyService::class)->quoteCharge($quote), 'currency' => $quote->currency, 'delivery_days' => $quote->delivery_days, 'expires_at' => $quote->expires_at->toIso8601String(), 'mode' => data_get($quote->parcel, '_shipping_plan.mode')])->values()]);
     }
 
     public function shippingWebhook(Request $request, WebsiteCommerceShippingService $shipping): JsonResponse
@@ -652,6 +668,7 @@ class WebsiteCommerceController extends Controller
             'status' => ['required', 'in:draft,active,archived'], 'price' => ['required', 'numeric', 'min:0', 'max:1000000'], 'wholesale_price' => ['nullable', 'numeric', 'min:0', 'max:1000000'], 'compare_at_price' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
             'variant_title' => ['nullable', 'string', 'max:190'], 'sku' => ['nullable', 'string', 'max:120'], 'track_inventory' => ['nullable', 'boolean'], 'inventory_quantity' => ['nullable', 'integer', 'min:0', 'max:1000000'], 'is_available' => ['nullable', 'boolean'],
             'shipping_weight_ounces' => ['nullable', 'integer', 'min:1', 'max:1000000'], 'shipping_length_inches' => ['nullable', 'integer', 'min:1', 'max:1000'], 'shipping_width_inches' => ['nullable', 'integer', 'min:1', 'max:1000'], 'shipping_height_inches' => ['nullable', 'integer', 'min:1', 'max:1000'],
+            'shipping_mode' => ['nullable', 'in:parcel,ltl'],
             'image_url' => ['nullable', 'string', 'max:2048', function (string $attribute, mixed $value, \Closure $fail): void {
                 if (filter_var($value, FILTER_VALIDATE_URL) === false && preg_match('#^/images/[a-z0-9/_~.-]+$#i', (string) $value) !== 1) {
                     $fail('Enter an HTTPS image URL or a hosted image path.');
