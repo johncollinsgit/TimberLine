@@ -101,7 +101,8 @@
       const rank = entry.rank;
       if (rank) rows.push({ document: doc, rank });
     }
-    rows.sort((a, b) => compare(a.rank, b.rank));
+    // Search ranks have four numeric components followed by a lexical stable ID.
+    rows.sort((a, b) => a.rank[0] - b.rank[0] || a.rank[1] - b.rank[1] || a.rank[2] - b.rank[2] || a.rank[3] - b.rank[3] || (a.rank[4] < b.rank[4] ? -1 : a.rank[4] > b.rank[4] ? 1 : 0));
     return rows.map(row => row.document);
   }
   function element(tag, text, className) { const node = document.createElement(tag); if (text != null) node.textContent = text; if (className) node.className = className; return node; }
