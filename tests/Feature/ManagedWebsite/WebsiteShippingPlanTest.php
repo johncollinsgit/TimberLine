@@ -78,6 +78,35 @@ function shippingPlanResponse(array $rates = []): array
     return ['id' => 'shp_pilot', 'mode' => 'test', 'rates' => $rates ?: [['id' => 'rate_pilot', 'carrier' => 'USPS', 'service' => 'GroundAdvantage', 'rate' => '5.25000', 'currency' => 'USD']]];
 }
 
+test('free customer shipping retains the carrier cost in the accepted order plan', function (): void {
+    $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => ['USPS:GroundAdvantage'], 'charge_mode' => 'free', 'states' => ['TX']], $this->actor);
+    $quote = $this->shipping->quote($this->cart, $this->destination)[0];
+    $order = $this->commerce->beginCheckout($this->cart, $this->buyer + ['shipping_rate_quote_id' => $quote->id], 'https://pilot.test/success', 'https://pilot.test/cart')['order'];
+    expect($quote->amount_cents)->toBe(525)->and($order->shipping_cents)->toBe(0)
+        ->and($order->shipping_rate_snapshot['amount_cents'])->toBe(525)->and($order->shipping_rate_snapshot['customer_shipping_cents'])->toBe(0)
+        ->and(data_get($order->shipping_rate_snapshot, 'plan.mode'))->toBe('test');
+});
+
+test('shipping region changes invalidate unpaid quotes and reject excluded destinations before HTTP', function (): void {
+    $quote = $this->shipping->quote($this->cart, $this->destination)[0];
+    $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => ['USPS:GroundAdvantage'], 'charge_mode' => 'calculated', 'states' => ['TX']], $this->actor);
+    expect(fn () => $this->plans->selectedQuote($this->cart, $quote->id, $this->destination))->toThrow(ValidationException::class);
+    expect(fn () => $this->shipping->quote($this->cart, array_replace($this->destination, ['state' => 'NY', 'zip' => '10001'])))->toThrow(ValidationException::class);
+    Http::assertSentCount(1);
+});
+
+test('freight products cannot request a parcel rate or pay through parcel checkout', function (): void {
+    $this->variant->update(['options' => ['shipping_mode' => 'ltl']]);
+    expect(fn () => $this->shipping->quote($this->cart, $this->destination))->toThrow(ValidationException::class, 'freight arrangement');
+    expect(fn () => $this->commerce->beginCheckout($this->cart, $this->buyer, 'https://pilot.test/success', 'https://pilot.test/cart'))->toThrow(ValidationException::class, 'freight arrangement');
+    Http::assertNothingSent();
+});
+
+test('customer-charge policy cannot silently save with every shipping state unchecked', function (): void {
+    expect(fn () => $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => ['USPS:GroundAdvantage'], 'charge_mode' => 'free'], $this->actor))->toThrow(ValidationException::class);
+    expect(data_get($this->site->fresh()->settings, 'shipping.charge_mode'))->toBeNull();
+});
+
 test('carrier request uses the shipment envelope measured contents and package tare', function (): void {
     $quote = $this->shipping->quote($this->cart, $this->destination)[0];
     Http::assertSent(fn ($request) => $request->url() === 'https://api.easypost.com/v2/shipments'

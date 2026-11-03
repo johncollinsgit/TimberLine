@@ -2,6 +2,17 @@
 
 Field web .13 shares the native Field home presentation, materials and nested bottom navigation. iPad uses compact operation rows and a bounded sign-in form. Missing tenant logos use the tenant name. Shared source: mobile PR 64 at 59da1c2; deployment and native store acceptance are tracked separately.
 
+## November 3 · native shipping recovery candidate
+
+Add private printable order invoices/packing slips, state-aware customer shipping
+charges, freight-only variant controls and shipment-status instructions. Retain
+current native packing, label and handoff protections. Existing merchant rollout
+and financial permissions remain required; this note is source evidence only.
+
+## 2026-11-03 — Repeated local search ranking
+
+Unchanged local queries reuse one private rank per document. Source fields, completion/archive state, type and current filters remain live. Phrase requirements retain separate query identities. This reduces repeated 10,000-document ranking allocation without changing ordering or the existing 50 ms p95 release limit.
+
 ## 2026-10-31 — Everbranch Pay customer-linked checkout (source candidate)
 
 Modern Forestry's catalog opens native live-basket review and customer selection.

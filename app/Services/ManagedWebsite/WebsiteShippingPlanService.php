@@ -54,10 +54,12 @@ class WebsiteShippingPlanService
     /** @return array{parcel:array,context:array,origin:array,connection:IntegrationConnection} */
     public function build(WebsiteCart $cart, array $destination): array
     {
+        $destination = $this->address($destination);
         abort_unless($cart->status === 'active', 422, 'This cart is no longer active.');
         $site = TenantSite::query()->forTenantId($cart->tenant_id)->findOrFail($cart->tenant_site_id);
         $connection = $this->connection($cart->tenant_id);
         $policy = (array) data_get($site->settings, 'shipping', []);
+        app(WebsiteShippingPolicyService::class)->buyerCharge($site, $destination['state'], 0);
         abort_unless(in_array($policy['mode'] ?? '', ['test', 'production'], true) && ! empty($policy['services']), 423, 'Review shipping mode and approved carrier services before requesting rates.');
         $origin = WebsiteFulfillmentLocation::query()->forTenantId($cart->tenant_id)->where('tenant_site_id', $site->id)
             ->where('active', true)->orderByDesc('is_default')->orderBy('id')->first();
@@ -104,6 +106,7 @@ class WebsiteShippingPlanService
                 'connection_id' => $connection->id, 'account_fingerprint' => $this->accountFingerprint($connection),
                 'mode' => $policy['mode'], 'services' => array_values($policy['services']), 'currency' => 'usd',
                 'free_shipping_threshold_cents' => (int) data_get($site->publishedSiteVersion?->settings, 'free_shipping_threshold_cents', 0),
+                'customer_policy' => app(WebsiteShippingPolicyService::class)->forSite($site),
             ];
             $context['fingerprint'] = $this->fingerprint($context);
 
