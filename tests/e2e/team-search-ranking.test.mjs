@@ -44,6 +44,43 @@ test('prepared search observes changed source fields and accepts a caller-parsed
   engine.prepare(document); document.body.text = 'Changed evidence';
   assert.equal(engine.search([document], 'evidence')[0], document);
 });
+test('repeated queries still observe live state, type and filter changes', () => {
+  const first = { id: 'task:1', type: 'task', title: 'Oak room', completed: false, projects: ['north'] };
+  const second = { id: 'task:2', type: 'task', title: 'Oak room', completed: false, projects: ['south'] };
+  const docs = [first, second];
+  assert.deepEqual(Array.from(engine.search(docs, 'oak'), x => x.id), ['task:1', 'task:2']);
+  first.completed = true;
+  assert.deepEqual(Array.from(engine.search(docs, 'oak'), x => x.id), ['task:2', 'task:1']);
+  first.projects = ['south'];
+  assert.equal(engine.search(docs, 'oak', { project: 'north' }).length, 0);
+  assert.deepEqual(Array.from(engine.search(docs, 'oak', { state: 'active' }), x => x.id), ['task:2']);
+  first.type = 'command';
+  assert.deepEqual(Array.from(engine.search(docs, '> oak'), x => x.id), ['task:1']);
+  first.type = 'task';
+  assert.equal(engine.search(docs, '> oak').length, 0);
+  second.title = 'Maple room';
+  assert.deepEqual(Array.from(engine.search(docs, 'oak'), x => x.id), ['task:1']);
+});
+test('phrase requirements and public score arrays cannot reuse or alter another query rank', () => {
+  const docs = [{ id: 'task:1', title: 'Copper repair pipe' }, { id: 'task:2', title: 'Copper pipe repair' }];
+  assert.equal(engine.search(docs, 'copper pipe').length, 2);
+  assert.deepEqual(Array.from(engine.search(docs, '"copper pipe"'), x => x.id), ['task:2']);
+  const original = Array.from(engine.search(docs, 'copper pipe'), x => x.id);
+  engine.score(docs[0], 'copper pipe')[0] = -100;
+  assert.deepEqual(Array.from(engine.search(docs, 'copper pipe'), x => x.id), original);
+});
+test('caller result edits and changing sparse-array membership retain fresh results', () => {
+  const first = { id: 'task:1', title: 'Oak room' }, second = { id: 'task:2', title: 'Oak room' };
+  const docs = []; docs[1] = second; docs[3] = first;
+  engine.search(docs, 'oak').reverse().pop();
+  assert.deepEqual(Array.from(engine.search(docs, 'oak'), x => x.id), ['task:1', 'task:2']);
+  delete docs[3];
+  assert.deepEqual(Array.from(engine.search(docs, 'oak'), x => x.id), ['task:2']);
+  docs[0] = { id: 'task:2', title: 'Maple room' };
+  assert.equal(engine.search(docs, 'oak').length, 0);
+  docs[0].title = 'Oak room';
+  assert.equal(engine.search(docs, 'oak')[0], docs[0]);
+});
 test('10,000-document local index ranks useful results within 50ms p95', () => {
   const documents = Array.from({ length: 10000 }, (_, i) => ({ id: 'task:' + i, identifier: 'T' + i, type: 'task', title: 'Campus maintenance ' + i, body: 'Facilities inspection notes for Avery Hall' }));
   const durations = [];

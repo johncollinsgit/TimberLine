@@ -1,3 +1,7 @@
+## 2026-11-03 — Repeated local search ranking
+
+Unchanged local queries reuse one private rank per document. Source fields, completion/archive state, type and current filters remain live. Phrase requirements retain separate query identities. This reduces repeated 10,000-document ranking allocation without changing ordering or the existing 50 ms p95 release limit.
+
 ## 2026-10-31 — Everbranch Pay customer-linked checkout (source candidate)
 
 Modern Forestry's catalog opens native live-basket review and customer selection.
