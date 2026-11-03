@@ -69,6 +69,18 @@ test('phrase requirements and public score arrays cannot reuse or alter another 
   engine.score(docs[0], 'copper pipe')[0] = -100;
   assert.deepEqual(Array.from(engine.search(docs, 'copper pipe'), x => x.id), original);
 });
+test('caller result edits and changing sparse-array membership retain fresh results', () => {
+  const first = { id: 'task:1', title: 'Oak room' }, second = { id: 'task:2', title: 'Oak room' };
+  const docs = []; docs[1] = second; docs[3] = first;
+  engine.search(docs, 'oak').reverse().pop();
+  assert.deepEqual(Array.from(engine.search(docs, 'oak'), x => x.id), ['task:1', 'task:2']);
+  delete docs[3];
+  assert.deepEqual(Array.from(engine.search(docs, 'oak'), x => x.id), ['task:2']);
+  docs[0] = { id: 'task:2', title: 'Maple room' };
+  assert.equal(engine.search(docs, 'oak').length, 0);
+  docs[0].title = 'Oak room';
+  assert.equal(engine.search(docs, 'oak')[0], docs[0]);
+});
 test('10,000-document local index ranks useful results within 50ms p95', () => {
   const documents = Array.from({ length: 10000 }, (_, i) => ({ id: 'task:' + i, identifier: 'T' + i, type: 'task', title: 'Campus maintenance ' + i, body: 'Facilities inspection notes for Avery Hall' }));
   const durations = [];

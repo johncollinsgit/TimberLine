@@ -81,8 +81,11 @@
   const compare = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1; } return 0; };
   const labelFor = value => String(value || '').replace(/[_-]/g, ' ').replace(/^./, letter => letter.toUpperCase());
   const ranked = new WeakMap();
+  const previousSearch = new WeakMap();
   function search(documents, input, filters = {}) {
     const query = parse(input), key = JSON.stringify(query), seen = new Set(), rows = [];
+    const previous = previousSearch.get(documents);
+    let unchanged = Boolean(previous);
     for (let i = 0; i < documents.length; i++) {
       if (!(i in documents)) continue;
       const doc = documents[i];
@@ -99,11 +102,20 @@
         ranked.set(doc, entry);
       }
       const rank = entry.rank;
-      if (rank) rows.push({ document: doc, rank });
+      if (rank) {
+        const prior = previous?.input[rows.length];
+        if (prior && prior.document === doc && prior.entry === entry) rows.push(prior);
+        else { unchanged = false; rows.push({ document: doc, entry, rank }); }
+      }
     }
+    // Reuse ordering only after scanning every current document and filter.
+    // Return a fresh array so callers cannot mutate the private cached ordering.
+    if (unchanged && rows.length === previous.input.length) return previous.sorted.map(row => row.document);
+    const sorted = rows.slice();
     // Search ranks have four numeric components followed by a lexical stable ID.
-    rows.sort((a, b) => a.rank[0] - b.rank[0] || a.rank[1] - b.rank[1] || a.rank[2] - b.rank[2] || a.rank[3] - b.rank[3] || (a.rank[4] < b.rank[4] ? -1 : a.rank[4] > b.rank[4] ? 1 : 0));
-    return rows.map(row => row.document);
+    sorted.sort((a, b) => a.rank[0] - b.rank[0] || a.rank[1] - b.rank[1] || a.rank[2] - b.rank[2] || a.rank[3] - b.rank[3] || (a.rank[4] < b.rank[4] ? -1 : a.rank[4] > b.rank[4] ? 1 : 0));
+    previousSearch.set(documents, { input: rows, sorted });
+    return sorted.map(row => row.document);
   }
   function element(tag, text, className) { const node = document.createElement(tag); if (text != null) node.textContent = text; if (className) node.className = className; return node; }
   function highlight(node, text, input) {
