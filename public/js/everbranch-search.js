@@ -1,7 +1,8 @@
 /* Everbranch search v1. Shared by Teams and the standalone campus demo. No dependencies. */
 (function (global) {
   'use strict';
-  const normalize = value => String(value ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+  const textValue = value => value == null ? '' : typeof value === 'string' ? value : String(value);
+  const normalize = value => textValue(value).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
   const words = value => normalize(value).split(' ').filter(Boolean);
   function parse(value) {
     const raw = String(value || '').trim().slice(0, 500), commandsOnly = raw.startsWith('>');
@@ -28,7 +29,7 @@
   function prepare(document) {
     // Compare source strings before allocating a combined signature on every keystroke.
     // String conversion also observes in-place changes to non-string input values.
-    const sourceTitle = String(document.title ?? ''), sourceBody = String(document.body ?? ''), sourceIdentifier = String(document.identifier ?? ''), sourceId = String(document.id ?? ''), sourceUpdated = String(document.updated_at ?? ''), effectiveId = String(document.identifier || document.id || '');
+    const sourceTitle = textValue(document.title), sourceBody = textValue(document.body), sourceIdentifier = textValue(document.identifier), sourceId = textValue(document.id), sourceUpdated = textValue(document.updated_at), effectiveId = textValue(document.identifier || document.id || '');
     let cached = prepared.get(document);
     if (!cached || cached.sourceTitle !== sourceTitle || cached.sourceBody !== sourceBody || cached.sourceIdentifier !== sourceIdentifier || cached.sourceId !== sourceId || cached.sourceUpdated !== sourceUpdated || cached.effectiveId !== effectiveId) {
       const title = normalize(sourceTitle), body = normalize(sourceBody), id = normalize(document.identifier || document.id);
@@ -48,7 +49,10 @@
   function score(document, input) {
     const query = typeof input === 'string' ? parse(input) : input;
     if (query.commandsOnly && document.type !== 'command') return null;
-    const { title, compactId, combined, titleWords, allWords, idWords, updated } = prepare(document);
+    return scorePrepared(document, query, prepare(document));
+  }
+  function scorePrepared(document, query, fields) {
+    const { title, compactId, combined, titleWords, allWords, idWords, updated } = fields;
     const compactQuery = query.compactText ?? query.text.replace(/ /g, '');
     if (compactQuery && compactId === compactQuery) return [0, 0, document.completed || document.archived ? 1 : 0, updated, String(document.id)];
     for (let i = 0; i < query.phrases.length; i++) {
@@ -77,19 +81,42 @@
   }
   const compare = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1; } return 0; };
   const labelFor = value => String(value || '').replace(/[_-]/g, ' ').replace(/^./, letter => letter.toUpperCase());
+  const ranked = new WeakMap();
+  const previousSearch = new WeakMap();
   function search(documents, input, filters = {}) {
-    const query = parse(input), seen = new Set(), rows = [];
+    const query = parse(input), key = JSON.stringify(query), seen = new Set(), rows = [];
+    const previous = previousSearch.get(documents);
+    let unchanged = Boolean(previous);
     for (let i = 0; i < documents.length; i++) {
       if (!(i in documents)) continue;
       const doc = documents[i];
       if (seen.has(doc.id)) continue;
       seen.add(doc.id);
       if ((filters.type && doc.type !== filters.type) || (filters.project && !(doc.projects || []).includes(filters.project)) || (filters.person && !(doc.people || []).includes(filters.person)) || (filters.state === 'active' && (doc.completed || doc.archived)) || (filters.state === 'closed' && !(doc.completed || doc.archived))) continue;
-      const rank = score(doc, query);
-      if (rank) rows.push({ document: doc, rank });
+      if (query.commandsOnly && doc.type !== 'command') continue;
+      const fields = prepare(doc), closed = Boolean(doc.completed || doc.archived);
+      let entry = ranked.get(doc);
+      // One private rank per document avoids repeated allocations for an unchanged
+      // query. Source conversion, state/type and every filter remain checked live.
+      if (!entry || entry.fields !== fields || entry.key !== key || entry.type !== doc.type || entry.closed !== closed) {
+        entry = { fields, key, type: doc.type, closed, rank: scorePrepared(doc, query, fields) };
+        ranked.set(doc, entry);
+      }
+      const rank = entry.rank;
+      if (rank) {
+        const prior = previous?.input[rows.length];
+        if (prior && prior.document === doc && prior.entry === entry) rows.push(prior);
+        else { unchanged = false; rows.push({ document: doc, entry, rank }); }
+      }
     }
-    rows.sort((a, b) => compare(a.rank, b.rank));
-    return rows.map(row => row.document);
+    // Reuse ordering only after scanning every current document and filter.
+    // Return a fresh array so callers cannot mutate the private cached ordering.
+    if (unchanged && rows.length === previous.input.length) return previous.sorted.map(row => row.document);
+    const sorted = rows.slice();
+    // Search ranks have four numeric components followed by a lexical stable ID.
+    sorted.sort((a, b) => a.rank[0] - b.rank[0] || a.rank[1] - b.rank[1] || a.rank[2] - b.rank[2] || a.rank[3] - b.rank[3] || (a.rank[4] < b.rank[4] ? -1 : a.rank[4] > b.rank[4] ? 1 : 0));
+    previousSearch.set(documents, { input: rows, sorted });
+    return sorted.map(row => row.document);
   }
   function element(tag, text, className) { const node = document.createElement(tag); if (text != null) node.textContent = text; if (className) node.className = className; return node; }
   function highlight(node, text, input) {
