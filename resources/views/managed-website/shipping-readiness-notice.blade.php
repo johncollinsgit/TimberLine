@@ -1,3 +1,6 @@
+@if($requiresFreight ?? false)
+    <div role="status" style="max-width:1100px;margin:24px auto;padding:16px;border:1px solid #e5ca8b;border-radius:12px;background:#fff9eb;color:#654715"><strong>This cart needs a freight arrangement.</strong><p>Contact the store for delivery or choose pickup. Parcel shipping is unavailable for this cart.</p></div>
+@endif
 @if(($missingShippingWeights ?? collect())->isNotEmpty())
     <div role="status" style="max-width:1100px;margin:24px auto;padding:16px;border:1px solid #e5ca8b;border-radius:12px;background:#fff9eb;color:#654715">
         <strong>Some items are not available for shipping yet.</strong>

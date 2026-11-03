@@ -65,6 +65,11 @@ class WebsiteShippingReadinessService
 
     public function assertCartCanShip(WebsiteCart $cart): void
     {
+        foreach ($cart->loadMissing('items.variant.product')->items as $item) {
+            if ($item->variant) {
+                $this->assertFreight($item->variant);
+            }
+        }
         $missing = $this->missingCartWeights($cart);
         if ($missing->isNotEmpty()) {
             $this->unavailable($missing->map(fn ($item) => $this->variantLabel($item->variant))->unique()->implode(', '));
@@ -73,8 +78,16 @@ class WebsiteShippingReadinessService
 
     public function assertVariantCanShip(WebsiteProductVariant $variant): void
     {
+        $this->assertFreight($variant);
         if ($variant->product?->product_type === 'physical' && (int) $variant->shipping_weight_ounces <= 0) {
             $this->unavailable($this->variantLabel($variant));
+        }
+    }
+
+    private function assertFreight(WebsiteProductVariant $variant): void
+    {
+        if ($variant->product?->product_type === 'physical' && data_get($variant->options, 'shipping_mode', 'parcel') !== 'parcel') {
+            throw ValidationException::withMessages(['cart' => 'This item requires a freight arrangement. Contact the store or choose pickup; parcel shipping cannot be used.']);
         }
     }
 

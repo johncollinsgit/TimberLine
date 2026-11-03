@@ -109,6 +109,12 @@ class WebsiteCommerceService
                 $variant->{$field} = $product->product_type === 'physical' && filled($data[$field]) ? max(1, (int) $data[$field]) : null;
             }
         }
+        if (array_key_exists('shipping_mode', $data)) {
+            if (! in_array($data['shipping_mode'], ['parcel', 'ltl'], true)) {
+                throw ValidationException::withMessages(['shipping_mode' => 'Choose parcel shipping or freight.']);
+            }
+            $variant->options = array_merge((array) $variant->options, ['shipping_mode' => $data['shipping_mode']]);
+        }
         $wasNew = ! $variant->exists;
         $before = $variant->inventory_quantity;
         $variant->save();

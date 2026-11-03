@@ -1,3 +1,10 @@
+## November 3 · native shipping recovery candidate
+
+Add private printable order invoices/packing slips, state-aware customer shipping
+charges, freight-only variant controls and shipment-status instructions. Retain
+current native packing, label and handoff protections. Existing merchant rollout
+and financial permissions remain required; this note is source evidence only.
+
 ## 2026-11-03 — Repeated local search ranking
 
 Unchanged local queries reuse one private rank per document. Source fields, completion/archive state, type and current filters remain live. Phrase requirements retain separate query identities. This reduces repeated 10,000-document ranking allocation without changing ordering or the existing 50 ms p95 release limit.

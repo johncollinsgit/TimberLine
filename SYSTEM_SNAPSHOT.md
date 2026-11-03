@@ -10,6 +10,16 @@ remain; native Wallet collection also defaults off. Live acceptance, merchant
 setup and protected deployment are distinct from source tests. See
 `docs/operations/retail-shop-pay-wallet.md`.
 
+## Recovered native shipping controls (November 3; source candidate)
+
+Native order invoices and packing slips can be printed privately; freight-only
+variants block parcel checkout. Owners/admins can choose customer-paid or free
+shipping and allowed US states while retaining the existing carrier environment,
+approved services, packing rules and durable label/refund lifecycle. Free buyer
+shipping preserves the actual postage cost in the accepted plan. Existing paid
+orders retain their original terms. No carrier or checkout rollout is activated.
+See `docs/operations/website-commerce-shipping-operations.md`.
+
 ## Everbranch Pay checkout and rewards (November 1; source candidate)
 
 Tenant administrators can draft and review checkout rules, customer enrollment
