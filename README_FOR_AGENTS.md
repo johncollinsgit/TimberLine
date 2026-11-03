@@ -1,3 +1,10 @@
+## Shared PC/Mac workflow (2026-11-03)
+
+Use `docs/operations/shared-development-workflow.md` and the shared work-log index
+before starting or handing off work. The read-only
+`node scripts/dev/workspace.mjs status` and `handoff` commands report exact source
+state; they do not sync private files, claim ownership, push or deploy.
+
 ## Add-on discount settings (November 1; source candidate)
 
 Seller admins can configure `allow_additional_discounts` per add-on in the

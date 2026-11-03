@@ -1,3 +1,11 @@
+## Shared PC/Mac workflow (2026-11-03)
+
+The cross-device operating procedure is `docs/operations/shared-development-workflow.md`;
+`shared-work-log.md` indexes existing tasks. One writer owns each branch and the
+task record carries the exact handoff. Existing GitHub/Forge gates and separate
+Enterprise activation boundaries remain. Local runtime/configuration and private
+evidence are machine-specific; source sync is not a backup or a chat-memory sync.
+
 ## Everbranch Pay checkout and rewards (November 1; source candidate)
 
 Tenant administrators can draft and review checkout rules, customer enrollment

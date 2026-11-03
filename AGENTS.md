@@ -1,3 +1,13 @@
+## Shared PC/Mac workflow (2026-11-03)
+
+- Before editing, read `docs/operations/shared-development-workflow.md` and
+  `docs/operations/shared-work-log.md`, then inspect the existing task/PR and
+  current main for work already delivered. Use one active writer per task branch;
+  hand off exact branch/head, validation, open findings and next action.
+- Preserve dirty and Mac-only work. Reuse dependencies and focused checks;
+  keep existing GitHub/Forge release gates. Separate source, deployment and
+  feature/provider activation. Keep private evidence and secrets out of public notes.
+
 ## Uncharged basket cancellation (November 1 UTC; source candidate)
 
 Cancel of an uncollected quote clears its basket and customer selection, retains other
