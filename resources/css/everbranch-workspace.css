@@ -196,7 +196,14 @@ body.mf-app-shell[data-eb-workspace], body.mf-app-shell[data-eb-landlord], body.
 
 .eb-auth-theme { background: var(--eb-page-background); }
 .eb-auth-theme .fb-auth-card { background: var(--eb-surface); border: 1px solid var(--eb-border); border-radius: 18px; }
-.eb-auth-theme .fb-auth-brand-panel { background: linear-gradient(140deg, #214a36, #172d23); }
+.eb-auth-theme .fb-auth-brand-panel {
+  background: linear-gradient(140deg, #214a36, #172d23);
+  color: #fffef9;
+}
+.eb-auth-theme .fb-auth-brand-panel :is(.fb-auth-brand, .fb-auth-brand-copy h1) { color: #fffef9; }
+.eb-auth-theme .fb-auth-brand-panel :is(.fb-auth-brand-copy p, .fb-auth-brand-foot) { color: #e3ecd6; }
+.eb-auth-theme .fb-auth-brand-panel .fb-auth-eyebrow { color: #dce9b4; }
+.eb-auth-theme .fb-auth-brand-panel .fb-auth-brand-lockup { filter: brightness(0) invert(1); }
 .eb-auth-theme :is(.fb-auth-brand-copy h1, .fb-auth-title) { font-family: var(--eb-font-ui); }
 .eb-auth-theme :is(.fb-auth-subtitle, .fb-auth-support) { color: var(--eb-text-secondary); font-size: 15px; }
 .eb-auth-theme .fb-auth-submit { background: var(--eb-brand); color: #fffef9; }
