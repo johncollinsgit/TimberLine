@@ -120,9 +120,9 @@
 .tr-decision-baseline p{font-size:12px;line-height:1.7;color:#dcebe3;margin:6px 0 0}
 .tr-decision-baseline details{border-left:1px solid #719c8870;padding-left:26px;align-self:center}
 .tr-decision-baseline summary{cursor:pointer;font-size:14px;font-weight:650;padding:8px 0;color:#fff}
-.tr-decision-baseline dl{margin:8px 0 14px}.tr-decision-baseline dl>div{display:grid;grid-template-columns:1fr auto;gap:6px 16px;padding:10px 0;border-bottom:1px solid #719c8855;font-size:12px}
+.tr-decision-baseline dl{margin:8px 0 14px}.tr-decision-baseline dl>div{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:6px 0;border-bottom:1px solid #719c8855;font-size:12px}
 .tr-decision-baseline dt{color:#e1eee7}.tr-decision-baseline dd{margin:0;color:#fff;font-weight:650;font-variant-numeric:tabular-nums}
-.tr-decision-baseline dt small{display:block;font-size:10px;color:#c1dbce;margin-top:3px}.tr-decision-baseline dl p{grid-column:1/-1;font-size:11px}
+.tr-decision-baseline dt small{display:inline;font-size:10px;color:#c1dbce;margin-left:7px}.tr-decision-baseline dl p{grid-column:1/-1;font-size:11px}
 .tr-app .tr-decision-baseline button{background:#fff;color:#174b37;border-color:#fff;font-size:12px}
 .tr-decision-month-heading{align-items:center;margin-bottom:16px}.tr-decision-month-heading h3{font-size:19px;color:#243c35;margin:0 0 5px}.tr-decision-month-heading p{font-size:11px;color:#647a70;margin:0;line-height:1.5}
 .tr-decision-month-heading label{display:flex;align-items:center;gap:8px;font-size:12px;color:#425e51}.tr-decision-month-heading select{max-width:190px;padding:8px 10px;border:1px solid #d2e0d9;border-radius:7px;background:#fff;color:#244638}
@@ -147,3 +147,5 @@
 .tr-decision-capacity{grid-column:1/-1;background:#f3f7f4;border:1px solid #e0e9e3;border-radius:8px;padding:12px}.tr-decision-capacity>span{font-size:11px;color:#62776a}.tr-decision-capacity>strong{display:block;font-size:20px;margin-top:6px}.tr-decision-capacity li{font-size:11px;line-height:1.6;color:#667b6d}.tr-decision-business>button{justify-self:start;font-size:11px;grid-column:1/-1;margin-top:6px}
 .tr-decision-capacity dl{font-size:11px;line-height:1.7;margin:10px 0}.tr-decision-capacity dl>div{display:flex;justify-content:space-between;gap:14px}.tr-decision-capacity dt{color:#62776a}.tr-decision-capacity dd{margin:0;color:#345442;font-variant-numeric:tabular-nums}
 .tr-account-picker{display:flex;align-items:center;gap:7px;font-size:12px;color:#526e5e}.tr-account-picker select{max-width:210px;min-height:37px;border:1px solid #d8e3dc;border-radius:8px;padding:7px 10px;background:white;color:#284c38;font:inherit}@media(max-width:700px){.tr-account-picker select{max-width:180px}.tr-account-picker{flex-shrink:0}}
+
+.tr-decision-baseline dl>div.tr-cost-total{border-bottom:0;border-top:1px solid #a1c5b6;margin-top:4px;padding-top:9px;font-weight:700}.tr-decision-baseline .tr-cost-note{font-size:10px;line-height:1.45;margin:0 0 12px}.tr-decision-baseline dd{white-space:nowrap}
