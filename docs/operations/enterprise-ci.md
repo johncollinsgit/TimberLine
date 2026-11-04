@@ -86,9 +86,11 @@ measurements justify its maintenance; Forge's existing atomic build/rollback is
 unchanged. Rollback is reverting this workflow/helper change through review and
 normal checks, not modifying a live release or required-check settings.
 
-The primary PHP 8.4 and isolated Enterprise workflows verify the known Ubuntu
-`mirror+file:/etc/apt/apt-mirrors.txt` indirection before PHP setup and remove only
-its exact Azure entry. Official HTTPS archive/security entries, source fields,
+The primary PHP 8.4 and isolated Enterprise workflows share
+`scripts/ci/ubuntu-official-mirrors.py`. It preserves folded Deb822 source fields,
+accepts already-direct official HTTPS archives, and verifies the known Ubuntu
+`mirror+file:/etc/apt/apt-mirrors.txt` indirection before removing only its exact
+Azure entry. Official HTTPS archive/security entries, source fields,
 keyring references and unrelated repositories remain unchanged. Unsupported
 formats fail before modification. This changes the observed slow download path;
 it does not cache OS packages or guarantee speed. Preserve every test, browser

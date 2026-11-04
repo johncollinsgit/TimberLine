@@ -28,6 +28,12 @@ The event screens and saves require an internet connection.
 `TEAM_OPERATIONS_ASANA_WRITE_ENABLED` defaults false. Enable only after protected
 release and runtime OAuth acceptance. Each user must explicitly authorize
 `tasks:write` through their own Events connection; read access alone cannot save.
+Register the eight read scopes in `AsanaReadProvider::SCOPES` and the optional
+`tasks:write` scope in the Asana app console. Section reads use `projects:read`;
+Asana does not register a `sections:read` scope. Both Teams authorization entry
+points use the same supported read set. Register the production callbacks
+`https://app.theeverbranch.com/team/asana/callback` and
+`https://app.theeverbranch.com/team/integrations/asana/callback`.
 Existing send and event-creation flags stay independent. Read-only local snapshot
 connections always reject writes, even when other flags are enabled.
 

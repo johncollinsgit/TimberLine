@@ -38,6 +38,22 @@ test('Asana status is per viewer and encrypted credentials never reach JSON', fu
     Http::assertNothingSent();
 });
 
+test('Asana authorization uses registered read scopes and separately requests reviewed task writes', function (): void {
+    [$tenant, $owner] = teamWorkspace();
+    $readScopes = ['projects:read', 'tasks:read', 'users:read', 'workspaces:read', 'stories:read', 'attachments:read', 'custom_fields:read', 'tags:read'];
+    $url = $this->actingAs($owner)->postJson(route('team.asana.connect', ['tenant' => $tenant->slug]))->assertOk()->json('url');
+    parse_str(parse_url($url, PHP_URL_QUERY), $read);
+    expect(explode(' ', $read['scope']))->toEqualCanonicalizing($readScopes)
+        ->and($read['code_challenge_method'])->toBe('S256');
+    config(['team_operations.enabled' => true]);
+    $area = \App\Models\TeamArea::create(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'slug' => 'events', 'name' => 'Events', 'profile' => 'events', 'settings' => []]);
+    $url = $this->postJson(route('team.operations.connect', ['tenant' => $tenant->slug, 'area' => $area->id, 'provider' => 'asana']), ['send' => true])->assertOk()->json('url');
+    parse_str(parse_url($url, PHP_URL_QUERY), $edit);
+    expect(explode(' ', $edit['scope']))->toEqualCanonicalizing([...$readScopes, 'tasks:write'])
+        ->and($edit['code_challenge_method'])->toBe('S256');
+    Http::assertNothingSent();
+});
+
 test('Asana selection verifies current source access and source tasks never become native copies', function (): void {
     [$tenant, $owner] = teamWorkspace();
     asanaFixtureConnection($tenant, $owner, []);

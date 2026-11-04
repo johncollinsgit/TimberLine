@@ -1,5 +1,8 @@
 ## Events My Tasks and phone web app (November 4; source candidate)
 
+Request only registered Asana scopes. Sections use `projects:read`, not
+`sections:read`; keep optional `tasks:write` separate from the eight read scopes.
+
 Keep Asana authoritative: per-user selected-source reads and only explicitly
 reviewed title/date/completion write-through behind `asana_write_enabled` and
 OAuth `tasks:write`. Preserve encrypted attempts, generation/access checks,

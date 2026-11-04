@@ -1,5 +1,9 @@
 ## Events My Tasks and phone web app (November 4; source candidate)
 
+OAuth compatibility correction: section reads use Asana's registered
+`projects:read` scope. The unsupported `sections:read` request is removed from
+both Teams connection entry points; optional `tasks:write` remains separate.
+
 Premium Teams Events now has identity-scoped Asana My Tasks, original event notes,
 paged checklist/comments/attachment links and separately gated reviewed task
 write-through. Asana remains authoritative. The tenant-bound installable web app
