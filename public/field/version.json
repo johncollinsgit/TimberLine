@@ -1,9 +1,9 @@
 {
-  "version": "2.3.30-web.13",
-  "build": "a6960ddfc1a3233d",
-  "worker": "/field/sw-a6960ddfc1a3233d.js",
+  "version": "2.3.30-web.14",
+  "build": "ab588eb90bd1238a",
+  "worker": "/field/sw-ab588eb90bd1238a.js",
   "baseline": "Everbranch Field Showcase 2.3.29 + workspace assistant",
-  "built_at": "2026-11-03T22:17:46.228Z",
-  "source_commit": "59da1c2b9ca99237dba227b0dd970499792f0a3d",
-  "native_candidate": "2.3.30 (46)"
+  "built_at": "2026-11-04T00:13:43.876Z",
+  "source_commit": "04b5705817eaa4dfd4f3a156bfa4cc376936e7e8",
+  "native_candidate": "2.3.30 (47)"
 }

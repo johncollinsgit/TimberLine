@@ -1,3 +1,7 @@
+## 2026-11-03 — Field keyboard dismissal
+
+Software keyboards have an explicit down-arrow control and downward page swipe. Drafts remain intact. Field web .14 shares mobile build 47 source `04b5705817eaa4dfd4f3a156bfa4cc376936e7e8`.
+
 ## 2026-11-03 — Field tablet/native presentation candidate
 
 Field web .13 shares the native Field home presentation, materials and nested bottom navigation. iPad uses compact operation rows and a bounded sign-in form. Missing tenant logos use the tenant name. Shared source: mobile PR 64 at 59da1c2; deployment and native store acceptance are tracked separately.
