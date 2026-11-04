@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
 /** Asana owns these tasks. This service never copies them into the native graph. */
 class EventTasks
 {
-    public const FIELDS = 'gid,name,notes,completed,due_on,start_on,modified_at,assignee.gid,assignee.name,workspace.gid,memberships.project.gid,memberships.project.name,permalink_url,num_subtasks,parent.gid';
+    public const FIELDS = 'gid,name,notes,completed,due_on,start_on,due_at,start_at,modified_at,assignee.gid,assignee.name,workspace.gid,memberships.project.gid,memberships.project.name,permalink_url,num_subtasks,parent.gid';
 
     public function __construct(private OperationsAccess $access, private OperationsProviders $providers) {}
 
@@ -102,7 +102,7 @@ class EventTasks
     private function present(TeamProviderConnection $c, array $task): array
     {
         return ['gid' => (string) $task['gid'], 'name' => $task['name'] ?? '', 'notes' => $task['notes'] ?? '', 'completed' => (bool) ($task['completed'] ?? false),
-            'due_on' => $task['due_on'] ?? null, 'start_on' => $task['start_on'] ?? null, 'assignee' => $task['assignee'] ?? null,
+            'due_on' => $task['due_on'] ?? null, 'start_on' => $task['start_on'] ?? null, 'due_at' => $task['due_at'] ?? null, 'start_at' => $task['start_at'] ?? null, 'assignee' => $task['assignee'] ?? null,
             'modified_at' => $task['modified_at'] ?? null, 'source_url' => 'https://app.asana.com/0/'.($this->project($c, $task) ?? $task['_verified_parent_project'] ?? '0').'/'.$task['gid'],
             'connection_id' => $c->id, 'parent_id' => $task['_verified_parent'] ?? null, 'version' => $this->version($task), 'can_write' => $this->writable($c),
             'source_mode' => ($c->settings['read_only_snapshot'] ?? false) ? 'snapshot' : 'live'];
@@ -113,7 +113,7 @@ class EventTasks
         $projects = collect($task['memberships'] ?? [])->pluck('project.gid')->map(fn ($id) => (string) $id)->sort()->values()->all();
 
         return hash('sha256', json_encode([(string) $task['gid'], $task['modified_at'] ?? null, $task['name'] ?? '', $task['notes'] ?? '',
-            $task['due_on'] ?? null, $task['start_on'] ?? null, (bool) ($task['completed'] ?? false), $task['assignee']['gid'] ?? null,
+            $task['due_on'] ?? null, $task['start_on'] ?? null, $task['due_at'] ?? null, $task['start_at'] ?? null, (bool) ($task['completed'] ?? false), $task['assignee']['gid'] ?? null,
             $task['workspace']['gid'] ?? null, $task['parent']['gid'] ?? null, $projects], JSON_THROW_ON_ERROR));
     }
 
@@ -174,6 +174,7 @@ class EventTasks
         }
         $task = $this->read($c, $input['task_id'], $input['parent_id'] ?? null);
         abort_unless(hash_equals($this->present($c, $task)['version'], $input['version']), 409, 'The Asana task changed. Refresh and review the latest version.');
+        abort_if((! empty($task['due_at']) || ! empty($task['start_at'])) && array_intersect(array_keys($changes), ['due_on', 'start_on']), 422, 'Edit timed schedules in Asana to preserve their times. Titles and completion can still be changed here.');
         abort_if(TeamOperationAttempt::where(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'area_id' => $area->id, 'connection_id' => $c->id, 'kind' => 'asana.update'])->whereIn('status', ['executing', 'unknown'])->get()->contains(fn ($a) => ($a->payload['task_id'] ?? '') === $input['task_id']), 409, 'A previous save needs review in Asana before another change.');
         if (isset($changes['start_on'])) {
             abort_unless(array_key_exists('due_on', $changes), 422, 'Review the start and due date together.');

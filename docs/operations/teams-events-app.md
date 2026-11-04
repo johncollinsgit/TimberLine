@@ -33,7 +33,9 @@ connections always reject writes, even when other flags are enabled.
 
 The first slice edits only title, start/due dates and completion, including
 verified checklist tasks. A durable encrypted `TeamOperationAttempt` holds the
-original values, source version and reviewed changes. A second explicit action
+original values, source version and reviewed changes. Timed start/due schedules
+must be edited in Asana; date-only changes cannot silently discard their times.
+A second explicit action
 dispatches only those fields. Task/workspace/project access, role, grant and
 connection generation are checked again. Source freshness is checked before
 preparation and dispatch. A shared cache lock serializes this tenant's saves for
@@ -74,7 +76,7 @@ References: [Asana task update](https://developers.asana.com/reference/updatetas
 [Apple web app installation](https://support.apple.com/guide/iphone/open-as-web-app-iphea86e5236/ios),
 [Chrome Android web apps](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=en).
 
-Local validation: 265 tests passed (2,646 assertions); the opt-in 10,000-document
+Local validation: 266 tests passed (2,655 assertions); the opt-in 10,000-document
 latency benchmark was skipped. This includes all Team, profile and both campus
 demo suites. Both Vite bundles and TypeScript/build checks passed. Browser checks
 cover the assigned event, its seven checklist items, six comments and five

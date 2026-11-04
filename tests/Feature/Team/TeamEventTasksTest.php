@@ -178,6 +178,16 @@ test('event area viewers can read their source but cannot prepare changes', func
     Http::assertNotSent(fn ($r) => $r->method() === 'PUT');
 });
 
+test('event date-only edits cannot discard an existing timed schedule', function () {
+    $this->task['due_at'] = '2026-11-06T17:00:00Z';
+    eventTaskFake($this);
+    $this->getJson($this->detail)->assertOk()->assertJsonPath('due_at', $this->task['due_at']);
+    eventTaskPrepare($this, ['due_on' => '2026-11-07'])->assertUnprocessable();
+    $id = eventTaskPrepare($this)->assertOk()->json('id');
+    eventTaskDispatch($this, $id)->assertOk()->assertJsonPath('status', 'succeeded');
+    Http::assertSent(fn ($request) => $request->method() === 'PUT' && $request['data'] === ['completed' => true]);
+});
+
 test('installable app stays tenant bound and never caches private task responses', function () {
     $this->get('/teams/manifest.webmanifest?tenant='.$this->tenant->slug)->assertOk()->assertJsonPath('start_url', '/teams/app?app=events&tenant='.$this->tenant->slug);
     $this->get('/teams/app?app=events&tenant='.$this->tenant->slug)->assertOk()->assertSee('Install Teams')->assertSee('apple-mobile-web-app-capable');

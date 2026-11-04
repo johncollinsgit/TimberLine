@@ -45,6 +45,7 @@ export function installEventTasks({ api, el, button, field, dialog, section, not
     body.replaceChildren();
     body.append(el('p', task.source_mode === 'snapshot' ? 'Saved snapshot · read only' : 'Asana is the source of truth', 'event-source'));
     body.append(el('p', [task.assignee?.name || 'Unassigned', task.start_on ? when(task.start_on) + ' → ' + when(task.due_on) : when(task.due_on), task.completed ? 'Completed' : 'Open'].join(' · ')), link('Open in Asana', task.source_url));
+    if (task.start_at || task.due_at) note([task.start_at ? 'Starts: ' + new Date(task.start_at).toLocaleString() : '', task.due_at ? 'Due: ' + new Date(task.due_at).toLocaleString() : ''].filter(Boolean).join(' · '), body);
     if (task.can_write) body.append(button('Edit task in Teams', () => edit(task), 'primary'));
     const highlights = sourceHighlights(task.notes); if (highlights.length) { const summary = section('Event essentials · from original notes', body), grid = el('dl', '', 'event-essentials'); for (const line of highlights) { const cell = el('div'), split = line.indexOf(':'); cell.append(el('dt', line.slice(0, split)), el('dd', line.slice(split + 1).trim())); grid.append(cell); } summary.append(grid); }
     const tabs = el('div', '', 'event-detail-tabs'), related = el('div'); body.append(tabs, related);
@@ -97,6 +98,7 @@ export function installEventTasks({ api, el, button, field, dialog, section, not
     note('Only the fields you change will be sent to Asana. Original notes and attachments stay untouched.', form);
     const title = field(form, 'name', 'Task title', task.name); title.required = true;
     const start = field(form, 'start_on', 'Start date', task.start_on || '', 'date'), due = field(form, 'due_on', 'Due date', task.due_on || '', 'date');
+    if (task.start_at || task.due_at) { start.disabled = due.disabled = true; note('This task has a scheduled time. Edit its dates in Asana to preserve the time.', form); }
     const complete = field(form, 'completed', 'Status', task.completed ? 'yes' : 'no', 'text', [{ id: 'no', name: 'Open' }, { id: 'yes', name: 'Completed' }]);
     const preview = button('Review changes', () => {}); preview.type = 'submit'; form.append(preview);
     let requestId = crypto.randomUUID(), busy = false;
@@ -113,7 +115,11 @@ export function installEventTasks({ api, el, button, field, dialog, section, not
         const result = await api('/events/asana/changes', { method: 'POST', body: { connection_id: task.connection_id, task_id: task.gid, parent_id: task.parent_id, version: task.version, request_id: requestId, changes } });
         if (!body.isConnected) return;
         const reviewed = section('Changes to save in Asana', body);
-        for (const [key, value] of Object.entries(changes)) reviewed.append(el('p', key.replaceAll('_', ' ') + ': ' + String(value ?? 'Not set')));
+        for (const [key, value] of Object.entries(changes)) {
+          const name = { name: 'Task title', start_on: 'Start date', due_on: 'Due date', completed: 'Status' }[key];
+          const display = value => key === 'completed' ? (value ? 'Completed' : 'Open') : key.endsWith('_on') ? (value ? when(value) : 'Not set') : String(value ?? 'Not set');
+          reviewed.append(el('p', name + ': ' + display(result.before[key]) + ' → ' + display(value)));
+        }
         preview.disabled = true; for (const input of [title, start, due, complete]) input.disabled = true;
         const confirm = button('Save these changes to Asana', async () => {
           confirm.disabled = true;

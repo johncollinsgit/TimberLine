@@ -25,7 +25,7 @@ class TeamAppPackageController extends Controller
 
     public function offline()
     {
-        return response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Teams · Offline</title><body style="font:18px/1.6 system-ui;padding:32px;max-width:600px;margin:auto"><h1>You are offline</h1><p>Reconnect to open your event and confirm its latest Asana information. Saves require a connection.</p><p><a href="javascript:location.reload()">Try again</a></p></body></html>')
+        return response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Teams · Offline</title><body style="font:18px/1.6 system-ui;padding:32px;max-width:600px;margin:auto"><h1>You are offline</h1><p>Reconnect to open your event and confirm its latest Asana information. Saves require a connection.</p><p><a href="">Try again</a></p></body></html>')
             ->header('Cache-Control', 'public, max-age=3600');
     }
 }
