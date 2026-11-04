@@ -264,6 +264,7 @@ class DashboardService
             'accounts' => $accounts->map(fn ($a) => $a->only(['id', 'name', 'kind', 'connection_id', 'balance_cents', 'history_start', 'observed_at']))->all(),
             'connections' => Connection::where(fn ($q) => $q->where('space_id', $space->id)->orWhereIn('id', $accounts->pluck('connection_id')->filter()))->get()->map(fn ($c) => [...$c->only(['id', 'status', 'institution_name', 'synced_at']), 'managed_here' => $c->space_id === $space->id])->all(),
             'medical' => $space->kind === 'household' ? $medical : null,
+            'household_cards' => $space->kind === 'household' ? app(HouseholdCardsService::class)->build($records, $start->toDateString(), $end->toDateString(), $today->toDateString()) : null,
             'interest_by_account' => $interestByAccount, 'interest_statements' => $interestStatements,
             'commitments' => app(CommitmentsService::class)->summary($records, $entries, $accounts, $today),
             'history' => app(HistoryService::class)->summarize($entries, $accounts, $today),
@@ -287,7 +288,7 @@ class DashboardService
             'cash_history' => Snapshot::where('space_id', $space->id)->orderBy('observed_on')->get()->filter(fn ($s) => isset($s->data['imported_cash_cents']))->map(fn ($s) => ['date' => $s->observed_on->toDateString(), 'cash_cents' => $s->data['imported_cash_cents'], 'accounts' => $s->data['imported_cash_accounts'], 'source' => $s->data['cash_source']])->values()->all(),
             'net_worth_history' => Snapshot::where('space_id', $space->id)->orderBy('observed_on')->get()->filter(fn ($s) => isset($s->data['net_worth_cents']))->map(fn ($s) => ['date' => $s->observed_on->toDateString(), ...$s->data])->values()->all(),
             'business' => $space->kind === 'business' ? $this->business($space, $start, $end, $records) : null,
-            'providers' => ['plaid' => app(PlaidService::class)->linkReady($space), 'metals' => filled(config('trajectory.goldapi_key')), 'sms' => (bool) config('trajectory.sms_enabled')],
+            'providers' => ['plaid' => app(PlaidService::class)->linkReady($space), 'plaid_sync' => app(PlaidService::class)->ready(), 'metals' => filled(config('trajectory.goldapi_key')), 'sms' => (bool) config('trajectory.sms_enabled')],
             'settings' => [
                 'discretionary_categories' => $space->settings['discretionary_categories'] ?? config('trajectory.discretionary_defaults'),
                 'pending_bank_connections' => $space->settings['pending_bank_connections'] ?? [],

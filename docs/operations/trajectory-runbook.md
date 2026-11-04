@@ -109,6 +109,36 @@ enablement; this flow does not assume that extra provider feature is available.
 
 ## Imports and financial semantics
 
+### Household evidence cards
+
+`financial_observation` records keep dated, source-referenced household card
+figures in the existing encrypted record store. They never enter ledger income,
+cash, liabilities, tax calculations, or forecasts. Employee pay is net wages with
+optional gross wages; metals use gross sale proceeds, including separately
+documented cash. Owner draws remain separate from employee compensation. Take
+home excludes borrowing, asset-sale proceeds and reimbursements and includes
+each owner distribution only once. These cash observations are not lender
+qualifying income or a DTI calculation.
+
+Income cards require the selected period's starting date and show their actual
+through-date. Interest paid and interest charged are separate current-year
+observations. Balances use a single actual observation date. A later observation
+replaces an earlier card value; values are never added across overlapping
+statements. Missing observations stay unavailable and incomplete coverage stays
+explicit. Stale debt totals cannot show current payoff progress. The payoff
+thermometer requires complete current coverage and a positive dated baseline for
+the same set of personal debts; increased debt is reported as an increase.
+
+Manual accounts expose Update balance through the existing scoped, audited
+balance endpoint. Connected balances continue to come from their bank feed.
+New Plaid sign-in readiness is shown separately from existing-feed sync readiness;
+a space outside the new-sign-in pilot does not imply that its working feeds lack
+provider credentials. No pilot allowlist, credentials or bank consent is changed.
+
+Validate with `HouseholdCardsTest`, the existing Trajectory suite, JS checks and
+the normal protected test/build and migration-safety release gates. No migration
+is added. All real figures and evidence remain outside the public repository.
+
 CSV/XLSX imports are previewed before confirmation (20-minute, single-use token,
 5 MB/5,000 rows). Transaction columns are `id,date,merchant,amount,category`;
 amounts are signed dollars, negative for money out. Dates use `YYYY-MM-DD`.

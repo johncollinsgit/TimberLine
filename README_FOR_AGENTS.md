@@ -3543,6 +3543,12 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 
 ## Trajectory financial privacy and planning
 
+- Household cards are source-referenced `financial_observation` records, never
+  additive ledger entries. Preserve period/coverage labels, paid versus charged
+  interest, missing values and dated baseline requirements. No real household
+  evidence belongs in source or fixtures. See `HouseholdCardsTest` and the
+  household evidence cards section of the Trajectory runbook.
+
 - Read `docs/operations/trajectory-runbook.md` before touching this Branch.
   `FinanceAccess` requires global availability, enabled space, canonical
   entitlement, active verified user, and household membership or tenant financial

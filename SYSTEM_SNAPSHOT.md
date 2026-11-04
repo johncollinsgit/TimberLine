@@ -4248,6 +4248,13 @@ Scope guard:
 
 ## Trajectory private financial planning Branch (2026-09-14)
 
+- Household evidence cards use encrypted `financial_observation` records for
+  dated income, draws, employee pay, gross metals proceeds, card balances and
+  paid/charged interest. These are non-additive summaries. Personal payoff
+  progress requires a complete current total and a dated baseline for the same
+  debts. Manual balances remain scoped/audited; Plaid sync readiness is separate
+  from new sign-in readiness. See the Trajectory runbook and HouseholdCardsTest.
+
 - `/trajectory` adds isolated household/business spaces, explicit partner sharing
   and links, exact transaction allocations, reviewed imports and reconciliation,
   bill schedules, goals, scenarios, debt estimates, reliance targets, and asset/
