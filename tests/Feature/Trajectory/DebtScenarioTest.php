@@ -58,7 +58,6 @@ test('unmapped liabilities and duplicate identities block complete portfolio cla
         ->and($service->compare([fictionalScenarioDebt(['balance_cents' => 0])], $from)['status'])->toBe('setup_required');
 });
 
-
 test('zero balance accounts need no future payment schedule and do not block active debt scenarios', function () {
     $zero = ['id' => 2, 'name' => 'Fictional paid card', 'balance_cents' => 0];
     $result = (new DebtScenarioService)->compare([fictionalScenarioDebt(), $zero], CarbonImmutable::parse('2027-01-01'));
