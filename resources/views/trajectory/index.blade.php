@@ -2,7 +2,12 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><meta name="robots" content="noindex,nofollow"><title>Trajectory · Your financial future</title></head><body class="trajectory-site">
     @vite('resources/js/trajectory/app.js')
     <main id="trajectory" class="tr-app" data-spaces="{{ json_encode($spaces->map->only(['id','name','kind'])->values()) }}" data-invite="{{ request('invite','') }}">
-        <aside class="tr-sidebar">
+        <div id="tr-mobile-overlay" class="tr-mobile-overlay" aria-hidden="true" hidden></div>
+        <section id="tr-mobile-splash" class="tr-mobile-splash" aria-label="Loading Trajectory" hidden>
+            <div><svg class="tr-splash-art" viewBox="0 0 200 200" aria-hidden="true"><circle class="tr-splash-orbit" cx="100" cy="100" r="84"/><circle class="tr-splash-orbit" cx="100" cy="100" r="65" stroke-dasharray="2 12"/><path class="tr-splash-path" d="M46 137L84 99L111 117L154 67M121 67H154V100"/><circle class="tr-splash-glow" cx="46" cy="137" r="5"/><circle class="tr-splash-glow" cx="154" cy="67" r="5"/></svg><p class="tr-splash-wordmark">trajectory<span>.</span></p><p class="tr-splash-caption">A little clarity.<br>More room for what matters.</p><button type="button" id="tr-splash-skip" class="tr-splash-skip">Skip introduction</button></div>
+        </section>
+        <aside id="tr-mobile-drawer" class="tr-sidebar" aria-label="Trajectory navigation" tabindex="-1">
+            <button type="button" id="tr-mobile-close" class="tr-mobile-close" aria-label="Close navigation">×</button>
             <a class="tr-wordmark" href="{{ route('trajectory.index') }}"><span class="tr-logo" aria-hidden="true">↗</span>trajectory<span class="tr-brand-dot">.</span></a>
             <p class="tr-nav-label">YOUR FINANCIAL FUTURE</p>
             <nav class="tr-tabs" aria-label="Trajectory sections">
@@ -10,9 +15,10 @@
                 <button data-tab="{{ $key }}" @if($key==='overview') aria-current="page" @endif><span aria-hidden="true">{{ $item[0] }}</span>{{ $item[1] }}</button>
                 @endforeach
             </nav>
-            <div class="tr-sidebar-bottom"><a href="{{ route('trajectory.welcome') }}">About Trajectory ↗</a><a href="{{ route('home') }}">← Back to Everbranch</a><div class="tr-user"><span class="tr-avatar">{{ mb_substr(auth()->user()->name,0,1) }}</span><div>{{ auth()->user()->name }}<small>Private financial workspace</small></div></div></div>
+            <div class="tr-sidebar-bottom"><div class="tr-drawer-photo" aria-hidden="true"><img src="{{ asset('images/marketplace/studio.jpg') }}" alt="" loading="lazy"><span>Room for what matters.</span></div><a href="{{ route('legal.support') }}">Help &amp; support ↗</a><a href="{{ route('platform.contact') }}">Contact Everbranch ↗</a><div class="tr-footer-legal"><a href="{{ route('legal.privacy') }}">Privacy</a><a href="{{ route('legal.terms') }}">Terms</a></div><a href="{{ route('trajectory.welcome') }}">About Trajectory ↗</a><a href="{{ route('home') }}">← Back to Everbranch</a><div class="tr-user"><span class="tr-avatar">{{ mb_substr(auth()->user()->name,0,1) }}</span><div>{{ auth()->user()->name }}<small>Private financial workspace</small></div></div></div>
         </aside>
         <div class="tr-workspace">
+        <div class="tr-mobile-bar"><a class="tr-mobile-brand" href="{{ route('trajectory.index') }}"><span class="tr-logo" aria-hidden="true">↗</span>trajectory<span>.</span></a><button type="button" id="tr-mobile-menu" class="tr-mobile-menu" aria-label="Open navigation" aria-controls="tr-mobile-drawer" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6H20M4 12H20M4 18H20"/></svg></button></div>
         <header class="tr-header"><div><p class="tr-eyebrow">MAKE ROOM FOR WHAT MATTERS</p><h1 id="tr-page-title">Your trajectory</h1><p id="tr-page-subtitle">A clearer picture of today. A better plan for tomorrow.</p></div><div class="tr-actions"><div id="tr-space-tabs" class="tr-space-tabs" role="tablist" aria-label="Finance view"></div><label id="tr-company-label" hidden>Company <select id="tr-company"></select></label><button id="tr-add" class="tr-primary">＋ Add to your plan</button></div></header>
         <div id="tr-feedback" role="status" aria-live="polite" hidden></div>
         <div id="tr-invite" hidden class="tr-notice">You have a household invitation. <button id="tr-accept">Accept invitation</button></div>

@@ -4588,3 +4588,13 @@ for explicit source selection.
 Run CashBalanceSourceTest and the existing Trajectory feature/JS suites before
 protected publication; confirm the picker, excluded labels and current totals in
 a fictional household. No production evidence belongs in source or fixtures.
+
+## Trajectory household planning candidate (2026-11-04)
+
+The trajectory branch adds monthly decision support, source-labeled metals cash
+bridges, recorded-debt payoff comparisons, scoped account actuals, a mobile drawer
+and setup/import guide. Business funding requires fresh reviewed inputs and an
+unchanged server snapshot. Ask Everbranch reuses existing provider/approval/caps
+and explicit versioned budget review. No provider activation, financial action,
+public billing or production readiness follows from these source changes. See
+`docs/operations/trajectory-runbook.md` for scope, privacy and validation.

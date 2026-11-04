@@ -1,6 +1,7 @@
-export function planningUI({getData, spaces, esc, money, precise, panel, btn, plot, chart, line, dialog, field, api, endpoint, minor, load, navigate, evidence}) {
-  const conversations=new Map();
-  const contextKey=()=>[getData().space.id,getData().range.start,getData().range.end].join(':');
+export function planningUI({getData, spaces, esc, money, precise, panel, btn, plot, chart, line, dialog, field, api, endpoint, minor, load, navigate, evidence, reviewBudget}) {
+  const conversations=new Map(), questionRequests=new Map(), budgetDrafts=new Map();
+  let draftSequence=0;
+  const contextKey=()=>[getData().space.id,getData().range.start,getData().range.end,getData().scope_filter?.account_id||'all'].join(':');
   const label = key => getData().workspace_settings?.income_categories?.[key] || key.replaceAll('_',' ');
   const reviewButton = (text,ids) => ids?.length ? btn(text,'plan-evidence',`data-ids="${esc(JSON.stringify(ids))}"`) : '<span class="tr-subtle">No supporting records</span>';
   const jump = (text,tab) => btn(text,'plan-nav',`data-view="${tab}"`);
@@ -34,7 +35,7 @@ export function planningUI({getData, spaces, esc, money, precise, panel, btn, pl
     return panel('Profit & loss',`<p><strong>${esc(p.source)}</strong> · ${esc(getData().range.start)} – ${esc(getData().range.end)}</p><p class="tr-subtle">${esc(p.note)} ${p.basis?'Accounting basis: '+esc(p.basis):''}</p><div class="tr-metrics">${tile('Revenue',p.income_cents,p.authoritative?'QuickBooks report':'Provisional bank evidence',reviewButton('Supporting deposits',p.revenue_ids))}${tile('Expenses',p.expenses_cents,p.authoritative?'QuickBooks report':'Provisional bank evidence',jump('Review categories','tax'))}${tile('Net result',p.net_cents,'Revenue less expenses',jump('Ask Bud','bud'))}</div><h3>Supporting transaction categories</h3>${p.transaction_expense_lines.map(c=>`<div class="tr-row"><span>${esc(label(c.category))}</span><strong>${precise(c.amount_cents)}</strong>${reviewButton('View records',c.ids)}</div>`).join('')}<p class="tr-subtle">${p.unreviewed_count} transactions in this period still need review.</p>`);
   }
   function companies(){return panel('Businesses & account ownership',`<p class="tr-subtle">Each company has separate books, access, and tax settings. Both shows your household with the company selected above. A shared bank login can feed accounts into different companies; only the connection owner can change those assignments.</p>${spaces.map(s=>`<div class="tr-row"><div><strong>${esc(s.name)}</strong><p class="tr-subtle">${s.kind==='household'?'Private household':'Business · separate financial access'}</p></div><a class="tr-link" href="/trajectory?space=${s.id}&tab=accounts">Open accounts</a></div>`).join('')}<div class="tr-actions tr-block">${btn('Add an entitled business','plan-add-business')}${btn('Edit current profile','plan-profile')}</div><p class="tr-subtle">New companies must have an Everbranch workspace, financial access, and Trajectory entitlement. Linking your household does not grant company access.</p>`);}
-  function bud(){return panel('Ask Bud about your finances',`<p class="tr-subtle">Bud Core answers from ${esc(getData().space.name)} and the selected period. It explains calculations and links to their evidence. Free-form generative Bud AI is not enabled by this screen.</p><div class="tr-actions">${['What income do I need?','Compare debt payoff methods','What did I spend last year?','Explain category anomalies','Explain tax review'].map(q=>btn(q,'plan-bud-prompt',`data-question="${esc(q)}"`)).join('')}</div><label class="tr-field full tr-block">Your question<textarea id="tr-bud-question" rows="3" maxlength="2000"></textarea></label>${btn('Ask Bud','plan-bud')}<div id="tr-bud-thread" role="log" aria-live="polite">${(conversations.get(contextKey())||[]).join('')}</div>`);}
+  function bud(){return panel('Ask Everbranch',`<p class="tr-subtle">Ask about ${esc(getData().space.name)} and the selected period. Each answer identifies whether it used enabled AI or calculated guidance, and shows missing coverage. Budget changes open a draft for your review; no money moves from this chat.</p><div class="tr-actions">${['What income do I need this month?','What bills are upcoming?','How do metals proceeds affect my gap?','Can the business pay us?','Compare debt payoff methods'].map(q=>btn(q,'plan-bud-prompt',`data-question="${esc(q)}"`)).join('')}</div><label class="tr-field full tr-block">Your question<textarea id="tr-bud-question" rows="3" maxlength="2000"></textarea></label>${btn('Ask Everbranch','plan-bud')}<div id="tr-bud-thread" role="log" aria-live="polite">${(conversations.get(contextKey())||[]).join('')}</div>`);}
   function draw(){
     const p=getData().planning;if(!p)return;
     chart('tr-income-plan','line',p.monthly.map(r=>r.date),[{...line('Historical cash path',p.monthly.map(r=>r.historical_cash_cents),'#7190a6'),borderDash:[6,4]},line('Your expected-income plan',p.monthly.map(r=>r.planned_cash_cents),'#176b52',true)],i=>{const r=p.monthly[i];dialog(r.date,`<div class="tr-block"><p>Expected income: ${precise(r.expected_income_cents)} / month</p><p>Planned costs & goals: ${precise(r.required_income_cents)} / month</p><p>Planned cash: ${precise(r.planned_cash_cents)}</p><p class="tr-subtle">Monthly amounts are spread evenly. See the daily cash forecast for due dates.</p></div>`,null);});
@@ -54,12 +55,32 @@ export function planningUI({getData, spaces, esc, money, precise, panel, btn, pl
     else if(a==='plan-add-category')dialog('Add your income category',field('label','Category name','text','',null,true),async v=>{const name=v.get('label').trim(),key=name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,40);await api(endpoint('/workspace'),'PATCH',{income_categories:{[key]:name}});});
     else if(a==='plan-assign'){const account=data.accounts.find(x=>x.id===Number(target.dataset.id));dialog('Assign account ownership',`<p class="tr-subtle">Move ${esc(account.name)} and its transaction history to the selected company or household. People authorized there will be able to see those records. Linked plans, split purchases and reconciled transfers must be resolved first.</p>${field('target','Account belongs to','text','',[{value:'',label:'Choose owner'},...spaces.filter(s=>s.id!==data.space.id).map(s=>({value:s.id,label:s.name}))])}`,async v=>{await api(endpoint(`/accounts/${account.id}/assign`),'POST',{target_space_id:Number(v.get('target'))});},'Move account and history');}
     else if(a==='plan-add-business'){const choices=await api('/trajectory/businesses');dialog('Add an existing business',choices.some(t=>!t.space_id)?field('tenant','Entitled workspace','text','',choices.filter(t=>!t.space_id).map(t=>({value:t.id,label:t.name}))):'<p class="tr-subtle">All eligible businesses are already listed. Enable Trajectory for another Everbranch workspace to add it.</p>',choices.some(t=>!t.space_id)?async v=>{const r=await api('/trajectory/businesses','POST',{tenant_id:Number(v.get('tenant'))});location.href=`/trajectory?space=${r.space.id}&tab=accounts`;return false;}:null);}
+    else if(a==='plan-budget-review'){
+      const draft=budgetDrafts.get(target.dataset.draft);
+      if(!draft||draft.context!==contextKey()||draft.proposal.space_id!==data.space.id)throw new Error('This budget draft belongs to a different view. Ask again in the current space.');
+      const proposal=draft.proposal,current=proposal.record_id?data.records.find(row=>row.id===proposal.record_id&&row.kind==='budget'):null;
+      if(proposal.record_id&&(!current||current.version!==proposal.expected_version))throw new Error('This budget changed. Refresh and prepare a new draft.');
+      if(typeof reviewBudget!=='function')throw new Error('Open Budget to review and save this proposed target.');
+      await reviewBudget({...proposal,version:proposal.expected_version});
+    }
     else if(a==='plan-bud-prompt'||a==='plan-bud'){
       const input=document.querySelector('#tr-bud-question'),question=target.dataset.question||input.value.trim();if(!question)return true;
-      const key=contextKey(),range=document.querySelector('#tr-range').value;
-      target.disabled=true;try{const r=await api(endpoint('/bud'),'POST',{question,range,...(range==='custom'?{from:data.range.start,through:data.range.end}:{})});const html=`<article class="tr-bud-answer"><strong>${esc(question)}</strong><p style="white-space:pre-wrap">${esc(r.reply)}</p><small>${esc(r.mode)}</small><div class="tr-actions">${r.links.map(l=>jump(l.label,l.tab)).join('')}</div></article>`;conversations.set(key,[...(conversations.get(key)||[]).slice(-19),html]);if(contextKey()===key&&document.querySelector('#tr-bud-thread')){document.querySelector('#tr-bud-thread').innerHTML=conversations.get(key).join('');input.value='';}}finally{target.disabled=false;}
-
+      const key=contextKey(),range=document.querySelector('#tr-range').value,requestKey=key+'\n'+question;
+      const requestId=questionRequests.get(requestKey)||globalThis.crypto?.randomUUID?.();
+      if(requestId)questionRequests.set(requestKey,requestId);
+      target.disabled=true;
+      try{
+        const r=await api(endpoint('/bud'),'POST',{question,range,...(data.scope_filter?.account_id?{account_id:data.scope_filter.account_id}:{}),use_ai:!!requestId,...(requestId?{request_id:requestId}:{}),...(range==='custom'?{from:data.range.start,through:data.range.end}:{})});
+        const drafts=(r.proposals||[]).filter(proposal=>proposal.type==='budget'&&proposal.requires_review===true&&proposal.space_id===data.space.id);
+        const draftActions=drafts.map((proposal,index)=>{const token=(requestId||'core-'+(++draftSequence))+':'+index;budgetDrafts.set(token,{context:key,proposal});return btn('Review budget draft','plan-budget-review',`data-draft="${esc(token)}"`);}).join('');
+        const status=r.ai?.status?.replaceAll('_',' '),partial=r.ai?.source_coverage?.complete===false;
+        const html=`<article class="tr-bud-answer"><strong>${esc(question)}</strong><p style="white-space:pre-wrap">${esc(r.reply)}</p><small>${esc(r.mode)}${status?' · '+esc(status):''}</small>${r.notice?`<p class="tr-data-note">${esc(r.notice)}</p>`:''}${partial?'<p class="tr-data-note">AI context is partial. Unverified mixed totals were excluded.</p>':''}<div class="tr-actions">${(r.links||[]).map(l=>jump(l.label,l.tab)).join('')}${draftActions}</div></article>`;
+        conversations.set(key,[...(conversations.get(key)||[]).slice(-19),html]);
+        if(!['outcome_unconfirmed','request_not_replayed','usage_review_required'].includes(r.ai?.status))questionRequests.delete(requestKey);
+        if(contextKey()===key&&document.querySelector('#tr-bud-thread')){document.querySelector('#tr-bud-thread').innerHTML=conversations.get(key).join('');input.value='';}
+      }finally{target.disabled=false;}
     }
+
     return true;
   }
   return {summary,planning,anomalies,tax,profit,companies,bud,draw,handle};

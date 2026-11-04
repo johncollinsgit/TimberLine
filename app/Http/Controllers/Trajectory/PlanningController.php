@@ -117,9 +117,21 @@ class PlanningController extends Controller
     {
         $access->authorize($request->user(), $space);
         abort_unless(config('bud.core_enabled', true), 503, 'Bud is currently unavailable.');
-        $data = $request->validate(['question' => 'required|string|max:2000', 'range' => 'sometimes|in:day,week,month,year,all,custom', 'from' => 'required_if:range,custom|date_format:Y-m-d', 'through' => 'required_if:range,custom|date_format:Y-m-d|after_or_equal:from']);
+        $data = $request->validate(['question' => 'required|string|max:2000', 'range' => 'sometimes|in:day,week,month,quarter,year,all,custom', 'account_id' => 'sometimes|nullable|integer|min:1', 'from' => 'required_if:range,custom|date_format:Y-m-d|before_or_equal:today', 'through' => 'required_if:range,custom|date_format:Y-m-d|after_or_equal:from|before_or_equal:today', 'use_ai' => 'sometimes|boolean', 'request_id' => 'required_if:use_ai,true|nullable|uuid']);
+        $context = $dashboard->build($space, $data['range'] ?? 'month', null, $data['from'] ?? null, $data['through'] ?? null, false, $request->user(), isset($data['account_id']) ? (int) $data['account_id'] : null);
+        $reply = ! empty($data['use_ai'])
+            ? app(\App\Services\Trajectory\TrajectoryAiService::class)->respond($request->user(), $space, $data['question'], $context, $data['request_id'] ?? null)
+            : app(\App\Services\Bud\TrajectoryBudService::class)->respond($data['question'], $context);
 
-        return response()->json(app(\App\Services\Bud\TrajectoryBudService::class)->respond($data['question'], $dashboard->build($space, $data['range'] ?? 'month', null, $data['from'] ?? null, $data['through'] ?? null)))->header('Cache-Control', 'private, no-store');
+        return response()->json($reply)->header('Cache-Control', 'private, no-store');
+    }
+
+    public function debtScenarios(Request $request, Space $space, FinanceAccess $access)
+    {
+        $access->authorize($request->user(), $space);
+        $data = $request->validate(['extra_cents' => 'required|integer|min:0|max:100000000000', 'account_id' => 'sometimes|nullable|integer|min:1']);
+
+        return response()->json(app(\App\Services\Trajectory\DebtScenarioSourceService::class)->build($space, (int) $data['extra_cents'], isset($data['account_id']) ? (int) $data['account_id'] : null))->header('Cache-Control', 'private, no-store');
     }
 
     public function businesses(Request $request, FinanceAccess $access)

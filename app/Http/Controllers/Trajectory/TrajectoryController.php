@@ -37,9 +37,9 @@ class TrajectoryController extends Controller
     public function dashboard(Request $request, Space $space, FinanceAccess $access, DashboardService $dashboard)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['range' => ['nullable', Rule::in(['day', 'week', 'month', 'quarter', 'year', 'all', 'custom'])], 'scenario_id' => ['nullable', 'integer'], 'from' => 'required_if:range,custom|nullable|date_format:Y-m-d|before_or_equal:today|after_or_equal:1900-01-01', 'through' => 'required_if:range,custom|nullable|date_format:Y-m-d|after_or_equal:from|before_or_equal:today', 'seasonal' => 'sometimes|boolean']);
+        $data = $request->validate(['range' => ['nullable', Rule::in(['day', 'week', 'month', 'quarter', 'year', 'all', 'custom'])], 'scenario_id' => ['nullable', 'integer'], 'account_id' => 'sometimes|nullable|integer|min:1', 'from' => 'required_if:range,custom|nullable|date_format:Y-m-d|before_or_equal:today|after_or_equal:1900-01-01', 'through' => 'required_if:range,custom|nullable|date_format:Y-m-d|after_or_equal:from|before_or_equal:today', 'seasonal' => 'sometimes|boolean']);
 
-        return response()->json([...$dashboard->build($space, $data['range'] ?? 'month', $data['scenario_id'] ?? null, $data['from'] ?? null, $data['through'] ?? null, (bool) ($data['seasonal'] ?? false)),
+        return response()->json([...$dashboard->build($space, $data['range'] ?? 'month', $data['scenario_id'] ?? null, $data['from'] ?? null, $data['through'] ?? null, (bool) ($data['seasonal'] ?? false), $request->user(), isset($data['account_id']) ? (int) $data['account_id'] : null),
             'review_email' => app(\App\Services\Trajectory\ReviewEmailService::class)->preferences($request->user(), $space),
         ])->header('Cache-Control', 'private, no-store');
     }
@@ -189,7 +189,30 @@ class TrajectoryController extends Controller
     public function previewImport(Request $request, Space $space, FinanceAccess $access)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['file' => 'required|file|max:5120|mimes:csv,txt,xlsx', 'kind' => ['required', Rule::in(['transactions', 'payroll', 'monarch', 'financial_observation'])], 'account_id' => 'nullable|integer']);
+        if ($request->input('kind') === 'budget') {
+            foreach (['column_mapping', 'budget_defaults'] as $field) {
+                if (is_string($request->input($field))) {
+                    try {
+                        $request->merge([$field => json_decode($request->input($field), true, 32, JSON_THROW_ON_ERROR)]);
+                    } catch (\JsonException) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([$field => 'Use a valid JSON object for this budget mapping.']);
+                    }
+                }
+            }
+        }
+        $data = $request->validate([
+            'file' => 'required|file|max:5120|mimes:csv,txt,xlsx',
+            'kind' => ['required', Rule::in(['transactions', 'payroll', 'monarch', 'financial_observation', 'budget'])],
+            'account_id' => 'nullable|integer',
+            'budget_format' => ['sometimes', Rule::in(['template', 'everydollar', 'mapped'])],
+            'column_mapping' => 'sometimes|array|max:9', 'column_mapping.*' => 'required|string|max:160',
+            'budget_defaults' => 'sometimes|array:amount_units,amount_basis,purpose,effective_on,source,reviewed',
+            'budget_defaults.amount_units' => ['sometimes', 'nullable', Rule::in(['cents', 'dollars'])],
+            'budget_defaults.amount_basis' => ['sometimes', 'nullable', Rule::in(['planned'])],
+            'budget_defaults.purpose' => ['sometimes', 'nullable', Rule::in(['spending', 'savings', 'debt_payment', 'income'])],
+            'budget_defaults.effective_on' => 'sometimes|nullable|date_format:Y-m-d|after_or_equal:1900-01-01|before:2200-01-01',
+            'budget_defaults.source' => 'sometimes|nullable|string|max:160', 'budget_defaults.reviewed' => 'sometimes|boolean',
+        ]);
         $account = null;
         if ($data['kind'] === 'transactions') {
             $account = Account::where('space_id', $space->id)->whereKey($data['account_id'] ?? 0)->firstOrFail();
@@ -197,6 +220,21 @@ class TrajectoryController extends Controller
         abort_if($data['kind'] === 'payroll' && $space->kind !== 'business', 422);
         abort_if($data['kind'] === 'financial_observation' && $space->kind !== 'household', 422);
         $file = $request->file('file');
+        if ($data['kind'] === 'budget') {
+            abort_if(filled($data['account_id'] ?? null), 422, 'Choose all accounts before importing a whole-space budget.');
+            abort_unless(in_array(strtolower($file->getClientOriginalExtension()), ['csv', 'txt'], true), 422, 'Choose a budget CSV. Spreadsheet workbooks need an explicit CSV export first.');
+            $preview = app(\App\Services\Trajectory\BudgetImportService::class)->read($file->getRealPath(), $space, $data['budget_format'] ?? 'template', $data['column_mapping'] ?? [], $data['budget_defaults'] ?? []);
+            $token = Str::random(48);
+            Cache::put('trajectory:import:'.hash('sha256', $token), encrypt([
+                'user_id' => $request->user()->id, 'space_id' => $space->id, 'kind' => 'budget',
+                'rows' => $preview['rows'], 'budget_missing_fields' => $preview['missing_fields'],
+            ]), now()->addMinutes(20));
+
+            return response()->json([
+                ...$preview, 'token' => $token, 'count' => count($preview['rows']),
+                'preview' => $preview['rows'], 'category_options' => app(\App\Services\Trajectory\WorkspaceService::class)->categories($space),
+            ])->header('Cache-Control', 'private, no-store');
+        }
         if ($data['kind'] === 'monarch') {
             $rows = app(\App\Services\Trajectory\MonarchImportService::class)->read($file->getRealPath());
             $token = Str::random(48);
@@ -254,14 +292,19 @@ class TrajectoryController extends Controller
     public function confirmImport(Request $request, Space $space, FinanceAccess $access)
     {
         $access->authorize($request->user(), $space);
-        $request->validate(['token' => 'required|string|max:100', 'account_kinds' => 'sometimes|array|max:100', 'account_kinds.*' => ['required', Rule::in(['cash', 'credit', 'loan', 'investment'])]]);
+        $request->validate(['token' => 'required|string|max:100', 'account_kinds' => 'sometimes|array|max:100', 'account_kinds.*' => ['required', Rule::in(['cash', 'credit', 'loan', 'investment'])], 'category_map' => 'sometimes|array|max:5000', 'category_map.*' => ['required', Rule::in(app(\App\Services\Trajectory\WorkspaceService::class)->categories($space))]]);
         $key = 'trajectory:import:'.hash('sha256', $request->input('token'));
         $cached = Cache::get($key);
         abort_unless($cached, 410, 'Import preview expired.');
         $payload = decrypt($cached);
         abort_unless($payload['user_id'] === $request->user()->id && $payload['space_id'] === $space->id, 403);
-        DB::transaction(function () use ($payload, $request, $space): void {
-            if ($payload['kind'] === 'monarch') {
+        $budgetResult = null;
+        DB::transaction(function () use ($payload, $request, $space, &$budgetResult): void {
+            if ($payload['kind'] === 'budget') {
+                $importer = app(\App\Services\Trajectory\BudgetImportService::class);
+                $rows = $importer->resolve($space, ['rows' => $payload['rows'], 'missing_fields' => $payload['budget_missing_fields'] ?? []], $request->input('category_map', []));
+                $budgetResult = $importer->confirm($request->user(), $space, $rows);
+            } elseif ($payload['kind'] === 'monarch') {
                 app(\App\Services\Trajectory\MonarchImportService::class)->import($request->user(), $space, $payload['rows'], $request->input('account_kinds', []));
             } elseif ($payload['kind'] === 'transactions') {
                 $account = Account::where('space_id', $space->id)->findOrFail($payload['account_id']);
@@ -280,7 +323,7 @@ class TrajectoryController extends Controller
         });
         Cache::forget($key);
 
-        return response()->json(['ok' => true, 'count' => count($payload['rows'])]);
+        return response()->json(['ok' => true, 'count' => count($payload['rows']), ...($budgetResult ?? [])])->header('Cache-Control', 'private, no-store');
     }
 
     public function linkBank(Request $request, Space $space, FinanceAccess $access, PlaidService $plaid)

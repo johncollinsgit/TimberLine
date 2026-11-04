@@ -81,4 +81,4 @@ jobs:
             exit 0
           fi
 
-          vendor/bin/pint --test "${php_files[@]}"
+          vendor/bin/pint --test -v "${php_files[@]}"

@@ -519,3 +519,51 @@ for explicit source selection.
 Run CashBalanceSourceTest and the existing Trajectory feature/JS suites before
 protected publication; confirm the picker, excluded labels and current totals in
 a fictional household. No production evidence belongs in source or fixtures.
+
+## Household planning product candidate (2026-11-04; trajectory branch)
+
+The candidate adds a mobile navigation drawer and skippable animated introduction
+with reduced-motion support, a photo-led welcome page, and a derived setup guide.
+It reuses existing accounts, membership, private imports and Plaid Link readiness.
+No public checkout, provider approval, subscriptions or financial actions are enabled.
+
+The overview explains monthly money needed, received, spent and the remaining gap.
+Metals sale proceeds remain a separate one-time bridge, not recurring earnings.
+The ongoing monthly need is a rate; historical comparisons disclose use of today's
+reviewed plan rather than pretending to hold archived forecasts. Missing evidence
+stays unavailable. Inferred recurring bills are labeled suggestions and never paid
+or saved automatically. Account filters restrict actuals and source records;
+whole-space budgets, business P&L, metal inventory and forecasts are hidden when
+they cannot be attributed to that account.
+
+Debt comparisons use recorded, reviewed terms and dated balances. They expose
+missing APRs, payment cadence, interest method, next unpaid dates and stale
+observations instead of inventing payoff dates. Scenarios assume no new charges,
+fees or rate changes, and recorded obligations do not establish inventory completeness.
+
+A business funding scenario requires an explicitly complete current-month cost
+review, current cash/debt observations and a server-derived balance/term snapshot.
+Editing a plan or changing balances/terms invalidates its capacity attestation.
+Cash is not profit or lender qualifying income. Household access to a linked
+business still requires FinanceAccess for that viewer.
+
+Ask Everbranch reuses the existing approved Bud provider, tenant access and spend
+caps. TRAJECTORY_AI_ENABLED controls only surface availability; existing global
+provider, approval and billing gates still apply. Provider requests are selected-
+space scoped, use durable request UUIDs and private encrypted request evidence.
+Uncertain dispatch is not automatically retried with another identity. Unverified
+bank/Square-derived content is excluded from provider context. Budget changes
+open explicit versioned review rather than being saved from model output. Local
+checks do not establish production provider readiness or real financial advice.
+
+Budget CSV import uses the existing encrypted, expiring preview/confirmation
+workflow. EveryDollar exports require explicit planned-amount column mapping,
+units and period/purpose review; actual spending columns cannot become budget
+targets. Stable source identities protect manual corrections and prevent replay
+from duplicating targets. No financial source files belong in this public repository.
+
+Validation: run Trajectory PHP feature tests, npm run test:trajectory,
+npm run test:trajectory:mobile and the normal build/quality/MySQL release gates.
+Mobile checks use fictional records and cover focus trapping, Escape/return focus,
+responsive overflow and reduced motion. This candidate stays on trajectory until
+review and protected release; it is not a production acceptance claim.
