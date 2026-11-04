@@ -212,7 +212,6 @@ return [
         ],
     ],
     'debt' => [
-        'balance_observed_on' => ['label' => 'Principal balance verified on (unlinked debts)', 'type' => 'date', 'required' => false],
         'payment_cadence' => ['label' => 'Loan payment cadence', 'type' => 'select', 'required' => false, 'choices' => ['monthly', 'biweekly', 'weekly']],
         'interest_method' => ['label' => 'Interest calculation', 'type' => 'select', 'required' => false, 'choices' => ['monthly', 'actual_365']],
         'interest_paid_through' => ['label' => 'Interest paid through (daily interest loans)', 'type' => 'date', 'required' => false],

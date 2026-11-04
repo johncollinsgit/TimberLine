@@ -25,7 +25,7 @@ beforeEach(function (): void {
     $this->otherCash = ($this->makeAccount)('Example other cash', 'cash', 80000, 'cash-b');
     $this->card = ($this->makeAccount)('Example selected card', 'credit', 100000, 'card-a');
     $this->otherCard = ($this->makeAccount)('Example other card', 'credit', 200000, 'card-b');
-    $this->term = Record::create(['space_id' => $this->space->id, 'kind' => 'debt', 'name' => 'Example reviewed debt', 'active' => true, 'version' => 1, 'data' => ['account_id' => $this->card->id, 'balance_cents' => 100000, 'rate_millis' => 0, 'apr_bps' => 0, 'payment_cents' => 10000, 'payment_cadence' => 'monthly', 'interest_method' => 'monthly', 'next_due_on' => '2027-01-15', 'confirmed' => true]]);
+    $this->term = Record::create(['space_id' => $this->space->id, 'kind' => 'debt', 'name' => 'Example reviewed debt', 'active' => true, 'version' => 1, 'data' => ['kind' => 'credit', 'observed_on' => '2027-01-01', 'escrow_cents' => 0, 'fees_cents' => 0, 'account_id' => $this->card->id, 'balance_cents' => 100000, 'rate_millis' => 0, 'apr_bps' => 0, 'payment_cents' => 10000, 'payment_cadence' => 'monthly', 'interest_method' => 'monthly', 'next_due_on' => '2027-01-15', 'confirmed' => true]]);
     $this->addEntry = function (Account $account, string $id, int $amount, string $flow, string $date = '2027-01-01', array $extra = []) {
         app(LedgerService::class)->ingest($account, [['id' => $id, 'date' => $date, 'merchant' => 'Example '.$id, 'amount_cents' => $amount, ...$extra]]);
         $transaction = Transaction::where('source_key', $account->source_key.':'.$id)->firstOrFail();
@@ -133,7 +133,7 @@ test('standalone debt requires a current explicit balance date instead of a rece
     $standalone = Record::create(['space_id' => $this->space->id, 'kind' => 'debt', 'name' => 'Example standalone', 'active' => true, 'version' => 1, 'data' => ['balance_cents' => 50000, 'rate_millis' => 0, 'payment_cents' => 5000, 'next_due_on' => '2027-01-15', 'payment_cadence' => 'monthly', 'interest_method' => 'monthly', 'confirmed' => true]]);
     $service = app(DebtScenarioSourceService::class);
     expect($service->build($this->space)['status'])->toBe('setup_required');
-    $standalone->update(['data' => [...$standalone->data, 'balance_observed_on' => '2027-01-01']]);
+    $standalone->update(['data' => [...$standalone->data, 'observed_on' => '2027-01-01']]);
     expect($service->build($this->space)['status'])->toBe('estimated');
 });
 

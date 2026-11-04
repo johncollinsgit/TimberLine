@@ -37,7 +37,18 @@ beforeEach(function (): void {
     $this->uuid = (string) Str::uuid();
     Http::preventStrayRequests();
     $this->providerResponse = ['id' => 'resp_example_finance', 'status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => 'Recorded cash is $500.00; review incomplete coverage before planning.']]]], 'usage' => ['input_tokens' => 100, 'output_tokens' => 25]];
-    Http::fake(['https://api.openai.com/v1/responses' => Http::response($this->providerResponse)]);
+    $this->providerFailure = false;
+    $this->providerCalls = 0;
+    // Register one callback: later fake registrations append rather than replace
+    // this factory's earlier handlers. Read each case's current fixture at dispatch.
+    Http::fake(['https://api.openai.com/v1/responses' => function () {
+        $this->providerCalls++;
+        if ($this->providerFailure) {
+            throw new ConnectionException('private-provider-diagnostic-never-return');
+        }
+
+        return Http::response($this->providerResponse);
+    }]);
 });
 
 test('finance AI uses the authorized private context and verified transport with durable usage', function (): void {
@@ -70,10 +81,12 @@ test('unconfigured denied exhausted and missing billing states return honest Cor
         'feature' => config(['trajectory.ai_enabled' => false]),
         'approval' => $this->setting->update(['ai_status' => 'disabled']),
         'budget' => $this->setting->update(['ai_monthly_budget_cents' => 0]),
-        'tenant' => $this->space->update(['tenant_id' => null]),
+        'tenant' => $this->space->setAttribute('tenant_id', null),
     };
-    // The missing-billing case still needs permitted finance access; inject only that boundary.
+    // Exercise the missing-scope refusal in memory; the persisted tenant binding
+    // is required by the schema and must never be nulled for this fixture.
     if ($state === 'tenant') {
+        expect($this->space->fresh()->tenant_id)->toBe($this->setting->tenant_id);
         $access = Mockery::mock(\App\Services\Trajectory\FinanceAccess::class);
         $access->shouldReceive('authorize')->andReturnNull();
         app()->instance(\App\Services\Trajectory\FinanceAccess::class, $access);
@@ -105,9 +118,7 @@ test('cross-space data or unauthorized household access is rejected before an AI
 });
 
 test('timeout keeps the full reservation and cannot retry the same paid request', function (): void {
-    Http::fake(function () {
-        throw new ConnectionException('private-provider-diagnostic-never-return');
-    });
+    $this->providerFailure = true;
     $answer = $this->service->respond($this->owner, $this->space, 'Explain current cash.', $this->data, $this->uuid);
     expect($answer['ai']['status'])->toBe('outcome_unconfirmed')
         ->and(json_encode($answer))->not->toContain('private-provider-diagnostic-never-return');
@@ -115,7 +126,8 @@ test('timeout keeps the full reservation and cannot retry the same paid request'
     expect($usage->status)->toBe('reserved')->and($usage->buyer_charge_micros)->toBeGreaterThan(0);
     $again = $this->service->respond($this->owner, $this->space, 'Explain current cash.', $this->data, $this->uuid);
     expect($again['ai']['status'])->toBe('request_not_replayed')->and(TenantAiUsageEvent::count())->toBe(1);
-    expect(Event::where('action', 'trajectory_ai_request')->count())->toBe(1);
+    expect(Event::where('action', 'trajectory_ai_request')->count())->toBe(1)
+        ->and($this->providerCalls)->toBe(1);
 });
 
 test('validated budget proposals bypass AI and never mutate the budget', function (): void {
@@ -129,10 +141,12 @@ test('validated budget proposals bypass AI and never mutate the budget', functio
 
 test('secret-bearing or false-action provider text is withheld after legitimate usage settlement', function (string $reply): void {
     $this->providerResponse['output'][0]['content'][0]['text'] = $reply;
-    Http::fake(['https://api.openai.com/v1/responses' => Http::response($this->providerResponse)]);
     $answer = $this->service->respond($this->owner, $this->space, 'Explain current cash.', $this->data, $this->uuid);
     expect($answer['ai']['status'])->toBe('answer_requires_review')->and($answer['reply'])->not->toBe($reply)
-        ->and(TenantAiUsageEvent::firstOrFail()->status)->toBe('settled');
+        ->and(TenantAiUsageEvent::firstOrFail()->status)->toBe('settled')
+        ->and($this->providerCalls)->toBe(1);
+    Http::assertSent(fn ($request, $response): bool => $request->url() === 'https://api.openai.com/v1/responses'
+        && $response?->json('output.0.content.0.text') === $reply);
 })->with(['fictional-provider-credential', 'I have transferred money for you.']);
 
 test('text usage extension retains the existing teams feature and rejects arbitrary feature names', function (): void {

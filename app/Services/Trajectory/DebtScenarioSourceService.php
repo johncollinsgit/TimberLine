@@ -42,7 +42,7 @@ class DebtScenarioSourceService
                 }
             }
             if (! $account && $balance !== 0) {
-                $observed = filled($d['balance_observed_on'] ?? null) ? CarbonImmutable::parse($d['balance_observed_on'], $space->timezone)->startOfDay() : null;
+                $observed = filled($d['observed_on'] ?? null) ? CarbonImmutable::parse($d['observed_on'], $space->timezone)->startOfDay() : null;
                 if (! $observed || $observed->lt($today->subDays(2)) || $observed->gt($today)) {
                     $missing[] = $record->name.' — verify its current dated principal balance';
                 }
