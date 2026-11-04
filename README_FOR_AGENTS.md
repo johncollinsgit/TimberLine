@@ -3850,3 +3850,31 @@ birthday redemption remain unfinished. New owned-stock pre-handoff claims use a
 gated atomic journal transition and can be cancelled without replacing an issued
 attempt. A signed development archive is not distribution
 approval, and a simulator run is not physical Square acceptance.
+
+## Explicit household cash balance sources
+
+Accounts can explicitly link an unconnected manual/Monarch cash snapshot to its
+connected cash feed in the same household and currency. Only the household owner
+can confirm or unlink a pair. No identity is inferred from names or masks. The
+existing account PATCH endpoint accepts replacement_account_id (nullable for
+unlink) and the current cash_source_version; stale versions return409. Balance
+updates cannot be mixed with a source change.
+
+The encrypted space settings retain the exact pair map and version; encrypted
+audit events retain before/after maps and actor. No migration is needed. Existing
+settings are merged under the space lock. Historical balances, observations,
+transaction allocations and snapshots are untouched. Current cash, net worth and
+forecast starting cash exclude only explicitly linked historical balances. The
+Accounts list labels each excluded snapshot and retains Activity/Update balance;
+unlink restores its current-total inclusion. A disconnected feed retains the
+reviewed authority link and its visible last observation; never silently revive
+both balances. Unlink before moving either account to another owner.
+
+SourceCoverageReconciliationService is unchanged: transaction supersession and
+this balance-only authority control are separate. Unicode mask matching remains
+a documented follow-up requiring verified transaction coverage, not a prerequisite
+for explicit source selection.
+
+Run CashBalanceSourceTest and the existing Trajectory feature/JS suites before
+protected publication; confirm the picker, excluded labels and current totals in
+a fictional household. No production evidence belongs in source or fixtures.

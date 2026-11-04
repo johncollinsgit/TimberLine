@@ -61,6 +61,7 @@ class WorkspaceService
             }
             Space::whereIn('id', [$source->id, $target->id])->orderBy('id')->lockForUpdate()->get();
             $account = Account::where('space_id', $source->id)->lockForUpdate()->findOrFail($account->id);
+            app(CashBalanceSourceService::class)->assertUnlinked($source->fresh(), $account);
             $transactions = Transaction::where('account_id', $account->id)->lockForUpdate()->get();
             $ids = $transactions->pluck('id');
             abort_if(Allocation::whereIn('transaction_id', $ids)->where('space_id', '!=', $source->id)->exists(), 422, 'Resolve shared transaction allocations before moving this account.');

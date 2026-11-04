@@ -78,6 +78,20 @@ class TrajectoryController extends Controller
     {
         $access->authorize($request->user(), $space);
         abort_unless($account->space_id === $space->id, 404);
+        if (array_key_exists('replacement_account_id', $request->all())) {
+            $data = $request->validate([
+                'replacement_account_id' => 'present|nullable|integer',
+                'cash_source_version' => 'required|integer|min:0',
+                'balance_cents' => 'prohibited', 'observed_on' => 'prohibited',
+            ]);
+            $version = app(\App\Services\Trajectory\CashBalanceSourceService::class)->change(
+                $request->user(), $space, $account,
+                $data['replacement_account_id'] === null ? null : (int) $data['replacement_account_id'],
+                (int) $data['cash_source_version'],
+            );
+
+            return response()->json(['ok' => true, 'cash_source_version' => $version])->header('Cache-Control', 'private, no-store');
+        }
         abort_if($account->connection_id, 422, 'Connected balances refresh from the bank.');
         $data = $request->validate(['balance_cents' => 'required|integer|between:-100000000000,100000000000', 'observed_on' => 'required|date_format:Y-m-d|before_or_equal:today']);
         Event::create(['space_id' => $space->id, 'actor_id' => $request->user()->id, 'action' => 'balance_updated', 'record_id' => $account->id, 'before' => $account->only(['balance_cents', 'observed_at']), 'after' => $data]);

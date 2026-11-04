@@ -112,7 +112,7 @@ class DashboardService
             $dailyByAccount[$id] ??= ['income' => 0, 'expense' => 0, 'categories' => []];
             $dailyByAccount[$id]['seasonal'] = $months;
         }
-        $cash = (int) $accounts->where('kind', 'cash')->sum('balance_cents');
+        $cash = app(CashBalanceSourceService::class)->currentCash($space, $accounts);
         $blockers = [...$medical['issues'], ...($space->settings['coverage_notes'] ?? [])];
         if ($accounts->whereIn('kind', ['cash', 'credit'])->contains(fn ($a) => ! $a->history_start || $a->history_start->gt($today->subDays(90)))) {
             $blockers[] = 'Some spending accounts have less than 90 days of history.';
@@ -282,7 +282,8 @@ class DashboardService
             'unresolved_deposits' => ['amount_cents' => (int) $unresolvedDeposits->sum('amount_cents'), 'ids' => $unresolvedDeposits->pluck('id')->all()],
             'summary' => ['income_cents' => (int) $income, 'spending_cents' => -(int) $spending->sum('amount_cents'), 'cash_cents' => $cash, 'net_worth_cents' => $assetTotal - $liabilities, 'net_worth_complete' => $netComplete, 'assets_cents' => $assetTotal, 'liabilities_cents' => $liabilities, 'review_count' => $entries->where('reviewed', false)->count(), 'selected_interest_cents' => $interestService->total($interest, $interestStatements, $start->toDateString(), $end->toDateString()), 'ytd_interest_cents' => $interestService->total($interest, $interestStatements, $today->startOfYear()->toDateString(), $today->toDateString()), 'recorded_interest_cents' => $interestService->total($interest, $interestStatements), 'projected_interest_cents' => count($forecastDebts) > count($debts) || collect($debtRows)->contains(fn ($d) => $d['projection']['interest_cents'] === null) ? null : (int) collect($debtRows)->sum(fn ($d) => $d['projection']['interest_cents'])],
             'coverage' => ['history_days' => $days, 'provisional' => $days < 90 || count($blockers) > 0, 'blockers' => $blockers, 'history_start' => $historyStart?->toDateString()],
-            'accounts' => $accounts->map(fn ($a) => $a->only(['id', 'name', 'kind', 'connection_id', 'balance_cents', 'history_start', 'observed_at']))->all(),
+            'accounts' => app(CashBalanceSourceService::class)->accountPayload($space, $accounts),
+            'cash_source_version' => app(CashBalanceSourceService::class)->version($space),
             'connections' => Connection::where(fn ($q) => $q->where('space_id', $space->id)->orWhereIn('id', $accounts->pluck('connection_id')->filter()))->get()->map(fn ($c) => [...$c->only(['id', 'status', 'institution_name', 'synced_at']), 'managed_here' => $c->space_id === $space->id])->all(),
             'medical' => $space->kind === 'household' ? $medical : null,
             'household_cards' => $space->kind === 'household' ? app(HouseholdCardsService::class)->build($records, $start->toDateString(), $end->toDateString(), $today->toDateString(), $entries) : null,
