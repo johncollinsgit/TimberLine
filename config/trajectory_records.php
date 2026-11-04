@@ -3,6 +3,8 @@
 return [
     'financial_observation' => [
         'metric' => ['label' => 'Card', 'type' => 'select', 'required' => true, 'choices' => ['take_home_income', 'owner_draws', 'employee_pay', 'metals_sold', 'personal_credit_cards', 'personal_debt', 'interest_paid', 'interest_charged']],
+        'aggregation' => ['label' => 'Evidence shape (blank means period total)', 'type' => 'select', 'required' => false, 'choices' => ['period_total', 'dated_item']],
+        'source_id' => ['label' => 'Stable source reference (required for dated items)', 'type' => 'text', 'required' => false],
         'period_start' => ['label' => 'Evidence period starts', 'type' => 'date', 'required' => true],
         'period_end' => ['label' => 'Evidence period ends', 'type' => 'date', 'required' => true],
         'observed_on' => ['label' => 'Verified on', 'type' => 'date', 'required' => true],

@@ -19,7 +19,7 @@ class DashboardService
     {
         $today = CarbonImmutable::now($space->timezone)->startOfDay();
         $start = match ($range) {
-            'day' => $today, 'week' => $today->startOfWeek(), 'year' => $today->startOfYear(), default => $today->startOfMonth()
+            'day' => $today, 'week' => $today->startOfWeek(), 'quarter' => $today->startOfQuarter(), 'year' => $today->startOfYear(), default => $today->startOfMonth()
         };
         $entries = collect(app(LedgerService::class)->entries($space, null, $today->toDateString()));
         if ($range === 'all') {
@@ -30,6 +30,21 @@ class DashboardService
         }
         $end = $range === 'custom' && $through ? CarbonImmutable::parse($through, $space->timezone) : $today;
         $selected = $entries->where('date', '>=', $start->toDateString())->where('date', '<=', $end->toDateString())->values();
+        $priorStart = $start->subYearNoOverflow();
+        $priorEnd = $end->subYearNoOverflow();
+        $priorEntries = $entries->where('date', '>=', $priorStart->toDateString())->where('date', '<=', $priorEnd->toDateString());
+        $priorSnapshot = Snapshot::where('space_id', $space->id)->whereDate('observed_on', $priorEnd->toDateString())->first();
+        $periodSnapshot = $end->lt($today) ? Snapshot::where('space_id', $space->id)->whereDate('observed_on', $end->toDateString())->first() : null;
+        $periodComparison = [
+            'range' => ['start' => $priorStart->toDateString(), 'end' => $priorEnd->toDateString()],
+            'has_transactions' => $priorEntries->isNotEmpty(),
+            'summary' => [
+                'income_cents' => $priorEntries->isEmpty() ? null : app(IncomeSourceService::class)->summarize($priorEntries)['earned_income_cents'],
+                'spending_cents' => $priorEntries->isEmpty() ? null : -(int) $priorEntries->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership'])->sum('amount_cents'),
+                'cash_cents' => $priorSnapshot?->data['imported_cash_cents'] ?? $priorSnapshot?->data['cash_cents'] ?? null,
+                'net_worth_cents' => $priorSnapshot?->data['net_worth_cents'] ?? null,
+            ],
+        ];
         $unexpectedThrough = $end->min($today);
         $unexpectedFrom = $unexpectedThrough->startOfMonth();
         $unexpected = $entries->where('date', '>=', $unexpectedFrom->toDateString())
@@ -38,6 +53,7 @@ class DashboardService
             ->where('amount_cents', '<', 0)->sortBy('amount_cents')->values();
         $accounts = Account::where('space_id', $space->id)->get();
         $records = Record::where('space_id', $space->id)->where('active', true)->whereNotIn('kind', ['sms'])->get();
+        $periodComparison['household_cards'] = $space->kind === 'household' ? app(HouseholdCardsService::class)->build($records, $priorStart->toDateString(), $priorEnd->toDateString(), $today->toDateString(), $entries) : null;
         $plans = fn ($kind) => $records->where('kind', $kind)->map(fn ($r) => [...$r->data, 'id' => $r->id, 'name' => $r->name])->values()->all();
         $schedules = array_values(array_filter($plans('recurring'), fn ($r) => $r['confirmed']));
         foreach ($schedules as &$schedule) {
@@ -258,13 +274,18 @@ class DashboardService
 
         return [
             'space' => $space->only(['id', 'name', 'kind', 'currency', 'timezone']), 'range' => ['key' => $range, 'start' => $start->toDateString(), 'end' => $end->toDateString()],
+            'period_comparison' => $periodComparison,
+            'period_balances' => [
+                'cash_cents' => $end->lt($today) ? ($periodSnapshot?->data['imported_cash_cents'] ?? $periodSnapshot?->data['cash_cents'] ?? null) : $cash,
+                'net_worth_cents' => $end->lt($today) ? ($periodSnapshot?->data['net_worth_cents'] ?? null) : $assetTotal - $liabilities,
+            ],
             'unresolved_deposits' => ['amount_cents' => (int) $unresolvedDeposits->sum('amount_cents'), 'ids' => $unresolvedDeposits->pluck('id')->all()],
             'summary' => ['income_cents' => (int) $income, 'spending_cents' => -(int) $spending->sum('amount_cents'), 'cash_cents' => $cash, 'net_worth_cents' => $assetTotal - $liabilities, 'net_worth_complete' => $netComplete, 'assets_cents' => $assetTotal, 'liabilities_cents' => $liabilities, 'review_count' => $entries->where('reviewed', false)->count(), 'selected_interest_cents' => $interestService->total($interest, $interestStatements, $start->toDateString(), $end->toDateString()), 'ytd_interest_cents' => $interestService->total($interest, $interestStatements, $today->startOfYear()->toDateString(), $today->toDateString()), 'recorded_interest_cents' => $interestService->total($interest, $interestStatements), 'projected_interest_cents' => count($forecastDebts) > count($debts) || collect($debtRows)->contains(fn ($d) => $d['projection']['interest_cents'] === null) ? null : (int) collect($debtRows)->sum(fn ($d) => $d['projection']['interest_cents'])],
             'coverage' => ['history_days' => $days, 'provisional' => $days < 90 || count($blockers) > 0, 'blockers' => $blockers, 'history_start' => $historyStart?->toDateString()],
             'accounts' => $accounts->map(fn ($a) => $a->only(['id', 'name', 'kind', 'connection_id', 'balance_cents', 'history_start', 'observed_at']))->all(),
             'connections' => Connection::where(fn ($q) => $q->where('space_id', $space->id)->orWhereIn('id', $accounts->pluck('connection_id')->filter()))->get()->map(fn ($c) => [...$c->only(['id', 'status', 'institution_name', 'synced_at']), 'managed_here' => $c->space_id === $space->id])->all(),
             'medical' => $space->kind === 'household' ? $medical : null,
-            'household_cards' => $space->kind === 'household' ? app(HouseholdCardsService::class)->build($records, $start->toDateString(), $end->toDateString(), $today->toDateString()) : null,
+            'household_cards' => $space->kind === 'household' ? app(HouseholdCardsService::class)->build($records, $start->toDateString(), $end->toDateString(), $today->toDateString(), $entries) : null,
             'interest_by_account' => $interestByAccount, 'interest_statements' => $interestStatements,
             'commitments' => app(CommitmentsService::class)->summary($records, $entries, $accounts, $today),
             'history' => app(HistoryService::class)->summarize($entries, $accounts, $today),

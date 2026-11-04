@@ -56,6 +56,9 @@ class RecordService
         }
         if ($kind === 'financial_observation') {
             $today = now($space->timezone)->toDateString();
+            if (($data['aggregation'] ?? 'period_total') === 'dated_item') {
+                abort_unless(filled($data['source_id'] ?? null) && $data['period_start'] === $data['period_end'] && ! in_array($data['metric'], ['personal_credit_cards', 'personal_debt'], true), 422, 'A dated item needs a stable source reference and one actual transaction date.');
+            }
             abort_unless($data['amount_cents'] >= 0 && $data['period_start'] <= $data['period_end'] && $data['period_end'] <= $data['observed_on'] && $data['observed_on'] <= $today, 422, 'Use nonnegative actual amounts and a completed evidence period.');
             if (in_array($data['metric'], ['personal_credit_cards', 'personal_debt'], true)) {
                 abort_unless($data['period_start'] === $data['period_end'] && $data['period_end'] === $data['observed_on'], 422, 'A balance observation needs one actual balance date.');
@@ -162,6 +165,18 @@ class RecordService
                 foreach (Record::where('space_id', $space->id)->where('kind', 'payroll')->get() as $other) {
                     if ($other->id !== $record?->id && ($other->data['source_id'] ?? null) === $data['source_id']) {
                         abort_unless($other->data === $data, 409, 'Payroll source row changed; edit the existing row.');
+
+                        return $other;
+                    }
+                }
+            }
+            if ($kind === 'financial_observation' && $record && filled($record->data['source_id'] ?? null)) {
+                abort_if($record->data['source_id'] !== ($data['source_id'] ?? null), 422, 'Keep the original stable source reference when correcting evidence.');
+            }
+            if ($kind === 'financial_observation' && filled($data['source_id'] ?? null)) {
+                foreach (Record::where('space_id', $space->id)->where('kind', $kind)->get() as $other) {
+                    if ($other->id !== $record?->id && ($other->data['source_id'] ?? null) === $data['source_id']) {
+                        abort_unless($other->data === $data, 409, 'This source reference already exists with different evidence. Edit the existing observation.');
 
                         return $other;
                     }

@@ -121,13 +121,31 @@ each owner distribution only once. These cash observations are not lender
 qualifying income or a DTI calculation.
 
 Income cards require the selected period's starting date and show their actual
-through-date. Interest paid and interest charged are separate current-year
+through-date. Interest paid and interest charged are separate selected-period
 observations. Balances use a single actual observation date. A later observation
 replaces an earlier card value; values are never added across overlapping
 statements. Missing observations stay unavailable and incomplete coverage stays
-explicit. Stale debt totals cannot show current payoff progress. The payoff
+explicit. Stale debt totals cannot show payoff progress for a different cutoff. The payoff
 thermometer requires complete current coverage and a positive dated baseline for
 the same set of personal debts; increased debt is reported as an increase.
+
+Day, Month, Quarter and Year use matching calendar dates for the prior-year
+comparison (February 29 maps to February 28). Partial months/quarters/years stop
+at the same date in each year. Total spending uses the same ledger expense and
+refund rules in both periods. Historical cash/net-worth cards require a dated
+snapshot at the cutoff; today's balances never stand in for prior-year evidence.
+
+Household users can preview/confirm `financial_observation` CSV/XLSX imports.
+Columns are `name` plus the fields in `config/trajectory_records.php`. Money is
+integer cents, booleans are 0/1, and every imported row requires a stable
+`source_id`. Dated items use one actual pay/sale date and aggregate only inside
+the selected period. A period total replaces items in its covered interval;
+later dated items may extend it without adding covered dates twice. Source IDs
+cannot be changed on edit. An identical reimport is a no-op; changed evidence
+requires editing the existing observation and cannot overwrite a later review.
+Reviewed ledger receipts can support explicitly partial take-home, draw and
+metals-deposit cards; they never establish complete household coverage. Metals
+cash retained outside the bank requires a separate dated source observation.
 
 Manual accounts expose Update balance through the existing scoped, audited
 balance endpoint. Connected balances continue to come from their bank feed.
