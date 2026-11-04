@@ -1,6 +1,6 @@
 ## 2026-11-03 — Field keyboard dismissal
 
-Software keyboards have an explicit down-arrow control and downward page swipe. Drafts remain intact. Field web .14 shares mobile build 47 source `b0aab78cd6f06d2f42529d07f14b48d77cc4552c`.
+Software keyboards have an explicit down-arrow control and downward page swipe. Drafts remain intact. Field web .14 shares mobile build 47 source `04b5705817eaa4dfd4f3a156bfa4cc376936e7e8`.
 
 ## 2026-11-03 — Field tablet/native presentation candidate
 

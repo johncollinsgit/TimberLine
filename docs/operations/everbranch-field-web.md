@@ -132,4 +132,4 @@ Paired source PRs are Everbranch Mobile #62 and TimberLine #521. The installable
 
 ## Keyboard dismissal — build .14
 
-Field web 2.3.30-web.14 comes from mobile source `b0aab78cd6f06d2f42529d07f14b48d77cc4552c` (native candidate 2.3.30 build 47). Software keyboards have a down-arrow Hide keyboard control and downward page swipe. Drafts remain intact; text-field and horizontal/media gestures retain their behavior. Native iOS additionally uses interactive dismissal. The toolbar occupies the keyboard navigation area without covering message composers. Source, hosting and store acceptance remain separate.
+Field web 2.3.30-web.14 comes from mobile source `04b5705817eaa4dfd4f3a156bfa4cc376936e7e8` (native candidate 2.3.30 build 47). Software keyboards have a down-arrow Hide keyboard control and downward page swipe. Drafts remain intact; text-field and horizontal/media gestures retain their behavior. Native iOS additionally uses interactive dismissal. The toolbar occupies the keyboard navigation area without covering message composers. Source, hosting and store acceptance remain separate.
