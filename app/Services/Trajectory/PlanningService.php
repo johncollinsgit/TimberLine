@@ -89,7 +89,7 @@ class PlanningService
         $strategy = app(DebtStrategyService::class)->compare($debts, $space->settings['debt_extra_cents'] ?? 0, $space->settings['debt_target_months'] ?? 36, $missing);
         $required = $fixed + $flex + $goals + ($space->settings['debt_extra_cents'] ?? 0);
         $months = [];
-        $cash = (int) $accounts->where('kind', 'cash')->sum('balance_cents');
+        $cash = app(CashBalanceSourceService::class)->currentCash($space, $accounts);
         $plannedCash = $cash;
         foreach (array_slice($forecast['monthly'], 0, 12) as $row) {
             $date = CarbonImmutable::parse($row['date']);

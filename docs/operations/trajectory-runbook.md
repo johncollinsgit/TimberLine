@@ -491,3 +491,31 @@ section uses the same complete scoped ledger as summary/category totals, lists
 the ten largest negative spending records and every positive net spending
 category, and shows refund offsets explicitly. Transfers and debt principal are
 excluded consistently; repayments do not count card purchases twice.
+
+## Explicit household cash balance sources
+
+Accounts can explicitly link an unconnected manual/Monarch cash snapshot to its
+connected cash feed in the same household and currency. Only the household owner
+can confirm or unlink a pair. No identity is inferred from names or masks. The
+existing account PATCH endpoint accepts replacement_account_id (nullable for
+unlink) and the current cash_source_version; stale versions return409. Balance
+updates cannot be mixed with a source change.
+
+The encrypted space settings retain the exact pair map and version; encrypted
+audit events retain before/after maps and actor. No migration is needed. Existing
+settings are merged under the space lock. Historical balances, observations,
+transaction allocations and snapshots are untouched. Current cash, net worth and
+forecast starting cash exclude only explicitly linked historical balances. The
+Accounts list labels each excluded snapshot and retains Activity/Update balance;
+unlink restores its current-total inclusion. A disconnected feed retains the
+reviewed authority link and its visible last observation; never silently revive
+both balances. Unlink before moving either account to another owner.
+
+SourceCoverageReconciliationService is unchanged: transaction supersession and
+this balance-only authority control are separate. Unicode mask matching remains
+a documented follow-up requiring verified transaction coverage, not a prerequisite
+for explicit source selection.
+
+Run CashBalanceSourceTest and the existing Trajectory feature/JS suites before
+protected publication; confirm the picker, excluded labels and current totals in
+a fictional household. No production evidence belongs in source or fixtures.

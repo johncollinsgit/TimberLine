@@ -215,6 +215,10 @@ class PlaidService
 
                         continue;
                     }
+                    $incomingKind = in_array($data['type'], ['credit', 'loan'], true) ? $data['type'] : 'cash';
+                    if ($account->exists && ($account->kind !== $incomingKind || $account->currency !== 'USD')) {
+                        app(CashBalanceSourceService::class)->assertUnlinked(Space::whereKey($account->space_id)->lockForUpdate()->firstOrFail(), $account);
+                    }
                     $account->fill([
                         'space_id' => $targetId ?? $connection->space_id, 'connection_id' => $connection->id, 'name' => $data['name'].(empty($data['mask']) ? '' : ' (…'.$data['mask'].')'),
                         'kind' => in_array($data['type'], ['credit', 'loan'], true) ? $data['type'] : 'cash',
