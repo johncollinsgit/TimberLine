@@ -2,6 +2,9 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+import sys
+
+sys.dont_write_bytecode = True
 
 spec = importlib.util.spec_from_file_location('mirrors', Path(__file__).with_name('ubuntu-official-mirrors.py'))
 mirrors = importlib.util.module_from_spec(spec)
