@@ -5,23 +5,59 @@ use App\Models\User;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
-use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
-new class extends Component {
+new class extends Component
+{
     use ProfileValidationRules;
 
     public string $name = '';
+
     public string $email = '';
+
+    #[Locked]
+    public ?int $teamTenantId = null;
+
+    #[Locked]
+    public ?int $teamViewerId = null;
+
+    public bool $profileSaved = false;
 
     /**
      * Mount the component.
      */
-    public function mount(): void
+    public function mount(?int $teamTenantId = null): void
     {
+        $this->teamTenantId = $teamTenantId;
+        if ($teamTenantId !== null) {
+            $this->teamViewerId = Auth::id();
+            $this->verifyTeamContext();
+        }
         $this->name = Auth::user()->name;
         $this->email = Auth::user()->email;
+    }
+
+    public function hydrate(): void
+    {
+        $this->verifyTeamContext();
+    }
+
+    public function updated(string $property): void
+    {
+        if (in_array($property, ['name', 'email'], true)) {
+            $this->profileSaved = false;
+        }
+    }
+
+    private function verifyTeamContext(): void
+    {
+        if ($this->teamTenantId === null) {
+            return;
+        }
+        abort_unless(Auth::id() === $this->teamViewerId && config('team_work.premium_enabled'), 403);
+        app(\App\Services\Team\TeamWorkAccess::class)->context(Auth::user()->fresh(), \App\Models\Tenant::findOrFail($this->teamTenantId));
     }
 
     /**
@@ -40,6 +76,8 @@ new class extends Component {
         }
 
         $user->save();
+
+        $this->profileSaved = true;
 
         $this->dispatch('profile-updated', name: $user->name);
     }
@@ -76,6 +114,10 @@ new class extends Component {
     }
 }; ?>
 
+<div>
+@if ($teamTenantId !== null)
+    @include('team.settings-profile')
+@else
 <section class="w-full">
     @include('partials.settings-heading')
 
@@ -125,3 +167,5 @@ new class extends Component {
         @endif
     </x-pages::settings.layout>
 </section>
+@endif
+</div>

@@ -1,4 +1,6 @@
 import '../../css/team-operations.css';
+import '../../css/team-events.css';
+import { installEventTasks } from './event-tasks';
 
 // Business workspaces share the Teams shell and services. Private drafts stay in memory.
 export function installOperations(nativeRoot) {
@@ -14,6 +16,7 @@ export function installOperations(nativeRoot) {
   let areas = [], members = [], area, view = 'overview', page = 1, serial = 0, returnFocus, draft, busy = false, identityLost = false, timer, searchTimer, editorSequence = 0, pageCursors = [null], statisticsYear = new Date().getFullYear();
   const drafts = new Map();
   const emailDrafts = new Map();
+  const eventTasks = installEventTasks({ api, el, button, field, dialog, section, note, area: () => area, content: $('content'), navigate });
   async function api(path, options = {}) {
     if (identityLost && !options.verify) throw new Error('Verify the original account before continuing. Area drafts are retained in this page.');
     const url = new URL(root.dataset.url + path, location.origin);
@@ -65,14 +68,15 @@ export function installOperations(nativeRoot) {
       const b = button(label(tab), () => { view = tab; page = 1; controls(); return load(); }); b.setAttribute('aria-current', view === tab ? 'page' : 'false'); $('tabs').append(b);
     }
     $('settings').hidden = !admin;
-    $('new').hidden = !area.capabilities?.write || ['statistics', 'documents', 'connections', 'communications', 'orders', 'staffing'].includes(view) || (!admin && ['automations', 'campaigns', 'templates'].includes(view));
+    $('new').hidden = !area.capabilities?.write || ['my_tasks', 'statistics', 'documents', 'connections', 'communications', 'orders', 'staffing'].includes(view) || (!admin && ['automations', 'campaigns', 'templates'].includes(view));
     $('new').textContent = 'New ' + ({ pipeline: 'opportunity', followups: 'follow-up', prospects: 'prospect', campaigns: 'campaign', templates: 'template', automations: 'rule' }[view] || (area.profile === 'events' ? 'event' : 'account'));
     $('prev').hidden = $('next').hidden = true;
-    $('search').closest('label').hidden = ['connections', 'statistics', 'communications', 'orders', 'prospects', 'followups', 'templates'].includes(view);
+    $('search').closest('label').hidden = ['my_tasks', 'connections', 'statistics', 'communications', 'orders', 'prospects', 'followups', 'templates'].includes(view);
   }
   async function openArea(item, initialView = 'overview') {
     if (window.TeamPremium?.context && !window.TeamPremium.context.ready()) return;
     if (area) keepDraft();
+    eventTasks.reset();
     area = item; view = item.views.includes(initialView) ? initialView : 'overview'; page = 1; serial++;
     root.classList.add('tops-active'); $('panel').hidden = false;
     document.querySelectorAll('#tops-areas button').forEach(b => b.setAttribute('aria-current', b.dataset.area === area.id ? 'page' : 'false'));
@@ -89,6 +93,13 @@ export function installOperations(nativeRoot) {
   document.querySelector('.teams-sidebar')?.addEventListener('click', event => { if (event.target.closest('[data-team-mode],#teams-create,#teams-project-list button,#teams-favorite-list button')) native(); });
   let personalTicket = 0;
   window.TeamOperations = {
+    settingsAreas: () => identityLost ? [] : areas.map(item => ({ id: item.id, name: item.name })),
+    openSettingsArea: async (areaId, settingsView) => {
+      if (identityLost) throw new Error('Verify the original account before opening area settings.');
+      const target = areas.find(item => item.id === areaId);
+      if (!target || !['connections', 'automations'].includes(settingsView) || (settingsView === 'automations' && !admin)) throw new Error('These area settings are not available to this account.');
+      await openArea(target, settingsView);
+    },
     area: async areaId => { const target = areas.find(a => a.id === areaId); if (!target) throw new Error('This area is no longer accessible.'); await openArea(target); },
     create: async areaId => { const target = areas.find(a => a.id === areaId); if (!target) throw new Error('This area is no longer accessible.'); await openArea(target); edit(); },
     open: async (areaId, recordId) => { const target = areas.find(a => a.id === areaId); if (!target) throw new Error('This area is no longer accessible.'); await openArea(target); await details({ id: recordId, title: 'Work details' }); },
@@ -130,7 +141,8 @@ export function installOperations(nativeRoot) {
     $('content').inert = true;
     try {
       let result;
-      if (view === 'connections') result = await api('/integrations');
+      if (view === 'my_tasks') result = await api('/events/my-tasks', { query: { connection_id: eventTasks.connection(), cursor: pageCursors[page - 1] } });
+      else if (view === 'connections') result = await api('/integrations');
       else if (view === 'templates') result = await api('/communications/templates');
       else if (view === 'statistics') result = await api('/statistics', { query: { year: statisticsYear } });
       else if (view === 'communications') result = await api('/communications', { query: { page } });
@@ -146,7 +158,8 @@ export function installOperations(nativeRoot) {
       pageCursors[page] = result.next_cursor;
       $('scope').textContent = result.count !== undefined ? result.count + ' visible records · page ' + page : result.total !== undefined ? result.total + ' accessible records · page ' + page : '';
       $('prev').hidden = page === 1; $('next').hidden = !result.has_more;
-      if (view === 'connections') renderConnections(result);
+      if (view === 'my_tasks') { $('prev').hidden = $('next').hidden = true; await eventTasks.render(result); }
+      else if (view === 'connections') renderConnections(result);
       else if (view === 'templates') renderTemplates(result);
       else if (view === 'automations') renderAutomations(result.items);
       else if (view === 'campaigns') { note('Campaign plans retain wording for review. Automated external sequences are not enabled in this candidate. Individual email updates are prepared from an account using its current permissions.'); renderRecords(result.items); }
@@ -339,7 +352,7 @@ export function installOperations(nativeRoot) {
   function updateDraftNotice() { $('draft').hidden = !drafts.size && !emailDrafts.size; const ids = [...new Set([...drafts.keys(), ...[...emailDrafts.values()].map(d => d.area)])]; $('draft').querySelector('span').textContent = 'Drafts retained in this page: ' + ids.map(id => areas.find(a => a.id === id)?.name || 'Area').join(', '); }
   function keepDraft() { if (draft?.dirty) { draft.values = Object.fromEntries(new FormData($('form'))); const audience = $('form').querySelector('[name=audience_ids]'); if (audience?.multiple) { draft.data.audience_ids = [...audience.selectedOptions].map(o => o.value); delete draft.values.audience_ids; } drafts.set(draft.area, draft); } updateDraftNotice(); }
   $('new').onclick = () => edit();
-  document.addEventListener('keydown', event => { if ($('panel').hidden || $('detail').open || $('editor').open || event.target.closest('input,textarea,select,[contenteditable]')) return; if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !window.TeamSearchPalette) { event.preventDefault(); event.stopImmediatePropagation(); ($('search').closest('label').hidden ? $('groups').querySelector('button') : $('search'))?.focus(); } else if (event.key.toLowerCase() === 'n' && !event.ctrlKey && !event.metaKey && !event.altKey && !$('new').hidden) { event.preventDefault(); event.stopImmediatePropagation(); edit(); } }, true);
+  document.addEventListener('keydown', event => { if ($('panel').hidden || $('detail').open || $('editor').open || event.target.closest('dialog,input,textarea,select,[contenteditable]')) return; if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !window.TeamSearchPalette) { event.preventDefault(); event.stopImmediatePropagation(); ($('search').closest('label').hidden ? $('groups').querySelector('button') : $('search'))?.focus(); } else if (event.key.toLowerCase() === 'n' && !event.ctrlKey && !event.metaKey && !event.altKey && !$('new').hidden) { event.preventDefault(); event.stopImmediatePropagation(); edit(); } }, true);
   $('editor-close').onclick = () => { keepDraft(); $('editor').close(); returnFocus?.focus(); };
   $('editor').addEventListener('cancel', keepDraft);
   $('resume').onclick = async () => { if (drafts.has(area?.id)) edit(); else { const retained = [...emailDrafts.values()].find(d => d.area === area?.id); if (retained) { const record = await api('/operations/records/' + retained.recordId); await compose(record, 'gmail.send'); } else $('notice').textContent = 'Return to the area where you started this draft to resume it.'; } };
@@ -380,7 +393,7 @@ export function installOperations(nativeRoot) {
         }));
         box.append(button('Authorize hidden identifier writes', async () => { if (drafts.size || emailDrafts.size || draft?.dirty) throw new Error('Save or discard area drafts before OAuth.'); const result = await api('/integrations/sheets/connect', { method: 'POST', body: { send: true } }); location.assign(result.url); }));
       }
-      if (connection.provider === 'asana' || connection.provider === 'gmail') box.append(button('Authorize ' + (connection.provider === 'asana' ? 'reviewed event creation' : 'email sending'), async () => { if (drafts.size || emailDrafts.size || draft?.dirty) throw new Error('Save or discard area drafts before OAuth.'); const result = await api('/integrations/' + connection.provider + '/connect', { method: 'POST', body: { send: true } }); location.assign(result.url); }));
+      if (connection.provider === 'asana' || connection.provider === 'gmail') box.append(button('Authorize ' + (connection.provider === 'asana' ? 'reviewed task changes and event creation' : 'email sending'), async () => { if (drafts.size || emailDrafts.size || draft?.dirty) throw new Error('Save or discard area drafts before OAuth.'); const result = await api('/integrations/' + connection.provider + '/connect', { method: 'POST', body: { send: true } }); location.assign(result.url); }));
     }
   }
   function projectPicker(form, connection, preset) {
@@ -451,5 +464,5 @@ export function installOperations(nativeRoot) {
   addEventListener('beforeunload', event => { if (draft?.dirty || drafts.size || emailDrafts.size) { event.preventDefault(); event.returnValue = ''; } });
   document.addEventListener('visibilitychange', () => { clearInterval(timer); if (!document.hidden) timer = setInterval(() => { if (!$('panel').hidden && !draft?.dirty && !$('detail').open && !$('editor').open) load(); }, 60000); });
   document.dispatchEvent(new Event('visibilitychange'));
-  api('/areas').then(async data => { areas = data.items; renderAreas(); const url = new URL(location.href), initial = areas.find(a => a.id === url.searchParams.get('area')); if (initial) await openArea(initial, url.searchParams.get('area_view') || 'overview'); }).catch(report);
+  api('/areas').then(async data => { areas = data.items; renderAreas(); const url = new URL(location.href), eventApp = url.searchParams.get('app') === 'events', initial = areas.find(a => a.id === url.searchParams.get('area')) || (eventApp ? areas.find(a => a.profile === 'events') : null); if (initial) await openArea(initial, url.searchParams.get('area_view') || (eventApp ? 'my_tasks' : 'overview')); }).catch(report);
 }

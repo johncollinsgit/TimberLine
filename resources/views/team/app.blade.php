@@ -6,6 +6,12 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="robots" content="noindex,nofollow">
     <meta name="theme-color" content="#244d3b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Teams">
+    <link rel="manifest" href="{{ route('team.manifest', ['tenant' => $tenant->slug]) }}">
+    <link rel="apple-touch-icon" href="{{ asset('brand/everbranch-mark.png') }}">
+    @if(config('team_work.premium_enabled')) @livewireStyles @endif
     <title>{{ $teamAppName }}</title>
     <link rel="icon" href="{{ asset('brand/everbranch-mark.svg') }}" type="image/svg+xml">
     <style>
@@ -31,17 +37,24 @@
         <div class="teams-projects"><p class="teams-section-label">Favorites</p><div id="teams-favorite-list"></div><p class="teams-section-label" style="margin-top:26px">Projects</p><input id="tw-project-nav-search" type="search" placeholder="Find a project…" aria-label="Find a project in navigation" style="width:100%;border:1px solid #ffffff20;background:#ffffff08;color:#dce7dd;padding:8px 10px;border-radius:5px;font:inherit;font-size:12px;margin-bottom:10px"><div id="teams-project-list"></div>@if(config('team_work.asana_enabled'))<p class="teams-section-label" style="margin-top:26px">Asana</p><div id="tw-asana-project-nav"></div>@endif</div>
         @endif
         <div class="teams-bottom">
+            <button type="button" class="teams-install" data-teams-install>Install Teams</button>
+            <p class="teams-install-help" data-teams-install-help hidden></p>
             <a href="{{ route('team.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link>Back to Everbranch</a>
             @if(app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, auth()->user()))
             <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link>AI Voice Branch</a>
             @endif
+            @if(config('team_work.premium_enabled'))
+            <button type="button" class="teams-settings-entry" data-team-settings aria-haspopup="dialog">Settings</button>
+            @else
             <a href="{{ route('profile.edit', ['tenant' => $tenant->slug]) }}">Account settings</a>
-            <div class="teams-user">@if(config('team_work.premium_enabled'))<span class="teams-avatar" aria-hidden="true">{{ mb_substr(auth()->user()->name, 0, 1) }}</span>@endif<span>{{ auth()->user()->name }}<br>{{ $tenant->name }}</span></div>
+            @endif
+            <div class="teams-user">@if(config('team_work.premium_enabled'))<span class="teams-avatar" data-team-user-avatar aria-hidden="true">{{ mb_substr(auth()->user()->name, 0, 1) }}</span>@endif<span><span data-team-user-name>{{ auth()->user()->name }}</span><br>{{ $tenant->name }}</span></div>
         </div>
     </aside>
     <main class="teams-content" id="teams-main" tabindex="-1">
         @include('team.workspace')
     </main>
 </div>
+@if(config('team_work.premium_enabled')) @livewireScripts @endif
 </body>
 </html>

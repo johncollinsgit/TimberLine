@@ -1,3 +1,21 @@
+## Events My Tasks and phone web app (November 4; source candidate)
+
+Premium Teams Events now has identity-scoped Asana My Tasks, original event notes,
+paged checklist/comments/attachment links and separately gated reviewed task
+write-through. Asana remains authoritative. The tenant-bound installable web app
+opens My Tasks on iPhone and Android; private data is not cached offline. No new
+migration or campus storage change. Runtime OAuth, protected release and physical
+phone acceptance remain necessary. See `docs/operations/teams-events-app.md`.
+
+## Teams settings containment (November 4; local candidate)
+
+The local review ports the isolated Settings change onto deployed release
+`2db6f506ae5dfc9cb5f9188c9c1c2b23507a9ee2`. Premium Teams keeps profile,
+work-area connections and admin reminder navigation within its current page.
+Current search, graph permissions and campus facilities code remain intact.
+This is a local candidate, not a production release or an Asana migration.
+See `docs/operations/teams-settings-local-review.md` for verification and limits.
+
 ## Retail Shop Pay Wallet (November 3; source candidate)
 
 Every retail owner/admin can open Shop Pay setup and choose Shopify-managed
