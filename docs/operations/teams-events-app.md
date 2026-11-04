@@ -80,3 +80,10 @@ demo suites. Both Vite bundles and TypeScript/build checks passed. Browser check
 cover the assigned event, its seven checklist items, six comments and five
 attachment links at desktop and phone widths. Actual source content stays in a
 private local preview, outside this repository; no real source task was changed.
+
+The first GitHub CI attempt stopped before app tests because the existing Ubuntu
+mirror step rejected its runner source layout. The setup helper now parses
+folded Deb822 fields without rewriting them, accepts direct official HTTPS source
+URIs, and retains the exact official mirror allowlist. Five fixture tests cover
+preservation, replay and rejection of malformed/insecure/unknown sources. This
+does not skip the test/build gate or change production package sources.
