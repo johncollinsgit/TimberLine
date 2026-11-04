@@ -1,6 +1,20 @@
 <?php
 
 return [
+    'financial_observation' => [
+        'metric' => ['label' => 'Card', 'type' => 'select', 'required' => true, 'choices' => ['take_home_income', 'owner_draws', 'employee_pay', 'metals_sold', 'personal_credit_cards', 'personal_debt', 'interest_paid', 'interest_charged']],
+        'aggregation' => ['label' => 'Evidence shape (blank means period total)', 'type' => 'select', 'required' => false, 'choices' => ['period_total', 'dated_item']],
+        'source_id' => ['label' => 'Stable source reference (required for dated items)', 'type' => 'text', 'required' => false],
+        'period_start' => ['label' => 'Evidence period starts', 'type' => 'date', 'required' => true],
+        'period_end' => ['label' => 'Evidence period ends', 'type' => 'date', 'required' => true],
+        'observed_on' => ['label' => 'Verified on', 'type' => 'date', 'required' => true],
+        'amount_cents' => ['label' => 'Verified total (employee pay: net; metals: gross proceeds)', 'type' => 'money', 'required' => true],
+        'gross_cents' => ['label' => 'Employee gross pay (optional)', 'type' => 'money', 'required' => false],
+        'baseline_cents' => ['label' => 'Personal debt starting balance (same debts; optional)', 'type' => 'money', 'required' => false],
+        'baseline_on' => ['label' => 'Starting balance date (optional)', 'type' => 'date', 'required' => false],
+        'source' => ['label' => 'Source, period and included accounts', 'type' => 'text', 'required' => true],
+        'complete' => ['label' => 'Covers every source / account for this card and period', 'type' => 'boolean', 'required' => true],
+    ],
     'subscription' => [
         'merchant' => ['label' => 'Merchant / service', 'type' => 'text', 'required' => true],
         'amount_cents' => ['label' => 'Last charge (if known)', 'type' => 'money', 'required' => false],

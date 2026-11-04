@@ -37,7 +37,7 @@ class TrajectoryController extends Controller
     public function dashboard(Request $request, Space $space, FinanceAccess $access, DashboardService $dashboard)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['range' => ['nullable', Rule::in(['day', 'week', 'month', 'year', 'all', 'custom'])], 'scenario_id' => ['nullable', 'integer'], 'from' => 'required_if:range,custom|nullable|date_format:Y-m-d|before_or_equal:today|after_or_equal:1900-01-01', 'through' => 'required_if:range,custom|nullable|date_format:Y-m-d|after_or_equal:from|before_or_equal:today', 'seasonal' => 'sometimes|boolean']);
+        $data = $request->validate(['range' => ['nullable', Rule::in(['day', 'week', 'month', 'quarter', 'year', 'all', 'custom'])], 'scenario_id' => ['nullable', 'integer'], 'from' => 'required_if:range,custom|nullable|date_format:Y-m-d|before_or_equal:today|after_or_equal:1900-01-01', 'through' => 'required_if:range,custom|nullable|date_format:Y-m-d|after_or_equal:from|before_or_equal:today', 'seasonal' => 'sometimes|boolean']);
 
         return response()->json([...$dashboard->build($space, $data['range'] ?? 'month', $data['scenario_id'] ?? null, $data['from'] ?? null, $data['through'] ?? null, (bool) ($data['seasonal'] ?? false)),
             'review_email' => app(\App\Services\Trajectory\ReviewEmailService::class)->preferences($request->user(), $space),
@@ -175,12 +175,13 @@ class TrajectoryController extends Controller
     public function previewImport(Request $request, Space $space, FinanceAccess $access)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['file' => 'required|file|max:5120|mimes:csv,txt,xlsx', 'kind' => ['required', Rule::in(['transactions', 'payroll', 'monarch'])], 'account_id' => 'nullable|integer']);
+        $data = $request->validate(['file' => 'required|file|max:5120|mimes:csv,txt,xlsx', 'kind' => ['required', Rule::in(['transactions', 'payroll', 'monarch', 'financial_observation'])], 'account_id' => 'nullable|integer']);
         $account = null;
         if ($data['kind'] === 'transactions') {
             $account = Account::where('space_id', $space->id)->whereKey($data['account_id'] ?? 0)->firstOrFail();
         }
         abort_if($data['kind'] === 'payroll' && $space->kind !== 'business', 422);
+        abort_if($data['kind'] === 'financial_observation' && $space->kind !== 'household', 422);
         $file = $request->file('file');
         if ($data['kind'] === 'monarch') {
             $rows = app(\App\Services\Trajectory\MonarchImportService::class)->read($file->getRealPath());
@@ -220,6 +221,10 @@ class TrajectoryController extends Controller
                 }
                 $row = Validator::make($row, ['id' => 'required|string|max:100', 'date' => 'required|date_format:Y-m-d|before_or_equal:today', 'merchant' => 'required|string|max:160', 'amount' => 'required|regex:/^-?\d{1,10}(\.\d{1,2})?$/', 'category' => ['nullable', Rule::in(app(\App\Services\Trajectory\WorkspaceService::class)->categories($space))]])->validate();
                 $rows[] = ['id' => $row['id'], 'date' => $row['date'], 'merchant' => $row['merchant'], 'amount_cents' => Money::cents($row['amount']), 'category' => $row['category'] ?? null];
+            } elseif ($data['kind'] === 'financial_observation') {
+                $name = Validator::make($row, ['name' => 'required|string|max:160', 'source_id' => 'required|string|max:160'])->validate();
+                $evidence = array_filter($row, fn ($value) => $value !== '' && $value !== null);
+                $rows[] = ['name' => $name['name'], ...app(RecordService::class)->validate($space, 'financial_observation', $evidence)];
             } else {
                 $row = app(RecordService::class)->validate($space, 'payroll', $row);
                 $rows[] = $row;
@@ -248,6 +253,10 @@ class TrajectoryController extends Controller
                 $account = Account::where('space_id', $space->id)->findOrFail($payload['account_id']);
                 app(LedgerService::class)->ingest($account, $payload['rows']);
                 $account->update(['history_start' => Transaction::where('account_id', $account->id)->min('posted_on')]);
+            } elseif ($payload['kind'] === 'financial_observation') {
+                foreach ($payload['rows'] as $row) {
+                    app(RecordService::class)->save($request->user(), $space, 'financial_observation', $row['name'], $row);
+                }
             } else {
                 foreach ($payload['rows'] as $row) {
                     app(RecordService::class)->save($request->user(), $space, 'payroll', $row['employee'], $row);
