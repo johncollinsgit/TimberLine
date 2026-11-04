@@ -46,6 +46,7 @@ test('finance AI uses the authorized private context and verified transport with
         ->and($answer['proposals'])->toBe([]);
     Http::assertSent(function ($request): bool {
         $body = $request->data();
+
         return $request->url() === 'https://api.openai.com/v1/responses' && $body['store'] === false
             && $body['model'] === 'example-finance-model' && ! isset($body['tools'])
             && ! str_contains(json_encode($body), 'fictional-bank-secret')
@@ -161,6 +162,7 @@ test('partial safe context excludes mixed totals rather than silently sending un
     expect($answer['ai']['status'])->toBe('completed')->and($answer['ai']['source_coverage']['complete'])->toBeFalse();
     Http::assertSent(function ($request): bool {
         $payload = json_decode($request['input'][0]['content'], true)['untrusted_financial_context'];
+
         return ! isset($payload['summary'], $payload['planning'], $payload['decision_support'])
             && $payload['verified_bank_balances'][0]['balance_cents'] === 50000
             && ! str_contains(json_encode($payload), '1049999') && ! str_contains(json_encode($payload), '999999');
@@ -174,6 +176,7 @@ test('account-filtered AI context includes only the selected bank account and no
     expect($answer['ai']['status'])->toBe('completed');
     Http::assertSent(function ($request): bool {
         $context = json_decode($request['input'][0]['content'], true)['untrusted_financial_context'];
+
         return count($context['verified_bank_balances']) === 1
             && $context['verified_bank_balances'][0]['id'] === $this->account->id
             && ! isset($context['planning'], $context['decision_support'], $context['metals'], $context['budgets']);
