@@ -10,7 +10,7 @@
                 <button data-tab="{{ $key }}" @if($key==='overview') aria-current="page" @endif><span aria-hidden="true">{{ $item[0] }}</span>{{ $item[1] }}</button>
                 @endforeach
             </nav>
-            <div class="tr-sidebar-bottom"><a href="{{ route('trajectory.welcome') }}">About Trajectory ↗</a><a href="/dashboard">← Back to Everbranch</a><div class="tr-user"><span class="tr-avatar">{{ mb_substr(auth()->user()->name,0,1) }}</span><div>{{ auth()->user()->name }}<small>Private financial workspace</small></div></div></div>
+            <div class="tr-sidebar-bottom"><a href="{{ route('trajectory.welcome') }}">About Trajectory ↗</a><a href="{{ route('home') }}">← Back to Everbranch</a><div class="tr-user"><span class="tr-avatar">{{ mb_substr(auth()->user()->name,0,1) }}</span><div>{{ auth()->user()->name }}<small>Private financial workspace</small></div></div></div>
         </aside>
         <div class="tr-workspace">
         <header class="tr-header"><div><p class="tr-eyebrow">MAKE ROOM FOR WHAT MATTERS</p><h1 id="tr-page-title">Your trajectory</h1><p id="tr-page-subtitle">A clearer picture of today. A better plan for tomorrow.</p></div><div class="tr-actions"><div id="tr-space-tabs" class="tr-space-tabs" role="tablist" aria-label="Finance view"></div><label id="tr-company-label" hidden>Company <select id="tr-company"></select></label><button id="tr-add" class="tr-primary">＋ Add to your plan</button></div></header>
