@@ -50,7 +50,16 @@ return [
         'source' => ['label' => 'Statement / provider source', 'type' => 'text', 'required' => true],
         'confirmed' => ['label' => 'Amount and due date verified', 'type' => 'boolean', 'required' => true],
     ],
+    'business_funding_plan' => [
+        'reserve_floor_cents' => ['label' => 'Cash to keep for payroll, tax and operating reserves', 'type' => 'money', 'required' => true],
+        'committed_costs_cents' => ['label' => 'Unpaid obligations remaining this month', 'type' => 'money', 'required' => true],
+        'expected_receipts_cents' => ['label' => 'Confirmed receipts expected before month end', 'type' => 'money', 'required' => true],
+        'reviewed_on' => ['label' => 'Review date', 'type' => 'date', 'required' => true],
+        'source' => ['label' => 'Sources and reserve assumptions', 'type' => 'text', 'required' => true],
+        'complete' => ['label' => 'Current balances, all unpaid obligations and reserves reviewed', 'type' => 'boolean', 'required' => true],
+    ],
     'budget' => [
+        'source_id' => ['label' => 'Stable source reference (budget imports)', 'type' => 'text', 'required' => false],
         'category' => ['label' => 'Category', 'type' => 'category', 'required' => true],
         'monthly_cents' => ['label' => 'Monthly target', 'type' => 'money', 'required' => true],
         'purpose' => ['label' => 'Purpose', 'type' => 'select', 'required' => true, 'choices' => ['spending', 'savings', 'debt_payment', 'income']],

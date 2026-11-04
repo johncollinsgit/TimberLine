@@ -18,6 +18,7 @@ Route::middleware(['auth', 'verified', 'throttle:120,1'])->prefix('trajectory')-
         Route::get('/banks/{connection}/accounts', [Planning::class, 'bankAccounts'])->middleware('throttle:10,1');
         Route::post('/banks/{connection}/accounts', [Planning::class, 'mapBankAccounts'])->middleware('throttle:10,1');
         Route::post('/bud', [Planning::class, 'bud'])->middleware('throttle:15,1');
+        Route::post('/debt-scenarios', [Planning::class, 'debtScenarios'])->middleware('throttle:20,1');
         Route::get('/reconciliation', [Trajectory::class, 'reconciliation'])->name('trajectory.reconciliation');
         Route::post('/reconciliation', [Trajectory::class, 'reconcile'])->name('trajectory.reconcile');
         Route::get('/combined', [Trajectory::class, 'combined'])->name('trajectory.combined');

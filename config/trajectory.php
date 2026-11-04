@@ -3,6 +3,8 @@
 return [
     'enabled' => (bool) env('TRAJECTORY_ENABLED', false),
     'sms_enabled' => (bool) env('TRAJECTORY_SMS_ENABLED', false),
+    // Existing Bud provider, tenant approval, financial access and cost caps still apply.
+    'ai_enabled' => (bool) env('TRAJECTORY_AI_ENABLED', true),
     'checkout_enabled' => false,
     'plans' => ['personal', 'business', 'both'],
     'plaid' => [

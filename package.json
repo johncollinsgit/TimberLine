@@ -7,7 +7,7 @@
     "build": "npm run typecheck && npm run test:trajectory && npm run test:ai-voice && npm run test:pos && npm run test:team-search-ranking && npm run test:shop-pay && vite build && vite build --config vite.enterprise.config.js",
     "test:highlevel-fleet": "node --test tests/e2e/highlevel-fleet*.test.mjs",
     "test:shop-pay": "node --test tests/e2e/website-shop-pay.test.mjs",
-    "test:trajectory": "node --test tests/e2e/trajectory-money.test.mjs tests/e2e/trajectory-charts.test.mjs tests/e2e/trajectory-bank-link.test.mjs",
+    "test:trajectory": "node --test tests/e2e/trajectory-*.test.mjs",
     "test:ai-voice": "node --test tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs",
     "media:optimize-public": "node scripts/media/optimize-public-image.mjs",
     "test:visual": "playwright test --config=playwright.public.config.ts",
@@ -34,7 +34,8 @@
     "test:team-laravel-browser": "node scripts/everbranch-team/laravel-acceptance.mjs",
     "test:team-laravel-views": "node scripts/everbranch-team/laravel-view-smoke.mjs",
     "team:parity": "node scripts/everbranch-team/build-parity-matrix.mjs",
-    "test:pos": "node --test tests/e2e/pos-*.test.mjs"
+    "test:pos": "node --test tests/e2e/pos-*.test.mjs",
+    "test:trajectory:mobile": "node tests/e2e/trajectory-household-mobile.cjs"
   },
   "dependencies": {
     "@glideapps/glide-data-grid": "^6.0.3",

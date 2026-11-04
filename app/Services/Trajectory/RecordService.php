@@ -18,7 +18,7 @@ class RecordService
     {
         $definition = config('trajectory_records.'.$kind);
         abort_unless(is_array($definition), 422);
-        abort_if(in_array($kind, ['payroll', 'reliance'], true) && $space->kind !== 'business', 422);
+        abort_if(in_array($kind, ['payroll', 'reliance', 'business_funding_plan'], true) && $space->kind !== 'business', 422);
         abort_if(str_starts_with($kind, 'medical_') && $space->kind !== 'household', 422, 'Medical sharing belongs to a private household.');
         abort_if($kind === 'financial_observation' && $space->kind !== 'household', 422, 'Household financial observations belong to a private household.');
         $rules = [];
@@ -53,6 +53,10 @@ class RecordService
             if ($field['type'] === 'boolean') {
                 $data[$key] = (bool) $data[$key];
             }
+        }
+        if ($kind === 'business_funding_plan') {
+            abort_unless($data['reviewed_on'] <= now($space->timezone)->toDateString(), 422, 'Use an actual review date.');
+            abort_if($data['complete'] && $data['reviewed_on'] !== now($space->timezone)->toDateString(), 422, 'Re-review remaining receipts and commitments today before confirming this plan against current balances.');
         }
         if ($kind === 'financial_observation') {
             $today = now($space->timezone)->toDateString();
@@ -148,6 +152,13 @@ class RecordService
             }
             // Revalidate references while holding the space lock, including concurrent archive changes.
             $this->validate($space, $kind, $data);
+            if ($kind === 'business_funding_plan' && ($data['complete'] ?? false)) {
+                // Never accept a client snapshot. A new explicit attestation binds
+                // the remaining receipts/costs to the exact locked source balances.
+                $accounts = Account::where('space_id', $space->id)->orderBy('id')->lockForUpdate()->get();
+                $terms = Record::where('space_id', $space->id)->where('kind', 'debt')->where('active', true)->orderBy('id')->lockForUpdate()->get();
+                $data['funding_snapshot'] = app(DecisionSupportService::class)->fundingSnapshot($accounts, $terms);
+            }
             if (str_starts_with($kind, 'medical_')) {
                 $data = app(MedicalSharingService::class)->prepare($space, $kind, $data, $record);
             }
@@ -165,6 +176,18 @@ class RecordService
                 foreach (Record::where('space_id', $space->id)->where('kind', 'payroll')->get() as $other) {
                     if ($other->id !== $record?->id && ($other->data['source_id'] ?? null) === $data['source_id']) {
                         abort_unless($other->data === $data, 409, 'Payroll source row changed; edit the existing row.');
+
+                        return $other;
+                    }
+                }
+            }
+            if ($kind === 'budget' && $record && filled($record->data['source_id'] ?? null)) {
+                abort_if($record->data['source_id'] !== ($data['source_id'] ?? null), 422, 'Keep the original stable source reference when editing an imported budget target.');
+            }
+            if ($kind === 'budget' && filled($data['source_id'] ?? null)) {
+                foreach (Record::where('space_id', $space->id)->where('kind', 'budget')->get() as $other) {
+                    if ($other->id !== $record?->id && ($other->data['source_id'] ?? null) === $data['source_id']) {
+                        abort_unless($other->active && $other->name === $name && $other->data == $data, 409, 'This budget source already exists with different or archived data. Edit the existing target.');
 
                         return $other;
                     }

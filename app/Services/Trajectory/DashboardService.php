@@ -9,19 +9,37 @@ use App\Models\Trajectory\Connection;
 use App\Models\Trajectory\Record;
 use App\Models\Trajectory\Snapshot;
 use App\Models\Trajectory\Space;
+use App\Models\User;
 use App\Services\Reporting\SalesChannelSummaryService;
 use Brick\Math\BigDecimal;
 use Carbon\CarbonImmutable;
 
 class DashboardService
 {
-    public function build(Space $space, string $range = 'month', ?int $scenarioId = null, ?string $from = null, ?string $through = null, bool $seasonal = false): array
+    public function build(Space $space, string $range = 'month', ?int $scenarioId = null, ?string $from = null, ?string $through = null, bool $seasonal = false, ?User $viewer = null, ?int $accountId = null): array
     {
         $today = CarbonImmutable::now($space->timezone)->startOfDay();
+        $allAccounts = Account::where('space_id', $space->id)->get();
+        $scopeAccount = $accountId === null ? null : $allAccounts->firstWhere('id', $accountId);
+        abort_if($accountId !== null && ! $scopeAccount, 404);
+        if ($scopeAccount) {
+            // Whole-space targets and holdings cannot be attributed to one account.
+            // This clone changes calculation inputs only; it is never persisted.
+            $space = clone $space;
+            $scopedSettings = $space->settings ?? [];
+            foreach (['income_expectations', 'flexible_monthly_cents', 'debt_extra_cents'] as $key) {
+                unset($scopedSettings[$key]);
+            }
+            $scopedSettings['coverage_notes'] = [...($scopedSettings['coverage_notes'] ?? []), 'Selected account only. Choose all accounts for household plans, holdings and complete debt totals.'];
+            $space->settings = $scopedSettings;
+        }
         $start = match ($range) {
             'day' => $today, 'week' => $today->startOfWeek(), 'quarter' => $today->startOfQuarter(), 'year' => $today->startOfYear(), default => $today->startOfMonth()
         };
         $entries = collect(app(LedgerService::class)->entries($space, null, $today->toDateString()));
+        if ($scopeAccount) {
+            $entries = $entries->where('account_id', $accountId)->values();
+        }
         if ($range === 'all') {
             $start = $entries->isNotEmpty() ? CarbonImmutable::parse($entries->min('date'), $space->timezone) : $start;
         }
@@ -35,6 +53,10 @@ class DashboardService
         $priorEntries = $entries->where('date', '>=', $priorStart->toDateString())->where('date', '<=', $priorEnd->toDateString());
         $priorSnapshot = Snapshot::where('space_id', $space->id)->whereDate('observed_on', $priorEnd->toDateString())->first();
         $periodSnapshot = $end->lt($today) ? Snapshot::where('space_id', $space->id)->whereDate('observed_on', $end->toDateString())->first() : null;
+        if ($scopeAccount) {
+            $periodSnapshot = null;
+            $priorSnapshot = null;
+        }
         $periodComparison = [
             'range' => ['start' => $priorStart->toDateString(), 'end' => $priorEnd->toDateString()],
             'has_transactions' => $priorEntries->isNotEmpty(),
@@ -51,8 +73,11 @@ class DashboardService
             ->where('date', '<=', $unexpectedThrough->toDateString())
             ->where('face_punched', true)->whereIn('flow', ['expense', 'medical_payment', 'medical_membership'])
             ->where('amount_cents', '<', 0)->sortBy('amount_cents')->values();
-        $accounts = Account::where('space_id', $space->id)->get();
+        $accounts = $scopeAccount ? $allAccounts->where('id', $accountId)->values() : $allAccounts;
         $records = Record::where('space_id', $space->id)->where('active', true)->whereNotIn('kind', ['sms'])->get();
+        if ($scopeAccount) {
+            $records = $records->filter(fn ($record) => ($record->data['account_id'] ?? null) === $accountId || ($record->data['payment_account_id'] ?? null) === $accountId)->values();
+        }
         $periodComparison['household_cards'] = $space->kind === 'household' ? app(HouseholdCardsService::class)->build($records, $priorStart->toDateString(), $priorEnd->toDateString(), $today->toDateString(), $entries) : null;
         $plans = fn ($kind) => $records->where('kind', $kind)->map(fn ($r) => [...$r->data, 'id' => $r->id, 'name' => $r->name])->values()->all();
         $schedules = array_values(array_filter($plans('recurring'), fn ($r) => $r['confirmed']));
@@ -112,7 +137,8 @@ class DashboardService
             $dailyByAccount[$id] ??= ['income' => 0, 'expense' => 0, 'categories' => []];
             $dailyByAccount[$id]['seasonal'] = $months;
         }
-        $cash = app(CashBalanceSourceService::class)->currentCash($space, $accounts);
+        $excludedBalances = app(CashBalanceSourceService::class)->excluded($space, $allAccounts);
+        $cash = (int) $accounts->where('kind', 'cash')->reject(fn ($account) => isset($excludedBalances[$account->id]))->sum('balance_cents');
         $blockers = [...$medical['issues'], ...($space->settings['coverage_notes'] ?? [])];
         if ($accounts->whereIn('kind', ['cash', 'credit'])->contains(fn ($a) => ! $a->history_start || $a->history_start->gt($today->subDays(90)))) {
             $blockers[] = 'Some spending accounts have less than 90 days of history.';
@@ -131,7 +157,7 @@ class DashboardService
                 $blockers[] = 'Review payment terms for '.$a->name.'.';
             }
         }
-        $unresolvedDeposits = \App\Models\Trajectory\Transaction::where('space_id', $space->id)->where('reviewed', false)->where('flow', 'transfer')->where('amount_cents', '>', 0)->where('pending', false)->where('removed', false)->whereDate('posted_on', '>=', $today->subDays(90))->get()->filter(fn ($t) => preg_match('/DEPOSIT|CASHOUT/i', $t->source['original']['Original Statement'] ?? ''));
+        $unresolvedDeposits = \App\Models\Trajectory\Transaction::where('space_id', $space->id)->when($accountId !== null, fn ($q) => $q->where('account_id', $accountId))->where('reviewed', false)->where('flow', 'transfer')->where('amount_cents', '>', 0)->where('pending', false)->where('removed', false)->whereDate('posted_on', '>=', $today->subDays(90))->get()->filter(fn ($t) => preg_match('/DEPOSIT|CASHOUT/i', $t->source['original']['Original Statement'] ?? ''));
         if ($unresolvedDeposits->isNotEmpty()) {
             array_unshift($blockers, 'Incoming deposits need purpose review before relying on this forecast. Company income, medical shares, and transfers have different effects.');
         }
@@ -274,6 +300,8 @@ class DashboardService
 
         return [
             'space' => $space->only(['id', 'name', 'kind', 'currency', 'timezone']), 'range' => ['key' => $range, 'start' => $start->toDateString(), 'end' => $end->toDateString()],
+            'account_options' => $allAccounts->map(fn ($account) => $account->only(['id', 'name', 'kind']))->values()->all(),
+            'scope_filter' => ['account_id' => $accountId, 'label' => $scopeAccount?->name ?? 'All accounts'],
             'period_comparison' => $periodComparison,
             'period_balances' => [
                 'cash_cents' => $end->lt($today) ? ($periodSnapshot?->data['imported_cash_cents'] ?? $periodSnapshot?->data['cash_cents'] ?? null) : $cash,
@@ -282,7 +310,7 @@ class DashboardService
             'unresolved_deposits' => ['amount_cents' => (int) $unresolvedDeposits->sum('amount_cents'), 'ids' => $unresolvedDeposits->pluck('id')->all()],
             'summary' => ['income_cents' => (int) $income, 'spending_cents' => -(int) $spending->sum('amount_cents'), 'cash_cents' => $cash, 'net_worth_cents' => $assetTotal - $liabilities, 'net_worth_complete' => $netComplete, 'assets_cents' => $assetTotal, 'liabilities_cents' => $liabilities, 'review_count' => $entries->where('reviewed', false)->count(), 'selected_interest_cents' => $interestService->total($interest, $interestStatements, $start->toDateString(), $end->toDateString()), 'ytd_interest_cents' => $interestService->total($interest, $interestStatements, $today->startOfYear()->toDateString(), $today->toDateString()), 'recorded_interest_cents' => $interestService->total($interest, $interestStatements), 'projected_interest_cents' => count($forecastDebts) > count($debts) || collect($debtRows)->contains(fn ($d) => $d['projection']['interest_cents'] === null) ? null : (int) collect($debtRows)->sum(fn ($d) => $d['projection']['interest_cents'])],
             'coverage' => ['history_days' => $days, 'provisional' => $days < 90 || count($blockers) > 0, 'blockers' => $blockers, 'history_start' => $historyStart?->toDateString()],
-            'accounts' => app(CashBalanceSourceService::class)->accountPayload($space, $accounts),
+            'accounts' => array_values(array_filter(app(CashBalanceSourceService::class)->accountPayload($space, $allAccounts), fn ($account) => $accountId === null || $account['id'] === $accountId)),
             'cash_source_version' => app(CashBalanceSourceService::class)->version($space),
             'connections' => Connection::where(fn ($q) => $q->where('space_id', $space->id)->orWhereIn('id', $accounts->pluck('connection_id')->filter()))->get()->map(fn ($c) => [...$c->only(['id', 'status', 'institution_name', 'synced_at']), 'managed_here' => $c->space_id === $space->id])->all(),
             'medical' => $space->kind === 'household' ? $medical : null,
@@ -299,17 +327,19 @@ class DashboardService
             'review_suggestions' => app(ReviewSuggestionService::class)->forEntries($entries),
             'anomalies' => app(AnomalyService::class)->detect($space, $entries),
             'planning' => $planning,
+            'decision_support' => $scopeAccount ? null : app(DecisionSupportService::class)->build($space, $entries, $records, $planning, $bills, $this->recurringSuggestions($entries, $schedules), $today, $viewer),
+            'debt_planner' => app(DebtScenarioSourceService::class)->build($space, 0, $accountId),
             'income_runway' => $incomeRunway,
             'tax_review' => app(TaxReviewService::class)->review($space, $selected, $records),
             'income_sources' => $incomeSources,
             'categories' => $categories, 'daily_series' => $dailySeries,
             'spending_analysis' => ['largest_transactions' => $spending->where('amount_cents', '<', 0)->sortBy('amount_cents')->take(10)->values()->all(), 'transaction_count' => $spending->where('amount_cents', '<', 0)->count(), 'refund_cents' => (int) $spending->where('amount_cents', '>', 0)->sum('amount_cents')],
-            'debt_suggestions' => app(PlaidService::class)->debtSuggestions($space), 'forecast' => $baseline, 'comparison' => $comparison, 'bills' => $bills, 'goals' => $goals, 'debts' => $debtRows, 'assets' => $assets, 'metals' => $metals, 'quotes' => $quotes,
+            'debt_suggestions' => array_values(array_filter(app(PlaidService::class)->debtSuggestions($space), fn ($row) => $accountId === null || (int) $row['account_id'] === $accountId)), 'forecast' => $baseline, 'comparison' => $comparison, 'bills' => $bills, 'goals' => $goals, 'debts' => $debtRows, 'assets' => $assets, 'metals' => $metals, 'quotes' => $quotes,
             'recommendations' => $recommendations, 'recurring_suggestions' => $this->recurringSuggestions($entries, $schedules),
             'records' => $records->whereNotIn('kind', ['payroll'])->values()->all(),
-            'cash_history' => Snapshot::where('space_id', $space->id)->orderBy('observed_on')->get()->filter(fn ($s) => isset($s->data['imported_cash_cents']))->map(fn ($s) => ['date' => $s->observed_on->toDateString(), 'cash_cents' => $s->data['imported_cash_cents'], 'accounts' => $s->data['imported_cash_accounts'], 'source' => $s->data['cash_source']])->values()->all(),
-            'net_worth_history' => Snapshot::where('space_id', $space->id)->orderBy('observed_on')->get()->filter(fn ($s) => isset($s->data['net_worth_cents']))->map(fn ($s) => ['date' => $s->observed_on->toDateString(), ...$s->data])->values()->all(),
-            'business' => $space->kind === 'business' ? $this->business($space, $start, $end, $records) : null,
+            'cash_history' => $scopeAccount ? [] : Snapshot::where('space_id', $space->id)->orderBy('observed_on')->get()->filter(fn ($s) => isset($s->data['imported_cash_cents']))->map(fn ($s) => ['date' => $s->observed_on->toDateString(), 'cash_cents' => $s->data['imported_cash_cents'], 'accounts' => $s->data['imported_cash_accounts'], 'source' => $s->data['cash_source']])->values()->all(),
+            'net_worth_history' => $scopeAccount ? [] : Snapshot::where('space_id', $space->id)->orderBy('observed_on')->get()->filter(fn ($s) => isset($s->data['net_worth_cents']))->map(fn ($s) => ['date' => $s->observed_on->toDateString(), ...$s->data])->values()->all(),
+            'business' => ! $scopeAccount && $space->kind === 'business' ? $this->business($space, $start, $end, $records) : null,
             'providers' => ['plaid' => app(PlaidService::class)->linkReady($space), 'plaid_sync' => app(PlaidService::class)->ready(), 'metals' => filled(config('trajectory.goldapi_key')), 'sms' => (bool) config('trajectory.sms_enabled')],
             'settings' => [
                 'discretionary_categories' => $space->settings['discretionary_categories'] ?? config('trajectory.discretionary_defaults'),

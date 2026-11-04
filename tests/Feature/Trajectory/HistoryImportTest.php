@@ -28,7 +28,7 @@ afterEach(function () {
 });
 
 test('standalone public marketing never exposes household records and private shell owns navigation', function () {
-    $this->get('/trajectory/welcome')->assertOk()->assertSee('Change your trajectory')->assertDontSee($this->owner->email);
+    $this->get('/trajectory/welcome')->assertOk()->assertSee('Make room for')->assertDontSee($this->owner->email);
     $this->get('/trajectory')->assertRedirect('/login');
     $this->actingAs($this->owner)->get('/trajectory')->assertOk()->assertSee('tr-sidebar')->assertSee('Back to Everbranch')->assertDontSee('mf-shell-content');
 });
