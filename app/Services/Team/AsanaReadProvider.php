@@ -16,7 +16,8 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 /** Per-viewer read projection. Never writes source work or imports native records. */
 class AsanaReadProvider
 {
-    public const SCOPES = 'projects:read tasks:read sections:read users:read workspaces:read stories:read attachments:read custom_fields:read tags:read';
+    // Asana section reads are covered by projects:read; sections:read is not a registered scope.
+    public const SCOPES = 'projects:read tasks:read users:read workspaces:read stories:read attachments:read custom_fields:read tags:read';
 
     public function connection(int $tenant, int $user): ?TeamUserConnection
     {
