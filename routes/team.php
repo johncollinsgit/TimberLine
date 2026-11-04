@@ -5,12 +5,22 @@ use App\Http\Controllers\TeamFileController;
 use App\Http\Controllers\TeamWorkController;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/teams/manifest.webmanifest', [\App\Http\Controllers\TeamAppPackageController::class, 'manifest'])->name('team.manifest');
+Route::get('/teams/sw.js', [\App\Http\Controllers\TeamAppPackageController::class, 'worker'])->name('team.worker');
+Route::get('/teams/offline', [\App\Http\Controllers\TeamAppPackageController::class, 'offline'])->name('team.offline');
+
 Route::get('/team/asana/callback', [\App\Http\Controllers\TeamAsanaController::class, 'callback'])->middleware(['auth', 'verified', 'throttle:20,1'])->name('team.asana.callback');
 Route::get('/team/integrations/{provider}/callback', [\App\Http\Controllers\TeamOperationsController::class, 'callback'])->whereIn('provider', ['asana', 'gmail', 'sheets'])->middleware(['auth', 'verified', 'throttle:20,1'])->name('team.operations.callback');
 
 Route::middleware(['auth', 'verified', 'tenant.access', \App\Http\Middleware\EnsureTeamWorkViewer::class, 'throttle:120,1'])->group(function (): void {
     Route::get('/teams', [TeamWorkController::class, 'app'])->name('team.app');
+    Route::get('/teams/app', [TeamWorkController::class, 'app'])->name('team.installed');
     Route::prefix('team')->name('team.')->group(function (): void {
+        Route::get('/events/my-tasks', \App\Http\Controllers\TeamEventTasksController::class)->name('events.my-tasks');
+        Route::get('/events/asana/tasks/{id}/{kind?}', \App\Http\Controllers\TeamEventTasksController::class)->where('id', '[0-9]+')->where('kind', 'task|stories|subtasks|attachments')->defaults('action', 'detail')->name('events.task');
+        Route::post('/events/asana/changes', \App\Http\Controllers\TeamEventTasksController::class)->defaults('action', 'prepare')->name('events.changes');
+        Route::post('/events/asana/changes/{id}/dispatch', \App\Http\Controllers\TeamEventTasksController::class)->whereUuid('id')->defaults('action', 'dispatch')->name('events.dispatch');
+        Route::post('/events/asana/changes/{id}/reconcile', \App\Http\Controllers\TeamEventTasksController::class)->whereUuid('id')->defaults('action', 'reconcile')->name('events.reconcile');
         Route::get('/search', \App\Http\Controllers\TeamSearchController::class)->withoutMiddleware('throttle:120,1')->middleware('throttle:team-search')->name('search');
         Route::controller(\App\Http\Controllers\TeamOperationsController::class)->name('operations.')->group(function (): void {
             Route::get('/areas', 'areas')->name('areas');

@@ -1,3 +1,23 @@
+## Events My Tasks and phone web app (November 4; source candidate)
+
+Keep Asana authoritative: per-user selected-source reads and only explicitly
+reviewed title/date/completion write-through behind `asana_write_enabled` and
+OAuth `tasks:write`. Preserve encrypted attempts, generation/access checks,
+unknown-outcome recovery and no automatic PUT replay. Do not put real event
+fixtures or tokens into Git/public assets. The installable app is a web app,
+not a signed native release; cache only the public offline explanation. Read
+`docs/operations/teams-events-app.md` before modifying these paths.
+
+## Teams settings containment (November 4; local candidate)
+
+Settings now opens over premium standalone and embedded Teams. It reuses the
+canonical profile component with locked viewer/workspace identity and fresh
+access checks. Preserve the current global search and Operations navigation
+methods when integrating the older PR #446; do not deploy its October base.
+The disposable local preview and verification are described in
+`docs/operations/teams-settings-local-review.md`. No source import or live
+activation follows from this local review.
+
 ## Retail Shop Pay Wallet (November 3; source candidate)
 
 Every retail owner/admin can open Shop Pay setup and choose Shopify-managed
