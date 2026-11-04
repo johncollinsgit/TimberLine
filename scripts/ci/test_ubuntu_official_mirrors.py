@@ -47,10 +47,37 @@ class OfficialMirrorsTest(unittest.TestCase):
         self.assertEqual((root / 'apt-mirrors.txt').read_bytes(), b'original')
 
     def test_unknown_mirror_is_rejected_without_mutation(self):
-        root = self.fixture(b'URIs: mirror+file:/etc/apt/apt-mirrors.txt\n', b'https://untrusted.invalid/ priority:1\n')
+        source = b'URIs: mirror+file:/etc/apt/apt-mirrors.txt http://security.ubuntu.com/ubuntu\n'
+        root = self.fixture(source, b'https://untrusted.invalid/ priority:1\n')
         with self.assertRaises(ValueError):
             mirrors.configure(root)
         self.assertEqual((root / 'apt-mirrors.txt').read_bytes(), b'https://untrusted.invalid/ priority:1\n')
+        self.assertEqual((root / 'sources.list.d/ubuntu.sources').read_bytes(), source)
+
+    def test_runner_mixed_sources_upgrade_only_security_uri_and_are_idempotent(self):
+        source = (b'# http://security.ubuntu.com/ubuntu\r\nTypes: deb\r\n'
+                  b'URIs: mirror+file:/etc/apt/apt-mirrors.txt\r\n'
+                  b'Suites: noble noble-updates\r\nSigned-By: /usr/share/keyrings/ubuntu.gpg\r\n\r\n'
+                  b'Types: deb\r\nURIs:\r\n http://security.ubuntu.com/ubuntu\r\n'
+                  b'Suites: noble-security\r\nSigned-By:\r\n http://security.ubuntu.com/ubuntu\r\n')
+        expected = source.replace(b'URIs:\r\n http:', b'URIs:\r\n https:').replace(
+            b'https://security.ubuntu.com/ubuntu\r\n', b'https://security.ubuntu.com/ubuntu/\r\n')
+        fallback = b'https://archive.ubuntu.com/ubuntu/ priority:2\nhttps://security.ubuntu.com/ubuntu/ priority:3\n'
+        root = self.fixture(source, b'http://azure.archive.ubuntu.com/ubuntu/ priority:1\n' + fallback)
+        for _ in range(2):
+            mirrors.configure(root)
+            self.assertEqual((root / 'sources.list.d/ubuntu.sources').read_bytes(), expected)
+            self.assertEqual((root / 'apt-mirrors.txt').read_bytes(), fallback)
+
+    def test_security_lookalikes_are_rejected_without_mutation(self):
+        for uri in ('http://security.ubuntu.com.evil.invalid/ubuntu',
+                    'http://security.ubuntu.com/ubuntu/extra',
+                    'http://security.ubuntu.com/ubuntu?x=1'):
+            source = f'URIs: {uri}\n'.encode()
+            root = self.fixture(source)
+            with self.subTest(uri=uri), self.assertRaises(ValueError):
+                mirrors.configure(root)
+            self.assertEqual((root / 'sources.list.d/ubuntu.sources').read_bytes(), source)
 
     def test_malformed_source_and_insecure_direct_uri_are_rejected(self):
         for source in [b'URIs: http://archive.ubuntu.com/ubuntu/\n', b' continuation\nURIs: https://archive.ubuntu.com/ubuntu/\n', b'broken\n']:
