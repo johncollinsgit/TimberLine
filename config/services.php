@@ -351,6 +351,7 @@ return [
                 'client_secret' => env('SHOPIFY_WHOLESALE_CLIENT_SECRET'),
                 'embedded_client_id' => env('SHOPIFY_WHOLESALE_EMBEDDED_CLIENT_ID'),
                 'embedded_client_secret' => env('SHOPIFY_WHOLESALE_EMBEDDED_CLIENT_SECRET'),
+                'embedded_app_handle' => env('SHOPIFY_WHOLESALE_EMBEDDED_APP_HANDLE', 'mf-wholesale-backstage'),
                 'timezone' => env('SHOPIFY_WHOLESALE_TIMEZONE', env('SHOPIFY_REPORTING_TIMEZONE', 'America/New_York')),
             ],
 

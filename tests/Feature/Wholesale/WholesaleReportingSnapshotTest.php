@@ -75,7 +75,7 @@ function fakeWholesaleReporting(array $orders, array $payments): void
 
 test('complete private history preserves pagination and uses provider net payments without creating production orders', function (): void {
     fakeWholesaleReporting([
-        reportingRawOrder(1001, ['created_at' => '2026-11-01T03:59:00Z']),
+        reportingRawOrder(1001, ['created_at' => '2026-11-01T03:59:00Z', 'line_items' => [['product_id' => 41, 'variant_id' => 51]]]),
         reportingRawOrder(1002, ['created_at' => '2026-11-03T12:00:00Z', 'financial_status' => 'pending']),
         reportingRawOrder(1003, ['cancelled_at' => '2026-07-01T13:00:00Z']),
     ], ['1001' => ['100.00', '20.00', 'PARTIALLY_REFUNDED'], '1002' => ['0.00', '0.00', 'PENDING'], '1003' => ['0.00', '0.00', 'VOIDED']]);
@@ -91,7 +91,9 @@ test('complete private history preserves pagination and uses provider net paymen
     $customer = app(WholesaleOperationsService::class)->customers((int) $this->tenant->id)->first();
     expect($customer['timing_state'])->toBe('awaiting_payment')
         ->and($customer['lifetime_revenue'])->toBe(80.0)
-        ->and($customer['orders']->first()->lines->first()->raw_title)->toBe('Cedar Candle');
+        ->and($customer['orders']->first()->lines->first()->raw_title)->toBe('Cedar Candle')
+        ->and($customer['orders']->last()->lines->first()->shopify_product_id)->toBe(41)
+        ->and($customer['orders']->last()->lines->first()->shopify_variant_id)->toBe(51);
     Http::assertSent(fn ($request) => str_contains($request->url(), 'page_info=second'));
 });
 

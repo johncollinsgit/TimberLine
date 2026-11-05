@@ -1,5 +1,18 @@
 # Wholesale Email Messenger
 
+## Branded customer reorder drafts (November 5; source candidate)
+
+The Monday account list opens a private customer-specific preview in the
+installed Shopify app. `WholesaleCustomerOutreachDraft` uses that account's
+current eligible latest order; `WholesaleOutreachProductCatalog` matches public
+photos and wholesale product links by provider product ID. The copy action
+includes inline HTML and plain text for pasting into Gmail, with a selection
+fallback if clipboard permission is denied. Subject and personal-message edits
+stay local to the review page. No Gmail draft API permission or customer send is
+introduced. See the reporting/outreach runbook for suppression and schedule rules.
+
+## Saved wholesale introduction draft
+
 The wholesale Shopify app contains a saved sixteen-block draft named
 “Bring Modern Forestry to your store.” Edits use the current draft revision and
 tenant/store context. Saving does not send the email; test sending is a separate

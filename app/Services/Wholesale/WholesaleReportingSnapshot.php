@@ -102,6 +102,8 @@ class WholesaleReportingSnapshot
                 'received_cents' => $received['cents'], 'refunded_cents' => $refunded['cents'],
                 'currency' => $net['currency'],
                 'lines' => collect($raw['line_items'] ?? [])->map(fn (array $line): array => [
+                    'shopify_product_id' => $line['product_id'] ?? null,
+                    'shopify_variant_id' => $line['variant_id'] ?? null,
                     'raw_title' => $line['title'] ?? $line['name'] ?? null,
                     'raw_variant' => $line['variant_title'] ?? null, 'sku' => $line['sku'] ?? null,
                     'quantity' => max(0, (int) ($line['quantity'] ?? 0)),

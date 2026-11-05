@@ -95,11 +95,25 @@ wholesale value and elapsed time; each buying inbox appears once. Snoozes,
 handled/review decisions, future follow-ups, follow-ups completed in the past
 14 days, invalid emails and matched do-not-contact flags suppress recommendations.
 
-Each “Review email draft” button opens Gmail with the recipient, subject,
-latest original order date and up to five ordered product/quantity lines.
-It does not send customer outreach. Review the sending account and current
-relationship before sending. Record/complete or snooze the follow-up in Backstage
-to keep the next list current; opening a Gmail draft does not prove it was sent.
+Each “Review email draft” button opens the installed wholesale Shopify app's
+branded customer preview. It rechecks the current list before revealing the
+draft, so old links cannot revive dismissed, snoozed or newly reordered accounts.
+The layout includes the buyer's name, original order reference/date, up to four
+current product cards and verified wholesale links. Product IDs are retained in
+the private read model; photos and destinations come from the same store's
+current Admin API, never a similar product title or retail-store substitution.
+Deleted/unpublished products are omitted; unavailable media falls back to honest
+order text. Catalog failures are visible and do not invalidate sales reporting.
+
+Gmail compose URLs cannot carry the formatted message. The selected default
+workflow is: review/edit the personal message and subject, Copy formatted email,
+Open Gmail, then paste into its message body. Rich copying includes inline email
+styles, photos and links; browser clipboard denial retains the message and offers
+selection/manual copy. Check the sending account and relationship before sending.
+This requires no new mailbox connection and performs no customer send or Gmail
+draft API write. Native Gmail HTML drafts would require separate mailbox consent
+for draft access. Record/complete or snooze the follow-up in Backstage to keep
+the next list current; copying/opening a draft does not prove it was sent.
 
 The weekly tenant/recipient key is reserved in `marketing_email_deliveries`
 before provider HTTP, under a cache lock. A repeated or uncertain send is not

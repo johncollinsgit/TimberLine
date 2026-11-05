@@ -31,6 +31,7 @@ use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use App\Services\Tenancy\TenantResolver;
+use App\Services\Wholesale\WholesaleCustomerOutreachDraft;
 use App\Services\Wholesale\WholesaleFollowUpService;
 use App\Services\Wholesale\WholesaleModuleSetupService;
 use App\Services\Wholesale\WholesaleOperationsService;
@@ -587,6 +588,31 @@ class ShopifyEmbeddedAppController extends Controller
                 'contextToken' => isset($resolved['context']) ? $contextService->issueContextToken($resolved['context']) : null,
                 'canDecide' => $this->canManageWholesaleApprovals($this->resolveWholesaleWorkspaceActor($resolved['context'] ?? null, $tenantId)),
             ]);
+    }
+
+    public function showWholesaleOutreach(
+        Request $request,
+        string $accountKey,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        WholesaleCustomerOutreachDraft $drafts
+    ): Response {
+        $resolved = $this->resolveWholesaleWorkspaceContext($request, $contextService);
+        $tenantId = $this->resolvedWholesaleTenantId($resolved, $tenantResolver);
+        $draft = null;
+        $problem = null;
+        if (($resolved['authorized'] ?? false) && $tenantId !== null) {
+            try {
+                $draft = $drafts->forCustomer(Tenant::query()->findOrFail($tenantId), $accountKey);
+            } catch (DomainException $error) {
+                $problem = $error->getMessage();
+            }
+        }
+
+        return $this->wholesaleWorkspaceResponse($resolved, $tenantId, 'messaging', 'Customer Email Draft',
+            'Review a personal, branded follow-up with products from the latest order.',
+            'shopify.wholesale-outreach-draft', compact('draft', 'problem', 'accountKey'))
+            ->header('Cache-Control', 'private, no-store');
     }
 
     public function showWholesaleFollowUps(

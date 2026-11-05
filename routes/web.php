@@ -2288,6 +2288,9 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
     Route::get('/app/wholesale/customers/{accountKey}', [ShopifyEmbeddedAppController::class, 'showWholesaleCustomer'])
         ->where('accountKey', '[a-f0-9]{64}')
         ->name('shopify.app.wholesale.customers.show');
+    Route::get('/app/wholesale/customers/{accountKey}/outreach', [ShopifyEmbeddedAppController::class, 'showWholesaleOutreach'])
+        ->where('accountKey', '[a-f0-9]{64}')
+        ->name('shopify.app.wholesale.customers.outreach');
     Route::get('/app/wholesale/orders', [ShopifyEmbeddedAppController::class, 'showWholesaleOrders'])
         ->name('shopify.app.wholesale.orders');
     Route::get('/app/wholesale/suggestions', [ShopifyEmbeddedAppController::class, 'showWholesaleSuggestions'])

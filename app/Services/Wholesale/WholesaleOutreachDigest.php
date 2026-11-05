@@ -7,6 +7,7 @@ use App\Models\TenantWholesaleSetting;
 use App\Models\WholesaleFollowUp;
 use App\Models\WholesaleProspect;
 use App\Models\WholesaleSuggestion;
+use App\Services\Shopify\ShopifyStores;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Support\Str;
 
@@ -107,6 +108,7 @@ class WholesaleOutreachDigest
             ], '', '&', PHP_QUERY_RFC3986);
 
             return [
+                'account_key' => $customer['public_key'],
                 'company' => $company, 'buyer' => $buyer, 'email' => $customer['email'],
                 'reason' => $customer['median_reorder_days'] === null ? 'Estimated reorder check-in (limited history)' : match ($customer['timing_state']) {
                     'at_risk' => 'Past its usual reorder window',
@@ -118,8 +120,15 @@ class WholesaleOutreachDigest
                 'order_number' => $orderNumber, 'order_date' => $last->ordered_at->copy()->timezone('America/New_York')->format('M j, Y'),
                 'order_total' => number_format(max(0, (float) $last->total_price - (float) $last->refund_total), 2),
                 'currency' => $this->plain($last->currency_code ?: 'Unknown currency', 16),
-                'items' => $items, 'draft_url' => $draftUrl,
+                'items' => $items, 'draft_url' => $this->reviewUrl($tenant, $customer['public_key']),
+                'gmail_url' => $draftUrl,
                 'draft_subject' => $subject, 'draft_body' => $body,
+                'product_evidence' => $last->lines->map(fn ($line) => [
+                    'product_id' => $line->shopify_product_id,
+                    'title' => $this->plain($line->raw_title ?: $line->sku ?: 'Item', 100),
+                    'variant' => $this->plain($line->raw_variant ?: $line->size_code, 80),
+                    'quantity' => max(0, (int) ($line->quantity ?: $line->ordered_qty)),
+                ])->all(),
             ];
         })->all();
 
@@ -132,6 +141,23 @@ class WholesaleOutreachDigest
             'import_stale' => false,
             'source_order_count' => $reporting['source_order_count'],
         ];
+    }
+
+    private function reviewUrl(Tenant $tenant, string $accountKey): string
+    {
+        $setting = TenantWholesaleSetting::query()->where('tenant_id', $tenant->id)->with('shopifyStore')->firstOrFail();
+        $store = ShopifyStores::find($setting->shopifyStore->store_key, true);
+        if (! $store || (int) ($store['tenant_id'] ?? 0) !== (int) $tenant->id || ($store['store_role'] ?? '') !== 'wholesale') {
+            throw new \DomainException('The wholesale app does not belong to this workspace.');
+        }
+        $handle = trim((string) config('services.shopify.stores.'.$store['key'].'.embedded_app_handle'));
+        $shop = strtolower((string) $store['shop']);
+        if (! preg_match('/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/D', $shop) || ! preg_match('/^[a-z0-9][a-z0-9-]*$/D', $handle)) {
+            throw new \DomainException('The wholesale app review destination is not configured.');
+        }
+
+        return 'https://admin.shopify.com/store/'.str_replace('.myshopify.com', '', $shop).'/apps/'.$handle
+            .route('shopify.app.wholesale.customers.outreach', ['accountKey' => $accountKey], false);
     }
 
     private function plain(?string $text, int $length): string

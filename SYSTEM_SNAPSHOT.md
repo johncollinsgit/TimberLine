@@ -1,3 +1,14 @@
+## Branded wholesale customer drafts (November 5; source candidate)
+
+Monday draft buttons now open a Shopify-authenticated branded customer preview,
+rechecking current eligibility. Public photos and wholesale destinations match
+the latest order's product IDs; deleted/unpublished media is not guessed.
+Original order IDs/dates and personal-message context remain intact. Reviewers
+can edit the subject/message, copy the HTML and paste it into Gmail. Clipboard
+denial preserves the draft and offers manual copy. No customer send, native
+Gmail draft API write or new mailbox scope is introduced. See the wholesale
+email messenger and reporting/outreach runbooks.
+
 ## Wholesale reporting and Monday outreach (November 4; source candidate)
 
 Dedicated-store sales cards now use ShopifyQL. Full private history preserves
