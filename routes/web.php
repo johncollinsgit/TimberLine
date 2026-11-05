@@ -2498,12 +2498,18 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
         Route::post('/wholesale/messaging/draft', [WholesaleEmailMessengerController::class, 'save'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wholesale.messaging.save');
+        Route::post('/wholesale/messaging/photo', [WholesaleEmailMessengerController::class, 'resolvePhoto'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wholesale.messaging.photo');
         Route::post('/wholesale/messaging/test-send', [WholesaleEmailMessengerController::class, 'testSend'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wholesale.messaging.test-send');
         Route::post('/rewards/birthdays/email/draft', [BirthdayEmailComposerController::class, 'save'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('rewards.birthdays.email.save');
+        Route::post('/rewards/birthdays/email/photo', [BirthdayEmailComposerController::class, 'resolvePhoto'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.birthdays.email.photo');
         Route::post('/rewards/birthdays/email/test-send', [BirthdayEmailComposerController::class, 'testSend'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('rewards.birthdays.email.test-send');

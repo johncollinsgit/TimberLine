@@ -5,6 +5,22 @@ The wholesale Shopify app contains a saved sixteen-block draft named
 tenant/store context. Saving does not send the email; test sending is a separate
 explicit action to entered test addresses. There is no campaign-send control.
 
+## Photo selection and workspace home
+
+Image blocks and each product-grid image use Shopify's native single-image File
+picker (`pick:shopify/File`), with a thumbnail instead of a raw image URL field.
+The verified current store resolves the chosen MediaImage ID server-side. Client
+store identifiers and image URLs cannot select another store's credentials.
+Cancel or failure retains the previous image; changing blocks while selection
+resolves updates only the original block. Save/test wait for pending selections.
+The shared birthday editor uses the same selector. Selecting does not save or send;
+Save draft remains explicit. Click destinations remain editable as “Link when clicked.”
+
+The embedded shell passes its home navigation target independently of its hidden
+header navigation. The logo therefore returns wholesale staff to their wholesale
+overview, preserving Shopify context, rather than the generic loyalty dashboard.
+Standalone shell home behavior is unchanged.
+
 ## Retired image and wholesale URLs
 
 On November 4, the seeded `SaleImage-darktheme_5f5f655b-77a9-49f5-b699-037f71dee79e.png`
@@ -32,5 +48,7 @@ send occurs during repair.
   changing layout; replacing this image URL does not alter layout.
 - Run the focused messenger/URL-repair cases in
   `tests/Feature/Wholesale/EmbeddedWholesaleOperationsTest.php`.
+- Run `node tests/e2e/email-photo-selector.mjs` for the offline fictional-files
+  browser checks. It mocks every request and sends no email.
 - Release backend changes through the existing GitHub/Forge gates. A live draft
   edit does not establish that the new defaults have reached production.

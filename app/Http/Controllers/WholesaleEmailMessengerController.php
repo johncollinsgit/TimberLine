@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Shopify\ShopifyEmailPhotoSelection;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedAppCredentials;
 use App\Services\Shopify\ShopifyEmbeddedMessagingWorkspaceService;
@@ -53,6 +54,7 @@ class WholesaleEmailMessengerController extends Controller
                 'endpoints' => [
                     'save' => route('shopify.app.api.wholesale.messaging.save', [], false),
                     'test_send' => route('shopify.app.api.wholesale.messaging.test-send', [], false),
+                    'photo_resolve' => route('shopify.app.api.wholesale.messaging.photo', [], false),
                 ],
             ],
         ]), $authorized && $tenantId !== null && $hasAccess ? 200 : 403);
@@ -113,7 +115,24 @@ class WholesaleEmailMessengerController extends Controller
         }
     }
 
-    /** @return array{tenant_id:int,store_key:string}|JsonResponse */
+    public function resolvePhoto(Request $request, ShopifyEmbeddedAppContext $contexts, TenantResolver $tenants, TenantModuleAccessResolver $modules, ShopifyEmailPhotoSelection $photos): JsonResponse
+    {
+        $access = $this->apiAccess($request, $contexts, $tenants, $modules);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+        try {
+            return response()->json(['ok' => true, 'data' => $photos->resolve($access['store'], $request->input('id'))]);
+        } catch (ValidationException $exception) {
+            return response()->json(['ok' => false, 'message' => 'Choose an available photo from this store.', 'errors' => $exception->errors()], 422);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return response()->json(['ok' => false, 'message' => 'The photo could not be loaded. Please try again.'], 502);
+        }
+    }
+
+    /** @return array{tenant_id:int,store_key:string,store:array<string,mixed>}|JsonResponse */
     protected function apiAccess(Request $request, ShopifyEmbeddedAppContext $contexts, TenantResolver $tenants, TenantModuleAccessResolver $modules): array|JsonResponse
     {
         $context = $contexts->resolveMutationContext($request);
@@ -126,7 +145,7 @@ class WholesaleEmailMessengerController extends Controller
             return response()->json(['ok' => false, 'message' => 'Email Messenger is unavailable for this wholesale workspace.'], 403);
         }
 
-        return ['tenant_id' => $tenantId, 'store_key' => trim((string) ($store['key'] ?? 'wholesale')) ?: 'wholesale'];
+        return ['tenant_id' => $tenantId, 'store_key' => trim((string) ($store['key'] ?? 'wholesale')) ?: 'wholesale', 'store' => $store];
     }
 
     /** @return array<string,mixed> */

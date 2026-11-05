@@ -1,10 +1,15 @@
-## Wholesale email draft URLs (November 4)
+## Wholesale email photos, draft URLs and home navigation (November 4)
 
 The wholesale messenger seeds the current Shopify hero asset and canonical
 wholesale destinations. Exact retired seed values in existing drafts are repaired
 idempotently without replacing merchant artwork, copy, or custom destinations.
 The saved live draft and backend source release are separate verification steps.
 See `docs/operations/wholesale-email-messenger.md`.
+
+Wholesale/birthday image controls now select one Shopify photo with a thumbnail;
+the server resolves its ID against the verified store. Selection preserves other
+blocks and requires an explicit save. The embedded header receives its workspace
+home target, keeping wholesale logo navigation inside Wholesale Operations.
 
 ## Retired Forestry Backstage entry (November 4)
 

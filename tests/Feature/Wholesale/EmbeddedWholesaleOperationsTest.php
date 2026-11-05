@@ -13,6 +13,7 @@ use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyStores;
 use App\Services\Wholesale\WholesaleEmailMessengerService;
 use App\Services\Wholesale\WholesaleOrderClassificationService;
+use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
     $this->withoutVite();
@@ -185,6 +186,20 @@ test('wholesale app navigation puts email messenger before suggestions', functio
     }
 });
 
+test('wholesale header logo returns to wholesale overview with embedded context', function (): void {
+    $signedQuery = wholesaleEmbeddedSignedQuery();
+    $html = $this->get(route('shopify.app.wholesale.messaging', $signedQuery))->assertOk()->getContent();
+    $document = new DOMDocument;
+    @$document->loadHTML($html);
+    $links = (new DOMXPath($document))->query('//a[contains(@class, "app-topbar-brand-link")]');
+    expect($links->length)->toBe(1);
+    $url = $links->item(0)->getAttribute('href');
+    parse_str(parse_url($url, PHP_URL_QUERY) ?: '', $query);
+    expect(parse_url($url, PHP_URL_PATH))->toBe('/shopify/app/wholesale')
+        ->and($query['shop'] ?? null)->toBe($signedQuery['shop'])
+        ->and($query['host'] ?? null)->not->toBeEmpty();
+});
+
 test('wholesale email messenger creates and persists the approved sixteen-block draft', function (): void {
     $response = $this->get(route('shopify.app.wholesale.messaging', wholesaleEmbeddedSignedQuery()));
     $response->assertOk()->assertSeeText('Email Messenger')->assertSee('Bring Modern Forestry to your store')->assertSee('cdn.shopify.com');
@@ -279,6 +294,47 @@ test('wholesale URL repair leaves custom merchant artwork and destinations uncha
     $payload = $service->draft($this->tenant->id, 'wholesale');
     expect($payload['sections'])->toBe($sections)
         ->and($payload['revision'])->toBe($revision);
+});
+
+test('email photo selection resolves only from the verified store without changing a draft', function (string $routeName): void {
+    $store = ShopifyStores::find('wholesale', true);
+    $token = app(ShopifyEmbeddedAppContext::class)->issueContextToken(['store' => $store, 'shop_domain' => $store['shop'], 'host' => 'photo-picker-test']);
+    Http::fake(fn () => Http::response(['data' => ['node' => ['id' => 'gid://shopify/MediaImage/123', 'alt' => 'Selected candle photo', 'image' => ['url' => 'https://cdn.shopify.com/fixture-photo.png']]]], 200));
+
+    $this->postJson(route($routeName), [
+        'id' => 'gid://shopify/MediaImage/123', 'context_token' => $token,
+        'store_key' => 'retail', 'url' => 'https://untrusted.example/ignored.png',
+    ])->assertOk()->assertJsonPath('data.url', 'https://cdn.shopify.com/fixture-photo.png');
+    Http::assertSentCount(1);
+    Http::assertSent(fn ($request): bool => str_starts_with($request->url(), 'https://'.$store['shop'].'/admin/api/')
+        && $request->hasHeader('X-Shopify-Access-Token', $store['token'])
+        && $request['variables']['id'] === 'gid://shopify/MediaImage/123');
+    expect(WholesaleEmailMessengerDraft::query()->count())->toBe(0);
+})->with(['wholesale' => ['shopify.app.api.wholesale.messaging.photo'], 'birthday' => ['shopify.app.api.rewards.birthdays.email.photo']]);
+
+test('email photo selection rejects missing authorization and invalid resource IDs before Shopify is called', function (): void {
+    Http::fake();
+    $this->postJson(route('shopify.app.api.wholesale.messaging.photo'), ['id' => 'gid://shopify/MediaImage/123'])->assertUnauthorized();
+    $store = ShopifyStores::find('wholesale', true);
+    $token = app(ShopifyEmbeddedAppContext::class)->issueContextToken(['store' => $store, 'shop_domain' => $store['shop'], 'host' => 'photo-picker-test']);
+    $this->postJson(route('shopify.app.api.wholesale.messaging.photo'), ['id' => 'https://untrusted.example/photo.png', 'context_token' => $token])->assertUnprocessable();
+    Http::assertNothingSent();
+});
+
+test('email photo selection rejects a photo missing from the current store', function (): void {
+    Http::fake(fn () => Http::response(['data' => ['node' => null]], 200));
+    $store = ShopifyStores::find('wholesale', true);
+    $token = app(ShopifyEmbeddedAppContext::class)->issueContextToken(['store' => $store, 'shop_domain' => $store['shop'], 'host' => 'photo-picker-test']);
+    $this->postJson(route('shopify.app.api.wholesale.messaging.photo'), ['id' => 'gid://shopify/MediaImage/999', 'context_token' => $token])->assertUnprocessable()->assertJsonMissingPath('data.url');
+});
+
+test('email photo selection rejects an unmapped store before Shopify is called', function (): void {
+    configureEmbeddedWholesaleStore();
+    Http::fake();
+    $store = ShopifyStores::find('wholesale', true);
+    $token = app(ShopifyEmbeddedAppContext::class)->issueContextToken(['store' => $store, 'shop_domain' => $store['shop'], 'host' => 'photo-picker-test']);
+    $this->postJson(route('shopify.app.api.wholesale.messaging.photo'), ['id' => 'gid://shopify/MediaImage/123', 'context_token' => $token])->assertForbidden();
+    Http::assertNothingSent();
 });
 
 test('wholesale pages fail closed when the authenticated store has no tenant mapping', function (): void {
