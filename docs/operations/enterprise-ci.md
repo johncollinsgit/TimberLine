@@ -1,5 +1,11 @@
 # Enterprise source verification
 
+All four jobs explicitly use `ubuntu-24.04`, matching primary CI and the
+production server's supported OS. The floating `ubuntu-latest` label selected
+Ubuntu 26.04 runners with an unsupported mirror list in two lanes, including a
+same-commit retry. Pinning the supported OS preserves the strict mirror guard,
+every command, both browser engines, all matrix lanes and the aggregate gate.
+
 ## Isolated parallel verification (performance candidate)
 
 The workflow keeps the required check named `enterprise-runtime`. It is an
