@@ -1,5 +1,19 @@
 # Enterprise source verification
 
+All four jobs explicitly use `ubuntu-24.04`, matching primary CI and the
+production server's supported OS. The floating `ubuntu-latest` label selected
+Ubuntu 26.04 runners with an unsupported mirror list in two lanes, including a
+same-commit retry; 24.04 also exposed a mirror-list format variation. The mirror
+helper validates the known Ubuntu endpoints rather than one exact list layout.
+The refusal diagnostics identified the actual variant:
+`http://us-east-2.ec2.archive.ubuntu.com/ubuntu/`, a regional mirror documented by
+[Canonical cloud-init](https://github.com/canonical/cloud-init/blob/main/doc/examples/cloud-config-apt.txt).
+The guard recognizes only the documented regional EC2 URI form and the existing
+Azure/archive/security endpoints; it removes cloud mirrors and retains only the
+official HTTPS archive/security fallbacks. Arbitrary hosts remain rejected.
+The supported OS pin preserves every command, both browser engines, all matrix
+lanes and the aggregate gate.
+
 ## Isolated parallel verification (performance candidate)
 
 The workflow keeps the required check named `enterprise-runtime`. It is an
@@ -89,11 +103,18 @@ normal checks, not modifying a live release or required-check settings.
 The primary PHP 8.4 and isolated Enterprise workflows share
 `scripts/ci/ubuntu-official-mirrors.py`. It preserves folded Deb822 source fields,
 accepts already-direct official HTTPS archives, and verifies the known Ubuntu
-`mirror+file:/etc/apt/apt-mirrors.txt` indirection before removing only its exact
-Azure entry. The observed mixed runner layout also has the exact official
+`mirror+file:/etc/apt/apt-mirrors.txt` indirection before removing only its known
+Azure/EC2 entries. Mirror order and optional numeric priority metadata are preserved;
+only the archive/security endpoints are retained, normalized to HTTPS with the
+canonical `/ubuntu/` base. At least the official archive fallback is required;
+security may instead be a direct source stanza. Duplicate endpoints, unknown
+hosts/paths/transports, credentials/query strings and unknown metadata fail
+before modification. Refusal diagnostics omit credential/query/fragment values,
+unrecognized paths and unsupported metadata.
+The observed mixed runner layout also has the exact official
 `http://security.ubuntu.com/ubuntu` URI; only that token in a URIs field is
-upgraded to `https://security.ubuntu.com/ubuntu/`. Existing HTTPS entries,
-other source fields, keyring references and unrelated repositories remain
+upgraded to `https://security.ubuntu.com/ubuntu/`. Other source fields,
+keyring references and unrelated repositories remain
 unchanged. All inputs are validated before either file is changed; unknown
 hosts, paths and mirror lists fail closed. This changes the observed slow download path;
 it does not cache OS packages or guarantee speed. Preserve every test, browser

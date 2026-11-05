@@ -135,7 +135,7 @@ permissions:
 jobs:
   prepare:
     name: Enterprise inputs and contracts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       artifact: ${{ steps.inputs.outputs.artifact }}
       producer-attempt: ${{ steps.inputs.outputs.producer-attempt }}
@@ -195,7 +195,7 @@ jobs:
   native:
     name: Enterprise PHP and MySQL
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       mysql:
         image: mysql:8.4
@@ -250,7 +250,7 @@ jobs:
   browser:
     name: Enterprise browser (${{ matrix.id }})
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       max-parallel: 12
@@ -556,7 +556,7 @@ jobs:
     - prepare
     - native
     - browser
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: Require every Enterprise verification job
       env:

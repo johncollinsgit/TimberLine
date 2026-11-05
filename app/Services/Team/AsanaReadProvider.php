@@ -19,6 +19,16 @@ class AsanaReadProvider
     // Asana section reads are covered by projects:read; sections:read is not a registered scope.
     public const SCOPES = 'projects:read tasks:read users:read workspaces:read stories:read attachments:read custom_fields:read tags:read';
 
+    public static function tokenIdentity(array $token): array
+    {
+        // The OAuth token response uses data for account identity, not user.
+        $identity = $token['data'] ?? null;
+        abort_unless(is_array($identity) && is_string($identity['gid'] ?? null)
+            && preg_match('/^\d{1,120}$/D', $identity['gid']), 502, 'Asana did not return a valid account identity. Try connecting again.');
+
+        return $identity;
+    }
+
     public function connection(int $tenant, int $user): ?TeamUserConnection
     {
         return TeamUserConnection::query()->where(['tenant_id' => $tenant, 'user_id' => $user, 'provider' => 'asana'])->first();
@@ -47,9 +57,10 @@ class AsanaReadProvider
         $response = Http::asForm()->timeout(20)->post('https://app.asana.com/-/oauth_token', ['grant_type' => 'authorization_code', 'client_id' => config('team_work.asana.client_id'), 'client_secret' => config('team_work.asana.client_secret'), 'redirect_uri' => route('team.asana.callback'), 'code' => $input['code'], 'code_verifier' => $state['verifier']]);
         abort_unless($response->successful() && $response->json('access_token') && $response->json('refresh_token'), 502, 'Asana could not complete the connection. Try connecting again.');
         $token = $response->json();
+        $identity = self::tokenIdentity($token);
         $connection = $this->connection($tenant->id, $request->user()->id) ?? new TeamUserConnection(['tenant_id' => $tenant->id, 'user_id' => $request->user()->id, 'provider' => 'asana']);
         // A new identity invalidates selections, cursors and in-flight requests.
-        $connection->fill(['id' => (string) Str::uuid(), 'credentials' => ['access_token' => $token['access_token'], 'refresh_token' => $token['refresh_token']], 'external_user_id' => $token['user']['gid'] ?? null, 'account_name' => $token['user']['name'] ?? 'Asana account', 'project_ids' => [], 'status' => 'connected', 'expires_at' => now()->addSeconds((int) ($token['expires_in'] ?? 3600)), 'last_synced_at' => null]);
+        $connection->fill(['id' => (string) Str::uuid(), 'credentials' => ['access_token' => $token['access_token'], 'refresh_token' => $token['refresh_token']], 'external_user_id' => $identity['gid'], 'account_name' => $identity['name'] ?? 'Asana account', 'project_ids' => [], 'status' => 'connected', 'expires_at' => now()->addSeconds((int) ($token['expires_in'] ?? 3600)), 'last_synced_at' => null]);
         $connection->save();
 
         return $tenant;
