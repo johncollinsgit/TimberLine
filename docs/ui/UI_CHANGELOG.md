@@ -1,3 +1,17 @@
+## 2026-11-05 — Configurable public campus walkthrough
+
+Owner requested logically connected fictional roles/flows and editable settings.
+The existing standalone branded Facilities shell adds Campus operations for daily
+crew assignments/checkpoints, calendar coordination, vendor renewals, invoice and
+fund review, factual quarterly reports, and pilot/training examples. Demo settings
+uses grouped forms with a stable save row, shared revision checks and retained
+local drafts. Named role profiles select simulated capabilities and original
+work-order scopes; persona controls wait for the shared directory. The existing
+public campus identity and banner placement remain. This public presentation is
+an intentional paired frontend exception; authenticated workspace shells and
+commerce/provider behavior are unchanged. No real campus access or new external
+integration is activated. See the campus Facilities runbook for validation.
+
 ## 2026-11-05 — Native wholesale email review and send
 
 Customer follow-up drafts can connect the approved store Gmail account and review
