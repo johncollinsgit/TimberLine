@@ -1,3 +1,12 @@
+## Campus overview banner (November 5; source candidate)
+
+The public Facilities overview starts with the campus/job photo banner above the
+personal greeting. This is the paired standalone frontend package, not the
+Enterprise reviewer shell. Preserve shared demo storage, gallery/persona scope
+and existing provider permissions. The public demo does not yet demonstrate
+all Andrew-attributed requirements; see the November 5 coverage addendum in
+`docs/architecture/enterprise-requirement-traceability.md`.
+
 ## Branded wholesale customer drafts (November 5; source candidate)
 
 Monday draft buttons now open a Shopify-authenticated branded customer preview,

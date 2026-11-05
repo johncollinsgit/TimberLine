@@ -122,3 +122,12 @@ instruction to create real records, send messages, grant access or connect
 providers. Confirm which procedural changes solve each problem before adding
 automation; retain separately commissioned product work without rewriting its
 provenance.
+
+
+## Public Facilities demo coverage — November 5, 2026
+
+The current public `/platform/demos/lees-mcrae` route serves the paired Facilities standalone package, not the broader Enterprise reviewer renderer described above. Do not claim the Enterprise implementation matrix is visible in that public app. The October 21 Quick Notes email was reread for this audit.
+
+The public app demonstrates shared fictional intake, head approval, single-person assignment, recorded work/time/materials, photos/comments, building views and current status/workload charts. It does not demonstrate daily printed Roll Call, explicit flexible-pair/emergency resumption, classroom/athletics calendar conflicts, quarterly submission reports, contractor-certificate expiry alerts, vendor ratings, invoice/check approval packets or restricted-fund accounting. Recording access timing, urgent priority or awaiting-parts status is not the corresponding complete workflow.
+
+Broader Enterprise source contains internal operational interruption/hand-off, reservation/conflict, period-export, certificate-review and finance-packet slices with the documented boundaries above. They are separate from public-demo availability, external calendar/system synchronization, outbound alerts, payment execution, real identity enforcement and campus acceptance. Flat-fee scope/usage, training, pilot measures and ownership still need agreement; a public demo or sent review invitation does not establish those agreements. Geolocation and generated prose remain John proposals, not automatically Andrew requirements.
