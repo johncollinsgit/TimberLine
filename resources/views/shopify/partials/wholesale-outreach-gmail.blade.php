@@ -23,6 +23,7 @@
             status.textContent = value.message;
             find('from').textContent = value.from ? `From: ${value.name} <${value.from}>\nReply to: ${value.reply_to}` : '';
             connect.hidden = !value.configured || value.connected;
+            find('consent').hidden = connect.hidden;
             find('disconnect').hidden = !value.can_disconnect;
             review.disabled = !(value.can_review ?? value.can_send);
         } catch (error) { status.textContent = error.message; }

@@ -112,6 +112,10 @@ alias tests are evidence for that route, not acceptance of this new deployed
 client. Verify a real recipient-side receipt before claiming live readiness.
 Enable live customer sends only after that separate acceptance is recorded.
 
+The public privacy page includes a Gmail-specific disclosure at
+`/privacy#wholesale-gmail`; the connection prompt links it before Google consent.
+Publish the current disclosure before authorizing the live mailbox.
+
 Protocol references:
 [Google web-server OAuth](https://developers.google.com/identity/protocols/oauth2/web-server),
 [Gmail send](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/send),

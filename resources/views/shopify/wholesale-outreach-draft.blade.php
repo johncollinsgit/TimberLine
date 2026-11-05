@@ -20,6 +20,7 @@
                         <p class="text-sm text-zinc-600" role="status" aria-live="polite" data-gmail-status>Checking your email connection…</p>
                         <button type="button" class="w-full rounded-full bg-zinc-950 px-4 py-3 font-semibold text-white disabled:opacity-50" data-gmail-review disabled>Review and send</button>
                         <button type="button" class="w-full rounded-full border px-4 py-2 font-semibold" data-gmail-connect hidden>Connect Gmail</button>
+                        <p class="text-sm text-zinc-600" data-gmail-consent hidden>Connect the approved store account for authorized wholesale operators. Google requests sending and basic settings access so Backstage can verify the From address. It reads aliases without changing settings. <a href="{{ route('legal.privacy') }}#wholesale-gmail" target="_blank" rel="noopener" class="underline">Gmail data use and privacy</a></p>
                         <button type="button" class="text-sm font-semibold underline" data-gmail-refresh>Check connection</button>
                         <button type="button" class="ml-3 text-sm underline" data-gmail-disconnect hidden>Disconnect</button>
                     </section>
