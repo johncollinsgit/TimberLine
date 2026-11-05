@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\Marketing\BirthdayEmailComposerService;
+use App\Services\Shopify\ShopifyEmailPhotoSelection;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedAppCredentials;
 use App\Services\Shopify\ShopifyEmbeddedMessagingWorkspaceService;
@@ -36,7 +37,7 @@ class BirthdayEmailComposerController extends Controller
             'birthdayEmailComposerBootstrap' => [
                 'authorized' => $authorized, 'draft' => $authorized ? $drafts->draft($tenantId) : null,
                 'context_token' => $authorized ? $contexts->issueContextToken($context) : null,
-                'endpoints' => ['save' => route('shopify.app.api.rewards.birthdays.email.save', [], false), 'test_send' => route('shopify.app.api.rewards.birthdays.email.test-send', [], false)],
+                'endpoints' => ['save' => route('shopify.app.api.rewards.birthdays.email.save', [], false), 'test_send' => route('shopify.app.api.rewards.birthdays.email.test-send', [], false), 'photo_resolve' => route('shopify.app.api.rewards.birthdays.email.photo', [], false)],
                 'meta' => ['eyebrow' => 'Everbranch Rewards', 'saveNotice' => 'Birthday email design saved.', 'testDescription' => 'Tests go only to addresses entered below. This screen never sends to the birthday audience.'],
             ],
         ]), $authorized ? 200 : 403);
@@ -76,13 +77,39 @@ class BirthdayEmailComposerController extends Controller
 
     protected function tenant(Request $request, ShopifyEmbeddedAppContext $contexts, TenantResolver $tenants): int|JsonResponse
     {
+        $access = $this->access($request, $contexts, $tenants);
+
+        return $access instanceof JsonResponse ? $access : $access['tenant_id'];
+    }
+
+    public function resolvePhoto(Request $request, ShopifyEmbeddedAppContext $contexts, TenantResolver $tenants, ShopifyEmailPhotoSelection $photos): JsonResponse
+    {
+        $access = $this->access($request, $contexts, $tenants);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+        try {
+            return response()->json(['ok' => true, 'data' => $photos->resolve($access['store'], $request->input('id'))]);
+        } catch (ValidationException $exception) {
+            return response()->json(['ok' => false, 'message' => 'Choose an available photo from this store.', 'errors' => $exception->errors()], 422);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return response()->json(['ok' => false, 'message' => 'The photo could not be loaded. Please try again.'], 502);
+        }
+    }
+
+    /** @return array{tenant_id:int,store:array<string,mixed>}|JsonResponse */
+    protected function access(Request $request, ShopifyEmbeddedAppContext $contexts, TenantResolver $tenants): array|JsonResponse
+    {
         $context = $contexts->resolveMutationContext($request);
         if (! ($context['ok'] ?? false)) {
             return response()->json(['ok' => false, 'message' => 'Reload this page from Shopify Admin and try again.'], 401);
         }
-        $tenantId = $tenants->resolveTenantIdForStoreContext((array) ($context['store'] ?? []));
+        $store = (array) ($context['store'] ?? []);
+        $tenantId = $tenants->resolveTenantIdForStoreContext($store);
 
-        return $tenantId ?? response()->json(['ok' => false, 'message' => 'Birthday email designer is unavailable for this store.'], 403);
+        return $tenantId !== null ? ['tenant_id' => $tenantId, 'store' => $store] : response()->json(['ok' => false, 'message' => 'Birthday email designer is unavailable for this store.'], 403);
     }
 
     protected function embedded(Response $response): Response

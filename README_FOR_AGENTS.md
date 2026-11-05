@@ -1,3 +1,24 @@
+## Wholesale email photos, draft URLs and home navigation (November 4)
+
+The hero uses the current Shopify file, and wholesale CTAs use the actual
+wholesale store/application. Opening a saved draft repairs only the exact known
+retired seed URLs, increments its revision once, and preserves merchant edits.
+See `docs/operations/wholesale-email-messenger.md`. Keep draft repair separate
+from email sending; the editor has explicit test-only send controls.
+
+Use the native image-only Shopify File picker; resolve IDs with the verified
+store and retain previous photos on cancel/failure. Keep pending selection guards
+and original-section targeting. The embedded header's brand home is explicit even
+when header navigation is hidden; preserve the wholesale overview destination.
+
+## Retired Forestry Backstage entry (November 4)
+
+The versioned Cloudflare Worker at `cloudflare/forestry-backstage-entry` serves
+the old hostname's public welcome and four fixed staff entry handoffs. Keep this
+repair at the edge: do not enable the old host in Laravel, forward stale session
+queries, or redirect callbacks/state-changing requests. See its README and the
+domain cutover runbook. Source validation and Cloudflare activation are separate.
+
 ## Events My Tasks and phone web app (November 4; source candidate)
 
 Request only registered Asana scopes. Sections use `projects:read`, not

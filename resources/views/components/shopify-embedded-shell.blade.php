@@ -32,6 +32,8 @@
         $workspaceLabel = 'Commerce';
     }
     $navItems = is_array($appNavigation['items'] ?? null) ? $appNavigation['items'] : [];
+    $homeNavItem = collect($navItems)->first(fn (array $item): bool => ($item['key'] ?? null) === 'home' && filled($item['href'] ?? null));
+    $brandHref = is_array($homeNavItem) ? (string) $homeNavItem['href'] : null;
     $commandSearchEndpoint = $appNavigation['commandSearchEndpoint'] ?? null;
     $commandSearchPlaceholder = trim((string) ($appNavigation['commandSearchPlaceholder'] ?? 'Search actions, pages, and Shopify tools'));
     $commandSearchDocuments = is_array($appNavigation['commandSearchDocuments'] ?? null) ? $appNavigation['commandSearchDocuments'] : [];
@@ -83,6 +85,7 @@
     @endif
 
     <x-app-shell
+        :brand-href="$brandHref"
         :navigation="[]"
         :page-title="$headline"
         :page-subtitle="$subheadline"

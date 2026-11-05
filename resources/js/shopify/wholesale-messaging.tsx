@@ -2,13 +2,14 @@ import { createRoot } from "react-dom/client";
 import { useState } from "react";
 import { requestMessagingJson } from "./messaging/api";
 import type { EmailProductTile, EmailSection } from "./messaging/types";
+import PhotoSelector, { type SelectedPhoto } from "./messaging/PhotoSelector";
 import "./wholesale-messaging.css";
 
 interface Draft {
   id: number; name: string; subject: string; sections: EmailSection[]; personalization: Record<string, string>;
   revision: number; rendered_html: string; locked_footer: boolean; sender: { from_email: string; from_name: string };
 }
-interface Bootstrap { authorized: boolean; draft: Draft; context_token?: string | null; endpoints: { save: string; test_send: string }; meta?: { eyebrow?: string; saveNotice?: string; testDescription?: string } }
+interface Bootstrap { authorized: boolean; draft: Draft; context_token?: string | null; endpoints: { save: string; test_send: string; photo_resolve?: string }; meta?: { eyebrow?: string; saveNotice?: string; testDescription?: string } }
 const node = document.getElementById("wholesale-email-messenger-bootstrap") || document.getElementById("birthday-email-composer-bootstrap");
 const bootstrap = node?.textContent ? JSON.parse(node.textContent) as Bootstrap : null;
 
@@ -63,14 +64,14 @@ function EmailCanvas({ draft, selected, preview, onSelect }: { draft: Draft; sel
   </section>;
 }
 
-function ProductGridInspector({ section, replaceSection }: { section: EmailSection; replaceSection: (change: Partial<EmailSection>) => void }) {
+function ProductGridInspector({ section, replaceSection, initial, selectPhoto, onPhotoBusy }: { section: EmailSection; replaceSection: (change: Partial<EmailSection>) => void; initial: Bootstrap; selectPhoto: (sectionId: string, photo: SelectedPhoto, productIndex?: number) => void; onPhotoBusy: (busy: boolean) => void }) {
   const products = section.products || [];
   const replaceProduct = (index: number, change: Partial<EmailProductTile>) => replaceSection({ products: products.map((product, productIndex) => productIndex === index ? { ...product, ...change } : product) });
   return <>
     <label>Grid heading<input value={section.heading || ""} onChange={(event) => replaceSection({ heading: event.target.value })} /></label>
     {products.map((product, index) => <fieldset className="wem-product-fields" key={`${product.title || "product"}-${index}`}><legend>Product {index + 1}</legend>
       <label>Name<input value={product.title || ""} onChange={(event) => replaceProduct(index, { title: event.target.value })} /></label>
-      <label>Image URL<input value={product.imageUrl || ""} onChange={(event) => replaceProduct(index, { imageUrl: event.target.value })} /></label>
+      <PhotoSelector url={product.imageUrl} alt={product.title} resolveUrl={initial.endpoints.photo_resolve} contextToken={initial.context_token} onSelect={(photo) => selectPhoto(section.id, photo, index)} onBusyChange={onPhotoBusy} />
       <label>Product URL<input value={product.href || ""} onChange={(event) => replaceProduct(index, { href: event.target.value })} /></label>
       <label>Link label<input value={product.buttonLabel || ""} onChange={(event) => replaceProduct(index, { buttonLabel: event.target.value })} /></label>
     </fieldset>)}
@@ -82,13 +83,24 @@ function App({ initial }: { initial: Bootstrap }) {
   const [selected, setSelected] = useState(0);
   const [preview, setPreview] = useState<"desktop" | "mobile">("desktop");
   const [saving, setSaving] = useState(false);
+  const [photoRequests, setPhotoRequests] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [testEmail, setTestEmail] = useState("");
   const [testing, setTesting] = useState(false);
   const section = draft.sections[selected];
+  const onPhotoBusy = (busy: boolean) => setPhotoRequests((count) => Math.max(0, count + (busy ? 1 : -1)));
   const replaceSection = (change: Partial<EmailSection>) => setDraft((current) => ({ ...current, sections: current.sections.map((item, index) => index === selected ? { ...item, ...change } : item) }));
+  const selectPhoto = (sectionId: string, photo: SelectedPhoto, productIndex?: number) => setDraft((current) => ({
+    ...current,
+    sections: current.sections.map((item) => {
+      if (item.id !== sectionId) return item;
+      if (productIndex !== undefined) return { ...item, products: (item.products || []).map((product, index) => index === productIndex ? { ...product, imageUrl: photo.url } : product) };
+      return { ...item, imageUrl: photo.url, alt: item.alt || photo.alt };
+    }),
+  }));
 
   const save = async (): Promise<boolean> => {
+    if (photoRequests > 0) { setNotice("Finish choosing a photo before saving."); return false; }
     setSaving(true); setNotice(null);
     try {
       const response = await requestMessagingJson<Draft>(initial.endpoints.save, { method: "POST", body: JSON.stringify({ subject: draft.subject, sections: draft.sections, personalization: draft.personalization, revision: draft.revision, context_token: initial.context_token }) });
@@ -110,7 +122,7 @@ function App({ initial }: { initial: Bootstrap }) {
   };
 
   return <div className="wem-shell">
-    <div className="wem-toolbar"><div><span className="wem-eyebrow">{initial.meta?.eyebrow || "MF Wholesale Backstage"}</span><strong>{draft.name}</strong><small>From {draft.sender.from_name} &lt;{draft.sender.from_email}&gt; · campaign sending is disabled</small></div><div><button className="wem-button wem-secondary" onClick={() => setPreview(preview === "desktop" ? "mobile" : "desktop")}>{preview === "desktop" ? "Mobile preview" : "Desktop preview"}</button><button className="wem-button" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save draft"}</button></div></div>
+    <div className="wem-toolbar"><div><span className="wem-eyebrow">{initial.meta?.eyebrow || "MF Wholesale Backstage"}</span><strong>{draft.name}</strong><small>From {draft.sender.from_name} &lt;{draft.sender.from_email}&gt; · campaign sending is disabled</small></div><div><button className="wem-button wem-secondary" onClick={() => setPreview(preview === "desktop" ? "mobile" : "desktop")}>{preview === "desktop" ? "Mobile preview" : "Desktop preview"}</button><button className="wem-button" disabled={saving || photoRequests > 0} onClick={() => void save()}>{saving ? "Saving…" : "Save draft"}</button></div></div>
     {notice && <div className="wem-notice">{notice}</div>}
     <div className="wem-grid">
       <aside className="wem-blocks"><h2>{draft.sections.length} editable blocks</h2><p>Choose a block here or click it in the email.</p>{draft.sections.map((item, index) => <button key={item.id} onClick={() => setSelected(index)} className={selected === index ? "active" : ""} aria-pressed={selected === index}>{blockLabel(item, index)}</button>)}<div className="wem-locked"><strong>Locked compliance footer</strong><span>Unsubscribe and privacy links are appended server-side.</span></div></aside>
@@ -121,12 +133,12 @@ function App({ initial }: { initial: Bootstrap }) {
         <div className="wem-inspector-fields">
           {section.type === "heading" && <label>Heading<input value={section.text || ""} onChange={(event) => replaceSection({ text: event.target.value })} /></label>}
           {section.type === "text" && <label>Copy<textarea value={section.html || ""} onChange={(event) => replaceSection({ html: event.target.value })} /></label>}
-          {section.type === "image" && <><label>Image URL<input value={section.imageUrl || ""} onChange={(event) => replaceSection({ imageUrl: event.target.value })} /></label><label>Alt text<input value={section.alt || ""} onChange={(event) => replaceSection({ alt: event.target.value })} /></label><label>Destination URL<input value={section.href || ""} onChange={(event) => replaceSection({ href: event.target.value })} /></label></>}
+          {section.type === "image" && <><PhotoSelector key={section.id} url={section.imageUrl} alt={section.alt} resolveUrl={initial.endpoints.photo_resolve} contextToken={initial.context_token} onSelect={(photo) => selectPhoto(section.id, photo)} onBusyChange={onPhotoBusy} /><label>Alt text<input value={section.alt || ""} onChange={(event) => replaceSection({ alt: event.target.value })} /></label><label>Link when clicked<input value={section.href || ""} onChange={(event) => replaceSection({ href: event.target.value })} /></label></>}
           {section.type === "button" && <><label>Button label<input value={section.label || ""} onChange={(event) => replaceSection({ label: event.target.value })} /></label><label>Destination URL<input value={section.href || ""} onChange={(event) => replaceSection({ href: event.target.value })} /></label></>}
-          {section.type === "product_grid_4" && <ProductGridInspector section={section} replaceSection={replaceSection} />}
+          {section.type === "product_grid_4" && <ProductGridInspector section={section} replaceSection={replaceSection} initial={initial} selectPhoto={selectPhoto} onPhotoBusy={onPhotoBusy} />}
           {section.type === "fading_divider" && <><label>Top spacing<input type="number" value={section.spacingTop || 0} onChange={(event) => replaceSection({ spacingTop: Number(event.target.value) })} /></label><label>Bottom spacing<input type="number" value={section.spacingBottom || 0} onChange={(event) => replaceSection({ spacingBottom: Number(event.target.value) })} /></label></>}
         </div>
-        <div className="wem-test"><h2>Send a test only</h2><p>{initial.meta?.testDescription || "Tests go only to addresses entered below. This screen has no campaign send control and never contacts prospects."}</p><input aria-label="Test email" placeholder="you@example.com" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} /><button className="wem-button" disabled={testing} onClick={() => void testSend()}>{testing ? "Sending test…" : "Send test email"}</button></div>
+        <div className="wem-test"><h2>Send a test only</h2><p>{initial.meta?.testDescription || "Tests go only to addresses entered below. This screen has no campaign send control and never contacts prospects."}</p><input aria-label="Test email" placeholder="you@example.com" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} /><button className="wem-button" disabled={testing || photoRequests > 0} onClick={() => void testSend()}>{testing ? "Sending test…" : "Send test email"}</button></div>
       </aside>
     </div>
   </div>;

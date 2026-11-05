@@ -13,6 +13,7 @@
     'commandSearchContext' => [],
     'commandPaletteVariant' => 'legacy',
     'workspaceLabel' => 'Unified workspace',
+    'brandHref' => null,
 ])
 
 @php
@@ -46,6 +47,7 @@
     @endif
     <div class="app-shell-main">
         <x-app-topbar
+            :brand-href="$brandHref"
             :navigation="$navigation['items'] ?? []"
             :active="$navigation['activeSection'] ?? null"
             :active-child="$navigation['activeChild'] ?? null"

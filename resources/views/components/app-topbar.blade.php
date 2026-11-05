@@ -11,6 +11,7 @@
     'workspaceLabel' => 'Unified workspace',
     'commandSearchEnabled' => false,
     'commandSearchPlaceholder' => 'Search or ask what you want to do...',
+    'brandHref' => null,
 ])
 
 @php
@@ -47,11 +48,11 @@
         $activeModuleState = $activeSubnavItem['module_state'];
     }
 
-    $brandHref = '/';
+    $brandHref = filled($brandHref) ? (string) $brandHref : '/';
     $homeItem = collect($navigation)->first(
         fn (array $item): bool => ($item['key'] ?? null) === 'home' && filled($item['href'] ?? null)
     );
-    if (is_array($homeItem)) {
+    if ($brandHref === '/' && is_array($homeItem)) {
         $brandHref = (string) ($homeItem['href'] ?? '/');
     }
     $tenant = request()->attributes->get('current_tenant');

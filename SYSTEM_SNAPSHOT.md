@@ -1,3 +1,24 @@
+## Wholesale email photos, draft URLs and home navigation (November 4)
+
+The wholesale messenger seeds the current Shopify hero asset and canonical
+wholesale destinations. Exact retired seed values in existing drafts are repaired
+idempotently without replacing merchant artwork, copy, or custom destinations.
+The saved live draft and backend source release are separate verification steps.
+See `docs/operations/wholesale-email-messenger.md`.
+
+Wholesale/birthday image controls now select one Shopify photo with a thumbnail;
+the server resolves its ID against the verified store. Selection preserves other
+blocks and requires an explicit save. The embedded header receives its workspace
+home target, keeping wholesale logo navigation inside Wholesale Operations.
+
+## Retired Forestry Backstage entry (November 4)
+
+`cloudflare/forestry-backstage-entry` provides an edge-only public welcome and
+fixed current entry redirects for `backstage.theforestrystudio.com`. It preserves
+the canonical-only Laravel host contract, passes unknown/mutating requests to
+the origin unchanged, and drops stale query context on its four entry redirects.
+See the Worker README for activation/rollback and verification evidence.
+
 ## Events My Tasks and phone web app (November 4; source candidate)
 
 OAuth compatibility correction: section reads use Asana's registered
