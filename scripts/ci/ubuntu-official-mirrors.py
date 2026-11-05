@@ -8,14 +8,24 @@ INDIRECT = 'mirror+file:/etc/apt/apt-mirrors.txt'
 OFFICIAL = {f'https://{host}/ubuntu{slash}' for host in
             ('archive.ubuntu.com', 'security.ubuntu.com') for slash in ('', '/')}
 MIRRORS = {f'{scheme}://{host}/ubuntu{slash}': kind
-           for kind, host in (('azure', 'azure.archive.ubuntu.com'),
+           for kind, host in (('cloud', 'azure.archive.ubuntu.com'),
                               ('archive', 'archive.ubuntu.com'),
                               ('security', 'security.ubuntu.com'))
            for scheme in ('http', 'https') for slash in ('', '/')}
 
 
+def mirror_kind(uri):
+    kind = MIRRORS.get(uri)
+    if kind is not None:
+        return kind
+    # Canonical cloud-init documents <region>.ec2.archive.ubuntu.com mirrors.
+    if re.fullmatch(r'https?://[a-z]{2}(?:-[a-z]+){1,2}-[0-9]{1,2}\.ec2\.archive\.ubuntu\.com/ubuntu/?', uri):
+        return 'cloud'
+    return None
+
+
 def mirror_endpoint_description(uri):
-    if uri in MIRRORS:
+    if mirror_kind(uri) is not None:
         return uri
     try:
         parsed = urlsplit(uri.lstrip('\ufeff'))
@@ -29,7 +39,7 @@ def mirror_endpoint_description(uri):
 
 
 def verified_mirrors(content):
-    """Validate known endpoints before removing Azure and securing fallback URLs."""
+    """Validate known endpoints before removing cloud mirrors and securing URLs."""
     lines = content.splitlines(keepends=True)
     entries = [line.decode('utf-8').split() for line in lines
                if line.strip() and not line.lstrip().startswith(b'#')]
@@ -40,11 +50,12 @@ def verified_mirrors(content):
     failure = 'Unsupported Ubuntu mirror list; refusing change. Entries: ' + repr(safe)
     seen = set()
     for words in entries:
-        kind = MIRRORS.get(words[0])
-        if (kind is None or kind in seen or len(words) > 2
+        kind = mirror_kind(words[0])
+        endpoint = 'cloud:' + str(urlsplit(words[0]).hostname) if kind == 'cloud' else kind
+        if (kind is None or endpoint in seen or len(words) > 2
                 or (len(words) == 2 and not re.fullmatch(r'priority:[0-9]{1,6}', words[1]))):
             raise ValueError(failure)
-        seen.add(kind)
+        seen.add(endpoint)
     # An archive fallback supplies every Ubuntu suite. Security may be a separate
     # direct stanza, so its presence in the mirror file is not required.
     if 'archive' not in seen:
@@ -55,8 +66,8 @@ def verified_mirrors(content):
             after.append(line)
             continue
         uri = line.decode('utf-8').split()[0]
-        kind = MIRRORS[uri]
-        if kind != 'azure':
+        kind = mirror_kind(uri)
+        if kind != 'cloud':
             target = f'https://{kind}.ubuntu.com/ubuntu/'
             after.append(line.replace(uri.encode('utf-8'), target.encode('utf-8'), 1))
     return b''.join(after)

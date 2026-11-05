@@ -5,8 +5,8 @@ OAuth compatibility correction: section reads use Asana's registered
 both Teams connection entry points; optional `tasks:write` remains separate.
 The native and Operations callbacks share validation of Asana's token `data`
 identity. An absent/invalid account ID cannot create a connected record.
-Enterprise CI is pinned to Ubuntu 24.04 after unsupported floating 26.04 runner
-mirror layouts blocked setup; all original test lanes and guards remain.
+Enterprise CI uses Ubuntu 24.04 and validates documented Azure/EC2 mirror forms
+before selecting official HTTPS fallbacks. All original lanes and guards remain.
 
 Premium Teams Events now has identity-scoped Asana My Tasks, original event notes,
 paged checklist/comments/attachment links and separately gated reviewed task
