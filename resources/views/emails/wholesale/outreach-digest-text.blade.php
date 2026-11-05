@@ -1,6 +1,6 @@
 {{ $report['tenant']['name'] }} — Wholesale outreach, week of {{ $report['week'] }}
 
-Open each editable Gmail draft and review the recipient, order details and sending account before sending.
+Open each branded email preview in the wholesale app. Review the photos and product links, copy the formatted message, then open Gmail and paste it into the message body. Check the sending account before sending.
 @if($report['import_stale'])
 WHOLESALE HISTORY NEEDS ATTENTION: {{ $report['reporting_issue'] ?? 'Current complete order history could not be verified.' }}
 @endif

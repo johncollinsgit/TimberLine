@@ -1,3 +1,13 @@
+## Branded wholesale customer drafts (November 5; source candidate)
+
+Read the wholesale email messenger and reporting/outreach runbooks. Keep customer
+draft links inside the verified installed wholesale app and recheck eligibility
+on open. Match current public product photos/URLs only by original product IDs,
+with no retail/name-only substitutions. Copy includes rich HTML and plain text;
+preserve edits on clipboard failure. This workflow uses manual Gmail paste/send,
+not Gmail compose-URL HTML or a newly connected mailbox. It must not send mail,
+create orders or mutate staff decisions from a preview request.
+
 ## Wholesale reporting and Monday outreach (November 4; source candidate)
 
 Read `docs/operations/wholesale-reporting-and-outreach.md`. Sales cards must use

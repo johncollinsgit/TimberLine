@@ -6,7 +6,7 @@
 <p style="font-size:12px;letter-spacing:2px;color:#477369">EVERBRANCH · WHOLESALE</p>
 <h1 style="font-family:Georgia,serif;font-size:30px">Your wholesale follow-ups</h1>
 <p>{{ $report['tenant']['name'] }} · Week of {{ $report['week'] }}</p>
-<p>Up to ten accounts to consider this week, based on reorder timing and recent wholesale value. Each button opens a Gmail draft with the latest order details. Review before sending.</p>
+<p>Up to ten accounts to consider this week, based on reorder timing and recent wholesale value. Each button opens a branded email preview with the latest order details, product photos and wholesale links. Review, copy into Gmail and send when ready.</p>
 @if($report['import_stale'])
 <p style="padding:14px;background:#fff2d8;color:#634900"><strong>Wholesale history needs attention.</strong> {{ $report['reporting_issue'] ?? 'Current complete order history could not be verified.' }}</p>
 @endif

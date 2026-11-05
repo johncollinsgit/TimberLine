@@ -52,8 +52,10 @@ test('outreach ranks ten qualified accounts and builds accurate editable latest 
         ->and($report['rows'][0]['email'])->toBe('buyer12@example.com')
         ->and(array_column($report['rows'], 'email'))->not->toContain('retail@example.com', 'private@example.com', 'buyer1@example.com');
     $row = $report['rows'][0];
-    parse_str(parse_url($row['draft_url'], PHP_URL_QUERY), $draft);
-    expect(parse_url($row['draft_url'], PHP_URL_HOST))->toBe('mail.google.com')
+    parse_str(parse_url($row['gmail_url'], PHP_URL_QUERY), $draft);
+    expect(parse_url($row['draft_url'], PHP_URL_HOST))->toBe('admin.shopify.com')
+        ->and($row['draft_url'])->toContain('/apps/mf-wholesale-backstage/shopify/app/wholesale/customers/'.$row['account_key'].'/outreach')
+        ->and(parse_url($row['gmail_url'], PHP_URL_HOST))->toBe('mail.google.com')
         ->and($draft['to'])->toBe('buyer12@example.com')
         ->and($draft['view'])->toBe('cm')
         ->and($draft['body'])->toContain('24 × Cedar & Moss (16 oz)', $last->order_number, $last->ordered_at->format('F j, Y'))
