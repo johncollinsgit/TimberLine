@@ -30,9 +30,9 @@ class JobLookup
         return ['type' => 'object', 'properties' => [
             'kind' => ['type' => 'string', 'enum' => ['summary', 'details']],
             'building' => ['type' => 'string', 'enum' => ['', ...$buildings]],
-            'team' => ['type' => 'string', 'enum' => ['', ...Tickets::TEAMS]],
+            'team' => ['type' => 'string', 'enum' => ['', ...app(DemoDirectory::class)->teams()]],
             'statuses' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => [...self::STATUSES, 'Open', 'Closed']]],
-            'assignee' => ['type' => 'string', 'enum' => ['', 'unassigned', 'sam', 'casey', 'riley']],
+            'assignee' => ['type' => 'string', 'enum' => ['', 'unassigned', ...array_column(array_filter(app(Tickets::class)->people(), fn ($person) => $person['role'] === 'technician'), 'id')]],
             'priority' => ['type' => 'string', 'enum' => ['', 'Low', 'Normal', 'High', 'Urgent']],
             'search' => ['type' => 'string', 'description' => 'A literal issue/room keyword only when requested. Empty for a whole-building or workload summary.'],
             'groupBy' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['status', 'team', 'building']]],
@@ -56,9 +56,9 @@ class JobLookup
         abort_if(array_diff(array_keys($filters), array_keys($this->schema($context)['properties'])), 422, 'Unsupported job filters.');
         Validator::make($filters, [
             'kind' => ['required', Rule::in(['summary', 'details'])], 'building' => ['present', 'string', 'max:3000'],
-            'team' => ['present', Rule::in(['', ...Tickets::TEAMS])], 'statuses' => ['present', 'array', 'max:10'],
+            'team' => ['present', Rule::in(['', ...app(DemoDirectory::class)->teams()])], 'statuses' => ['present', 'array', 'max:10'],
             'statuses.*' => [Rule::in([...self::STATUSES, 'Open', 'Closed'])],
-            'assignee' => ['present', Rule::in(['', 'unassigned', 'sam', 'casey', 'riley'])],
+            'assignee' => ['present', Rule::in(['', 'unassigned', ...array_column(array_filter(app(Tickets::class)->people(), fn ($person) => $person['role'] === 'technician'), 'id')])],
             'priority' => ['present', Rule::in(['', 'Low', 'Normal', 'High', 'Urgent'])], 'search' => ['present', 'string', 'max:120'],
             'groupBy' => ['present', 'array', 'max:3'], 'groupBy.*' => [Rule::in(['status', 'team', 'building'])],
             'ticketIds' => ['present', 'array', 'max:8'], 'ticketIds.*' => ['string', 'max:50'],
@@ -75,7 +75,7 @@ class JobLookup
                 && ($filters['building'] === '' || $job['building'] === $filters['building'])
                 && ($filters['team'] === '' || $job['team'] === $filters['team'])
                 && (! $filters['statuses'] || in_array($job['status'], $filters['statuses'], true) || ($isClosed && in_array('Closed', $filters['statuses'], true)) || (! $isClosed && in_array('Open', $filters['statuses'], true)))
-                && ($filters['assignee'] === '' || ($job['assignee'] ?: 'unassigned') === $filters['assignee'])
+                && ($filters['assignee'] === '' || ($job['assignee'] ?: 'unassigned') === $filters['assignee'] || in_array($filters['assignee'], $job['crewIds'] ?? [], true))
                 && ($filters['priority'] === '' || $job['priority'] === $filters['priority'])
                 && ($filters['search'] === '' || mb_stripos($job['title'].' '.$job['area'], $filters['search']) !== false);
         }));

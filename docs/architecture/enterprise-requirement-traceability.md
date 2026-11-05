@@ -131,3 +131,17 @@ The current public `/platform/demos/lees-mcrae` route serves the paired Faciliti
 The public app demonstrates shared fictional intake, head approval, single-person assignment, recorded work/time/materials, photos/comments, building views and current status/workload charts. It does not demonstrate daily printed Roll Call, explicit flexible-pair/emergency resumption, classroom/athletics calendar conflicts, quarterly submission reports, contractor-certificate expiry alerts, vendor ratings, invoice/check approval packets or restricted-fund accounting. Recording access timing, urgent priority or awaiting-parts status is not the corresponding complete workflow.
 
 Broader Enterprise source contains internal operational interruption/hand-off, reservation/conflict, period-export, certificate-review and finance-packet slices with the documented boundaries above. They are separate from public-demo availability, external calendar/system synchronization, outbound alerts, payment execution, real identity enforcement and campus acceptance. Flat-fee scope/usage, training, pilot measures and ownership still need agreement; a public demo or sent review invitation does not establish those agreements. Geolocation and generated prose remain John proposals, not automatically Andrew requirements.
+
+### November 5 public Facilities expansion (source candidate)
+
+Following the coverage review, the owner requested logically connected fictional
+roles/flows plus configurable settings. The public React package now demonstrates
+crew pairing, printed daily board, emergency checkpoints/resume, class/athletics
+conflicts, contractor renewals/demo inbox, invoice routing/thresholds, restricted
+funds, reviewed factual quarterly CSVs and editable pilot/training examples.
+Original-system references demonstrate consolidation without claiming a real
+import. Shared state upgrade retains prior records and adds three sample jobs.
+See `docs/operations/campus-facilities-demo.md` for boundaries and validation.
+These are illustrative policies, not Andrew-approved campus procedures or connected
+campus systems. The October21 Gemini synopsis remains attributed meeting notes,
+not a signed scope or evidence of accepted procedures.

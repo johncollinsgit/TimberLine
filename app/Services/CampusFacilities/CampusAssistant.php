@@ -12,10 +12,12 @@ class CampusAssistant
     public function context(array $identity): array
     {
         $tickets = app(Tickets::class);
-        $person = $tickets->actor($identity);
-        $visible = app(DemoStore::class)->access(fn (&$state) => array_values(array_filter($state['tickets'], fn ($t) => $tickets->canSee($t, $person))), false);
-        $people = array_column($tickets->people(), 'name', 'id');
-        $jobs = array_map(fn ($t) => ['id' => $t['id'], 'title' => $t['title'], 'building' => app(JobLookup::class)->buildingName($t['fields']['location']), 'area' => $t['fields']['room'], 'team' => $t['fields']['category'], 'status' => $t['status'], 'priority' => $t['priority'], 'assignee' => $t['assignee'], 'assignedTo' => $people[$t['assignee'] ?? ''] ?? 'Unassigned', 'updatedAt' => $t['updatedAt']], $visible);
+        [$person, $visible, $people] = app(DemoStore::class)->access(function (&$state) use ($tickets, $identity) {
+            $person = $tickets->actor($identity, $state);
+
+            return [$person, array_values(array_filter($state['tickets'], fn ($t) => $tickets->canSee($t, $person))), array_column($tickets->people($state, true), 'name', 'id')];
+        }, false);
+        $jobs = array_map(fn ($t) => ['id' => $t['id'], 'title' => $t['title'], 'building' => app(JobLookup::class)->buildingName($t['fields']['location']), 'area' => $t['fields']['room'], 'team' => $t['fields']['category'], 'status' => $t['status'], 'priority' => $t['priority'], 'assignee' => $t['assignee'], 'crewIds' => $t['crewIds'] ?? array_values(array_filter([$t['assignee']])), 'assignedTo' => $people[$t['assignee'] ?? ''] ?? 'Unassigned', 'updatedAt' => $t['updatedAt']], $visible);
         $campus = app(CampusReference::class)->read();
 
         return ['asOf' => now()->toIso8601String(), 'demo' => true, 'view' => ['name' => $person['name'], 'role' => $person['role'], 'scope' => $person['role'] === 'admin' ? 'Campus overview: all demo tickets and all service teams' : ($person['role'] === 'head' ? $person['team'].' team jobs' : ($person['role'] === 'technician' ? 'Only jobs assigned to '.$person['name'] : 'Only requests submitted by '.$person['name']))],

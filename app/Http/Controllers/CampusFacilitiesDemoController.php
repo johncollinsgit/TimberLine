@@ -29,9 +29,12 @@ class CampusFacilitiesDemoController extends Controller
     public function index(Request $request)
     {
         $this->boundary($request);
-        abort_if(array_diff(array_keys($request->query()), ['role', 'ticket']), 404);
+        abort_if(array_diff(array_keys($request->query()), ['role', 'ticket', 'profile', 'person']), 404);
         abort_if($request->has('role') && ! in_array($request->query('role'), ['staff', 'head', 'technician', 'admin'], true), 404);
         abort_if($request->has('ticket') && (! is_string($request->query('ticket')) || ! preg_match('/^FM-[A-Z0-9-]{1,30}$/D', $request->query('ticket'))), 404);
+        foreach (['profile', 'person'] as $key) {
+            abort_if($request->has($key) && (! is_string($request->query($key)) || ! preg_match('/^[a-z][a-z0-9-]{0,39}$/D', $request->query($key))), 404);
+        }
         app('livewire')->flushState();
         $html = file_get_contents(public_path('campus-facilities/index.html'));
         $nonce = base64_encode(random_bytes(24));
@@ -60,6 +63,11 @@ class CampusFacilitiesDemoController extends Controller
                 abort_unless($request->header('Origin') === $request->getSchemeAndHttpHost(), 403, 'Invalid request origin.');
                 abort_if((int) $request->header('Content-Length', '0') > ($endpoint === 'photos' ? 9_000_000 : 40_000), 413, 'This upload is too large.');
             }
+            // Request snapshot supports read-only helpers; mutations resolve the
+            // actor again from their already locked, current fictional state.
+            $directory = app(\App\Services\CampusFacilities\DemoDirectory::class);
+            $directory->load($store->access(fn (&$state) => $state['operations']['settings'], false));
+            app()->instance(\App\Services\CampusFacilities\DemoDirectory::class, $directory);
             $cookie = null;
             if ($request->isMethod('GET')) {
                 $result = match ($endpoint) {
@@ -70,6 +78,8 @@ class CampusFacilitiesDemoController extends Controller
                         return $rows;
                     }, false),
                     'campus' => app(CampusReference::class)->read($request->query('refresh') === '1'),
+                    'operations' => $store->access(fn (&$state) => app(\App\Services\CampusFacilities\DemoWorkspace::class)->snapshot($state), false),
+                    'operations/report' => $store->access(fn (&$state) => app(\App\Services\CampusFacilities\DemoReports::class)->read($state, $request->query()), false),
                     'voice' => ['configured' => app(\App\Services\CampusFacilities\LiveVoice::class)->configured(), 'sessionSeconds' => 300, 'dailySessions' => 3],
                     'participants' => $store->access(fn (&$state) => app(Participants::class)->directory($state, $request), false),
                     'messaging/config' => ['channels' => [['channel' => 'email', 'configured' => false, 'credentialsConfigured' => false, 'recipients' => []]], 'subject' => 'Lees-McRae Facilities demo — test notification', 'content' => '[DEMO TEST] A sample work order has an update.'],
@@ -80,14 +90,19 @@ class CampusFacilitiesDemoController extends Controller
                 $input = $request->json()->all();
                 $result = match ($endpoint) {
                     'tickets' => ($input['action'] ?? '') === 'comment' ? app(\App\Services\CampusFacilities\Comments::class)->post($store, $request, $input) : $store->access(fn (&$state) => $tickets->save($state, $input)),
+                    'operations' => $store->access(fn (&$state) => [
+                        'result' => app(\App\Services\CampusFacilities\DemoWorkspace::class)->command($state, $input),
+                        'workspace' => app(\App\Services\CampusFacilities\DemoWorkspace::class)->snapshot($state),
+                    ]),
                     'participants' => app(Participants::class)->register($store, $request),
                     'reset' => $store->access(function (&$state) use ($input, $tickets, $store) {
-                        $actor = $tickets->actor($input);
-                        abort_unless($actor['role'] === 'admin' && ($input['confirm'] ?? false) === true, 403, 'Choose the administrator demo role and confirm reset.');
+                        $actor = $tickets->actor($input, $state);
+                        abort_unless(app(\App\Services\CampusFacilities\DemoDirectory::class)->may($actor, 'settings.manage') && ($input['confirm'] ?? false) === true, 403, 'Choose the administrator demo role and confirm reset.');
                         // Preserve completed upload metadata and daily quota across reset.
                         $seed = $store->seed();
                         $state['tickets'] = $seed['tickets'];
                         $state['request_keys'] = $seed['request_keys'];
+                        $state['operations'] = $seed['operations'];
 
                         return ['reset' => true];
                     }),
@@ -102,6 +117,13 @@ class CampusFacilitiesDemoController extends Controller
                 };
             }
 
+            if ($endpoint === 'operations/report' && $request->query('format') === 'csv') {
+                return response(app(\App\Services\CampusFacilities\DemoReports::class)->csv($result), 200, [
+                    'Content-Type' => 'text/csv; charset=UTF-8',
+                    'Content-Disposition' => 'attachment; filename="campus-demo-'.$result['period']['start'].'-'.$result['period']['end'].'.csv"',
+                    'Cache-Control' => 'no-store', 'X-Content-Type-Options' => 'nosniff', 'Referrer-Policy' => 'no-referrer',
+                ]);
+            }
             if ($endpoint === 'participants' && ! $request->isMethod('GET')) {
                 $cookie = $result['cookie'] ?? null;
                 unset($result['cookie']);

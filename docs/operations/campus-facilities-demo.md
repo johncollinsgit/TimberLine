@@ -24,7 +24,7 @@ existing reviewed dashboard; broader redesign is deferred at the owner's request
 
 `storage/app/campus-facilities-demo/` resolves through Forge's persistent storage.
 `workspace.json` is outside the public document root, permissions0600, containing
-only fictional work orders, upload metadata, usage counters and create receipts.
+only fictional work orders, operational scenarios/configuration, upload metadata, usage counters and action receipts.
 A stable separate lock plus atomic same-directory rename serializes updates.
 Tickets require complete details, head approval before assignment/work, current
 revision, team-appropriate technician and reviewed work fields for completion.
@@ -225,3 +225,63 @@ Source validation for this follow-up: TypeScript/standalone build and 30 focused
 The photo banner is the first overview content below navigation and demo-role controls, before the personal greeting and report action. Gallery controls, persona/photo scope and other views remain unchanged. Paired source commit `904e8da8ca6b5845010906700b2f5dd3692b800a` passed TypeScript, standalone build and local read-only desktop/phone checks. No migration, ticket reset, provider setting or additional permission is part of this layout change. Protected CI, atomic release and live asset/order verification remain required.
 
 Build from LF-normalized standalone HTML and verify the build descriptor matches the committed index SHA-256 prefix. Windows checkout normalization must not change the versioned HTML after the cache version is generated.
+
+## Configurable operational walkthrough (November 5)
+
+Owner direction: use coherent fictional filler rather than wait for real campus
+policies. The paired React source exposes Campus operations and shared Demo
+settings. Default roles include faculty/staff, technicians, service heads,
+administrator, scheduling coordinator, finance reviewer, operations director,
+vendor coordinator, IT lead and reporting coordinator. The original people and
+team IDs remain valid. Named profiles map to the four original work-order scopes;
+capabilities govern simulated actions. Anyone with the public link can switch
+profiles: these controls are a walkthrough, not real campus access control.
+
+The first workspace access adds an `operations` object and three linked Bryan Gym
+work orders without rewriting prior work, photographs, history, participants or
+provider usage. The 44-record clean seed becomes 47; a live 45-record workspace
+becomes 48. Subsequent reads do not re-seed examples. Crew planning connects Sam
+and Devon's HVAC work to a leak interruption with an explicit checkpoint/resume.
+A proposed gym audio window overlaps athletics practice until a coordinator
+records a different window. Project records retain fictional original-system
+references and linked IT/Facilities work. Daily board printing is browser-local.
+
+Vendor ratings and required certificate types share a renewal register. Proposed
+replacements retain the accepted expiry until reviewed. Reminders are bounded,
+deduplicated daily demo-inbox notices, never emails/SMS. Example invoices show
+scope/finance review, a director threshold of $2,500 and a restricted accessibility
+fund. Submit freezes terms and route; each approval rechecks purpose, budget and
+accepted certificates under the shared lock. Approved/Demo paid packets consume
+allocation once. Reopening retains prior review evidence. Demo paid records only
+fictional references; it calls no payment or accounting provider.
+
+Report previews and CSVs use recorded factual events and a selected period.
+Statuses/certificate attention are current at report time, not reconstructed past
+quarter ends. Role capabilities filter finance/certificate sections. A configured
+reviewer must preview current evidence before retaining a fixed snapshot; stale
+digests fail. CSV values neutralize spreadsheet formulas. Export never submits a
+report. Training, pilot goals, flat-fee scope text and original-system references
+are editable planning examples; no price or contractual commitment is implied.
+
+Settings use full typed forms, revision checks and device-local draft retention.
+Workflow roles must remain enabled, capable and staffed. Existing open assignments
+cannot lose their technician's team/work capability through a settings edit.
+Submitted routes are retained; new routes apply to new submissions. Stable UUID
+command receipts permit exact unknown-outcome retry; changed-body/stale-generation
+replays fail. Limits:20 profiles,50 people,12 teams,6 approval steps,100 records per
+operational collection,1000 receipts and2000 operational events, within the existing
+8MB workspace bound. No migration, native tenant record, provider credential or
+new outbound integration is introduced.
+
+Reset now explicitly replaces shared sample tickets, operations and configuration.
+It preserves participants, upload metadata and provider quotas. Never use the live
+reset as a verification step. `CAMPUS_FACILITIES_DEMO_STORAGE_PATH` can override the
+storage directory for an isolated local preview; production defaults are unchanged.
+
+Validation includes CampusFacilitiesWorkspaceTest (additive upgrade, configured
+permissions/approval, interruption, conflict resolution, fund purpose/current
+budget, certificate review, report snapshots/CSV and reset generations) plus the
+existing Facilities and campus route tests. Build with `npm run build:standalone`
+and verify committed index bytes against build.json before the protected release.
+Real MaintenanceCare/IT/calendar/Microsoft365/accounting imports and real campus
+permissions/approval policies remain a future authorized pilot, not this demo.
