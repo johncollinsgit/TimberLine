@@ -9,6 +9,9 @@ weekly delivery reservations. The owner chose info@theforestrystudio.com,
 Monday 8 a.m. America/New_York, with manual Gmail draft review/send.
 Keep historical recommendations out of the current queue and preserve the
 selected Eastern follow-up/snooze instant in UTC. Retired advice is read-only.
+Follow-up completion/rescheduling requires current tenant/operator verification,
+row locking and audit. Completed history must not reopen on retry. Forms refresh
+their Shopify token at submission and submit once.
 
 ## Wholesale email photos, draft URLs and home navigation (November 4)
 

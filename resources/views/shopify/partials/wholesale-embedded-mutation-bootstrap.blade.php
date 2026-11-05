@@ -56,6 +56,29 @@
         }
 
         bootstrapEmbeddedIdentity();
+        const mutationForms = new Set(tokenInputs.map((input) => input.closest('form')).filter(Boolean));
+        mutationForms.forEach((form) => {
+            let submitting = false;
+            form.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                if (submitting) return;
+                submitting = true;
+                const formButtons = Array.from(form.querySelectorAll('[data-wholesale-mutation-button]'));
+                const help = form.querySelector('[data-wholesale-verification-help]');
+                formButtons.forEach((button) => { button.disabled = true; });
+                try {
+                    const resolver = await resolveSessionTokenHelper();
+                    const token = await resolver();
+                    if (typeof token !== 'string' || token.trim() === '') throw new Error('Missing session token');
+                    form.querySelector('[data-wholesale-session-token]').value = token.trim();
+                    HTMLFormElement.prototype.submit.call(form);
+                } catch (error) {
+                    if (help) help.textContent = 'Shopify verification failed. Your entries are preserved. Refresh verification and try again.';
+                    submitting = false;
+                    formButtons.forEach((button) => { button.disabled = false; });
+                }
+            });
+        });
         window.addEventListener('pageshow', bootstrapEmbeddedIdentity, { once: true });
         document.addEventListener('visibilitychange', () => {
             if (!verificationFinished && document.visibilityState === 'visible') {

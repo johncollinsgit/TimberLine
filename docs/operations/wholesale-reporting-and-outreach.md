@@ -77,6 +77,14 @@ in UTC, including daylight saving changes. The selected date must not be replace
 by a hidden default. Due-today dashboard comparisons also use the Eastern day's
 UTC boundary.
 
+Follow-Ups now lets an authorized operator mark an open task completed or choose
+a future Eastern due date. Completion is idempotent; rescheduling preserves
+completed history rather than reopening it. Updates lock the tenant-scoped row
+and retain an operator audit. A future due date suppresses the account, and a
+recent completion suppresses it for fourteen days. Shared wholesale forms fetch
+current Shopify verification again at submission; verification failure preserves
+entered dates and does not submit, and a double click submits once.
+
 ## Monday email
 
 The owner requested `info@theforestrystudio.com`, Monday 8 a.m.,

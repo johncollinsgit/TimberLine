@@ -31,6 +31,7 @@ use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use App\Services\Tenancy\TenantResolver;
+use App\Services\Wholesale\WholesaleFollowUpService;
 use App\Services\Wholesale\WholesaleModuleSetupService;
 use App\Services\Wholesale\WholesaleOperationsService;
 use App\Services\Wholesale\WholesaleProspectWorkflowService;
@@ -608,7 +609,45 @@ class ShopifyEmbeddedAppController extends Controller
 
         return $this->wholesaleWorkspaceResponse($resolved, $tenantId, 'follow_ups', 'Wholesale Follow-Ups',
             'Open, overdue, and completed tasks created from reviewed wholesale evidence.',
-            'shopify.wholesale-follow-ups', ['followUps' => $followUps]);
+            'shopify.wholesale-follow-ups', [
+                'followUps' => $followUps,
+                'contextToken' => isset($resolved['context']) ? $contextService->issueContextToken($resolved['context']) : null,
+                'canDecide' => $this->canManageWholesaleApprovals($this->resolveWholesaleWorkspaceActor($resolved['context'] ?? null, $tenantId)),
+            ]);
+    }
+
+    public function updateWholesaleFollowUp(
+        Request $request,
+        string $followUpPublicId,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        WholesaleFollowUpService $followUps
+    ): RedirectResponse|JsonResponse {
+        $context = $contextService->resolveMutationContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+        $tenantId = $this->resolvedMappedWholesaleTenantId($context, $tenantResolver);
+        $actor = $this->resolveWholesaleWorkspaceActor($context, $tenantId);
+        if ($tenantId === null || ! app(TenantModuleAccessResolver::class)->canAccess($tenantId, 'wholesale_operations') || ! $this->canManageWholesaleApprovals($actor)) {
+            return response()->json(['ok' => false, 'message' => 'Follow-up updates require an authorized wholesale operator.'], 403);
+        }
+        $input = $request->validate([
+            'action' => ['required', 'in:complete,reschedule'],
+            'due_local_at' => ['required_if:action,reschedule', 'nullable', 'date_format:Y-m-d\TH:i'],
+        ]);
+        $dueAt = filled($input['due_local_at'] ?? null)
+            ? \Carbon\CarbonImmutable::createFromFormat('!Y-m-d\TH:i', $input['due_local_at'], 'America/New_York')->utc() : null;
+        try {
+            $followUps->update($tenantId, $followUpPublicId, $actor, $input['action'], $dueAt);
+        } catch (DomainException $error) {
+            return response()->json(['ok' => false, 'message' => $error->getMessage()], 422);
+        }
+        $redirectUrl = $this->wholesaleEmbeddedRoute($request, 'shopify.app.wholesale.follow-ups', [], (string) ($context['host'] ?? null));
+
+        return $request->expectsJson()
+            ? response()->json(['ok' => true, 'redirect_url' => $redirectUrl])
+            : redirect()->to($redirectUrl)->with('status', 'Wholesale follow-up updated.');
     }
 
     public function decideWholesaleSuggestion(

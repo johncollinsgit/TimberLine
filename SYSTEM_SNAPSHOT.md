@@ -11,6 +11,8 @@ Positive reorder intervals, original-sale dates, current payment/review states,
 stable latest-order suggestions and retained staff decisions govern outreach.
 The current queue separates historical decisions; chosen follow-up/snooze dates
 use Eastern time with UTC persistence and cannot reactivate superseded advice.
+Follow-Ups includes audited completion/rescheduling controls, and wholesale forms
+refresh Shopify verification on submit while preserving entries on failure.
 The requested internal digest is Monday 8 a.m. Eastern to
 info@theforestrystudio.com, with up to ten reviewable Gmail drafts. Protected
 release and live refresh/acceptance are separate from these source changes.
