@@ -6,9 +6,45 @@ import re
 INDIRECT = 'mirror+file:/etc/apt/apt-mirrors.txt'
 OFFICIAL = {f'https://{host}/ubuntu{slash}' for host in
             ('archive.ubuntu.com', 'security.ubuntu.com') for slash in ('', '/')}
-AZURE = ['http://azure.archive.ubuntu.com/ubuntu/', 'priority:1']
-FALLBACK = [['https://archive.ubuntu.com/ubuntu/', 'priority:2'],
-            ['https://security.ubuntu.com/ubuntu/', 'priority:3']]
+MIRRORS = {f'{scheme}://{host}/ubuntu{slash}': kind
+           for kind, host in (('azure', 'azure.archive.ubuntu.com'),
+                              ('archive', 'archive.ubuntu.com'),
+                              ('security', 'security.ubuntu.com'))
+           for scheme in ('http', 'https') for slash in ('', '/')}
+
+
+def verified_mirrors(content):
+    """Validate known endpoints before removing Azure and securing fallback URLs."""
+    lines = content.splitlines(keepends=True)
+    entries = [line.decode('utf-8').split() for line in lines
+               if line.strip() and not line.lstrip().startswith(b'#')]
+    # Diagnostics must never echo credentials or arbitrary metadata from a URI.
+    safe = [[words[0] if words[0] in MIRRORS else '<unrecognized URI>',
+             *[word if re.fullmatch(r'priority:[0-9]{1,6}', word)
+               else '<unsupported metadata>' for word in words[1:]]] for words in entries]
+    failure = 'Unsupported Ubuntu mirror list; refusing change. Entries: ' + repr(safe)
+    seen = set()
+    for words in entries:
+        kind = MIRRORS.get(words[0])
+        if (kind is None or kind in seen or len(words) > 2
+                or (len(words) == 2 and not re.fullmatch(r'priority:[0-9]{1,6}', words[1]))):
+            raise ValueError(failure)
+        seen.add(kind)
+    # An archive fallback supplies every Ubuntu suite. Security may be a separate
+    # direct stanza, so its presence in the mirror file is not required.
+    if 'archive' not in seen:
+        raise ValueError(failure)
+    after = []
+    for line in lines:
+        if not line.strip() or line.lstrip().startswith(b'#'):
+            after.append(line)
+            continue
+        uri = line.decode('utf-8').split()[0]
+        kind = MIRRORS[uri]
+        if kind != 'azure':
+            target = f'https://{kind}.ubuntu.com/ubuntu/'
+            after.append(line.replace(uri.encode('utf-8'), target.encode('utf-8'), 1))
+    return b''.join(after)
 
 
 def normalize_source(content):
@@ -65,12 +101,7 @@ def configure(root=Path('/etc/apt')):
         if mirrors.is_symlink() or not mirrors.is_file():
             raise ValueError('Unsupported Ubuntu APT mirror file.')
         before = mirrors.read_bytes()
-        lines = before.splitlines(keepends=True)
-        entries = [line.decode('utf-8').split() for line in lines
-                   if line.strip() and not line.lstrip().startswith(b'#')]
-        if entries not in ([AZURE, *FALLBACK], FALLBACK):
-            raise ValueError('Unsupported Ubuntu mirror list; refusing change.')
-        after = b''.join(line for line in lines if line.decode('utf-8').split() != AZURE)
+        after = verified_mirrors(before)
         if after != before:
             mirrors.write_bytes(after)
         if mirrors.read_bytes() != after:

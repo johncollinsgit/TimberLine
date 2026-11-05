@@ -84,6 +84,47 @@ class OfficialMirrorsTest(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(ValueError):
                 mirrors.source_uris(source)
 
+    def test_official_mirror_variants_preserve_priority_order_comments_and_replay(self):
+        source = b'URIs: mirror+file:/etc/apt/apt-mirrors.txt\nSigned-By: /known/keyring.gpg\n'
+        before = (b'# keep this comment\r\nhttp://security.ubuntu.com/ubuntu\tpriority:8\r\n'
+                  b'https://azure.archive.ubuntu.com/ubuntu priority:0\r\n'
+                  b'  https://archive.ubuntu.com/ubuntu\r\n')
+        after = (b'# keep this comment\r\nhttps://security.ubuntu.com/ubuntu/\tpriority:8\r\n'
+                 b'  https://archive.ubuntu.com/ubuntu/\r\n')
+        root = self.fixture(source, before)
+        for _ in range(2):
+            mirrors.configure(root)
+            self.assertEqual((root / 'apt-mirrors.txt').read_bytes(), after)
+            self.assertEqual((root / 'sources.list.d/ubuntu.sources').read_bytes(), source)
+
+    def test_archive_fallback_does_not_require_duplicate_direct_security_source(self):
+        source = b'URIs: mirror+file:/etc/apt/apt-mirrors.txt http://security.ubuntu.com/ubuntu\n'
+        root = self.fixture(source, b'http://azure.archive.ubuntu.com/ubuntu/\nhttp://archive.ubuntu.com/ubuntu\n')
+        mirrors.configure(root)
+        self.assertEqual((root / 'apt-mirrors.txt').read_bytes(), b'https://archive.ubuntu.com/ubuntu/\n')
+        self.assertEqual((root / 'sources.list.d/ubuntu.sources').read_bytes(), source.replace(
+            b'http://security.ubuntu.com/ubuntu', b'https://security.ubuntu.com/ubuntu/'))
+
+    def test_unknown_mirror_metadata_duplicates_and_credential_urls_fail_before_any_write(self):
+        source = b'URIs: mirror+file:/etc/apt/apt-mirrors.txt http://security.ubuntu.com/ubuntu\n'
+        for invalid in [
+            b'https://archive.ubuntu.com/ubuntu/ arch:amd64\n',
+            b'https://archive.ubuntu.com/ubuntu/ priority:no\n',
+            b'https://archive.ubuntu.com/ubuntu/ priority:2 extra\n',
+            b'https://archive.ubuntu.com/ubuntu/\nhttps://archive.ubuntu.com/ubuntu\n',
+            b'https://security.ubuntu.com/ubuntu/\n',
+            b'http://azure.archive.ubuntu.com/ubuntu/\n',
+            b'https://user:private-sentinel@archive.ubuntu.com/ubuntu/\n',
+            b'https://archive.ubuntu.com/ubuntu/?token=private-sentinel\n',
+            b'https://archive.ubuntu.com.evil.invalid/ubuntu/\n',
+        ]:
+            root = self.fixture(source, invalid)
+            with self.subTest(mirror=invalid), self.assertRaises(ValueError) as failure:
+                mirrors.configure(root)
+            self.assertNotIn('private-sentinel', str(failure.exception))
+            self.assertEqual((root / 'apt-mirrors.txt').read_bytes(), invalid)
+            self.assertEqual((root / 'sources.list.d/ubuntu.sources').read_bytes(), source)
+
 
 if __name__ == '__main__':
     unittest.main()
