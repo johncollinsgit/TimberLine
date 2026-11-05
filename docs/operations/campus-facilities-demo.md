@@ -223,3 +223,5 @@ Source validation for this follow-up: TypeScript/standalone build and 30 focused
 ## Overview banner order — November 5, 2026
 
 The photo banner is the first overview content below navigation and demo-role controls, before the personal greeting and report action. Gallery controls, persona/photo scope and other views remain unchanged. Paired source commit `68f574f77e4a3f0c10305d638918627a628ca2ab` passed TypeScript, standalone build and local read-only desktop/phone checks. No migration, ticket reset, provider setting or additional permission is part of this layout change. Protected CI, atomic release and live asset/order verification remain required.
+
+Build from LF-normalized standalone HTML and verify the build descriptor matches the committed index SHA-256 prefix. Windows checkout normalization must not change the versioned HTML after the cache version is generated.
