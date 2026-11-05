@@ -552,7 +552,7 @@ test('dashboard now exposes overview start-here and plans subnav links', functio
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
             $keys = collect($subnav)->pluck('key')->values()->all();
 
-            return $keys === ['overview', 'start', 'plans', 'store', 'integrations'];
+            return $keys === ['overview', 'start', 'plans', 'store', 'stockists', 'integrations'];
         });
 });
 

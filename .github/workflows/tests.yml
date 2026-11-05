@@ -275,6 +275,11 @@ jobs:
           TEAM_WORK_DISPOSABLE_MYSQL: '1'
         run: php ./vendor/bin/pest tests/Integration/TeamSearchMySqlRecoveryTest.php --compact
 
+      - name: Verify stockist locator migration recovery
+        env:
+          STOCKIST_DISPOSABLE_MYSQL: '1'
+        run: php ./vendor/bin/pest tests/Integration/StockistLocatorMySqlRecoveryTest.php --compact
+
       - name: Recover native Shop Pay Wallet migrations
         env:
           WEBSITE_WALLET_DISPOSABLE_MYSQL: '1'

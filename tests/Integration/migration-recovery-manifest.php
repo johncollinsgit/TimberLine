@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_05_140000_create_stockist_locator_tables.php' => [
+        'test' => 'tests/Integration/StockistLocatorMySqlRecoveryTest.php',
+        'scenarios' => ['retained settings before location-table creation, replay and code rollback preserve source and published snapshots; duplicate store/source keys are rejected'],
+    ],
     '2026_10_30_230000_create_subscription_member_votes.php' => [
         'test' => 'tests/Integration/SubscriptionMemberVotesMySqlRecoveryTest.php',
         'scenarios' => ['accepted encrypted ballots survive bare-table/missing-constraint/completed-DDL recovery and code rollback; composite tenant ownership rejects foreign votes; incompatible named indexes stop without replacing evidence'],

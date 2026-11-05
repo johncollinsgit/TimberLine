@@ -10,6 +10,31 @@ Google client approval, consent, controlled acceptance and protected release
 remain necessary. Connection/send flags default off; no live grant or send is
 created by this source work. The cold campaign/Macon authorization is unchanged.
 
+## Store locator replacement (November 5; source candidate)
+
+The isolated stockist locator reuses StockistLocation/StockistLocatorSetting from
+September's unpublished replacement work. This release contains only locator
+management/public rendering; it does not activate the broader replacement center.
+Owner/admin operations are freshly Shopify verified and tenant/store scoped.
+Draft edits/imports never alter an existing published snapshot. Publishing and
+previous-publication restore lock one store and reject stale revisions. Public
+reads use the existing signed app proxy; short-lived private draft grants are
+store/revision bound. Google browser keys are encrypted at rest and never returned
+in staff JSON. No automatic location prompt or shopper-coordinate persistence.
+Read `docs/operations/stockist-locator.md` before import or cutover. Keep Omnium
+installed through observation and retain the original Shopify page body/template.
+The November 5 reviewed source has 38 current locations; do not reintroduce the
+September 44-location archive. Source files and credentials stay outside Git.
+
+## Campus overview banner (November 5; source candidate)
+
+The public Facilities overview starts with the campus/job photo banner above the
+personal greeting. This is the paired standalone frontend package, not the
+Enterprise reviewer shell. Preserve shared demo storage, gallery/persona scope
+and existing provider permissions. The public demo does not yet demonstrate
+all Andrew-attributed requirements; see the November 5 coverage addendum in
+`docs/architecture/enterprise-requirement-traceability.md`.
+
 ## Branded wholesale customer drafts (November 5; source candidate)
 
 Read the wholesale email messenger and reporting/outreach runbooks. Keep customer

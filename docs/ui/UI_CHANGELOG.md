@@ -5,6 +5,14 @@ the exact From, Reply-To, recipient, subject and formatted email before Send.
 Uncertain outcomes remain held; copying to Gmail remains an optional fallback.
 This is a source candidate pending Google setup, protected release and acceptance.
 
+## 2026-11-05 — Native stockist locator (source candidate)
+
+Add a compact owner/admin directory table, edit dialog, private preview and
+explicit publish/restore controls inside Backstage. The public responsive map and
+server-rendered retailer list share search, optional nearby lookup, keyboard
+button markers, cluster zoom and directions. The original Store Locator page and
+Shop Near You navigation target remain unchanged. No other replacement activates.
+
 ## 2026-11-03 — Field keyboard dismissal
 
 Software keyboards have an explicit down-arrow control and downward page swipe. Drafts remain intact. Field web .14 shares mobile build 47 source `04b5705817eaa4dfd4f3a156bfa4cc376936e7e8`.
