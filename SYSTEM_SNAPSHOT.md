@@ -9,6 +9,8 @@ sales comparison.
 
 Positive reorder intervals, original-sale dates, current payment/review states,
 stable latest-order suggestions and retained staff decisions govern outreach.
+The current queue separates historical decisions; chosen follow-up/snooze dates
+use Eastern time with UTC persistence and cannot reactivate superseded advice.
 The requested internal digest is Monday 8 a.m. Eastern to
 info@theforestrystudio.com, with up to ten reviewable Gmail drafts. Protected
 release and live refresh/acceptance are separate from these source changes.

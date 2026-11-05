@@ -7,6 +7,8 @@ The complete provider snapshot is a private read model, not a production import.
 Keep stale/incomplete-history guards, tenant/role checks, staff decisions and
 weekly delivery reservations. The owner chose info@theforestrystudio.com,
 Monday 8 a.m. America/New_York, with manual Gmail draft review/send.
+Keep historical recommendations out of the current queue and preserve the
+selected Eastern follow-up/snooze instant in UTC. Retired advice is read-only.
 
 ## Wholesale email photos, draft URLs and home navigation (November 4)
 

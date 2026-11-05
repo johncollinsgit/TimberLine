@@ -10,7 +10,26 @@ use App\Models\WholesaleFollowUp;
 use App\Models\WholesaleSuggestion;
 use App\Models\WholesaleSuggestionDecision;
 use App\Services\Wholesale\WholesaleSuggestionGenerator;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
+
+function createWholesaleDecisionTestSuggestion(int $tenantId, array $overrides = []): WholesaleSuggestion
+{
+    return WholesaleSuggestion::query()->create(array_merge([
+        'tenant_id' => $tenantId,
+        'public_id' => (string) Str::uuid(),
+        'target_type' => 'customer',
+        'target_key' => hash('sha256', (string) Str::uuid()),
+        'suggestion_type' => 'customer_due_for_reorder',
+        'title' => 'Current reorder recommendation',
+        'recommended_action' => 'Review the account before contacting.',
+        'supporting_evidence' => [],
+        'reason' => 'Qualified wholesale timing evidence.',
+        'evidence_fingerprint' => hash('sha256', (string) Str::uuid()),
+        'status' => 'pending',
+        'last_evaluated_at' => now(),
+    ], $overrides));
+}
 
 beforeEach(function (): void {
     $this->withoutVite();
@@ -124,4 +143,92 @@ test('dismissal requires a recorded reason', function (): void {
 
     expect($suggestion->fresh()->status)->toBe('pending')
         ->and(WholesaleSuggestionDecision::query()->forAllTenants()->count())->toBe(0);
+});
+
+test('the current queue separates retired recommendations and its history link works', function (): void {
+    createWholesaleDecisionTestSuggestion((int) $this->tenant->id);
+    $retired = createWholesaleDecisionTestSuggestion((int) $this->tenant->id, [
+        'title' => 'Retired prior recommendation',
+        'status' => 'superseded',
+    ]);
+    createWholesaleDecisionTestSuggestion((int) $this->tenant->id, [
+        'title' => 'Previously handled recommendation',
+        'status' => 'already_handled',
+    ]);
+
+    $current = $this->get(route('shopify.app.wholesale.suggestions', wholesaleEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Current reorder recommendation')
+        ->assertDontSeeText('Retired prior recommendation')
+        ->assertDontSeeText('Previously handled recommendation');
+
+    $dom = new DOMDocument;
+    @$dom->loadHTML($current->getContent());
+    $historyLink = (new DOMXPath($dom))->query('//a[@data-wholesale-suggestion-history]')->item(0);
+    expect($historyLink)->not->toBeNull();
+
+    $this->get($historyLink->getAttribute('href'))
+        ->assertOk()
+        ->assertSeeText('Retired prior recommendation')
+        ->assertSeeText('Previously handled recommendation')
+        ->assertDontSeeText('Current reorder recommendation')
+        ->assertSeeText('Historical entry retained with its decisions.')
+        ->assertDontSee(route('shopify.app.wholesale.suggestions.decide', ['suggestionPublicId' => $retired->public_id], false), false);
+});
+
+test('selected Eastern follow up and snooze dates are stored at the correct UTC instant', function (string $action, int $month): void {
+    $suggestion = createWholesaleDecisionTestSuggestion((int) $this->tenant->id);
+    $chosen = CarbonImmutable::create(now('America/New_York')->year + 1, $month, 15, 9, 30, 0, 'America/New_York');
+
+    $this->withHeaders([
+        'Authorization' => 'Bearer '.wholesaleShopifySessionToken(['email' => $this->actor->email]),
+        'Accept' => 'application/json',
+    ])->post(route('shopify.app.wholesale.suggestions.decide', ['suggestionPublicId' => $suggestion->public_id]), [
+        'action' => $action,
+        'decision_local_at' => $chosen->format('Y-m-d\TH:i'),
+    ])->assertOk()->assertJsonPath('ok', true);
+
+    $savedAt = $action === 'snooze'
+        ? $suggestion->fresh()->snoozed_until
+        : WholesaleFollowUp::query()->forAllTenants()->firstOrFail()->due_at;
+
+    expect($savedAt->utc()->format('Y-m-d H:i:s'))->toBe($chosen->utc()->format('Y-m-d H:i:s'))
+        ->and($savedAt->timezone('America/New_York')->format('H:i'))->toBe('09:30');
+})->with([
+    'winter snooze' => ['snooze', 1],
+    'summer snooze' => ['snooze', 7],
+    'winter follow up' => ['create_follow_up', 1],
+    'summer follow up' => ['create_follow_up', 7],
+]);
+
+test('snooze requires an explicit future date', function (array $dateInput): void {
+    $suggestion = createWholesaleDecisionTestSuggestion((int) $this->tenant->id);
+
+    $this->withHeaders([
+        'Authorization' => 'Bearer '.wholesaleShopifySessionToken(['email' => $this->actor->email]),
+        'Accept' => 'application/json',
+    ])->post(route('shopify.app.wholesale.suggestions.decide', ['suggestionPublicId' => $suggestion->public_id]), array_merge([
+        'action' => 'snooze',
+    ], $dateInput))->assertUnprocessable();
+
+    expect($suggestion->fresh()->status)->toBe('pending')
+        ->and(WholesaleSuggestionDecision::query()->forAllTenants()->count())->toBe(0);
+})->with([
+    'missing' => [[]],
+    'invalid' => [['decision_local_at' => 'not-a-date']],
+    'past' => [['decision_local_at' => '2020-01-15T09:30']],
+]);
+
+test('a stale superseded recommendation cannot create another follow up', function (): void {
+    $suggestion = createWholesaleDecisionTestSuggestion((int) $this->tenant->id, ['status' => 'superseded']);
+
+    $this->withHeaders([
+        'Authorization' => 'Bearer '.wholesaleShopifySessionToken(['email' => $this->actor->email]),
+        'Accept' => 'application/json',
+    ])->post(route('shopify.app.wholesale.suggestions.decide', ['suggestionPublicId' => $suggestion->public_id]), [
+        'action' => 'create_follow_up',
+    ])->assertUnprocessable()->assertJsonPath('ok', false);
+
+    expect($suggestion->fresh()->status)->toBe('superseded')
+        ->and(WholesaleFollowUp::query()->forAllTenants()->count())->toBe(0);
 });

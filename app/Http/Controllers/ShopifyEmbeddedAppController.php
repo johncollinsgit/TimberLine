@@ -413,7 +413,7 @@ class ShopifyEmbeddedAppController extends Controller
             $payload['attention']['suggestions'] = WholesaleSuggestion::query()->forAllTenants()
                 ->where('tenant_id', $tenantId)->whereIn('status', ['pending', 'account_review', 'data_review'])->count();
             $payload['attention']['follow_ups_due'] = WholesaleFollowUp::query()->forAllTenants()
-                ->where('tenant_id', $tenantId)->whereIn('status', ['open', 'in_progress'])->where('due_at', '<=', now('America/New_York')->endOfDay())->count();
+                ->where('tenant_id', $tenantId)->whereIn('status', ['open', 'in_progress'])->where('due_at', '<=', now('America/New_York')->endOfDay()->utc())->count();
         }
 
         $actor = $this->resolveWholesaleWorkspaceActor($resolved['context'] ?? null, $tenantId);
@@ -565,10 +565,13 @@ class ShopifyEmbeddedAppController extends Controller
         $resolved = $this->resolveWholesaleWorkspaceContext($request, $contextService);
         $tenantId = $this->resolvedWholesaleTenantId($resolved, $tenantResolver);
         $suggestions = collect();
+        $showHistory = $request->boolean('history');
         if (($resolved['authorized'] ?? false) && $tenantId !== null) {
             $suggestions = WholesaleSuggestion::query()->forAllTenants()
                 ->with(['decisions' => fn ($query) => $query->orderByDesc('decided_at'), 'followUps'])
                 ->where('tenant_id', $tenantId)
+                ->when(! $showHistory, fn ($query) => $query->whereIn('status', ['pending', 'account_review', 'data_review']))
+                ->when($showHistory, fn ($query) => $query->whereNotIn('status', ['pending', 'account_review', 'data_review']))
                 ->orderByRaw("case when priority = 'urgent' then 0 when priority = 'high' then 1 else 2 end")
                 ->orderByDesc('created_at')
                 ->limit(200)
@@ -579,6 +582,7 @@ class ShopifyEmbeddedAppController extends Controller
             'Review explainable recommendations and record what happened after each decision.',
             'shopify.wholesale-suggestions', [
                 'suggestions' => $suggestions,
+                'showHistory' => $showHistory,
                 'contextToken' => isset($resolved['context']) ? $contextService->issueContextToken($resolved['context']) : null,
                 'canDecide' => $this->canManageWholesaleApprovals($this->resolveWholesaleWorkspaceActor($resolved['context'] ?? null, $tenantId)),
             ]);
@@ -629,13 +633,18 @@ class ShopifyEmbeddedAppController extends Controller
             return response()->json(['ok' => false, 'message' => 'Suggestion decisions require an authorized wholesale operator.'], 403);
         }
 
+        $request->validate(['decision_local_at' => ['nullable', 'date_format:Y-m-d\TH:i']]);
+        if ($request->filled('decision_local_at')) {
+            $chosen = \Carbon\CarbonImmutable::createFromFormat('!Y-m-d\TH:i', (string) $request->input('decision_local_at'), 'America/New_York')->utc()->toIso8601String();
+            $request->merge([$request->input('action') === 'snooze' ? 'snoozed_until' : 'due_at' => $chosen]);
+        }
         $validated = $request->validate([
             'action' => ['required', 'string', 'in:accept,create_follow_up,snooze,dismiss,already_handled,mark_incorrect,request_review'],
             'note' => ['nullable', 'string', 'max:2000'],
             'dismissal_reason' => ['nullable', 'string', 'max:255'],
             'priority' => ['nullable', 'string', 'in:low,normal,high,urgent'],
             'due_at' => ['nullable', 'date'],
-            'snoozed_until' => ['nullable', 'date', 'after:now'],
+            'snoozed_until' => ['required_if:action,snooze', 'nullable', 'date', 'after:now'],
             'assigned_user_id' => ['nullable', 'integer'],
         ]);
         if (isset($validated['assigned_user_id'])) {

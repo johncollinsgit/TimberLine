@@ -69,6 +69,14 @@ and follow-up history remain. Existing accepted/review/handled decisions are not
 rewritten. Suggestion decisions lock their parent row before creating a follow-up
 so replay/concurrent decisions use the current state.
 
+Current recommendations exclude accepted, snoozed, dismissed, handled and
+superseded entries, which remain accessible through Decision history. Retired
+entries cannot create another follow-up. Snooze requires a selected future date;
+the shared follow-up/snooze field is interpreted in Eastern time and persisted
+in UTC, including daylight saving changes. The selected date must not be replaced
+by a hidden default. Due-today dashboard comparisons also use the Eastern day's
+UTC boundary.
+
 ## Monday email
 
 The owner requested `info@theforestrystudio.com`, Monday 8 a.m.,

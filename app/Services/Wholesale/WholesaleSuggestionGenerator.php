@@ -72,7 +72,7 @@ class WholesaleSuggestionGenerator
                     'source_stores' => $customer['source_stores'],
                 ],
                 'estimated_opportunity' => $customer['average_order_value'],
-                'suggested_follow_up_at' => now('America/New_York')->addWeekday(),
+                'suggested_follow_up_at' => now('America/New_York')->addWeekday()->utc(),
                 'reason' => 'Qualified wholesale order timing is outside the account-specific reorder window. No retail behavior was used.',
                 'status' => 'pending',
                 'last_evaluated_at' => now(),
