@@ -67,7 +67,8 @@ accepted From alias are checked again before each send. Authorized operators of
 this store share the configured business sender; this is not a tenant access grant.
 
 Connection launch is one-use and short-lived, with PKCE and a first-party Secure,
-HttpOnly, SameSite=Lax browser cookie. Callback validates exact origin/path,
+HttpOnly, SameSite=Lax browser cookie. It is explicitly host-only, independent of
+Backstage's shared login-cookie domain, including when expiring the cookie. Callback validates exact origin/path,
 browser/state, configuration, generation and current operator/store access. A
 durable exchange claim precedes HTTP. Wrong account/scopes, missing refresh
 permission, replay, changed configuration or replaced consent closes the attempt.

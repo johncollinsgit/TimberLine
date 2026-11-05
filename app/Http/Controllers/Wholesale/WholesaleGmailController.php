@@ -106,6 +106,6 @@ class WholesaleGmailController extends ShopifyEmbeddedAppController
         }
 
         return response('Gmail connected. Close this tab and return to Backstage, then choose Check connection.', 200)
-            ->withoutCookie($gmail->cookieName($id), '/')->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
+            ->withCookie($gmail->browserCookie($id, '', true))->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
     }
 }

@@ -278,3 +278,17 @@ test('internal acceptance can send only to the configured team inbox while custo
     expect(app(WholesaleOutreachDigest::class)->snapshot($this->tenant)['rows'])->toHaveCount(1);
     expect($this->journal->rows($this->tenant->id, 'send')->count())->toBe(0);
 });
+
+test('OAuth cookies remain host only even when normal Backstage login uses a shared cookie domain', function (): void {
+    app('cookie')->setDefaultPathAndDomain('/', 'example.test', true, 'lax');
+    $url = $this->gmail->begin($this->tenant->id, $this->actor->id, $this->shop);
+    $id = basename(parse_url($url, PHP_URL_PATH));
+    $response = $this->gmail->launch(Request::create($url), $id);
+    $cookie = $response->headers->getCookies()[0];
+    expect($cookie->getName())->toStartWith('__Host-')
+        ->and($cookie->getDomain())->toBeNull()->and($cookie->getPath())->toBe('/')
+        ->and($cookie->isSecure())->toBeTrue()->and($cookie->isHttpOnly())->toBeTrue()
+        ->and($cookie->getSameSite())->toBe('lax');
+    $expired = $this->gmail->browserCookie($id, '', true);
+    expect($expired->getDomain())->toBeNull()->and($expired->getExpiresTime())->toBeLessThan(now()->timestamp);
+});

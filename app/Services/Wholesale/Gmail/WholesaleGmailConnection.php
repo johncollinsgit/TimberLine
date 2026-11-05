@@ -6,6 +6,7 @@ use App\Models\TeamOperationRecord;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Cookie;
 
 class WholesaleGmailConnection
 {
@@ -95,6 +96,12 @@ class WholesaleGmailConnection
         return '__Host-wgmail-'.substr(hash('sha256', $state), 0, 16);
     }
 
+    public function browserCookie(string $id, string $value, bool $expire = false): Cookie
+    {
+        // Bypass CookieJar's shared SESSION_DOMAIN. __Host- cookies must never have a Domain attribute.
+        return Cookie::create($this->cookieName($id), $value, $expire ? 1 : now()->addMinutes(10), '/', null, true, true, false, Cookie::SAMESITE_LAX);
+    }
+
     private function state(string $id): TeamOperationRecord
     {
         return TeamOperationRecord::query()->where(['area_id' => WholesaleGmailJournal::AREA, 'kind' => 'wg_state'])->findOrFail($id);
@@ -133,7 +140,7 @@ class WholesaleGmailConnection
             'code_challenge' => self::encode(hash('sha256', $d['verifier'], true)), 'code_challenge_method' => 'S256'];
 
         return redirect()->away('https://accounts.google.com/o/oauth2/v2/auth?'.http_build_query($query, '', '&', PHP_QUERY_RFC3986))
-            ->withCookie(cookie($this->cookieName($id), $d['cookie'], 10, '/', null, true, true, false, 'lax'));
+            ->withCookie($this->browserCookie($id, $d['cookie']));
     }
 
     private function identity(string $access, array $c): array
