@@ -74,7 +74,7 @@ if (root) {
                     const {item,point} = group[0], button = document.createElement('button');
                     button.type='button'; button.className='locator-pin'; button.dataset.pin=String(item.id);
                     button.style.left=`${point.x}px`; button.style.top=`${point.y}px`;
-                    const face=document.createElement('span'); face.textContent=group.length>1 ? String(group.length) : '●'; button.append(face);
+                    const face=document.createElement('span'); face.textContent=group.length>1 ? String(group.length) : item.featured ? '★' : '●'; button.append(face);
                     button.setAttribute('aria-label',group.length>1 ? `${group.length} retailers. Zoom in to explore.` : `${item.name}, ${item.address}`);
                     maps.OverlayView.preventMapHitsAndGesturesFrom(button);
                     button.addEventListener('click', () => {

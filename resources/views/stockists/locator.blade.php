@@ -23,6 +23,7 @@
             @foreach($locations as $location)
                 <li data-retailer="{{ $location['id'] }}">
                     <h2><button type="button" data-select="{{ $location['id'] }}">{{ $location['name'] }}</button></h2>
+                    @if($location['featured'])<p class="locator-featured">Featured retailer</p>@endif
                     <p>{{ $location['address'] }}</p><p class="locator-distance" data-distance></p>
                     <a href="https://www.google.com/maps/dir/?api=1&amp;destination={{ $location['latitude'] }},{{ $location['longitude'] }}" target="_blank" rel="noopener" aria-label="Directions to {{ $location['name'] }} at {{ $location['address'] }} (opens a new tab)">Get directions <span aria-hidden="true">↗</span></a>
                 </li>
