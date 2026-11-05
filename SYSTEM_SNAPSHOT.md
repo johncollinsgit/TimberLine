@@ -1,3 +1,11 @@
+## Retired Forestry Backstage entry (November 4)
+
+`cloudflare/forestry-backstage-entry` provides an edge-only public welcome and
+fixed current entry redirects for `backstage.theforestrystudio.com`. It preserves
+the canonical-only Laravel host contract, passes unknown/mutating requests to
+the origin unchanged, and drops stale query context on its four entry redirects.
+See the Worker README for activation/rollback and verification evidence.
+
 ## Events My Tasks and phone web app (November 4; source candidate)
 
 OAuth compatibility correction: section reads use Asana's registered

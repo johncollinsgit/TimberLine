@@ -1,0 +1,14 @@
+{
+  "$schema": "../../../node_modules/wrangler/config-schema.json",
+  "name": "modern-forestry-backstage-entry",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-02",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "backstage.theforestrystudio.com/*",
+      "zone_name": "theforestrystudio.com"
+    }
+  ]
+}

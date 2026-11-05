@@ -1,0 +1,30 @@
+name: Forestry Backstage Entry
+
+on:
+  pull_request:
+    paths:
+      - cloudflare/forestry-backstage-entry/**
+      - .github/workflows/forestry-entry.yml
+  push:
+    branches: [main]
+    paths:
+      - cloudflare/forestry-backstage-entry/**
+      - .github/workflows/forestry-entry.yml
+
+permissions:
+  contents: read
+
+jobs:
+  entry:
+    name: Forestry entry behavior
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - run: node --test cloudflare/forestry-backstage-entry/entry.test.mjs
+      - name: Validate the Worker bundle
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+        run: npx --yes wrangler@4.157.0 deploy --dry-run --config cloudflare/forestry-backstage-entry/wrangler.jsonc

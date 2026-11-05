@@ -1,3 +1,11 @@
+## Retired Forestry Backstage entry (November 4)
+
+The versioned Cloudflare Worker at `cloudflare/forestry-backstage-entry` serves
+the old hostname's public welcome and four fixed staff entry handoffs. Keep this
+repair at the edge: do not enable the old host in Laravel, forward stale session
+queries, or redirect callbacks/state-changing requests. See its README and the
+domain cutover runbook. Source validation and Cloudflare activation are separate.
+
 ## Events My Tasks and phone web app (November 4; source candidate)
 
 Request only registered Asana scopes. Sections use `projects:read`, not
