@@ -197,9 +197,63 @@ test('OAuth requires same user session current Team access and one-time state', 
     $callback = route('team.asana.callback', ['state' => $query['state'], 'code' => 'fictional-code']);
     $this->actingAs($member)->get($callback)->assertForbidden();
     Http::assertNothingSent();
-    Http::fake(['https://app.asana.com/-/oauth_token' => Http::response(['access_token' => 'fictional-access', 'refresh_token' => 'fictional-refresh', 'expires_in' => 3600, 'user' => ['gid' => '800', 'name' => 'Fictional connected user']])]);
+    Http::fake(['https://app.asana.com/-/oauth_token' => Http::response(['access_token' => 'fictional-access', 'refresh_token' => 'fictional-refresh', 'expires_in' => 3600, 'data' => ['gid' => '800', 'name' => 'Fictional connected user']])]);
     $response = $this->actingAs($owner)->get($callback);
     $response->assertRedirect(route('team.app', ['tenant' => $tenant->slug, 'asana' => 'connected']));
     $this->get($callback)->assertForbidden();
     Http::assertSentCount(1);
 });
+
+function asanaOAuthCallbackFixture($test, string $entry): array
+{
+    [$tenant, $owner] = teamWorkspace();
+    $area = null;
+    if ($entry === 'native') {
+        $connect = route('team.asana.connect', ['tenant' => $tenant->slug]);
+        $callback = route('team.asana.callback');
+    } else {
+        config(['team_operations.enabled' => true]);
+        $area = \App\Models\TeamArea::create(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'slug' => 'events', 'name' => 'Events', 'profile' => 'events', 'settings' => ['preset' => ['asana_workspace' => '900', 'asana_project' => '101']]]);
+        $connect = route('team.operations.connect', ['tenant' => $tenant->slug, 'area' => $area->id, 'provider' => 'asana']);
+        $callback = route('team.operations.callback', ['provider' => 'asana']);
+    }
+    $authorization = $test->actingAs($owner)->postJson($connect, ['send' => $entry === 'operations-write'])->assertOk()->json('url');
+    parse_str(parse_url($authorization, PHP_URL_QUERY), $query);
+    $test->withCookie(config('session.cookie'), app('session')->getId());
+
+    return [$tenant, $owner, $callback.'?'.http_build_query(['state' => $query['state'], 'code' => 'fictional-code']), $query, $area];
+}
+
+test('both Asana callbacks consume the documented token data identity', function (string $entry): void {
+    [$tenant, $owner, $callback, $query, $area] = asanaOAuthCallbackFixture($this, $entry);
+    // Asana's OAuth token response places account fields in data, not user.
+    Http::fake(['https://app.asana.com/-/oauth_token' => Http::response(['access_token' => 'fictional-access', 'refresh_token' => 'fictional-refresh', 'expires_in' => 3600, 'scope' => $query['scope'], 'data' => ['id' => 800, 'gid' => '800', 'name' => 'Fictional connected user', 'email' => 'fixture@example.invalid']])]);
+    $this->get($callback)->assertRedirect();
+    if ($entry === 'native') {
+        $connection = TeamUserConnection::query()->sole();
+        expect($connection->external_user_id)->toBe('800')->and($connection->account_name)->toBe('Fictional connected user');
+    } else {
+        $connection = \App\Models\TeamProviderConnection::query()->sole();
+        expect($connection->area_id)->toBe($area->id)->and($connection->account_key)->toBe(hash('sha256', '800'))
+            ->and($connection->account_name)->toBe('fixture@example.invalid')->and($connection->settings['external_user_id'])->toBe('800')
+            ->and($connection->settings['send_authorized'])->toBe($entry === 'operations-write')
+            ->and($connection->settings['scopes'])->toBe($query['scope']);
+    }
+    expect($connection->tenant_id)->toBe($tenant->id)->and($connection->user_id)->toBe($owner->id)
+        ->and($connection->credentials['access_token'])->toBe('fictional-access')
+        ->and($connection->getRawOriginal('credentials'))->not->toContain('fictional-access');
+    Http::assertSentCount(1);
+})->with(['native', 'operations-read', 'operations-write']);
+
+test('Asana callbacks refuse absent or invalid provider identity without saving credentials', function (string $entry, array $identity): void {
+    [, , $callback] = asanaOAuthCallbackFixture($this, $entry);
+    Http::fake(['https://app.asana.com/-/oauth_token' => Http::response(['access_token' => 'fictional-access', 'refresh_token' => 'fictional-refresh', ...$identity])]);
+    $this->get($callback)->assertStatus(502);
+    expect(TeamUserConnection::query()->count())->toBe(0)->and(\App\Models\TeamProviderConnection::query()->count())->toBe(0);
+    Http::assertSentCount(1);
+})->with([
+    ['native', ['user' => ['gid' => '800']]],
+    ['operations-read', ['user' => ['gid' => '800']]],
+    ['native', ['data' => ['gid' => 'invalid']]],
+    ['operations-read', ['data' => ['gid' => 'invalid']]],
+]);

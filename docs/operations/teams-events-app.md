@@ -34,6 +34,9 @@ Asana does not register a `sections:read` scope. Both Teams authorization entry
 points use the same supported read set. Register the production callbacks
 `https://app.theeverbranch.com/team/asana/callback` and
 `https://app.theeverbranch.com/team/integrations/asana/callback`.
+Asana's token exchange returns the account in `data`, not `user`. Both callbacks
+use the same identity validation and reject a missing/invalid `gid` before saving
+credentials. Regression fixtures must use this documented provider envelope.
 Existing send and event-creation flags stay independent. Read-only local snapshot
 connections always reject writes, even when other flags are enabled.
 

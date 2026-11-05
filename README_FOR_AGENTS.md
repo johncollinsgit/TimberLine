@@ -38,6 +38,11 @@ domain cutover runbook. Source validation and Cloudflare activation are separate
 
 Request only registered Asana scopes. Sections use `projects:read`, not
 `sections:read`; keep optional `tasks:write` separate from the eight read scopes.
+Both OAuth callbacks read account identity from the documented token `data`
+object and reject absent/invalid IDs before persisting credentials.
+Enterprise CI uses Ubuntu 24.04 runners. Its mirror guard recognizes Azure and
+documented regional EC2 mirrors, retaining only official HTTPS fallbacks. Keep
+every required lane and reject unknown endpoints/metadata.
 
 Keep Asana authoritative: per-user selected-source reads and only explicitly
 reviewed title/date/completion write-through behind `asana_write_enabled` and
