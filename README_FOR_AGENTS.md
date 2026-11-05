@@ -1,3 +1,11 @@
+## Wholesale email draft URLs (November 4)
+
+The hero uses the current Shopify file, and wholesale CTAs use the actual
+wholesale store/application. Opening a saved draft repairs only the exact known
+retired seed URLs, increments its revision once, and preserves merchant edits.
+See `docs/operations/wholesale-email-messenger.md`. Keep draft repair separate
+from email sending; the editor has explicit test-only send controls.
+
 ## Retired Forestry Backstage entry (November 4)
 
 The versioned Cloudflare Worker at `cloudflare/forestry-backstage-entry` serves

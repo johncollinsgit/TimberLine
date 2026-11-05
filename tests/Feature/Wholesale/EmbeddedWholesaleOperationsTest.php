@@ -242,6 +242,45 @@ test('wholesale email messenger repairs only the legacy placeholder candle asset
         ->and(data_get($payload, 'sections.10.products.0.buttonLabel'))->toBe('Merchant-written link label');
 });
 
+test('retired wholesale hero and entry URLs repair once without replacing merchant edits', function (): void {
+    $service = app(WholesaleEmailMessengerService::class);
+    $service->draft($this->tenant->id, 'wholesale');
+    $draft = WholesaleEmailMessengerDraft::query()->where('tenant_id', $this->tenant->id)->firstOrFail();
+    $expected = $draft->sections;
+    $expected[0]['alt'] = 'Merchant-written image description';
+    $expected[3]['imageUrl'] = 'https://assets.example.test/custom-craft.jpg';
+    $expected[11]['label'] = 'Merchant-written application label';
+    $legacy = $expected;
+    $legacy[0]['imageUrl'] = 'https://cdn.shopify.com/s/files/1/2081/2479/files/SaleImage-darktheme_5f5f655b-77a9-49f5-b699-037f71dee79e.png?v=1762446943';
+    $legacy[0]['href'] = 'https://theforestrystudio.com/collections/wholesale';
+    $legacy[11]['href'] = 'https://theforestrystudio.com/pages/wholesale';
+    $revision = $draft->revision;
+    $draft->forceFill(['sections' => $legacy])->save();
+
+    $repaired = $service->draft($this->tenant->id, 'wholesale');
+    expect($repaired['sections'])->toBe($expected)
+        ->and($repaired['revision'])->toBe($revision + 1);
+    $unchanged = $service->draft($this->tenant->id, 'wholesale');
+    expect($unchanged['sections'])->toBe($expected)
+        ->and($unchanged['revision'])->toBe($repaired['revision']);
+});
+
+test('wholesale URL repair leaves custom merchant artwork and destinations unchanged', function (): void {
+    $service = app(WholesaleEmailMessengerService::class);
+    $service->draft($this->tenant->id, 'wholesale');
+    $draft = WholesaleEmailMessengerDraft::query()->where('tenant_id', $this->tenant->id)->firstOrFail();
+    $sections = $draft->sections;
+    $sections[0]['imageUrl'] = 'https://assets.example.test/merchant-hero.png';
+    $sections[0]['href'] = 'https://example.test/merchant-collection';
+    $sections[11]['href'] = 'https://example.test/merchant-application';
+    $revision = $draft->revision;
+    $draft->forceFill(['sections' => $sections])->save();
+
+    $payload = $service->draft($this->tenant->id, 'wholesale');
+    expect($payload['sections'])->toBe($sections)
+        ->and($payload['revision'])->toBe($revision);
+});
+
 test('wholesale pages fail closed when the authenticated store has no tenant mapping', function (): void {
     configureEmbeddedWholesaleStore();
 

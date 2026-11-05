@@ -53,7 +53,6 @@ Rules:
 
 All rules must preserve query strings.
 
-## 5) DNS/TLS Prerequisites
 ### Retired Modern Forestry staff entry
 
 `cloudflare/forestry-backstage-entry` is the narrow edge-only exception for
@@ -65,6 +64,8 @@ discard query context and require a fresh canonical login/Shopify session. They
 do not replay callbacks or accept application state changes. Other paths keep
 their existing origin response. Laravel's canonical-only host guard stays intact.
 See the Worker's README for tests, deployment and rollback.
+
+## 5) DNS/TLS Prerequisites
 
 Provision and validate before deploy:
 - `theeverbranch.com`

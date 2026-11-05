@@ -1,3 +1,11 @@
+## Wholesale email draft URLs (November 4)
+
+The wholesale messenger seeds the current Shopify hero asset and canonical
+wholesale destinations. Exact retired seed values in existing drafts are repaired
+idempotently without replacing merchant artwork, copy, or custom destinations.
+The saved live draft and backend source release are separate verification steps.
+See `docs/operations/wholesale-email-messenger.md`.
+
 ## Retired Forestry Backstage entry (November 4)
 
 `cloudflare/forestry-backstage-entry` provides an edge-only public welcome and
