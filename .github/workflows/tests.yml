@@ -138,6 +138,7 @@ jobs:
           node tests/e2e/wholesale-reorder-browser.mjs
           node tests/e2e/wholesale-cart-refresh-browser.mjs
           node tests/e2e/wholesale-label-admin-browser.mjs
+          node tests/e2e/wholesale-decision-controls.mjs
           node --test scripts/labels/batch-import.test.mjs
           npx tsc --noEmit -p extensions/wholesale-order-notes/tsconfig.json
 

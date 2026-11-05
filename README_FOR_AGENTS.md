@@ -1,3 +1,18 @@
+## Wholesale reporting and Monday outreach (November 4; source candidate)
+
+Read `docs/operations/wholesale-reporting-and-outreach.md`. Sales cards must use
+ShopifyQL, never creation-date/payment sums. Matrixify copies retain original
+processed dates; do not combine their retail and wholesale representations.
+The complete provider snapshot is a private read model, not a production import.
+Keep stale/incomplete-history guards, tenant/role checks, staff decisions and
+weekly delivery reservations. The owner chose info@theforestrystudio.com,
+Monday 8 a.m. America/New_York, with manual Gmail draft review/send.
+Keep historical recommendations out of the current queue and preserve the
+selected Eastern follow-up/snooze instant in UTC. Retired advice is read-only.
+Follow-up completion/rescheduling requires current tenant/operator verification,
+row locking and audit. Completed history must not reopen on retry. Forms refresh
+their Shopify token at submission and submit once.
+
 ## Wholesale email photos, draft URLs and home navigation (November 4)
 
 The hero uses the current Shopify file, and wholesale CTAs use the actual

@@ -200,6 +200,11 @@ test('wholesale header logo returns to wholesale overview with embedded context'
         ->and($query['host'] ?? null)->not->toBeEmpty();
 });
 
+test('verified wholesale app launch opens wholesale operations instead of the retail loyalty dashboard', function (): void {
+    $this->followingRedirects()->get(route('shopify.app', wholesaleEmbeddedSignedQuery()))->assertOk()
+        ->assertSeeText('Wholesale Operations')->assertDontSeeText('Fast loyalty snapshot');
+});
+
 test('wholesale email messenger creates and persists the approved sixteen-block draft', function (): void {
     $response = $this->get(route('shopify.app.wholesale.messaging', wholesaleEmbeddedSignedQuery()));
     $response->assertOk()->assertSeeText('Email Messenger')->assertSee('Bring Modern Forestry to your store')->assertSee('cdn.shopify.com');

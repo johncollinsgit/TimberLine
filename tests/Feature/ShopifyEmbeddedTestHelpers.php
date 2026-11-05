@@ -6,6 +6,17 @@ use App\Models\TenantWholesaleSetting;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyStores;
 
+/** Ranking/decision fixtures supply known synthetic history; provider completeness is tested separately. */
+function configureWholesaleReportingFixture(): void
+{
+    $source = \Mockery::mock(\App\Services\Wholesale\WholesaleReportingSnapshot::class);
+    $snapshot = fn (): array => ['store_key' => 'wholesale', 'refreshed_at' => now()->toIso8601String(), 'source_order_count' => 100, 'included_order_count' => 100, 'currency' => 'USD'];
+    $source->shouldReceive('read')->andReturnUsing($snapshot);
+    $source->shouldReceive('orders')->andReturnNull();
+    $source->shouldReceive('refresh')->andReturnUsing($snapshot);
+    app()->instance(\App\Services\Wholesale\WholesaleReportingSnapshot::class, $source);
+}
+
 function configureEmbeddedRetailStore(?int $tenantId = null): void
 {
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');

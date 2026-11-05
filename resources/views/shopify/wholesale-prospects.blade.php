@@ -40,7 +40,7 @@
                         <div><div class="font-semibold text-zinc-950">{{ $prospect->business_name }}</div><div class="mt-1 text-sm text-zinc-600">{{ $prospect->primary_category ? str_replace('_', ' ', $prospect->primary_category) : 'Category needs review' }} · {{ collect([$prospect->city, $prospect->state])->filter()->join(', ') ?: 'Location unavailable' }}</div></div>
                         <div><div class="text-xs uppercase text-zinc-500">Status</div><div class="font-semibold capitalize">{{ str_replace('_', ' ', $prospect->status) }}</div></div>
                         <div><div class="text-xs uppercase text-zinc-500">Fit</div><div class="font-semibold">{{ $prospect->fit_score }}/100</div></div>
-                        <div><div class="text-xs uppercase text-zinc-500">Evidence</div><div class="font-semibold">{{ $prospect->fit_confidence }}% confidence</div></div>
+                        <div><div class="text-xs uppercase text-zinc-500">Evidence</div><div class="font-semibold">{{ $prospect->fit_confidence }}/100 completeness</div></div>
                     </a>
                 @empty
                     <div class="px-6 py-12 text-sm text-zinc-600">No prospects have been discovered. Start a controlled search to create the review queue.</div>

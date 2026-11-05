@@ -1,3 +1,23 @@
+## Wholesale reporting and Monday outreach (November 4; source candidate)
+
+Dedicated-store sales cards now use ShopifyQL. Full private history preserves
+original processed sales dates for Matrixify imports and reads provider payment
+facts separately. No historical orders are imported as production work. Native
+Analytics reconciled exactly for the owner’s selected period; private totals
+remain in local audit evidence. Creation-date/payment aggregation was an invalid
+sales comparison.
+
+Positive reorder intervals, original-sale dates, current payment/review states,
+stable latest-order suggestions and retained staff decisions govern outreach.
+The current queue separates historical decisions; chosen follow-up/snooze dates
+use Eastern time with UTC persistence and cannot reactivate superseded advice.
+Follow-Ups includes audited completion/rescheduling controls, and wholesale forms
+refresh Shopify verification on submit while preserving entries on failure.
+The requested internal digest is Monday 8 a.m. Eastern to
+info@theforestrystudio.com, with up to ten reviewable Gmail drafts. Protected
+release and live refresh/acceptance are separate from these source changes.
+See `docs/operations/wholesale-reporting-and-outreach.md`.
+
 ## Wholesale email photos, draft URLs and home navigation (November 4)
 
 The wholesale messenger seeds the current Shopify hero asset and canonical

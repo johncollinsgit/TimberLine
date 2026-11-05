@@ -31,6 +31,7 @@ use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use App\Services\Tenancy\TenantResolver;
+use App\Services\Wholesale\WholesaleFollowUpService;
 use App\Services\Wholesale\WholesaleModuleSetupService;
 use App\Services\Wholesale\WholesaleOperationsService;
 use App\Services\Wholesale\WholesaleProspectWorkflowService;
@@ -148,6 +149,9 @@ class ShopifyEmbeddedAppController extends Controller
 
             /** @var array<string,mixed> $store */
             $store = $context['store'];
+            if (strtolower(trim((string) ($store['store_role'] ?? ''))) === 'wholesale') {
+                return $this->showWholesale($request, $contextService, $tenantResolver, app(WholesaleOperationsService::class));
+            }
             $tenantId = $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store));
             if ($tenantId !== null && $wantsFullDashboard) {
                 $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
@@ -410,7 +414,7 @@ class ShopifyEmbeddedAppController extends Controller
             $payload['attention']['suggestions'] = WholesaleSuggestion::query()->forAllTenants()
                 ->where('tenant_id', $tenantId)->whereIn('status', ['pending', 'account_review', 'data_review'])->count();
             $payload['attention']['follow_ups_due'] = WholesaleFollowUp::query()->forAllTenants()
-                ->where('tenant_id', $tenantId)->whereIn('status', ['open', 'in_progress'])->where('due_at', '<=', now()->endOfDay())->count();
+                ->where('tenant_id', $tenantId)->whereIn('status', ['open', 'in_progress'])->where('due_at', '<=', now('America/New_York')->endOfDay()->utc())->count();
         }
 
         $actor = $this->resolveWholesaleWorkspaceActor($resolved['context'] ?? null, $tenantId);
@@ -429,6 +433,7 @@ class ShopifyEmbeddedAppController extends Controller
                 'pageActions' => [],
                 'pageSubnav' => [],
                 'payload' => $payload,
+                'reportingStatus' => $tenantId !== null ? $operations->reportingStatus($tenantId) : null,
                 'contextToken' => isset($resolved['context']) ? $contextService->issueContextToken($resolved['context']) : null,
                 'actor' => $actor,
             ]),
@@ -505,8 +510,8 @@ class ShopifyEmbeddedAppController extends Controller
             ])), $search))->values();
         }
         $customers = match ($filter) {
-            'active', 'due', 'at_risk', 'lapsed' => $customers->where('timing_state', $filter)->values(),
-            'new' => $customers->filter(fn (array $customer): bool => $customer['first_order_at']?->gte(now()->startOfMonth()) ?? false)->values(),
+            'active', 'due', 'at_risk', 'lapsed', 'awaiting_payment', 'refund_review', 'account_review' => $customers->where('timing_state', $filter)->values(),
+            'new' => $customers->filter(fn (array $customer): bool => $customer['first_order_at']?->gte(now('America/New_York')->startOfMonth()) ?? false)->values(),
             'repeat' => $customers->where('order_count', '>', 1)->values(),
             'first_order_only' => $customers->where('order_count', 1)->values(),
             'high_value' => $customers->sortByDesc('lifetime_revenue')->take(max(1, (int) ceil($customers->count() * .2)))->values(),
@@ -561,10 +566,13 @@ class ShopifyEmbeddedAppController extends Controller
         $resolved = $this->resolveWholesaleWorkspaceContext($request, $contextService);
         $tenantId = $this->resolvedWholesaleTenantId($resolved, $tenantResolver);
         $suggestions = collect();
+        $showHistory = $request->boolean('history');
         if (($resolved['authorized'] ?? false) && $tenantId !== null) {
             $suggestions = WholesaleSuggestion::query()->forAllTenants()
                 ->with(['decisions' => fn ($query) => $query->orderByDesc('decided_at'), 'followUps'])
                 ->where('tenant_id', $tenantId)
+                ->when(! $showHistory, fn ($query) => $query->whereIn('status', ['pending', 'account_review', 'data_review']))
+                ->when($showHistory, fn ($query) => $query->whereNotIn('status', ['pending', 'account_review', 'data_review']))
                 ->orderByRaw("case when priority = 'urgent' then 0 when priority = 'high' then 1 else 2 end")
                 ->orderByDesc('created_at')
                 ->limit(200)
@@ -575,6 +583,7 @@ class ShopifyEmbeddedAppController extends Controller
             'Review explainable recommendations and record what happened after each decision.',
             'shopify.wholesale-suggestions', [
                 'suggestions' => $suggestions,
+                'showHistory' => $showHistory,
                 'contextToken' => isset($resolved['context']) ? $contextService->issueContextToken($resolved['context']) : null,
                 'canDecide' => $this->canManageWholesaleApprovals($this->resolveWholesaleWorkspaceActor($resolved['context'] ?? null, $tenantId)),
             ]);
@@ -600,7 +609,45 @@ class ShopifyEmbeddedAppController extends Controller
 
         return $this->wholesaleWorkspaceResponse($resolved, $tenantId, 'follow_ups', 'Wholesale Follow-Ups',
             'Open, overdue, and completed tasks created from reviewed wholesale evidence.',
-            'shopify.wholesale-follow-ups', ['followUps' => $followUps]);
+            'shopify.wholesale-follow-ups', [
+                'followUps' => $followUps,
+                'contextToken' => isset($resolved['context']) ? $contextService->issueContextToken($resolved['context']) : null,
+                'canDecide' => $this->canManageWholesaleApprovals($this->resolveWholesaleWorkspaceActor($resolved['context'] ?? null, $tenantId)),
+            ]);
+    }
+
+    public function updateWholesaleFollowUp(
+        Request $request,
+        string $followUpPublicId,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        WholesaleFollowUpService $followUps
+    ): RedirectResponse|JsonResponse {
+        $context = $contextService->resolveMutationContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+        $tenantId = $this->resolvedMappedWholesaleTenantId($context, $tenantResolver);
+        $actor = $this->resolveWholesaleWorkspaceActor($context, $tenantId);
+        if ($tenantId === null || ! app(TenantModuleAccessResolver::class)->canAccess($tenantId, 'wholesale_operations') || ! $this->canManageWholesaleApprovals($actor)) {
+            return response()->json(['ok' => false, 'message' => 'Follow-up updates require an authorized wholesale operator.'], 403);
+        }
+        $input = $request->validate([
+            'action' => ['required', 'in:complete,reschedule'],
+            'due_local_at' => ['required_if:action,reschedule', 'nullable', 'date_format:Y-m-d\TH:i'],
+        ]);
+        $dueAt = filled($input['due_local_at'] ?? null)
+            ? \Carbon\CarbonImmutable::createFromFormat('!Y-m-d\TH:i', $input['due_local_at'], 'America/New_York')->utc() : null;
+        try {
+            $followUps->update($tenantId, $followUpPublicId, $actor, $input['action'], $dueAt);
+        } catch (DomainException $error) {
+            return response()->json(['ok' => false, 'message' => $error->getMessage()], 422);
+        }
+        $redirectUrl = $this->wholesaleEmbeddedRoute($request, 'shopify.app.wholesale.follow-ups', [], (string) ($context['host'] ?? null));
+
+        return $request->expectsJson()
+            ? response()->json(['ok' => true, 'redirect_url' => $redirectUrl])
+            : redirect()->to($redirectUrl)->with('status', 'Wholesale follow-up updated.');
     }
 
     public function decideWholesaleSuggestion(
@@ -625,13 +672,18 @@ class ShopifyEmbeddedAppController extends Controller
             return response()->json(['ok' => false, 'message' => 'Suggestion decisions require an authorized wholesale operator.'], 403);
         }
 
+        $request->validate(['decision_local_at' => ['nullable', 'date_format:Y-m-d\TH:i']]);
+        if ($request->filled('decision_local_at')) {
+            $chosen = \Carbon\CarbonImmutable::createFromFormat('!Y-m-d\TH:i', (string) $request->input('decision_local_at'), 'America/New_York')->utc()->toIso8601String();
+            $request->merge([$request->input('action') === 'snooze' ? 'snoozed_until' : 'due_at' => $chosen]);
+        }
         $validated = $request->validate([
             'action' => ['required', 'string', 'in:accept,create_follow_up,snooze,dismiss,already_handled,mark_incorrect,request_review'],
             'note' => ['nullable', 'string', 'max:2000'],
             'dismissal_reason' => ['nullable', 'string', 'max:255'],
             'priority' => ['nullable', 'string', 'in:low,normal,high,urgent'],
             'due_at' => ['nullable', 'date'],
-            'snoozed_until' => ['nullable', 'date', 'after:now'],
+            'snoozed_until' => ['required_if:action,snooze', 'nullable', 'date', 'after:now'],
             'assigned_user_id' => ['nullable', 'integer'],
         ]);
         if (isset($validated['assigned_user_id'])) {
@@ -2206,6 +2258,7 @@ class ShopifyEmbeddedAppController extends Controller
             'pageActions' => [],
             'pageSubnav' => [],
             'embeddedUrl' => fn (string $url): string => app(\App\Services\Shopify\ShopifyEmbeddedUrlGenerator::class)->append($url, request(), $resolved['host'] ?? null),
+            'reportingStatus' => $tenantId !== null ? app(WholesaleOperationsService::class)->reportingStatus($tenantId) : null,
         ], $viewData)), $workspaceState['httpStatus']);
     }
 

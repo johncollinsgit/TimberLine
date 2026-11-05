@@ -118,7 +118,31 @@ Schedule::call(function (): void {
 })
     ->name('wholesale:suggestions:refresh-active-tenants')
     ->dailyAt('06:15')
+    ->timezone('America/New_York')
     ->withoutOverlapping(60);
+
+Schedule::call(function (): void {
+    TenantWholesaleSetting::query()->whereNotNull('confirmed_at')->with('tenant')->get()
+        ->each(function ($setting): void {
+            if ($setting->tenant) {
+                Artisan::call('wholesale:refresh-reporting', ['--tenant' => $setting->tenant->slug]);
+            }
+        });
+})
+    ->name('wholesale:reporting:refresh-active-tenants')
+    ->everyThirtyMinutes()
+    ->withoutOverlapping(25);
+
+// Owner-requested internal outreach list. Customer buttons open personal drafts;
+// this command never sends customer outreach. Keep the schedule in Eastern time.
+Schedule::command('wholesale:send-outreach-digest', [
+    '--tenant' => 'modern-forestry',
+    '--email' => 'info@theforestrystudio.com',
+])
+    ->weeklyOn(1, '08:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping(60)
+    ->runInBackground();
 
 // Reconcile click->order attributions after order imports and webhook drift.
 Schedule::command('marketing:sync-message-order-attributions', [

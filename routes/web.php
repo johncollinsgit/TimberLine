@@ -2297,6 +2297,9 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
         ->name('shopify.app.wholesale.suggestions.decide');
     Route::get('/app/wholesale/follow-ups', [ShopifyEmbeddedAppController::class, 'showWholesaleFollowUps'])
         ->name('shopify.app.wholesale.follow-ups');
+    Route::post('/app/wholesale/follow-ups/{followUpPublicId}', [ShopifyEmbeddedAppController::class, 'updateWholesaleFollowUp'])
+        ->whereUuid('followUpPublicId')
+        ->name('shopify.app.wholesale.follow-ups.update');
     Route::get('/app/wholesale/prospects', [ShopifyEmbeddedAppController::class, 'showWholesaleProspects'])
         ->name('shopify.app.wholesale.prospects');
     Route::get('/app/wholesale/prospects/discover', [ShopifyEmbeddedAppController::class, 'showWholesaleProspectDiscovery'])
