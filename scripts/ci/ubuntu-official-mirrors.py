@@ -2,6 +2,7 @@
 """Keep official HTTPS Ubuntu sources without assuming one Deb822 layout."""
 from pathlib import Path
 import re
+from urllib.parse import urlsplit
 
 INDIRECT = 'mirror+file:/etc/apt/apt-mirrors.txt'
 OFFICIAL = {f'https://{host}/ubuntu{slash}' for host in
@@ -13,13 +14,27 @@ MIRRORS = {f'{scheme}://{host}/ubuntu{slash}': kind
            for scheme in ('http', 'https') for slash in ('', '/')}
 
 
+def mirror_endpoint_description(uri):
+    if uri in MIRRORS:
+        return uri
+    try:
+        parsed = urlsplit(uri.lstrip('\ufeff'))
+        return {'scheme': parsed.scheme, 'host': parsed.hostname,
+                'port': parsed.port, 'path': parsed.path if parsed.path.strip('/') == 'ubuntu' else '<other path>',
+                'has_credentials': parsed.username is not None or parsed.password is not None,
+                'has_query': bool(parsed.query), 'has_fragment': bool(parsed.fragment),
+                'leading_bom': uri.startswith('\ufeff')}
+    except ValueError:
+        return '<unrecognized URI>'
+
+
 def verified_mirrors(content):
     """Validate known endpoints before removing Azure and securing fallback URLs."""
     lines = content.splitlines(keepends=True)
     entries = [line.decode('utf-8').split() for line in lines
                if line.strip() and not line.lstrip().startswith(b'#')]
     # Diagnostics must never echo credentials or arbitrary metadata from a URI.
-    safe = [[words[0] if words[0] in MIRRORS else '<unrecognized URI>',
+    safe = [[mirror_endpoint_description(words[0]),
              *[word if re.fullmatch(r'priority:[0-9]{1,6}', word)
                else '<unsupported metadata>' for word in words[1:]]] for words in entries]
     failure = 'Unsupported Ubuntu mirror list; refusing change. Entries: ' + repr(safe)
