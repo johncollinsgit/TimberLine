@@ -15,6 +15,8 @@ export default defineConfig(() => ({
         'resources/js/website-shop-pay.js',
         'resources/js/marketplace-management.js',
         'resources/js/app.js',
+        'resources/js/stockists/locator.js',
+        'resources/js/stockists/admin.js',
         'resources/js/wholesale-label-admin.js',
         'resources/js/wholesale-label-bootstrap.js',
         'resources/js/subscriptions-pilot.js',
