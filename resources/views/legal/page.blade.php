@@ -71,6 +71,14 @@
                 <p>Everbranch stores encrypted connection tokens and imported records needed to provide the requested workspace features. Disconnecting QuickBooks stops future API access. An authorized workspace administrator may request deletion of stored connection tokens and imported QuickBooks data by contacting us.</p>
             </section>
 
+            <section id="wholesale-gmail">
+                <h2>Optional Gmail sending for wholesale follow-ups</h2>
+                <p>When an authorized wholesale operator connects the approved store Google account, Everbranch uses the account's verified email and Google account identifier to bind the connection to the correct store. Google permissions allow sending email and access to basic Gmail settings. This feature reads send-as addresses to verify the approved sender; it does not change Gmail settings or read inbox messages, threads, drafts, or attachments.</p>
+                <p>Authorized operators for that store can review the sender, recipient, subject, and formatted customer email before sending. Google receives the reviewed message and recipient to deliver it. Everbranch stores connection tokens and private message reviews encrypted, and retains send references and audit records to show provider results and prevent duplicate sends. A Gmail acceptance result does not establish recipient delivery.</p>
+                <p>Disconnecting in Backstage removes its local connection tokens and prevents future use of that connection. It does not automatically remove Google's authorization or erase retained reviews, send/audit records, or backups. You can revoke access in <a href="https://myaccount.google.com/connections" rel="noopener noreferrer">Google Account connections</a> and contact us using the details below to request deletion of retained data, subject to applicable record-retention needs.</p>
+                <p>We use data obtained through this Gmail connection only for this visible sending feature and its security/reliability. We do not sell that data, use it for ad targeting, or use it to train AI models. Our use and transfer of Google API data is limited to the practices allowed by the <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener noreferrer">Google API Services User Data Policy</a>, including its Limited Use requirements.</p>
+            </section>
+
             <section>
                 <h2>How we use information</h2>
                 <p>We use information to provide tenant-scoped workspaces, import authorized records, support job and customer workflows, secure accounts, troubleshoot problems, improve requested features, communicate service notices, and comply with law. We do not sell personal information or use connected QuickBooks data for advertising.</p>

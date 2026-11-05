@@ -1,3 +1,10 @@
+## 2026-11-05 — Native wholesale email review and send
+
+Customer follow-up drafts can connect the approved store Gmail account and review
+the exact From, Reply-To, recipient, subject and formatted email before Send.
+Uncertain outcomes remain held; copying to Gmail remains an optional fallback.
+This is a source candidate pending Google setup, protected release and acceptance.
+
 ## 2026-11-05 — Native stockist locator (source candidate)
 
 Add a compact owner/admin directory table, edit dialog, private preview and

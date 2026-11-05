@@ -34,7 +34,12 @@ class WholesaleOutreachDigest
         $followUps = WholesaleFollowUp::query()->forAllTenants()->where('tenant_id', $tenantId)
             ->where('target_type', 'customer')->get()->groupBy('target_key');
         $blockedProspects = WholesaleProspect::query()->forAllTenants()->where('tenant_id', $tenantId)->where('do_not_contact', true)->get(['existing_customer_match', 'public_business_email']);
-        $candidates = $this->operations->customers($tenantId)->filter(function (array $customer) use ($suggestions, $followUps, $blockedProspects): bool {
+        $nativeSends = app(\App\Services\Wholesale\Gmail\WholesaleGmailJournal::class)->rows($tenantId, 'send')
+            ->where(fn ($query) => $query->whereIn('status', ['sending', 'uncertain'])->orWhere(fn ($q) => $q->where('status', 'accepted')->where('created_at', '>=', now()->subDays(14))))->get();
+        $candidates = $this->operations->customers($tenantId)->filter(function (array $customer) use ($suggestions, $followUps, $blockedProspects, $nativeSends): bool {
+            if ($nativeSends->contains(fn ($send) => $send->data['account'] === $customer['public_key'] || Str::lower($send->data['to']) === Str::lower($customer['email']))) {
+                return false;
+            }
             if (! in_array($customer['timing_state'], ['due', 'at_risk', 'lapsed'], true)
                 || ! filter_var($customer['email'], FILTER_VALIDATE_EMAIL)) {
                 return false;
@@ -117,6 +122,7 @@ class WholesaleOutreachDigest
                 },
                 'days_since_order' => $customer['days_since_last_order'],
                 'expected_days' => $customer['median_reorder_days'],
+                'source_order_id' => (string) ($last->shopify_order_id ?: $last->id),
                 'order_number' => $orderNumber, 'order_date' => $last->ordered_at->copy()->timezone('America/New_York')->format('M j, Y'),
                 'order_total' => number_format(max(0, (float) $last->total_price - (float) $last->refund_total), 2),
                 'currency' => $this->plain($last->currency_code ?: 'Unknown currency', 16),
