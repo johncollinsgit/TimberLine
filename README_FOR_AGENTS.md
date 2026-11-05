@@ -1,3 +1,15 @@
+## Configurable campus walkthrough (November 5; source candidate)
+
+The public Facilities demo now has named fictional operational roles and additive
+crew, scheduling, vendor-renewal, finance, quarterly-report and pilot examples.
+Demo settings edit people, simulated capabilities, review routes/thresholds,
+time zone/buffers, report template, certificate rules, training, team labels and
+role shortcuts. Existing tickets, photos, registrations and provider quotas are
+retained on first upgrade; three linked sample jobs are added once. Public role
+switching is still a simulation, never real authentication. No campus, calendar,
+accounting or payment integration is activated. Read
+`docs/operations/campus-facilities-demo.md` before changing these workflows.
+
 ## Native wholesale Gmail sender (November 5; source candidate)
 
 Owner direction replaces manual paste as the preferred customer follow-up flow.

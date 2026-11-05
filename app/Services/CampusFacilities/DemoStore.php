@@ -30,6 +30,7 @@ class DemoStore
             $state = $exists ? json_decode(file_get_contents($path), true, 64, JSON_THROW_ON_ERROR) : $this->seed();
             $state += ['participants' => [], 'comment_receipts' => [], 'verification_requests' => [], 'mail_usage' => []];
             $upgraded = $this->addBuildingSamples($state);
+            $upgraded = DemoWorkspaceSeed::upgrade($state) || $upgraded;
             $result = $callback($state);
             if ($write || ! $exists || $upgraded) {
                 $json = json_encode($state, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
@@ -66,6 +67,7 @@ class DemoStore
 
         $state = ['schema' => 1, 'tickets' => array_column($tickets, null, 'id'), 'request_keys' => $keys, 'attachments' => [], 'usage' => []];
         $this->addBuildingSamples($state);
+        DemoWorkspaceSeed::upgrade($state);
 
         return $state;
     }

@@ -45,7 +45,8 @@ it('persists one shared ticket across clients and requires head approval before 
     $ticket = $this->postJson($this->demoBase.'/api/tickets', $input)->assertOk()->assertJsonPath('status', 'Pending approval')->json();
     $this->postJson($this->demoBase.'/api/tickets', $input)->assertOk()->assertJsonPath('id', $ticket['id']);
     $this->postJson($this->demoBase.'/api/tickets', [...$input, 'fields' => [...$input['fields'], 'issue' => 'A different report.']])->assertConflict();
-    $this->getJson($this->demoBase.'/api/tickets')->assertOk()->assertJsonCount(45);
+    // Original 44 fixtures, three linked operations examples and this new request.
+    $this->getJson($this->demoBase.'/api/tickets')->assertOk()->assertJsonCount(48);
     $command = ['id' => $ticket['id'], 'revision' => 1, 'role' => 'admin', 'actor' => 'admin', 'action' => 'assign', 'data' => ['assignee' => 'sam']];
     $this->postJson($this->demoBase.'/api/tickets', $command)->assertUnprocessable();
     $this->postJson($this->demoBase.'/api/tickets', [...$command, 'action' => 'start'])->assertUnprocessable();
@@ -167,7 +168,7 @@ it('confirms a self-entered address before mentions and sends one branded email 
 it('adds building samples once while preserving edited shared tickets and attachments', function (): void {
     $store = app(DemoStore::class);
     $state = $store->seed();
-    expect(count($state['tickets']))->toBe(44);
+    expect(count($state['tickets']))->toBe(47);
     foreach (['Shelton Learning Commons', 'Virginia Hall', 'May Wildlife Rehabilitation Center'] as $building) {
         $teams = array_values(array_unique(array_map(fn ($t) => $t['fields']['category'], array_filter($state['tickets'], fn ($t) => $t['fields']['location'] === $building))));
         sort($teams);
@@ -180,11 +181,11 @@ it('adds building samples once while preserving edited shared tickets and attach
     $directory = $store->directory();
     file_put_contents($directory.'/workspace.json', json_encode($state, JSON_THROW_ON_ERROR));
     $read = $store->access(fn (&$s) => $s, false);
-    expect(count($read['tickets']))->toBe(44)
+    expect(count($read['tickets']))->toBe(47)
         ->and($read['tickets']['FM-1048']['revision'])->toBe(7)
         ->and($read['tickets']['FM-1048']['title'])->toBe('Previously edited shared ticket')
         ->and($read['tickets']['FM-B13-1']['title'])->toBe('Previously edited building job');
-    expect($store->access(fn (&$s) => count($s['tickets']), false))->toBe(44);
+    expect($store->access(fn (&$s) => count($s['tickets']), false))->toBe(47);
 });
 
 it('uses a server-only Realtime key with replay protection and bounded session cleanup', function (): void {
@@ -238,7 +239,7 @@ it('validates extracted voice fields without saving or changing the requester id
     $this->postJson($this->demoBase.'/api/voice/draft', [...$input, 'update' => ['requesterId' => 'admin']])->assertUnprocessable();
     $this->postJson($this->demoBase.'/api/voice/draft', [...$input, 'update' => ['status' => 'Completed']])->assertUnprocessable();
     $this->postJson($this->demoBase.'/api/voice/draft', ['mode' => 'work', 'fields' => [], 'update' => ['minutes' => -1]])->assertUnprocessable();
-    expect(count(app(DemoStore::class)->access(fn (&$s) => $s['tickets'], false)))->toBe(44);
+    expect(count(app(DemoStore::class)->access(fn (&$s) => $s['tickets'], false)))->toBe(47);
     Http::assertNothingSent();
 });
 

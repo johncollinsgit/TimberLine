@@ -13,6 +13,8 @@ class Comments
         $data = Validator::make($input['data'] ?? [], ['id' => 'required|uuid', 'text' => 'present|nullable|string|max:3000', 'photos' => 'present|array|max:5', 'photos.*.id' => 'required|uuid', 'mentions' => 'present|array|max:5', 'mentions.*' => 'required|uuid|distinct', 'notify' => 'required|boolean'])->validate();
         $person = app(Tickets::class)->actor($input);
         $prepared = $store->access(function (&$state) use ($request, $input, $data, $person) {
+            $person = app(Tickets::class)->actor($input, $state);
+            abort_unless(app(DemoDirectory::class)->may($person, 'work.comment'), 403, 'This demo role cannot post work comments.');
             $id = $input['id'] ?? '';
             abort_unless(is_string($id) && isset($state['tickets'][$id]), 404, 'Ticket not found.');
             $ticket = $state['tickets'][$id];
