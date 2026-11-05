@@ -1,3 +1,19 @@
+## Store locator replacement (November 5; source candidate)
+
+The isolated stockist locator reuses StockistLocation/StockistLocatorSetting from
+September's unpublished replacement work. This release contains only locator
+management/public rendering; it does not activate the broader replacement center.
+Owner/admin operations are freshly Shopify verified and tenant/store scoped.
+Draft edits/imports never alter an existing published snapshot. Publishing and
+previous-publication restore lock one store and reject stale revisions. Public
+reads use the existing signed app proxy; short-lived private draft grants are
+store/revision bound. Google browser keys are encrypted at rest and never returned
+in staff JSON. No automatic location prompt or shopper-coordinate persistence.
+Read `docs/operations/stockist-locator.md` before import or cutover. Keep Omnium
+installed through observation and retain the original Shopify page body/template.
+The November 5 reviewed source has 38 current locations; do not reintroduce the
+September 44-location archive. Source files and credentials stay outside Git.
+
 ## Branded wholesale customer drafts (November 5; source candidate)
 
 Monday draft buttons now open a Shopify-authenticated branded customer preview,

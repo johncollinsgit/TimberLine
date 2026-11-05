@@ -2084,6 +2084,8 @@ Route::prefix('shopify/marketing')
         Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
         Route::get('/customer/status', [MarketingShopifyIntegrationController::class, 'customerStatus'])->name('customer.status');
         Route::get('/health', [MarketingShopifyIntegrationController::class, 'proxyHealth'])->name('health');
+        Route::get('/stockists', [\App\Http\Controllers\StockistLocatorController::class, 'storefront'])->name('stockists');
+        Route::get('/stockists/assets/{file}', [\App\Http\Controllers\StockistLocatorController::class, 'asset'])->where('file', '[A-Za-z0-9_.-]+')->name('stockists.assets');
         Route::get('/product-options', [ShopifyProductOptionsController::class, 'storefront'])->name('product-options');
         Route::get('/feedback', [ModernForestryAppFeedbackController::class, 'index'])->name('feedback');
         Route::post('/feedback', [ModernForestryAppFeedbackController::class, 'store'])
@@ -2184,6 +2186,8 @@ Route::prefix('shopify/marketing/v1')
         Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
         Route::get('/customer/status', [MarketingShopifyIntegrationController::class, 'customerStatus'])->name('customer.status');
         Route::get('/health', [MarketingShopifyIntegrationController::class, 'proxyHealth'])->name('health');
+        Route::get('/stockists', [\App\Http\Controllers\StockistLocatorController::class, 'storefront'])->name('stockists');
+        Route::get('/stockists/assets/{file}', [\App\Http\Controllers\StockistLocatorController::class, 'asset'])->where('file', '[A-Za-z0-9_.-]+')->name('stockists.assets');
         Route::get('/product-options', [ShopifyProductOptionsController::class, 'storefront'])->name('product-options');
         Route::get('/feedback', [ModernForestryAppFeedbackController::class, 'index'])->name('feedback');
         Route::post('/feedback', [ModernForestryAppFeedbackController::class, 'store'])
@@ -2370,9 +2374,15 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
     Route::get('/app/messaging/app-messages', [ShopifyEmbeddedMessagingController::class, 'appMessages'])->name('shopify.app.messaging.app-messages');
     Route::get('/app/development-notes', [ShopifyEmbeddedDevelopmentNotesController::class, 'show'])->name('shopify.app.development-notes');
     Route::get('/app/edit', [ShopifyEmbeddedSettingsController::class, 'editApp'])->name('shopify.app.edit');
+    Route::get('/app/stockists', [\App\Http\Controllers\StockistLocatorController::class, 'index'])->name('shopify.app.stockists');
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
     Route::get('/app/fundraising', [ShopifyEmbeddedFundraisingController::class, 'show'])->name('shopify.app.fundraising');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
+        Route::get('/stockists', [\App\Http\Controllers\StockistLocatorController::class, 'data'])->name('stockists.data');
+        Route::post('/stockists/locations', [\App\Http\Controllers\StockistLocatorController::class, 'save'])->withoutMiddleware([VerifyCsrfToken::class])->name('stockists.create');
+        Route::patch('/stockists/locations/{location}', [\App\Http\Controllers\StockistLocatorController::class, 'save'])->whereNumber('location')->withoutMiddleware([VerifyCsrfToken::class])->name('stockists.update');
+        Route::post('/stockists/publish', [\App\Http\Controllers\StockistLocatorController::class, 'publish'])->withoutMiddleware([VerifyCsrfToken::class])->name('stockists.publish');
+        Route::post('/stockists/maps-key', [\App\Http\Controllers\StockistLocatorController::class, 'configureKey'])->withoutMiddleware([VerifyCsrfToken::class])->name('stockists.maps-key');
         Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
         Route::get('/dashboard-lite', [ShopifyEmbeddedAppController::class, 'liteData'])->name('dashboard-lite');
         Route::get('/search', [ShopifyEmbeddedAppController::class, 'search'])->name('search');
@@ -2714,3 +2724,9 @@ require __DIR__.'/website-invoices.php';
 require __DIR__.'/pos.php';
 
 require __DIR__.'/campus-demo.php';
+
+Route::get('/stockists/preview/{store}', [\App\Http\Controllers\StockistLocatorController::class, 'preview'])->whereNumber('store')->middleware('throttle:60,1')->name('stockists.preview');
+
+Route::get('/stockists', [\App\Http\Controllers\StockistLocatorController::class, 'index'])->name('shopify.embedded.stockists');
+
+Route::get('/stockists/assets/{file}', [\App\Http\Controllers\StockistLocatorController::class, 'asset'])->where('file', '[A-Za-z0-9_.-]+')->name('stockists.assets');

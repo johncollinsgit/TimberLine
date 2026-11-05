@@ -277,6 +277,11 @@ $catalog = [
             'description' => 'Shopify embedded and storefront-specific context.',
             'module_key' => 'shopify',
         ],
+        'shopify.stockists' => [
+            'display_name' => 'Store locator',
+            'description' => 'Manage and publish this store’s retailer directory.',
+            'module_key' => 'shopify',
+        ],
         'shopify.product_options' => [
             'display_name' => 'Shopify product options',
             'description' => 'Assign scent rulesets to Shopify bundle products and capture selections as line-item properties.',
@@ -1373,7 +1378,7 @@ $catalog = [
             'billing_mode' => 'included',
             'visibility' => ['public_site' => false, 'app_store' => false],
             'cta_routing' => 'none',
-            'capabilities' => ['shopify.connection'],
+            'capabilities' => ['shopify.connection', 'shopify.stockists'],
         ],
         'quickbooks' => [
             'display_name' => 'QuickBooks',
