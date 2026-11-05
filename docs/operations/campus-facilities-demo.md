@@ -218,3 +218,8 @@ inbox delivery remain outstanding until tested on the corresponding devices.
 
 
 Source validation for this follow-up: TypeScript/standalone build and 30 focused native/public tests (500 assertions) pass. Browser fixtures cover exact card filters/counts and persona scope; empty/loading states; top voice controls with explicit start, denial, cancellation, failure and close cleanup; late ASR ordering with photo cards; and frozen typed retry ID/history during mixed voice. Composer checks cover long history, photo+mention+error at a 360px keyboard viewport, profile input visibility, retry identity, slow post close/reopen with a newer draft, distinct workflow icons and in-app photo focus. Actual browser portrait/landscape sizes and scoped offline Retry also pass. These fixtures used no microphone/camera, paid provider call or email. Temporary harness pages were removed before packaging. Physical-device and inbox acceptance remain separate.
+
+
+## Overview banner order — November 5, 2026
+
+The photo banner is the first overview content below navigation and demo-role controls, before the personal greeting and report action. Gallery controls, persona/photo scope and other views remain unchanged. Paired source commit `68f574f77e4a3f0c10305d638918627a628ca2ab` passed TypeScript, standalone build and local read-only desktop/phone checks. No migration, ticket reset, provider setting or additional permission is part of this layout change. Protected CI, atomic release and live asset/order verification remain required.
