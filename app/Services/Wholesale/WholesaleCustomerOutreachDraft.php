@@ -48,7 +48,7 @@ class WholesaleCustomerOutreachDraft
         return [
             'recipient' => $row['email'], 'subject' => $row['draft_subject'],
             'greeting' => 'Hi '.$firstName.',', 'message' => $message,
-            'order_number' => $row['order_number'], 'order_date' => $row['order_date'],
+            'source_order_id' => $row['source_order_id'], 'order_number' => $row['order_number'], 'order_date' => $row['order_date'],
             'items' => $row['items'], 'products' => $products, 'brand' => $brand,
             'storefront_url' => $catalog['storefront_url'], 'catalog_issue' => $catalogIssue,
             'contact_email' => $isForestry ? 'info@theforestrystudio.com' : null,

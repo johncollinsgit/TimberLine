@@ -2273,6 +2273,9 @@ Route::prefix('shopify/marketing/v1/wholesale/labels')->middleware('throttle:60,
     Route::get('/assets/{revision}/{kind}', [\App\Http\Controllers\Wholesale\WholesaleLabelStorefrontController::class, 'asset'])->whereUuid('revision');
 });
 
+Route::get('/wholesale/gmail/start/{stateId}', [\App\Http\Controllers\Wholesale\WholesaleGmailController::class, 'launch'])->whereUuid('stateId')->middleware('throttle:20,1');
+Route::get('/wholesale/gmail/callback', [\App\Http\Controllers\Wholesale\WholesaleGmailController::class, 'callback'])->middleware('throttle:20,1');
+
 Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group(function () {
     Route::get('/app/wholesale/labels', [\App\Http\Controllers\Wholesale\WholesaleLabelAdminController::class, 'index'])->name('shopify.app.wholesale.labels');
     Route::post('/app/wholesale/labels/import', [\App\Http\Controllers\Wholesale\WholesaleLabelAdminController::class, 'import'])->withoutMiddleware([VerifyCsrfToken::class])->name('shopify.app.wholesale.labels.import');
@@ -2291,6 +2294,14 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
     Route::get('/app/wholesale/customers/{accountKey}/outreach', [ShopifyEmbeddedAppController::class, 'showWholesaleOutreach'])
         ->where('accountKey', '[a-f0-9]{64}')
         ->name('shopify.app.wholesale.customers.outreach');
+    Route::prefix('/app/wholesale/gmail')->middleware('throttle:20,1')->withoutMiddleware([VerifyCsrfToken::class])->group(function () {
+        Route::post('/status', [\App\Http\Controllers\Wholesale\WholesaleGmailController::class, 'status'])->name('shopify.app.wholesale.gmail.status');
+        Route::post('/connect', [\App\Http\Controllers\Wholesale\WholesaleGmailController::class, 'connect'])->name('shopify.app.wholesale.gmail.connect');
+        Route::post('/disconnect', [\App\Http\Controllers\Wholesale\WholesaleGmailController::class, 'disconnect'])->name('shopify.app.wholesale.gmail.disconnect');
+        Route::post('/review/{accountKey}', [\App\Http\Controllers\Wholesale\WholesaleGmailController::class, 'review'])->where('accountKey', '[a-f0-9]{64}')->name('shopify.app.wholesale.gmail.review');
+        Route::post('/test/{reviewId}', [\App\Http\Controllers\Wholesale\WholesaleGmailController::class, 'test'])->whereUuid('reviewId')->name('shopify.app.wholesale.gmail.test');
+        Route::post('/send/{reviewId}', [\App\Http\Controllers\Wholesale\WholesaleGmailController::class, 'send'])->whereUuid('reviewId')->name('shopify.app.wholesale.gmail.send');
+    });
     Route::get('/app/wholesale/orders', [ShopifyEmbeddedAppController::class, 'showWholesaleOrders'])
         ->name('shopify.app.wholesale.orders');
     Route::get('/app/wholesale/suggestions', [ShopifyEmbeddedAppController::class, 'showWholesaleSuggestions'])

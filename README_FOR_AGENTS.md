@@ -1,3 +1,15 @@
+## Native wholesale Gmail sender (November 5; source candidate)
+
+Owner direction replaces manual paste as the preferred customer follow-up flow.
+Read `docs/operations/wholesale-native-gmail.md`. Review/Send uses a store-bound
+Google connection and accepted alias, exact server-rendered HTML, fresh Shopify
+operator verification, current order/suppression checks and durable per-order
+send claims. Accepted Gmail IDs do not prove delivery; pending/uncertain sends
+never retry automatically. Tokens and private reviews stay encrypted. Separate
+Google client approval, consent, controlled acceptance and protected release
+remain necessary. Connection/send flags default off; no live grant or send is
+created by this source work. The cold campaign/Macon authorization is unchanged.
+
 ## Branded wholesale customer drafts (November 5; source candidate)
 
 Read the wholesale email messenger and reporting/outreach runbooks. Keep customer
