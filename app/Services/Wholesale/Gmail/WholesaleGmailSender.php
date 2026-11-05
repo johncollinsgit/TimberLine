@@ -74,18 +74,30 @@ class WholesaleGmailSender
         abort_unless(hash_equals($d['hash'], $current['hash']), 409, 'The customer or order changed. Review the current email again.');
         $binding = $auth['config']['binding'];
         $recipient = $test ? $binding['test_recipient'] : $d['draft']['recipient'];
+        $html = $d['html'];
+        $plain = $d['plain'];
+        $headers = $d['headers'];
+        if ($test) {
+            // Team tests must not contain a working opt-out token for the real buyer.
+            $oldUrl = trim($headers['List-Unsubscribe'], '<>');
+            $newUrl = app(\App\Services\Marketing\MarketingEmailUnsubscribeService::class)->url($tenant, $recipient);
+            $html = str_replace(e($oldUrl), e($newUrl), $html);
+            $plain = str_replace($oldUrl, $newUrl, $plain);
+            $headers['List-Unsubscribe'] = '<'.$newUrl.'>';
+        }
         $email = (new Email)->from(new Address($binding['from'], $binding['name']))->replyTo($binding['reply_to'])
-            ->to($recipient)->subject($d['draft']['subject'])->html($d['html'])->text($d['plain']);
-        foreach ($d['headers'] as $name => $value) {
+            ->to($recipient)->subject($d['draft']['subject'])->html($html)->text($plain);
+        foreach ($headers as $name => $value) {
             $email->getHeaders()->addTextHeader($name, $value);
         }
         $email->getHeaders()->addIdHeader('Message-ID', ($test ? 'test-' : '').$reviewId.'@'.explode('@', $binding['from'], 2)[1]);
         $raw = WholesaleGmailConnection::encode($email->toString());
         abort_if(strlen($raw) > 1000000, 422, 'This email is too large.');
         // Commit a durable claim before the only send HTTP call. Different reviews share the same intent key.
-        $claim = $this->journal->locked($tenant, function () use ($tenant, $actor, $shop, $d, $reviewId, $binding, $kind, $intent, $recipient, $test) {
+        $claim = $this->journal->locked($tenant, function () use ($tenant, $actor, $shop, $d, $reviewId, $binding, $kind, $intent, $recipient, $test, $raw) {
             $this->journal->operator($tenant, $actor, $shop);
             abort_unless(config($test ? 'wholesale_gmail.test_enabled' : 'wholesale_gmail.send_enabled'), 503);
+            abort_unless($d['expires'] > now()->timestamp, 409, 'Review this email again before sending.');
             $c = $this->connections->settings($tenant, $shop);
             $connection = $this->connections->connection($tenant, $shop);
             abort_unless($connection?->status === 'connected' && $connection->data['generation'] === $d['generation'] && $c['fingerprint'] === $d['fingerprint'], 409);
@@ -98,7 +110,7 @@ class WholesaleGmailSender
             $row = $this->journal->create($tenant, $kind, $intent, [
                 'actor' => $actor, 'shop' => $shop, 'account' => $d['account'], 'review' => $reviewId,
                 'to' => $recipient, 'internal_test' => $test, 'from' => $binding['from'], 'reply_to' => $binding['reply_to'],
-                'content_hash' => $d['hash'], 'rfc_message_id' => ($test ? 'test-' : '').$reviewId.'@'.explode('@', $binding['from'], 2)[1],
+                'content_hash' => $d['hash'], 'mime_sha256' => hash('sha256', $raw), 'rfc_message_id' => ($test ? 'test-' : '').$reviewId.'@'.explode('@', $binding['from'], 2)[1],
             ], 'sending');
             $this->journal->audit($tenant, $actor, 'send_claimed', $row->id);
 

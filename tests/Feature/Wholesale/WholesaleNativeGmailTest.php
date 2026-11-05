@@ -272,6 +272,10 @@ test('internal acceptance can send only to the configured team inbox while custo
         }
         $raw = base64_decode(strtr($r['raw'], '-_', '+/'));
         expect($raw)->toContain('To: team@example.test', 'From: Example Candles <info@example.test>')->not->toContain('To: buyer@example.test');
+        $unfolded = preg_replace('/\r\n[ \t]+/', '', $raw);
+        preg_match('/List-Unsubscribe: <([^>]+)>/', $unfolded, $matches);
+        parse_str(parse_url($matches[1], PHP_URL_QUERY), $query);
+        expect(app(\App\Services\Marketing\MarketingEmailUnsubscribeService::class)->recipient($query['token'])['email'])->toBe('team@example.test');
 
         return true;
     });

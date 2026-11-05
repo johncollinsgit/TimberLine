@@ -50,7 +50,8 @@ Configuration (no real secrets in Git):
   in the tenant binding and set `WHOLESALE_GMAIL_TEST_ENABLED=true`. Review works
   in this mode, but Send email remains disabled. Send internal test uses only
   that server-bound address, a separate deduplicated test journal, and never
-  suppresses or contacts the customer. No browser-provided test recipient is used.
+  suppresses or contacts the customer. Its unsubscribe token is bound to the test
+  inbox rather than the real buyer. No browser-provided test recipient is used.
 
 For John's requested route the approved login is johncollinsemail@gmail.com and
 From/Reply-To is info@theforestrystudio.com. The broken Wholesale Gmail alias is
