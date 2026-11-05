@@ -148,6 +148,9 @@ class ShopifyEmbeddedAppController extends Controller
 
             /** @var array<string,mixed> $store */
             $store = $context['store'];
+            if (strtolower(trim((string) ($store['store_role'] ?? ''))) === 'wholesale') {
+                return $this->showWholesale($request, $contextService, $tenantResolver, app(WholesaleOperationsService::class));
+            }
             $tenantId = $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store));
             if ($tenantId !== null && $wantsFullDashboard) {
                 $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
@@ -410,7 +413,7 @@ class ShopifyEmbeddedAppController extends Controller
             $payload['attention']['suggestions'] = WholesaleSuggestion::query()->forAllTenants()
                 ->where('tenant_id', $tenantId)->whereIn('status', ['pending', 'account_review', 'data_review'])->count();
             $payload['attention']['follow_ups_due'] = WholesaleFollowUp::query()->forAllTenants()
-                ->where('tenant_id', $tenantId)->whereIn('status', ['open', 'in_progress'])->where('due_at', '<=', now()->endOfDay())->count();
+                ->where('tenant_id', $tenantId)->whereIn('status', ['open', 'in_progress'])->where('due_at', '<=', now('America/New_York')->endOfDay())->count();
         }
 
         $actor = $this->resolveWholesaleWorkspaceActor($resolved['context'] ?? null, $tenantId);
@@ -429,6 +432,7 @@ class ShopifyEmbeddedAppController extends Controller
                 'pageActions' => [],
                 'pageSubnav' => [],
                 'payload' => $payload,
+                'reportingStatus' => $tenantId !== null ? $operations->reportingStatus($tenantId) : null,
                 'contextToken' => isset($resolved['context']) ? $contextService->issueContextToken($resolved['context']) : null,
                 'actor' => $actor,
             ]),
@@ -505,8 +509,8 @@ class ShopifyEmbeddedAppController extends Controller
             ])), $search))->values();
         }
         $customers = match ($filter) {
-            'active', 'due', 'at_risk', 'lapsed' => $customers->where('timing_state', $filter)->values(),
-            'new' => $customers->filter(fn (array $customer): bool => $customer['first_order_at']?->gte(now()->startOfMonth()) ?? false)->values(),
+            'active', 'due', 'at_risk', 'lapsed', 'awaiting_payment', 'refund_review', 'account_review' => $customers->where('timing_state', $filter)->values(),
+            'new' => $customers->filter(fn (array $customer): bool => $customer['first_order_at']?->gte(now('America/New_York')->startOfMonth()) ?? false)->values(),
             'repeat' => $customers->where('order_count', '>', 1)->values(),
             'first_order_only' => $customers->where('order_count', 1)->values(),
             'high_value' => $customers->sortByDesc('lifetime_revenue')->take(max(1, (int) ceil($customers->count() * .2)))->values(),
@@ -2206,6 +2210,7 @@ class ShopifyEmbeddedAppController extends Controller
             'pageActions' => [],
             'pageSubnav' => [],
             'embeddedUrl' => fn (string $url): string => app(\App\Services\Shopify\ShopifyEmbeddedUrlGenerator::class)->append($url, request(), $resolved['host'] ?? null),
+            'reportingStatus' => $tenantId !== null ? app(WholesaleOperationsService::class)->reportingStatus($tenantId) : null,
         ], $viewData)), $workspaceState['httpStatus']);
     }
 

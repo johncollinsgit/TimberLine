@@ -34,9 +34,9 @@ class WholesaleSuggestionDecisionService
             throw new DomainException('Choose when this suggestion should return.');
         }
 
-        $before = $suggestion->only(['status', 'priority', 'snoozed_until']);
-
-        return DB::transaction(function () use ($tenantId, $suggestion, $actor, $input, $action, $before): WholesaleSuggestionDecision {
+        return DB::transaction(function () use ($tenantId, $suggestion, $actor, $input, $action): WholesaleSuggestionDecision {
+            $suggestion = WholesaleSuggestion::query()->forAllTenants()->where('tenant_id', $tenantId)->whereKey($suggestion->id)->lockForUpdate()->firstOrFail();
+            $before = $suggestion->only(['status', 'priority', 'snoozed_until']);
             $followUp = null;
             $status = match ($action) {
                 'accept', 'create_follow_up' => 'accepted',

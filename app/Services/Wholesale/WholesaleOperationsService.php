@@ -10,32 +10,30 @@ use Illuminate\Support\Str;
 
 class WholesaleOperationsService
 {
-    public function __construct(protected WholesaleQualifiedOrderScope $orders) {}
+    public function __construct(protected WholesaleQualifiedOrderScope $orders, protected WholesaleReportingSnapshot $reporting) {}
 
     /** @return array<string,mixed> */
     public function overview(int $tenantId): array
     {
-        $now = CarbonImmutable::now();
-        $orders = $this->orders->query($tenantId)
-            ->orderBy('ordered_at')
-            ->orderBy('id')
-            ->get();
+        $now = CarbonImmutable::now('America/New_York');
+        $orders = $this->reportingOrders($tenantId);
         $customers = $this->customersFromOrders($tenantId, $orders);
         $thisMonth = $orders->filter(fn ($order): bool => $order->ordered_at?->gte($now->startOfMonth()) ?? false);
         $thisYear = $orders->filter(fn ($order): bool => $order->ordered_at?->gte($now->startOfYear()) ?? false);
         $trailingYear = $orders->filter(fn ($order): bool => $order->ordered_at?->gte($now->subYear()) ?? false);
         $repeatCustomers = $customers->filter(fn (array $customer): bool => $customer['order_count'] > 1)->count();
+        $sales = $this->reporting->read($tenantId)['sales'] ?? null;
 
         return [
             'metrics' => [
-                'revenue_month' => $this->revenue($thisMonth),
-                'revenue_year' => $this->revenue($thisYear),
-                'revenue_trailing_12' => $this->revenue($trailingYear),
-                'order_count' => $orders->count(),
+                'revenue_month' => $sales !== null ? (float) $sales['month']['total_sales'] : $this->revenue($thisMonth),
+                'revenue_year' => $sales !== null ? (float) $sales['year']['total_sales'] : $this->revenue($thisYear),
+                'revenue_trailing_12' => $sales !== null ? (float) $sales['trailing_12']['total_sales'] : $this->revenue($trailingYear),
+                'order_count' => $sales !== null ? (int) $sales['year']['orders'] : $orders->count(),
                 'active_customers' => $customers->filter(fn (array $customer): bool => $customer['last_order_at']?->gte($now->subYear()) ?? false)->count(),
                 'new_customers' => $customers->filter(fn (array $customer): bool => $customer['first_order_at']?->gte($now->startOfMonth()) ?? false)->count(),
                 'repeat_order_rate' => $customers->isEmpty() ? 0.0 : round(($repeatCustomers / $customers->count()) * 100, 1),
-                'average_order_value' => $orders->isEmpty() ? 0.0 : round($this->revenue($orders) / $orders->count(), 2),
+                'average_order_value' => $sales !== null ? (float) $sales['year']['average_order_value'] : ($orders->isEmpty() ? 0.0 : round($this->revenue($orders) / $orders->count(), 2)),
             ],
             'attention' => [
                 'due_for_reorder' => $customers->where('timing_state', 'due')->count(),
@@ -46,6 +44,7 @@ class WholesaleOperationsService
             'recent_orders' => $orders->sortByDesc(fn ($order) => $order->ordered_at?->timestamp ?? 0)->take(8)->values(),
             'customers' => $customers->sortByDesc('lifetime_revenue')->take(8)->values(),
             'scope_label' => 'Qualified wholesale orders only',
+            'reporting' => $this->reportingStatus($tenantId),
             'as_of' => $now,
         ];
     }
@@ -55,7 +54,7 @@ class WholesaleOperationsService
     {
         return $this->customersFromOrders(
             $tenantId,
-            $this->orders->query($tenantId)->orderBy('ordered_at')->orderBy('id')->get()
+            $this->reportingOrders($tenantId)
         )->sortByDesc('last_order_at')->values();
     }
 
@@ -74,29 +73,69 @@ class WholesaleOperationsService
 
     public function recentOrders(int $tenantId, int $limit = 100): Collection
     {
-        return $this->orders->query($tenantId)
-            ->with('lines')
-            ->orderByDesc('ordered_at')
-            ->orderByDesc('id')
-            ->limit(max(1, min(250, $limit)))
-            ->get();
+        return $this->reportingOrders($tenantId)->sortByDesc(fn ($order) => $order->ordered_at?->timestamp ?? 0)->take(max(1, min(250, $limit)))->values();
+    }
+
+    public function reportingStatus(int $tenantId): array
+    {
+        $snapshot = $this->reporting->read($tenantId);
+        $legacyCount = $snapshot ? $this->orders->query($tenantId)->get()->filter(fn ($order): bool => $this->sourceStore($order) !== $snapshot['store_key'])->count() : 0;
+
+        return [
+            'complete' => $snapshot !== null && $legacyCount === 0,
+            'sales_verified' => isset($snapshot['sales']),
+            'legacy_unverified_count' => $legacyCount,
+            'stale' => ! $snapshot || CarbonImmutable::parse($snapshot['refreshed_at'])->lt(now()->subMinutes(90)),
+            'refreshed_at' => $snapshot['refreshed_at'] ?? null,
+            'source_order_count' => $snapshot['source_order_count'] ?? null,
+            'included_order_count' => $snapshot['included_order_count'] ?? null,
+            'currency' => $snapshot['currency'] ?? null,
+        ];
+    }
+
+    protected function reportingOrders(int $tenantId): \Illuminate\Database\Eloquent\Collection
+    {
+        $snapshot = $this->reporting->read($tenantId);
+        $orders = $snapshot ? $this->reporting->orders($tenantId) : null;
+        $local = $this->orders->query($tenantId)->with('lines')->get();
+        if ($orders !== null) {
+            // Migrated retail orders may already exist in the dedicated store.
+            // Legacy records require duplicate/payment review before combining.
+        } else {
+            $orders = $local;
+        }
+
+        return $orders->filter(fn ($order): bool => $order->ordered_at !== null && ! $order->ordered_at->isFuture())
+            ->sortBy(fn ($order) => [$order->ordered_at->timestamp, $order->shopify_order_id ?: $order->id])->values();
     }
 
     /** @param Collection<int,mixed> $orders */
     protected function customersFromOrders(int $tenantId, Collection $orders): Collection
     {
+        $cancelledCustomers = $this->reporting->read($tenantId)['last_cancelled_order_by_customer'] ?? [];
+
         return $orders
             ->groupBy(fn ($order): string => $this->identityKey($order))
-            ->map(function (Collection $customerOrders, string $identity) use ($tenantId): array {
+            ->map(function (Collection $customerOrders, string $identity) use ($tenantId, $cancelledCustomers): array {
                 $sorted = $customerOrders->sortBy(fn ($order) => $order->ordered_at?->timestamp ?? 0)->values();
                 $first = $sorted->first();
                 $last = $sorted->last();
                 $intervals = $sorted->pluck('ordered_at')->filter()->values()->map(
-                    fn ($date, int $index): ?int => $index === 0 ? null : (int) round($date->diffInDays($sorted[$index - 1]->ordered_at))
+                    fn ($date, int $index): ?int => $index === 0 ? null : (int) round($date->diffInDays($sorted[$index - 1]->ordered_at, true))
                 )->filter()->sort()->values();
                 $medianInterval = $this->median($intervals);
-                $daysSince = $last?->ordered_at ? (int) round($last->ordered_at->diffInDays(now())) : null;
+                $daysSince = $last?->ordered_at ? (int) floor($last->ordered_at->diffInDays(now())) : null;
                 $timingState = $this->timingState($daysSince, $medianInterval, $sorted->count());
+                $financialStatus = data_get($last?->attribution_meta, 'wholesale_reporting.financial_status');
+                if ($financialStatus !== null && ! in_array($financialStatus, ['paid', 'partially_refunded'], true)) {
+                    $timingState = $financialStatus === 'refunded' ? 'refund_review' : 'awaiting_payment';
+                }
+                if ($sorted->contains(fn ($order): bool => in_array(data_get($order->attribution_meta, 'wholesale_reporting.financial_status'), ['pending', 'authorized', 'partially_paid'], true))) {
+                    $timingState = 'awaiting_payment';
+                }
+                if (($cancelledCustomers[(string) $last?->shopify_customer_id] ?? 0) >= ($last?->ordered_at?->timestamp ?? PHP_INT_MAX)) {
+                    $timingState = 'account_review';
+                }
                 $storeKeys = $sorted->map(fn ($order): string => $this->sourceStore($order))->unique()->values();
 
                 return [
@@ -115,7 +154,7 @@ class WholesaleOperationsService
                     'lifetime_revenue' => $this->revenue($sorted),
                     'trailing_12_revenue' => $this->revenue($sorted->filter(fn ($order): bool => $order->ordered_at?->gte(now()->subYear()) ?? false)),
                     'average_order_value' => $sorted->isEmpty() ? 0.0 : round($this->revenue($sorted) / $sorted->count(), 2),
-                    'revenue_this_year' => $this->revenue($sorted->filter(fn ($order): bool => $order->ordered_at?->gte(now()->startOfYear()) ?? false)),
+                    'revenue_this_year' => $this->revenue($sorted->filter(fn ($order): bool => $order->ordered_at?->gte(now('America/New_York')->startOfYear()) ?? false)),
                     'refund_total' => round((float) $sorted->sum(fn ($order): float => (float) ($order->refund_total ?? 0)), 2),
                     'average_reorder_days' => $intervals->isEmpty() ? null : (int) round($intervals->average()),
                     'predicted_reorder_at' => $last?->ordered_at?->copy()->addDays($medianInterval ?? ($sorted->count() === 1 ? 120 : 90)),
@@ -123,6 +162,7 @@ class WholesaleOperationsService
                     'risk_level' => match ($timingState) {
                         'lapsed' => 'high',
                         'at_risk' => 'medium',
+                        'awaiting_payment', 'refund_review', 'account_review' => 'review_required',
                         default => 'low',
                     },
                     'orders' => $sorted->sortByDesc(fn ($order) => $order->ordered_at?->timestamp ?? 0)->values(),
@@ -148,14 +188,14 @@ class WholesaleOperationsService
 
                         return (float) ($line->line_total ?? ((float) $line->unit_price * $quantity));
                     }), 2),
-                    'order_count' => $group->pluck('order.id')->unique()->count(),
+                    'order_count' => $group->map(fn (array $row): string => $this->sourceStore($row['order']).'|'.($row['order']->shopify_order_id ?: $row['order']->id))->unique()->count(),
                 ];
             })->sortByDesc('units')->values();
         };
         $now = CarbonImmutable::now();
         $priorStart = $now->subYears(2);
         $priorEnd = $now->subYear();
-        $priorRevenue = $this->revenue($orders->filter(fn ($order): bool => $order->ordered_at?->between($priorStart, $priorEnd) ?? false));
+        $priorRevenue = $this->revenue($orders->filter(fn ($order): bool => $order->ordered_at?->gte($priorStart) && $order->ordered_at?->lt($priorEnd)));
         $currentRevenue = (float) $customer['trailing_12_revenue'];
         $predicted = $customer['predicted_reorder_at'];
 
@@ -190,7 +230,7 @@ class WholesaleOperationsService
             return 'email|'.$email;
         }
 
-        return $store.'|order-owner|'.Str::lower(trim((string) ($order->customer_name ?: $order->display_name ?: $order->id)));
+        return $store.'|order-owner|'.($order->shopify_order_id ?: $order->id);
     }
 
     protected function sourceStore($order): string

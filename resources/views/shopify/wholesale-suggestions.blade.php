@@ -1,12 +1,13 @@
 @php $embeddedUrl = static fn (string $url): string => app(\App\Services\Shopify\ShopifyEmbeddedUrlGenerator::class)->append($url, request()); @endphp
 <x-shopify-embedded-shell :authorized="$authorized" :shopify-api-key="$shopifyApiKey" :shop-domain="$shopDomain" :host="$host" :store-label="$storeLabel" :headline="$headline" :subheadline="$subheadline" :app-navigation="$appNavigation" :page-subnav="$pageSubnav ?? []" :page-actions="$pageActions">
     @if ($authorized)
+        @include('shopify.partials.wholesale-reporting-status')
         <div class="space-y-5">
             @forelse ($suggestions as $suggestion)
                 <article class="fb-page-surface overflow-hidden">
                     <div class="grid gap-6 p-6 xl:grid-cols-[minmax(0,1fr)_360px]">
                         <div>
-                            <div class="flex flex-wrap items-center gap-2"><span class="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold uppercase text-zinc-600">{{ str_replace('_', ' ', $suggestion->suggestion_type) }}</span><span class="rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold uppercase text-zinc-600">{{ $suggestion->priority }}</span><span class="rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold uppercase text-zinc-600">{{ $suggestion->confidence }}% confidence</span><span class="rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold uppercase text-zinc-600">{{ str_replace('_', ' ', $suggestion->status) }}</span></div>
+                            <div class="flex flex-wrap items-center gap-2"><span class="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold uppercase text-zinc-600">{{ str_replace('_', ' ', $suggestion->suggestion_type) }}</span><span class="rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold uppercase text-zinc-600">{{ $suggestion->priority }}</span><span class="rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold uppercase text-zinc-600">History evidence score: {{ $suggestion->confidence }}/100</span><span class="rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold uppercase text-zinc-600">{{ str_replace('_', ' ', $suggestion->status) }}</span></div>
                             <h2 class="mt-4 text-xl font-semibold text-zinc-950">{{ $suggestion->title }}</h2>
                             <p class="mt-2 text-sm text-zinc-700">{{ $suggestion->reason }}</p>
                             <div class="mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-4"><div class="text-xs font-semibold uppercase text-sky-700">Recommended action</div><p class="mt-2 text-sm text-sky-950">{{ $suggestion->recommended_action }}</p></div>

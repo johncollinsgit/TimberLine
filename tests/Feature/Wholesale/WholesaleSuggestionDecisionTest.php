@@ -16,6 +16,7 @@ beforeEach(function (): void {
     $this->withoutVite();
     $this->tenant = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
     configureEmbeddedWholesaleStore((int) $this->tenant->id);
+    configureWholesaleReportingFixture();
     $this->actor = User::factory()->create(['email' => 'wholesale-decisions@example.com', 'role' => 'admin', 'is_active' => true]);
     $this->actor->tenants()->attach($this->tenant->id, ['role' => 'admin']);
 });

@@ -21,14 +21,17 @@ class WholesaleQualifiedOrderScope
         $storeKey = $this->wholesaleStoreKey($tenantId);
 
         return Order::query()
+            ->where('orders.tenant_id', $tenantId)
+            ->whereNotExists(function ($classification) use ($tenantId): void {
+                $classification->selectRaw('1')->from('wholesale_order_classifications as woc')
+                    ->whereColumn('woc.order_id', 'orders.id')->where('woc.tenant_id', $tenantId)->where('woc.status', 'retail_only');
+            })
             ->where(function (Builder $query) use ($tenantId, $storeKey): void {
                 $query->where(function (Builder $wholesaleStore) use ($tenantId, $storeKey): void {
                     $wholesaleStore
                         ->where('orders.tenant_id', $tenantId)
                         ->where(function (Builder $origin) use ($storeKey): void {
-                            $origin
-                                ->whereRaw('LOWER(COALESCE(orders.shopify_store_key, ?)) = ?', ['', $storeKey])
-                                ->orWhereRaw('LOWER(COALESCE(orders.shopify_store, ?)) = ?', ['', $storeKey]);
+                            $origin->whereRaw("COALESCE(NULLIF(LOWER(orders.shopify_store_key), ''), LOWER(orders.shopify_store), '') = ?", [$storeKey]);
                         });
                 })->orWhereExists(function ($classification) use ($tenantId): void {
                     $classification
@@ -63,7 +66,7 @@ class WholesaleQualifiedOrderScope
                     ->from('wholesale_order_classifications as woc')
                     ->whereColumn('woc.order_id', 'orders.id')
                     ->where('woc.tenant_id', $tenantId)
-                    ->whereIn('woc.status', ['confirmed', 'manual_override']);
+                    ->whereIn('woc.status', ['confirmed', 'manual_override', 'retail_only']);
             })
             ->count();
     }

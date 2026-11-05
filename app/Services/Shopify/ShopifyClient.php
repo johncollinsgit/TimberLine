@@ -8,7 +8,9 @@ use Illuminate\Support\Facades\Http;
 class ShopifyClient
 {
     protected string $shopDomain;
+
     protected string $accessToken;
+
     protected string $apiVersion;
 
     public function __construct(string $shopDomain, string $accessToken, string $apiVersion = '2026-01')
@@ -24,7 +26,7 @@ class ShopifyClient
         $resourceKey = $page['resource_key'] ?? null;
         $payload = $page['payload'] ?? [];
 
-        if ($resourceKey === null || !($page['is_list_resource'] ?? false)) {
+        if ($resourceKey === null || ! ($page['is_list_resource'] ?? false)) {
             return is_array($payload) ? $payload : [];
         }
 
@@ -104,6 +106,7 @@ class ShopifyClient
         }
 
         $key = array_key_first($payload);
+
         return is_string($key) ? $key : null;
     }
 
@@ -134,9 +137,13 @@ class ShopifyClient
 
         do {
             $attempts++;
-            $response = $this->request()->get($url, $params);
+            // An explicit empty query array replaces query parameters embedded
+            // in Shopify's next-page URL, silently dropping its cursor/filters.
+            $response = $params === []
+                ? $this->request()->get($url)
+                : $this->request()->get($url, $params);
 
-            if (!$response->failed()) {
+            if (! $response->failed()) {
                 return $response;
             }
 
@@ -149,6 +156,7 @@ class ShopifyClient
                     : ($baseDelayMs * (2 ** ($attempts - 1)));
 
                 usleep($delayMs * 1000);
+
                 continue;
             }
 
@@ -156,6 +164,7 @@ class ShopifyClient
         } while ($attempts < $maxAttempts);
 
         $response->throw();
+
         return $response;
     }
 }
