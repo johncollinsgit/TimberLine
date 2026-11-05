@@ -2,6 +2,8 @@
 
 Request only registered Asana scopes. Sections use `projects:read`, not
 `sections:read`; keep optional `tasks:write` separate from the eight read scopes.
+Both OAuth callbacks read account identity from the documented token `data`
+object and reject absent/invalid IDs before persisting credentials.
 
 Keep Asana authoritative: per-user selected-source reads and only explicitly
 reviewed title/date/completion write-through behind `asana_write_enabled` and

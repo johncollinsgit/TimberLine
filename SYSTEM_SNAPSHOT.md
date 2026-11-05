@@ -3,6 +3,8 @@
 OAuth compatibility correction: section reads use Asana's registered
 `projects:read` scope. The unsupported `sections:read` request is removed from
 both Teams connection entry points; optional `tasks:write` remains separate.
+The native and Operations callbacks share validation of Asana's token `data`
+identity. An absent/invalid account ID cannot create a connected record.
 
 Premium Teams Events now has identity-scoped Asana My Tasks, original event notes,
 paged checklist/comments/attachment links and separately gated reviewed task

@@ -46,7 +46,7 @@ class OperationsProviders
         abort_unless($response->successful() && $response->json('access_token') && $response->json('refresh_token'), 502, 'Connection was not completed. Try connecting again.');
         $token = $response->json();
         if ($provider === 'asana') {
-            $identity = $token['user'] ?? [];
+            $identity = \App\Services\Team\AsanaReadProvider::tokenIdentity($token);
         } else {
             $identityResponse = Http::withToken($token['access_token'])->timeout(15)->get('https://openidconnect.googleapis.com/v1/userinfo');
             abort_unless($identityResponse->successful() && is_array($identityResponse->json()), 502, 'Google account identity could not be verified.');
