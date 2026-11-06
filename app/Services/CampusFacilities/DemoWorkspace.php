@@ -11,7 +11,7 @@ class DemoWorkspace
     public const ACTIONS = [
         'settings.save', 'crew.save', 'crew.start', 'crew.pause', 'crew.resume', 'crew.finish',
         'booking.save', 'booking.confirm', 'booking.cancel',
-        'project.save', 'vendor.save', 'certificate.propose', 'certificate.review', 'certificate.remind',
+        'contractor.assign', 'contractor.remove', 'project.save', 'vendor.save', 'certificate.propose', 'certificate.review', 'certificate.remind',
         'fund.save', 'invoice.save', 'invoice.submit', 'invoice.review', 'invoice.reopen', 'invoice.record',
         'report.review', 'training.complete', 'notification.read',
     ];
@@ -60,7 +60,7 @@ class DemoWorkspace
         abort_unless(hash_equals($ops['generation'], $input['generation']), 409, 'The sample workspace was reset. Refresh before continuing.');
         $permission = match (explode('.', $input['action'])[0]) {
             'settings' => 'settings.manage', 'booking' => 'schedule.manage',
-            'project', 'crew' => 'crew.manage', 'vendor' => 'vendors.manage',
+            'contractor' => 'work.assign', 'project', 'crew' => 'crew.manage', 'vendor' => 'vendors.manage',
             'certificate', 'notification' => 'certificates.review',
             'fund' => 'finance.review', 'invoice' => match ($input['action']) {
                 'invoice.review', 'invoice.reopen' => 'finance.review', 'invoice.record' => 'finance.record',
@@ -86,6 +86,7 @@ class DemoWorkspace
             'settings' => $this->settings($state, $actor, $revision, $data),
             'crew' => app(DemoWorkPlanner::class)->handle($state, $actor, $action, $id, $revision, $data),
             'booking' => app(DemoSchedule::class)->handle($state, $actor, $action, $id, $revision, $data),
+            'contractor' => app(DemoContractors::class)->handle($state, $actor, $action, $id, $revision, $data),
             'vendor', 'certificate' => app(DemoVendors::class)->handle($state, $actor, $action, $id, $revision, $data),
             'project', 'fund', 'invoice' => app(DemoFinance::class)->handle($state, $actor, $action, $id, $revision, $data),
             'report' => app(DemoReports::class)->review($state, $actor, $id, $revision, $data),

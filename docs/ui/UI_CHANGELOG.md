@@ -1,3 +1,15 @@
+## 2026-11-05 — Concise campus presentation and Contractors
+
+Removed decorative page introductions and promotional copy throughout the public
+Facilities dashboard, preserving the campus banner, galleries, operational facts
+and necessary instructions. Share demo moves to top-bar utilities. The bottom-left
+sidebar uses the existing Everbranch Enterprise by Evergrove Software SVG on its
+established white backing. Contractors becomes main navigation with searchable
+company/status/trade/insurance filters, detailed linked records and staff-controlled
+assignment/removal. Operations keeps its other workflows. Six compact phone
+navigation targets retain accessible names and touch sizes. Existing persona
+permissions and the documented standalone public-shell exception remain intact.
+
 ## 2026-11-05 — Configurable public campus walkthrough
 
 Owner requested logically connected fictional roles/flows and editable settings.

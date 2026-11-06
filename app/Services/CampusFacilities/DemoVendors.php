@@ -26,7 +26,7 @@ class DemoVendors
     {
         $today = now($state['operations']['settings']['timezone'])->toDateString();
         foreach ($state['operations']['settings']['certificateTypes'] as $type) {
-            if (! collect($state['operations']['certificates'])->contains(fn ($row) => $row['vendorId'] === $vendorId && $row['type'] === $type && $row['expiresOn'] !== null && $row['expiresOn'] >= $today)) {
+            if (! collect($state['operations']['certificates'])->contains(fn ($row) => $row['vendorId'] === $vendorId && $row['type'] === $type && $row['reviewedBy'] !== null && $row['expiresOn'] !== null && $row['expiresOn'] >= $today)) {
                 return false;
             }
         }
@@ -39,10 +39,17 @@ class DemoVendors
         $records = app(DemoRecords::class);
         $settings = $state['operations']['settings'];
         if ($action === 'vendor.save') {
-            $data = $records->data($data, ['name' => 'required|string|min:3|max:120', 'trade' => 'required|string|min:3|max:120', 'rating' => 'required|integer|min:1|max:5', 'notes' => 'nullable|string|max:1200', 'contact' => 'required|string|min:3|max:150']);
-            $records->save($state, 'vendors', $id, $revision, [...$data, 'notes' => $data['notes'] ?? '']);
+            $data = $records->data($data, ['name' => 'required|string|min:3|max:120', 'trade' => 'required|string|min:3|max:120', 'rating' => 'required|integer|min:1|max:5', 'notes' => 'nullable|string|max:1200', 'contact' => 'required|string|min:3|max:150', 'contactName' => 'sometimes|nullable|string|max:90', 'phone' => 'sometimes|nullable|string|max:50', 'coordinatorId' => 'sometimes|nullable|string|max:50', 'status' => 'sometimes|required|in:Active,On hold,Archived', 'projectIds' => 'sometimes|present|array|max:100', 'projectIds.*' => 'required|string|max:70|distinct']);
+            if (! empty($data['coordinatorId'])) {
+                $records->person($state, $data['coordinatorId']);
+            }
+            foreach ($data['projectIds'] ?? [] as $projectId) {
+                $records->row($state, 'projects', $projectId);
+            }
+            $defaults = $revision === 0 ? ['status' => 'Active', 'contactName' => '', 'phone' => '', 'coordinatorId' => null, 'projectIds' => []] : [];
+            $records->save($state, 'vendors', $id, $revision, [...$defaults, ...$data, 'notes' => $data['notes'] ?? '']);
 
-            return ['message' => 'Sample vendor and rating saved.', 'resourceId' => $id];
+            return ['message' => 'Contractor company saved.', 'resourceId' => $id];
         }
         $old = $revision ? $records->existing($state, 'certificates', $id, $revision) : null;
         if ($action === 'certificate.propose') {

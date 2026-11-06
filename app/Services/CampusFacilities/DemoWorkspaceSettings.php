@@ -12,9 +12,10 @@ class DemoWorkspaceSettings
 
     public function validate(array $input, array $state): array
     {
+        $input['requireContractorInsurance'] ??= $state['operations']['settings']['requireContractorInsurance'] ?? true;
         $slug = 'regex:/^[a-z][a-z0-9-]{0,39}$/D';
         $settings = Validator::make(['settings' => $input], [
-            'settings' => 'required|array:revision,roles,people,teams,workApproval,financeApproval,timezone,bufferMinutes,conflictRole,fiscalStartMonth,reportColumns,reportReviewerRole,certificateWarningDays,certificateReviewerRole,certificateTypes,requireValidCertificate,training,pilotGoals,feeModel,sources,shortcuts',
+            'settings' => 'required|array:revision,roles,people,teams,workApproval,financeApproval,timezone,bufferMinutes,conflictRole,fiscalStartMonth,reportColumns,reportReviewerRole,certificateWarningDays,certificateReviewerRole,certificateTypes,requireValidCertificate,requireContractorInsurance,training,pilotGoals,feeModel,sources,shortcuts',
             'settings.revision' => 'required|integer|min:1',
             'settings.roles' => 'required|array|min:4|max:20',
             'settings.roles.*' => 'required|array:id,name,baseRole,permissions,enabled',
@@ -60,6 +61,7 @@ class DemoWorkspaceSettings
             'settings.certificateTypes' => 'required|array|min:1|max:8',
             'settings.certificateTypes.*' => 'required|string|min:2|max:90|distinct',
             'settings.requireValidCertificate' => 'required|boolean',
+            'settings.requireContractorInsurance' => 'required|boolean',
             'settings.training' => 'present|array|max:12',
             'settings.training.*' => 'required|array:id,title,ownerRole,minutes',
             'settings.training.*.id' => ['required', 'string', $slug, 'distinct'],
