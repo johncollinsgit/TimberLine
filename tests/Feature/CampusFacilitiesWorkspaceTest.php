@@ -255,3 +255,129 @@ it('rejects commands from an old reset generation while retaining participants a
     $state = app(DemoStore::class)->access(fn (&$state) => $state, false);
     expect($state['usage']['fixture'])->toBe(3)->and($state['participants']['sentinel']['private'])->toBe('retained')->and($state['operations']['generation'])->not->toBe($old['generation']);
 });
+
+it('upgrades contractor metadata once while retaining company edits and all prior shared state', function (): void {
+    $store = app(DemoStore::class);
+    $old = $store->seed();
+    $old['operations']['schema'] = 1;
+    unset($old['operations']['settings']['requireContractorInsurance']);
+    foreach ($old['operations']['vendors'] as &$vendor) {
+        foreach (['status', 'contactName', 'phone', 'coordinatorId', 'projectIds'] as $key) {
+            unset($vendor[$key]);
+        }
+    }
+    unset($vendor);
+    $old['operations']['vendors'][0]['name'] = 'Retained company edit';
+    $old['operations']['vendors'][0]['notes'] = 'Retained performance notes';
+    $old['participants'] = ['private' => ['email' => 'PRIVATE-CONTRACTOR-SENTINEL']];
+    $old['usage'] = ['2026-11-05' => 21];
+    $old['mail_usage'] = ['2026-11-05' => 7];
+    File::put($store->directory().'/workspace.json', json_encode($old, JSON_THROW_ON_ERROR));
+    $response = $this->getJson($this->opsBase.'/operations')->assertOk()->assertDontSee('PRIVATE-CONTRACTOR-SENTINEL');
+    expect($response->json('schema'))->toBe(2)
+        ->and($response->json('settings.requireContractorInsurance'))->toBeTrue();
+    $saved = $store->access(fn (&$state) => $state, false);
+    foreach (['tickets', 'request_keys', 'participants', 'usage', 'mail_usage', 'attachments'] as $group) {
+        expect($saved[$group])->toBe($old[$group]);
+    }
+    foreach (['certificates', 'invoices', 'receipts', 'history', 'projects', 'crewPlans', 'bookings', 'funds'] as $group) {
+        expect($saved['operations'][$group])->toBe($old['operations'][$group]);
+    }
+    expect($saved['operations']['vendors'][0]['name'])->toBe('Retained company edit')
+        ->and($saved['operations']['vendors'][0]['notes'])->toBe('Retained performance notes')
+        ->and($saved['operations']['vendors'][0]['projectIds'])->toBe(['project-comfort']);
+    campusOpsSnapshot($this);
+    expect($store->access(fn (&$state) => $state, false))->toBe($saved);
+});
+
+it('assigns and removes contractors with exact receipts without changing the staff lead or status', function (): void {
+    $store = app(DemoStore::class);
+    $original = $store->access(fn (&$state) => $state['tickets']['FM-DEMO-ACCESS'], false);
+    $data = ['vendorId' => 'vendor-access', 'scope' => 'Inspect accessible entry hardware', 'targetDate' => '2026-11-08'];
+    $id = (string) Str::uuid();
+    campusOpsRequest($this, 'contractor.assign', $original['id'], $original['revision'], $data, requestId: $id)->assertOk();
+    campusOpsRequest($this, 'contractor.assign', $original['id'], $original['revision'], $data, requestId: $id)->assertOk()->assertJsonPath('result.replayed', true);
+    campusOpsRequest($this, 'contractor.assign', $original['id'], $original['revision'], [...$data, 'scope' => 'Changed scope'], requestId: $id)->assertConflict();
+    campusOpsRequest($this, 'contractor.remove', $original['id'], $original['revision'], ['reason' => 'A stale removal'])->assertConflict();
+    $assigned = $store->access(fn (&$state) => $state['tickets'][$original['id']], false);
+    expect($assigned['assignee'])->toBe($original['assignee'])->and($assigned['status'])->toBe($original['status'])
+        ->and($assigned['revision'])->toBe($original['revision'] + 1)->and($assigned['events'])->toHaveCount(count($original['events']) + 1)
+        ->and($assigned['contractor']['vendorId'])->toBe('vendor-access');
+    $removeId = (string) Str::uuid();
+    campusOpsRequest($this, 'contractor.remove', $original['id'], $assigned['revision'], ['reason' => 'Scope retained for campus staff'], requestId: $removeId)->assertOk();
+    campusOpsRequest($this, 'contractor.remove', $original['id'], $assigned['revision'], ['reason' => 'Scope retained for campus staff'], requestId: $removeId)->assertOk()->assertJsonPath('result.replayed', true);
+    $removed = $store->access(fn (&$state) => $state['tickets'][$original['id']], false);
+    expect($removed)->not->toHaveKey('contractor');
+    expect($removed['assignee'])->toBe($original['assignee'])->and($removed['status'])->toBe($original['status'])
+        ->and($removed['events'][count($original['events'])]['message'])->toContain('Inspect accessible entry hardware')
+        ->and($removed['events'][count($original['events']) + 1]['message'])->toContain('Scope retained for campus staff');
+});
+
+it('requires work assignment permission and service scope for both contractor actions', function (): void {
+    $data = ['vendorId' => 'vendor-access', 'scope' => 'Inspect entry hardware'];
+    foreach ([['alex', 'staff'], ['devon', 'technician'], ['mika', 'admin'], ['avery', 'head']] as [$actor, $role]) {
+        campusOpsRequest($this, 'contractor.assign', 'FM-DEMO-ACCESS', 1, $data, $actor, $role)->assertForbidden();
+        campusOpsRequest($this, 'contractor.remove', 'FM-DEMO-ACCESS', 1, ['reason' => 'Wrong role cannot remove'], $actor, $role)->assertForbidden();
+    }
+    campusOpsRequest($this, 'contractor.assign', 'FM-DEMO-ACCESS', 1, $data, 'morgan', 'head')->assertOk();
+    campusOpsRequest($this, 'contractor.remove', 'FM-DEMO-ACCESS', 2, ['reason' => 'Responsible head removes'], 'morgan', 'head')->assertOk();
+});
+
+it('requires accepted current insurance and active status for new assignments while retaining history', function (): void {
+    $data = ['vendorId' => 'vendor-av', 'scope' => 'Inspect the event sound system'];
+    campusOpsRequest($this, 'contractor.assign', 'FM-DEMO-GYM', 1, $data)->assertUnprocessable();
+    campusOpsRequest($this, 'certificate.propose', 'cert-av', 1, ['vendorId' => 'vendor-av', 'type' => 'General liability', 'expiresOn' => '2027-11-01', 'reference' => 'Fictional renewed policy'])->assertOk();
+    campusOpsRequest($this, 'contractor.assign', 'FM-DEMO-GYM', 1, $data)->assertUnprocessable();
+    campusOpsRequest($this, 'certificate.review', 'cert-av', 2, ['decision' => 'approve', 'reason' => 'Renewed policy reviewed'])->assertOk();
+    campusOpsRequest($this, 'contractor.assign', 'FM-DEMO-GYM', 1, $data)->assertOk();
+    $vendor = campusOpsRow(campusOpsSnapshot($this), 'vendors', 'vendor-av');
+    $form = array_intersect_key($vendor, array_flip(['name', 'trade', 'rating', 'notes', 'contact']));
+    foreach (['On hold', 'Archived'] as $status) {
+        campusOpsRequest($this, 'vendor.save', $vendor['id'], $vendor['revision'], [...$form, 'status' => $status])->assertOk();
+        $vendor = campusOpsRow(campusOpsSnapshot($this), 'vendors', 'vendor-av');
+        campusOpsRequest($this, 'contractor.assign', 'FM-DEMO-IT', 1, $data)->assertUnprocessable();
+    }
+    $ticket = app(DemoStore::class)->access(fn (&$state) => $state['tickets']['FM-DEMO-GYM'], false);
+    expect($ticket['contractor']['vendorId'])->toBe('vendor-av');
+    campusOpsRequest($this, 'contractor.remove', 'FM-DEMO-GYM', 2, ['reason' => 'Contractor archived after review'])->assertOk();
+    expect(campusOpsRow(campusOpsSnapshot($this), 'vendors', 'vendor-av')['status'])->toBe('Archived');
+});
+
+it('supports the independent assignment insurance setting and preserves extended fields from older forms', function (): void {
+    $w = campusOpsSnapshot($this);
+    $settings = $w['settings'];
+    $settings['requireContractorInsurance'] = false;
+    campusOpsRequest($this, 'settings.save', 'settings', $settings['revision'], $settings)->assertOk();
+    campusOpsRequest($this, 'contractor.assign', 'FM-DEMO-GYM', 1, ['vendorId' => 'vendor-av', 'scope' => 'A reviewed insurance-rule exception'])->assertOk();
+    $settings = campusOpsSnapshot($this)['settings'];
+    unset($settings['requireContractorInsurance']);
+    campusOpsRequest($this, 'settings.save', 'settings', $settings['revision'], $settings)->assertOk();
+    expect(campusOpsSnapshot($this)['settings']['requireContractorInsurance'])->toBeFalse()
+        ->and(campusOpsSnapshot($this)['settings']['requireValidCertificate'])->toBeTrue();
+    $vendor = campusOpsRow(campusOpsSnapshot($this), 'vendors', 'vendor-mechanical');
+    $form = array_intersect_key($vendor, array_flip(['name', 'trade', 'rating', 'notes', 'contact']));
+    campusOpsRequest($this, 'vendor.save', $vendor['id'], 1, [...$form, 'rating' => 5], 'mika')->assertOk();
+    campusOpsRequest($this, 'vendor.save', $vendor['id'], 1, $form, 'mika')->assertConflict();
+    $saved = campusOpsRow(campusOpsSnapshot($this), 'vendors', $vendor['id']);
+    foreach (['status', 'projectIds', 'coordinatorId', 'contactName', 'phone'] as $key) {
+        expect($saved[$key])->toBe($vendor[$key]);
+    }
+    campusOpsRequest($this, 'vendor.save', $vendor['id'], 2, $form, 'morgan', 'head')->assertForbidden();
+});
+
+it('rejects contractor assignment to unapproved, closed or unowned work without changing a record', function (): void {
+    $store = app(DemoStore::class);
+    foreach (['Pending approval', 'Approved', 'Needs details', 'Completed', 'Rejected'] as $status) {
+        $store->access(function (&$state) use ($status): void {
+            $state['tickets']['FM-DEMO-ACCESS']['status'] = $status;
+        });
+        campusOpsRequest($this, 'contractor.assign', 'FM-DEMO-ACCESS', 1, ['vendorId' => 'vendor-access', 'scope' => 'Inspect entry hardware'])->assertUnprocessable();
+    }
+    $store->access(function (&$state): void {
+        $state['tickets']['FM-DEMO-ACCESS']['status'] = 'Assigned';
+        $state['tickets']['FM-DEMO-ACCESS']['assignee'] = null;
+    });
+    campusOpsRequest($this, 'contractor.assign', 'FM-DEMO-ACCESS', 1, ['vendorId' => 'vendor-access', 'scope' => 'Inspect entry hardware'])->assertUnprocessable();
+    $ticket = $store->access(fn (&$state) => $state['tickets']['FM-DEMO-ACCESS'], false);
+    expect($ticket['revision'])->toBe(1)->and($ticket)->not->toHaveKey('contractor');
+});

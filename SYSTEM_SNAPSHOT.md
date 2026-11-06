@@ -1,3 +1,13 @@
+## Contractor management in the public campus demo (November 5)
+
+The paired standalone dashboard has a Contractors main tab, concise copy and the
+canonical Enterprise sidebar logo. Existing vendor IDs/certificates/invoices are
+retained. Additive schema2 enriches companies once; explicit contractor assignment
+uses work.assign, ticket scope/revisions, UUID receipts and an internal staff lead.
+Current accepted insurance is required by default through a separate configurable
+assignment rule. Company archive retains history. No external contractor access,
+messages or native/provider records are created. See the campus Facilities runbook.
+
 ## Configurable campus walkthrough (November 5; source candidate)
 
 The public Facilities demo now has named fictional operational roles and additive

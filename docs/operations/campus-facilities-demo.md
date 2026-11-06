@@ -285,3 +285,41 @@ existing Facilities and campus route tests. Build with `npm run build:standalone
 and verify committed index bytes against build.json before the protected release.
 Real MaintenanceCare/IT/calendar/Microsoft365/accounting imports and real campus
 permissions/approval policies remain a future authorized pilot, not this demo.
+
+
+## Contractor directory and concise presentation (November 5)
+
+The standalone public dashboard removes decorative introductory copy throughout,
+retains the campus/photo galleries and functional instructions, moves Share demo
+to the top bar, and uses the canonical Enterprise SVG on its white backing in
+the desktop sidebar. Contractors is a main navigation destination; the former
+Operations vendor tab and the stable vendors shortcut now lead there.
+
+The existing vendors collection and IDs remain authoritative for this fictional
+workspace. Schema2 adds contact name/phone, campus coordinator, company status and
+related project IDs once. Three existing companies gain coherent fictional contact
+and project metadata; existing names, ratings, notes, contacts, insurance, invoices,
+tickets, registrations and usage counters are retained. Upgrade advances affected
+revisions; subsequent reads do not reseed or replace company edits. Archive and
+On hold retain historical links and block new assignments.
+
+contractor.assign / contractor.remove operate under the existing workspace lock,
+UUID receipts, generation and ticket revision checks. They require work.assign
+and the current actor's work-order scope. Only approved open work already carrying
+an internal assignee is eligible. Assignment adds a contractor scope/target date;
+removal retains both actions in ticket history. Neither changes the internal lead,
+work status, work logs or completion rules. Company editing, certificate review
+and invoice visibility continue to use their established simulated permissions.
+
+The new requireContractorInsurance setting defaults true and requires current
+accepted certificates for all configured types before NEW assignments. Pending
+renewals do not satisfy the rule. The separate invoice insurance setting keeps
+its original meaning. Older settings/company forms retain omitted new fields.
+There is no contractor portal, native identity, invitation, outbound message,
+provider activation or payment. The public persona selector remains a simulation.
+
+Validation adds preservation/idempotent upgrade, exact retries/stale revisions,
+role/team scope, accepted-versus-pending/expired insurance, company status,
+independent settings and staff-lead/status preservation to the existing focused
+suite. Verify desktop and phone layout and exact deployed build/retained live
+records through the existing protected GitHub-to-Forge release process.

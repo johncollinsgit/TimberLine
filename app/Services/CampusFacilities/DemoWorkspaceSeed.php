@@ -49,7 +49,7 @@ class DemoWorkspaceSeed
             'financeApproval' => [['id' => 'scope', 'name' => 'Facilities scope review', 'role' => 'head', 'minimumCents' => 0], ['id' => 'funds', 'name' => 'Finance and fund review', 'role' => 'finance', 'minimumCents' => 0], ['id' => 'director', 'name' => 'Operations director review', 'role' => 'director', 'minimumCents' => 250000]],
             'timezone' => 'America/New_York', 'bufferMinutes' => 15, 'conflictRole' => 'scheduler',
             'fiscalStartMonth' => 7, 'reportColumns' => ['work_orders', 'completed', 'labor_minutes', 'materials', 'teams', 'finance', 'certificates'], 'reportReviewerRole' => 'reporting',
-            'certificateWarningDays' => 30, 'certificateReviewerRole' => 'vendor', 'certificateTypes' => ['General liability', 'Workers compensation'], 'requireValidCertificate' => true,
+            'certificateWarningDays' => 30, 'certificateReviewerRole' => 'vendor', 'certificateTypes' => ['General liability', 'Workers compensation'], 'requireValidCertificate' => true, 'requireContractorInsurance' => true,
             'training' => [
                 ['id' => 'technicians', 'title' => 'Technician quick start: daily work, photos and interruptions', 'ownerRole' => 'head', 'minutes' => 30],
                 ['id' => 'coordinators', 'title' => 'Coordinator walkthrough: conflicts, crews and handoffs', 'ownerRole' => 'scheduler', 'minutes' => 45],
@@ -76,7 +76,7 @@ class DemoWorkspaceSeed
     public static function upgrade(array &$state): bool
     {
         if (isset($state['operations'])) {
-            return false;
+            return self::upgradeContractors($state);
         }
         $today = now('America/New_York')->startOfDay();
         $at = fn ($days, $time = '09:00') => $today->copy()->addDays($days)->setTimeFromTimeString($time)->toIso8601String();
@@ -133,6 +133,42 @@ class DemoWorkspaceSeed
             ],
             'notifications' => [], 'reports' => [], 'trainingProgress' => [], 'history' => [], 'receipts' => [],
         ];
+
+        self::upgradeContractors($state, true);
+
+        return true;
+    }
+
+    private static function upgradeContractors(array &$state, bool $fresh = false): bool
+    {
+        if (($state['operations']['schema'] ?? 1) >= 2) {
+            return false;
+        }
+        $samples = [
+            'vendor-mechanical' => ['contactName' => 'Pat Mercer', 'phone' => '828-555-0101', 'coordinatorId' => 'morgan', 'projectIds' => ['project-comfort']],
+            'vendor-av' => ['contactName' => 'Chris Rowan', 'phone' => '828-555-0102', 'coordinatorId' => 'ellis', 'projectIds' => ['project-event']],
+            'vendor-access' => ['contactName' => 'Dana Wells', 'phone' => '828-555-0103', 'coordinatorId' => 'morgan', 'projectIds' => ['project-access']],
+        ];
+        $projects = array_column($state['operations']['projects'], 'id');
+        $people = array_column($state['operations']['settings']['people'], 'id');
+        foreach ($state['operations']['vendors'] as &$vendor) {
+            $extra = $samples[$vendor['id']] ?? ['contactName' => '', 'phone' => '', 'coordinatorId' => null, 'projectIds' => []];
+            $extra['projectIds'] = array_values(array_intersect($extra['projectIds'], $projects));
+            if (! in_array($extra['coordinatorId'], $people, true)) {
+                $extra['coordinatorId'] = null;
+            }
+            $vendor += [...$extra, 'status' => 'Active'];
+            if (! $fresh) {
+                $vendor['revision']++;
+            }
+        }
+        unset($vendor);
+        $state['operations']['settings']['requireContractorInsurance'] ??= true;
+        if (! $fresh) {
+            $state['operations']['settings']['revision']++;
+            $state['operations']['revision']++;
+        }
+        $state['operations']['schema'] = 2;
 
         return true;
     }

@@ -34,7 +34,7 @@ class DemoDirectory
         'workload' => ['name' => 'Review workload', 'permission' => 'work.view', 'page' => 'overview'],
         'daily_work' => ['name' => 'Daily crew plan', 'permission' => 'work.view', 'page' => 'operations', 'tab' => 'daily'],
         'schedule' => ['name' => 'Review the schedule', 'permission' => 'schedule.view', 'page' => 'operations', 'tab' => 'calendar'],
-        'vendors' => ['name' => 'Vendors and renewals', 'permission' => 'vendors.view', 'page' => 'operations', 'tab' => 'vendors'],
+        'vendors' => ['name' => 'Contractors', 'permission' => 'vendors.view', 'page' => 'contractors'],
         'finance' => ['name' => 'Review finance packets', 'permission' => 'finance.view', 'page' => 'operations', 'tab' => 'finance'],
         'reports' => ['name' => 'Quarterly reports', 'permission' => 'reports.view', 'page' => 'operations', 'tab' => 'reports'],
         'buildings' => ['name' => 'Buildings and jobs', 'permission' => 'work.view', 'page' => 'campus'],
