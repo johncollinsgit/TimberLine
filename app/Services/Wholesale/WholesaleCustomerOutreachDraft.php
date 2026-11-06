@@ -38,7 +38,7 @@ class WholesaleCustomerOutreachDraft
         })->filter()->values()->all();
         $isForestry = $tenant->slug === 'modern-forestry';
         $brand['display_name'] = $isForestry ? 'Modern Forestry' : $brand['display_name'];
-        $brand['logo_url'] = $isForestry ? 'https://modernforestrywholesale.com/cdn/shop/t/4/assets/modern-forestry-header-logo.png?v=151527550753401185811784061842' : null;
+        $brand['logo_url'] = $isForestry ? 'https://app.theeverbranch.com/brand/modern-forestry-logo-white.png' : null;
         $brand['primary_color'] = $isForestry ? '#294333' : $brand['primary_color'];
         $brand['accent_color'] = $isForestry ? '#9B6B45' : $brand['accent_color'];
         $firstName = explode(' ', trim($row['buyer']))[0] ?: 'there';

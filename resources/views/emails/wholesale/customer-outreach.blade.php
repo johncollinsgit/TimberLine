@@ -1,7 +1,7 @@
 <table role="presentation" width="100%" style="width:100%;border-collapse:collapse;background:#F5F2EB;font-family:Arial,Helvetica,sans-serif;color:#263C2E"><tr><td align="center" style="padding:26px 14px">
-<table role="presentation" width="600" style="width:100%;max-width:600px;border-collapse:collapse;background:#FFFFFF"><tr><td align="center" style="padding:36px 28px 30px;border-bottom:1px solid #E6E1D7">
+<table role="presentation" width="600" style="width:100%;max-width:600px;border-collapse:collapse;background:#FFFFFF"><tr><td align="center" bgcolor="{{ $draft['brand']['logo_url'] ? $draft['brand']['primary_color'] : '#FFFFFF' }}" style="padding:28px;border-bottom:1px solid #E6E1D7;background:{{ $draft['brand']['logo_url'] ? $draft['brand']['primary_color'] : '#FFFFFF' }}">
 @if($draft['brand']['logo_url'])
-<img src="{{ $draft['brand']['logo_url'] }}" alt="{{ $draft['brand']['display_name'] }}" width="246" style="display:block;width:246px;max-width:100%;height:auto;border:0">
+<img src="{{ $draft['brand']['logo_url'] }}" alt="{{ $draft['brand']['display_name'] }}" width="220" style="display:block;width:220px;max-width:100%;height:auto;border:0">
 @else
 <div style="font-family:Georgia,serif;font-size:29px;color:{{ $draft['brand']['primary_color'] }}">{{ $draft['brand']['display_name'] }}</div>
 @endif
