@@ -47,7 +47,7 @@ test('branded drafts match current product IDs and group variants without exposi
         ->and($draft['products'][0]['previous_order'])->toBe('12 × 8 oz · 6 × 16 oz')
         ->and($draft['products'][0]['url'])->toBe('https://wholesale.example.com/products/forest');
     $html = view('emails.wholesale.customer-outreach', compact('draft'))->render();
-    expect($html)->toContain('modern-forestry-header-logo.png', 'https://cdn.shopify.com/forest.png', 'https://wholesale.example.com/products/cedar', 'Hi Robin,', $row['order_number'])
+    expect($html)->toContain('modern-forestry-logo-white.png', 'https://cdn.shopify.com/forest.png', 'https://wholesale.example.com/products/cedar', 'Hi Robin,', $row['order_number'])
         ->not->toContain('at_risk', 'usual reorder window', '1452 days', '@if', '@endif', 'Everbranch');
     $page = $this->get(route('shopify.app.wholesale.customers.outreach', [...wholesaleEmbeddedSignedQuery(), 'accountKey' => $row['account_key']]))
         ->assertOk()->assertHeader('Cache-Control')
@@ -107,7 +107,7 @@ test('missing catalog media leaves an honest branded draft without guessing an i
     $draft = app(WholesaleCustomerOutreachDraft::class)->forCustomer($this->tenant, $row['account_key']);
     expect($draft['products'])->toBe([]);
     $html = view('emails.wholesale.customer-outreach', compact('draft'))->render();
-    expect($html)->toContain('modern-forestry-header-logo.png', 'Forest Candle', 'https://wholesale.example.com/')
+    expect($html)->toContain('modern-forestry-logo-white.png', 'Forest Candle', 'https://wholesale.example.com/')
         ->not->toContain('cdn.shopify.com/forest.png');
 });
 

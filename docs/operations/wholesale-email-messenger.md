@@ -23,6 +23,10 @@ fallback if clipboard permission is denied. Subject and personal-message edits
 stay local to the review page. No Gmail draft API permission or customer send is
 introduced. See the reporting/outreach runbook for suppression and schedule rules.
 
+The customer email header uses the full Modern Forestry pine-tree logo already
+used by retail birthday and Candle Club pages (`brand/modern-forestry-logo-white.png`),
+on a forest-green background. Do not substitute the wholesale theme's text-only header asset.
+
 ## Saved wholesale introduction draft
 
 The wholesale Shopify app contains a saved sixteen-block draft named
