@@ -67,7 +67,7 @@ class TeamsStudio
     public function saveDraft(Tenant $tenant, User $user, TeamArea $area, array $input): array
     {
         $this->access->financial($tenant, $user);
-        $i = Validator::make($input, ['id' => 'required|uuid', 'request_id' => 'required|uuid', 'expected_version' => 'required|integer|min:0', 'title' => 'required|string|max:500', 'step' => 'required|integer|min:0|max:4', 'logistics' => 'present|array', 'budget_inputs' => 'present|array', 'policy_id' => 'nullable|uuid', 'copy_from' => 'nullable|uuid', 'revision' => 'nullable|array:event_id,event_version,budget_id,reason', 'revision.event_id' => 'required_with:revision|uuid', 'revision.event_version' => 'required_with:revision|integer|min:1', 'revision.budget_id' => 'present_with:revision|nullable|uuid', 'revision.reason' => 'nullable|string|max:3000'])->validate();
+        $i = Validator::make($input, ['id' => 'required|uuid', 'request_id' => 'required|uuid', 'expected_version' => 'required|integer|min:0', 'title' => 'required|string|max:500', 'step' => 'required|integer|min:0|max:4', 'logistics' => 'present|array', 'budget_inputs' => 'present|array', 'policy_id' => 'nullable|uuid', 'copy_from' => 'nullable|uuid', 'revision' => 'nullable|array:event_id,event_version,budget_id,reason', 'revision.event_id' => 'required_with:revision|uuid', 'revision.event_version' => 'required_with:revision|integer|min:1', 'revision.budget_id' => 'nullable|uuid', 'revision.reason' => 'nullable|string|max:3000'])->validate();
         $logistics = $this->logistics($i['logistics']);
         if (isset($logistics['series_id'])) {
             $series = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'series'])->findOrFail($logistics['series_id']);
@@ -81,6 +81,7 @@ class TeamsStudio
             abort_unless(! $draft->exists || ($draft->status === 'draft' && (int) $draft->assigned_user_id === (int) $user->id), 409, 'This draft is already created or belongs to another author.');
             abort_if($draft->exists && ($draft->data['revision']['event_id'] ?? null) !== ($i['revision']['event_id'] ?? null), 409, 'Keep this draft attached to its original event or creation flow.');
             if (isset($i['revision'])) {
+                abort_unless(isset($i['revision']['event_id'], $i['revision']['event_version']) && array_key_exists('budget_id', $i['revision']), 422, 'Choose the original event, version and current budget for this revision.');
                 $target = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event'])->findOrFail($i['revision']['event_id']);
                 $this->access->record($tenant, $user, $target);
             }

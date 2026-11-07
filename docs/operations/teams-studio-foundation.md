@@ -127,7 +127,8 @@ must not be merged as a declaration that the requested full Teams product is don
   without replacing the existing protected release checks.
 - `scripts/everbranch-team/studio-mysql-concurrency.php`: explicit isolated
   local `codex_teams_` MySQL only; two processes replay one command to one event,
-  or yield one success/one version conflict for competing commands. Never resets
+  or yield one success/one version conflict for competing commands. Budget revision
+  races freeze one new revision and retain the original event. Never resets
   or drops a database. Provide the testing DB/env explicitly.
 - Backend build and zero-change migration lint; mobile typecheck/unit tests,
   paired bundle build and intercepted Chromium wizard/lost-response acceptance.

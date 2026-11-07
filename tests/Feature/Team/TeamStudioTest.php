@@ -87,7 +87,7 @@ test('wizard saves partial drafts then freezes one event and budget across retri
     [$t, $owner] = teamWorkspace();
     $a = studioArea($t);
     $policy = studioDefinition($t, $owner, $a);
-    $draft = ['id' => (string) Str::uuid(), 'request_id' => (string) Str::uuid(), 'expected_version' => 0, 'title' => 'Fictional winter show', 'step' => 0, 'logistics' => [], 'budget_inputs' => []];
+    $draft = ['id' => (string) Str::uuid(), 'request_id' => (string) Str::uuid(), 'expected_version' => 0, 'title' => 'Fictional winter show', 'step' => 0, 'logistics' => [], 'budget_inputs' => [], 'revision' => null];
     $url = '/team/studio/draft?tenant='.$t->slug.'&area='.$a->id;
     $this->postJson($url, $draft)->assertOk()->assertJsonPath('version', 1);
     $draft = array_replace($draft, ['request_id' => (string) Str::uuid(), 'expected_version' => 1, 'step' => 4, 'policy_id' => $policy['id'], 'logistics' => ['starts_on' => '2026-11-06', 'ends_on' => '2026-11-08', 'timezone' => 'America/New_York'], 'budget_inputs' => studioInputs()]);
