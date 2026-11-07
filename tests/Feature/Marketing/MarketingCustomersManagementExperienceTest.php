@@ -2,7 +2,9 @@
 
 use App\Models\CandleCashBalance;
 use App\Models\CustomerExternalProfile;
+use App\Models\MarketingConsentEvent;
 use App\Models\MarketingEmailDelivery;
+use App\Models\MarketingIdentityReview;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingProfileWishlistItem;
@@ -12,8 +14,10 @@ use App\Models\Order;
 use App\Models\SquareCustomer;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Marketing\SquareCustomerIdentityService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * @return array<int,array<string,string>>
@@ -1207,7 +1211,16 @@ test('customer detail email timeline paginates legacy unknown rows safely', func
 });
 
 test('customers index includes shopify and square-only canonical profiles without requiring growave', function () {
+    $tenant = Tenant::query()->create(['name' => 'Fictional customer source coverage', 'slug' => 'customer-source-coverage']);
+    $admin = User::factory()->create([
+        'role' => 'admin',
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+    $admin->tenants()->attach($tenant->id, ['role' => 'owner', 'membership_active' => true]);
+
     Order::factory()->create([
+        'tenant_id' => $tenant->id,
         'source' => 'shopify_retail',
         'order_type' => 'retail',
         'shopify_store_key' => 'retail',
@@ -1221,12 +1234,36 @@ test('customers index includes shopify and square-only canonical profiles withou
     ]);
 
     SquareCustomer::query()->create([
+        'tenant_id' => $tenant->id,
         'square_customer_id' => 'SQ-CUST-IDX-1',
         'given_name' => 'Square',
         'family_name' => 'Only',
         'email' => 'square.only.index@example.com',
         'phone' => '+1 (555) 440-0202',
+        'preferences' => ['email_unsubscribed' => false],
+        'raw_payload' => [
+            'id' => 'SQ-CUST-IDX-1',
+            'given_name' => 'Square',
+            'family_name' => 'Only',
+            'email_address' => 'square.only.index@example.com',
+            'phone_number' => '+1 (555) 440-0202',
+            'preferences' => ['email_unsubscribed' => false],
+        ],
         'synced_at' => now(),
+    ]);
+
+    $identities = app(SquareCustomerIdentityService::class);
+    $identities->sync([
+        'primary_source' => ['source_type' => 'square_customer', 'source_id' => 'SQ-CUST-IDX-1'],
+        'source_links' => [['source_type' => 'square_customer', 'source_id' => 'SQ-CUST-IDX-1']],
+    ], $tenant->id, false);
+    $review = MarketingIdentityReview::query()->where('source_type', 'square_customer')->where('source_id', 'SQ-CUST-IDX-1')->sole();
+    $reviewResult = $identities->review($tenant->id, $admin, $review, [
+        'request_id' => (string) Str::uuid(),
+        'expected_version' => $identities->version($review),
+        'decision' => 'create_new',
+        'identity_confirmed' => true,
+        'reason' => 'Owner reviewed the original tenant source customer independently.',
     ]);
 
     $this->artisan('marketing:sync-profiles --source=shopify')->assertExitCode(0);
@@ -1236,20 +1273,25 @@ test('customers index includes shopify and square-only canonical profiles withou
     $squareProfile = MarketingProfile::query()->where('normalized_email', 'square.only.index@example.com')->first();
 
     expect($shopifyProfile)->not->toBeNull()
-        ->and($squareProfile)->not->toBeNull();
-
-    $admin = User::factory()->create([
-        'role' => 'admin',
-        'email_verified_at' => now(),
-    ]);
+        ->and($squareProfile)->not->toBeNull()
+        ->and($squareProfile->id)->toBe($reviewResult['profile_id'])
+        ->and($squareProfile->tenant_id)->toBe($tenant->id)
+        ->and($squareProfile->accepts_email_marketing)->toBeFalse()
+        ->and($squareProfile->accepts_sms_marketing)->toBeFalse()
+        ->and(MarketingProfileLink::query()->where('tenant_id', $tenant->id)->where('marketing_profile_id', $squareProfile->id)->where('source_type', 'square_customer')->where('source_id', 'SQ-CUST-IDX-1')->sole()->match_method)->toBe('reviewed_square_source_id')
+        ->and(MarketingConsentEvent::query()->where('marketing_profile_id', $squareProfile->id)->count())->toBe(0)
+        ->and(MarketingProfile::query()->where('tenant_id', $tenant->id)->count())->toBe(2)
+        ->and(CustomerExternalProfile::query()->where('integration', 'growave')->count())->toBe(0);
 
     $this->actingAs($admin)
-        ->get(route('marketing.customers'))
+        ->withSession(['tenant_id' => $tenant->id])
+        ->get(route('marketing.customers', ['tenant' => $tenant->slug]))
         ->assertOk()
         ->assertSeeText('Manage Customers');
 
     $response = $this->actingAs($admin)
-        ->getJson(route('marketing.customers.data'));
+        ->withSession(['tenant_id' => $tenant->id])
+        ->getJson(route('marketing.customers.data', ['tenant' => $tenant->slug]));
 
     $customers = collect($response->json('data'));
 
