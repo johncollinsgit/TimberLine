@@ -40,6 +40,23 @@ and reviewed tenant mappings qualify. Declared avoided scents stay visible but
 are not promoted. Declared favorites never rewrite observed purchase frequency.
 See `customer-event-value.md` for exact evidence and client fences.
 
+Native standalone lookup uses a separate model and separate capture/enrollment
+journals. Browsing, cancelling and lookup authentication expiry do not mutate
+the shopping model, payment recovery, basket or rewards proof. Only an explicit
+Shop action can copy a selected customer after matching the current session,
+origin, register and idle payment state. Recommendations promote eligible rows
+only; absent evidence retains the normal product order.
+
+Lookup capture clears its exact retained journal only after a known pre-create
+rejection or successful original-request recovery. Unknown failures and recovery
+404s remain retained. New journals store the original API origin; explicit
+GET-only capture recovery after reauthentication additionally requires that exact
+origin, workspace and register. The server's request key binds the authenticated
+actor and device, so another account cannot recover the original. This does not
+replay a POST. Older originless capture journals remain session-bound. Enrollment
+has no request-status GET and remains sealed after session replacement; staff
+resolution for that case is still a required recovery extension.
+
 ## Declared choices and consent
 
 `CustomerPreferenceService` stores the current tenant-owned preference snapshot
@@ -93,6 +110,9 @@ the existing sender, which rechecks identity, contact, current preferences,
 content integrity, suppression, frequency, readiness and approval. An interrupted
 or unknown handoff retains the original evidence and cannot become a replacement
 send through this page.
+The exact outgoing HTML, text and subject must match the content validated under
+the admission lock. Edited/rehashed content cannot acquire approval against a
+different immutable preparation record, even if mutable render hashes match.
 
 Both CUSTOMER_PROFILE_EMAIL_DISPATCH_ENABLED and
 CUSTOMER_PROFILE_SMS_DISPATCH_ENABLED remain false. Existing transport retry and

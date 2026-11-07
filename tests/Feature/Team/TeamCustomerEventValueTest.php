@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 require_once __DIR__.'/../../Support/TeamStudioFixtures.php';
 require_once __DIR__.'/../../Support/CustomerProfileJson.php';
@@ -79,6 +80,18 @@ function valueReviewInput(MarketingProfileLink $link, array $extra = []): array
 {
     return ['request_id' => (string) Str::uuid(), 'source_link_id' => $link->id, 'expected_revision' => 0, 'kind' => 'acquisition', 'classification' => 'new',
         'prehistory_reviewed' => true, 'reason' => 'Owner reviewed the original historical customer records.', 'evidence_reference' => 'Reviewed source archive reference 123', ...$extra];
+}
+
+function valueIdentityConflict(callable $read): void
+{
+    try {
+        $read();
+    } catch (HttpException $error) {
+        expect($error->getStatusCode())->toBe(409);
+
+        return;
+    }
+    test()->fail('Expected customer identity drift to reject the value projection with HTTP 409.');
 }
 
 function valueReceipt($test, MarketingProfile $profile): object
@@ -150,6 +163,63 @@ test('invalid or simultaneous ambiguous capture evidence cannot select an acquis
     valueCapture($this, $this->profile, 456);
     $value = app(CustomerEventValueService::class)->forProfile($this->profile, $this->tenant->id);
     expect($value['first_recorded_capture'])->toBeNull()->and($value['issues'])->toContain('first_capture_ambiguous');
+});
+
+test('customer value rejects commerce history belonging to a different canonical customer', function () {
+    $survivor = MarketingProfile::create(['tenant_id' => $this->tenant->id]);
+    $snapshot = Mockery::mock(CustomerCommerceSnapshotService::class);
+    $snapshot->shouldReceive('forProfile')->once()->andReturn(['customer_id' => $survivor->id, 'purchases' => [], 'has_more' => false, 'issues' => []]);
+    app()->instance(CustomerCommerceSnapshotService::class, $snapshot);
+    valueIdentityConflict(fn () => app(CustomerEventValueService::class)->forProfile($this->profile, $this->tenant->id));
+});
+
+test('customer value rejects a merge after the original history snapshot was read', function () {
+    $survivor = MarketingProfile::create(['tenant_id' => $this->tenant->id]);
+    $original = app(CustomerCommerceSnapshotService::class);
+    $snapshot = Mockery::mock(CustomerCommerceSnapshotService::class);
+    $snapshot->shouldReceive('forProfile')->once()->andReturnUsing(function ($profile, $tenant, $limit) use ($survivor, $original) {
+        $history = $original->forProfile($profile, $tenant, $limit);
+        $profile->update(['merged_into_profile_id' => $survivor->id, 'merged_at' => now()]);
+
+        return $history;
+    });
+    app()->instance(CustomerCommerceSnapshotService::class, $snapshot);
+    valueIdentityConflict(fn () => app(CustomerEventValueService::class)->forProfile($this->profile, $this->tenant->id));
+});
+
+test('event value rejects a cohort merge before presenting donor and survivor as separate rows', function () {
+    $survivor = MarketingProfile::create(['tenant_id' => $this->tenant->id]);
+    valueCapture($this, $this->profile);
+    valueCapture($this, $survivor);
+    valueOrder($this, $survivor, '2026-01-02T12:00:00+00:00');
+    $cohort = Mockery::mock(EventCustomerCohort::class);
+    $cohort->shouldReceive('read')->once()->andReturnUsing(function () use ($survivor) {
+        $this->profile->update(['merged_into_profile_id' => $survivor->id, 'merged_at' => now()]);
+
+        return ['profile_ids' => [$this->profile->id, $survivor->id], 'relations' => [$this->profile->id => ['captured' => true], $survivor->id => ['captured' => true]], 'review_items' => []];
+    });
+    $cohort->shouldReceive('options')->andReturn([]);
+    app()->instance(EventCustomerCohort::class, $cohort);
+    valueIdentityConflict(fn () => app(CustomerEventValueService::class)->forEvent($this->tenant->id, 123));
+});
+
+test('event value rejects an earlier row merged while projecting a later customer', function () {
+    $survivor = MarketingProfile::create(['tenant_id' => $this->tenant->id]);
+    valueCapture($this, $this->profile);
+    valueCapture($this, $survivor);
+    valueOrder($this, $this->profile, '2026-01-02T12:00:00+00:00');
+    valueOrder($this, $survivor, '2026-01-03T12:00:00+00:00');
+    $original = app(CustomerCommerceSnapshotService::class);
+    $snapshot = Mockery::mock(CustomerCommerceSnapshotService::class);
+    $snapshot->shouldReceive('forProfile')->twice()->andReturnUsing(function ($profile, $tenant, $limit) use ($survivor, $original) {
+        if ((int) $profile->id === (int) $survivor->id) {
+            $this->profile->update(['merged_into_profile_id' => $survivor->id, 'merged_at' => now()]);
+        }
+
+        return $original->forProfile($profile, $tenant, $limit);
+    });
+    app()->instance(CustomerCommerceSnapshotService::class, $snapshot);
+    valueIdentityConflict(fn () => app(CustomerEventValueService::class)->forEvent($this->tenant->id, 123));
 });
 
 test('new captures record created versus selected provenance and legacy labels cannot inflate new record reporting', function () {
@@ -233,7 +303,7 @@ test('unknown refund amounts withhold net value and reward only purchases do not
     $value = app(CustomerEventValueService::class)->forProfile($this->profile, $this->tenant->id);
     expect($value['windows'][0]['currencies'][0]['net_paid_minor'])->toBeNull()->and($value['windows'][0]['currencies'][0]['unknown_refund_purchase_count'])->toBe(1);
     $snapshot = Mockery::mock(CustomerCommerceSnapshotService::class);
-    $snapshot->shouldReceive('forProfile')->andReturn(['has_more' => false, 'issues' => [], 'purchases' => [['id' => 'pos_sale:reward-only', 'source' => 'pos_sale', 'source_id' => 'reward-only',
+    $snapshot->shouldReceive('forProfile')->andReturn(['customer_id' => $this->profile->id, 'has_more' => false, 'issues' => [], 'purchases' => [['id' => 'pos_sale:reward-only', 'source' => 'pos_sale', 'source_id' => 'reward-only',
         'confirmed' => true, 'channel' => 'in_person', 'currency' => 'USD', 'amount_minor' => 0, 'refunded_minor' => 0, 'occurred_at' => '2026-01-02T12:00:00+00:00']]]);
     app()->instance(CustomerCommerceSnapshotService::class, $snapshot);
     $value = app(CustomerEventValueService::class)->forProfile($this->profile, $this->tenant->id);

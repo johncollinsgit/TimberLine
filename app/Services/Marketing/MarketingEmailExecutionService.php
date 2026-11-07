@@ -252,7 +252,7 @@ class MarketingEmailExecutionService
         }
 
         $blocked = [];
-        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext, $dispatchTenantId, $storeKey, $batchId, $sourceLabel, $subject, $messageText, $dryRun, &$blocked): ?MarketingEmailDelivery {
+        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext, $dispatchTenantId, $storeKey, $batchId, $sourceLabel, $subject, $messageText, $rendered, $profileHtml, $dryRun, &$blocked): ?MarketingEmailDelivery {
             $decisionAudit = null;
             if ($campaign->source_label === 'customer_profile') {
                 $scope = (int) $campaign->tenant_id;
@@ -272,8 +272,9 @@ class MarketingEmailExecutionService
                     $decision['reason_codes'][] = 'outreach_customer_contact_changed';
                 }
                 $currentBody = trim((string) $freshRecipient->variant?->message_text);
-                if ($currentBody !== $messageText || ! app(CustomerOutreachDraft::class)->emailContent($freshCampaign, $freshProfile, $currentBody)
-                    || $freshCampaign->message_subject !== $subject) {
+                $currentPrepared = app(CustomerOutreachDraft::class)->emailContent($freshCampaign, $freshProfile, $currentBody);
+                if ($currentBody !== $messageText || ! $currentPrepared || $currentPrepared['html'] !== $profileHtml
+                    || $currentPrepared['body'] !== $rendered || $currentPrepared['subject'] !== $subject) {
                     $decision['reason_codes'][] = 'outreach_prepared_content_changed';
                 }
                 $decision['reason_codes'] = array_values(array_unique($decision['reason_codes']));

@@ -5,6 +5,18 @@ struct RefundReviewServerError: Error {
     let code: String
 }
 
+struct CustomerCaptureServerError: Error {
+    let status: Int
+    let code: String
+    let message: String
+    // These responses precede creation. A timeout, authorization change, request
+    // conflict or missing recovery row never proves that the original POST failed.
+    var provesNoCreation: Bool {
+        (status == 409 && code == "select_existing_customer")
+            || (status == 422 && ["invalid_request", "customer_name_required"].contains(code))
+    }
+}
+
 final class NoRedirects: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
@@ -78,6 +90,12 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
                 "customer_rewards_historical_review": "The purchase is linked. A manager needs to review its rewards eligibility.",
                 "collection_not_ready": "This register still needs its payment readiness review.",
                 "inventory_collection_off": "This register is being prepared for its inventory acceptance test."]
+            if method == "POST" && path.hasSuffix("/customers") && (400...499).contains(http.statusCode) {
+                let validationMessages = ["invalid_request": "Check the customer details before trying again.",
+                    "customer_name_required": "Enter the customer's first name before trying again."]
+                throw CustomerCaptureServerError(status: http.statusCode, code: code,
+                    message: validationMessages[code] ?? messages[code] ?? code.replacingOccurrences(of: "_", with: " "))
+            }
             throw POSError.unavailable(messages[code] ?? code.replacingOccurrences(of: "_", with: " "))
         }
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -95,6 +113,7 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
     nonisolated(unsafe) private static var bundleSaleData = Data()
     nonisolated(unsafe) private static var enrollmentRequestID: String?
     nonisolated(unsafe) private static var lookupCaptureRequestID: String?
+    nonisolated(unsafe) private static var lookupRejectedCaptureRequestID: String?
     nonisolated(unsafe) private static var readinessQuoteData = Data()
     nonisolated(unsafe) private static var readinessEnabled = false
     static func setCatalog(_ data: Data) { lock.lock(); defer { lock.unlock() }; catalogData = data }
@@ -279,11 +298,33 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
                 let input = try JSONSerialization.jsonObject(with: body) as! [String: Any]
                 guard let id = input["request_id"] as? String, UUID(uuidString: id) != nil,
                       input["first_name"] as? String == "Fictional", input["accepts_email_marketing"] == nil, input["accepts_sms_marketing"] == nil else { throw URLError(.badServerResponse) }
-                Self.lock.lock(); Self.lookupCaptureRequestID = id; Self.lock.unlock()
-                throw URLError(.networkConnectionLost)
+                if ProcessInfo.processInfo.arguments.contains("--pos-lookup-rejected-capture-ui-tests") {
+                    let duplicate = input["email"] as? String == "ada@example.test" || input["phone"] as? String == "+12025550123"
+                    let invalid = input["email"] as? String == "invalid"
+                    if duplicate || invalid {
+                        Self.lock.lock(); Self.lookupRejectedCaptureRequestID = id; Self.lock.unlock()
+                        let code = duplicate ? "select_existing_customer" : "invalid_request"
+                        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: duplicate ? 409 : 422, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+                        client?.urlProtocol(self, didLoad: try JSONSerialization.data(withJSONObject: ["error": ["code": code]])); client?.urlProtocolDidFinishLoading(self); return
+                    }
+                    Self.lock.lock(); let rejectedID = Self.lookupRejectedCaptureRequestID; Self.lock.unlock()
+                    guard let rejectedID, id != rejectedID, input["email"] == nil, input["phone"] == nil else { throw URLError(.badServerResponse) }
+                    data = Data(#"{"customer":{"id":3,"name":"Fictional Captured","email":null,"phone":null}}"#.utf8)
+                } else {
+                    Self.lock.lock(); Self.lookupCaptureRequestID = id; Self.lock.unlock()
+                    throw URLError(.networkConnectionLost)
+                }
             } else if ProcessInfo.processInfo.arguments.contains("--pos-lookup-isolation-ui-tests") && url.path.contains("/customer-requests/") {
-                Self.lock.lock(); let id = Self.lookupCaptureRequestID; Self.lock.unlock()
-                guard id != nil, url.lastPathComponent == id else { throw URLError(.badServerResponse) }
+                if ProcessInfo.processInfo.arguments.contains("--pos-lookup-renew-capture-ui-tests") {
+                    guard request.httpMethod == "GET", url.lastPathComponent == "33333333-3333-4333-8333-333333333333" else { throw URLError(.badServerResponse) }
+                    if ProcessInfo.processInfo.arguments.contains("--pos-lookup-capture-other-actor-ui-tests") {
+                        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+                        client?.urlProtocol(self, didLoad: Data(#"{"error":{"code":"customer_request_not_found"}}"#.utf8)); client?.urlProtocolDidFinishLoading(self); return
+                    }
+                } else {
+                    Self.lock.lock(); let id = Self.lookupCaptureRequestID; Self.lock.unlock()
+                    guard id != nil, url.lastPathComponent == id else { throw URLError(.badServerResponse) }
+                }
                 data = Data(#"{"customer":{"id":3,"name":"Fictional Captured","email":null,"phone":null}}"#.utf8)
             } else if ProcessInfo.processInfo.arguments.contains("--pos-customer-commerce-ui-tests") && url.path.hasSuffix("/customers") {
                 data = try JSONSerialization.data(withJSONObject: ["customers": [["id": 1, "name": "Ada Buyer", "email": "ada@example.test", "phone": "+12025550123"], ["id": 2, "name": "Mia Buyer", "email": "mia@example.test"]], "has_more": false])

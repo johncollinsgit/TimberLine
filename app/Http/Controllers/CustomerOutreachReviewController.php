@@ -178,7 +178,8 @@ class CustomerOutreachReviewController extends Controller
             $decision = ['allowed' => false, 'reason_codes' => ['outreach_preparation_evidence_unavailable']];
         }
         $integrity = array_values(array_filter($decision['reason_codes'], fn ($code) => str_starts_with($code, 'outreach_preparation_')
-            || str_starts_with($code, 'outreach_prepared_') || $code === 'outreach_personalization_evidence_missing'));
+            || str_starts_with($code, 'outreach_prepared_') || $code === 'outreach_original_content_changed_or_missing'
+            || $code === 'outreach_personalization_evidence_missing'));
         if (! $valid) {
             $integrity[] = 'outreach_prepared_content_changed';
         }

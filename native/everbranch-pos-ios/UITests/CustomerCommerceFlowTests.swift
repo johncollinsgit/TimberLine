@@ -142,6 +142,102 @@ extension CustomerCommerceFlowTests {
 }
 
 extension CustomerCommerceFlowTests {
+    private func assertRejectedCaptureAllowsDifferentCustomer(field: String, rejectedValue: String, expectedMessage: String) {
+        let app = launchLookupIsolation(["--pos-lookup-rejected-capture-ui-tests"])
+        let original = app.staticTexts["shopping-fixture-state"].label
+        app.buttons["Customers"].tap()
+        app.buttons["Create a new customer"].tap()
+        let first = app.textFields["First name"]
+        XCTAssertTrue(first.waitForExistence(timeout: 5)); first.tap(); first.typeText("Fictional")
+        let contact = app.textFields[field]
+        XCTAssertTrue(contact.waitForExistence(timeout: 5)); contact.tap(); contact.typeText(rejectedValue)
+        app.buttons["Create and select customer"].tap()
+        XCTAssertTrue(app.staticTexts[expectedMessage].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["Recover customer request"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
+        app.buttons["Customers"].tap()
+        app.buttons["Create a new customer"].tap()
+        let replacement = app.textFields["First name"]
+        XCTAssertTrue(replacement.waitForExistence(timeout: 5)); replacement.tap(); replacement.typeText("Fictional")
+        app.buttons["Create and select customer"].tap()
+        // The fixture rejects reuse of the rejected UUID or contact details.
+        XCTAssertTrue(app.staticTexts["Fictional Captured"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["Recover customer request"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
+    }
+    func testDuplicateEmailCaptureCanBeCorrectedWithoutLosingOriginalShoppingJournals() {
+        assertRejectedCaptureAllowsDifferentCustomer(field: "Email (optional)", rejectedValue: "ada@example.test",
+            expectedMessage: "This contact already has a customer record. Find and select it instead.")
+    }
+    func testDuplicatePhoneCaptureCanBeCorrectedWithoutLosingOriginalShoppingJournals() {
+        assertRejectedCaptureAllowsDifferentCustomer(field: "Phone (optional)", rejectedValue: "+12025550123",
+            expectedMessage: "This contact already has a customer record. Find and select it instead.")
+    }
+    func testInvalidCaptureDetailsCanBeCorrectedWithoutStartingRequestRecovery() {
+        assertRejectedCaptureAllowsDifferentCustomer(field: "Email (optional)", rejectedValue: "invalid",
+            expectedMessage: "Check the customer details before trying again.")
+    }
+    func testRenewedSessionCanExplicitlyReadOriginalCaptureWithoutReplayingCreation() {
+        let app = launchLookupIsolation(["--pos-lookup-renew-capture-ui-tests"])
+        let original = app.staticTexts["shopping-fixture-state"].label
+        app.buttons["Customers"].tap()
+        let check = app.buttons["Check original capture"]
+        XCTAssertTrue(check.waitForExistence(timeout: 5)); check.tap()
+        XCTAssertTrue(app.staticTexts["Fictional Captured"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["Check original capture"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
+    }
+    func testCaptureNotFoundForCurrentActorStaysRetainedAcrossLookupReopen() {
+        let app = launchLookupIsolation(["--pos-lookup-renew-capture-ui-tests", "--pos-lookup-capture-other-actor-ui-tests"])
+        let original = app.staticTexts["shopping-fixture-state"].label
+        app.buttons["Customers"].tap()
+        let check = app.buttons["Check original capture"]
+        XCTAssertTrue(check.waitForExistence(timeout: 5)); check.tap()
+        XCTAssertTrue(app.staticTexts["customer request not found"].waitForExistence(timeout: 8))
+        XCTAssertTrue(check.exists)
+        XCTAssertFalse(app.staticTexts["Fictional Captured"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
+        app.buttons["Customers"].tap()
+        XCTAssertTrue(app.buttons["Check original capture"].waitForExistence(timeout: 5))
+    }
+    private func assertCaptureRemainsBoundToOriginalScope(_ flag: String) {
+        let app = launchLookupIsolation(["--pos-lookup-renew-capture-ui-tests", flag])
+        let original = app.staticTexts["shopping-fixture-state"].label
+        app.buttons["Customers"].tap()
+        let recover = app.buttons["Recover customer request"]
+        XCTAssertTrue(recover.waitForExistence(timeout: 5)); recover.tap()
+        // The fixture would return 200 for this UUID if an unsafe GET escaped.
+        XCTAssertTrue(app.staticTexts["Recover the earlier customer request at its original register with the same sign-in."].waitForExistence(timeout: 5))
+        XCTAssertTrue(recover.exists)
+        XCTAssertFalse(app.buttons["Check original capture"].exists)
+        XCTAssertFalse(app.staticTexts["Fictional Captured"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
+    }
+    func testCaptureCannotRecoverAtDifferentOrigin() {
+        assertCaptureRemainsBoundToOriginalScope("--pos-lookup-capture-foreign-origin-ui-tests")
+    }
+    func testCaptureCannotRecoverAtDifferentRegister() {
+        assertCaptureRemainsBoundToOriginalScope("--pos-lookup-capture-foreign-register-ui-tests")
+    }
+    func testCaptureCannotRecoverAtDifferentWorkspace() {
+        assertCaptureRemainsBoundToOriginalScope("--pos-lookup-capture-foreign-workspace-ui-tests")
+    }
+    func testLegacyCaptureWithoutOriginRemainsBoundToOriginalSession() {
+        assertCaptureRemainsBoundToOriginalScope("--pos-lookup-capture-legacy-ui-tests")
+    }
+}
+
+extension CustomerCommerceFlowTests {
     private func recommendationProductLabels(_ app: XCUIApplication) -> [String] {
         app.buttons.matching(NSPredicate(format: "label IN %@", ["Add Fictional trio to basket", "Choose Laurel & Fig options", "Add River Birch to basket"])).allElementsBoundByIndex.map(\.label)
     }
@@ -192,7 +288,7 @@ extension CustomerCommerceFlowTests {
         let app = launchLookupIsolation(["--pos-lookup-invalid-journal-ui-tests"])
         let original = app.staticTexts["shopping-fixture-state"].label
         app.buttons["Customers"].tap()
-        XCTAssertTrue(app.staticTexts["Saved customer requests could not be read. Search remains available; capture and enrollment are paused until recovery can be checked."].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Saved customer requests could not be read.")).firstMatch.waitForExistence(timeout: 8))
         app.buttons["Create a new customer"].tap()
         let first = app.textFields["First name"]
         XCTAssertTrue(first.waitForExistence(timeout: 5)); first.tap(); first.typeText("Fictional")

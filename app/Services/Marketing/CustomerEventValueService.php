@@ -41,8 +41,10 @@ class CustomerEventValueService
         try {
             $history = app(CustomerCommerceSnapshotService::class)->forProfile($profile, $tenantId, 100);
         } catch (\Throwable) {
-            $history = ['purchases' => [], 'has_more' => true, 'issues' => ['customer_history_unavailable']];
+            $history = ['customer_id' => (int) $profile->id, 'purchases' => [], 'has_more' => true, 'issues' => ['customer_history_unavailable']];
         }
+        abort_unless((int) ($history['customer_id'] ?? 0) === (int) $profile->id, 409, 'Customer identity changed. Refresh before displaying event value.');
+        $this->assertCurrentProfile($tenantId, (int) $profile->id);
         $issues = [...$issues, ...($history['issues'] ?? [])];
         if ($history['has_more'] ?? true) {
             $issues[] = 'customer_history_window_incomplete';
@@ -88,6 +90,8 @@ class CustomerEventValueService
             $windows[] = $this->window($journey, $first, $days, $now);
         }
         $membership = $this->membership($profile, $first, $links, $tenantId, $now, $issues);
+        $reviewOptions = $this->reviewOptions($links, $journey, $first, $membership, $tenantId);
+        $this->assertCurrentProfile($tenantId, (int) $profile->id);
 
         return [
             'contract_version' => 1, 'tenant_id' => $tenantId, 'customer_id' => (int) $profile->id, 'as_of' => $now->toIso8601String(),
@@ -99,7 +103,7 @@ class CustomerEventValueService
             'contact_classification' => $first ? ($first['record_origin'] === 'created' ? 'new_customer_record' : 'captured_contact') : 'no_recorded_capture',
             'confirmed_buyer' => $firstPaidAt !== null, 'first_observed_paid_purchase_at' => $firstPaidAt?->toIso8601String(),
             'purchase_journey' => $journey, 'membership_conversion' => $membership, 'windows' => $windows,
-            'review_options' => $this->reviewOptions($links, $journey, $first, $membership, $tenantId),
+            'review_options' => $reviewOptions,
             'coverage' => ['source' => 'canonical_customer_commerce', 'scope' => 'explicitly_linked_records_only', 'complete' => false,
                 'purchase_limit' => 100, 'has_more_purchases' => (bool) ($history['has_more'] ?? true), 'capture_limit' => 5000],
             'contribution_margin_minor' => null, 'margin_missing_evidence' => ['original_item_cogs', 'shipping_cost', 'processing_cost', 'reward_cost'],
@@ -126,8 +130,10 @@ class CustomerEventValueService
 
                 continue;
             }
+            abort_unless((int) $profile->id === (int) $id, 409, 'Customer cohort identities changed. Refresh the event page.');
             $value = $this->forProfile($profile, $tenantId);
-            $rows[] = ['customer_id' => $id, 'name' => trim($profile->first_name.' '.$profile->last_name),
+            abort_unless((int) $value['customer_id'] === (int) $profile->id, 409, 'Customer cohort identities changed. Refresh the event page.');
+            $rows[] = ['customer_id' => (int) $profile->id, 'name' => trim($profile->first_name.' '.$profile->last_name),
                 'relations' => array_keys($cohort['relations'][$id] ?? []), 'customer_classification' => $value['customer_classification'],
                 'contact_classification' => $value['contact_classification'], 'confirmed_buyer' => $value['confirmed_buyer'],
                 'acquisition_cohort' => ($value['acquisition']['event']['id'] ?? null) === $eventId,
@@ -155,6 +161,10 @@ class CustomerEventValueService
                 'classification_unknown_customers_on_page' => count(array_filter($acquired, fn ($row) => $row['customer_classification'] === 'unknown')),
             ], 'coverage_complete' => false, 'summary_scope' => 'this_page_only'];
         }
+        // A later row may merge a customer already projected earlier on this page.
+        foreach ($rows as $row) {
+            $this->assertCurrentProfile($tenantId, $row['customer_id']);
+        }
 
         return ['contract_version' => 1, 'tenant_id' => $tenantId, 'event' => $event, 'customers' => $rows, 'windows' => $windows,
             'denominators' => ['recorded_event_customers' => count($ids), 'customers_on_page' => count($rows),
@@ -164,6 +174,13 @@ class CustomerEventValueService
             'issues' => array_values(array_unique([...$issues, 'unconnected_and_unlinked_history_unknown'])),
             'as_of' => CarbonImmutable::now('UTC')->toIso8601String(), 'causal_credit' => null,
             'basis' => 'Acquisition windows group the first recorded capture, not every event attended. Buyers and captured contacts use separate denominators. Monetary summaries cover this page only and retain currencies separately.'];
+    }
+
+    private function assertCurrentProfile(int $tenant, int $profileId): void
+    {
+        $current = $this->identities->byId($tenant, $profileId);
+        abort_unless($current && (int) $current->id === $profileId && $current->archived_at === null,
+            409, 'Customer identity changed. Refresh before displaying event value.');
     }
 
     private function profileLinks(MarketingProfile $profile, int $tenant, array &$issues): Collection

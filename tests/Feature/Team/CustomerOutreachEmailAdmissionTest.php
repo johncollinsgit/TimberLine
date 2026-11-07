@@ -137,6 +137,21 @@ test('a pending existing SMS claim blocks personal email admission before the pr
     Http::assertNothingSent();
 });
 
+test('the outgoing personal HTML must match the immutable content validated under the admission lock', function () {
+    [$tenant, $owner, $profile, $campaign, $recipient] = personalEmailFixture();
+    $originalHtml = $campaign->message_html;
+    $originalSnapshot = $campaign->target_snapshot;
+    $editedHtml = $originalHtml.'<p>Unapproved earlier payload</p>';
+    $campaign->update(['message_html' => $editedHtml, 'target_snapshot' => [...$originalSnapshot,
+        'render_hash' => hash('sha256', json_encode([$campaign->message_subject, $campaign->message_body, $editedHtml], JSON_THROW_ON_ERROR))]]);
+    personalEmailReadiness(fn () => $campaign->update(['message_html' => $originalHtml, 'target_snapshot' => $originalSnapshot]));
+    $this->mock(SendGridEmailService::class)->shouldNotReceive('sendEmail');
+    $result = app(MarketingEmailExecutionService::class)->sendRecipient($recipient, ['tenant_id' => $tenant->id]);
+    expect($result['outcome'])->toBe('skipped')->and($result['reason_codes'])->toContain('outreach_prepared_content_changed')
+        ->and(MarketingEmailDelivery::count())->toBe(0)->and($recipient->fresh()->status)->toBe('approved');
+    Http::assertNothingSent();
+});
+
 test('personal email retains unknown acceptance in its original ledger and cannot retry it as a failed recipient', function (array $response) {
     [$tenant, $owner, $profile, $campaign, $recipient] = personalEmailFixture();
     personalEmailReadiness();

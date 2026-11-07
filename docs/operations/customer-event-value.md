@@ -59,6 +59,10 @@ Captured contacts and confirmed event purchasers have separate denominators.
 access, the requested area and record, current Customers capability and a reviewed
 commerce event association. Responses are private/no-store. The caller must
 preserve equivalent ACL when presenting the profile projection elsewhere.
+Identity drift during a profile/history or event-page read returns409 for a
+refresh. A merged donor cannot present its survivor's history under the donor ID
+or add the survivor twice to a page total. Normal retained aliases resolve at the
+start of a new request.
 
 ## Evidence review command
 

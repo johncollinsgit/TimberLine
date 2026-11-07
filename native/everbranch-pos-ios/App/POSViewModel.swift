@@ -16,7 +16,11 @@ struct POSCustomerEvents: Decodable {
     let events: [Event]
 }
 struct POSCustomerResponse: Decodable { let customer: POSCustomer }
-struct PendingCustomerCreation: Codable { let workspace: String; let register: String; let requestID: String; var sessionFingerprint: String? = nil }
+struct PendingCustomerCreation: Codable {
+    let workspace: String; let register: String; let requestID: String
+    var sessionFingerprint: String? = nil
+    var origin: String? = nil
+}
 struct RefundResponse: Decodable { let refundId: String; let state: String; let sale: Sale }
 struct ReceiptEmailStatus: Decodable {
     let state: String
@@ -428,7 +432,9 @@ private struct RestorableQuote: Decodable {
             lookupCaptureNotice = "Saved customer requests could not be read. Search remains available; capture and enrollment are paused until recovery can be checked."
         }
         if let pendingCustomer, !lookupCaptureMatches(pendingCustomer) {
-            message = "An earlier customer capture is retained for its original sign-in and register. Recover it there before starting another capture."
+            message = lookupCaptureCanRecover(pendingCustomer)
+                ? "An earlier customer capture is retained. Check its original request before starting another capture."
+                : "An earlier customer capture is retained for its original sign-in and register. Recover it there before starting another capture."
         }
         return true
     }
@@ -460,7 +466,21 @@ private struct RestorableQuote: Decodable {
     }
     private func lookupCaptureMatches(_ capture: PendingCustomerCreation) -> Bool {
         capture.workspace == selectedWorkspace?.slug && capture.register == selectedRegister?.id
-            && (!lookupOnly || (capture.sessionFingerprint != nil && capture.sessionFingerprint == enrollmentSessionFingerprint))
+            && (!lookupOnly || ((capture.origin == nil || capture.origin == api.origin.absoluteString)
+                && capture.sessionFingerprint != nil && capture.sessionFingerprint == enrollmentSessionFingerprint))
+    }
+    private func lookupCaptureCanRecover(_ capture: PendingCustomerCreation) -> Bool {
+        guard lookupOnly else { return lookupCaptureMatches(capture) }
+        // The request endpoint authenticates tenant/register/actor/device. A renewed
+        // session may only read the original UUID; it must never replay its POST.
+        return capture.workspace == selectedWorkspace?.slug && capture.register == selectedRegister?.id
+            && (capture.origin == api.origin.absoluteString || (capture.origin == nil && lookupCaptureMatches(capture)))
+    }
+    var customerCaptureRecoveryLabel: String {
+        if lookupOnly, let pendingCustomer, !lookupCaptureMatches(pendingCustomer), lookupCaptureCanRecover(pendingCustomer) {
+            return "Check original capture"
+        }
+        return "Recover customer request"
     }
     #if DEBUG
     func loadLookupIsolationFixture() {
@@ -477,6 +497,15 @@ private struct RestorableQuote: Decodable {
             try? SecureStore.write("lookup-pending-customer", nil); try? SecureStore.write("lookup-pending-enrollment", nil)
         }
         if ProcessInfo.processInfo.arguments.contains("--pos-lookup-invalid-journal-ui-tests") { try? SecureStore.write("lookup-pending-customer", Data("unreadable-fixture-record".utf8)) }
+        if ProcessInfo.processInfo.arguments.contains("--pos-lookup-renew-capture-ui-tests") {
+            let captureWorkspace = ProcessInfo.processInfo.arguments.contains("--pos-lookup-capture-foreign-workspace-ui-tests") ? "other-workspace" : "fixture"
+            let captureRegister = ProcessInfo.processInfo.arguments.contains("--pos-lookup-capture-foreign-register-ui-tests") ? "other-register" : "fixture"
+            let captureOrigin = ProcessInfo.processInfo.arguments.contains("--pos-lookup-capture-foreign-origin-ui-tests") ? "https://other.example.test" : api.origin.absoluteString
+            let legacy = ProcessInfo.processInfo.arguments.contains("--pos-lookup-capture-legacy-ui-tests")
+            let retained = PendingCustomerCreation(workspace: captureWorkspace, register: captureRegister, requestID: "33333333-3333-4333-8333-333333333333",
+                sessionFingerprint: "expired-fictional-session", origin: legacy ? nil : captureOrigin)
+            try? SecureStore.write("lookup-pending-customer", try? JSONEncoder().encode(retained))
+        }
     }
     var lookupIsolationSummary: String {
         let capture = SecureStore.read("pending-customer").flatMap { try? JSONDecoder().decode(PendingCustomerCreation.self, from: $0) }
@@ -816,21 +845,38 @@ private struct RestorableQuote: Decodable {
         guard canRecordCustomerChoices else { message = lookupCaptureNotice; return }
         guard let base, let workspace = selectedWorkspace, let register = selectedRegister,
               !customerFirstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        if lookupOnly, pendingCustomer != nil { recoverCustomer(); return }
+        if lookupOnly, pendingCustomer != nil {
+            message = "Check the saved original customer request before starting another capture."; return
+        }
         let token = api.token; let generation = lookupGeneration
         perform {
             if let pending = self.pendingCustomer, !self.lookupCaptureMatches(pending) {
                 throw POSError.unavailable("Recover the earlier customer request at its original register before creating another record.")
             }
             if self.pendingCustomer == nil {
-                self.pendingCustomer = PendingCustomerCreation(workspace: workspace.slug, register: register.id, requestID: UUID().uuidString.lowercased(), sessionFingerprint: self.lookupOnly ? self.enrollmentSessionFingerprint : nil)
-                try SecureStore.write(self.customerJournalKey, try JSONEncoder().encode(self.pendingCustomer!))
+                let pending = PendingCustomerCreation(workspace: workspace.slug, register: register.id, requestID: UUID().uuidString.lowercased(),
+                    sessionFingerprint: self.lookupOnly ? self.enrollmentSessionFingerprint : nil, origin: self.lookupOnly ? self.api.origin.absoluteString : nil)
+                try SecureStore.write(self.customerJournalKey, try JSONEncoder().encode(pending))
+                self.pendingCustomer = pending
             }
             var body: [String: Any] = ["request_id": self.pendingCustomer!.requestID, "first_name": self.customerFirstName]
             if !self.customerLastName.isEmpty { body["last_name"] = self.customerLastName }
             if !self.customerEmail.isEmpty { body["email"] = self.customerEmail }
             if !self.customerPhone.isEmpty { body["phone"] = self.customerPhone }
-            let result: POSCustomerResponse = try await self.api.request(base + "/customers", method: "POST", body: body)
+            let requestID = self.pendingCustomer!.requestID
+            let result: POSCustomerResponse
+            do { result = try await self.api.request(base + "/customers", method: "POST", body: body) }
+            catch let error as CustomerCaptureServerError {
+                guard self.currentLookup(base, token, generation) else { return }
+                if self.lookupOnly, error.provesNoCreation, let pending = self.pendingCustomer,
+                   pending.requestID == requestID, self.lookupCaptureMatches(pending) {
+                    // Only delete this lookup journal after the server proves this
+                    // POST created nothing. Unknown requests keep their original ID.
+                    try SecureStore.write(self.customerJournalKey, nil)
+                    self.pendingCustomer = nil
+                }
+                throw POSError.unavailable(error.message)
+            }
             guard self.currentLookup(base, token, generation) else { return }
             self.selectedCustomer = result.customer
             try SecureStore.write(self.customerJournalKey, nil); self.pendingCustomer = nil
@@ -838,13 +884,14 @@ private struct RestorableQuote: Decodable {
         }
     }
     func recoverCustomer() {
-        guard let base, let pending = pendingCustomer, lookupCaptureMatches(pending) else {
+        guard let base, let pending = pendingCustomer, lookupCaptureCanRecover(pending) else {
             message = "Recover the earlier customer request at its original register with the same sign-in."; return
         }
         let token = api.token; let generation = lookupGeneration
         perform {
             let result: POSCustomerResponse = try await self.api.request(base + "/customer-requests/" + pending.requestID)
-            guard self.currentLookup(base, token, generation) else { return }
+            guard self.currentLookup(base, token, generation), self.pendingCustomer?.requestID == pending.requestID,
+                  self.lookupCaptureCanRecover(pending) else { return }
             self.selectedCustomer = result.customer
             try SecureStore.write(self.customerJournalKey, nil); self.pendingCustomer = nil
         }

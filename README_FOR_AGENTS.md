@@ -1,3 +1,16 @@
+## Shared customer profiles and event value (November 7; source candidate)
+
+Core Customers, Website accounts, Teams and Pay reuse canonical identities and
+original purchases for behavior, declared preferences, event value and current
+POS recommendations. Core search does not require global Marketing roles;
+personal draft preparation/review still requires verified tenant ownership or
+admin membership and current capabilities. Existing campaign senders retain
+authority; both new profile dispatch gates remain closed. Frozen content,
+current preferences, original handoffs and customer identity drift are checked
+before use. Read `docs/operations/shared-customer-profiles.md` and its linked
+runbooks for exact coverage, MySQL races and remaining release work. No new
+ledger, migration, live message, policy publication or production activation.
+
 ## Teams Studio foundation (November 7; draft source candidate)
 
 A paired React/Capacitor Teams candidate adds private event drafts, deterministic
@@ -21,8 +34,10 @@ membership reporting. Original subscription dates are required for join metrics.
 A newly reviewed POS binding can require counted stock per pool while older pools
 retain their untracked policy. Owners can adjust available products through the
 product menu. Read `docs/operations/pay-tenant-rewards-and-events.md` for current
-source coverage and remaining release work. Policy publication, QR redemption,
-phone installation and physical acceptance remain incomplete.
+source coverage and remaining release work. QR/saved-contact redemption, guarded
+policy publication and zero-tender wallet/stock completion are implemented in
+source; phone installation, live policy activation and physical acceptance remain
+outstanding.
 
 ## Contractor management in the public campus demo (November 5)
 

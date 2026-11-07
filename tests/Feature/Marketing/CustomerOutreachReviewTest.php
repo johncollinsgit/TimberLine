@@ -226,3 +226,15 @@ test('preference edits after preparation require a new draft instead of approvin
     $this->getJson(($this->url)())->assertOk()->assertJsonPath('review.can_approve', false);
     expect(MarketingSendApproval::count())->toBe(0)->and(MarketingEmailDelivery::count())->toBe(0)->and(MarketingConsentEvent::count())->toBe(0);
 });
+
+test('rehashed edited content cannot acquire approval against a different immutable preparation', function () {
+    $editedHtml = $this->campaign->message_html.'<p>Edited after preparation</p>';
+    $this->campaign->update(['message_html' => $editedHtml, 'target_snapshot' => [...$this->campaign->target_snapshot,
+        'render_hash' => hash('sha256', json_encode([$this->campaign->message_subject, $this->campaign->message_body, $editedHtml], JSON_THROW_ON_ERROR))]]);
+    $review = $this->getJson(($this->url)())->assertOk()->assertJsonPath('review.can_approve', false)->json('review');
+    expect($review['integrity_blockers'])->toContain('outreach_original_content_changed_or_missing');
+    $this->postJson(($this->url)(), ['action' => 'approve', 'request_id' => (string) Str::uuid(),
+        'reviewed_content_hash' => $review['content_hash'], 'confirm_approval' => true])->assertConflict();
+    expect(MarketingSendApproval::count())->toBe(0)->and(MarketingEmailDelivery::count())->toBe(0);
+    Http::assertNothingSent();
+});
