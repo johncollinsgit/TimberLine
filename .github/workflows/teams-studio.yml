@@ -58,6 +58,13 @@ jobs:
       - name: Prepare test environment
         run: cp .env.example .env
       - name: Verify Core Square source OAuth and credential renewal without provider transport
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          DB_URL: ''
+          DATABASE_URL: ''
+          TEAM_WORK_DISPOSABLE_MYSQL: '0'
+          POS_LIVE_DISPOSABLE_MYSQL: '0'
         run: php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.team.xml tests/Integration/CustomerSquareOAuthTest.php --compact
       - name: Verify policies, tenant isolation and native authorization on MySQL
         run: php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.team-studio-mysql.xml --compact
