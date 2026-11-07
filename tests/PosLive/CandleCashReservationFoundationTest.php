@@ -52,7 +52,7 @@ it('debits the shared ledger once and preserves fractional balance across retrie
     $again = $this->service->reserve($this->tenant->id, $this->sale, 500, 'customer-approved');
     expect($again->id)->toBe($hold->id)->and($hold->state)->toBe('held')
         ->and(CandleCashBalance::find($this->profile->id)->balance)->toBe(7.345)
-        ->and(DB::table('candle_cash_transactions')->where('source', 'pos_reservation')->count())->toBe(1);
+        ->and(DB::table('candle_cash_transactions')->where('marketing_profile_id', $this->profile->id)->where('source', 'pos_reservation')->count())->toBe(1);
     expect(fn () => $this->service->reserve($this->tenant->id, $this->sale, 400, 'customer-approved'))
         ->toThrow(PosException::class, 'reward_reservation_conflict');
 });

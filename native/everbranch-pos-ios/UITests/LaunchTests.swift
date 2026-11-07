@@ -212,10 +212,16 @@ final class LaunchTests: XCTestCase {
             let manage = app.buttons["Manage checkout rules"]; XCTAssertTrue(manage.waitForExistence(timeout: 5)); app.swipeUp(); manage.tap()
             let legacy = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Legacy add-on'")).firstMatch
             XCTAssertTrue(legacy.waitForExistence(timeout: 10)); legacy.tap()
-            let toggle = app.switches["Allow additional discounts"]
-            XCTAssertTrue(toggle.waitForExistence(timeout: 5)); app.swipeUp(); XCTAssertEqual(toggle.value as? String, "1")
+            XCTAssertTrue(app.navigationBars["Edit rule"].waitForExistence(timeout: 5))
+            XCTAssertEqual(app.textFields["Name"].value as? String, "Legacy add-on")
+            let toggle = app.switches["rule-allow-additional-discounts"]
+            for _ in 0..<4 where !toggle.exists || toggle.frame.maxY > app.frame.maxY - 100 { app.swipeUp() }
+            XCTAssertTrue(toggle.waitForExistence(timeout: 5)); XCTAssertEqual(toggle.value as? String, "1")
             if protect {
                 toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+                let turnedOff = NSPredicate(format: "value == %@", "0")
+                expectation(for: turnedOff, evaluatedWith: toggle)
+                waitForExpectations(timeout: 5)
                 XCTAssertEqual(toggle.value as? String, "0")
             }
             app.buttons["Save"].tap()

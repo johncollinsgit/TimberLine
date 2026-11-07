@@ -34,7 +34,7 @@ final class PosCustomerPurchases
             }
             try {
                 $sale = $this->store->rows('sales', $tenant)->where('id', $id)->where('state', 'succeeded')->first();
-                if (! $sale || ! $sale->attempt_id) {
+                if (! $sale) {
                     continue;
                 }
                 $snapshot = app(PosReceiptCustomers::class)->decorate($sale, app(PosService::class)->snapshot($sale));
@@ -46,8 +46,8 @@ final class PosCustomerPurchases
 
                     continue;
                 }
-                $payment = $this->journal->get($tenant, $sale->attempt_id);
-                if ($payment['state'] !== 'succeeded' || $payment['kind'] !== 'payment'
+                $payment = app(PosSalePaymentEvidence::class)->read($sale, app(PosService::class)->snapshot($sale));
+                if (! $payment || $payment['state'] !== 'succeeded' || $payment['kind'] !== 'payment'
                     || ($payment['binding']['environment'] ?? null) !== 'live'
                     || $payment['provider_id'] === null || $payment['sale_id'] !== $sale->id
                     || (int) $payment['amount_minor'] !== (int) $sale->amount_minor
@@ -63,10 +63,15 @@ final class PosCustomerPurchases
                 $refunds = $this->confirmedRefunds($sale);
                 $result['purchases'][] = ['id' => 'pos_sale:'.$id, 'source' => 'pos_sale', 'source_id' => $id,
                     'number' => 'Everbranch Pay · EB-'.strtoupper(substr($id, 0, 12)), 'channel' => 'in_person',
-                    'status' => $refunds >= $sale->amount_minor ? 'refunded' : ($refunds > 0 ? 'partially_refunded' : 'paid'),
+                    'status' => ($payment['rewards_returned_minor'] ?? 0) > 0 || ($sale->amount_minor > 0 && $refunds >= $sale->amount_minor) ? 'refunded' : ($refunds > 0 ? 'partially_refunded' : 'paid'),
                     'confirmed' => true, 'amount_minor' => (int) $sale->amount_minor, 'refunded_minor' => $refunds,
+                    'location' => ['name' => $snapshot['location_name'], 'register' => $snapshot['register_name'],
+                        'address' => $snapshot['configuration']['shopify']['tax_address'] ?? null],
+                    'items' => array_map(fn ($line) => array_intersect_key($line, array_flip(['title', 'quantity', 'components'])), $snapshot['terms']['display']),
                     'currency' => 'USD', 'currency_scale' => 2, 'occurred_at' => \Carbon\CarbonImmutable::parse($sale->created_at)->toIso8601String()];
-                $result['square_payments'][] = $payment['provider_id'];
+                if (($payment['source'] ?? '') !== 'everbranch_rewards_only') {
+                    $result['square_payments'][] = $payment['provider_id'];
+                }
                 if ($sale->provider_order_id) {
                     $result['square_orders'][] = $sale->provider_order_id;
                 }

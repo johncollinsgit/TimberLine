@@ -37,6 +37,9 @@ class CustomerMergeService
         $this->assertFieldSources($profiles, $fieldSources);
 
         return DB::transaction(function () use ($tenantId, $profiles, $survivorProfileId, $storeKey, $idempotencyKey, $fieldSources, $context, $shopifyIds): CustomerMergeOperation {
+            if (Schema::hasTable('customer_account_fences')) {
+                app(CustomerAccountFence::class)->lock($tenantId);
+            }
             // Serialize merge initiation with POS reward holds. The operation
             // members then prevent new holds until the merge is resolved.
             $lockedProfiles = MarketingProfile::query()->whereIn('id', $profiles->pluck('id'))
@@ -94,6 +97,9 @@ class CustomerMergeService
     public function apply(CustomerMergeOperation $operation, ?string $keptShopifyGid = null, ?string $deletedShopifyGid = null): CustomerMergeOperation
     {
         return DB::transaction(function () use ($operation, $keptShopifyGid, $deletedShopifyGid): CustomerMergeOperation {
+            if (Schema::hasTable('customer_account_fences')) {
+                app(CustomerAccountFence::class)->lock((int) $operation->tenant_id);
+            }
             $locked = CustomerMergeOperation::query()->lockForUpdate()->with('members')->findOrFail($operation->id);
             if ($locked->status === 'completed') {
                 return $locked;

@@ -28,7 +28,10 @@ final class StockEvents
         if ($input['end_on'] < $input['start_on']) {
             throw new StockException('stock_event_dates_required', 422);
         }
-        $metadata = array_intersect_key($input, array_flip(['name', 'start_on', 'end_on', 'venue', 'address', 'city', 'state', 'postal_code']));
+        if (isset($input['timezone']) && (! is_string($input['timezone']) || ! in_array($input['timezone'], \DateTimeZone::listIdentifiers(), true))) {
+            throw new StockException('stock_event_timezone_invalid', 422);
+        }
+        $metadata = array_intersect_key($input, array_flip(['name', 'start_on', 'end_on', 'venue', 'address', 'city', 'state', 'postal_code', 'timezone']));
 
         return $this->stock->operation($tenant, $request, 'event_reference', $actor, [$provider, $external, $metadata, $input['event_id'] ?? null], function () use ($tenant, $actor, $provider, $external, $metadata, $input): array {
             $old = $this->stock->rows('event_links', $tenant)->where('provider', $provider)->where('external_id', $external)->first();

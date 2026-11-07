@@ -90,6 +90,10 @@ final class PosPaymentStartClaim
                     || ! app(PosVerifiedCustomerAccount::class)->verified($profile, (int) $authorization->account_link_id)) {
                     throw new PosException('customer_identity_review_required', 409);
                 }
+                $effective = app(PosRewardRedemptionSettings::class)->forProfile($profile);
+                if ((int) $hold->amount_minor > $effective['max_minor'] || $hold->policy_version !== $effective['version']) {
+                    throw new PosException('membership_redemption_limit_changed', 409);
+                }
             }
             $id = $existing->id ?? (string) Str::uuid();
             if ($cancelPreparing) {

@@ -2208,6 +2208,14 @@ CREATE TABLE `customer_access_requests` (
   KEY `customer_access_requests_application_kind_index` (`application_kind`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_account_fences`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `customer_account_fences` (
+  `tenant_id` bigint unsigned NOT NULL,
+  PRIMARY KEY (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `customer_birthday_audits`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -9419,14 +9427,14 @@ CREATE TABLE `stockist_locations` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
   `shopify_store_id` bigint unsigned NOT NULL,
-  `source_key` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `source_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `name` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `address` text COLLATE utf8mb4_unicode_ci,
-  `body` text COLLATE utf8mb4_unicode_ci,
+  `source_key` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_id` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `name` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `address` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `body` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `latitude` decimal(10,7) DEFAULT NULL,
   `longitude` decimal(10,7) DEFAULT NULL,
-  `marker_icon` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `marker_icon` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `featured` tinyint(1) NOT NULL DEFAULT '0',
   `source_visible` tinyint(1) NOT NULL DEFAULT '1',
   `published` tinyint(1) NOT NULL DEFAULT '0',
@@ -9450,9 +9458,9 @@ CREATE TABLE `stockist_locator_settings` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
   `shopify_store_id` bigint unsigned NOT NULL,
-  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'draft',
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'draft',
   `configuration` json DEFAULT NULL,
-  `source_checksum` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `source_checksum` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `last_imported_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -14584,3 +14592,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (331,'2026_10_30_23
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (332,'2026_11_03_100000_create_website_shop_pay_connections_table',49);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (333,'2026_11_03_100100_create_website_shop_pay_attempts_table',49);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (334,'2026_11_05_140000_create_stockist_locator_tables',50);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (335,'2026_11_06_220000_create_customer_account_fences',51);

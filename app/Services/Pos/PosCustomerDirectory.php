@@ -107,6 +107,7 @@ final class PosCustomerDirectory
             $profile = MarketingProfile::query()->create(['tenant_id' => $scope['tenant_id'], ...$values,
                 'normalized_email' => $values['email'], 'normalized_phone' => app(\App\Support\Marketing\MarketingIdentityNormalizer::class)->normalizePhone($values['phone']), 'accepts_email_marketing' => false,
                 'accepts_sms_marketing' => false, 'source_channels' => ['everbranch_pay_manual']]);
+            app(PosEventAttribution::class)->capture($scope, $profile, $key);
             $this->store->event($scope['tenant_id'], $key, 'customer_created', ['hash' => $hash,
                 'profile_id' => $profile->id, 'actor_id' => $scope['actor_id'], 'register_id' => $scope['register']->id]);
 
@@ -176,7 +177,7 @@ final class PosCustomerDirectory
 
     public function linkSale(array $scope, string $sale, int $profileId): void
     {
-        MarketingProfile::query()->forTenantId($scope['tenant_id'])->whereKey($profileId)->lockForUpdate()->firstOrFail();
+        $profile = MarketingProfile::query()->forTenantId($scope['tenant_id'])->whereKey($profileId)->lockForUpdate()->firstOrFail();
         if ($this->profile($scope['tenant_id'], $profileId)->id !== $profileId) {
             throw new PosException('customer_selection_changed');
         }
@@ -184,6 +185,7 @@ final class PosCustomerDirectory
             'source_type' => 'pos_sale', 'source_id' => $this->store->runtime().':'.$sale,
             'match_method' => 'register_selected', 'source_meta' => ['actor_id' => $scope['actor_id'],
                 'register_id' => $scope['register']->id, 'selected_at' => now()->toIso8601String()]]);
+        app(PosEventAttribution::class)->capture($scope, $profile, $sale);
     }
 
     private function summary(MarketingProfile $profile): array

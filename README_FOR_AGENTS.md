@@ -1,3 +1,19 @@
+## Tenant rewards, event attribution and physical counts (November 6; source candidate)
+
+Pay can recommend an already authorized event register from the signed-in user's
+current Asana Events or native Teams assignment. Shared customer history includes
+recorded locations and products. Tenant policy supports optional percentage
+purchase earning and a separate verified-member redemption cap. Receipt email
+and text are explicit choices; contact suggestions alone do not request delivery.
+New event customer records retain first-capture provenance for later online and
+membership reporting. Original subscription dates are required for join metrics.
+
+A newly reviewed POS binding can require counted stock per pool while older pools
+retain their untracked policy. Owners can adjust available products through the
+product menu. Read `docs/operations/pay-tenant-rewards-and-events.md` for current
+source coverage and remaining release work. Policy publication, QR redemption,
+phone installation and physical acceptance remain incomplete.
+
 ## Contractor management in the public campus demo (November 5)
 
 The paired standalone dashboard has a Contractors main tab, concise copy and the
@@ -4021,3 +4037,18 @@ unchanged server snapshot. Ask Everbranch reuses existing provider/approval/caps
 and explicit versioned budget review. No provider activation, financial action,
 public billing or production readiness follows from these source changes. See
 `docs/operations/trajectory-runbook.md` for scope, privacy and validation.
+
+
+## Pay QR and wallet completion (November 6, 2026 source candidate)
+
+The newer `docs/operations/pay-tenant-rewards-and-events.md` supersedes the November
+1 source-gap list for QR, existing-wallet finalization, cross-writer identity and
+zero-tender purchases. Customer codes require fresh explicit cap consent. Saved
+contact possession uses a bounded one-time challenge and the same one-use proof.
+All identity writers and final payment admission share the tenant database fence;
+policy publication serializes on the actual setting rows. No provider I/O occurs
+inside the journal transaction. Fully redeemed purchases have internal wallet and
+stock evidence, no Square charge, and one-time rewards restoration. Short-lived
+owner membership review changes only redemption limits, never join statistics.
+The independent birthday lane retains its existing rollout and acceptance gates.
+Signed development artifacts do not establish distribution or physical acceptance.

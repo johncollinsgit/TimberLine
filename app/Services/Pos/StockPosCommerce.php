@@ -165,12 +165,14 @@ final class StockPosCommerce
                 || ! is_string($reward['policy_version'] ?? null) || ! is_string($reward['refund_policy'] ?? null)) {
                 throw new PosException('reward_quote_invalid', 422);
             }
-            $eligible = array_sum($offers['lines_minor']);
+            $eligible = array_sum($offers['lines_minor']) - ($offers['lines_minor']['custom'] ?? 0);
+            // The customer chooses a maximum. Do not redeem more than this basket's eligible merchandise.
+            $reward['amount_minor'] = min($reward['amount_minor'], $eligible);
             $offers = app(PosRewardAllocation::class)->apply($offers, $reward['amount_minor']);
             $reward['eligible_minor'] = $eligible;
         }
         $netSubtotal = array_sum($offers['lines_minor']);
-        if ($netSubtotal < 1) {
+        if ($netSubtotal < 1 && ($reward === null || $netSubtotal !== 0)) {
             throw new PosException('zero_total_checkout_not_supported', 422);
         }
         foreach ($display as &$displayLine) {
@@ -301,6 +303,7 @@ final class StockPosCommerce
             'custom_charge' => $input['custom_charge'] ?? null, 'display' => $display,
             'subtotal_minor' => $subtotal, 'discount_minor' => $offers['discount_minor'], 'applied_offers' => $offers['offers'], 'checkout_rules_version' => $offers['version'],
             'rewardable_subtotal_minor' => $netSubtotal - ($offers['lines_minor']['custom'] ?? 0),
+            'custom_discounted_minor' => $offers['lines_minor']['custom'] ?? 0,
             ...($reward !== null ? ['pos_candle_cash' => $reward] : []),
             'lines' => [['line_id' => 'counter_basket', 'kind' => 'merchandise', 'quantity' => 1, 'unit_amount_minor' => $netSubtotal, 'tax_amount_minor' => $tax]]];
     }

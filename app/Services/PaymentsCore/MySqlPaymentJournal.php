@@ -85,6 +85,7 @@ final class MySqlPaymentJournal implements NativeAtomicPaymentJournal, PaymentJo
                 || (int) $current->amount_minor !== $sale->amountMinor || strtolower($current->currency) !== $sale->currency) {
                 throw new DomainException('Native handoff terms require review.');
             }
+            app(\App\Services\Pos\PosRewardPaymentAdmission::class)->assert($this->db, $binding, $current, $snapshot);
             $holdKey = 'pos:'.$binding->runtimeId.':'.$sale->saleId;
             $stockLock = $this->db->table('commerce_stock_operations')->where('tenant_id', $binding->tenantId)
                 ->where('request_hash', hash('sha256', 'collect-lock:'.$holdKey))->where('kind', 'collection_lock')->lockForUpdate()->first();

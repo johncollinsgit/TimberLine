@@ -27,6 +27,7 @@ class PosLiveTestCase extends \Tests\TestCase
                 '2026_11_01_150000_create_pos_birthday_cycle_fences.php',
                 '2026_11_01_160000_add_pos_reward_authorization_terms.php',
                 '2026_11_01_170000_create_pos_birthday_annual_holds.php',
+                '2026_11_06_220000_create_customer_account_fences.php',
             ] as $migration) {
                 $path = database_path('migrations/'.$migration);
                 // The proof and start-claim migrations may land separately from the initial POS release.

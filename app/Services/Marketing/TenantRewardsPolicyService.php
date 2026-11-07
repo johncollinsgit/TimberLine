@@ -12,15 +12,25 @@ use Illuminate\Validation\ValidationException;
 class TenantRewardsPolicyService
 {
     public const POLICY_KEY = 'candle_cash_policy_config';
+
     public const PROGRAM_KEY = 'candle_cash_program_config';
+
     public const FRONTEND_KEY = 'candle_cash_frontend_config';
+
     public const NOTIFICATION_KEY = 'candle_cash_notification_config';
+
     public const FINANCE_KEY = 'candle_cash_finance_config';
+
     public const ACCESS_STATE_KEY = 'candle_cash_access_state';
+
     public const OPERATIONS_KEY = 'candle_cash_operations_config';
+
     public const TEAM_ACCESS_KEY = 'candle_cash_team_access_config';
+
     public const AUTOMATION_STATE_KEY = 'candle_cash_automation_state';
+
     public const VERSION_META_KEY = 'candle_cash_policy_version_meta';
+
     public const VERSION_HISTORY_KEY = 'candle_cash_policy_versions';
 
     public function __construct(
@@ -37,8 +47,7 @@ class TenantRewardsPolicyService
         protected TenantRewardsReminderAnalyticsService $reminderAnalyticsService,
         protected TenantRewardsFinanceSummaryService $financeSummaryService,
         protected TenantRewardsOperationsService $operationsService
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string,mixed>
@@ -216,6 +225,7 @@ class TenantRewardsPolicyService
                 'enable_milestone_rewards' => (bool) ($policyEarning['enable_milestone_rewards'] ?? true),
                 'enable_task_rewards' => (bool) ($policyEarning['enable_task_rewards'] ?? true),
                 'enable_order_based_earning' => (bool) ($policyEarning['enable_order_based_earning'] ?? true),
+                'purchase_earn_bps' => $policyEarning['purchase_earn_bps'] ?? null,
                 'first_order_reward_amount' => $this->nullablePositiveFloat($policyEarning['first_order_reward_amount'] ?? null),
                 'second_order_reward_amount' => round(max(0, (float) ($program['second_order_reward_amount'] ?? 5)), 2),
                 'third_order_reward_amount' => $this->nullablePositiveFloat($policyEarning['third_order_reward_amount'] ?? null),
@@ -335,6 +345,11 @@ class TenantRewardsPolicyService
             $errors['earning_rules.candle_club_multiplier_value'][] = 'Candle Club multiplier must be at least 1x.';
         }
 
+        if (isset($earning['purchase_earn_bps']) && (! is_int($earning['purchase_earn_bps'])
+            || $earning['purchase_earn_bps'] < 0 || $earning['purchase_earn_bps'] > 10000)) {
+            $errors['earning_rules.purchase_earn_bps'][] = 'Purchase rewards must be a whole basis-point value from 0 to 10000.';
+        }
+
         $maxCodesPerOrder = max(1, (int) ($redemption['max_codes_per_order'] ?? 1));
         $platformSupportsMultiCode = (bool) ($redemption['platform_supports_multi_code'] ?? false);
         if ($maxCodesPerOrder > 1 && ! $platformSupportsMultiCode) {
@@ -363,6 +378,7 @@ class TenantRewardsPolicyService
                 $offsetValue = (int) $offset;
                 if ($offsetValue < 0) {
                     $errors[$path.'.'.$index][] = 'Reminder timing offsets must be zero or greater.';
+
                     continue;
                 }
 
@@ -505,6 +521,7 @@ class TenantRewardsPolicyService
                 'enable_milestone_rewards' => (bool) ($earning['enable_milestone_rewards'] ?? true),
                 'enable_task_rewards' => (bool) ($earning['enable_task_rewards'] ?? true),
                 'enable_order_based_earning' => (bool) ($earning['enable_order_based_earning'] ?? true),
+                'purchase_earn_bps' => $earning['purchase_earn_bps'] ?? null,
                 'first_order_reward_amount' => $this->nullablePositiveFloat($earning['first_order_reward_amount'] ?? null),
                 'second_order_reward_amount' => round(max(0, (float) ($earning['second_order_reward_amount'] ?? 5)), 2),
                 'third_order_reward_amount' => $this->nullablePositiveFloat($earning['third_order_reward_amount'] ?? null),
@@ -957,6 +974,7 @@ class TenantRewardsPolicyService
             'value_model.minimum_purchase_dollars' => ['access' => 'editable_with_warning', 'message' => 'Lower minimum purchase values can tighten margin.'],
 
             'finance_and_safety.max_open_codes' => ['access' => 'editable_with_warning', 'message' => 'Higher open-code limits can increase outstanding liability.'],
+            'earning_rules.purchase_earn_bps' => ['access' => 'editable', 'message' => 'Applies to eligible Everbranch Pay merchandise after discounts and before tax. Existing bonuses are separate.'],
             'earning_rules.rewardable_channels' => ['access' => 'editable', 'message' => null],
             'redemption_rules.code_strategy' => ['access' => 'editable_with_warning', 'message' => 'Shared codes reduce customer-level attribution precision.'],
             'redemption_rules.stacking_mode' => ['access' => 'editable_with_warning', 'message' => 'Stacking can increase discount spend and reduce margin.'],
@@ -1096,6 +1114,7 @@ class TenantRewardsPolicyService
                 }
 
                 $merged[$key] = $this->deepMerge((array) $merged[$key], $value);
+
                 continue;
             }
 
@@ -1389,6 +1408,11 @@ class TenantRewardsPolicyService
                 'path' => 'program_identity.program_name',
                 'label' => 'Program name',
                 'formatter' => fn (array $policy): string => (string) data_get($policy, 'program_identity.program_name', 'Rewards'),
+            ],
+            [
+                'path' => 'earning_rules.purchase_earn_bps',
+                'label' => 'In-person purchase reward',
+                'formatter' => fn (array $policy): string => data_get($policy, 'earning_rules.purchase_earn_bps') === null ? 'Not configured' : number_format(data_get($policy, 'earning_rules.purchase_earn_bps') / 100, 2).'%',
             ],
             [
                 'path' => 'earning_rules.second_order_reward_amount',

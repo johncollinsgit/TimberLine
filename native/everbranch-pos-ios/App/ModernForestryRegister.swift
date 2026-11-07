@@ -5,6 +5,9 @@ struct EverbranchRegisterView: View {
     @StateObject private var model = POSViewModel()
     @State private var basket = false
     @State private var account = false
+    @State private var customerLookup = false
+    @State private var previousCustomer: POSCustomer?
+    @State private var lookupRegister: String?
     @State private var showRecovery = true
     private var fixture: Bool {
         #if DEBUG
@@ -21,17 +24,20 @@ struct EverbranchRegisterView: View {
                 POSView(screen: .checkout, model: model)
             }
             else if fixture || (model.signedIn && model.registerLoaded) {
-                NativeRegister(model: model, onBasket: { showRecovery = false; basket = true }, onAccount: { account = true })
+                NativeRegister(model: model, onBasket: { showRecovery = false; basket = true }, onAccount: { account = true }, onCustomers: { lookupRegister = model.base; previousCustomer = model.selectedCustomer; model.selectedCustomer = nil; customerLookup = true })
             } else { POSView(screen: .setup, model: model) }
         }
         .background(PayTheme.paper)
         .sheet(isPresented: $basket, onDismiss: {
             if model.sale?.canLeave == true && model.pending?.refundRequestID == nil { model.nextSale() }
         }) { POSView(onClose: { basket = false }, screen: .checkout, model: model) }
+        .sheet(isPresented: $customerLookup, onDismiss: { if model.base == lookupRegister { model.selectedCustomer = previousCustomer }; previousCustomer = nil; lookupRegister = nil; model.refreshCustomerCommerce() }) {
+            POSView(onClose: { customerLookup = false }, screen: .customers, model: model)
+        }
         .sheet(isPresented: $account) { POSView(onClose: { account = false }, onOpenRegister: { account = false }, screen: .setup, model: model) }
         .onChange(of: model.completedSaleGeneration) { _, _ in basket = false; showRecovery = false }
         .onChange(of: model.editingBasket) { _, editing in if editing { showRecovery = false; basket = true } }
-        .onChange(of: model.signedIn) { _, value in if !value { account = false; basket = false } }
+        .onChange(of: model.signedIn) { _, value in if !value { previousCustomer = nil; lookupRegister = nil; customerLookup = false; account = false; basket = false } }
         .modifier(ReadinessRefreshObserver(model: model, account: $account, basket: $basket))
         #if DEBUG
         .onAppear { if ProcessInfo.processInfo.arguments.contains("--pos-completed-sheet-ui-tests") { showRecovery = false } }
@@ -70,6 +76,7 @@ private struct NativeRegister: View {
     @ObservedObject var model: POSViewModel
     let onBasket: () -> Void
     let onAccount: () -> Void
+    let onCustomers: () -> Void
     @State private var tab: RegisterTab = .products
     @State private var search = ""
     @State private var favorites = Set<String>()
@@ -97,7 +104,11 @@ private struct NativeRegister: View {
                     Text(model.selectedWorkspace?.name ?? "Register").font(.system(.title2, design: .serif)).lineLimit(1)
                 }
                 Spacer()
+                VStack(spacing: 8) {
+                    Button("Customers", action: onCustomers).font(.subheadline.weight(.semibold)).padding(.horizontal, 14).frame(minHeight: 44)
+                        .foregroundStyle(PayTheme.ink).background(PayTheme.cream, in: Capsule()).disabled(model.busy || model.collector.hasActivePayment)
                 Button(action: onAccount) { Text("Account").font(.subheadline.weight(.semibold)).padding(14).frame(minHeight: 48).foregroundStyle(PayTheme.ink).background(PayTheme.cream, in: Capsule()).contentShape(Capsule()) }.accessibilityLabel("Account & Tap to Pay")
+                }
             }.padding(.horizontal, 20).frame(height: 168).foregroundStyle(PayTheme.cream)
                 .background {
                     Image("RegisterMountainHero")
@@ -213,6 +224,11 @@ private struct NativeRegister: View {
             } label: { Image(systemName: favorites.contains(group.id) ? "star.fill" : "star").frame(width: 44, height: 44).background(PayTheme.cream.opacity(0.95), in: Circle()).contentShape(Circle()) }.padding(searchFocused ? 12 : 20)
                 .accessibilityLabel(favorites.contains(group.id) ? "Remove \(group.title) from favorites" : "Favorite \(group.title)")
         }
+        .contextMenu {
+            if model.selectedRegister?.canManageInventory == true && group.items.contains(where: { $0.kind != "bundle" }) {
+                Button("Adjust stock") { stockCounts = [:]; options = group }.disabled(model.pending != nil || model.busy)
+            }
+        }
     }
     private func productPhoto(_ group: ProductGroup) -> some View {
         AsyncImage(url: group.items[0].imageUrl.flatMap(URL.init(string:))) { image in image.resizable().scaledToFill() }
@@ -256,11 +272,14 @@ private struct NativeRegister: View {
                         } label: {
                             HStack { VStack(alignment: .leading) { Text(item.variantLabel ?? item.title).font(.headline); Text(item.availability == "review_required" ? "Bundle setup needed" : item.kind == "bundle" ? "Mix & match" : (item.availableQuantity ?? 1) > 0 ? "Add to basket" : "Unavailable").font(.subheadline) }; Spacer(); Text(POSMoney.display(item.unitAmountMinor)).monospacedDigit() }.padding(20).background(PayTheme.cream, in: Capsule())
                         }.disabled(model.pending == nil && ((item.availableQuantity ?? 1) == 0 || ["count_required", "review_required"].contains(item.availability ?? ""))).accessibilityLabel("Add \(group.title) \(item.variantLabel ?? "")")
-                        if model.selectedRegister?.canManageInventory == true && item.kind != "bundle" && item.availability != "review_required" && (item.availableQuantity == 0 || item.availability == "count_required") {
-                            VStack(alignment: .leading, spacing: 12) {
+                        if model.selectedRegister?.canManageInventory == true && item.kind != "bundle" && item.availability != "review_required" {
+                            DisclosureGroup("Adjust stock") {
+                              VStack(alignment: .leading, spacing: 12) {
+                                if let available = item.availableQuantity { Text("Available to sell: \(available)").font(.subheadline) }
                                 Text("Count the physical \(item.variantLabel ?? item.title) units remaining at this event. Include units held for open sales.").font(.subheadline).foregroundStyle(PayTheme.muted)
                                 TextField("Physical units remaining", text: Binding(get: { stockCounts[item.id] ?? "" }, set: { stockCounts[item.id] = $0 })).keyboardType(.numberPad).padding(16).background(PayTheme.cream, in: Capsule())
-                                Button("Confirm count") { model.countStock(item, quantity: stockCounts[item.id] ?? "") }.font(.headline).frame(maxWidth: .infinity, minHeight: 52).background(PayTheme.ink, in: Capsule()).foregroundStyle(PayTheme.cream).disabled(model.busy || Int(stockCounts[item.id] ?? "") == nil)
+                                Button("Save physical count") { model.countStock(item, quantity: stockCounts[item.id] ?? "") }.font(.headline).frame(maxWidth: .infinity, minHeight: 52).background(PayTheme.ink, in: Capsule()).foregroundStyle(PayTheme.cream).disabled(model.busy || model.pending != nil || Int(stockCounts[item.id] ?? "").map { $0 < 0 || $0 > 1_000_000 } ?? true)
+                              }
                             }
                         }
                     }
@@ -300,7 +319,7 @@ extension POSViewModel {
         rows.append(["item_id": String(repeating: "e", count: 32), "product_key": "fixture-trio", "title": "Fictional trio", "variant_label": "Mix & match", "unit_amount_minor": 1800, "kind": "bundle", "revision": String(repeating: "f", count: 64), "available_quantity": untracked ? NSNull() : 6, "availability": "available", "bundle_quantity": 3, "bundle_items": [rows[0], rows[2]]])
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
         items = (try? decoder.decode(CatalogList.self, from: JSONSerialization.data(withJSONObject: ["items": rows])))?.items ?? []
-        selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": [], "custom_amount_enabled": true, "guest_checkout": true, "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests")]))
+        selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": [], "custom_amount_enabled": true, "guest_checkout": true, "rewards_redemption_available": ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests"), "can_manage_inventory": ProcessInfo.processInfo.arguments.contains("--pos-stock-count-ui-tests"), "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests")]))
         if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") {
             signedIn = true; registerLoaded = true; tapReady = true
             if ProcessInfo.processInfo.arguments.contains("--pos-enrollment-ui-tests") {

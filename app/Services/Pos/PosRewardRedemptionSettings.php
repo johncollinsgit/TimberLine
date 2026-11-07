@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Pos;
 
+use App\Models\MarketingProfile;
 use App\Models\TenantMarketingSetting;
 use App\Services\PaymentsCore\Contract;
 
@@ -24,7 +25,12 @@ final class PosRewardRedemptionSettings
             throw new PosException('in_person_rewards_policy_invalid', 422);
         }
 
-        return Contract::hash(['enabled' => true, 'max_minor' => $setting['max_minor'],
+        if (isset($setting['member_max_minor']) && (! is_int($setting['member_max_minor'])
+            || $setting['member_max_minor'] < 1 || $setting['member_max_minor'] > Contract::MAX_MINOR)) {
+            throw new PosException('in_person_rewards_policy_invalid', 422);
+        }
+
+        return Contract::hash([...(isset($setting['member_max_minor']) ? ['member_max_minor' => $setting['member_max_minor']] : []), 'enabled' => true, 'max_minor' => $setting['max_minor'],
             'refund_policy' => 'restore_full_review_partial', 'rewards_version' => $rewardsVersion]);
     }
 
@@ -46,8 +52,17 @@ final class PosRewardRedemptionSettings
             throw new PosException('in_person_rewards_review_required', 503);
         }
 
-        return ['version' => $version, 'max_minor' => $setting['max_minor'],
+        return ['version' => $version, 'max_minor' => $setting['max_minor'], 'member_max_minor' => $setting['member_max_minor'] ?? null,
             'refund_policy' => $setting['refund_policy'], 'rewards_version' => $program['version']];
+    }
+
+    public function forProfile(MarketingProfile $profile): array
+    {
+        $policy = $this->tenant((int) $profile->tenant_id);
+        $evidence = isset($policy['member_max_minor']) ? app(PosMembershipEvidence::class)->active($profile) : null;
+
+        return [...$policy, 'max_minor' => $evidence ? $policy['member_max_minor'] : $policy['max_minor'],
+            'membership_evidence' => $evidence];
     }
 
     public function forRegister(array $scope): array
@@ -68,6 +83,17 @@ final class PosRewardRedemptionSettings
             $this->tenant($tenant);
 
             return true;
+        } catch (PosException) {
+            return false;
+        }
+    }
+
+    public function availableForRegister(array $scope): bool
+    {
+        try {
+            $this->forRegister($scope);
+
+            return config('pos_live.durable_start_claims_enabled', false) === true;
         } catch (PosException) {
             return false;
         }

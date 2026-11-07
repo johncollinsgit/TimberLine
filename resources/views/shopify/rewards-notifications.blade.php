@@ -481,6 +481,11 @@
                 <h3 class="policy-heading">Where Customers Earn Rewards</h3>
                 <p class="policy-copy">Choose the launch-safe channel strategy for earning and redemption.</p>
                 <div class="policy-grid">
+                    <div class="policy-field" data-policy-field="earning_rules.purchase_earn_bps">
+                        <label for="purchase_earn_percent">In-person purchase reward (%)</label>
+                        <input id="purchase_earn_percent" name="purchase_earn_percent" type="number" min="0" max="100" step="0.01" />
+                        <p class="policy-field-help">Eligible Everbranch Pay merchandise after discounts, before tax. Leave blank to keep percentage earning unconfigured. Other program bonuses still apply.</p>
+                    </div>
                     <div class="policy-field" data-policy-field="earning_rules.rewardable_channels">
                         <label for="rewardable_channels">Channel strategy</label>
                         <select id="rewardable_channels" name="rewardable_channels">
@@ -1178,6 +1183,7 @@
                 setField("max_redeemable_per_order_dollars", policy?.value_model?.max_redeemable_per_order_dollars);
                 setField("minimum_purchase_dollars", policy?.value_model?.minimum_purchase_dollars);
                 setField("max_open_codes", policy?.finance_and_safety?.max_open_codes);
+                setField("purchase_earn_percent", policy?.earning_rules?.purchase_earn_bps == null ? "" : policy.earning_rules.purchase_earn_bps / 100);
                 setField("rewardable_channels", policy?.earning_rules?.rewardable_channels);
                 setField("candle_club_multiplier_enabled", policy?.earning_rules?.candle_club_multiplier_enabled);
                 setField("candle_club_multiplier_value", policy?.earning_rules?.candle_club_multiplier_value);
@@ -1678,6 +1684,7 @@
                         minimum_purchase_dollars: Number.parseFloat(document.getElementById("minimum_purchase_dollars")?.value || "0"),
                     },
                     earning_rules: {
+                        purchase_earn_bps: document.getElementById("purchase_earn_percent")?.value?.trim() ? Math.round(Number(document.getElementById("purchase_earn_percent").value) * 100) : null,
                         rewardable_channels: document.getElementById("rewardable_channels")?.value || "online_only",
                         candle_club_multiplier_enabled: !!document.getElementById("candle_club_multiplier_enabled")?.checked,
                         candle_club_multiplier_value: Number.parseFloat(document.getElementById("candle_club_multiplier_value")?.value || "2"),

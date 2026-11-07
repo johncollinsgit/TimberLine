@@ -81,6 +81,83 @@ function configureEnrollment($test): array
     ])->assertOk()->json();
 }
 
+function prepareContactRewardProgram($test): void
+{
+    config(['pos_live.in_person_rewards_enabled' => true, 'pos_live.durable_start_claims_enabled' => true]);
+    foreach (['candle_cash_program_config' => ['label' => 'Trail Credit'], 'candle_cash_policy_config' => ['earning_rules' => []],
+        'candle_cash_access_state' => ['launch_state' => 'published', 'test_mode' => false]] as $key => $value) {
+        \App\Models\TenantMarketingSetting::create(['tenant_id' => $test->tenant->id, 'key' => $key, 'value' => $value]);
+    }
+    $policy = ['enabled' => true, 'max_minor' => 500, 'member_max_minor' => 1000, 'refund_policy' => 'restore_full_review_partial'];
+    $version = app(\App\Services\Pos\PosRewardRedemptionSettings::class)->version($policy, app(\App\Services\Pos\PosCustomerRewards::class)->policy($test->tenant->id)['version']);
+    \App\Models\TenantMarketingSetting::create(['tenant_id' => $test->tenant->id, 'key' => \App\Services\Pos\PosRewardRedemptionSettings::SETTING_KEY,
+        'value' => [...$policy, 'reviewed_version' => $version, 'reviewed_by' => $test->actor->id, 'reviewed_at' => now()->toIso8601String()]]);
+    $row = $test->store->rows('registers', $test->tenant->id)->first();
+    $settings = $test->store->decrypt($row->configuration);
+    $settings['pos_candle_cash_reviewed_version'] = $version;
+    $test->store->rows('registers', $test->tenant->id)->update(['configuration' => $test->store->encrypt($settings)]);
+    $test->profile->update(['phone' => '+12025550123']);
+    \App\Models\CandleCashBalance::create(['marketing_profile_id' => $test->profile->id, 'balance' => 12]);
+}
+
+it('verifies possession of a saved contact once without spending or subscribing the customer', function (): void {
+    prepareContactRewardProgram($this);
+    $gateway = Mockery::mock(\App\Services\Marketing\Messaging\TenantMessagingGateway::class);
+    $code = null;
+    $gateway->shouldReceive('sendSms')->once()->andReturnUsing(function ($tenant, $phone, $body) use (&$code) {
+        preg_match('/code is ([0-9]{6})\./', $body, $match);
+        $code = $match[1];
+        expect($phone)->toBe('+12025550123')->and($body)->toContain('up to $5.00', 'ONE in-person purchase');
+
+        return ['success' => true, 'provider_message_id' => 'SMfictional'];
+    });
+    app()->instance(\App\Services\Marketing\Messaging\TenantMessagingGateway::class, $gateway);
+    $url = $this->base.'/reward-codes/contact';
+    $input = ['request_id' => (string) Str::uuid(), 'customer_profile_id' => $this->profile->id, 'channel' => 'phone', 'customer_requested' => true];
+    $this->postJson($url, [...$input, 'customer_requested' => false])->assertStatus(422);
+    $challenge = $this->postJson($url, $input)->assertOk()->assertJsonPath('state', 'requested')->json('challenge_id');
+    $this->postJson($url, $input)->assertOk()->assertJsonPath('challenge_id', $challenge);
+    $proof = $this->postJson($url.'/'.$challenge, ['code' => $code])->assertOk()->json('qr_payload');
+    $this->postJson($this->base.'/reward-codes/preview', ['proof' => $proof, 'expected_customer_id' => $this->profile->id])->assertOk()
+        ->assertJsonPath('customer.id', $this->profile->id)->assertJsonPath('max_minor', 500)->assertJsonPath('balance_minor', 1200);
+    $this->postJson($url.'/'.$challenge, ['code' => $code])->assertStatus(422);
+    expect((float) \App\Models\CandleCashBalance::whereKey($this->profile->id)->value('balance'))->toBe(12.0)
+        ->and($this->profile->fresh()->accepts_sms_marketing)->not->toBeTrue();
+});
+
+it('commits failed code attempts, expires authorizations, and never resends a contact request after provider uncertainty', function (): void {
+    prepareContactRewardProgram($this);
+    $gateway = Mockery::mock(\App\Services\Marketing\Messaging\TenantMessagingGateway::class);
+    $gateway->shouldReceive('sendSms')->once()->andThrow(new RuntimeException('possible provider acceptance'));
+    app()->instance(\App\Services\Marketing\Messaging\TenantMessagingGateway::class, $gateway);
+    $url = $this->base.'/reward-codes/contact';
+    $input = ['request_id' => (string) Str::uuid(), 'customer_profile_id' => $this->profile->id, 'channel' => 'phone', 'customer_requested' => true];
+    $id = $this->postJson($url, $input)->assertOk()->assertJsonPath('state', 'not_confirmed')->json('challenge_id');
+    $this->postJson($url, $input)->assertOk()->assertJsonPath('state', 'not_confirmed');
+    for ($i = 0; $i < 6; $i++) {
+        $this->postJson($url.'/'.$id, ['code' => '000000'])->assertStatus(422)->assertJsonPath('error.code', 'reward_contact_code_invalid');
+    }
+    $this->postJson($url.'/'.$id, ['code' => '000000'])->assertStatus(422)->assertJsonPath('error.code', 'reward_contact_code_expired');
+    expect($this->store->rows('events', $this->tenant->id)->where('sale_id', $id)->where('code', 'reward_contact_failed')->count())->toBe(6)
+        ->and(DB::table('pos_reward_authorizations')->where('tenant_id', $this->tenant->id)->count())->toBe(0);
+});
+
+it('connects only the explicitly reviewed wallet and replays finalization without moving balances', function (): void {
+    config(['pos_live.existing_wallet_review_enabled' => true]);
+    $reviews = app(\App\Services\Pos\PosExistingWalletReview::class);
+    $request = $reviews->request($this->tenant->id, 'gid://shopify/Customer/772', (string) Str::uuid());
+    $url = $this->base.'/wallet-link-reviews/'.$request['reference'];
+    $this->postJson($url.'/finalize', ['customer_profile_id' => $this->profile->id, 'confirmed' => true])->assertConflict();
+    $details = $this->getJson($url)->assertOk()->json();
+    $this->postJson($url, ['customer_profile_id' => $this->profile->id, 'evidence' => 'owner_verified_independent_evidence',
+        'confirmed' => true, 'disclosure_hash' => $details['disclosure_hash']])->assertOk();
+    $this->postJson($url.'/finalize', ['customer_profile_id' => $this->profile->id, 'confirmed' => true])->assertOk()->assertJsonPath('linked', true);
+    $this->postJson($url.'/finalize', ['customer_profile_id' => $this->profile->id, 'confirmed' => true])->assertOk()->assertJsonPath('linked', true);
+    $claim = \App\Models\MarketingProfileLink::forTenantId($this->tenant->id)->where('source_type', \App\Services\Pos\PosVerifiedCustomerAccount::SOURCE)->firstOrFail();
+    expect(app(\App\Services\Pos\PosVerifiedCustomerAccount::class)->verified($this->profile, $claim->id))->toBeTrue()
+        ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->count())->toBe(0);
+});
+
 it('defaults enrollment off and requires reviewed tenant-specific disclosures', function (): void {
     $settings = $this->getJson($this->base.'/customer-enrollment')->assertOk()->json();
     expect($settings['birthday_enabled'])->toBeFalse()->and($settings['email_enabled'])->toBeFalse()->and($settings['sms_enabled'])->toBeFalse();
@@ -225,7 +302,7 @@ it('records an assigned administrator review without linking a wallet or trustin
     $request = $service->request($this->tenant->id, $subject, (string) Str::uuid());
     $url = $this->base.'/wallet-link-reviews/'.$request['reference'];
     $details = $this->getJson($url)->assertOk()->assertJsonPath('shopify_subject', $subject)
-        ->assertJsonPath('linked', false)->assertJsonPath('finalization_available', false)->json();
+        ->assertJsonPath('linked', false)->assertJsonPath('finalization_available', true)->json();
     expect($details['disclosure'])->toContain('independently verified');
     $this->actor->tenants()->updateExistingPivot($this->tenant->id, ['role' => 'member']);
     $input = ['customer_profile_id' => $this->profile->id, 'evidence' => 'owner_verified_independent_evidence',

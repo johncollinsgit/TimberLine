@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_06_220000_create_customer_account_fences.php' => [
+        'test' => 'tests/Integration/CustomerAccountFenceMySqlRecoveryTest.php',
+        'scenarios' => ['durable tenant row survives missing primary key repair, retry and rollback'],
+    ],
     '2026_11_05_140000_create_stockist_locator_tables.php' => [
         'test' => 'tests/Integration/StockistLocatorMySqlRecoveryTest.php',
         'scenarios' => ['retained settings before location-table creation, replay and code rollback preserve source and published snapshots; duplicate store/source keys are rejected'],

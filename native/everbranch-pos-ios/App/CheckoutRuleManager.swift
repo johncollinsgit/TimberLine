@@ -135,21 +135,8 @@ struct CheckoutRuleManager: View {
     @State private var onlineRule: CheckoutRule?
     @State private var busy = false
     @State private var error: String?
-    @State private var editor = false
-    @State private var editingID: String?
-    @State private var name = ""
-    @State private var kind = "fixed"
-    @State private var value = ""
-    @State private var itemScope = true
-    @State private var saleScope = true
-    @State private var inPerson = true
-    @State private var online = false
-    @State private var active = true
-    @State private var requiresOtherItem = true
-    @State private var allowAdditionalDiscounts = false
-    @State private var legacyAddon = false
-    @State private var additionalDiscountsChanged = false
-    @State private var eligible = Set<String>()
+    private struct EditorPresentation: Identifiable { let id = UUID(); let draft: CheckoutRuleDraft }
+    @State private var editor: EditorPresentation?
 
     var body: some View {
         NavigationStack {
@@ -171,7 +158,7 @@ struct CheckoutRuleManager: View {
                         }
                         .swipeActions(allowsFullSwipe: false) { Button("Delete", role: .destructive) { remove(rule) } }
                     }
-                    Button("Add rule") { reset(); editor = true }
+                    Button("Add rule") { error = nil; editor = EditorPresentation(draft: CheckoutRuleDraft(rule: nil)) }
                 }
                 Section("Online discounts") {
                     Text("Only a single public, whole-sale discount can be published. It cannot combine with other discounts.").font(.footnote).foregroundStyle(.secondary)
@@ -187,50 +174,12 @@ struct CheckoutRuleManager: View {
             .disabled(busy)
             .overlay { if busy { ProgressView() } }
             .task { await reload() }
-            .sheet(isPresented: $editor) { editForm }
+            .sheet(item: $editor) { presentation in
+                CheckoutRuleEditor(model: model, initial: presentation.draft, busy: busy, error: error,
+                    onCancel: { editor = nil }, onSave: save).id(presentation.id)
+            }
             .sheet(item: $review) { snapshot in reviewSheet(snapshot) }
             .sheet(item: $onlineRule) { rule in ShopifyOnlineDiscountSheet(model: model, rule: rule, version: version) }
-        }
-    }
-
-    private var editForm: some View {
-        NavigationStack {
-            Form {
-                Section("Rule") {
-                    TextField("Name", text: $name)
-                    Picker("Type", selection: $kind) {
-                        Text("Amount off").tag("fixed"); Text("Percent off").tag("percent"); Text("Add-on price").tag("addon")
-                    }
-                    TextField(kind == "percent" ? "Percent" : "Amount", text: $value).keyboardType(.decimalPad)
-                    Toggle("Enabled", isOn: $active)
-                }
-                Section("Where it applies") {
-                    if kind != "addon" { Toggle("Individual item", isOn: $itemScope); Toggle("Whole sale", isOn: $saleScope) }
-                    Toggle("In person", isOn: $inPerson)
-                    Toggle("Online draft", isOn: $online)
-                    Text("Online rules are drafts. They will not affect Shopify checkout until online publishing is available and approved.").font(.caption).foregroundStyle(.secondary)
-                }
-                if kind == "addon" {
-                    Section("Eligible products") {
-                        Toggle("One add-on per regular product", isOn: $requiresOtherItem)
-                        Text("Each regular product can qualify one add-on across all offers. Bundles, custom amounts, and add-ons do not qualify.").font(.caption).foregroundStyle(.secondary)
-                        Toggle("Allow additional discounts", isOn: $allowAdditionalDiscounts)
-                            .onChange(of: allowAdditionalDiscounts) { _, _ in additionalDiscountsChanged = true }
-                        Text(legacyAddon && !additionalDiscountsChanged ? "This existing add-on allows additional discounts. Change this setting to update it." : "When off, item and whole-sale discounts do not reduce this add-on price.")
-                            .font(.caption).foregroundStyle(.secondary)
-                        ForEach(model.items.filter { $0.kind != "bundle" }) { item in
-                            Toggle(item.title + ((item.variantLabel ?? "").isEmpty ? "" : " · " + item.variantLabel!), isOn: Binding(get: { eligible.contains(item.id) }, set: { if $0 { eligible.insert(item.id) } else { eligible.remove(item.id) } }))
-                        }
-                    }
-                }
-                if let error { Section { Text(error).foregroundStyle(.red) } }
-            }
-            .navigationTitle(editingID == nil ? "Add rule" : "Edit rule")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { editor = false } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.disabled(busy) }
-            }
-            .disabled(busy)
         }
     }
 
@@ -238,14 +187,8 @@ struct CheckoutRuleManager: View {
         if rule.kind == "percent" { return String(format: "%.2f%% off", Double(rule.value) / 100) }
         return POSMoney.display(rule.value) + (rule.kind == "addon" ? " add-on" : " off")
     }
-    private func reset() { editingID = nil; name = ""; kind = "fixed"; value = ""; itemScope = true; saleScope = true; inPerson = true; online = false; active = true; requiresOtherItem = true; allowAdditionalDiscounts = false; legacyAddon = false; additionalDiscountsChanged = false; eligible = []; error = nil }
     private func edit(_ rule: CheckoutRule) {
-        editingID = rule.id; name = rule.name; kind = rule.kind; value = String(format: "%.2f", Double(rule.value) / 100)
-        itemScope = rule.scopes.contains("item"); saleScope = rule.scopes.contains("sale"); inPerson = rule.channels.contains("in_person"); online = rule.channels.contains("online")
-        active = rule.active; requiresOtherItem = rule.requiresOtherItem ?? true
-        legacyAddon = rule.kind == "addon" && rule.allowAdditionalDiscounts == nil
-        allowAdditionalDiscounts = rule.kind == "addon" ? (rule.allowAdditionalDiscounts ?? true) : false
-        additionalDiscountsChanged = false; eligible = Set(rule.eligibleItemIds ?? []); error = nil; editor = true
+        error = nil; editor = EditorPresentation(draft: CheckoutRuleDraft(rule: rule))
     }
     private func reload() async {
         guard let base = model.base else { error = "Choose a register first."; return }
@@ -325,23 +268,23 @@ struct CheckoutRuleManager: View {
         }
     }
 
-    private func save() {
+    private func save(_ draft: CheckoutRuleDraft) {
         guard let base = model.base, !busy else { return }
         do {
-            let amount = try POSMoney.minor(value)
-            let scopes = kind == "addon" ? ["item"] : ([itemScope ? "item" : nil, saleScope ? "sale" : nil].compactMap { $0 })
-            let channels = [inPerson ? "in_person" : nil, online ? "online" : nil].compactMap { $0 }
-            guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !scopes.isEmpty, !channels.isEmpty,
-                  kind != "percent" || amount <= 10000, kind != "addon" || !eligible.isEmpty else { error = "Complete the name, amount and where the rule applies."; return }
-            var rule: [String: Any] = ["id": editingID ?? UUID().uuidString.lowercased(), "name": name.trimmingCharacters(in: .whitespacesAndNewlines), "kind": kind, "value": amount, "scopes": scopes, "channels": channels, "active": active]
-            if kind == "addon" {
-                rule["eligible_item_ids"] = eligible.sorted(); rule["requires_other_item"] = requiresOtherItem
-                if !legacyAddon || additionalDiscountsChanged { rule["allow_additional_discounts"] = allowAdditionalDiscounts }
+            let amount = try POSMoney.minor(draft.value)
+            let scopes = draft.kind == "addon" ? ["item"] : ([draft.itemScope ? "item" : nil, draft.saleScope ? "sale" : nil].compactMap { $0 })
+            let channels = [draft.inPerson ? "in_person" : nil, draft.online ? "online" : nil].compactMap { $0 }
+            guard !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !scopes.isEmpty, !channels.isEmpty,
+                  draft.kind != "percent" || amount <= 10000, draft.kind != "addon" || !draft.eligible.isEmpty else { error = "Complete the name, amount and where the rule applies."; return }
+            var rule: [String: Any] = ["id": draft.editingID ?? UUID().uuidString.lowercased(), "name": draft.name.trimmingCharacters(in: .whitespacesAndNewlines), "kind": draft.kind, "value": amount, "scopes": scopes, "channels": channels, "active": draft.active]
+            if draft.kind == "addon" {
+                rule["eligible_item_ids"] = draft.eligible.sorted(); rule["requires_other_item"] = draft.requiresOtherItem
+                if !draft.legacyAddon || draft.additionalDiscountsChanged { rule["allow_additional_discounts"] = draft.allowAdditionalDiscounts }
             }
             busy = true
             Task {
                 defer { busy = false }
-                do { let result: CheckoutRuleList = try await model.api.request(base + "/checkout-rules", method: "POST", body: ["version": version, "rule": rule]); rules = result.rules; version = result.version; editor = false; error = nil }
+                do { let result: CheckoutRuleList = try await model.api.request(base + "/checkout-rules", method: "POST", body: ["version": version, "rule": rule]); rules = result.rules; version = result.version; editor = nil; error = nil }
                 catch { self.error = "Could not save. Refresh rules and try again." }
             }
         } catch { self.error = "Enter a valid amount." }
@@ -354,4 +297,92 @@ struct CheckoutRuleManager: View {
             catch { self.error = "Could not delete. Refresh rules and try again." }
         }
     }
+}
+
+
+/// A sheet carries a complete selection snapshot; its fields are not separately
+/// updated parent State that SwiftUI can capture before the sheet is presented.
+private struct CheckoutRuleDraft {
+    var editingID: String?
+    var name = ""
+    var kind = "fixed"
+    var value = ""
+    var itemScope = true
+    var saleScope = true
+    var inPerson = true
+    var online = false
+    var active = true
+    var requiresOtherItem = true
+    var allowAdditionalDiscounts = false
+    var legacyAddon = false
+    var additionalDiscountsChanged = false
+    var eligible = Set<String>()
+
+    init(rule: CheckoutRule?) {
+        guard let rule else { return }
+        editingID = rule.id; name = rule.name; kind = rule.kind
+        value = String(format: "%.2f", Double(rule.value) / 100)
+        itemScope = rule.scopes.contains("item"); saleScope = rule.scopes.contains("sale")
+        inPerson = rule.channels.contains("in_person"); online = rule.channels.contains("online")
+        active = rule.active; requiresOtherItem = rule.requiresOtherItem ?? true
+        legacyAddon = rule.kind == "addon" && rule.allowAdditionalDiscounts == nil
+        allowAdditionalDiscounts = rule.kind == "addon" ? (rule.allowAdditionalDiscounts ?? true) : false
+        eligible = Set(rule.eligibleItemIds ?? [])
+    }
+}
+
+private struct CheckoutRuleEditor: View {
+    @ObservedObject var model: POSViewModel
+    @State private var draft: CheckoutRuleDraft
+    let busy: Bool
+    let error: String?
+    let onCancel: () -> Void
+    let onSave: (CheckoutRuleDraft) -> Void
+
+    init(model: POSViewModel, initial: CheckoutRuleDraft, busy: Bool, error: String?,
+         onCancel: @escaping () -> Void, onSave: @escaping (CheckoutRuleDraft) -> Void) {
+        self.model = model; _draft = State(initialValue: initial)
+        self.busy = busy; self.error = error; self.onCancel = onCancel; self.onSave = onSave
+    }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Rule") {
+                    TextField("Name", text: $draft.name)
+                    Picker("Type", selection: $draft.kind) {
+                        Text("Amount off").tag("fixed"); Text("Percent off").tag("percent"); Text("Add-on price").tag("addon")
+                    }
+                    TextField(draft.kind == "percent" ? "Percent" : "Amount", text: $draft.value).keyboardType(.decimalPad)
+                    Toggle("Enabled", isOn: $draft.active)
+                }
+                Section("Where it applies") {
+                    if draft.kind != "addon" { Toggle("Individual item", isOn: $draft.itemScope); Toggle("Whole sale", isOn: $draft.saleScope) }
+                    Toggle("In person", isOn: $draft.inPerson)
+                    Toggle("Online draft", isOn: $draft.online)
+                    Text("Online rules are drafts. They will not affect Shopify checkout until online publishing is available and approved.").font(.caption).foregroundStyle(.secondary)
+                }
+                if draft.kind == "addon" {
+                    Section("Eligible products") {
+                        Toggle("One add-on per regular product", isOn: $draft.requiresOtherItem)
+                        Text("Each regular product can qualify one add-on across all offers. Bundles, custom amounts, and add-ons do not qualify.").font(.caption).foregroundStyle(.secondary)
+                        Toggle("Allow additional discounts", isOn: $draft.allowAdditionalDiscounts).accessibilityIdentifier("rule-allow-additional-discounts")
+                            .onChange(of: draft.allowAdditionalDiscounts) { _, _ in draft.additionalDiscountsChanged = true }
+                        Text(draft.legacyAddon && !draft.additionalDiscountsChanged ? "This existing add-on allows additional discounts. Change this setting to update it." : "When off, item and whole-sale discounts do not reduce this add-on price.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        ForEach(model.items.filter { $0.kind != "bundle" }) { item in
+                            Toggle(item.title + ((item.variantLabel ?? "").isEmpty ? "" : " · " + item.variantLabel!), isOn: Binding(get: { draft.eligible.contains(item.id) }, set: { if $0 { draft.eligible.insert(item.id) } else { draft.eligible.remove(item.id) } }))
+                        }
+                    }
+                }
+                if let error { Section { Text(error).foregroundStyle(.red) } }
+            }
+            .navigationTitle(draft.editingID == nil ? "Add rule" : "Edit rule")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { onCancel() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Save") { onSave(draft) }.disabled(busy) }
+            }
+            .disabled(busy)
+        }
+    }
+
 }

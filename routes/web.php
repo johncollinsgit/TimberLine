@@ -8,6 +8,7 @@
 \Illuminate\Support\Facades\Route::prefix('pos/admin')->middleware(['auth', 'verified', \App\Http\Middleware\ResolvePosTenant::class])->name('pos.admin.')->group(function (): void {
     \Illuminate\Support\Facades\Route::get('/', [\App\Http\Controllers\PosAdminController::class, 'index'])->name('index');
     \Illuminate\Support\Facades\Route::get('/report', [\App\Http\Controllers\PosAdminController::class, 'report'])->name('report');
+    \Illuminate\Support\Facades\Route::get('/events', [\App\Http\Controllers\PosAdminController::class, 'events'])->name('events');
     \Illuminate\Support\Facades\Route::get('/stock', [\App\Http\Controllers\StockAdministrationController::class, 'index'])->name('stock.index');
     \Illuminate\Support\Facades\Route::post('/stock', [\App\Http\Controllers\StockAdministrationController::class, 'update'])->middleware('throttle:30,1')->name('stock.update');
     \Illuminate\Support\Facades\Route::post('/items/{item}/adjust', [\App\Http\Controllers\PosAdminController::class, 'adjust'])->where('item', '[a-f0-9]{32}')->name('stock.adjust');
@@ -2067,6 +2068,8 @@ Route::prefix('shopify/marketing')
     ->middleware(['marketing.storefront.verify', 'throttle:120,1'])
     ->group(function () {
         Route::get('/account', [MarketingPublicEventController::class, 'customerDashboard'])->name('account');
+        Route::get('/rewards/show-code', [\App\Http\Controllers\PosStorefrontRewardsController::class, 'show'])->name('rewards.show-code');
+        Route::post('/rewards/show-code', [\App\Http\Controllers\PosStorefrontRewardsController::class, 'act'])->withoutMiddleware([VerifyCsrfToken::class])->name('rewards.show-code.issue');
         Route::post('/message', [MarketingPublicEventController::class, 'sendCustomerMessage'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('message');
@@ -2169,6 +2172,8 @@ Route::prefix('shopify/marketing/v1')
     ->middleware(['marketing.storefront.verify', 'throttle:120,1'])
     ->group(function () {
         Route::get('/account', [MarketingPublicEventController::class, 'customerDashboard'])->name('account');
+        Route::get('/rewards/show-code', [\App\Http\Controllers\PosStorefrontRewardsController::class, 'show'])->name('rewards.show-code');
+        Route::post('/rewards/show-code', [\App\Http\Controllers\PosStorefrontRewardsController::class, 'act'])->withoutMiddleware([VerifyCsrfToken::class])->name('rewards.show-code.issue');
         Route::post('/message', [MarketingPublicEventController::class, 'sendCustomerMessage'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('message');

@@ -74,17 +74,18 @@ it('binds verified proof to the frozen customer and exact discounted quote', fun
         ->and(json_encode($hold))->not->toContain($proof);
 });
 
-it('rejects a proof if the verified account becomes conflicting before wallet reservation', function (): void {
+it('rejects a conflicting import before it can redirect a verified wallet', function (): void {
     $proof = $this->proofs->issueForAuthenticatedProfile($this->profile, $this->accepted, $this->accountLink)['qr_payload'];
     $attestation = \App\Models\MarketingProfileLink::findOrFail($this->accountLink);
     $gid = $attestation->source_meta['shopify_customer_gid'];
     $other = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Other']);
-    \App\Models\CustomerExternalProfile::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $other->id,
-        'provider' => 'shopify', 'integration' => 'shopify_customer', 'store_key' => 'retail', 'external_customer_id' => basename($gid), 'external_customer_gid' => $gid]);
-    expect(fn () => $this->service->reserve($this->tenant->id, $this->saleId, 500, $proof))
-        ->toThrow(PosException::class, 'customer_identity_review_required');
+    expect(fn () => \App\Models\CustomerExternalProfile::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $other->id,
+        'provider' => 'shopify', 'integration' => 'shopify_customer', 'store_key' => 'retail', 'external_customer_id' => basename($gid), 'external_customer_gid' => $gid]))
+        ->toThrow(PosException::class, 'customer_account_mapping_conflict');
     expect(CandleCashBalance::find($this->profile->id)->balance)->toBe(10.0)
         ->and($this->proofs->preview($this->tenant->id, $proof)->sale_id)->toBeNull();
+    $hold = $this->service->reserve($this->tenant->id, $this->saleId, 500, $proof);
+    expect($hold->state)->toBe('held');
 });
 
 it('rolls proof binding back when amount or customer is wrong', function (): void {

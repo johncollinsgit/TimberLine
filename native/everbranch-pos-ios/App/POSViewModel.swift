@@ -21,6 +21,16 @@ struct SavedPaymentReview: Codable, Identifiable {
     let savedAt: Date
     var confirmed: Bool? = nil
 }
+struct ReceiptSmsStatus: Decodable { let state: String; let enabled: Bool }
+struct POSRewardPreview: Decodable {
+    let customer: POSCustomer
+    let label: String
+    let balanceMinor: Int
+    let maxMinor: Int
+    let availableMinor: Int
+    let expiresAt: String
+}
+struct POSRewardContactChallenge: Decodable { let challengeId: String; let expiresAt: String; let maxMinor: Int; let state: String }
 struct POSReceipt: Decodable {
     struct Line: Decodable { let itemId: String?; let lineId: String?; let title: String; let quantity: Int; let subtotalMinor: Int?; let taxMinor: Int?; let components: [SaleComponent]? }
     struct PaymentDetails: Decodable {
@@ -29,6 +39,23 @@ struct POSReceipt: Decodable {
         var lines: [String] { [cardholderName, [cardBrand, lastFour].compactMap { $0 }.joined(separator: " "), entryMethod, applicationName, applicationIdentifier].compactMap { $0 }.filter { !$0.isEmpty } }
     }
     struct Contact: Decodable { let name: String?; let phone: String?; let email: String? }
+    struct Rewards: Decodable {
+        let label: String
+        let balanceMinor: Int?
+        let earnedMinor: Int?
+        let redeemedMinor: Int
+        let rules: [String]
+        let balanceAsOf: String
+        var lines: [String] {
+            var result: [String] = []
+            if let earnedMinor { result.append("\(label) earned: \(POSMoney.display(earnedMinor))") }
+            if redeemedMinor > 0 { result.append("\(label) used: \(POSMoney.display(redeemedMinor))") }
+            if let balanceMinor { result.append("\(label) balance: \(POSMoney.display(balanceMinor))"); result.append("Balance checked: \(balanceAsOf)") }
+            return result + rules
+        }
+    }
+    let rewards: Rewards?
+    let suggestedContact: Contact?
     let receiptNumber: String
     let merchantLocation: String
     let registerName: String
@@ -36,6 +63,7 @@ struct POSReceipt: Decodable {
     let amountMinor: Int
     let paymentReference: String
     let refundedMinor: Int
+    let rewardsReturnedMinor: Int?
     let settlementStatus: String
     let customerRewardsStatus: String?
     let customer: SaleCustomer?
@@ -51,6 +79,8 @@ struct POSReceipt: Decodable {
         output.append("Refunded: \(POSMoney.display(refundedMinor))")
         output.append("Payment: \(paymentReference)")
         output.append(contentsOf: paymentDetails?.lines ?? [])
+        output.append(contentsOf: rewards?.lines ?? [])
+        if ["pending", "review_required"].contains(customerRewardsStatus ?? "") { output.append("Rewards are still being processed or reviewed.") }
         if let customer { output.append("Customer: \(customer.name)") }
         output.append(contentsOf: [contact?.name, contact?.phone, contact?.email].compactMap { $0 })
         return output.joined(separator: "\n")
@@ -156,6 +186,11 @@ private struct RestorableQuote: Decodable {
     private var appIsActive = true
     private var readinessRefreshWanted = false
     private var readinessRefreshRunning = false
+    private var manuallySelectedRegister: String?
+    private var hasRegisterBasket: Bool {
+        !quantities.isEmpty || !bundleLines.isEmpty || !initialBasket.isEmpty || customAmountMinor > 0 || !invoiceID.isEmpty
+            || selectedCustomer != nil || editingBasket || sale?.state == "quoted"
+    }
     #if DEBUG
     @Published var simulatedReadinessSetups = 0
     #endif
@@ -163,10 +198,85 @@ private struct RestorableQuote: Decodable {
     @Published var receiptContactPhone = ""
     @Published var receiptContactEmail = ""
     @Published var receiptUpdateGeneration = 0
+    @Published var receiptSmsStatus: ReceiptSmsStatus?
+    @Published var receiptSmsError: String?
     @Published var receiptEmailStatus: ReceiptEmailStatus?
     @Published var receiptEmailError: String?
     @Published var stockCountGeneration = 0
     @Published var rewardMemberAtPurchase = false
+    @Published var rewardPreview: POSRewardPreview?
+    @Published var rewardUseAmount = ""
+    @Published var rewardContactChallenge: POSRewardContactChallenge?
+    @Published var rewardContactCode = ""
+    private var rewardContactRequestID: String?
+    private var rewardContactContext: String?
+    private var rewardProof: String?
+    private var rewardSelectedMinor = 0
+    var canApplyScannedRewards: Bool { rewardProof != nil && !busy && (pending == nil || canEditBasket) }
+    func removeScannedRewards() {
+        let applied = (sale?.rewardsRedeemedMinor ?? 0) > 0 && canEditBasket
+        clearRewardSelection()
+        if applied { bindCustomerToUnstartedSale() }
+    }
+    func clearRewardSelection() { rewardProof = nil; rewardPreview = nil; rewardUseAmount = ""; rewardSelectedMinor = 0; rewardContactChallenge = nil; rewardContactCode = ""; rewardContactRequestID = nil; rewardContactContext = nil }
+    func previewRewardCode(_ proof: String) {
+        guard RewardProofFormat.isWellFormed(proof), let base, !busy, pending == nil || canEditBasket else { return }
+        perform {
+            try await self.acceptRewardProof(proof, base: base, expected: self.selectedCustomer?.id)
+        }
+    }
+    private func acceptRewardProof(_ proof: String, base: String, expected: Int?) async throws {
+        var body: [String: Any] = ["proof": proof]
+        if let expected { body["expected_customer_id"] = expected }
+        let value: POSRewardPreview = try await api.request(base + "/reward-codes/preview", method: "POST", body: body)
+        guard self.base == base, expected == nil || expected == value.customer.id else { throw POSError.recoveryRequired }
+        selectedCustomer = value.customer; rewardPreview = value; rewardProof = proof
+        rewardUseAmount = String(format: "%d.%02d", value.availableMinor / 100, value.availableMinor % 100)
+        rewardSelectedMinor = 0; refreshCustomerCommerce()
+    }
+    func requestRewardContactCode(channel: String) {
+        guard let base, let customer = selectedCustomer, !busy, pending == nil || canEditBasket else { return }
+        let context = base + ":\(customer.id):" + channel
+        if rewardContactContext != context { rewardContactRequestID = nil; rewardContactChallenge = nil; rewardContactCode = "" }
+        rewardContactContext = context
+        if rewardContactRequestID == nil { rewardContactRequestID = UUID().uuidString.lowercased() }
+        guard let request = rewardContactRequestID else { return }
+        perform {
+            let value: POSRewardContactChallenge = try await self.api.request(base + "/reward-codes/contact", method: "POST",
+                body: ["customer_profile_id": customer.id, "channel": channel, "request_id": request, "customer_requested": true])
+            guard self.base == base, self.selectedCustomer?.id == customer.id else { throw POSError.recoveryRequired }
+            self.rewardContactChallenge = value
+        }
+    }
+    func verifyRewardContactCode() {
+        guard let base, let customer = selectedCustomer, let challenge = rewardContactChallenge, !busy,
+              rewardContactCode.range(of: "^[0-9]{6}$", options: .regularExpression) != nil else { return }
+        let code = rewardContactCode
+        perform {
+            struct Issued: Decodable { let qrPayload: String }
+            let issued: Issued = try await self.api.request(base + "/reward-codes/contact/" + challenge.challengeId, method: "POST", body: ["code": code])
+            guard self.base == base, self.selectedCustomer?.id == customer.id else { throw POSError.recoveryRequired }
+            self.rewardContactCode = ""; self.rewardContactChallenge = nil
+            try await self.acceptRewardProof(issued.qrPayload, base: base, expected: customer.id)
+        }
+    }
+    func verifyCurrentMembership(reference: String, active: Bool) {
+        guard let base, let customer = selectedCustomer, !busy, pending == nil || canEditBasket else { return }
+        perform {
+            struct Result: Decodable { let recorded: Bool }
+            let _: Result = try await self.api.request(base + "/customers/\(customer.id)/membership-review", method: "POST", body: ["confirmed": true, "active": active, "reference": reference])
+            self.clearRewardSelection(); self.message = active ? "Current membership verified for up to 24 hours. Ask for a new rewards code to use the member limit." : "Manual membership verification removed."
+        }
+    }
+    func startNewRewardContactCode() { rewardContactChallenge = nil; rewardContactCode = ""; rewardContactRequestID = nil; rewardContactContext = nil }
+    func useScannedRewards() {
+        guard let preview = rewardPreview, selectedCustomer?.id == preview.customer.id, let proof = rewardProof,
+              RewardProofFormat.isWellFormed(proof), let amount = try? POSMoney.minor(rewardUseAmount),
+              amount <= preview.availableMinor, !busy else { return }
+        rewardSelectedMinor = amount
+        if pending != nil { bindCustomerToUnstartedSale() }
+        else { quote() }
+    }
     @Published var rewardPriorOrders = ""
     @Published var rewardReviewReason = ""
     private var rewardReviewRequestID: String?
@@ -177,7 +287,7 @@ private struct RestorableQuote: Decodable {
     @Published var basketIssue: String?
     @Published var customerQuery = ""
     @Published var customers: [POSCustomer] = []
-    @Published var selectedCustomer: POSCustomer?
+    @Published var selectedCustomer: POSCustomer? { didSet { if oldValue?.id != selectedCustomer?.id { clearRewardSelection() } } }
     @Published var customerEnrollmentSettings: CustomerEnrollmentSettings?
     @Published var customerEnrollmentNotice: String?
     @Published var pendingEnrollment: PendingCustomerEnrollment?
@@ -268,7 +378,8 @@ private struct RestorableQuote: Decodable {
         selectedWorkspace = workspace
         let result: RegisterList = try await api.request("api/mobile/v1/workspaces/\(workspace.slug)/pos/registers")
         registers = result.registers
-        let registerID = pending?.register ?? selectedRegister?.id ?? saved?.register
+        let registerID = POSOperatorRegisterSelection.pick(pending: pending?.register, current: selectedRegister?.id,
+            manual: manuallySelectedRegister, recommended: result.operatorContext?.recommendedRegisterId, saved: saved?.register, hasBasket: hasRegisterBasket)
         guard let register = registers.first(where: { $0.id == registerID }) else {
             selectedRegister = nil; registerLoaded = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; bundleComponents = [:]; bundleLines = []; tapReady = false
             return
@@ -314,6 +425,7 @@ private struct RestorableQuote: Decodable {
     func chooseAvailableProducts() { initialBasket = []; basketIssue = nil; quantities = [:]; bundleComponents = [:]; bundleLines = [] }
     func appActivityChanged(_ active: Bool) {
         appIsActive = active
+        if !active { rewardProof = nil; rewardContactCode = ""; if pending == nil { clearRewardSelection() } }
         if active { requestReadinessRefresh() }
     }
 
@@ -343,6 +455,12 @@ private struct RestorableQuote: Decodable {
                     return
                 }
                 registers = response.registers
+                let registerID = POSOperatorRegisterSelection.pick(pending: pending?.register, current: current.id,
+                    manual: manuallySelectedRegister, recommended: response.operatorContext?.recommendedRegisterId, saved: nil, hasBasket: hasRegisterBasket)
+                if registerID != current.id, let recommended = response.registers.first(where: { $0.id == registerID }) {
+                    perform { try await self.loadRegister(recommended); self.message = "Register set to \(recommended.location)." }
+                    return
+                }
                 selectedRegister = current
                 let blockers = current.setupBlockers ?? current.blockers
                 if !tapReady && !blockers.contains(where: { $0 != "merchant_evidence_stale" }) {
@@ -369,9 +487,13 @@ private struct RestorableQuote: Decodable {
     func choose(_ workspace: Workspace) {
         guard pending == nil else { return }
         perform {
+            self.manuallySelectedRegister = nil
             self.selectedWorkspace = workspace; self.selectedRegister = nil; self.registerLoaded = false; self.tapReady = false; self.selectedCustomer = nil; self.customers = []; self.items = []; self.quantities = [:]; self.bundleComponents = [:]; self.bundleLines = []; self.invoiceID = ""
             let result: RegisterList = try await self.api.request("api/mobile/v1/workspaces/\(workspace.slug)/pos/registers")
             self.registers = result.registers
+            if let recommended = result.operatorContext?.recommendedRegisterId, let register = result.registers.first(where: { $0.id == recommended }) {
+                try await self.loadRegister(register)
+            }
         }
     }
     func chooseRegister(_ register: Register) {
@@ -379,6 +501,7 @@ private struct RestorableQuote: Decodable {
         perform {
             self.quantities = [:]; self.bundleComponents = [:]; self.bundleLines = []
             try await self.loadRegister(register)
+            self.manuallySelectedRegister = register.id
             self.selectedCustomer = nil; self.customers = []
             if let workspace = self.selectedWorkspace {
                 try SecureStore.write("selected-register", try JSONEncoder().encode(SavedRegister(workspace: workspace.slug, register: register.id)))
@@ -580,12 +703,19 @@ private struct RestorableQuote: Decodable {
             body["discounts"] = checkoutDiscounts.map(\.request)
             body["addons"] = checkoutAddons.map(\.request)
         }
+        if rewardSelectedMinor > 0 {
+            guard let proof = rewardProof, let preview = rewardPreview, preview.customer.id == selectedCustomer?.id else {
+                throw POSError.unavailable("Scan a fresh rewards code to authorize this purchase.")
+            }
+            body["reward_redemption"] = ["proof": proof, "amount_minor": rewardSelectedMinor]
+        }
         // Save only a fully understood request before it can reach the server.
         // Unsupported forms remain recovery-only and never persist credentials.
         try saveQuoteDraft(body, pending: original)
         pending = original
         do { try savePending() } catch { pending = nil; try? SecureStore.write("quote-draft", nil); throw error }
         let result: Sale = try await api.request(base + "/quotes", method: "POST", body: body)
+        rewardProof = nil
         sale = result; pending?.saleID = result.saleId; try savePending()
         offerDraftQuoteID = result.saleId
         pollAvailabilityIfNeeded()
@@ -720,7 +850,7 @@ private struct RestorableQuote: Decodable {
             self.availabilityPoll?.cancel()
             self.pending = nil
             do { try self.savePending() } catch { self.pending = pending; throw error }
-            self.sale = nil; self.receipt = nil; self.offerDraftQuoteID = nil; self.editingBasket = true
+            self.sale = nil; self.receipt = nil; self.offerDraftQuoteID = nil; self.clearRewardSelection(); self.editingBasket = true
         }
     }
     func removeQuotedProduct(_ itemID: String) {
@@ -735,7 +865,7 @@ private struct RestorableQuote: Decodable {
             self.pending = nil
             do { try self.savePending() } catch { self.pending = pending; throw error }
             self.sale = nil; self.receipt = nil; self.offerDraftQuoteID = nil
-            self.removeProduct(itemID)
+            self.clearRewardSelection(); self.removeProduct(itemID)
             self.editingBasket = true
         }
     }
@@ -751,7 +881,7 @@ private struct RestorableQuote: Decodable {
                 self.availabilityPoll?.cancel()
                 self.pending = nil
                 do { try self.savePending() } catch { self.pending = pending; throw error }
-                self.sale = nil; self.offerDraftQuoteID = nil
+                self.sale = nil; self.offerDraftQuoteID = nil; self.clearRewardSelection()
             }
             switch change {
             case .addDiscount(let value): self.checkoutDiscounts.append(value)
@@ -786,13 +916,14 @@ private struct RestorableQuote: Decodable {
         }
     }
     func pay() {
-        guard let base, let id = sale?.saleId, pending?.collectionRequested == false, tapReady else { return }
+        guard let base, let id = sale?.saleId, pending?.collectionRequested == false, tapReady || sale?.amountMinor == 0 else { return }
         perform {
-            _ = try self.collector.preflight()
+            if self.sale?.amountMinor != 0 { _ = try self.collector.preflight() }
             self.paymentPhase = "Preparing payment…"
             self.pending?.collectionRequested = true; self.pending?.collectionAttempted = true; try self.savePending()
             let result: Sale = try await self.api.request(base + "/sales/\(id)/collect", method: "POST", body: [:])
             self.sale = result
+            if result.amountMinor == 0 && result.canonicalConfirmation == true && result.receiptAvailable { try await self.recover(); return }
             guard let descriptor = result.collection, self.pending?.sdkStarted == false else { throw POSError.recoveryRequired }
             try descriptor.validate(sale: result, applicationID: POSAppDelegate.applicationID, environment: POSAppDelegate.environment)
             self.pending?.sdkStarted = true; try self.savePending()
@@ -823,6 +954,14 @@ private struct RestorableQuote: Decodable {
         if result.receiptAvailable {
             receipt = try await api.request(base + "/sales/\(result.saleId)/receipt")
             await refreshReceiptEmailStatus(base: base, saleID: result.saleId)
+            await refreshReceiptSmsStatus(base: base, saleID: result.saleId)
+        }
+    }
+    func returnRewardsOnly() {
+        guard let base, let id = sale?.saleId, receipt?.amountMinor == 0 else { return }
+        perform {
+            self.receipt = try await self.api.request(base + "/sales/\(id)/return-rewards", method: "POST", body: ["confirmed": true])
+            self.message = "Rewards returned. Adjust physical stock separately if merchandise was returned."
         }
     }
     func refund() {
@@ -952,18 +1091,33 @@ private struct RestorableQuote: Decodable {
             struct Result: Decodable { let receipt: POSReceipt }
             let result: Result = try await self.api.request(base + "/sales/\(sale.saleId)/receipt/customer", method: "POST", body: body)
             self.receipt = result.receipt; self.receiptContactRequestID = nil
-            // Only an email explicitly entered in this contact form requests delivery.
-            let suppliedEmail = self.receiptContactEmail.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !suppliedEmail.isEmpty, result.receipt.contact?.email?.caseInsensitiveCompare(suppliedEmail) == .orderedSame {
-                await self.refreshReceiptEmailStatus(base: base, saleID: sale.saleId)
-                if self.receiptEmailStatus?.enabled == true && self.receiptEmailStatus?.state == "not_requested" {
-                    await self.queueReceiptEmail(base: base, saleID: sale.saleId)
-                }
-            } else {
-                await self.refreshReceiptEmailStatus(base: base, saleID: sale.saleId)
-            }
+            // Saving contact and choosing receipt delivery are separate customer decisions.
+            await self.refreshReceiptEmailStatus(base: base, saleID: sale.saleId)
+            await self.refreshReceiptSmsStatus(base: base, saleID: sale.saleId)
             self.receiptUpdateGeneration += 1
         }
+    }
+    private func refreshReceiptSmsStatus(base: String, saleID: String) async {
+        guard receipt?.contact?.phone?.isEmpty == false else { receiptSmsStatus = nil; receiptSmsError = nil; return }
+        do { receiptSmsStatus = try await api.request(base + "/sales/\(saleID)/receipt/sms"); receiptSmsError = nil }
+        catch { receiptSmsStatus = nil; receiptSmsError = "Could not check receipt text status." }
+    }
+    func sendReceiptSms() {
+        guard let base, let sale, let phone = receipt?.contact?.phone, receiptSmsStatus?.state == "not_requested" else { return }
+        perform {
+            do {
+                self.receiptSmsStatus = try await self.api.request(base + "/sales/\(sale.saleId)/receipt/sms", method: "POST",
+                    body: ["customer_requested": true, "expected_phone": phone])
+                self.receiptSmsError = nil
+            } catch {
+                self.receiptSmsError = "Text status is not confirmed. Check its status before requesting another receipt."
+                await self.refreshReceiptSmsStatus(base: base, saleID: sale.saleId)
+            }
+        }
+    }
+    func checkReceiptSms() {
+        guard let base, let sale else { return }
+        perform { await self.refreshReceiptSmsStatus(base: base, saleID: sale.saleId) }
     }
     private func refreshReceiptEmailStatus(base: String, saleID: String) async {
         guard receipt?.contact?.email?.isEmpty == false else { receiptEmailStatus = nil; receiptEmailError = nil; return }
@@ -1032,7 +1186,7 @@ private struct RestorableQuote: Decodable {
         }
     }
     func countStock(_ item: CatalogItem, quantity: String) {
-        guard pending == nil, selectedRegister?.canManageInventory == true, let base, let count = Int(quantity), count >= 0 else { return }
+        guard pending == nil, selectedRegister?.canManageInventory == true, let base, let count = Int(quantity), count >= 0, count <= 1_000_000 else { return }
         perform {
             let result: CatalogList = try await self.api.request(base + "/stock-counts", method: "POST", body: [
                 "request_id": UUID().uuidString.lowercased(), "item_id": item.id, "quantity": count,
@@ -1041,11 +1195,13 @@ private struct RestorableQuote: Decodable {
         }
     }
     private func clearReceiptInputs() {
+        clearRewardSelection()
         receiptContactName = ""; receiptContactPhone = ""; receiptContactEmail = ""; receiptContactRequestID = nil
-        receiptEmailStatus = nil; receiptEmailError = nil
+        receiptEmailStatus = nil; receiptEmailError = nil; receiptSmsStatus = nil; receiptSmsError = nil
         rewardMemberAtPurchase = false; rewardPriorOrders = ""; rewardReviewReason = ""; rewardReviewRequestID = nil
     }
     func logout() {
+        manuallySelectedRegister = nil
         perform {
             await self.collector.signOut(); try SecureStore.write("session", nil)
             try SecureStore.write("selected-register", nil)

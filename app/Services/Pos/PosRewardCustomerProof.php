@@ -26,6 +26,12 @@ final class PosRewardCustomerProof
     /** @return array{qr_payload:string,expires_at:string,max_minor:int,policy_version:string,disclosure_version:string} */
     public function issueForAuthenticatedProfile(MarketingProfile $profile, array $accepted, int $accountLinkId): array
     {
+        return app(\App\Services\Marketing\CustomerAccountFence::class)->forTenant((int) $profile->tenant_id,
+            fn () => $this->issueLocked($profile, $accepted, $accountLinkId));
+    }
+
+    private function issueLocked(MarketingProfile $profile, array $accepted, int $accountLinkId): array
+    {
         if (config('pos_live.in_person_rewards_enabled', false) !== true || (int) $profile->tenant_id < 1) {
             throw new PosException('in_person_rewards_disabled', 403);
         }
@@ -36,7 +42,7 @@ final class PosRewardCustomerProof
         if (! app(PosVerifiedCustomerAccount::class)->verified($profile, $accountLinkId)) {
             throw new PosException('customer_identity_review_required', 409);
         }
-        $policy = app(PosRewardRedemptionSettings::class)->tenant((int) $profile->tenant_id);
+        $policy = app(PosRewardRedemptionSettings::class)->forProfile($profile);
         if (($accepted['max_minor'] ?? null) !== $policy['max_minor']
             || ! is_string($accepted['policy_version'] ?? null) || ! hash_equals($policy['version'], $accepted['policy_version'])
             || ($accepted['disclosure_version'] ?? null) !== self::DISCLOSURE_VERSION) {

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MarketingProfileLink extends Model
 {
+    use \App\Models\Concerns\FencesCustomerAccountWrites;
     use HasTenantScope;
 
     protected $fillable = [

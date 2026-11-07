@@ -171,7 +171,7 @@ private struct WalletReviewDetails: Decodable {
     let finalizationAvailable: Bool
 }
 
-/// An owner attestation only. The server does not link an account or verify this evidence.
+/// Explicit owner review precedes a separately confirmed account link.
 struct ExistingWalletReviewView: View {
     @ObservedObject var model: POSViewModel
     @Environment(\.dismiss) private var dismiss
@@ -202,9 +202,9 @@ struct ExistingWalletReviewView: View {
                         Text("Expires: \(review.expiresAt)").font(.caption)
                         if review.state == "expired" { Text("This request expired. Ask the customer to start a new request.") }
                         if review.state == "review_recorded", let profileID = review.reviewedProfileId { Text("Review recorded for customer #\(profileID).") }
-                        Text("No wallet has been linked. This review does not enable rewards redemption.").font(.subheadline.weight(.semibold))
+                        Text(review.linked ? "This account is connected to the reviewed wallet." : "The wallet is not connected until you confirm the reviewed link.").font(.subheadline.weight(.semibold))
                     }
-                    if review.state == "awaiting_review" && !review.linked && !review.finalizationAvailable {
+                    if review.state == "awaiting_review" && !review.linked {
                         Section("Select existing customer") {
                             TextField("Name, email or phone", text: $query).textInputAutocapitalization(.never).focused($inputFocused)
                             Button("Search customers") { Task { await search() } }.disabled(busy || query.trimmingCharacters(in: .whitespacesAndNewlines).count < 2)
@@ -231,6 +231,12 @@ struct ExistingWalletReviewView: View {
                                 .disabled(busy || selected == nil || evidence.isEmpty || !confirmed)
                         }
                     }
+                    if review.state == "review_recorded", review.finalizationAvailable, !review.linked {
+                        Section("Connect reviewed wallet") {
+                            Text("Connect this authenticated customer account to the wallet you independently reviewed. This does not move or combine balances.")
+                            Button("Connect reviewed wallet") { Task { await finalize() } }.disabled(busy)
+                        }
+                    }
                 }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
             }.navigationTitle("Wallet review").navigationBarTitleDisplayMode(.inline)
@@ -246,7 +252,7 @@ struct ExistingWalletReviewView: View {
         inputFocused = false; resetReview(); busy = true; defer { busy = false }
         do {
             let value: WalletReviewDetails = try await model.api.request(base + "/wallet-link-reviews/" + expected)
-            guard model.base == base, reference == expected, value.reference == expected, !value.linked, !value.finalizationAvailable else {
+            guard model.base == base, reference == expected, value.reference == expected else {
                 error = "This request needs administrator review."; return
             }
             review = value
@@ -272,15 +278,26 @@ struct ExistingWalletReviewView: View {
                 "customer_profile_id": selected.id, "evidence": evidence, "confirmed": true, "disclosure_hash": review.disclosureHash
             ])
             guard model.base == base, reference == review.reference, value.reference == review.reference, value.shopifySubject == review.shopifySubject,
-                  value.state == "review_recorded", value.reviewedProfileId == selected.id, !value.linked, !value.finalizationAvailable else {
+                  value.state == "review_recorded", value.reviewedProfileId == selected.id, !value.linked else {
                 error = "Review status needs checking. Find the original request again."; return
             }
             self.review = value; confirmed = false; error = nil
         } catch { self.error = "Review was not confirmed. Find the original request again before retrying."; self.review = nil; confirmed = false }
     }
+    private func finalize() async {
+        guard let base = model.base, let review, let profile = review.reviewedProfileId, !busy else { return }
+        busy = true; defer { busy = false }
+        do {
+            let value: WalletReviewDetails = try await model.api.request(base + "/wallet-link-reviews/" + review.reference + "/finalize", method: "POST",
+                body: ["customer_profile_id": profile, "confirmed": true])
+            guard model.base == base, value.reference == review.reference, value.linked else { throw POSError.recoveryRequired }
+            self.review = value; error = nil
+        } catch { self.error = "The link was not confirmed. Find the original request and check its status." }
+    }
 }
 
 private struct RedemptionDraft: Decodable {
+    let memberMaxMinor: Int?
     let enabled: Bool
     let maxMinor: Int
     let channel: String
@@ -288,6 +305,7 @@ private struct RedemptionDraft: Decodable {
 }
 
 private struct RedemptionPublished: Decodable {
+    let memberMaxMinor: Int?
     let enabled: Bool
     let maxMinor: Int
     let refundPolicy: String
@@ -295,6 +313,8 @@ private struct RedemptionPublished: Decodable {
 }
 
 private struct RedemptionSettings: Decodable {
+    let publicationAvailable: Bool?
+    let redemptionAvailable: Bool?
     let draft: RedemptionDraft
     let published: RedemptionPublished?
     let draftVersion: String
@@ -312,6 +332,7 @@ struct RewardsRedemptionSettingsView: View {
     @State private var settings: RedemptionSettings?
     @State private var enabled = false
     @State private var amount = ""
+    @State private var memberAmount = ""
     @State private var busy = false
     @State private var message: String?
     @FocusState private var amountFocused: Bool
@@ -322,7 +343,7 @@ struct RewardsRedemptionSettingsView: View {
                 Section("Availability") {
                     if let settings {
                         Text(settings.redemptionEnabled ? "The global in-person redemption gate is on." : "The global in-person redemption gate is off.")
-                        Text("End-to-end in-person redemption is not available. Customer authorization and other required steps are not yet enabled. Saving a draft does not change the published policy or activate redemption.").accessibilityIdentifier("rewards-unavailable-explanation")
+                        Text(settings.redemptionAvailable == true ? "This register can accept customer-authorized rewards codes." : "Publish this register’s reviewed policy and complete register setup to accept rewards codes.").accessibilityIdentifier("rewards-unavailable-explanation")
                         Text(settings.managementEnabled ? "An administrator can review this register's policy." : "Rewards policy management is currently off.").font(.caption)
                         if let published = settings.published {
                             Text(published.enabled ? "Published policy: up to \(POSMoney.display(published.maxMinor)) per in-person sale." : "Published policy: in-person redemption disabled.")
@@ -338,10 +359,13 @@ struct RewardsRedemptionSettingsView: View {
                         Toggle("Allow in-person redemption in this policy", isOn: $enabled).disabled(!settings.managementEnabled)
                         TextField("Maximum per sale", text: $amount).keyboardType(.decimalPad).focused($amountFocused)
                             .disabled(!settings.managementEnabled).accessibilityIdentifier("rewards-cap")
+                        TextField("Member maximum per sale (optional)", text: $memberAmount).keyboardType(.decimalPad)
+                            .disabled(!settings.managementEnabled).accessibilityIdentifier("rewards-member-cap")
+                        Text("The member limit requires verified active subscription membership. Leave blank to use the standard limit.").font(.caption)
                         Text("This is a per-sale maximum, not a customer's balance.").font(.caption)
                         Text("Channel: in person")
                         Text("Full refund: restore redeemed rewards. Partial refund: review required.").font(.caption)
-                        Button("Save draft") { Task { await save() } }.disabled(!settings.managementEnabled || busy || !dirty)
+                        Button("Save draft") { amountFocused = false; Task { await save() } }.buttonStyle(.borderless).disabled(!settings.managementEnabled || busy || !dirty)
                     }
                     Section("Review and publish") {
                         if dirty { Text("Save your changes before reviewing this policy.") }
@@ -349,14 +373,14 @@ struct RewardsRedemptionSettingsView: View {
                             Text(enabled ? "Allow up to \(POSMoney.display(settings.draft.maxMinor)) per in-person sale." : "Do not allow in-person redemption under this policy.")
                             Text("Full refunds restore redeemed rewards; partial refunds require review.")
                             if enabled && settings.programVersion == nil { Text("A published rewards program is required before this policy can be reviewed.") }
-                            Text("Publishing is temporarily unavailable while payment safety checks are being completed.").font(.footnote)
-                            Button("Publish reviewed policy") {}.disabled(true)
+                            Button("Publish reviewed policy") { Task { await publish() } }.disabled(busy || settings.publicationAvailable != true)
                         }
                         Text("Publishing records this reviewed policy. It does not turn on redemption or change online rewards.").font(.caption)
                     }
                 }
                 if let message { Section { Text(message).font(.footnote) } }
             }.navigationTitle("In-person rewards").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done editing") { amountFocused = false } } }
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() }.disabled(busy) } }
                 .disabled(busy).overlay { if busy { ProgressView() } }
                 .task { await load() }
@@ -365,6 +389,7 @@ struct RewardsRedemptionSettingsView: View {
     private var dirty: Bool {
         guard let settings else { return false }
         return enabled != settings.draft.enabled || (try? POSMoney.minor(amount)) != settings.draft.maxMinor
+            || (memberAmount.isEmpty ? nil : try? POSMoney.minor(memberAmount)) != settings.draft.memberMaxMinor
     }
     private func apply(_ result: RedemptionSettings) -> Bool {
         guard result.draft.channel == "in_person", result.draft.refundPolicy == "restore_full_review_partial",
@@ -372,6 +397,7 @@ struct RewardsRedemptionSettingsView: View {
             settings = nil; message = "This policy cannot be reviewed in this version of Pay."; return false
         }
         settings = result; enabled = result.draft.enabled; amount = String(format: "%d.%02d", result.draft.maxMinor / 100, result.draft.maxMinor % 100)
+        memberAmount = result.draft.memberMaxMinor.map { String(format: "%d.%02d", $0 / 100, $0 % 100) } ?? ""
         return true
     }
     private func load() async {
@@ -386,10 +412,15 @@ struct RewardsRedemptionSettingsView: View {
     private func save() async {
         guard let base = model.base, let settings, settings.managementEnabled, !busy else { return }
         guard let minor = try? POSMoney.minor(amount) else { message = "Enter a per-sale amount greater than zero, with up to two decimal places."; return }
+        var draft: [String: Any] = ["enabled": enabled, "max_minor": minor, "channel": "in_person", "refund_policy": "restore_full_review_partial"]
+        if !memberAmount.isEmpty {
+            guard let memberMinor = try? POSMoney.minor(memberAmount) else { message = "Enter a valid member maximum."; return }
+            draft["member_max_minor"] = memberMinor
+        }
         amountFocused = false; busy = true; defer { busy = false }
         do {
             let result: RedemptionSettings = try await model.api.request(base + "/reward-redemption/draft", method: "POST", body: [
-                "draft": ["enabled": enabled, "max_minor": minor, "channel": "in_person", "refund_policy": "restore_full_review_partial"],
+                "draft": draft,
                 "expected_draft_version": settings.draftVersion
             ])
             guard model.base == base, result.draft.enabled == enabled, result.draft.maxMinor == minor else {
@@ -397,6 +428,77 @@ struct RewardsRedemptionSettingsView: View {
             }
             if apply(result) { message = "Draft saved. Review it before publishing." }
         } catch { self.settings = nil; message = "Draft was not confirmed. Reopen settings and review the latest version before trying again." }
+    }
+    private func publish() async {
+        guard let base = model.base, let settings, !dirty, !busy else { return }
+        var body: [String: Any] = ["draft_version": settings.draftVersion, "confirmed": true]
+        if let value = settings.publishedVersion { body["expected_published_version"] = value } else { body["expected_published_version"] = NSNull() }
+        if let value = settings.registerReviewedVersion { body["expected_register_version"] = value } else { body["expected_register_version"] = NSNull() }
+        if let value = settings.programVersion { body["expected_program_version"] = value } else { body["expected_program_version"] = NSNull() }
+        busy = true; defer { busy = false }
+        do {
+            let value: RedemptionSettings = try await model.api.request(base + "/reward-redemption/publish", method: "POST", body: body)
+            guard model.base == base else { return }
+            if apply(value) { message = "Reviewed policy published for this register."; model.requestReadinessRefresh() }
+        } catch { self.settings = nil; message = "Publication was not confirmed. Reopen settings and check the current policy." }
+    }
+}
+
+struct RewardCheckoutPanel: View {
+    @ObservedObject var model: POSViewModel
+    let lookupOnly: Bool
+    @State private var membershipReference = ""
+    @State private var membershipConfirmed = false
+    @State private var scanning = false
+    @State private var contactChannel = "phone"
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let preview = model.rewardPreview, preview.customer.id == model.selectedCustomer?.id {
+                Text("\(preview.label) balance: \(POSMoney.display(preview.balanceMinor))")
+                Text("Up to \(POSMoney.display(preview.maxMinor)) per in-person purchase, limited to the available balance and eligible merchandise.").font(.caption)
+                if !lookupOnly {
+                    Text("Would the customer like to use their \(preview.label)?")
+                    TextField("Rewards to use", text: $model.rewardUseAmount).keyboardType(.decimalPad).payInput()
+                    Button("Use \(preview.label)", action: model.useScannedRewards).buttonStyle(PayButtonStyle(primary: false))
+                        .disabled(!model.canApplyScannedRewards || preview.availableMinor < 1 || ((try? POSMoney.minor(model.rewardUseAmount)).map { $0 > preview.availableMinor } ?? true))
+                    Button("Do not use rewards", action: model.removeScannedRewards).disabled(model.busy)
+                }
+            }
+            if model.pending == nil || model.canEditBasket {
+                if model.selectedRegister?.canManageCheckoutRules == true, model.selectedCustomer != nil {
+                    DisclosureGroup("Owner membership verification") {
+                        Text("Check the customer’s current membership account. This changes the redemption limit for up to 24 hours and does not add credit or a membership join.").font(.caption)
+                        TextField("Current account record reviewed", text: $membershipReference).payInput()
+                        Toggle("I verified the active membership account", isOn: $membershipConfirmed)
+                        Button("Confirm current membership") { model.verifyCurrentMembership(reference: membershipReference, active: true); membershipConfirmed = false }
+                            .disabled(model.busy || !membershipConfirmed || membershipReference.trimmingCharacters(in: .whitespacesAndNewlines).count < 10)
+                        Button("Remove manual verification") { model.verifyCurrentMembership(reference: "Owner revoked current membership review", active: false) }.disabled(model.busy)
+                    }
+                }
+                Button("Scan customer rewards QR") { scanning = true }.buttonStyle(PayButtonStyle(primary: false)).disabled(model.busy)
+                if !lookupOnly, model.rewardPreview == nil, let customer = model.selectedCustomer, customer.phone != nil || customer.email != nil {
+                    DisclosureGroup("Use rewards without the customer app") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("At the customer’s request, send a code to their saved contact. Sharing the code authorizes one purchase up to the limit shown in the message.").font(.caption)
+                            Picker("Send code to", selection: $contactChannel) {
+                                if customer.phone != nil { Text("Saved phone").tag("phone") }
+                                if customer.email != nil { Text("Saved email").tag("email") }
+                            }.onAppear { if customer.phone == nil { contactChannel = "email" } }
+                            if let challenge = model.rewardContactChallenge {
+                                Text("Use up to \(POSMoney.display(challenge.maxMinor)). Ask the customer for their six-digit code.").font(.caption)
+                                if challenge.state == "not_confirmed" { Text("Message delivery is not confirmed. If the customer received it, they can still use the code.").font(.caption) }
+                                SecureField("Customer’s six-digit code", text: $model.rewardContactCode).keyboardType(.numberPad).payInput()
+                                Button("Verify customer code", action: model.verifyRewardContactCode).disabled(model.busy || model.rewardContactCode.count != 6)
+                                Button("Start a new code", action: model.startNewRewardContactCode).disabled(model.busy)
+                            } else {
+                                Button("Customer requested a verification code") { model.requestRewardContactCode(channel: contactChannel) }.disabled(model.busy)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $scanning) { RewardCodeScanner(onProof: model.previewRewardCode) }
     }
 }
 

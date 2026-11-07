@@ -32,6 +32,7 @@ final class PosCandleCashReservation
         }
 
         return $this->store->db->transaction(function () use ($tenant, $saleId, $amountMinor, $customerProof): object {
+            app(\App\Services\Marketing\CustomerAccountFence::class)->lock($tenant);
             // Same lock serializes retries for a sale and prevents two holds on it.
             $sale = $this->store->rows('sales', $tenant)->where('id', $saleId)->lockForUpdate()->first();
             if (! $sale) {

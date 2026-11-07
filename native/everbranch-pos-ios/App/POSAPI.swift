@@ -122,7 +122,9 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
         guard let url = request.url else { return }
         do {
             let data: Data
-            if ProcessInfo.processInfo.arguments.contains("--pos-refund-review-ui-tests") && url.path.contains("/refund-rewards-review") {
+            if ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests") && url.path.hasSuffix("/reward-codes/preview") {
+                data = Data(#"{"customer":{"id":1,"name":"Ada Buyer","email":"ada@example.test","phone":"+12025550123"},"label":"Candle Cash","balance_minor":850,"max_minor":500,"available_minor":500,"expires_at":"2026-11-08T00:00:00Z"}"#.utf8)
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-refund-review-ui-tests") && url.path.contains("/refund-rewards-review") {
                 let unavailable = ProcessInfo.processInfo.arguments.contains("--pos-refund-review-disabled-tests")
                 if url.path.hasSuffix("/status") {
                     data = try JSONSerialization.data(withJSONObject: ["state": "completed", "review_reason": NSNull(), "last_verified_at": "2026-11-01T12:00:00Z", "verification_is_point_in_time": true])
@@ -201,7 +203,7 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
                 data = try JSONSerialization.data(withJSONObject: ["draft": ["enabled": false, "max_minor": (draft || publish) ? 600 : 500,
                     "channel": "in_person", "refund_policy": "restore_full_review_partial"], "draft_version": String(repeating: (draft || publish) ? "b" : "a", count: 64),
                     "published_version": publish ? (String(repeating: "c", count: 64) as Any) : (NSNull() as Any), "register_reviewed_version": NSNull(),
-                    "program_version": NSNull(), "management_enabled": management, "redemption_enabled": ProcessInfo.processInfo.arguments.contains("--pos-redemption-global-on-tests")])
+                    "program_version": NSNull(), "publication_available": management, "redemption_available": false, "management_enabled": management, "redemption_enabled": ProcessInfo.processInfo.arguments.contains("--pos-redemption-global-on-tests")])
             } else if ProcessInfo.processInfo.arguments.contains("--pos-wallet-review-ui-tests") && url.path.contains("/wallet-link-reviews/") {
                 let submitted = request.httpMethod == "POST"
                 if submitted {
@@ -276,7 +278,7 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
             else if url.path == "/api/mobile/v1/workspaces/fixture/pos/registers" {
                 let blocked = ProcessInfo.processInfo.arguments.contains("--pos-readiness-delayed-ui-tests") && !Self.isReadinessEnabled()
                 let blockers = blocked ? ["old_setup"] : []
-                data = try JSONSerialization.data(withJSONObject: ["runtime_id": "fixture", "registers": [["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": blockers, "setup_blockers": blockers, "guest_checkout": true, "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests")]]])
+                data = try JSONSerialization.data(withJSONObject: ["runtime_id": "fixture", "registers": [["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": blockers, "setup_blockers": blockers, "guest_checkout": true, "rewards_redemption_available": ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests"), "can_manage_inventory": ProcessInfo.processInfo.arguments.contains("--pos-stock-count-ui-tests"), "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests")]]])
             }
             else if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") && url.path.hasSuffix("/authorize-device") {
                 data = Data(#"{"application_id":"fixture","access_token":"fixture","location_id":"fixture","merchant_id":"fixture","environment":"sandbox","can_link_apple_account":false}"#.utf8)
@@ -319,6 +321,13 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
                 let saleID = bundleFixture ? "fixture-bundle-\(input["request_id"] as? String ?? "invalid")" : "fixture-sale"
                 var quote: [String: Any] = ["sale_id": saleID, "request_id": input["request_id"]!, "state": "quoted", "stock_state": "held", "amount_minor": bundleFixture ? subtotal + tax : 2180, "currency": "USD", "receipt_available": false, "canonical_confirmation": false, "recovery_required": false, "collection_ready": true, "inventory_authority": "everbranch", "lines": lines]
                 if ProcessInfo.processInfo.arguments.contains("--pos-enrollment-ui-tests"), let customer = input["customer_profile_id"] as? Int { quote["customer"] = ["id": customer, "name": "Ada Buyer"] }
+                if ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests") {
+                    if let reward = input["reward_redemption"] as? [String: Any] {
+                        guard reward["proof"] as? String == "everbranch-reward:v1:" + (String(repeating: "a", count: 42) + "A"), reward["amount_minor"] as? Int == 500 else { throw URLError(.badServerResponse) }
+                        quote["amount_minor"] = 1635; quote["rewards_redeemed_minor"] = 500
+                    }
+                    if let customer = input["customer_profile_id"] as? Int { quote["customer"] = ["id": customer, "name": "Ada Buyer"] }
+                }
                 data = try JSONSerialization.data(withJSONObject: quote)
                 if ProcessInfo.processInfo.arguments.contains("--pos-bundle-basket-ui-tests") { Self.setBundleSale(data) }
             } else { throw URLError(.unsupportedURL) }

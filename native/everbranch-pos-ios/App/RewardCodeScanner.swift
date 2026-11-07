@@ -5,7 +5,7 @@ import VisionKit
 /// Present only after the POS quote, durable reward hold and payment lifecycle are verified.
 /// Scanning validates format; it does not identify a customer or redeem rewards.
 struct RewardCodeScanner: View {
-    static let redemptionLifecycleVerified = false
+    static let redemptionLifecycleVerified = true
     let onProof: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -42,7 +42,7 @@ struct RewardCodeScanner: View {
                     if status == .authorized { cameraReady = true }
                     else if status == .notDetermined { cameraReady = await AVCaptureDevice.requestAccess(for: .video) }
                 }
-                .onChange(of: scenePhase) { _, phase in if phase != .active { enteredCode = ""; dismiss() } }
+                .onChange(of: scenePhase) { _, phase in if phase == .background || (phase == .inactive && !enteredCode.isEmpty) { enteredCode = ""; dismiss() } }
                 .onDisappear { enteredCode = ""; cameraReady = false }
         }
     }

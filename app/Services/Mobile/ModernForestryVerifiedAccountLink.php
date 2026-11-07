@@ -32,6 +32,7 @@ final class ModernForestryVerifiedAccountLink
         $key = 'retail:'.$digits;
 
         return DB::transaction(function () use ($identity, $gid, $tenant, $digits, $key, $createNew): MarketingProfile {
+            app(\App\Services\Marketing\CustomerAccountFence::class)->lock($tenant);
             $store = Tenant::query()->whereKey($tenant)->where('slug', ModernForestryMobileProductCatalogService::TENANT_SLUG)->lockForUpdate()->first();
             if (! $store) {
                 throw new PosException('customer_identity_review_required', 409);
@@ -85,7 +86,7 @@ final class ModernForestryVerifiedAccountLink
 
         return $link->source_type === self::SOURCE && (int) $link->tenant_id === (int) $profile->tenant_id
             && (int) $link->marketing_profile_id === (int) $profile->id && $profile->merged_at === null && $profile->archived_at === null
-            && ($meta['verification_method'] ?? null) === 'new_profile_authenticated_customer_account'
+            && in_array($meta['verification_method'] ?? null, ['new_profile_authenticated_customer_account', 'reviewed_existing_customer_account'], true)
             && ($meta['shopify_store_key'] ?? null) === 'retail' && ($meta['shopify_customer_gid'] ?? null) === $gid
             && ($meta['verified_profile_id'] ?? null) === (int) $profile->id
             && is_string($meta['verified_at'] ?? null) && strtotime($meta['verified_at']) !== false

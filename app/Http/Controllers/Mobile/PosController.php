@@ -34,10 +34,31 @@ final class PosController extends Controller
             app(\App\Services\Pos\PosAccess::class)->register($register, 'admin')));
     }
 
+    public function previewRewardCode(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['proof' => ['required', 'string', 'regex:/^everbranch-reward:v1:[A-Za-z0-9_-]{43}$/D'],
+            'expected_customer_id' => ['sometimes', 'integer', 'min:1']], fn ($input) => app(\App\Services\Pos\PosRewardCheckout::class)
+                ->preview($register, $input['proof'], $input['expected_customer_id'] ?? null));
+    }
+
+    public function requestRewardContactCode(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['customer_profile_id' => ['required', 'integer', 'min:1'], 'channel' => ['required', 'in:phone,email'],
+            'request_id' => ['required', 'uuid'], 'customer_requested' => ['required', 'boolean']], fn ($input) => app(\App\Services\Pos\PosRewardContactAuthorization::class)
+                ->request($register, $input['customer_profile_id'], $input['channel'], $input['request_id'], $input['customer_requested'] === true));
+    }
+
+    public function verifyRewardContactCode(Request $r, string $tenant, string $register, string $challenge): JsonResponse
+    {
+        return $this->respond($r, ['code' => ['required', 'string', 'regex:/^[0-9]{6}$/D']], fn ($input) => app(\App\Services\Pos\PosRewardContactAuthorization::class)
+            ->verify($register, $challenge, $input['code']));
+    }
+
     public function saveRewardRedemption(Request $r, string $tenant, string $register): JsonResponse
     {
-        return $this->respond($r, ['draft' => ['required', 'array:enabled,max_minor,channel,refund_policy'],
+        return $this->respond($r, ['draft' => ['required', 'array:enabled,max_minor,member_max_minor,channel,refund_policy'],
             'draft.enabled' => ['required', 'boolean'], 'draft.max_minor' => ['required', 'integer', 'min:1', 'max:100000000'],
+            'draft.member_max_minor' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000000'],
             'draft.channel' => ['required', 'in:in_person'], 'draft.refund_policy' => ['required', 'in:restore_full_review_partial'],
             'expected_draft_version' => ['required', 'regex:/^[a-f0-9]{64}$/D']],
             fn ($input) => app(\App\Services\Pos\PosRewardPolicyManager::class)->save(
@@ -171,6 +192,12 @@ final class PosController extends Controller
             fn ($input) => app(\App\Services\Pos\PosCustomerDirectory::class)->search($register, $input['query']));
     }
 
+    public function verifyMembership(Request $r, string $tenant, string $register, string $profile): JsonResponse
+    {
+        return $this->respond($r, ['confirmed' => ['required', 'accepted'], 'active' => ['required', 'boolean'], 'reference' => ['required', 'string', 'min:10', 'max:190']],
+            fn ($i) => app(\App\Services\Pos\PosMembershipVerification::class)->record($register, (int) $profile, $i['active'], $i['reference']));
+    }
+
     public function customerCommerce(Request $r, string $tenant, string $register, string $profile): JsonResponse
     {
         return $this->respond($r, [], fn () => app(\App\Services\Pos\PosCustomerDirectory::class)->commerce($register, (int) $profile));
@@ -194,6 +221,13 @@ final class PosController extends Controller
             'confirmed' => ['required', 'boolean'], 'disclosure_hash' => ['required', 'regex:/^[a-f0-9]{64}$/D']], fn ($input) => app(\App\Services\Pos\PosExistingWalletReview::class)
                 ->review(app(\App\Services\Pos\PosAccess::class)->register($register, 'admin'), $reference,
                     $input['customer_profile_id'], $input['evidence'], $input['confirmed'] === true, $input['disclosure_hash']));
+    }
+
+    public function finalizeWalletLinkReview(Request $r, string $tenant, string $register, string $reference): JsonResponse
+    {
+        return $this->respond($r, ['customer_profile_id' => ['required', 'integer', 'min:1'], 'confirmed' => ['required', 'boolean']],
+            fn ($input) => app(\App\Services\Pos\PosExistingWalletReview::class)->finalize(
+                app(\App\Services\Pos\PosAccess::class)->register($register, 'admin'), $reference, $input['customer_profile_id'], $input['confirmed'] === true));
     }
 
     public function configureCustomerEnrollment(Request $r, string $tenant, string $register): JsonResponse
@@ -342,6 +376,17 @@ final class PosController extends Controller
         return $this->respond($r, [], fn () => $this->pos->receipt($register, $sale));
     }
 
+    public function receiptSmsStatus(Request $r, string $tenant, string $register, string $sale): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosReceiptSms::class)->status($register, $sale));
+    }
+
+    public function sendReceiptSms(Request $r, string $tenant, string $register, string $sale): JsonResponse
+    {
+        return $this->respond($r, ['customer_requested' => ['required', 'accepted'], 'expected_phone' => ['required', 'string', 'max:40']],
+            fn ($input) => app(\App\Services\Pos\PosReceiptSms::class)->send($register, $sale, $input['customer_requested'] === true, $input['expected_phone']));
+    }
+
     public function receiptEmailStatus(Request $r, string $tenant, string $register, string $sale): JsonResponse
     {
         return $this->respond($r, [], fn () => app(\App\Services\Pos\PosReceiptEmail::class)->status($register, $sale));
@@ -356,6 +401,11 @@ final class PosController extends Controller
     {
         return $this->respond($r, ['payment_id' => ['sometimes', 'string', 'regex:/^[A-Za-z0-9_-]{1,100}$/D']],
             fn ($input) => $this->pos->reconcile($register, $sale, $input['payment_id'] ?? null));
+    }
+
+    public function returnRewardsOnly(Request $r, string $tenant, string $register, string $sale): JsonResponse
+    {
+        return $this->respond($r, ['confirmed' => ['required', 'accepted']], fn () => $this->pos->returnRewardsOnly($register, $sale));
     }
 
     public function refund(Request $r, string $tenant, string $register, string $sale): JsonResponse

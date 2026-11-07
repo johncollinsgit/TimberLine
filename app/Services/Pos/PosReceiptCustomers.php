@@ -8,7 +8,6 @@ use App\Models\MarketingProfile;
 use App\Services\Inventory\StockLedger;
 use App\Services\Marketing\CanonicalMarketingProfileResolver;
 use App\Services\Marketing\CustomerCommerceSnapshotService;
-use App\Services\PaymentsCore\PaymentJournal;
 use Illuminate\Support\Facades\Schema;
 
 /** An audited association is separate from the immutable financial snapshot. */
@@ -24,6 +23,14 @@ final class PosReceiptCustomers
         }
 
         return $this->stock->rows('receipt_associations', (int) $sale->tenant_id)->where('runtime_id', $this->store->runtime())->where('sale_id', $sale->id)->first();
+    }
+
+    /** Suggested account contact is not a delivery request or marketing consent. */
+    public function suggestedContact(object $sale, array $snapshot): ?array
+    {
+        $profile = $this->identities->byId((int) $sale->tenant_id, (int) ($snapshot['customer']['id'] ?? 0));
+
+        return $profile ? ['name' => trim($profile->first_name.' '.$profile->last_name), 'phone' => $profile->phone, 'email' => $profile->email] : null;
     }
 
     public function decorate(object $sale, array $snapshot): array
@@ -45,7 +52,7 @@ final class PosReceiptCustomers
 
     public function attach(array $scope, object $sale, array $snapshot, array $input): array
     {
-        $operation = $sale->attempt_id ? app(PaymentJournal::class)->get($scope['tenant_id'], $sale->attempt_id) : null;
+        $operation = app(PosSalePaymentEvidence::class)->read($sale, app(PosService::class)->snapshot($sale));
         if ($sale->state !== 'succeeded' || ! $operation || $operation['state'] !== 'succeeded' || ! $operation['provider_id']
             || $operation['sale_id'] !== $sale->id || $operation['request_id'] !== $sale->payment_request_id
             || $operation['kind'] !== 'payment' || (int) $operation['amount_minor'] !== (int) $sale->amount_minor

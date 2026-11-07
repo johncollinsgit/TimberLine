@@ -864,7 +864,7 @@ function ownedStockRewardsProgram($test, bool $multipliers = false): void
     $rules = ['first_order_reward_amount' => 3.50, 'event_rewards_enabled' => true, 'enable_milestone_rewards' => true,
         'enable_order_based_earning' => true, 'rewardable_channels' => 'show_issued_online_redeemed',
         'candle_club_multiplier_enabled' => $multipliers, 'candle_club_multiplier_value' => 2];
-    foreach (['candle_cash_program_config' => ['redeem_increment_dollars' => 10, 'second_order_reward_amount' => 1.25], 'candle_cash_policy_config' => ['earning_rules' => $rules]] as $key => $value) {
+    foreach (['candle_cash_program_config' => ['redeem_increment_dollars' => 10, 'second_order_reward_amount' => 1.25], 'candle_cash_policy_config' => ['earning_rules' => $rules], 'candle_cash_access_state' => ['launch_state' => 'published', 'test_mode' => false]] as $key => $value) {
         \App\Models\TenantMarketingSetting::create(['tenant_id' => $test->tenant->id, 'key' => $key, 'value' => $value]);
     }
     $settings = $test->store->decrypt($test->store->rows('registers', $test->tenant->id)->first()->configuration);
@@ -900,6 +900,9 @@ it('atomically binds one capped reward to the original quote and taxes the disco
     $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->assertJsonPath('amount_minor', 535)->json();
     $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail();
     $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($sale);
+    $receiptRules = app(\App\Services\Pos\PosReceiptRewards::class)->forSale($sale, $snapshot)['rules'];
+    expect(implode(' ', $receiptRules))->toContain('Use up to $5.00')->not->toContain('redeemed online');
+    expect($snapshot['customer_rewards']['redemption'])->toBe('in_person_and_online');
     expect($snapshot['terms']['discount_minor'])->toBe(500)->and($snapshot['terms']['tax_minor'])->toBe(35)
         ->and($snapshot['terms']['pos_candle_cash']['profile_id'])->toBe($this->profile->id)
         ->and(json_encode($snapshot))->not->toContain($credential['qr_payload'])
@@ -935,7 +938,8 @@ it('keeps a post-quote identity conflict from redirecting the reward hold or sta
     $gid = $link->source_meta['shopify_customer_gid'];
     $other = \App\Models\MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Other']);
     \App\Models\CandleCashBalance::create(['marketing_profile_id' => $other->id, 'balance' => 12]);
-    \App\Models\CustomerExternalProfile::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $other->id,
+    // Simulate out-of-band database corruption; first-party mapping writers now reject this conflict.
+    DB::table('customer_external_profiles')->insert(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $other->id,
         'provider' => 'shopify', 'integration' => 'shopify_customer', 'store_key' => 'retail',
         'external_customer_id' => basename($gid), 'external_customer_gid' => $gid]);
     $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect', [])->assertStatus(409)
@@ -1936,3 +1940,113 @@ it('resolves a fully evidenced owner-attested partial allocation once or retains
     }
     Http::assertNotSent(fn ($request) => $request->method() !== 'GET');
 })->with(['normal', 'shortfall', 'race', 'stale', 'changed_after_approval', 'changed_after_write', 'postcheck_outage', 'association_changed', 'association_after_approval', 'disabled_queued', 'lost_response']);
+
+it('completes a fully redeemed basket once without a Square charge and returns the same wallet once', function (int $price): void {
+    $this->stock->rows('items', $this->tenant->id)->where('id', $this->item)->update(['unit_amount_minor' => $price]);
+    $credential = ownedStockRewardCredential($this);
+    $input = [...$this->selection, 'reward_redemption' => ['proof' => $credential['qr_payload'], 'amount_minor' => 500]];
+    $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->assertJsonPath('amount_minor', 0)->json();
+    $url = $this->base.'/sales/'.$quote['sale_id'];
+    $this->postJson($url.'/collect')->assertOk()->assertJsonPath('canonical_confirmation', true)->assertJsonMissingPath('collection');
+    $this->postJson($url.'/collect')->assertOk()->assertJsonPath('canonical_confirmation', true)->assertJsonMissingPath('collection');
+    $this->postJson($url.'/reconcile')->assertOk()->assertJsonPath('canonical_confirmation', true);
+    $this->getJson($url.'/receipt')->assertOk()->assertJsonPath('payment_source', 'everbranch_rewards_only')->assertJsonPath('rewards_redeemed_minor', $price);
+    expect(DB::table('payment_core_operations')->where('tenant_id', $this->tenant->id)->count())->toBe(0)
+        ->and(DB::table('pos_candle_cash_reservations')->where('sale_id', $quote['sale_id'])->value('state'))->toBe('spent');
+    $this->postJson($url.'/return-rewards', ['confirmed' => false])->assertUnprocessable();
+    $this->postJson($url.'/return-rewards', ['confirmed' => true])->assertOk()->assertJsonPath('rewards_returned_minor', $price);
+    $this->postJson($url.'/return-rewards', ['confirmed' => true])->assertOk()->assertJsonPath('rewards_returned_minor', $price);
+    expect((float) \App\Models\CandleCashBalance::find($this->profile->id)->balance)->toBe(10.0)
+        ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'pos_reservation_refund')->count())->toBe(1);
+})->with([400, 500]);
+
+it('serializes actual policy publication and the final native descriptor in either acquisition order', function (bool $publishFirst): void {
+    if (DB::connection()->getDriverName() !== 'mysql' || getenv('POS_LIVE_DISPOSABLE_MYSQL') !== '1' || ! function_exists('pcntl_fork')) {
+        $this->markTestSkipped('Explicit disposable MySQL race');
+    }
+    $credential = ownedStockRewardCredential($this);
+    config(['pos_live.reward_policy_management_enabled' => true]);
+    $input = [...$this->selection, 'reward_redemption' => ['proof' => $credential['qr_payload'], 'amount_minor' => 500]];
+    $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->json();
+    $admin = $this->base.'/reward-redemption';
+    $status = $this->getJson($admin)->assertOk()->json();
+    $draft = ['enabled' => true, 'max_minor' => 300, 'channel' => 'in_person', 'refund_policy' => 'restore_full_review_partial'];
+    $status = $this->postJson($admin.'/draft', ['draft' => $draft, 'expected_draft_version' => $status['draft_version']])->assertOk()->json();
+    $publish = fn () => $this->postJson($admin.'/publish', ['draft_version' => $status['draft_version'], 'expected_published_version' => $status['published_version'],
+        'expected_register_version' => $status['register_reviewed_version'], 'expected_program_version' => $status['program_version'], 'confirmed' => true])->getStatusCode();
+    $collect = function () use ($quote) {
+        $response = $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/collect');
+        if ($response->getStatusCode() !== 200 && $response->getStatusCode() !== 409) {
+            throw new RuntimeException($response->getContent());
+        }
+
+        return $response->getStatusCode();
+    };
+    $results = \Tests\Support\PosProcessRace::run($publishFirst ? $publish : $collect, $publishFirst ? $collect : $publish,
+        fn ($query) => $publishFirst ? in_array('reward_policy_published', $query->bindings, true)
+            : str_contains($query->sql, 'update `pos_live_sales` set') && str_contains($query->sql, '`descriptor_issued_at`'));
+    expect($results)->toBe($publishFirst ? [200, 409] : [200, 200]);
+    expect(DB::table('payment_core_operations')->where('tenant_id', $this->tenant->id)->where('kind', 'payment')->count())->toBe($publishFirst ? 0 : 1);
+})->with([true, false]);
+
+it('serializes a conflicting identity import and customer QR issuance in either acquisition order', function (bool $importFirst): void {
+    if (DB::connection()->getDriverName() !== 'mysql' || getenv('POS_LIVE_DISPOSABLE_MYSQL') !== '1' || ! function_exists('pcntl_fork')) {
+        $this->markTestSkipped('Explicit disposable MySQL race');
+    }
+    $credential = ownedStockRewardCredential($this);
+    DB::table('pos_reward_authorizations')->where('tenant_id', $this->tenant->id)->delete();
+    $link = \App\Models\MarketingProfileLink::forTenantId($this->tenant->id)->where('source_type', \App\Services\Pos\PosVerifiedCustomerAccount::SOURCE)->firstOrFail();
+    $meta = $link->source_meta;
+    $source = $link->source_id;
+    $link->delete();
+    $other = \App\Models\MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Other person']);
+    $import = function () use ($other, $meta): string {
+        try {
+            \App\Models\MarketingProfileLink::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $other->id, 'source_type' => 'shopify_customer', 'source_id' => 'shopify:'.$meta['shopify_customer_gid'], 'source_meta' => $meta]);
+
+            return 'imported';
+        } catch (\App\Services\Pos\PosException) {
+            return 'blocked';
+        }
+    };
+    $issue = function () use ($source, $meta): string {
+        try {
+            return app(\App\Services\Marketing\CustomerAccountFence::class)->forTenant($this->tenant->id, function () use ($source, $meta): string {
+                $verified = \App\Models\MarketingProfileLink::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $this->profile->id,
+                    'source_type' => \App\Services\Pos\PosVerifiedCustomerAccount::SOURCE, 'source_id' => $source, 'source_meta' => $meta]);
+                $policy = app(\App\Services\Pos\PosRewardRedemptionSettings::class)->forProfile($this->profile);
+                $terms = ['max_minor' => $policy['max_minor'], 'policy_version' => $policy['version'], 'disclosure_version' => \App\Services\Pos\PosRewardCustomerProof::DISCLOSURE_VERSION];
+                app(\App\Services\Pos\PosRewardCustomerProof::class)->issueForAuthenticatedProfile($this->profile, $terms, (int) $verified->id);
+
+                return 'issued';
+            });
+        } catch (\App\Services\Pos\PosException) {
+            return 'blocked';
+        }
+    };
+    $results = \Tests\Support\PosProcessRace::run($importFirst ? $import : $issue, $importFirst ? $issue : $import,
+        fn ($query) => $importFirst ? str_starts_with($query->sql, 'insert into `marketing_profile_links`') : str_starts_with($query->sql, 'insert into `pos_reward_authorizations`'));
+    expect($results)->toBe($importFirst ? ['imported', 'blocked'] : ['issued', 'blocked']);
+    expect(DB::table('pos_reward_authorizations')->where('tenant_id', $this->tenant->id)->count())->toBe($importFirst ? 0 : 1);
+    expect((float) \App\Models\CandleCashBalance::find($this->profile->id)->balance)->toBe(10.0);
+})->with([true, false]);
+
+it('limits owner membership reviews to current account evidence and expires or revokes the larger cap', function (): void {
+    ownedStockRewardCredential($this);
+    $setting = \App\Models\TenantMarketingSetting::forTenantId($this->tenant->id)->where('key', \App\Services\Pos\PosRewardRedemptionSettings::SETTING_KEY)->firstOrFail();
+    $value = $setting->value;
+    $value['member_max_minor'] = 1000;
+    $value['reviewed_version'] = app(\App\Services\Pos\PosRewardRedemptionSettings::class)->version($value, app(\App\Services\Pos\PosCustomerRewards::class)->policy($this->tenant->id)['version']);
+    $setting->update(['value' => $value]);
+    $register = $this->store->rows('registers', $this->tenant->id)->first();
+    $config = $this->store->decrypt($register->configuration);
+    $config['pos_candle_cash_reviewed_version'] = $value['reviewed_version'];
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($config)]);
+    $url = $this->base.'/customers/'.$this->profile->id.'/membership-review';
+    $body = ['active' => true, 'confirmed' => true, 'reference' => 'Fictional current paid account reviewed'];
+    $this->postJson($url, [...$body, 'confirmed' => false])->assertUnprocessable();
+    $this->postJson($url, $body)->assertOk()->assertJsonPath('active', true);
+    expect(app(\App\Services\Pos\PosRewardRedemptionSettings::class)->forProfile($this->profile)['max_minor'])->toBe(1000);
+    $this->postJson($url, [...$body, 'active' => false])->assertOk();
+    expect(app(\App\Services\Pos\PosRewardRedemptionSettings::class)->forProfile($this->profile)['max_minor'])->toBe(500);
+});

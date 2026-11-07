@@ -6,9 +6,11 @@ final class ReceiptEmailFlowTests: XCTestCase {
         XCTAssertTrue(email.waitForExistence(timeout: 5)); email.tap(); email.typeText("buyer@example.test")
         app.buttons["Save receipt contact"].tap()
     }
-    func testExplicitEmailAutomaticallyQueuesWhenEnabled() {
+    func testSavingContactRequiresAnExplicitSendChoice() {
         let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-completed-ui-tests", "--pos-email-ui-tests"]; app.launch()
         saveAddress(app)
+        XCTAssertTrue(app.buttons["Send receipt email"].waitForExistence(timeout: 10))
+        app.buttons["Send receipt email"].tap()
         XCTAssertTrue(app.staticTexts["Receipt email queued. Delivery is not yet confirmed."].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["fixture-receipt"].exists)
         XCTAssertFalse(app.buttons["Send receipt email"].exists)
@@ -23,6 +25,8 @@ final class ReceiptEmailFlowTests: XCTestCase {
     func testUncertainEmailDoesNotAffectPaymentAndCanCheckStatus() {
         let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-completed-ui-tests", "--pos-email-ui-tests", "--pos-email-fail-tests"]; app.launch()
         saveAddress(app)
+        XCTAssertTrue(app.buttons["Send receipt email"].waitForExistence(timeout: 10))
+        app.buttons["Send receipt email"].tap()
         XCTAssertTrue(app.staticTexts["Receipt email request not confirmed. Check its status before trying again."].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["fixture-receipt"].exists)
         XCTAssertFalse(app.buttons["Send receipt email"].exists)

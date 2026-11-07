@@ -6,6 +6,32 @@ use Illuminate\Http\Request;
 
 class MarketingStorefrontRequestVerifier
 {
+    /** Money authorization uses Shopify's exact proxy signature and a mandatory fresh timestamp. */
+    public function customerProxy(Request $request): ?array
+    {
+        $query = $request->query();
+        $provided = $query['signature'] ?? null;
+        $timestamp = $query['timestamp'] ?? null;
+        $shop = $query['shop'] ?? null;
+        $customer = array_key_exists('logged_in_customer_id', $query) ? ($query['logged_in_customer_id'] ?? '') : null;
+        $prefix = $query['path_prefix'] ?? null;
+        $secret = $this->appProxySecret();
+        if (! config('marketing.shopify.app_proxy_enabled') || $secret === '' || ! is_string($provided)
+            || ! preg_match('/^[a-f0-9]{64}$/Di', $provided) || ! is_string($timestamp) || ! ctype_digit($timestamp)
+            || strlen($timestamp) > 12 || abs(time() - (int) $timestamp) > 120
+            || ! is_string($shop) || ! preg_match('/^[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com$/D', $shop)
+            || ! is_string($customer) || ($customer !== '' && ! preg_match('/^[1-9][0-9]{0,19}$/D', $customer))
+            || ! is_string($prefix) || ! preg_match('~^/(apps|a|community|tools)/[A-Za-z0-9_-]{1,30}$~D', $prefix)) {
+            return null;
+        }
+        unset($query['signature']);
+        if (! hash_equals(hash_hmac('sha256', $this->appProxyCanonicalString($query), $secret), strtolower($provided))) {
+            return null;
+        }
+
+        return ['shop' => $shop, 'customer_id' => $customer, 'path_prefix' => $prefix];
+    }
+
     /**
      * @return array{ok:bool,mode:?string,reason:?string}
      */
@@ -123,7 +149,7 @@ class MarketingStorefrontRequestVerifier
     protected function signaturePayload(Request $request, string $timestamp): string
     {
         $method = strtoupper($request->getMethod());
-        $path = '/' . ltrim((string) $request->path(), '/');
+        $path = '/'.ltrim((string) $request->path(), '/');
 
         $query = $request->query();
         unset($query['token'], $query['signature'], $query['hmac']);
@@ -142,7 +168,7 @@ class MarketingStorefrontRequestVerifier
         $method = strtoupper($request->getMethod());
 
         $paths = array_values(array_unique(array_filter([
-            '/' . ltrim((string) $request->path(), '/'),
+            '/'.ltrim((string) $request->path(), '/'),
             (string) $request->getPathInfo(),
             (string) parse_url((string) $request->fullUrl(), PHP_URL_PATH),
         ])));
@@ -171,7 +197,7 @@ class MarketingStorefrontRequestVerifier
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      */
     protected function canonicalize(array $payload): string
     {
@@ -192,14 +218,14 @@ class MarketingStorefrontRequestVerifier
                 $value = (string) $value;
             }
 
-            $parts[] = rawurlencode((string) $key) . '=' . rawurlencode((string) $value);
+            $parts[] = rawurlencode((string) $key).'='.rawurlencode((string) $value);
         }
 
         return implode('&', $parts);
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      */
     protected function appProxyCanonicalString(array $payload): string
     {
@@ -220,7 +246,7 @@ class MarketingStorefrontRequestVerifier
                 $value = (string) $value;
             }
 
-            $parts[] = (string) $key . '=' . (string) $value;
+            $parts[] = (string) $key.'='.(string) $value;
         }
 
         return implode('', $parts);

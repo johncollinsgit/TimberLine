@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Tenant;
@@ -48,15 +47,16 @@ it('requires an explicit authenticated account link rather than email, demo or a
     expect($this->identity->verified($otherSession))->toBeFalse()
         ->and($this->identity->verified($wrongSubject))->toBeFalse()
         ->and($this->identity->verified($demo))->toBeFalse();
-    $external = CustomerExternalProfile::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $other->id,
+    $externalId = DB::table('customer_external_profiles')->insertGetId(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $other->id,
         'provider' => 'shopify', 'integration' => 'shopify_customer', 'store_key' => 'retail', 'external_customer_id' => '771', 'external_customer_gid' => $this->gid]);
     expect($this->identity->verified($this->session))->toBeFalse();
-    $external->delete();
-    MarketingProfileLink::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $other->id,
+    DB::table('customer_external_profiles')->where('id', $externalId)->delete();
+    // A raw write represents manual database corruption, outside the guarded import path.
+    DB::table('marketing_profile_links')->insert(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $other->id,
         'source_type' => 'shopify_customer', 'source_id' => $this->gid, 'match_method' => 'customer_verified_account_link',
-        'source_meta' => ['verification_method' => 'authenticated_customer_account', 'shopify_customer_gid' => $this->gid,
+        'source_meta' => json_encode(['verification_method' => 'authenticated_customer_account', 'shopify_customer_gid' => $this->gid,
             'shopify_store_key' => 'retail',
-            'verified_at' => now()->toIso8601String()], 'confidence' => 1]);
+            'verified_at' => now()->toIso8601String()]), 'confidence' => 1]);
     expect($this->identity->verified($this->session))->toBeFalse();
 });
 
@@ -139,13 +139,13 @@ it('accepts an explicitly disclosed existing-wallet review request only from a f
         return \Illuminate\Support\Facades\Http::response(['data' => ['customer' => ['id' => $gid, 'emailAddress' => ['emailAddress' => 'same@example.invalid']]]]);
     });
     $url = '/api/mobile/v1/modern-forestry/rewards/existing-wallet-review';
-    $terms = $this->getJson($url.'-terms')->assertOk()->assertJsonPath('data.finalization_available', false)->json('data');
+    $terms = $this->getJson($url.'-terms')->assertOk()->assertJsonPath('data.finalization_available', true)->json('data');
     $input = ['request_id' => (string) \Illuminate\Support\Str::uuid(), 'confirmed' => true,
         'disclosure_version' => $terms['disclosure_version'], 'disclosure_hash' => $terms['disclosure_hash']];
     $this->withToken('fake-customer-account-token')->postJson($url, [...$input, 'confirmed' => false])->assertStatus(422);
     $this->withToken('fake-customer-account-token')->postJson($url, [...$input, 'disclosure_hash' => str_repeat('0', 64)])->assertStatus(422);
     $first = $this->withToken('fake-customer-account-token')->postJson($url, $input)->assertOk()
-        ->assertJsonPath('data.linked', false)->assertJsonPath('data.finalization_available', false)->assertJsonMissingPath('data.profile_id')->json('data');
+        ->assertJsonPath('data.linked', false)->assertJsonPath('data.finalization_available', true)->assertJsonMissingPath('data.profile_id')->json('data');
     $this->withToken('fake-customer-account-token')->postJson($url, $input)->assertOk()->assertJsonPath('data.reference', $first['reference']);
     $this->withToken('fake-customer-account-token')->getJson($url.'/'.$first['reference'])->assertOk()->assertJsonPath('data.state', 'awaiting_review');
     $this->withToken('other-token')->getJson($url.'/'.$first['reference'])->assertNotFound();

@@ -32,7 +32,7 @@ final class PosVerifiedRewardReservationAuthority implements PosRewardReservatio
         if (! is_array($terms) || ! is_int($terms['profile_id'] ?? null) || ! is_int($terms['amount_minor'] ?? null)
             || $terms['amount_minor'] !== $amountMinor || ! is_int($terms['eligible_minor'] ?? null)
             || ! is_int($subtotal) || ! is_int($discount) || $discount < $amountMinor
-            || $terms['eligible_minor'] !== $subtotal - ($discount - $amountMinor)
+            || $terms['eligible_minor'] !== $subtotal - ($discount - $amountMinor) - ($snapshot['terms']['custom_discounted_minor'] ?? 0)
             || (int) ($snapshot['customer']['id'] ?? 0) !== $terms['profile_id']) {
             throw new PosException('reward_quote_invalid', 409);
         }
@@ -56,8 +56,13 @@ final class PosVerifiedRewardReservationAuthority implements PosRewardReservatio
             throw new PosException('customer_identity_review_required', 409);
         }
 
+        $effective = $this->settings->forProfile($canonical);
+        if ($amountMinor > $effective['max_minor']) {
+            throw new PosException('membership_redemption_limit_changed', 409);
+        }
+
         return ['profile_id' => $profileId, 'expected_amount_minor' => $terms['amount_minor'],
-            'limit_minor' => $policy['max_minor'], 'eligible_minor' => $terms['eligible_minor'],
+            'limit_minor' => $effective['max_minor'], 'eligible_minor' => $terms['eligible_minor'],
             'policy_version' => $policy['version'], 'authorization_reference' => $proof->id,
             'account_link_id' => (int) $proof->account_link_id];
     }

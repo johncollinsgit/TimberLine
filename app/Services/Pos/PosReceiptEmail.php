@@ -24,13 +24,16 @@ final class PosReceiptEmail
         if (config('pos_live.receipt_email_enabled') !== true) {
             throw new PosException('receipt_email_unavailable', 503);
         }
+        if (config('pos_live.receipt_email_transport') === 'tenant_gateway') {
+            return app(PosReceiptTenantEmail::class)->send($register, $saleId);
+        }
         $scope = $this->access->register($register, 'quote');
         if (app(TenantContext::class)->id() !== $scope['tenant_id']) {
             throw new PosException('scope_invalid', 403);
         }
         $sale = $this->sales->sale($scope, $saleId);
         $snapshot = $this->sales->snapshot($sale);
-        $payment = $sale->attempt_id ? $this->journal->get($scope['tenant_id'], $sale->attempt_id) : null;
+        $payment = app(PosSalePaymentEvidence::class)->read($sale, $snapshot);
         if ($sale->state !== 'succeeded' || ! $payment || $payment['kind'] !== 'payment' || $payment['state'] !== 'succeeded'
             || ! is_string($payment['provider_id'] ?? null) || $payment['provider_id'] === ''
             || $payment['sale_id'] !== $sale->id || $payment['request_id'] !== $sale->payment_request_id
@@ -42,6 +45,7 @@ final class PosReceiptEmail
         // The contact and the immutable outbox intent share the default database.
         // The provider is called later by the outbox worker, never in this transaction.
         return $this->store->db->transaction(function () use ($scope, $sale, $register, $saleId, $payment): array {
+            $this->store->rows('sales', $scope['tenant_id'])->where('id', $sale->id)->lockForUpdate()->firstOrFail();
             $association = $this->store->db->table('commerce_stock_receipt_associations')
                 ->where('tenant_id', $scope['tenant_id'])->where('runtime_id', $this->store->runtime())
                 ->where('sale_id', $sale->id)->lockForUpdate()->first();
@@ -49,6 +53,9 @@ final class PosReceiptEmail
             $email = strtolower(trim((string) ($contact['email'] ?? '')));
             if (strlen($email) > 190 || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 throw new PosException('receipt_email_contact_required', 422);
+            }
+            if ($previous = app(PosReceiptTenantEmail::class)->recordedStatus($sale, $email)) {
+                return $previous;
             }
             if ($delivery = $this->findDelivery($scope['tenant_id'], $sale->id, $email)) {
                 return $this->statusBody($delivery);
@@ -75,6 +82,9 @@ final class PosReceiptEmail
     /** Read-only status; never enqueues or submits mail. */
     public function status(string $register, string $saleId): array
     {
+        if (config('pos_live.receipt_email_transport') === 'tenant_gateway') {
+            return app(PosReceiptTenantEmail::class)->status($register, $saleId);
+        }
         $scope = $this->access->register($register);
         if (app(TenantContext::class)->id() !== $scope['tenant_id']) {
             throw new PosException('scope_invalid', 403);
@@ -86,9 +96,19 @@ final class PosReceiptEmail
         if (strlen($email) > 190 || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return ['state' => 'contact_required', 'enabled' => config('pos_live.receipt_email_enabled') === true];
         }
+        if ($previous = app(PosReceiptTenantEmail::class)->recordedStatus($sale, $email)) {
+            return $previous;
+        }
         $delivery = $this->findDelivery($scope['tenant_id'], $sale->id, $email);
 
         return $delivery ? $this->statusBody($delivery) : ['state' => 'not_requested', 'enabled' => config('pos_live.receipt_email_enabled') === true];
+    }
+
+    public function previousPlatformStatus(object $sale, string $email): ?array
+    {
+        $delivery = $this->findDelivery((int) $sale->tenant_id, $sale->id, $email);
+
+        return $delivery ? $this->statusBody($delivery) : null;
     }
 
     private function findDelivery(int $tenantId, string $saleId, string $email): ?\App\Models\PlatformEmailDelivery
@@ -135,7 +155,7 @@ final class PosReceiptEmail
         return '$'.number_format($amount / 100, 2, '.', ',');
     }
 
-    private function text(array $receipt, string $merchant): string
+    public function text(array $receipt, string $merchant): string
     {
         $lines = [$merchant, $this->safe($receipt['merchant_location']), 'Receipt '.$this->safe($receipt['receipt_number']), ''];
         foreach ($receipt['lines'] as $line) {
@@ -162,6 +182,28 @@ final class PosReceiptEmail
         foreach (['card_brand', 'last_four', 'entry_method', 'application_name', 'application_identifier'] as $field) {
             if (! empty($details[$field])) {
                 $lines[] = $this->safe($details[$field]);
+            }
+        }
+
+        if ($rewards = $receipt['rewards'] ?? null) {
+            $lines[] = '';
+            $label = $this->safe($rewards['label']);
+            if ($rewards['earned_minor'] !== null) {
+                $lines[] = $label.' earned on this purchase: '.$this->money($rewards['earned_minor']);
+            }
+            if ($rewards['redeemed_minor'] > 0) {
+                $lines[] = $label.' used: '.$this->money($rewards['redeemed_minor']);
+            }
+            if ($rewards['balance_minor'] !== null) {
+                $lines[] = $label.' balance: '.$this->money($rewards['balance_minor']);
+                $lines[] = 'Balance checked: '.$this->safe($rewards['balance_as_of']);
+                $lines[] = 'Balance as of '.$this->safe($rewards['balance_as_of']);
+            }
+            foreach ($rewards['rules'] as $rule) {
+                $lines[] = $this->safe($rule);
+            }
+            if (in_array($receipt['customer_rewards_status'] ?? '', ['pending', 'review_required'], true)) {
+                $lines[] = 'Rewards for this purchase are still being processed or reviewed.';
             }
         }
 

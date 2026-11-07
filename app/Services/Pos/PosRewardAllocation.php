@@ -12,7 +12,9 @@ final class PosRewardAllocation
     public function apply(array $offers, int $amountMinor): array
     {
         $lines = $offers['lines_minor'];
-        if ($amountMinor < 1 || array_sum($lines) <= $amountMinor) {
+        $custom = $lines['custom'] ?? null;
+        unset($lines['custom']);
+        if ($amountMinor < 1 || array_sum($lines) < $amountMinor) {
             throw new PosException('reward_amount_unavailable', 422);
         }
         $unitLines = $offers['unit_lines_minor'] ?? null;
@@ -43,6 +45,9 @@ final class PosRewardAllocation
             throw new PosException('reward_amount_unavailable', 422);
         }
         $offers['lines_minor'] = $lines;
+        if ($custom !== null) {
+            $offers['lines_minor']['custom'] = $custom;
+        }
         $offers['unit_lines_minor'] = $unitLines;
         $offers['discount_minor'] += $amountMinor;
         $offers['offers'][] = ['kind' => 'reward', 'name' => 'Rewards', 'amount_minor' => $amountMinor];

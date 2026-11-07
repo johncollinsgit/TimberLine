@@ -7,6 +7,10 @@ struct POSCustomerCommerceResponse: Decodable {
 
 struct POSCustomerCommerce: Decodable {
     struct Purchase: Decodable, Identifiable {
+        struct Location: Decodable { let name: String; let register: String }
+        struct Item: Decodable { let title: String; let quantity: Int; let components: [Item]? }
+        let location: Location?
+        let items: [Item]?
         let id: String
         let number: String
         let channel: String
@@ -54,6 +58,13 @@ struct CustomerCommercePanel: View {
                             HStack { Text(purchase.number).font(.subheadline.weight(.semibold)); Spacer(); Text(amount(purchase)).font(.subheadline).monospacedDigit() }
                             Text([channel(purchase.channel), state(purchase), purchase.occurredAt.map { String($0.prefix(10)) }].compactMap { $0 }.joined(separator: " · "))
                                 .font(.caption).foregroundStyle(PayTheme.muted)
+                            if let location = purchase.location { Text(location.name).font(.caption).foregroundStyle(PayTheme.muted) }
+                            ForEach(Array((purchase.items ?? []).enumerated()), id: \.offset) { _, item in
+                                Text("\(item.quantity) × \(item.title)").font(.caption)
+                                ForEach(Array((item.components ?? []).enumerated()), id: \.offset) { _, part in
+                                    Text("  \(part.quantity) × \(part.title)").font(.caption)
+                                }
+                            }
                             if let refund = purchase.refundedMinor, refund > 0, let currency = purchase.currency, purchase.currencyScale == 2 {
                                 Text("Refunded: \(currency) \(String(format: "%.2f", Double(refund) / 100))").font(.caption).foregroundStyle(PayTheme.muted)
                             }

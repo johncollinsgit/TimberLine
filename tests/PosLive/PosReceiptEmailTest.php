@@ -185,3 +185,57 @@ it('keeps receipt sending disabled by default and never queues from status reads
     expect(\App\Models\PlatformEmailMessage::where('tenant_id', $this->tenant->id)->count())->toBe(0);
     \Illuminate\Support\Facades\Bus::assertNotDispatched(\App\Jobs\SendPlatformEmail::class);
 });
+
+it('includes the tenant rewards name, posted balance and original earning rules without sending to a suggested account contact', function (): void {
+    $sale = emailPosConfirm($this, ['purchase_earn_bps' => 500, 'enable_milestone_rewards' => false], ['label' => 'Forest Credit']);
+    app(\App\Services\Pos\PosCustomerRewards::class)->apply($sale);
+    $url = $this->base.'/sales/'.$sale->id.'/receipt/email';
+    $this->postJson($url)->assertStatus(422)->assertJsonPath('error.code', 'receipt_email_contact_required');
+    emailPosContact($this, $sale, $this->receiptEmail);
+    $result = $this->postJson($url)->assertOk()->json();
+    $delivery = \App\Models\PlatformEmailDelivery::findOrFail($result['delivery_id']);
+    expect(quoted_printable_decode($delivery->message->mime))->toContain('Forest Credit balance: $0.50', '5.00% back');
+});
+
+it('sends a customer-requested text once and keeps provider uncertainty from causing a duplicate', function (): void {
+    config(['pos_live.receipt_sms_enabled' => true]);
+    $sale = emailPosConfirm($this, ['purchase_earn_bps' => 500, 'enable_milestone_rewards' => false], ['label' => 'Forest Credit']);
+    emailPosContact($this, $sale, $this->receiptEmail);
+    DB::table('commerce_stock_receipt_associations')->where('tenant_id', $this->tenant->id)->where('sale_id', $sale->id)
+        ->update(['contact' => $this->store->encrypt(['phone' => '+12025550123', 'email' => $this->receiptEmail])]);
+    $gateway = Mockery::mock(\App\Services\Marketing\Messaging\TenantMessagingGateway::class);
+    $captured = null;
+    $gateway->shouldReceive('sendSms')->once()->withAnyArgs()->andReturnUsing(function (...$args) use (&$captured) {
+        $captured = $args;
+        throw new RuntimeException('Provider timed out after possible acceptance');
+    });
+    app()->instance(\App\Services\Marketing\Messaging\TenantMessagingGateway::class, $gateway);
+    $url = $this->base.'/sales/'.$sale->id.'/receipt/sms';
+    $this->getJson($url)->assertOk()->assertJsonPath('state', 'not_requested');
+    $this->postJson($url, ['customer_requested' => false, 'expected_phone' => '+12025550123'])->assertStatus(422);
+    $this->postJson($url, ['customer_requested' => true, 'expected_phone' => '+12025550124'])->assertStatus(422);
+    $this->postJson($url, ['customer_requested' => true, 'expected_phone' => '+12025550123'])->assertOk()->assertJsonPath('state', 'not_confirmed');
+    $this->postJson($url, ['customer_requested' => true, 'expected_phone' => '+12025550123'])->assertOk()->assertJsonPath('state', 'not_confirmed');
+    $this->getJson($url)->assertOk()->assertJsonPath('state', 'not_confirmed');
+    expect($captured[0])->toBe($this->tenant->id)->and($captured[1])->toBe('+12025550123')
+        ->and($captured[2])->toContain('Paid: $10.70')->and($captured[3]['source_type'])->toBe('pos_receipt');
+    expect(\App\Models\MarketingProfile::find($this->profile->id)->accepts_sms_marketing)->not->toBeTrue();
+});
+
+it('uses the tenant mail route once for an explicit receipt even after provider uncertainty', function (bool $uncertain): void {
+    config(['pos_live.receipt_email_transport' => 'tenant_gateway']);
+    $sale = emailPosConfirm($this);
+    $this->postJson($this->base.'/sales/'.$sale->id.'/receipt/customer', ['request_id' => (string) Str::uuid(), 'email' => $this->receiptEmail])->assertOk();
+    $gateway = Mockery::mock(\App\Services\Marketing\Messaging\TenantMessagingGateway::class);
+    $expectation = $gateway->shouldReceive('sendEmail')->once()->withArgs(fn ($tenant, $to, $subject, $text, $options) => $tenant === $this->tenant->id && $to === $this->receiptEmail && $options['message_type'] === 'transactional' && str_contains($text, 'EB-'));
+    if ($uncertain) {
+        $expectation->andThrow(new RuntimeException('possible acceptance'));
+    } else {
+        $expectation->andReturn(['success' => true, 'message_id' => 'fixture-accepted']);
+    }
+    app()->instance(\App\Services\Marketing\Messaging\TenantMessagingGateway::class, $gateway);
+    $url = $this->base.'/sales/'.$sale->id.'/receipt/email';
+    $this->postJson($url)->assertOk()->assertJsonPath('state', $uncertain ? 'unknown' : 'accepted');
+    $this->postJson($url)->assertOk()->assertJsonPath('state', $uncertain ? 'unknown' : 'accepted');
+    $this->getJson($url)->assertOk()->assertJsonPath('state', $uncertain ? 'unknown' : 'accepted');
+})->with([true, false]);

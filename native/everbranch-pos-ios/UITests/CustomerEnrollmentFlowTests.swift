@@ -61,7 +61,7 @@ extension CustomerEnrollmentFlowTests {
         let reference = app.textFields["wallet-review-reference"]
         XCTAssertTrue(reference.waitForExistence(timeout: 5)); reference.tap(); reference.typeText(String(repeating: "a", count: 32))
         app.buttons["Find request"].tap()
-        XCTAssertTrue(app.staticTexts["No wallet has been linked. This review does not enable rewards redemption."].exists)
+        XCTAssertTrue(app.staticTexts["The wallet is not connected until you confirm the reviewed link."].exists)
         let query = app.textFields["Name, email or phone"]; query.tap(); query.typeText("Ada")
         app.buttons["Search customers"].tap()
         XCTAssertTrue(app.buttons["wallet-customer-1"].waitForExistence(timeout: 5)); app.buttons["wallet-customer-1"].tap()
@@ -78,7 +78,7 @@ extension CustomerEnrollmentFlowTests {
         XCTAssertEqual(confirmation.value as? String, "1")
         XCTAssertTrue(record.isEnabled, "Selected: \(app.staticTexts["wallet-selected-customer"].label); evidence: \(app.buttons["wallet-evidence"].label); confirmation: \(String(describing: app.switches["I confirm the disclosure above"].value))"); record.tap()
         XCTAssertTrue(app.staticTexts["Review recorded for customer #1."].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["No wallet has been linked. This review does not enable rewards redemption."].exists)
+        XCTAssertTrue(app.staticTexts["The wallet is not connected until you confirm the reviewed link."].exists)
     }
 }
 
@@ -108,7 +108,7 @@ extension CustomerEnrollmentFlowTests {
         XCTAssertTrue(app.staticTexts["The global in-person redemption gate is on."].exists)
         let explanation = app.staticTexts["rewards-unavailable-explanation"]
         XCTAssertTrue(explanation.exists)
-        XCTAssertEqual(explanation.label, "End-to-end in-person redemption is not available. Customer authorization and other required steps are not yet enabled. Saving a draft does not change the published policy or activate redemption.")
+        XCTAssertEqual(explanation.label, "Publish this register’s reviewed policy and complete register setup to accept rewards codes.")
     }
     func testAdminReviewsDraftWithoutActivatingRedemption() {
         let app = XCUIApplication(); openRewardsSettings(app)
@@ -116,11 +116,15 @@ extension CustomerEnrollmentFlowTests {
         let cap = app.textFields["rewards-cap"]; cap.tap()
         let old = (cap.value as? String) ?? ""
         cap.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count) + "6.00")
-        app.buttons["Save draft"].tap()
+        if app.buttons["Done editing"].waitForExistence(timeout: 3) { app.buttons["Done editing"].tap() }
+        let save = app.buttons["Save draft"]; for _ in 0..<3 where !save.isHittable { app.swipeUp() }; save.tap()
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["Draft saved. Review it before publishing."].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Publishing is temporarily unavailable while payment safety checks are being completed."].exists)
-        XCTAssertFalse(app.buttons["Publish reviewed policy"].isEnabled)
+        XCTAssertTrue(app.buttons["Publish reviewed policy"].isEnabled)
+        app.buttons["Publish reviewed policy"].tap()
+        XCTAssertTrue(app.staticTexts["Reviewed policy published for this register."].waitForExistence(timeout: 5))
+        for _ in 0..<3 where !app.staticTexts["The global in-person redemption gate is off."].exists { app.swipeDown() }
+        XCTAssertTrue(app.staticTexts["The global in-person redemption gate is off."].exists)
     }
 }
 
@@ -263,5 +267,26 @@ extension CustomerEnrollmentFlowTests {
         confirmation.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         XCTAssertEqual(confirmation.value as? String, "1")
         if expectBlocked { XCTAssertFalse(submit.isEnabled) } else { XCTAssertTrue(submit.isEnabled); submit.tap() }
+    }
+}
+
+
+extension CustomerEnrollmentFlowTests {
+    func testScannedRewardsRequireAnExplicitOfferAndCanBeRemovedBeforeCharging() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-customer-commerce-ui-tests", "--pos-rewards-ui-tests"]; app.launch()
+        let basket = app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch
+        XCTAssertTrue(basket.waitForExistence(timeout: 10)); basket.tap()
+        XCTAssertTrue(app.buttons["Charge $21.80"].waitForExistence(timeout: 10))
+        app.swipeUp()
+        let scan = app.buttons["Scan customer rewards QR"]; XCTAssertTrue(scan.waitForExistence(timeout: 5)); scan.tap()
+        let field = app.secureTextFields["Paste rewards code"]; XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("everbranch-reward:v1:" + (String(repeating: "a", count: 42) + "A"))
+        app.buttons["Review code"].tap()
+        let use = app.buttons["Use Candle Cash"]; XCTAssertTrue(use.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Charge $21.80"].exists)
+        use.tap()
+        XCTAssertTrue(app.buttons["Charge $16.35"].waitForExistence(timeout: 10))
+        app.swipeUp()
+        app.buttons["Do not use rewards"].tap()
+        XCTAssertTrue(app.buttons["Charge $21.80"].waitForExistence(timeout: 10))
     }
 }
