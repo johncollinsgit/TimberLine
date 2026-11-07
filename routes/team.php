@@ -17,10 +17,14 @@ Route::middleware(['auth', 'verified', 'tenant.access', \App\Http\Middleware\Ens
     Route::get('/teams', [TeamWorkController::class, 'app'])->name('team.app');
     Route::get('/teams/app', [TeamWorkController::class, 'app'])->name('team.installed');
     Route::prefix('team')->name('team.')->group(function (): void {
+        Route::get('/customers/events', \App\Http\Controllers\TeamCustomerLookupController::class)->defaults('action', 'events')->name('customers.events');
+        Route::get('/customers/{profile}', \App\Http\Controllers\TeamCustomerLookupController::class)->whereNumber('profile')->defaults('action', 'detail')->name('customers.detail');
+        Route::get('/customers', \App\Http\Controllers\TeamCustomerLookupController::class)->name('customers.search');
+        Route::get('/events/{id}/profitability', \App\Http\Controllers\TeamEventProfitabilityController::class)->whereUuid('id')->name('events.profitability');
         Route::get('/events/{id}/intelligence', \App\Http\Controllers\TeamEventIntelligenceController::class)->whereUuid('id')->name('events.intelligence');
         Route::get('/studio/preset', \App\Http\Controllers\TeamStudioController::class)->defaults('action', 'preset')->name('studio.preset');
         Route::get('/studio', \App\Http\Controllers\TeamStudioController::class)->name('studio');
-        foreach (['definition', 'draft', 'preview', 'create', 'budget', 'mapping'] as $action) {
+        foreach (['definition', 'draft', 'preview', 'create', 'budget', 'mapping', 'commerce'] as $action) {
             Route::post('/studio/'.$action, \App\Http\Controllers\TeamStudioController::class)->defaults('action', $action)->name('studio.'.$action);
         }
         Route::get('/events/my-tasks', \App\Http\Controllers\TeamEventTasksController::class)->name('events.my-tasks');

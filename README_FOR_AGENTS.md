@@ -4062,3 +4062,12 @@ stock evidence, no Square charge, and one-time rewards restoration. Short-lived
 owner membership review changes only redemption limits, never join statistics.
 The independent birthday lane retains its existing rollout and acceptance gates.
 Signed development artifacts do not establish distribution or physical acceptance.
+
+### Teams / Pay event intelligence candidate
+
+Read `docs/operations/teams-studio-foundation.md` before editing the Profit Panel,
+company cost templates or customer event lookup. Reuse `EventCommerceReport`,
+original paid receipt evidence and the shared canonical customer service. Never
+recompute a frozen budget from today's company policy, infer event identity by
+name/date, or label a captured contact as a confirmed purchaser. New Pay event
+controls stay default-off pending protected release and acceptance.

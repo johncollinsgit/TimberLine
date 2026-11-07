@@ -467,18 +467,36 @@ struct POSView: View {
                 }
                 Button("Choose another customer") { model.selectedCustomer = nil }.frame(minHeight: 44)
             } else {
+                if model.selectedRegister?.canSearchEventCustomers == true {
+                    Picker("Event context", selection: $model.customerEventID) {
+                        Text("All events and channels").tag("")
+                        ForEach(model.customerEvents) { event in Text(event.name + (event.startsOn.map { " · " + $0 } ?? "")).tag(String(event.id)) }
+                    }.task(id: model.base) { await model.loadCustomerEvents() }
+                }
                 TextField("Name, email or phone", text: $model.customerQuery).payInput().textInputAutocapitalization(.never)
                     .focused($inputFocused).submitLabel(.search).onSubmit { model.searchCustomers() }
                 Button("Find customer", action: { inputFocused = false; model.searchCustomers() })
                     .buttonStyle(PayButtonStyle(primary: false))
-                    .disabled(model.customerQuery.trimmingCharacters(in: .whitespacesAndNewlines).count < 2)
+                    .disabled(model.customerEventID.isEmpty && model.customerQuery.trimmingCharacters(in: .whitespacesAndNewlines).count < 2)
                 ForEach(model.customers) { customer in
                     Button { inputFocused = false; model.selectedCustomer = customer } label: {
                         HStack {
-                            VStack(alignment: .leading, spacing: 5) { Text(customer.name); if let email = customer.email { Text(email).font(.caption).foregroundStyle(PayTheme.muted) } }
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(customer.name)
+                                if let email = customer.email { Text(email).font(.caption).foregroundStyle(PayTheme.muted) }
+                                if let phone = customer.phone { Text(phone).font(.caption).foregroundStyle(PayTheme.muted) }
+                                if model.customerSearchContext?.relations[String(customer.id)]?.captured == true { Text("Contact captured at event").font(.caption) }
+                                if model.customerSearchContext?.relations[String(customer.id)]?.purchased == true { Text("Confirmed linked event purchase").font(.caption) }
+                            }
                             Spacer(); Image(systemName: "plus.circle")
                         }.frame(maxWidth: .infinity, minHeight: 52).contentShape(Rectangle())
                     }
+                }
+                if model.customerPage > 1 { Button("Previous customers") { model.searchCustomers(page: model.customerPage - 1) } }
+                if model.customerHasMore { Button("Next customers") { model.searchCustomers(page: model.customerPage + 1) } }
+                if let context = model.customerSearchContext {
+                    Text(context.basis).font(.caption).foregroundStyle(PayTheme.muted)
+                    ForEach(context.reviewItems, id: \.self) { Text($0).font(.caption).foregroundStyle(PayTheme.muted) }
                 }
                 if model.customerEnrollmentSettings?.canCreateCustomers == true || model.selectedRegister?.canCreateCustomers == true {
                     DisclosureGroup("Create a new customer", isExpanded: $creatingCustomer) {

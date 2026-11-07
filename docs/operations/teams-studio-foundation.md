@@ -140,3 +140,44 @@ must not be merged as a declaration that the requested full Teams product is don
 
 Full clause-specific, backend-wide CI, MySQL release/recovery, real source/history
 reconciliation and supported physical-device acceptance remain release gates.
+
+## Shared Profit Panel and customer lookup (source candidate, November 7)
+
+- Teams and the native Pay register read one `EventCommerceReport`. An owner
+  reviews an existing tenant stock/Pay event association; title/date similarity
+  cannot create that association. One explicit canonical occurrence owns its
+  budget reference. Retried link commands retain the original ID and input.
+- The Profit Panel uses original confirmed live Pay receipts and their frozen
+  stock pool, tax address and operator. Moving the register cannot move old sales.
+  Quotes and test payments are excluded. Partial refunds without reviewed item/
+  tax allocation leave net revenue/profit unknown; no proportional split is made.
+- Saved event policies include tenant-owned named cost types, quantities, rates,
+  applicability, overrides and reasons. Meals, gifts, hotel, parking, shipping,
+  percentage COGS and processing are editable examples, with no invented default
+  COGS/processing rates. Company mileage rules remain company-specific. New global
+  policies do not recalculate old events; edits freeze a new budget revision.
+  Owner-reported costs remain distinct from payroll/payment evidence.
+- Break-even uses the frozen fixed/percentage cost model, commission minimums and
+  a conservative penny-rounding bound. Unknown categories, conflicting rules or
+  unsupported sales-dependent qualifications leave the target unknown. Workbook
+  net-minus-recorded-expense comparisons remain separate from current Pay sales.
+- Both clients have name/phone/email lookup, optionally restricted to a reviewed
+  event, with original linked purchase products/locations and rewards. Captured
+  contacts and verified buyers are labelled separately. Viewing never creates a
+  sale, merges identities, grants consent or authorizes reward redemption. Customer
+  summaries page 20 at a time; the current purchase-history window remains bounded
+  to the shared customer service, with incomplete coverage explicitly labelled.
+- Teams requires the current tenant customer capability and an editable work-area
+  role. Financial reports require owner/admin. Pay retains its assigned-register,
+  device, workspace and token permissions. New Pay event controls additionally
+  require `POS_EVENT_STATS_ENABLED` (default false); it is not enabled by this PR.
+  Account/workspace/register changes discard late customer/stat responses.
+- Report coverage is current-runtime Everbranch Pay, not all historical Square,
+  cash or online revenue. Receipt scans stop at 10,000 tenant rows and mark totals
+  incomplete beyond that window; capture and customer-history windows are also
+  explicit. Indexed large-history reporting and full customer-history pagination
+  remain follow-up acceptance work before a claim of complete history coverage.
+- Source verification includes SQLite and disposable MySQL, immutable original
+  evidence/refund/tenant tests, intercepted browser acceptance, Swift contract
+  tests and unsigned simulator compilation. Production rollout, actual Macon
+  mappings/rates and supported physical-device acceptance remain outstanding.

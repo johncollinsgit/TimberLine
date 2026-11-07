@@ -86,6 +86,7 @@ private struct NativeRegister: View {
     @State private var stockCounts: [String: String] = [:]
     @State private var savedPayments = false
     @State private var recentSales = false
+    @State private var eventStats = false
     @FocusState private var searchFocused: Bool
     private var favoriteKey: String { "register-favorites:\(model.selectedWorkspace?.id ?? 0):\(model.selectedRegister?.id ?? "fixture")" }
     private var groups: [ProductGroup] {
@@ -119,6 +120,9 @@ private struct NativeRegister: View {
                         .ignoresSafeArea(.container, edges: .top)
                 }
             Picker("Register", selection: $tab) { ForEach(RegisterTab.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).padding(.horizontal, 20)
+            if model.selectedRegister?.canViewEventStats == true {
+                Button("Profit Panel") { eventStats = true }.frame(minHeight: 44).disabled(model.busy || model.collector.hasActivePayment)
+            }
             if model.pending != nil { Button("Payment saved · Open status", action: onBasket).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
             else if !model.visibleSavedPayments.isEmpty { Button("Payments for review (\(model.visibleSavedPayments.count))") { savedPayments = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
             if model.pending == nil && !model.visibleRecentSales.isEmpty { Button("Recent sales") { recentSales = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
@@ -155,6 +159,7 @@ private struct NativeRegister: View {
         }
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { searchFocused = false } } }
         .sheet(item: $options) { group in optionsSheet(group) }
+        .sheet(isPresented: $eventStats) { EventProfitabilitySheet(model: model) }
         .sheet(item: $bundle) { item in BundleOptions(item: item, model: model, onPending: onBasket) }
         .sheet(isPresented: $savedPayments) {
             NavigationStack {
@@ -420,5 +425,93 @@ struct BundleOptions: View {
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
                 .onAppear { if let existing { choices = existing.components; bundles = existing.quantity } }
         }.preferredColorScheme(.light)
+    }
+}
+
+/// Read-only event intelligence. A changed account/register discards the response.
+private struct EventProfitabilitySheet: View {
+    @ObservedObject var model: POSViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var report: EventStats?
+    @State private var message: String?
+    @State private var loading = false
+    @State private var revision = 0
+    private var scope: String { (model.api.token ?? "") + "|" + (model.base ?? "") }
+    var body: some View {
+        NavigationStack {
+            List {
+                if loading { ProgressView("Loading event statistics…") }
+                if let message { Text(message) }
+                if let report {
+                    Section(report.eventName) {
+                        value("Net Pay sales before tax", report.sales.netSalesMinor)
+                        value("Net sales tax", report.sales.salesTaxMinor)
+                        value("Estimated event costs", report.profitability?.estimatedCostMinor)
+                        value("Estimated profit", report.profitability?.estimatedProfitMinor)
+                        if let margin = report.profitability?.estimatedMarginPercent { LabeledContent("Estimated margin", value: "\(margin.formatted())%") }
+                        value("Break-even sales target", report.profitability?.breakEvenSalesMinor)
+                        value("Sales remaining", report.profitability?.salesRemainingToBreakEvenMinor)
+                        if let progress = report.profitability?.breakEvenProgressPercent { LabeledContent("Progress to break even", value: "\(progress.formatted())%") }
+                        if let remaining = report.profitability?.percentRemainingToBreakEven { LabeledContent("Percentage remaining", value: "\(remaining.formatted())%") }
+                        if let budget = report.budget { Text("Saved cost policy v\(budget.policyVersion) · \(budget.frozenAt)").font(.caption) }
+                    }
+                    if let lines = report.profitability?.costLines {
+                        Section("Saved event cost breakdown") {
+                            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                                VStack(alignment: .leading) {
+                                    value(line.label, line.amountMinor)
+                                    Text(line.category.replacingOccurrences(of: "_", with: " ") + (line.costStatus.map { " · " + $0.replacingOccurrences(of: "_", with: " ") } ?? "")).font(.caption)
+                                }
+                            }
+                        }
+                    }
+                    Section("Location, team and travel") {
+                        LabeledContent("Confirmed receipts", value: String(report.sales.saleCount))
+                        ForEach(Array(report.sales.locations.enumerated()), id: \.offset) { _, location in Text(location.name) }
+                        ForEach(Array(report.sales.operators.enumerated()), id: \.offset) { _, member in Text("\(member.name ?? "Team member " + member.userId): \(member.saleCount) sales") }
+                        LabeledContent("Planned vehicle miles", value: (Double(report.travel.plannedMillimiles) / 1000).formatted())
+                        LabeledContent("Reported vehicle miles", value: (Double(report.travel.reportedActualMillimiles) / 1000).formatted())
+                        if report.travel.unknownLegs > 0 { Text("\(report.travel.unknownLegs) trip legs have unknown distance.") }
+                    }
+                    ForEach(report.annualHistory, id: \.year) { year in
+                        Section("\(String(year.year)) · \(year.partial ? "Partial year" : year.complete ? "Reconciled recorded figures" : "Review required")") {
+                            value("Recorded net sales", year.netSalesCents)
+                            value("Recorded expense", year.totalExpenseCents)
+                            value("Recorded profit", year.profitCents)
+                            if let margin = year.marginPercent { LabeledContent("Recorded margin", value: "\(margin.formatted())%") }
+                            ForEach((year.costs ?? [:]).keys.sorted(), id: \.self) { category in value(category.replacingOccurrences(of: "_", with: " "), year.costs?[category] ?? nil) }
+                            ForEach(year.reviewItems, id: \.self) { Text($0).font(.caption) }
+                        }
+                    }
+                    Section("Coverage and assumptions") {
+                        Text(report.basis); Text(report.sales.coverage)
+                        if let basis = report.profitability?.basis { Text(basis) }
+                        ForEach(Array((report.reviewItems + report.sales.reviewItems + (report.profitability?.reviewItems ?? [])).enumerated()), id: \.offset) { _, issue in Text(issue).font(.caption) }
+                        Text("As of \(report.sales.asOf)").font(.caption)
+                    }
+                }
+                Button("Refresh statistics") { revision += 1 }.disabled(loading)
+            }
+            .navigationTitle("Profit Panel")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
+            .task(id: scope + ":" + String(revision)) { await load() }
+            .onChange(of: scope) { _, _ in report = nil; message = nil }
+        }.preferredColorScheme(.light)
+    }
+    private func value(_ label: String, _ cents: Int?) -> some View { LabeledContent(label, value: cents.map { POSMoney.display($0) } ?? "Unknown") }
+    private func load() async {
+        report = nil; message = nil; loading = false
+        guard model.selectedRegister?.canViewEventStats == true, let base = model.base else { return }
+        let expected = scope
+        loading = true
+        do {
+            let value: EventStats = try await model.api.request(base + "/event-stats")
+            guard !Task.isCancelled, scope == expected else { return }
+            report = value; loading = false
+        } catch {
+            guard !Task.isCancelled, scope == expected else { return }
+            message = "Event statistics are unavailable. Check the reviewed event link and saved cost budget in Teams, then refresh."
+            loading = false
+        }
     }
 }

@@ -24,9 +24,12 @@ class TeamsStudio
         $this->access->area($tenant, $user, $area->id);
         $admin = $this->access->admin($this->access->actor($tenant, $user));
         $blueprint = $this->published($tenant, $area, 'blueprint');
-        $result = ['contract_version' => 2, 'area' => app(OperationsWorkspace::class)->areaView($area), 'blueprint' => $blueprint ? $this->view($blueprint) : null, 'capabilities' => ['manage' => $admin, 'budget' => $admin, 'write' => $this->access->mayWrite($tenant, $user, $area->id), 'native' => ($area->settings['source_authority'] ?? 'teams') === 'teams'], 'authority' => $this->authority($tenant, $area)];
+        $result = ['contract_version' => 2, 'area' => app(OperationsWorkspace::class)->areaView($area), 'blueprint' => $blueprint ? $this->view($blueprint) : null, 'capabilities' => ['manage' => $admin, 'budget' => $admin, 'customers' => $this->access->mayWrite($tenant, $user, $area->id) && app(\App\Services\Tenancy\TenantModuleAccessResolver::class)->canAccess($tenant->id, 'customers'), 'write' => $this->access->mayWrite($tenant, $user, $area->id), 'native' => ($area->settings['source_authority'] ?? 'teams') === 'teams'], 'authority' => $this->authority($tenant, $area)];
         if ($admin) {
             $result['definitions'] = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id])->whereIn('kind', ['blueprint', 'cost_policy'])->where('status', '!=', 'withdrawn')->orderByDesc('updated_at')->limit(100)->get()->map(fn ($r) => $this->view($r))->all();
+            if (\Illuminate\Support\Facades\Schema::hasTable('commerce_stock_event_links')) {
+                $result['commerce_events'] = app(\App\Services\Inventory\StockLedger::class)->rows('event_links', $tenant->id)->whereNotNull('reviewed_by')->orderByDesc('id')->get()->unique('event_id')->take(300)->map(fn ($row) => ['id' => (int) $row->event_id, 'name' => json_decode($row->metadata, true)['name'] ?? 'Reviewed event'])->values()->all();
+            }
             $result['drafts'] = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event_draft', 'assigned_user_id' => $user->id])->where('status', 'draft')->orderByDesc('updated_at')->limit(30)->get()->map(fn ($r) => $this->view($r))->all();
         }
 
@@ -205,6 +208,33 @@ class TeamsStudio
             $this->revision($link, $user);
 
             return $this->view($link);
+        });
+    }
+
+    public function linkCommerce(Tenant $tenant, User $user, TeamArea $area, array $input): array
+    {
+        $this->access->financial($tenant, $user);
+        $i = Validator::make($input, ['request_id' => 'required|uuid', 'event_id' => 'required|uuid', 'expected_version' => 'required|integer|min:1', 'commerce_event_id' => 'required|integer|min:1', 'reason' => 'required|string|min:12|max:3000'])->validate();
+
+        $i['commerce_event_id'] = (int) $i['commerce_event_id'];
+
+        return $this->once($tenant, $user, $area, $i, function () use ($tenant, $user, $area, $i) {
+            $stock = app(\App\Services\Inventory\StockLedger::class);
+            $stock->rows('mutexes', $tenant->id)->insertOrIgnore(['tenant_id' => $tenant->id]);
+            $stock->rows('mutexes', $tenant->id)->lockForUpdate()->firstOrFail();
+            abort_unless($stock->rows('event_links', $tenant->id)->where('event_id', $i['commerce_event_id'])->whereNotNull('reviewed_by')->exists(), 422, 'Choose an already reviewed event in this company.');
+            $event = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event'])->findOrFail($i['event_id']);
+            $this->access->record($tenant, $user, $event);
+            abort_unless($event->version === $i['expected_version'], 409, 'Refresh the event before linking its financial history.');
+            $existing = $event->data['_teams_enrichment']['commerce_event']['id'] ?? null;
+            abort_if($existing && $existing !== $i['commerce_event_id'], 409, 'This saved event already has a different commerce identity. Review its history before remapping.');
+            abort_if(TeamOperationRecord::where(['tenant_id' => $tenant->id, 'kind' => 'event'])->whereKeyNot($event->id)->where('status', '!=', 'withdrawn')->get()->contains(fn ($other) => ($other->data['_teams_enrichment']['commerce_event']['id'] ?? null) === $i['commerce_event_id']), 409, 'Another occurrence is the canonical cost record for this sales event.');
+            $data = $event->data;
+            $data['_teams_enrichment']['commerce_event'] = ['id' => $i['commerce_event_id'], 'reviewed_by' => (string) $user->id, 'reviewed_at' => now()->toIso8601String(), 'reason' => $i['reason']];
+            $event->update(['data' => $data, 'version' => $event->version + 1]);
+            $this->revision($event, $user);
+
+            return $this->view($event);
         });
     }
 

@@ -3,6 +3,8 @@
     <testsuites>
         <testsuite name="Teams Studio disposable MySQL">
             <file>tests/Feature/Team/TeamStudioTest.php</file>
+            <file>tests/Feature/Team/TeamEventCostTemplateTest.php</file>
+            <file>tests/Feature/Team/TeamEventCommerceTest.php</file>
             <file>tests/Feature/Team/TeamEventIntelligenceTest.php</file>
             <file>tests/Feature/Team/TeamCompanionTest.php</file>
             <file>tests/Feature/Team/TeamEventTasksTest.php</file>

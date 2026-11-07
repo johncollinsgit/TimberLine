@@ -8,6 +8,10 @@ Route::prefix('mobile/v1/workspaces/{tenant}/team-work')->name('mobile.v1.team-w
     ->middleware(['auth:sanctum', 'mobile.tenant', EnsureTeamWorkMobileEnabled::class, \App\Http\Middleware\EnsureTeamWorkViewer::class, 'throttle:120,1'])
     ->group(function (): void {
         Route::middleware('abilities:mobile:read')->group(function (): void {
+            Route::get('/customers/events', \App\Http\Controllers\TeamCustomerLookupController::class)->defaults('action', 'events')->name('customers.events');
+            Route::get('/customers/{profile}', \App\Http\Controllers\TeamCustomerLookupController::class)->whereNumber('profile')->defaults('action', 'detail')->name('customers.detail');
+            Route::get('/customers', \App\Http\Controllers\TeamCustomerLookupController::class)->name('customers.search');
+            Route::get('/events/{id}/profitability', \App\Http\Controllers\TeamEventProfitabilityController::class)->whereUuid('id')->name('events.profitability');
             Route::get('/events/{id}/intelligence', \App\Http\Controllers\TeamEventIntelligenceController::class)->whereUuid('id')->name('events.intelligence');
             foreach (['areas', 'records', 'prefill'] as $action) {
                 Route::get('/operations/'.$action, \App\Http\Controllers\Mobile\TeamsCompanionController::class)->defaults('action', $action)->name('operations.'.$action);
@@ -34,7 +38,7 @@ Route::prefix('mobile/v1/workspaces/{tenant}/team-work')->name('mobile.v1.team-w
         });
         Route::middleware('abilities:mobile:write')->group(function (): void {
             Route::post('/operations/areas', \App\Http\Controllers\Mobile\TeamsCompanionController::class)->defaults('action', 'areas')->name('operations.areas.create');
-            foreach (['definition', 'draft', 'preview', 'create', 'budget', 'mapping'] as $action) {
+            foreach (['definition', 'draft', 'preview', 'create', 'budget', 'mapping', 'commerce'] as $action) {
                 Route::post('/studio/'.$action, \App\Http\Controllers\TeamStudioController::class)->defaults('action', $action)->name('studio.'.$action);
             }
             Route::post('/events/asana/changes', \App\Http\Controllers\TeamEventTasksController::class)->defaults('action', 'prepare')->name('events.changes');

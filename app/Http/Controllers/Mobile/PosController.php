@@ -18,6 +18,17 @@ final class PosController extends Controller
         return $this->respond($r, [], fn () => $this->pos->registers());
     }
 
+    public function eventStats(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, [], function () use ($r, $register) {
+            if (! config('pos_live.event_stats_enabled')) {
+                throw new PosException('event_stats_unavailable', 404);
+            }
+
+            return app(\App\Services\Team\Studio\EventCommerceReport::class)->forRegister(app(\App\Services\Pos\PosAccess::class)->register($register), $r->user());
+        });
+    }
+
     public function catalog(Request $r, string $tenant, string $register): JsonResponse
     {
         return $this->respond($r, [], fn () => $this->pos->catalog($register));
@@ -188,8 +199,13 @@ final class PosController extends Controller
 
     public function customers(Request $r, string $tenant, string $register): JsonResponse
     {
-        return $this->respond($r, ['query' => ['required', 'string', 'min:2', 'max:120', 'regex:/\A[^\p{C}]+\z/u']],
-            fn ($input) => app(\App\Services\Pos\PosCustomerDirectory::class)->search($register, $input['query']));
+        return $this->respond($r, ['query' => ['nullable', 'string', 'max:120', 'regex:/\A[^\p{C}]*\z/u'], 'event_id' => ['nullable', 'integer', 'min:1'], 'page' => ['sometimes', 'integer', 'min:1', 'max:100000']],
+            fn ($input) => isset($input['event_id']) ? app(\App\Services\Pos\PosCustomerDirectory::class)->eventSearch($register, $input['query'] ?? '', (int) $input['event_id'], (int) ($input['page'] ?? 1)) : app(\App\Services\Pos\PosCustomerDirectory::class)->search($register, $input['query'] ?? '', (int) ($input['page'] ?? 1)));
+    }
+
+    public function customerEvents(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosCustomerDirectory::class)->eventOptions($register));
     }
 
     public function verifyMembership(Request $r, string $tenant, string $register, string $profile): JsonResponse

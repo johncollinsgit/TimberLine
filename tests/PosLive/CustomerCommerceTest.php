@@ -393,3 +393,19 @@ it('records a new event customer once and reports later online conversions with 
     expect(fn () => app(\App\Services\Pos\PosEventAttribution::class)->report(['admin' => false, 'tenant_id' => $this->tenant->id], now()->toDateString(), now()->toDateString()))
         ->toThrow(\App\Services\Pos\PosException::class);
 });
+
+it('filters standalone customer lookup by a reviewed event without treating contact capture as a purchase', function (): void {
+    $stock = app(\App\Services\Inventory\StockLedger::class);
+    $stock->rows('event_links', $this->tenant->id)->insert(['tenant_id' => $this->tenant->id, 'event_id' => 123, 'provider' => 'manual', 'external_id' => 'event-lookup-fixture',
+        'metadata' => json_encode(['name' => 'Fictional lookup event', 'timezone' => 'UTC']), 'reviewed_by' => $this->actor->id, 'created_at' => now(), 'updated_at' => now()]);
+    \App\Models\MarketingProfileLink::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $this->profile->id,
+        'source_type' => 'pos_event_capture', 'source_id' => 'fixture-capture', 'source_meta' => ['event_id' => 123]]);
+    $this->getJson($this->base.'/customers/events')->assertNotFound();
+    config(['pos_live.event_stats_enabled' => true]);
+    $this->getJson($this->base.'/customers/events')->assertOk()->assertJsonCount(1, 'events')->assertJsonPath('events.0.id', 123);
+    $response = $this->getJson($this->base.'/customers?event_id=123')->assertOk()->assertJsonPath('customers.0.id', $this->profile->id)->json();
+    expect($response['event_context']['relations'][$this->profile->id])->toBe(['captured' => true]);
+    $this->getJson($this->base.'/customers?event_id=999')->assertNotFound();
+    $this->withHeader('X-Pos-Device', 'unassigned-device')->getJson($this->base.'/customers?event_id=123')->assertNotFound();
+    expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(0);
+});

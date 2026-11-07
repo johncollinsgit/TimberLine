@@ -4742,3 +4742,14 @@ unchanged server snapshot. Ask Everbranch reuses existing provider/approval/caps
 and explicit versioned budget review. No provider activation, financial action,
 public billing or production readiness follows from these source changes. See
 `docs/operations/trajectory-runbook.md` for scope, privacy and validation.
+
+## Teams / Pay Profit Panel candidate (2026-11-07)
+
+The Teams Studio source candidate adds tenant-owned cost types, frozen budget
+revisions, a shared read-only event profitability projection and name/phone/event
+customer lookup in Teams and native Pay. Original stock/receipt/rewards/customer
+services retain authority. Pay controls require default-off
+`POS_EVENT_STATS_ENABLED`; no migration, policy publication or live activation is
+included. Coverage limits and release gaps are in
+`docs/operations/teams-studio-foundation.md`. The full Teams parity backlog remains
+open; this candidate is not a completion or deployment claim.

@@ -36,6 +36,8 @@ public struct Register: Decodable, Identifiable, Sendable {
     public let canCreateCustomers: Bool?
     public let guestCheckout: Bool?
     public let customAmountEnabled: Bool?
+    public let canViewEventStats: Bool?
+    public let canSearchEventCustomers: Bool?
     public let canManageInventory: Bool?
     public let canManageCheckoutRules: Bool?
 }
@@ -195,4 +197,32 @@ public enum POSMoney {
     public static func display(_ amount: Int) -> String {
         String(format: "$%d.%02d", amount / 100, amount % 100)
     }
+}
+
+/// Read-only projection from original Pay receipts and the saved Teams budget.
+public struct EventStats: Decodable, Sendable {
+    public struct Sales: Decodable, Sendable {
+        public struct Operator: Decodable, Sendable { public let userId: String; public let saleCount: Int; public let name: String? }
+        public struct Location: Decodable, Sendable { public let name: String }
+        public let netSalesMinor: Int?; public let salesTaxMinor: Int?; public let saleCount: Int
+        public let coverage: String; public let reviewItems: [String]; public let asOf: String
+        public let operators: [Operator]; public let locations: [Location]
+    }
+    public struct Profitability: Decodable, Sendable {
+        public struct CostLine: Decodable, Sendable { public let label: String; public let category: String; public let amountMinor: Int?; public let costStatus: String? }
+        public let costLines: [CostLine]?
+        public let estimatedCostMinor: Int?; public let estimatedProfitMinor: Int?; public let estimatedMarginPercent: Double?
+        public let breakEvenSalesMinor: Int?; public let breakEvenProgressPercent: Double?; public let percentRemainingToBreakEven: Double?; public let salesRemainingToBreakEvenMinor: Int?
+        public let reviewItems: [String]; public let basis: String
+    }
+    public struct Budget: Decodable, Sendable { public let policyVersion: Int; public let frozenAt: String }
+    public struct Travel: Decodable, Sendable { public let plannedMillimiles: Int; public let reportedActualMillimiles: Int; public let unknownLegs: Int }
+    public struct Year: Decodable, Sendable {
+        public let year: Int; public let netSalesCents: Int?; public let totalExpenseCents: Int?; public let profitCents: Int?; public let marginPercent: Double?
+        public let partial: Bool; public let complete: Bool; public let reviewItems: [String]
+        public let costs: [String: Int?]?
+    }
+    public let eventId: Int; public let teamsEventId: String; public let eventName: String
+    public let sales: Sales; public let profitability: Profitability?; public let budget: Budget?; public let travel: Travel
+    public let annualHistory: [Year]; public let reviewItems: [String]; public let basis: String
 }

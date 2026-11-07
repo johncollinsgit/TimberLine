@@ -13,11 +13,13 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
         Route::post('/wallet-link-reviews/{reference}', [PosController::class, 'recordWalletLinkReview'])->where('reference', '[a-f0-9]{32}')->middleware($write)->name('wallet-link-reviews.review');
         Route::post('/customer-enrollment/settings', [PosController::class, 'configureCustomerEnrollment'])->middleware($write)->name('customer-enrollment.configure');
         Route::post('/customers/{profile}/enrollment', [PosController::class, 'enrollCustomer'])->whereNumber('profile')->middleware($write)->name('customer-enrollment.save');
+        Route::get('/customers/events', [PosController::class, 'customerEvents'])->middleware($read)->name('customers.events');
         Route::get('/customers', [PosController::class, 'customers'])->middleware($read)->name('customers.search');
         Route::post('/customers/{profile}/membership-review', [PosController::class, 'verifyMembership'])->middleware($write)->name('customers.membership-review');
         Route::get('/customers/{profile}/commerce', [PosController::class, 'customerCommerce'])->whereNumber('profile')->middleware($read)->name('customers.commerce');
         Route::post('/customers', [PosController::class, 'createCustomer'])->middleware($write)->name('customers.create');
         Route::get('/customer-requests/{requestId}', [PosController::class, 'customerRequest'])->whereUuid('requestId')->middleware($read)->name('customers.request');
+        Route::get('/event-stats', [PosController::class, 'eventStats'])->middleware($read)->name('event-stats');
         Route::get('/catalog', [PosController::class, 'catalog'])->middleware($read)->name('catalog');
         Route::get('/reward-redemption', [PosController::class, 'rewardRedemption'])->middleware($read)->name('reward-redemption.show');
         Route::post('/reward-codes/preview', [PosController::class, 'previewRewardCode'])->middleware($write)->name('reward-codes.preview');

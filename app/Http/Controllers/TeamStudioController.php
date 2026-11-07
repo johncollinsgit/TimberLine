@@ -28,6 +28,7 @@ class TeamStudioController extends Controller
             'definition' => $studio->saveDefinition($tenant, $request->user(), $area, $request->all()),
             'draft' => $studio->saveDraft($tenant, $request->user(), $area, $request->all()),
             'preview' => $studio->preview($tenant, $request->user(), $area, $request->all()),
+            'commerce' => $studio->linkCommerce($tenant, $request->user(), $area, $request->all()),
             'budget' => $studio->reviseBudget($tenant, $request->user(), $area, $request->all()),
             'create' => $studio->createEvent($tenant, $request->user(), $area, $request->all()),
             default => abort(404),
@@ -41,6 +42,6 @@ class TeamStudioController extends Controller
         $access->financial($tenant, $request->user());
         $configured = config('team_operations.presets.'.$tenant->slug.'.'.$area->profile.'.compensation_template') === 'modern_forestry_criteria';
 
-        return ['policy' => $configured ? app(\App\Services\Team\Studio\ModernForestryPolicy::class)->draft() : ['name' => 'Event cost policy', 'currency' => 'USD', 'effective_on' => now()->toDateString(), 'required_categories' => [], 'requires_confirmation' => [], 'rules' => []]];
+        return ['policy' => $configured ? app(\App\Services\Team\Studio\ModernForestryPolicy::class)->draft() : ['name' => 'Event cost policy', 'currency' => 'USD', 'effective_on' => now()->toDateString(), 'required_categories' => [], 'requires_confirmation' => [], 'cost_types' => app(\App\Services\Team\Studio\EventCostTypes::class)->starter(), 'rules' => []]];
     }
 }

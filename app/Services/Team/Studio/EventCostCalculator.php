@@ -28,6 +28,7 @@ class EventCostCalculator
             'rules.*.effect.long_event_days' => 'sometimes|integer|min:1|max:365',
             'rules.*.effect.long_setup_minutes' => 'sometimes|integer|min:0|max:1440',
         ])->validate();
+        $policy['cost_types'] = app(EventCostTypes::class)->definitions($input['cost_types'] ?? []);
         $remaining = 1000;
         foreach ($policy['rules'] as $rule) {
             $this->qualifications->validate($rule['when'], 0, $remaining);
@@ -63,8 +64,13 @@ class EventCostCalculator
             'hotels.*.booking_fee_minor' => 'sometimes|integer|min:0|max:100000000',
             'trips' => 'present|array|max:100', 'trips.*.id' => 'required|string|max:80|distinct',
             'trips.*.kind' => 'required|in:studio_event,hotel_event,other', 'trips.*.distance_millimiles' => 'nullable|integer|min:0|max:100000000',
-            'trips.*.round_trip' => 'required|boolean', 'trips.*.vehicles' => 'required|integer|min:1|max:100',
-            'expenses' => 'present|array|max:100', 'expenses.*.category' => 'required|regex:/^[a-z_]{1,32}$/D',
+            'trips.*.distance_basis' => 'sometimes|in:planned,reported_actual', 'trips.*.round_trip' => 'required|boolean', 'trips.*.vehicles' => 'required|integer|min:1|max:100',
+            'expenses' => 'present|array|max:100', 'expenses.*.category' => 'required|regex:/^[a-z_][a-z0-9_]{0,31}$/D',
+            'expenses.*.cost_type_id' => 'nullable|regex:/^[a-z][a-z0-9_]{0,31}$/D|distinct',
+            'expenses.*.cost_status' => 'sometimes|in:unknown,not_applicable,estimated,reported_actual',
+            'expenses.*.quantity_milli' => 'nullable|integer|min:0|max:1000000000',
+            'expenses.*.rate_override_minor' => 'nullable|integer|min:0|max:100000000', 'expenses.*.rate_override_bps' => 'nullable|integer|min:0|max:10000',
+            'expenses.*.override_reason' => 'nullable|string|max:3000', 'expenses.*.evidence' => 'nullable|string|max:3000',
             'expenses.*.label' => 'required|string|max:150', 'expenses.*.amount_minor' => 'nullable|integer|min:0|max:100000000000',
         ])->validate();
         abort_unless(CarbonImmutable::parse($data['starts_on'])->diffInDays(CarbonImmutable::parse($data['ends_on'])) <= 366, 422, 'An occurrence covers at most one year.');
@@ -109,7 +115,8 @@ class EventCostCalculator
             if ($amount === null) {
                 $issues[] = $person['name'].': pay remains provisional; confirm sales, hours and applicable rules.';
             }
-            $lines[] = ['category' => 'staffing', 'label' => $person['name'], 'amount_minor' => $amount, 'rules' => array_values(array_filter([$base['id'] ?? null, $floor['id'] ?? null])), 'inputs' => ['work_minutes' => $person['work_minutes'] ?? null, 'expected_net_sales_minor' => $input['expected_net_sales_minor'] ?? null]];
+            $model = $base && $base['effect']['kind'] === 'commission' ? ['kind' => 'percent', 'rate_bps' => $base['effect']['rate_bps'], 'minimum_minor' => $minimum ?? 0] : ['kind' => 'constant'];
+            $lines[] = ['model' => $model, 'category' => 'staffing', 'label' => $person['name'], 'amount_minor' => $amount, 'rules' => array_values(array_filter([$base['id'] ?? null, $floor['id'] ?? null])), 'inputs' => ['work_minutes' => $person['work_minutes'] ?? null, 'expected_net_sales_minor' => $input['expected_net_sales_minor'] ?? null]];
             foreach ($person['days'] as $day) {
                 $covered = $day['date'] >= $policy['effective_on'] && (! isset($policy['expires_on']) || $day['date'] <= $policy['expires_on']);
                 if (! $covered) {
@@ -151,7 +158,19 @@ class EventCostCalculator
             $lines[] = ['category' => 'mileage', 'label' => $trip['id'], 'inputs' => $trip, 'rules' => $rule ? [$rule['id']] : [], 'amount_minor' => $policyCoversEvent && $rule && isset($trip['distance_millimiles']) ? $this->rounded($trip['distance_millimiles'] * $rule['effect']['rate_minor'] * ($trip['round_trip'] ? 2 : 1) * $trip['vehicles'], 1000) : null];
         }
         foreach ($input['expenses'] as $expense) {
-            $lines[] = ['category' => $expense['category'], 'label' => $expense['label'], 'amount_minor' => $expense['amount_minor'] ?? null];
+            $lines[] = isset($expense['cost_type_id']) ? app(EventCostTypes::class)->line($expense, $policy['cost_types'], $input['expected_net_sales_minor'] ?? null, $issues) : ['category' => $expense['category'], 'label' => $expense['label'], 'amount_minor' => $expense['amount_minor'] ?? null, 'model' => ['kind' => 'constant']];
+        }
+        foreach (['lodging', 'mileage', 'per_diem', 'staffing', 'event_fees'] as $category) {
+            $categoryLines = array_filter($lines, fn ($line) => $line['category'] === $category && ($line['cost_status'] ?? '') !== 'not_applicable');
+            if (collect($categoryLines)->contains(fn ($line) => isset($line['cost_type_id'])) && collect($categoryLines)->contains(fn ($line) => ! isset($line['cost_type_id']))) {
+                $issues[] = 'Potential duplicate '.$category.' cost: choose the automatic calculation or the cost-template entry.';
+            }
+        }
+        $usedTypes = array_column($input['expenses'], 'cost_type_id');
+        foreach ($policy['cost_types'] as $type) {
+            if ($type['required'] && ! in_array($type['id'], $usedTypes, true)) {
+                $issues[] = 'Missing cost type: '.$type['name'].'. Mark it not applicable explicitly when appropriate.';
+            }
         }
         foreach ($lines as $line) {
             if ($line['amount_minor'] === null) {

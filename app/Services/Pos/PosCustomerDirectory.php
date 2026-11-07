@@ -18,41 +18,37 @@ final class PosCustomerDirectory
     public function __construct(private PosStore $store, private PosAccess $access,
         private CanonicalMarketingProfileResolver $identities) {}
 
-    public function search(string $register, string $query): array
+    public function search(string $register, string $query, int $page = 1): array
     {
         $scope = $this->access->register($register, 'catalog');
-        if (mb_strlen(trim($query)) < 2) {
-            throw new PosException('customer_query_required', 422);
-        }
-        $matches = MarketingProfile::query()->forTenantId($scope['tenant_id'])->whereNull('archived_at');
-        $digits = preg_replace('/[^0-9]/', '', $query);
-        if (preg_match('/^[+()0-9.\s-]+$/D', trim($query)) && strlen($digits) >= 7) {
-            $phone = app(\App\Support\Marketing\MarketingIdentityNormalizer::class)->normalizePhone($query);
-            $matches->where(function ($q) use ($phone, $digits): void {
-                if ($phone !== null) {
-                    $q->where('normalized_phone', $phone);
-                }
-                $q->orWhere('normalized_phone', 'like', '%'.$digits.'%')
-                    ->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '(', ''), ')', ''), '-', ''), ' ', ''), '.', '') LIKE ?", ['%'.$digits.'%']);
-            });
-        } else {
-            foreach (preg_split('/\s+/u', trim($query), -1, PREG_SPLIT_NO_EMPTY) as $part) {
-                $pattern = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], Str::lower($part)).'%';
-                $matches->where(function ($q) use ($pattern): void {
-                    foreach (['first_name', 'last_name', 'email', 'phone', 'normalized_email', 'normalized_phone'] as $column) {
-                        $q->orWhereRaw('LOWER('.$column.") LIKE ? ESCAPE '!'", [$pattern]);
-                    }
-                });
+
+        return app(\App\Services\Marketing\TenantCustomerLookup::class)->search($scope['tenant_id'], $query, null, $page);
+    }
+
+    public function eventSearch(string $register, string $query, int $event, int $page): array
+    {
+        $scope = $this->access->register($register, 'catalog');
+        abort_unless(config('pos_live.event_stats_enabled'), 404);
+        $candidate = app(\App\Services\Team\Studio\EventCommerceReport::class)->candidate($scope['tenant_id'], $event);
+        if ($candidate) {
+            try {
+                app(\App\Services\Team\Operations\OperationsAccess::class)->record(\App\Models\Tenant::findOrFail($scope['tenant_id']), \App\Models\User::findOrFail($scope['actor_id']), $candidate);
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException) {
+                $candidate = null;
             }
         }
-        $found = $matches->orderBy('id')->limit(41)->get();
-        $canonical = $this->identities->canonicalCollection($found, $scope['tenant_id']);
-        if ($canonical === null) {
-            throw new PosException('customer_identity_review_required');
-        }
+        $cohort = app(\App\Services\Marketing\EventCustomerCohort::class)->read($scope['tenant_id'], $event, $candidate);
+        $result = app(\App\Services\Marketing\TenantCustomerLookup::class)->search($scope['tenant_id'], $query, $cohort['profile_ids'], $page);
 
-        return ['customers' => $canonical->filter(fn ($p) => $p->archived_at === null)->take(20)
-            ->map(fn ($p) => $this->summary($p))->values()->all(), 'has_more' => $found->count() > 20];
+        return $result + ['event_context' => ['event_id' => $event, 'review_items' => $cohort['review_items'], 'relations' => $cohort['relations'], 'basis' => $cohort['basis']]];
+    }
+
+    public function eventOptions(string $register): array
+    {
+        $scope = $this->access->register($register, 'catalog');
+        abort_unless(config('pos_live.event_stats_enabled'), 404);
+
+        return ['events' => app(\App\Services\Marketing\EventCustomerCohort::class)->options($scope['tenant_id'])];
     }
 
     /** Explicitly selected customer only; this reads existing source records and never links identities. */

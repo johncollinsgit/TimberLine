@@ -4,7 +4,17 @@ import CryptoKit
 struct PrintingQuote: Decodable, Identifiable { let id: Int; let number: String; let amountMinor: Int }
 struct PrintingQuoteList: Decodable { let quotes: [PrintingQuote] }
 struct POSCustomer: Decodable, Identifiable { let id: Int; let name: String; let email: String?; let phone: String? }
-struct POSCustomerList: Decodable { let customers: [POSCustomer]; let hasMore: Bool }
+struct POSCustomerList: Decodable {
+    struct Context: Decodable {
+        struct Relation: Decodable { let captured: Bool?; let purchased: Bool? }
+        let relations: [String: Relation]; let reviewItems: [String]; let basis: String
+    }
+    let customers: [POSCustomer]; let hasMore: Bool; let eventContext: Context?
+}
+struct POSCustomerEvents: Decodable {
+    struct Event: Decodable, Identifiable { let id: Int; let name: String; let startsOn: String? }
+    let events: [Event]
+}
 struct POSCustomerResponse: Decodable { let customer: POSCustomer }
 struct PendingCustomerCreation: Codable { let workspace: String; let register: String; let requestID: String }
 struct RefundResponse: Decodable { let refundId: String; let state: String; let sale: Sale }
@@ -165,8 +175,8 @@ private struct RestorableQuote: Decodable {
         quantities[previous.itemID] = max(0, (quantities[previous.itemID] ?? 0) - previous.quantity + quantity)
         checkoutDiscounts.removeAll { $0.itemId == id && ($0.quantity ?? quantity) > quantity }
     }
-    @Published var selectedWorkspace: Workspace?
-    @Published var selectedRegister: Register?
+    @Published var selectedWorkspace: Workspace? { didSet { if oldValue?.id != selectedWorkspace?.id { customerEvents = []; customerEventID = "" } } }
+    @Published var selectedRegister: Register? { didSet { if oldValue?.id != selectedRegister?.id { customerEvents = []; customerEventID = "" } } }
     @Published var registerLoaded = false
     @Published var sale: Sale?
     @Published var receipt: POSReceipt?
@@ -285,7 +295,29 @@ private struct RestorableQuote: Decodable {
     private var associationCustomerID: Int?
     private var initialBasket: [RegisterBasketLine]
     @Published var basketIssue: String?
-    @Published var customerQuery = ""
+    @Published var customerQuery = "" { didSet { invalidateCustomerSearch() } }
+    @Published var customerEventID = "" { didSet { invalidateCustomerSearch() } }
+    @Published var customerEvents: [POSCustomerEvents.Event] = []
+    @Published var customerSearchContext: POSCustomerList.Context?
+    @Published var customerHasMore = false
+    @Published var customerPage = 1
+    private var customerSearchGeneration = 0
+    private func invalidateCustomerSearch() {
+        customerSearchGeneration += 1; customers = []; customerHasMore = false; customerSearchContext = nil; customerPage = 1
+    }
+    func loadCustomerEvents() async {
+        customerEvents = []; customerEventID = ""
+        guard selectedRegister?.canSearchEventCustomers == true, let base else { return }
+        let token = api.token
+        do {
+            let value: POSCustomerEvents = try await api.request(base + "/customers/events")
+            guard !Task.isCancelled, self.base == base, api.token == token else { return }
+            customerEvents = value.events
+        } catch {
+            guard !Task.isCancelled, self.base == base, api.token == token else { return }
+            message = "Event filters are unavailable. You can still search all customers."
+        }
+    }
     @Published var customers: [POSCustomer] = []
     @Published var selectedCustomer: POSCustomer? { didSet { if oldValue?.id != selectedCustomer?.id { clearRewardSelection() } } }
     @Published var customerEnrollmentSettings: CustomerEnrollmentSettings?
@@ -534,12 +566,19 @@ private struct RestorableQuote: Decodable {
             message = "Tap to Pay needs attention. Open Account to complete the required step."
         }
     }
-    func searchCustomers() {
-        guard let base, customerQuery.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 else { return }
+    func searchCustomers(page: Int = 1) {
+        guard !busy, let base, !customerEventID.isEmpty || customerQuery.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 else { return }
+        let query = customerQuery; let event = customerEventID; let token = api.token
+        customerSearchGeneration += 1
+        let generation = customerSearchGeneration
         perform {
-            let result: POSCustomerList = try await self.api.request(base + "/customers", query: ["query": self.customerQuery])
-            self.customers = result.customers
-            if result.customers.isEmpty { self.message = "No matching customer. You can create a new record below." }
+            var params = ["query": query, "page": String(page)]
+            if !event.isEmpty { params["event_id"] = event }
+            let result: POSCustomerList = try await self.api.request(base + "/customers", query: params)
+            guard self.base == base, self.api.token == token, self.customerSearchGeneration == generation else { return }
+            self.customers = result.customers; self.customerHasMore = result.hasMore
+            self.customerPage = page; self.customerSearchContext = result.eventContext
+            if result.customers.isEmpty { self.message = "No matching customer in this context." }
         }
     }
     func refreshCustomerCommerce() {
