@@ -1,8 +1,8 @@
 {
   "product": "Everbranch Teams",
   "version": "1.0.0",
-  "source": "2de8303f2519c484c531d585e1eddfac5fd31ffd",
-  "html_sha256": "7d4045d81f6e13add1c65ceb8fe7d3f7541c8d56ec15176ecfa0578cc2df983f",
+  "source": "b5cb7f7ae9cec2ad2f554f9db10ec3da8f19b271",
+  "html_sha256": "473c1dc3b260e5bd635bb9ba987d96ca96548c458c1bbd91fc61634c4f40e0cd",
   "source_dirty": false,
   "target": "web"
 }

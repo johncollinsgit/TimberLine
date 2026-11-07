@@ -42,6 +42,7 @@ test('native definitions share web storage and require exact command headers and
     Auth::forgetGuards();
     $token = $owner->createToken('Teams fixture', ['mobile:read', 'mobile:write']);
     $this->withToken($token->plainTextToken);
+    $this->getJson('/api/mobile/v1/workspaces/'.$t->slug.'/team-work/')->assertOk()->assertJsonPath('viewer.id', (string) $owner->id);
     $input = ['id' => (string) Str::uuid(), 'request_id' => (string) Str::uuid(), 'expected_version' => 0, 'kind' => 'cost_policy', 'publish' => false, 'definition' => studioPolicy()];
     $url = '/api/mobile/v1/workspaces/'.$t->slug.'/team-work/studio/definition?area='.$area->id;
     $this->postJson($url, $input)->assertUnprocessable();

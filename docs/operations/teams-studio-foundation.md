@@ -130,6 +130,11 @@ must not be merged as a declaration that the requested full Teams product is don
   or yield one success/one version conflict for competing commands. Budget revision
   races freeze one new revision and retain the original event. Never resets
   or drops a database. Provide the testing DB/env explicitly.
+- `node tests/e2e/team-studio-live.browser.mjs` creates its own disposable SQLite
+  database, logs in through Fortify, saves and recovers a real wizard event and
+  saves a task/comment through shared commands. It verifies stale viewer refusal,
+  stops its local server and removes only its own temporary database. No provider
+  connections or writes are used. The existing protected workflow runs this check.
 - Backend build and zero-change migration lint; mobile typecheck/unit tests,
   paired bundle build and intercepted Chromium wizard/lost-response acceptance.
 
