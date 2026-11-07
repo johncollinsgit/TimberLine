@@ -149,6 +149,10 @@ extension CustomerCommerceFlowTests {
         app.buttons["Create a new customer"].tap()
         let first = app.textFields["First name"]
         XCTAssertTrue(first.waitForExistence(timeout: 5)); first.tap(); first.typeText("Fictional")
+        // Email sits under the keyboard toolbar at this scroll position. Finish
+        // the first field before selecting the contact field, as a user can.
+        let done = app.buttons["Done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5)); done.tap()
         let contact = app.textFields[field]
         XCTAssertTrue(contact.waitForExistence(timeout: 5)); contact.tap(); contact.typeText(rejectedValue)
         app.buttons["Create and select customer"].tap()
