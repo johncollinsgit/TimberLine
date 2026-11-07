@@ -221,3 +221,21 @@ it('sends a customer-requested text once and keeps provider uncertainty from cau
         ->and($captured[2])->toContain('Paid: $10.70')->and($captured[3]['source_type'])->toBe('pos_receipt');
     expect(\App\Models\MarketingProfile::find($this->profile->id)->accepts_sms_marketing)->not->toBeTrue();
 });
+
+it('uses the tenant mail route once for an explicit receipt even after provider uncertainty', function (bool $uncertain): void {
+    config(['pos_live.receipt_email_transport' => 'tenant_gateway']);
+    $sale = emailPosConfirm($this);
+    $this->postJson($this->base.'/sales/'.$sale->id.'/receipt/customer', ['request_id' => (string) Str::uuid(), 'email' => $this->receiptEmail])->assertOk();
+    $gateway = Mockery::mock(\App\Services\Marketing\Messaging\TenantMessagingGateway::class);
+    $expectation = $gateway->shouldReceive('sendEmail')->once()->withArgs(fn ($tenant, $to, $subject, $text, $options) => $tenant === $this->tenant->id && $to === $this->receiptEmail && $options['message_type'] === 'transactional' && str_contains($text, 'EB-'));
+    if ($uncertain) {
+        $expectation->andThrow(new RuntimeException('possible acceptance'));
+    } else {
+        $expectation->andReturn(['success' => true, 'message_id' => 'fixture-accepted']);
+    }
+    app()->instance(\App\Services\Marketing\Messaging\TenantMessagingGateway::class, $gateway);
+    $url = $this->base.'/sales/'.$sale->id.'/receipt/email';
+    $this->postJson($url)->assertOk()->assertJsonPath('state', $uncertain ? 'unknown' : 'accepted');
+    $this->postJson($url)->assertOk()->assertJsonPath('state', $uncertain ? 'unknown' : 'accepted');
+    $this->getJson($url)->assertOk()->assertJsonPath('state', $uncertain ? 'unknown' : 'accepted');
+})->with([true, false]);

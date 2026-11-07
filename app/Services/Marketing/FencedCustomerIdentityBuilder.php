@@ -62,7 +62,12 @@ final class FencedCustomerIdentityBuilder extends Builder
             return $copy->setRawAttributes(array_replace($model->getAttributes(), $values));
         }, $models);
 
-        return app(CustomerAccountFence::class)->mutate([...$models, ...$proposed], $write,
-            fn () => $this->model->newQueryWithoutScopes()->whereKey($ids)->get()->all());
+        return app(CustomerAccountFence::class)->mutate([...$models, ...$proposed], function () use ($ids, $write) {
+            // A contender may insert a newly matching row while this writer waits.
+            // Keep the write bounded to the identities whose tenant fences were acquired.
+            $this->whereKey($ids);
+
+            return $write();
+        }, fn () => $this->model->newQueryWithoutScopes()->whereKey($ids)->get()->all());
     }
 }

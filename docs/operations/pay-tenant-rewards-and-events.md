@@ -71,6 +71,10 @@ reviewed earning is disclosed. Existing account contact is suggested separately
 from saved receipt contact. Saving contact does not send mail. Staff explicitly
 choose Send receipt email or Send receipt text at the customer's request.
 
+Email can explicitly use `POS_RECEIPT_EMAIL_TRANSPORT=tenant_gateway` for the
+existing tenant email route; its durable intent prevents a resend after uncertain
+acceptance. The original platform outbox remains the default transport.
+
 Text receipts use the tenant messaging account resolver, existing suppression
 state, an explicit expected phone, and a durable encrypted intent committed before
 provider contact. Replays after provider uncertainty do not send again. Provider

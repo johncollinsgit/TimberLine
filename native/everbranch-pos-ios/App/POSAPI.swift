@@ -323,7 +323,7 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
                 if ProcessInfo.processInfo.arguments.contains("--pos-enrollment-ui-tests"), let customer = input["customer_profile_id"] as? Int { quote["customer"] = ["id": customer, "name": "Ada Buyer"] }
                 if ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests") {
                     if let reward = input["reward_redemption"] as? [String: Any] {
-                        guard reward["proof"] as? String == "everbranch-reward:v1:" + String(repeating: "a", count: 43), reward["amount_minor"] as? Int == 500 else { throw URLError(.badServerResponse) }
+                        guard reward["proof"] as? String == "everbranch-reward:v1:" + (String(repeating: "a", count: 42) + "A"), reward["amount_minor"] as? Int == 500 else { throw URLError(.badServerResponse) }
                         quote["amount_minor"] = 1635; quote["rewards_redeemed_minor"] = 500
                     }
                     if let customer = input["customer_profile_id"] as? Int { quote["customer"] = ["id": customer, "name": "Ada Buyer"] }

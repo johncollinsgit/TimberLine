@@ -1977,7 +1977,7 @@ it('serializes actual policy publication and the final native descriptor in eith
             throw new RuntimeException($response->getContent());
         }
 
-return $response->getStatusCode();
+        return $response->getStatusCode();
     };
     $results = \Tests\Support\PosProcessRace::run($publishFirst ? $publish : $collect, $publishFirst ? $collect : $publish,
         fn ($query) => $publishFirst ? in_array('reward_policy_published', $query->bindings, true)

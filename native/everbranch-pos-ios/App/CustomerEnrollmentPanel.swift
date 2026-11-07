@@ -365,7 +365,7 @@ struct RewardsRedemptionSettingsView: View {
                         Text("This is a per-sale maximum, not a customer's balance.").font(.caption)
                         Text("Channel: in person")
                         Text("Full refund: restore redeemed rewards. Partial refund: review required.").font(.caption)
-                        Button("Save draft") { Task { await save() } }.disabled(!settings.managementEnabled || busy || !dirty)
+                        Button("Save draft") { amountFocused = false; Task { await save() } }.buttonStyle(.borderless).disabled(!settings.managementEnabled || busy || !dirty)
                     }
                     Section("Review and publish") {
                         if dirty { Text("Save your changes before reviewing this policy.") }
@@ -380,6 +380,7 @@ struct RewardsRedemptionSettingsView: View {
                 }
                 if let message { Section { Text(message).font(.footnote) } }
             }.navigationTitle("In-person rewards").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done editing") { amountFocused = false } } }
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() }.disabled(busy) } }
                 .disabled(busy).overlay { if busy { ProgressView() } }
                 .task { await load() }

@@ -116,12 +116,14 @@ extension CustomerEnrollmentFlowTests {
         let cap = app.textFields["rewards-cap"]; cap.tap()
         let old = (cap.value as? String) ?? ""
         cap.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count) + "6.00")
+        if app.buttons["Done editing"].waitForExistence(timeout: 3) { app.buttons["Done editing"].tap() }
         let save = app.buttons["Save draft"]; for _ in 0..<3 where !save.isHittable { app.swipeUp() }; save.tap()
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["Draft saved. Review it before publishing."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Publish reviewed policy"].isEnabled)
         app.buttons["Publish reviewed policy"].tap()
         XCTAssertTrue(app.staticTexts["Reviewed policy published for this register."].waitForExistence(timeout: 5))
+        for _ in 0..<3 where !app.staticTexts["The global in-person redemption gate is off."].exists { app.swipeDown() }
         XCTAssertTrue(app.staticTexts["The global in-person redemption gate is off."].exists)
     }
 }
@@ -277,7 +279,7 @@ extension CustomerEnrollmentFlowTests {
         XCTAssertTrue(app.buttons["Charge $21.80"].waitForExistence(timeout: 10))
         app.swipeUp()
         let scan = app.buttons["Scan customer rewards QR"]; XCTAssertTrue(scan.waitForExistence(timeout: 5)); scan.tap()
-        let field = app.secureTextFields["Paste rewards code"]; XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("everbranch-reward:v1:" + String(repeating: "a", count: 43))
+        let field = app.secureTextFields["Paste rewards code"]; XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("everbranch-reward:v1:" + (String(repeating: "a", count: 42) + "A"))
         app.buttons["Review code"].tap()
         let use = app.buttons["Use Candle Cash"]; XCTAssertTrue(use.waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Charge $21.80"].exists)

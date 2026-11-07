@@ -24,6 +24,9 @@ final class PosReceiptEmail
         if (config('pos_live.receipt_email_enabled') !== true) {
             throw new PosException('receipt_email_unavailable', 503);
         }
+        if (config('pos_live.receipt_email_transport') === 'tenant_gateway') {
+            return app(PosReceiptTenantEmail::class)->send($register, $saleId);
+        }
         $scope = $this->access->register($register, 'quote');
         if (app(TenantContext::class)->id() !== $scope['tenant_id']) {
             throw new PosException('scope_invalid', 403);
@@ -42,6 +45,7 @@ final class PosReceiptEmail
         // The contact and the immutable outbox intent share the default database.
         // The provider is called later by the outbox worker, never in this transaction.
         return $this->store->db->transaction(function () use ($scope, $sale, $register, $saleId, $payment): array {
+            $this->store->rows('sales', $scope['tenant_id'])->where('id', $sale->id)->lockForUpdate()->firstOrFail();
             $association = $this->store->db->table('commerce_stock_receipt_associations')
                 ->where('tenant_id', $scope['tenant_id'])->where('runtime_id', $this->store->runtime())
                 ->where('sale_id', $sale->id)->lockForUpdate()->first();
@@ -49,6 +53,9 @@ final class PosReceiptEmail
             $email = strtolower(trim((string) ($contact['email'] ?? '')));
             if (strlen($email) > 190 || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 throw new PosException('receipt_email_contact_required', 422);
+            }
+            if ($previous = app(PosReceiptTenantEmail::class)->recordedStatus($sale, $email)) {
+                return $previous;
             }
             if ($delivery = $this->findDelivery($scope['tenant_id'], $sale->id, $email)) {
                 return $this->statusBody($delivery);
@@ -75,6 +82,9 @@ final class PosReceiptEmail
     /** Read-only status; never enqueues or submits mail. */
     public function status(string $register, string $saleId): array
     {
+        if (config('pos_live.receipt_email_transport') === 'tenant_gateway') {
+            return app(PosReceiptTenantEmail::class)->status($register, $saleId);
+        }
         $scope = $this->access->register($register);
         if (app(TenantContext::class)->id() !== $scope['tenant_id']) {
             throw new PosException('scope_invalid', 403);
@@ -86,9 +96,19 @@ final class PosReceiptEmail
         if (strlen($email) > 190 || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return ['state' => 'contact_required', 'enabled' => config('pos_live.receipt_email_enabled') === true];
         }
+        if ($previous = app(PosReceiptTenantEmail::class)->recordedStatus($sale, $email)) {
+            return $previous;
+        }
         $delivery = $this->findDelivery($scope['tenant_id'], $sale->id, $email);
 
         return $delivery ? $this->statusBody($delivery) : ['state' => 'not_requested', 'enabled' => config('pos_live.receipt_email_enabled') === true];
+    }
+
+    public function previousPlatformStatus(object $sale, string $email): ?array
+    {
+        $delivery = $this->findDelivery((int) $sale->tenant_id, $sale->id, $email);
+
+        return $delivery ? $this->statusBody($delivery) : null;
     }
 
     private function findDelivery(int $tenantId, string $saleId, string $email): ?\App\Models\PlatformEmailDelivery
