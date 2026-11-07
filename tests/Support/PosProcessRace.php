@@ -10,8 +10,10 @@ final class PosProcessRace
     public static function run(callable $first, callable $second, callable $pauseOn): array
     {
         $db = DB::connection();
+        $disposableName = preg_match('/(^|_)(ci|test|testing)(_|$)/i', $db->getDatabaseName())
+            || (getenv('TEAM_WORK_DISPOSABLE_MYSQL') === '1' && str_starts_with($db->getDatabaseName(), 'codex_teams_'));
         if ($db->getDriverName() !== 'mysql' || getenv('POS_LIVE_DISPOSABLE_MYSQL') !== '1' || ! function_exists('pcntl_fork')
-            || ! app()->environment('testing') || ! preg_match('/(^|_)(ci|test|testing)(_|$)/i', $db->getDatabaseName())
+            || ! app()->environment('testing') || ! $disposableName
             || ! in_array($db->getConfig('host'), ['127.0.0.1', 'localhost'], true)) {
             throw new \RuntimeException('Requires explicitly authorized local disposable MySQL.');
         }

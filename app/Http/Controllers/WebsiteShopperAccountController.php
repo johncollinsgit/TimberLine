@@ -7,8 +7,11 @@ use App\Models\TenantSite;
 use App\Models\WebsiteCustomer;
 use App\Models\WebsiteOrder;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
+use App\Services\Marketing\CustomerPreferenceService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -28,6 +31,51 @@ class WebsiteShopperAccountController extends Controller
         $rewardsLabel = app(\App\Services\Tenancy\TenantDisplayLabelResolver::class)->label((int) $tenant->id, 'rewards_label', 'Rewards');
 
         return view('managed-website.account', compact('site', 'customer', 'orders', 'customerCommerce', 'rewardsLabel'));
+    }
+
+    public function preferences(Request $request, ManagedWebsiteService $websites, CustomerPreferenceService $preferences): Response|JsonResponse
+    {
+        [$tenant, $site] = $this->publicSite($request, $websites);
+        $customer = $this->sessionCustomer($request, $tenant, $site);
+        abort_unless($customer, 403);
+        $customerPreferences = $preferences->forWebsiteCustomer($customer, (int) $tenant->id);
+
+        if ($request->expectsJson()) {
+            return response()->json(['preferences' => $customerPreferences, 'association_status' => $customerPreferences ? 'linked' : 'review_required'])
+                ->header('Cache-Control', 'private, no-store');
+        }
+
+        return response()->view('managed-website.account-preferences', compact('site', 'customer', 'customerPreferences'))->header('Cache-Control', 'private, no-store');
+    }
+
+    public function updatePreferences(Request $request, ManagedWebsiteService $websites, CustomerPreferenceService $preferences): RedirectResponse|JsonResponse
+    {
+        [$tenant, $site] = $this->publicSite($request, $websites);
+        $customer = $this->sessionCustomer($request, $tenant, $site);
+        abort_unless($customer, 403);
+        $command = $request->only(['request_id', 'expected_version', 'changes']);
+        if (! $request->expectsJson()) {
+            foreach (['favorite_scents', 'avoided_scents'] as $field) {
+                $text = $request->validate([$field.'_text' => ['sometimes', 'nullable', 'string', 'max:3000']])[$field.'_text'] ?? null;
+                if ($request->has($field.'_text')) {
+                    $command['changes'][$field] = array_values(array_filter(array_map('trim', preg_split('/[\r\n]+/', (string) $text) ?: []), fn ($value) => $value !== ''));
+                }
+            }
+        }
+        try {
+            $saved = $preferences->updateForWebsiteCustomer($customer, (int) $tenant->id, $command);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+            if ($request->expectsJson() || $exception->getStatusCode() !== 409) {
+                throw $exception;
+            }
+
+            return back()->withInput()->withErrors(['preferences' => $exception->getMessage()]);
+        }
+        if ($request->expectsJson()) {
+            return response()->json(['preferences' => $saved])->header('Cache-Control', 'private, no-store');
+        }
+
+        return redirect()->route('managed-website.store.account.preferences')->with('account_status', 'Your preferences were saved. Receipt choices are separate from marketing consent.');
     }
 
     public function requestLink(Request $request, ManagedWebsiteService $websites): RedirectResponse

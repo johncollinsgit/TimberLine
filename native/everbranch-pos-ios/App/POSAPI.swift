@@ -14,7 +14,7 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
     let origin: URL
     var token: String?
     private let session: URLSession
-    init() {
+    init(loadSession: Bool = true) {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") && ProcessInfo.processInfo.arguments.contains("--pos-refund-review-alt-origin-tests") {
             origin = URL(string: "https://app.theeverbranch.com/test-origin")!
@@ -28,7 +28,7 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
         if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") { config.protocolClasses = [POSCheckoutFixtureProtocol.self] }
         #endif
         session = URLSession(configuration: config, delegate: NoRedirects(), delegateQueue: nil)
-        token = SecureStore.read("session").flatMap { String(data: $0, encoding: .utf8) }
+        token = loadSession ? SecureStore.read("session").flatMap { String(data: $0, encoding: .utf8) } : nil
     }
     func request<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil, query: [String: String] = [:]) async throws -> T {
         try POSOrigin.validate(origin)
@@ -94,6 +94,7 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
     nonisolated(unsafe) private static var completedReceiptData = Data()
     nonisolated(unsafe) private static var bundleSaleData = Data()
     nonisolated(unsafe) private static var enrollmentRequestID: String?
+    nonisolated(unsafe) private static var lookupCaptureRequestID: String?
     nonisolated(unsafe) private static var readinessQuoteData = Data()
     nonisolated(unsafe) private static var readinessEnabled = false
     static func setCatalog(_ data: Data) { lock.lock(); defer { lock.unlock() }; catalogData = data }
@@ -121,6 +122,10 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
     override func startLoading() {
         guard let url = request.url else { return }
         do {
+            if (ProcessInfo.processInfo.arguments.contains("--pos-lookup-401-ui-tests") && url.path.hasSuffix("/customers") && request.httpMethod == "GET") || (ProcessInfo.processInfo.arguments.contains("--pos-lookup-history-401-ui-tests") && url.path.hasSuffix("/customers/1/commerce")) {
+                client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 401, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: Data("{}".utf8)); client?.urlProtocolDidFinishLoading(self); return
+            }
             let data: Data
             if ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests") && url.path.hasSuffix("/reward-codes/preview") {
                 data = Data(#"{"customer":{"id":1,"name":"Ada Buyer","email":"ada@example.test","phone":"+12025550123"},"label":"Candle Cash","balance_minor":850,"max_minor":500,"available_minor":500,"expires_at":"2026-11-08T00:00:00Z"}"#.utf8)
@@ -251,6 +256,35 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
                     if prior != requestID { throw URLError(.badServerResponse) }
                 }
                 data = Data(#"{"customer_id":1}"#.utf8)
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-customer-recommendations-ui-tests") && url.path.hasSuffix("/recommendations") {
+                let current = (try JSONSerialization.jsonObject(with: Self.catalog()) as! [String: Any])["items"] as! [[String: Any]]
+                let empty = ProcessInfo.processInfo.arguments.contains("--pos-recommendations-no-evidence-ui-tests")
+                let river = String(repeating: "c", count: 32)
+                let ordered = empty ? current : current.sorted { ($0["item_id"] as! String == river ? 0 : 1) < ($1["item_id"] as! String == river ? 0 : 1) }
+                let items: [[String: Any]] = ordered.enumerated().map { index, item in
+                    let promoted = !empty && item["item_id"] as! String == river
+                    return ["item_id": item["item_id"]!, "revision": item["revision"]!, "rank": index + 1, "recommended": promoted,
+                            "score": ["purchase_count": promoted ? 3 : 0, "units": promoted ? 8 : 0]]
+                }
+                let customer = Int(url.pathComponents[url.pathComponents.count - 2]) ?? 1
+                data = try JSONSerialization.data(withJSONObject: ["tenant_id": 1, "customer_id": customer, "register_id": "fixture", "items": items,
+                    "ordered_item_ids": ordered.map { $0["item_id"]! }, "coverage": ["has_more_purchases": false, "observed_eligible_purchase_count": empty ? 0 : 3, "preference_version": NSNull()],
+                    "basis": "Fictional observed purchase fixture; no consent or payment authority."])
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-lookup-isolation-ui-tests") && url.path.hasSuffix("/customers") && request.httpMethod == "POST" {
+                var body = request.httpBody ?? Data()
+                if body.isEmpty, let stream = request.httpBodyStream {
+                    stream.open(); defer { stream.close() }; var buffer = [UInt8](repeating: 0, count: 1024)
+                    while stream.hasBytesAvailable { let count = stream.read(&buffer, maxLength: buffer.count); if count <= 0 { break }; body.append(buffer, count: count) }
+                }
+                let input = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+                guard let id = input["request_id"] as? String, UUID(uuidString: id) != nil,
+                      input["first_name"] as? String == "Fictional", input["accepts_email_marketing"] == nil, input["accepts_sms_marketing"] == nil else { throw URLError(.badServerResponse) }
+                Self.lock.lock(); Self.lookupCaptureRequestID = id; Self.lock.unlock()
+                throw URLError(.networkConnectionLost)
+            } else if ProcessInfo.processInfo.arguments.contains("--pos-lookup-isolation-ui-tests") && url.path.contains("/customer-requests/") {
+                Self.lock.lock(); let id = Self.lookupCaptureRequestID; Self.lock.unlock()
+                guard id != nil, url.lastPathComponent == id else { throw URLError(.badServerResponse) }
+                data = Data(#"{"customer":{"id":3,"name":"Fictional Captured","email":null,"phone":null}}"#.utf8)
             } else if ProcessInfo.processInfo.arguments.contains("--pos-customer-commerce-ui-tests") && url.path.hasSuffix("/customers") {
                 data = try JSONSerialization.data(withJSONObject: ["customers": [["id": 1, "name": "Ada Buyer", "email": "ada@example.test", "phone": "+12025550123"], ["id": 2, "name": "Mia Buyer", "email": "mia@example.test"]], "has_more": false])
             } else if ProcessInfo.processInfo.arguments.contains("--pos-customer-commerce-ui-tests") && (url.path.hasSuffix("/customers/1/commerce") || url.path.hasSuffix("/customers/2/commerce")) {
@@ -278,7 +312,7 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
             else if url.path == "/api/mobile/v1/workspaces/fixture/pos/registers" {
                 let blocked = ProcessInfo.processInfo.arguments.contains("--pos-readiness-delayed-ui-tests") && !Self.isReadinessEnabled()
                 let blockers = blocked ? ["old_setup"] : []
-                data = try JSONSerialization.data(withJSONObject: ["runtime_id": "fixture", "registers": [["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": blockers, "setup_blockers": blockers, "guest_checkout": true, "rewards_redemption_available": ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests"), "can_manage_inventory": ProcessInfo.processInfo.arguments.contains("--pos-stock-count-ui-tests"), "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests")]]])
+                data = try JSONSerialization.data(withJSONObject: ["runtime_id": "fixture", "registers": [["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": blockers, "setup_blockers": blockers, "guest_checkout": true, "rewards_redemption_available": ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests"), "customer_recommendations_available": ProcessInfo.processInfo.arguments.contains("--pos-customer-recommendations-ui-tests"), "can_manage_inventory": ProcessInfo.processInfo.arguments.contains("--pos-stock-count-ui-tests"), "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests")]]])
             }
             else if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") && url.path.hasSuffix("/authorize-device") {
                 data = Data(#"{"application_id":"fixture","access_token":"fixture","location_id":"fixture","merchant_id":"fixture","environment":"sandbox","can_link_apple_account":false}"#.utf8)
@@ -331,8 +365,14 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
                 data = try JSONSerialization.data(withJSONObject: quote)
                 if ProcessInfo.processInfo.arguments.contains("--pos-bundle-basket-ui-tests") { Self.setBundleSale(data) }
             } else { throw URLError(.unsupportedURL) }
-            client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: data); client?.urlProtocolDidFinishLoading(self)
+            let deliver = { [weak self] in
+                guard let self else { return }
+                self.client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+                self.client?.urlProtocol(self, didLoad: data); self.client?.urlProtocolDidFinishLoading(self)
+            }
+            if ProcessInfo.processInfo.arguments.contains("--pos-lookup-delayed-history-ui-tests"), url.path.hasSuffix("/customers/1/commerce") {
+                DispatchQueue.global().asyncAfter(deadline: .now() + 1.0, execute: deliver)
+            } else { deliver() }
         } catch { client?.urlProtocol(self, didFailWithError: error) }
     }
     override func stopLoading() {}

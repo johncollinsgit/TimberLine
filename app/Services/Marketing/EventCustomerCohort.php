@@ -59,6 +59,28 @@ class EventCustomerCohort
                 $groups[] = ['links' => $links, 'relation' => 'purchased', 'purchase_type' => 'square_order', 'purchase_id' => $links->first()->source_id];
             }
         }
+        // Owner-reviewed attribution annotates the existing original purchase link.
+        // It cannot turn an unpaid/unverified source into an event purchase.
+        $reviewed = MarketingProfileLink::query()->forTenantId($tenant)
+            ->whereIn('source_type', ['order', 'square_order', 'square_payment', 'website_order'])->orderBy('id')->limit(5001)->get();
+        if ($reviewed->count() > 5000) {
+            $issues[] = 'Reviewed purchase attribution coverage is incomplete.';
+        }
+        foreach ($reviewed->take(5000)->groupBy(fn ($source) => $source->source_type.':'.$source->source_id) as $links) {
+            $matches = $links->contains(function ($source) use ($tenant, $eventId) {
+                $review = $source->source_meta['event_attribution'] ?? [];
+                $date = is_array($review) ? ($review['reviewed_at'] ?? null) : null;
+
+                return is_array($review) && (int) ($review['event_id'] ?? 0) === $eventId
+                    && is_string($date) && strtotime($date) !== false && strtotime($date) <= now()->timestamp
+                    && is_string($review['evidence_reference'] ?? null) && trim($review['evidence_reference']) !== ''
+                    && is_int($review['reviewed_by'] ?? null)
+                    && app(CustomerCommerceLinkService::class)->canLink(\App\Models\User::find($review['reviewed_by']), $tenant);
+            });
+            if ($matches) {
+                $groups[] = ['links' => $links, 'relation' => 'purchased', 'purchase_type' => $links->first()->source_type, 'purchase_id' => $links->first()->source_id];
+            }
+        }
         $resolver = app(CanonicalMarketingProfileResolver::class);
         foreach ($groups as $group) {
             $profiles = MarketingProfile::query()->forTenantId($tenant)->whereIn('id', $group['links']->pluck('marketing_profile_id'))->get();

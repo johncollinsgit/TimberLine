@@ -7,6 +7,7 @@ use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
+use App\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -62,6 +63,7 @@ class MarketingSmsExecutionService
                 'processed' => 0,
                 'sent' => 0,
                 'failed' => 0,
+                'unknown' => 0,
                 'skipped' => 0,
                 'dry_run' => 0,
             ];
@@ -72,6 +74,7 @@ class MarketingSmsExecutionService
                 'processed' => 0,
                 'sent' => 0,
                 'failed' => 0,
+                'unknown' => 0,
                 'skipped' => 0,
                 'dry_run' => 0,
             ];
@@ -101,6 +104,7 @@ class MarketingSmsExecutionService
             'processed' => 0,
             'sent' => 0,
             'failed' => 0,
+            'unknown' => 0,
             'skipped' => 0,
             'dry_run' => 0,
         ];
@@ -122,6 +126,8 @@ class MarketingSmsExecutionService
                 $summary['sent']++;
             } elseif ($outcome === 'failed') {
                 $summary['failed']++;
+            } elseif ($outcome === 'unknown') {
+                $summary['unknown']++;
             } else {
                 $summary['skipped']++;
             }
@@ -277,8 +283,46 @@ class MarketingSmsExecutionService
         }
 
         $attemptNumber = ((int) $recipient->send_attempt_count) + 1;
-        $delivery = DB::transaction(function () use ($recipient, $campaign, $profile, $toPhone, $renderedMessage, $attemptNumber, $actorId, $deliveryContext): MarketingMessageDelivery {
-            $recipient->refresh();
+        $delivery = DB::transaction(function () use ($recipient, $campaign, $profile, $toPhone, $renderedMessage, $attemptNumber, $actorId, $deliveryContext, $allowedStatuses, $dryRun): MarketingMessageDelivery|array {
+            $outreachDecisionId = null;
+            if ($campaign->source_label === 'customer_profile') {
+                // Identity/preference writers take this same durable fence before tenant/audit writes.
+                app(CustomerAccountFence::class)->lock((int) $campaign->tenant_id);
+                Tenant::whereKey($campaign->tenant_id)->lockForUpdate()->firstOrFail();
+                // Use locking-read results directly. A plain refresh before the profile lock
+                // can establish an older MySQL REPEATABLE READ snapshot while waiting on
+                // a legacy profile-first consent writer.
+                $freshCampaign = MarketingCampaign::forTenantId($campaign->tenant_id)->whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+                $freshProfile = MarketingProfile::forTenantId($campaign->tenant_id)->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+                $freshRecipient = MarketingCampaignRecipient::where('campaign_id', $freshCampaign->id)->where('marketing_profile_id', $freshProfile->id)
+                    ->whereKey($recipient->id)->lockForUpdate()->firstOrFail();
+                if (! in_array((string) $freshRecipient->status, $allowedStatuses, true) || $freshRecipient->channel !== 'sms'
+                    || in_array($freshCampaign->status, ['paused', 'completed', 'archived'], true)
+                    || ($freshRecipient->scheduled_for && $freshRecipient->scheduled_for->isFuture())) {
+                    return ['outcome' => 'skipped', 'reason' => 'status_not_sendable', 'dry_run' => $dryRun];
+                }
+                if (! app(CustomerOutreachDraft::class)->smsBodyMatches($freshCampaign, $freshProfile, $renderedMessage)
+                    || trim((string) $freshRecipient->variant?->message_text) !== $renderedMessage) {
+                    return $this->skipRecipient($freshRecipient, 'customer_profile_draft_changed', 'The prepared customer or message changed. Prepare a new draft.');
+                }
+                $explanations = app(CustomerOutreachExplanation::class);
+                $decision = $explanations->dispatchDecision($freshCampaign, $freshProfile);
+                $freshEligibility = $this->smsEligibilityService->evaluateProfile($freshProfile, (int) $freshCampaign->tenant_id);
+                if (($freshEligibility['normalized_phone'] ?? null) !== $toPhone) {
+                    $decision['allowed'] = false;
+                    $decision['reason_codes'][] = 'customer_profile_contact_changed';
+                }
+                $outreachDecisionId = $explanations->recordDispatchDecision($freshCampaign, $freshProfile, $decision, $actorId);
+                if (! $decision['allowed']) {
+                    return $this->skipRecipient($freshRecipient, $decision['reason_codes'][0] ?? 'customer_outreach_blocked',
+                        'Customer outreach requires review: '.implode(', ', $decision['reason_codes']));
+                }
+                $recipient->setRawAttributes($freshRecipient->getAttributes(), true);
+                $recipient->setRelations($freshRecipient->getRelations());
+                $attemptNumber = ((int) $recipient->send_attempt_count) + 1;
+            } else {
+                $recipient->refresh();
+            }
 
             $recipient->forceFill([
                 'status' => 'sending',
@@ -302,9 +346,13 @@ class MarketingSmsExecutionService
                 'attempt_number' => $attemptNumber,
                 'rendered_message' => $renderedMessage,
                 'send_status' => 'sending',
+                'provider_payload' => $outreachDecisionId ? ['customer_outreach_decision_audit_id' => $outreachDecisionId, 'dry_run' => $dryRun] : null,
                 'created_by' => $actorId,
             ]);
-        });
+        }, 3);
+        if (is_array($delivery)) {
+            return $delivery;
+        }
 
         $trackedMessage = $this->messageClickTrackingService->decorateSmsMessageForDelivery(
             delivery: $delivery,
@@ -337,11 +385,17 @@ class MarketingSmsExecutionService
 
         $providerStatus = strtolower(trim((string) ($sendResult['status'] ?? 'failed')));
         $success = (bool) ($sendResult['success'] ?? false);
+        $simulation = $dryRun || (bool) ($sendResult['dry_run'] ?? false);
+        $errorCode = (string) ($sendResult['error_code'] ?? '');
+        $outreachUnknown = $campaign->source_label === 'customer_profile' && ! $simulation
+            && ($providerStatus === 'unknown' || in_array($errorCode, ['exception', 'messaging_usage_unavailable', 'tenant_messaging_unavailable'], true)
+                || preg_match('/^5\d\d$/D', $errorCode) || ($success && ! filled($sendResult['provider_message_id'] ?? null))
+                || (! $success && filled($sendResult['provider_message_id'] ?? null)));
 
         $delivery->forceFill([
             'provider_message_id' => $sendResult['provider_message_id'] ?? null,
             'from_identifier' => $sendResult['from_identifier'] ?? null,
-            'send_status' => $success ? $providerStatus : 'failed',
+            'send_status' => $outreachUnknown ? 'unknown' : ($success ? $providerStatus : 'failed'),
             'error_code' => $sendResult['error_code'] ?? null,
             'error_message' => $sendResult['error_message'] ?? null,
             'provider_payload' => [
@@ -349,25 +403,26 @@ class MarketingSmsExecutionService
                 ...(is_array($sendResult['payload'] ?? null)
                     ? $sendResult['payload']
                     : ['raw' => $sendResult['payload'] ?? null]),
+                ...($campaign->source_label === 'customer_profile' ? ['dry_run' => $simulation] : []),
                 'sender_key' => $sendResult['sender_key'] ?? ($senderKey ?: $this->senderKeyFromRecipient($recipient)),
                 'sender_label' => $sendResult['sender_label'] ?? null,
             ],
-            'sent_at' => $success && in_array($providerStatus, ['queued', 'sending', 'sent', 'delivered', 'undelivered'], true)
+            'sent_at' => ! $outreachUnknown && $success && in_array($providerStatus, ['queued', 'sending', 'sent', 'delivered', 'undelivered'], true)
                 ? now()
                 : null,
             'delivered_at' => $success && $providerStatus === 'delivered' ? now() : null,
-            'failed_at' => ! $success || in_array($providerStatus, ['failed', 'undelivered', 'canceled'], true) ? now() : null,
+            'failed_at' => ! $outreachUnknown && (! $success || in_array($providerStatus, ['failed', 'undelivered', 'canceled'], true)) ? now() : null,
         ])->save();
 
-        $recipientStatus = $success
+        $recipientStatus = $outreachUnknown ? 'sending' : ($success
             ? $this->recipientStatusFromProviderStatus($providerStatus)
-            : 'failed';
+            : 'failed');
 
         $recipient->forceFill([
             'status' => $recipientStatus,
-            'last_status_note' => $success
+            'last_status_note' => $outreachUnknown ? 'Provider acceptance is unknown. Reconcile this original attempt before any further outreach.' : ($success
                 ? ($dryRun ? 'Dry-run send simulated.' : null)
-                : (string) ($sendResult['error_message'] ?? 'Twilio send failed.'),
+                : (string) ($sendResult['error_message'] ?? 'Twilio send failed.')),
             'sent_at' => in_array($recipientStatus, ['sent', 'delivered', 'undelivered'], true)
                 ? ($recipient->sent_at ?: now())
                 : $recipient->sent_at,
@@ -393,8 +448,8 @@ class MarketingSmsExecutionService
         );
 
         return [
-            'outcome' => $success ? 'sent' : 'failed',
-            'reason' => $success ? $delivery->send_status : 'provider_failure',
+            'outcome' => $outreachUnknown ? 'unknown' : ($success ? 'sent' : 'failed'),
+            'reason' => $outreachUnknown ? 'provider_outcome_unknown' : ($success ? $delivery->send_status : 'provider_failure'),
             'recipient_id' => $recipient->id,
             'delivery_id' => $delivery->id,
             'provider_message_id' => $delivery->provider_message_id,

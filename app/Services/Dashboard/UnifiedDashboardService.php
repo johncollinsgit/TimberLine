@@ -21,6 +21,7 @@ use App\Models\WebsiteOrder;
 use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\QuickBooksOwnerReportingService;
 use App\Services\FleetTracking\FleetTrackingAccessService;
+use App\Services\Marketing\CustomerProfileAccess;
 use App\Services\Reporting\SalesChannelSummaryService;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use App\Services\Tenancy\TenantBlueprintProfileService;
@@ -70,6 +71,7 @@ class UnifiedDashboardService
         $canAccessOps = ($user?->isAdmin() ?? false)
             || ($user?->isManager() ?? false)
             || ($user instanceof User && $tenant instanceof Tenant && $this->fieldServiceAccess->canManageJobs($user, $tenant));
+        $canAccessCustomers = app(CustomerProfileAccess::class)->allows($user, $tenant);
         $catalog = ($tenantId !== null && $canAccessMarketing)
             ? $this->moduleCatalogService->tenantStorePayload($tenantId, 'marketing')
             : ['sections' => []];
@@ -82,9 +84,9 @@ class UnifiedDashboardService
             : $this->summaryCards($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics, $clientFacingFieldService);
 
         $hero = $this->heroMetric($tenantId, $profile, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics, $clientFacingFieldService);
-        $hero['href'] = $this->destinationHref((array) ($hero['destination'] ?? []), $tenant, $range['key']);
-        $summaryCards = array_map(function (array $card) use ($tenant, $range): array {
-            $card['href'] = $this->destinationHref((array) ($card['destination'] ?? []), $tenant, $range['key']);
+        $hero['href'] = $this->destinationHref((array) ($hero['destination'] ?? []), $tenant, $range['key'], $canAccessCustomers);
+        $summaryCards = array_map(function (array $card) use ($tenant, $range, $canAccessCustomers): array {
+            $card['href'] = $this->destinationHref((array) ($card['destination'] ?? []), $tenant, $range['key'], $canAccessCustomers);
 
             return $card;
         }, $summaryCards);
@@ -122,7 +124,7 @@ class UnifiedDashboardService
             'front_yard_launch' => $this->frontYardLaunch($tenant),
             'workflow_automation_health' => $this->workflowAutomationHealth($tenantId, $canAccessOps || $canAccessMarketing),
             'owner_reporting' => $ownerReport,
-            'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $clientFacingFieldService),
+            'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $clientFacingFieldService, $canAccessCustomers, $tenant?->slug),
             'pinned_modules' => $canAccessMarketing ? $this->pinnedModules($catalog) : [],
         ];
     }
@@ -179,6 +181,10 @@ class UnifiedDashboardService
                     'detail' => 'Website '.strtolower($label), 'href' => $url($route)];
             }
             $actions[] = ['label' => 'Review the website', 'description' => 'Review your pages, photos, and launch setup.', 'href' => $url('managed-website.index')];
+        }
+        if (app(CustomerProfileAccess::class)->allows($user, $tenant) && Route::has('customers.directory')) {
+            $actions[] = ['label' => 'Open shared customers', 'description' => 'Find customer profiles and their explicitly linked purchase history.',
+                'href' => $url('customers.directory')];
         }
 
         return [
@@ -1035,7 +1041,9 @@ class UnifiedDashboardService
         array $catalog,
         bool $canAccessMarketing,
         bool $canAccessOps,
-        bool $clientFacingFieldService = true
+        bool $clientFacingFieldService = true,
+        bool $canAccessCustomers = false,
+        ?string $tenantSlug = null
     ): array {
         $actions = [];
 
@@ -1118,11 +1126,11 @@ class UnifiedDashboardService
             ];
         }
 
-        if ($canAccessMarketing && in_array((string) ($profile['use_case_profile'] ?? 'ops'), ['crm', 'marketing', 'hybrid'], true)) {
+        if ($canAccessCustomers && $tenantSlug && Route::has('customers.directory')) {
             $actions[] = [
                 'label' => 'Open customers',
                 'description' => 'Go straight to customer search, follow-up, and profile detail.',
-                'href' => route('marketing.customers'),
+                'href' => route('customers.directory', ['tenant' => $tenantSlug]),
                 'tone' => 'success',
             ];
         }
@@ -1182,13 +1190,13 @@ class UnifiedDashboardService
     }
 
     /** @param array<string,mixed> $destination */
-    protected function destinationHref(array $destination, ?Tenant $tenant, string $rangeKey): ?string
+    protected function destinationHref(array $destination, ?Tenant $tenant, string $rangeKey, bool $canAccessCustomers = false): ?string
     {
         $kind = (string) ($destination['kind'] ?? '');
 
         return match ($kind) {
             'field_service', 'field_service_job' => route('field-service.index').($destination['section'] ?? false ? '#'.(string) $destination['section'] : ''),
-            'customers', 'customer' => route('marketing.customers'),
+            'customers', 'customer' => $tenant && $canAccessCustomers && Route::has('customers.directory') ? route('customers.directory', ['tenant' => $tenant->slug]) : null,
             'orders' => route('shipping.orders'),
             'sales_channels' => route('sales-channels.index', ['range' => $rangeKey]),
             'imports' => route('marketing.providers-integrations'),

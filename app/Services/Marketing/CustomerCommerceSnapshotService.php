@@ -41,7 +41,7 @@ class CustomerCommerceSnapshotService
 
     public function forProfile(MarketingProfile $profile, int $tenantId, int $limit = 50): array
     {
-        $canonical = $this->identities->canonical($profile, $tenantId);
+        $canonical = $this->identities->byId($tenantId, (int) $profile->id);
         if (! $canonical || $tenantId <= 0) {
             throw (new ModelNotFoundException)->setModel(MarketingProfile::class, [$profile->id]);
         }
@@ -176,12 +176,15 @@ class CustomerCommerceSnapshotService
         $purchases = $purchases->unique('id')->sortByDesc('occurred_at')->values();
         $shown = $purchases->take($limit)->values();
 
+        $behavior = app(CustomerBehaviorProfile::class)->build($tenantId, $shown->all(), $purchases->count() > $limit, $issues);
+
         return [
+            'behavior' => $behavior['profile'],
             'contract_version' => 1,
             'included_for_every_tenant' => true,
             'customer_id' => (int) $canonical->id,
             'tenant_id' => $tenantId,
-            'purchases' => $shown->all(),
+            'purchases' => $behavior['purchases'],
             'confirmed_purchase_count' => $shown->where('confirmed', true)->count(),
             'unverified_record_count' => $shown->where('confirmed', false)->count(),
             'coverage' => 'explicitly_linked_records_only',

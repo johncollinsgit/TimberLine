@@ -32,11 +32,16 @@ final class PosVerifiedCustomerAccount
     public function verified(MarketingProfile $profile, int $linkId): bool
     {
         $tenant = (int) $profile->tenant_id;
-        if ($tenant < 1 || $linkId < 1 || $profile->archived_at !== null || $profile->merged_at !== null
-            || $this->identities->byId($tenant, (int) $profile->id)?->id !== $profile->id) {
+        if ($tenant < 1 || $linkId < 1) {
             return false;
         }
         $locked = DB::transactionLevel() > 0;
+        $current = $locked ? $this->identities->lockedById($tenant, (int) $profile->id) : $this->identities->byId($tenant, (int) $profile->id);
+        if (! $current || (int) $current->id !== (int) $profile->id
+            || $current->archived_at !== null || $current->merged_at !== null) {
+            return false;
+        }
+        $profile = $current;
         $link = MarketingProfileLink::query()->forTenantId($tenant)->whereKey($linkId)->whereIn('source_type', [self::SOURCE, self::CONTACT_SOURCE])
             ->when($locked, fn ($q) => $q->lockForUpdate())->first();
         $meta = $link?->source_meta ?? [];
@@ -74,6 +79,13 @@ final class PosVerifiedCustomerAccount
             return false;
         }
         $locked = DB::transactionLevel() > 0;
+        if ($locked) {
+            $current = $this->identities->lockedById($tenant, (int) $profile->id);
+            if (! $current || (int) $current->id !== (int) $profile->id || $current->archived_at || $current->merged_at) {
+                return false;
+            }
+            $profile = $current;
+        }
         $digits = $match[1];
         $ids = [$gid, $digits, $store.':'.$digits, $store.':'.$gid, 'shopify:'.$gid, 'shopify:'.$digits];
         $links = MarketingProfileLink::query()->forTenantId($tenant)->where('source_type', 'shopify_customer')
@@ -85,7 +97,8 @@ final class PosVerifiedCustomerAccount
             return false;
         }
         foreach ($links as $candidate) {
-            if ($this->identities->byId($tenant, (int) $candidate->marketing_profile_id)?->id !== $profile->id) {
+            $identity = $locked ? $this->identities->lockedById($tenant, (int) $candidate->marketing_profile_id) : $this->identities->byId($tenant, (int) $candidate->marketing_profile_id);
+            if ($identity?->id !== $profile->id) {
                 return false;
             }
         }
@@ -96,8 +109,8 @@ final class PosVerifiedCustomerAccount
             return false;
         }
         foreach ($external as $record) {
-            if ($record->provider !== 'shopify' || $record->integration !== 'shopify_customer' || $record->store_key !== $store
-                || $this->identities->byId($tenant, (int) $record->marketing_profile_id)?->id !== $profile->id) {
+            $identity = $locked ? $this->identities->lockedById($tenant, (int) $record->marketing_profile_id) : $this->identities->byId($tenant, (int) $record->marketing_profile_id);
+            if ($record->provider !== 'shopify' || $record->integration !== 'shopify_customer' || $record->store_key !== $store || $identity?->id !== $profile->id) {
                 return false;
             }
         }

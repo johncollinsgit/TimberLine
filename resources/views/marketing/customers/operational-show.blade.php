@@ -21,6 +21,7 @@
 
             <x-customer-commerce :snapshot="$customerCommerce ?? null" :rewards-label="data_get($customerCommerce ?? [], 'rewards.label', 'Rewards')" />
             <x-customer-commerce-link :profile="$profile" />
+        <a href="{{ route('customers.profile', ['profile' => $profile->id, 'tenant' => request()->attributes->get('current_tenant')?->slug]) }}">Open shared customer profile and personalized messages</a>
 
             @if (session('toast.message'))
                 <div class="fb-state {{ session('toast.style') === 'success' ? 'fb-state-success' : 'fb-state-warning' }}">{{ session('toast.message') }}</div>

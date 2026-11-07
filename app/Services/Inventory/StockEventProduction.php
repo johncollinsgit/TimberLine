@@ -93,9 +93,39 @@ final class StockEventProduction
         }
 
         return ['line_id' => (int) $line->id, 'order_id' => (int) $line->order_id, 'event_id' => (int) $line->event_id,
-            'planned_quantity' => $quantity, 'signature' => Contract::hash([$tenant, (int) $line->id, (int) $line->event_id,
-                $line->scent_id, $line->size_id, $line->wick_type]),
+            'planned_quantity' => $quantity, 'signature' => $this->sourceSignature($tenant, $line),
             'revision' => Contract::hash([(array) $line, $quantity])];
+    }
+
+    /** Read-only catalog classification from an explicit, still-current production mapping. */
+    public function reviewedScentForItem(int $tenant, string $item): ?array
+    {
+        $links = $this->stock->rows('production_links', $tenant)->where('item_id', $item)->limit(51)->get();
+        if ($links->count() > 50) {
+            return null;
+        }
+        $scents = [];
+        foreach ($links as $link) {
+            $query = $this->stock->db->table('order_lines as l')->join('orders as o', 'o.id', '=', 'l.order_id')
+                ->where('o.source', 'internal')->where('o.order_type', 'event')->whereNotNull('o.event_id')
+                ->whereNotIn('o.status', ['cancelled', 'canceled', 'deleted'])->where('l.id', $link->order_line_id)
+                ->select(['l.id', 'l.scent_id', 'l.scent_name', 'l.size_id', 'l.wick_type', 'o.event_id']);
+            $this->owned($query, $tenant);
+            $line = $query->first();
+            if (! $line || ! $line->scent_id || trim((string) $line->scent_name) === ''
+                || $this->stock->db->table('order_line_scent_splits')->where('order_line_id', $line->id)->exists()
+                || ! hash_equals($link->source_signature, $this->sourceSignature($tenant, $line))) {
+                return null;
+            }
+            $scents['scent:'.$line->scent_id] = ['key' => 'scent:'.$line->scent_id, 'name' => $line->scent_name];
+        }
+
+        return count($scents) === 1 ? array_values($scents)[0] : null;
+    }
+
+    private function sourceSignature(int $tenant, object $line): string
+    {
+        return Contract::hash([$tenant, (int) $line->id, (int) $line->event_id, $line->scent_id, $line->size_id, $line->wick_type]);
     }
 
     /** The owner chooses an exact canonical variant; names/SKUs are never identity proof. */

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="tests/Support/TeamsMySqlBootstrap.php" colors="true">
+    <testsuites>
+        <testsuite name="Customer profile disposable MySQL">
+            <file>tests/Feature/Team/CustomerPreferenceTest.php</file>
+            <file>tests/Feature/Team/CustomerStaffPreferenceTest.php</file>
+            <file>tests/Feature/Team/CustomerCoreDiscoveryTest.php</file>
+            <file>tests/Feature/Team/CustomerOutreachPolicyTest.php</file>
+            <file>tests/Feature/Team/CustomerOutreachEmailAdmissionTest.php</file>
+            <file>tests/Feature/Team/TeamCustomerEventValueTest.php</file>
+            <file>tests/Feature/Team/TeamPosCustomerRecommendationsTest.php</file>
+            <file>tests/Feature/Marketing/CustomerProfileIntegrationTest.php</file>
+            <file>tests/Feature/Marketing/CustomerProfileSafetyTest.php</file>
+            <file>tests/Feature/Marketing/CustomerOutreachReviewTest.php</file>
+        </testsuite>
+    </testsuites>
+    <php>
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_KEY" value="base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=" force="true"/>
+        <env name="DB_CONNECTION" value="mysql" force="true"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <env name="LOG_CHANNEL" value="null" force="true"/>
+        <env name="VIEW_COMPILED_PATH" value="storage/framework/views" force="true"/>
+        <env name="BCRYPT_ROUNDS" value="4" force="true"/>
+    </php>
+</phpunit>

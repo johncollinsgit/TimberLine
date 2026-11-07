@@ -61,3 +61,13 @@ jobs:
         run: php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.team-studio-mysql.xml --compact
       - name: Verify interrupted event creation and competing commands
         run: php scripts/everbranch-team/studio-mysql-concurrency.php
+      - name: Verify shared customer profiles, preferences and outreach on MySQL
+        run: php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml --compact
+      - name: Verify cross-channel caps and legacy unsubscribe races
+        run: php scripts/everbranch-team/customer-outreach-mysql-concurrency.php
+      - name: Verify customer fence recovery and existing rewards concurrency
+        env:
+          POS_LIVE_DISPOSABLE_MYSQL: '1'
+        run: |
+          php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml tests/PosLive/OwnedStockCheckoutTest.php --filter='serializes actual policy publication|serializes a conflicting identity import|completes a fully redeemed basket once' --compact
+          php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml tests/Integration/CustomerAccountFenceAdmissionMySqlTest.php --compact

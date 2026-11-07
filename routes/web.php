@@ -793,6 +793,8 @@ Route::post('/account/link', [WebsiteShopperAccountController::class, 'requestLi
 Route::get('/account/verify/{token}', [WebsiteShopperAccountController::class, 'verify'])->middleware('throttle:20,1')->name('managed-website.store.account.verify');
 Route::post('/account/verify/{token}', [WebsiteShopperAccountController::class, 'consume'])->middleware('throttle:20,1')->name('managed-website.store.account.consume');
 Route::post('/account/logout', [WebsiteShopperAccountController::class, 'logout'])->name('managed-website.store.account.logout');
+Route::get('/account/preferences', [WebsiteShopperAccountController::class, 'preferences'])->middleware('throttle:20,1')->name('managed-website.store.account.preferences');
+Route::post('/account/preferences', [WebsiteShopperAccountController::class, 'updatePreferences'])->middleware('throttle:20,1')->name('managed-website.store.account.preferences.update');
 Route::post('/account/profile', [WebsiteShopperAccountController::class, 'updateProfile'])->middleware('throttle:20,1')->name('managed-website.store.account.profile');
 Route::get('/account/orders/{number}', [WebsiteShopperAccountController::class, 'order'])->name('managed-website.store.account.orders.show');
 Route::post('/cart/items/{variant}', [WebsiteCommerceController::class, 'addCartItem'])->middleware('throttle:30,1')->name('managed-website.store.cart.items.store');
@@ -860,6 +862,15 @@ Route::post('/webhooks/subscriptions/stripe', [\App\Http\Controllers\Subscriptio
     ->withoutMiddleware([VerifyCsrfToken::class])->name('subscriptions.pilot.stripe-webhook');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::middleware('tenant.access')->group(function (): void {
+        Route::get('/workspace/customers', \App\Http\Controllers\CustomerProfileController::class)->name('customers.directory');
+        Route::match(['get', 'post'], '/workspace/customers/outreach-policy', \App\Http\Controllers\CustomerOutreachPolicyController::class)->name('customers.outreach.policy');
+        Route::post('/workspace/customers/{profile}/preferences', \App\Http\Controllers\CustomerStaffPreferenceController::class)->whereNumber('profile')->name('customers.preferences.update');
+        Route::post('/workspace/customers/{profile}/event-attribution', \App\Http\Controllers\CustomerEventAttributionReviewController::class)->whereNumber('profile')->name('customers.event-attribution');
+        Route::match(['get', 'post'], '/workspace/customers/{profile}/outreach/{campaign}', \App\Http\Controllers\CustomerOutreachReviewController::class)->whereNumber('profile')->whereNumber('campaign')->name('customers.outreach.review');
+        Route::get('/workspace/customers/{profile}', \App\Http\Controllers\CustomerProfileController::class)->whereNumber('profile')->name('customers.profile');
+        Route::post('/workspace/customers/{profile}/outreach', \App\Http\Controllers\CustomerProfileController::class)->whereNumber('profile')->name('customers.outreach');
+    });
 
     Route::middleware(['tenant.access', 'module:subscriptions'])
         ->get('/subscriptions/pilot', [\App\Http\Controllers\SubscriptionPilotController::class, 'index'])

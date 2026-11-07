@@ -54,3 +54,151 @@ final class CustomerCommerceFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Save physical count"].exists)
     }
 }
+
+extension CustomerCommerceFlowTests {
+    private func launchLookupIsolation(_ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-customer-commerce-ui-tests", "--pos-enrollment-ui-tests", "--pos-lookup-isolation-ui-tests", "--pos-lookup-reset-ui-tests"] + extra
+        app.launch()
+        if extra.contains("--pos-recovery-ui-tests"), app.buttons["Close"].waitForExistence(timeout: 8) { app.buttons["Close"].tap() }
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 10))
+        return app
+    }
+    private func selectLookupCustomer(_ app: XCUIApplication, name: String = "Mia Buyer") {
+        app.buttons["Customers"].tap()
+        let query = app.textFields["Name, email or phone"]
+        XCTAssertTrue(query.waitForExistence(timeout: 5)); query.tap(); query.typeText("Buyer")
+        app.buttons["Find customer"].tap()
+        let customer = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", name)).firstMatch
+        XCTAssertTrue(customer.waitForExistence(timeout: 8)); customer.tap()
+    }
+    func testStandaloneLookupCancelPreservesShoppingCustomerBasketRewardsAndMainJournals() {
+        let app = launchLookupIsolation()
+        let original = app.staticTexts["shopping-fixture-state"].label
+        XCTAssertTrue(original.contains("customer=1;units=1;rewards=300;proof=present;session=present;capture=original;enrollment=original"))
+        selectLookupCustomer(app)
+        XCTAssertTrue(app.staticTexts["Candle Cash: 2.00"].waitForExistence(timeout: 8))
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
+        XCTAssertFalse(app.staticTexts["Current sale"].exists)
+    }
+    func testExplicitShopCopiesOnlyCustomerAndClearsIncompatibleRewardsWithoutStartingPayment() {
+        let app = launchLookupIsolation()
+        selectLookupCustomer(app)
+        let shop = app.buttons["Shop for this customer"]
+        for _ in 0..<4 where !shop.isHittable { app.swipeUp() }
+        XCTAssertTrue(shop.waitForExistence(timeout: 5)); shop.tap()
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, "customer=2;units=1;rewards=0;proof=absent;session=present;capture=original;enrollment=original")
+        XCTAssertTrue(app.staticTexts["Shopping for Mia Buyer"].exists)
+        XCTAssertFalse(app.staticTexts["Current sale"].exists)
+    }
+    func testLookupExpiredSessionDoesNotSignOutShoppingModelOrEraseItsProofs() {
+        let app = launchLookupIsolation(["--pos-lookup-401-ui-tests"])
+        let original = app.staticTexts["shopping-fixture-state"].label
+        app.buttons["Customers"].tap()
+        let query = app.textFields["Name, email or phone"]
+        XCTAssertTrue(query.waitForExistence(timeout: 5)); query.tap(); query.typeText("Ada")
+        app.buttons["Find customer"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Customer lookup sign-in expired'")).firstMatch.waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["Continue with Google"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
+    }
+    func testCanceledDelayedLookupResponseCannotChangeShoppingSelection() {
+        let app = launchLookupIsolation(["--pos-lookup-delayed-history-ui-tests"])
+        let original = app.staticTexts["shopping-fixture-state"].label
+        selectLookupCustomer(app, name: "Ada Buyer")
+        XCTAssertTrue(app.buttons["Close"].exists); app.buttons["Close"].tap()
+        let settled = expectation(description: "The intercepted old response has elapsed")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { settled.fulfill() }
+        wait(for: [settled], timeout: 3)
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
+    }
+    func testLookupCaptureRecoversItsOwnOriginalRequestWithoutReplacingMainJournals() {
+        let app = launchLookupIsolation()
+        let original = app.staticTexts["shopping-fixture-state"].label
+        app.buttons["Customers"].tap()
+        let create = app.buttons["Create a new customer"]
+        XCTAssertTrue(create.waitForExistence(timeout: 5)); create.tap()
+        let first = app.textFields["First name"]
+        XCTAssertTrue(first.waitForExistence(timeout: 5)); first.tap(); first.typeText("Fictional")
+        app.buttons["Create and select customer"].tap()
+        XCTAssertTrue(app.buttons["Recover customer request"].waitForExistence(timeout: 8))
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
+        app.buttons["Customers"].tap()
+        let recover = app.buttons["Recover customer request"]
+        XCTAssertTrue(recover.waitForExistence(timeout: 5)); recover.tap()
+        XCTAssertTrue(app.staticTexts["Fictional Captured"].waitForExistence(timeout: 8))
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
+    }
+}
+
+extension CustomerCommerceFlowTests {
+    private func recommendationProductLabels(_ app: XCUIApplication) -> [String] {
+        app.buttons.matching(NSPredicate(format: "label IN %@", ["Add Fictional trio to basket", "Choose Laurel & Fig options", "Add River Birch to basket"])).allElementsBoundByIndex.map(\.label)
+    }
+    func testNoComparableRecommendationsPreserveNormalProductOrder() {
+        let app = launchLookupIsolation(["--pos-customer-recommendations-ui-tests", "--pos-recommendations-no-evidence-ui-tests"])
+        XCTAssertTrue(app.staticTexts["No comparable linked purchases in the current history window."].waitForExistence(timeout: 8))
+        XCTAssertEqual(recommendationProductLabels(app), ["Add Fictional trio to basket", "Choose Laurel & Fig options", "Add River Birch to basket"])
+    }
+    func testOnlyRecommendedProductMovesAndVoiceOverIncludesObservedEvidence() {
+        let app = launchLookupIsolation(["--pos-customer-recommendations-ui-tests"])
+        XCTAssertTrue(app.staticTexts["Ordered by this customer's recorded online and in-person purchases. Older or unconnected purchases may be missing."].waitForExistence(timeout: 8))
+        XCTAssertEqual(recommendationProductLabels(app), ["Add River Birch to basket", "Add Fictional trio to basket", "Choose Laurel & Fig options"])
+        XCTAssertEqual(app.buttons["Add River Birch to basket"].value as? String, "Bought on 3 occasions, 8 units")
+    }
+}
+
+extension CustomerCommerceFlowTests {
+    func testStandaloneLookupDuringUnknownPaymentCannotAdoptCustomerOrReplaceOriginalSale() {
+        let app = launchLookupIsolation(["--pos-recovery-ui-tests"])
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        let original = app.staticTexts["shopping-fixture-state"].label
+        XCTAssertTrue(app.buttons["Payment saved · Open status"].exists)
+        selectLookupCustomer(app)
+        XCTAssertTrue(app.staticTexts["Candle Cash: 2.00"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["Shop for this customer"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
+        XCTAssertTrue(app.buttons["Payment saved · Open status"].exists)
+    }
+}
+
+extension CustomerCommerceFlowTests {
+    func testExpiredHistoryReadAlsoPreventsLookupAdoptionWithoutSigningOutRegister() {
+        let app = launchLookupIsolation(["--pos-lookup-history-401-ui-tests"])
+        let original = app.staticTexts["shopping-fixture-state"].label
+        selectLookupCustomer(app, name: "Ada Buyer")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Customer lookup sign-in expired'")).firstMatch.waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["Shop for this customer"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
+    }
+}
+
+extension CustomerCommerceFlowTests {
+    func testUnreadableLookupCapturePausesWritesButKeepsSearchAndOriginalShoppingState() {
+        let app = launchLookupIsolation(["--pos-lookup-invalid-journal-ui-tests"])
+        let original = app.staticTexts["shopping-fixture-state"].label
+        app.buttons["Customers"].tap()
+        XCTAssertTrue(app.staticTexts["Saved customer requests could not be read. Search remains available; capture and enrollment are paused until recovery can be checked."].waitForExistence(timeout: 8))
+        app.buttons["Create a new customer"].tap()
+        let first = app.textFields["First name"]
+        XCTAssertTrue(first.waitForExistence(timeout: 5)); first.tap(); first.typeText("Fictional")
+        XCTAssertFalse(app.buttons["Create and select customer"].isEnabled)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
+    }
+}

@@ -87,6 +87,7 @@ struct POSView: View {
     var onClose: (() -> Void)? = nil
     var onOpenRegister: (() -> Void)? = nil
     var onAccount: (() -> Void)? = nil
+    var onShopForCustomer: (() -> Void)? = nil
     var screen: POSScreen
     @ObservedObject var model: POSViewModel
     @State private var choosingRegister = false
@@ -135,13 +136,15 @@ struct POSView: View {
                             .background(PayTheme.cream, in: RoundedRectangle(cornerRadius: 14))
                             .accessibilityIdentifier("status-message")
                     }
-                    if !model.signedIn { signIn }
+                    if model.lookupOnly && !model.signedIn {
+                        Text("Close customer lookup and sign in again from Account. Shopping and payment recovery remain in the register.").font(.subheadline)
+                    } else if !model.signedIn { signIn }
                     else if screen == .customers { customer }
                     else if model.pending != nil && !isSetup { recovery }
                     else if choosingRegister || model.selectedRegister == nil { registerPicker }
                     else if isSetup { setup }
                     else { checkout }
-                    if isSetup || !model.signedIn { accountDetails }
+                    if !model.lookupOnly && (isSetup || !model.signedIn) { accountDetails }
                 }.padding(20)
             }.disabled(model.busy)
             .scrollDismissesKeyboard(.interactively)
@@ -157,7 +160,7 @@ struct POSView: View {
                         Button {
                             if screen == .checkout && model.sale?.canLeave == true && model.pending?.refundRequestID == nil { model.nextSale() }
                             else { onClose() }
-                        } label: { Text("Close").lineLimit(1).fixedSize() }.frame(minWidth: 64, minHeight: 44).disabled(model.collector.hasActivePayment || model.busy)
+                        } label: { Text("Close").lineLimit(1).fixedSize() }.frame(minWidth: 64, minHeight: 44).disabled((!model.lookupOnly && model.collector.hasActivePayment) || model.busy)
                     }
                 }
                 if screen != .customers && model.selectedRegister != nil && !model.collector.hasActivePayment {
@@ -181,7 +184,7 @@ struct POSView: View {
                         .accessibilityIdentifier("payment-busy").allowsHitTesting(false)
                 }
             }
-            .interactiveDismissDisabled(model.collector.hasActivePayment || model.busy)
+            .interactiveDismissDisabled((!model.lookupOnly && model.collector.hasActivePayment) || model.busy)
             .confirmationDialog("No card was presented?", isPresented: $confirmUncollected, titleVisibility: .visible) {
                 Button("Save for review and return to register") { model.leaveUncollectedForReview() }
                 Button("Keep this payment open", role: .cancel) {}
@@ -449,6 +452,12 @@ struct POSView: View {
         }.padding(.vertical, 6)
     }
 
+    private func customerProfileURL(_ id: Int) -> URL? {
+        guard let workspace = model.selectedWorkspace else { return nil }
+        var url = URLComponents(url: model.api.origin.appendingPathComponent("workspace/customers/\(id)"), resolvingAgainstBaseURL: false)
+        url?.queryItems = [URLQueryItem(name: "tenant", value: workspace.slug)]
+        return url?.url
+    }
     private var customer: some View {
         PayCard(title: "Customer", icon: "person.crop.circle") {
             if let customer = model.selectedCustomer {
@@ -463,8 +472,10 @@ struct POSView: View {
                     Button("Try history again", action: model.refreshCustomerCommerce).frame(minHeight: 44)
                 }
                 if let settings = model.customerEnrollmentSettings, settings.birthdayEnabled || settings.emailEnabled || settings.smsEnabled || model.pendingEnrollment != nil {
-                    CustomerEnrollmentPanel(model: model, customer: customer, settings: settings).id(customer.id)
+                    CustomerEnrollmentPanel(model: model, customer: customer, settings: settings).id(customer.id).disabled(!model.canRecordCustomerChoices)
                 }
+                if let url = customerProfileURL(customer.id) { Link("Open shared profile & personalized messages", destination: url).frame(minHeight: 44) }
+                if screen == .customers, model.pending == nil, let shop = onShopForCustomer { Button("Shop for this customer", action: shop).buttonStyle(PayButtonStyle()).disabled(model.busy) }
                 Button("Choose another customer") { model.selectedCustomer = nil }.frame(minHeight: 44)
             } else {
                 if model.selectedRegister?.canSearchEventCustomers == true {
@@ -507,12 +518,13 @@ struct POSView: View {
                             TextField("Phone (optional)", text: $model.customerPhone).payInput().keyboardType(.phonePad).focused($inputFocused)
                             Text("Creates a purchase record without marketing signup. Their online account must be connected separately.").font(.caption).foregroundStyle(PayTheme.muted)
                             Button("Create and select customer", action: { inputFocused = false; model.createCustomer() })
-                                .buttonStyle(PayButtonStyle()).disabled(model.customerFirstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                .buttonStyle(PayButtonStyle()).disabled(!model.canRecordCustomerChoices || model.customerFirstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         }.padding(.top, 12)
                     }.padding(.vertical, 6)
                 }
                 if model.pendingCustomer != nil { Button("Recover customer request", action: model.recoverCustomer).frame(minHeight: 44) }
             }
+            if let notice = model.lookupCaptureNotice { Text(notice).font(.caption).foregroundStyle(PayTheme.muted) }
             if model.selectedRegister?.rewardsRedemptionAvailable == true && (screen != .customers || model.pending == nil) {
                 RewardCheckoutPanel(model: model, lookupOnly: screen == .customers)
             }

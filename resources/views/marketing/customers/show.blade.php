@@ -24,6 +24,7 @@
 
         <x-customer-commerce :snapshot="$customerCommerce ?? null" :rewards-label="$rewardsLabel" />
         <x-customer-commerce-link :profile="$profile" />
+        <a href="{{ route('customers.profile', ['profile' => $profile->id, 'tenant' => request()->attributes->get('current_tenant')?->slug]) }}">Open shared customer profile and personalized messages</a>
 
         <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6">
             <div class="flex items-start justify-between gap-4">

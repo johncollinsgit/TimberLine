@@ -43,6 +43,7 @@ final class PosService
             $rows[] = ['id' => $register->id, 'name' => $register->name, 'location' => $register->location_name,
                 'rewards_redemption_available' => app(PosRewardRedemptionSettings::class)->availableForRegister($scope),
                 'catalog_source' => $register->catalog_source, 'environment' => $scope['connection']->environment,
+                'customer_recommendations_available' => config('pos_live.customer_recommendations_enabled') === true && app(\App\Services\Tenancy\TenantModuleAccessResolver::class)->canAccess($actor['tenant_id'], 'customers'),
                 'can_search_event_customers' => config('pos_live.event_stats_enabled') === true,
                 'can_view_event_stats' => config('pos_live.event_stats_enabled') === true && in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
                 'can_create_customers' => in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),

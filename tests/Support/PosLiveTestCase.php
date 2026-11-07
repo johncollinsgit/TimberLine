@@ -10,7 +10,9 @@ class PosLiveTestCase extends \Tests\TestCase
         parent::setUp();
         if (config('database.default') === 'mysql' && getenv('POS_LIVE_DISPOSABLE_MYSQL') === '1') {
             $db = \Illuminate\Support\Facades\DB::connection();
-            if (! app()->environment('testing') || ! preg_match('/(^|_)(ci|test|testing)(_|$)/i', $db->getDatabaseName())
+            $disposableName = preg_match('/(^|_)(ci|test|testing)(_|$)/i', $db->getDatabaseName())
+                || (getenv('TEAM_WORK_DISPOSABLE_MYSQL') === '1' && str_starts_with($db->getDatabaseName(), 'codex_teams_'));
+            if (! app()->environment('testing') || ! $disposableName
                 || ! in_array($db->getConfig('host'), ['127.0.0.1', 'localhost'], true)) {
                 throw new \RuntimeException('Refusing POS fixtures outside local disposable MySQL.');
             }

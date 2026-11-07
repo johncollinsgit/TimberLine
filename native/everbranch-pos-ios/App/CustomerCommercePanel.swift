@@ -28,6 +28,11 @@ struct POSCustomerCommerce: Decodable {
         let balance: String?
         let programStatus: String
     }
+    struct Behavior: Decodable {
+        struct Rank: Decodable { let key: String; let name: String; let units: Int; let purchaseCount: Int }
+        let channels: [String: Int]; let mostPurchasedScents: [Rank]; let mostPurchasedProducts: [Rank]; let basis: String; let partial: Bool
+    }
+    let behavior: Behavior?
     let customerId: Int
     let purchases: [Purchase]
     let hasMore: Bool
@@ -47,6 +52,16 @@ struct CustomerCommercePanel: View {
                 Text("\(commerce.rewards.label): \(balance)").font(.subheadline.weight(.semibold))
             } else {
                 Text("\(commerce.rewards.label): balance unavailable").font(.subheadline)
+            }
+            if let behavior = commerce.behavior {
+                Text("Confirmed purchases: online \(behavior.channels["online"] ?? 0) · in person \(behavior.channels["in_person"] ?? 0) · channel unknown \(behavior.channels["unknown"] ?? 0)").font(.caption)
+                Text("Most purchased scents").font(.subheadline.weight(.semibold))
+                ForEach(behavior.mostPurchasedScents, id: \.key) { scent in Text("\(scent.name) · \(scent.units) units · \(scent.purchaseCount) purchases").font(.caption) }
+                if behavior.mostPurchasedScents.isEmpty { Text("Recorded scent details are not available in this history window.").font(.caption) }
+                DisclosureGroup("Most purchased products") {
+                    ForEach(behavior.mostPurchasedProducts, id: \.key) { product in Text("\(product.name) · \(product.units) units").font(.caption) }
+                }
+                Text(behavior.basis).font(.caption).foregroundStyle(PayTheme.muted)
             }
             Text("Only explicitly linked purchases are shown.").font(.caption).foregroundStyle(PayTheme.muted)
             if !commerce.issues.isEmpty { Text("Some records need review and may be missing.").font(.caption).foregroundStyle(PayTheme.muted) }

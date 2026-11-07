@@ -15,7 +15,7 @@ final class PosEventAttribution
 {
     public function __construct(private PosStore $pos, private StockLedger $stock, private CanonicalMarketingProfileResolver $identities) {}
 
-    public function capture(array $scope, MarketingProfile $profile, string $request): void
+    public function capture(array $scope, MarketingProfile $profile, string $request, bool $newRecord = false): void
     {
         if ((int) $profile->tenant_id !== (int) $scope['tenant_id']) {
             throw new PosException('scope_invalid', 403);
@@ -44,7 +44,8 @@ final class PosEventAttribution
         }
         MarketingProfileLink::query()->create(['tenant_id' => $scope['tenant_id'], 'marketing_profile_id' => $profile->id,
             'source_type' => 'pos_event_capture', 'source_id' => $this->pos->runtime().':'.$request,
-            'match_method' => 'register_customer_created', 'source_meta' => ['event_id' => (int) $match[1], 'event_name' => $event['name'],
+            'match_method' => $newRecord ? 'register_customer_created' : 'register_customer_selected',
+            'source_meta' => ['capture_evidence_version' => 1, 'record_origin' => $newRecord ? 'created' : 'selected', 'event_id' => (int) $match[1], 'event_name' => $event['name'],
                 'register_id' => $scope['register']->id, 'actor_id' => $scope['actor_id'], 'captured_local_on' => $today, 'captured_at' => now()->toIso8601String()]]);
     }
 
@@ -73,9 +74,14 @@ final class PosEventAttribution
             }
             $eventId = (int) $meta['event_id'];
             $events[$eventId] ??= ['event_id' => $eventId, 'event_name' => $meta['event_name'], 'new_customer_records' => 0,
+                'captured_customer_records' => 0, 'selected_existing_customer_records' => 0, 'record_origin_unknown' => 0,
                 'existing_before_event' => 0, 'online_customers_after_event' => 0, 'online_orders_after_event' => 0,
                 'online_net_minor' => 0, 'memberships_after_event' => 0, 'membership_timing_unknown' => 0, 'customers' => []];
             $row = &$events[$eventId];
+            $origin = ($meta['capture_evidence_version'] ?? null) === 1 && in_array($meta['record_origin'] ?? null, ['created', 'selected'], true) ? $meta['record_origin'] : 'unknown';
+            $row['captured_customer_records']++;
+            $row['selected_existing_customer_records'] += $origin === 'selected' ? 1 : 0;
+            $row['record_origin_unknown'] += $origin === 'unknown' ? 1 : 0;
             try {
                 $history = app(CustomerCommerceSnapshotService::class)->forProfile($profile, $scope['tenant_id'], 100);
             } catch (\Throwable) {
@@ -90,7 +96,7 @@ final class PosEventAttribution
 
                 continue;
             }
-            $row['new_customer_records']++;
+            $row['new_customer_records'] += $origin === 'created' ? 1 : 0;
             $online = $paid->filter(fn ($p) => $p['channel'] === 'online' && $p['currency'] === 'USD'
                 && strtotime($p['occurred_at']) > strtotime($captured) && ($p['refunded_minor'] ?? 0) < $p['amount_minor']);
             $row['online_customers_after_event'] += $online->isNotEmpty() ? 1 : 0;
@@ -104,6 +110,7 @@ final class PosEventAttribution
             $row['memberships_after_event'] += $membership['coverage_complete'] && $joined && ! $priorMembership ? 1 : 0;
             $row['membership_timing_unknown'] += $membership['coverage_complete'] ? 0 : 1;
             $row['customers'][] = ['customer_id' => (int) $profile->id, 'name' => trim($profile->first_name.' '.$profile->last_name),
+                'record_origin' => $origin, 'new_customer_record' => $origin === 'created',
                 'captured_at' => $captured, 'online_orders_after_event' => $online->count(), 'online_net_minor' => $net,
                 'membership_after_event' => $membership['coverage_complete'] ? ($joined && ! $priorMembership) : null];
             unset($row);
@@ -111,6 +118,6 @@ final class PosEventAttribution
 
         return ['events' => array_values($events), 'from' => $from, 'to' => $to, 'currency' => 'USD',
             'issues' => array_values(array_unique($issues)), 'attribution_model' => 'first_recorded_event_capture',
-            'basis' => 'Observed linked activity after event capture; association does not prove the event caused the purchase. Memberships require original subscription dates.'];
+            'basis' => 'Observed linked activity after event capture; association does not prove the event caused the purchase. New record counts require versioned created provenance; legacy capture origin and unconnected purchase history remain unknown. A new record is not proof of a first lifetime purchase. Memberships require original subscription dates.'];
     }
 }

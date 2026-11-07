@@ -42,13 +42,27 @@
         @if(data_get($snapshot, 'issues', []) !== [])
             <p class="customer-commerce-warning">Some customer links need review before their purchases can be shown.</p>
         @endif
+        @if(is_array($snapshot['behavior'] ?? null))
+            <div class="customer-commerce-rewards">
+                <h3>Customer purchase profile</h3>
+                <p>Confirmed purchases in this history window: online {{ $snapshot['behavior']['channels']['online'] }} · in person {{ $snapshot['behavior']['channels']['in_person'] }} · channel unknown {{ $snapshot['behavior']['channels']['unknown'] }}.</p>
+                <h3>Most purchased scents</h3>
+                <ul>@forelse($snapshot['behavior']['most_purchased_scents'] as $scent)<li><span>{{ $scent['name'] }}</span><span>{{ $scent['units'] }} units · {{ $scent['purchase_count'] }} purchases</span></li>@empty<li>Recorded scent details are not available in this history window.</li>@endforelse</ul>
+                <h3>Most purchased products</h3>
+                <ul>@forelse($snapshot['behavior']['most_purchased_products'] as $product)<li><span>{{ $product['name'] }}</span><span>{{ $product['units'] }} units · {{ $product['purchase_count'] }} purchases</span></li>@empty<li>Recorded item details are not available in this history window.</li>@endforelse</ul>
+                <p class="customer-commerce-coverage">{{ $snapshot['behavior']['basis'] }}</p>
+            </div>
+        @endif
         <div class="customer-commerce-table">
             <table >
                 <thead><tr ><th >Purchase</th><th >Channel</th><th >Status</th><th >Amount</th></tr></thead>
                 <tbody>
                     @forelse(data_get($snapshot, 'purchases', []) as $purchase)
                         <tr >
-                            <td >{{ $purchase['number'] }}</td>
+                            <td >{{ $purchase['number'] }}
+                                @if(!empty($purchase['location']['name']))<div>{{ $purchase['location']['name'] }}</div>@endif
+                                @foreach($purchase['items'] ?? [] as $item)<div class="customer-commerce-coverage">{{ $item['quantity'] }} × {{ $item['title'] }}</div>@endforeach
+                            </td>
                             <td >{{ ['online' => 'Online', 'in_person' => 'In person', 'unknown' => 'Not recorded'][$purchase['channel']] ?? 'Not recorded' }}</td>
                             <td >{{ ['paid' => 'Payment confirmed', 'partially_refunded' => 'Partially refunded', 'refunded' => 'Refunded', 'unverified' => 'Payment not verified'][$purchase['status']] ?? 'Payment not verified' }}</td>
                             <td >

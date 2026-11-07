@@ -465,7 +465,7 @@ struct RewardCheckoutPanel: View {
                 }
             }
             if model.pending == nil || model.canEditBasket {
-                if model.selectedRegister?.canManageCheckoutRules == true, model.selectedCustomer != nil {
+                if !lookupOnly, model.selectedRegister?.canManageCheckoutRules == true, model.selectedCustomer != nil {
                     DisclosureGroup("Owner membership verification") {
                         Text("Check the customer’s current membership account. This changes the redemption limit for up to 24 hours and does not add credit or a membership join.").font(.caption)
                         TextField("Current account record reviewed", text: $membershipReference).payInput()
@@ -668,7 +668,11 @@ struct RefundRewardsReviewView: View {
                 }
                 if let message { Section { Text(message).font(.footnote).accessibilityIdentifier("refund-review-message") } }
             }.navigationTitle("Refunded rewards").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() }.disabled(busy) } }
+                .scrollDismissesKeyboard(.interactively)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() }.disabled(busy) }
+                    ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done editing") { inputFocused = false } }
+                }
                 .disabled(busy).overlay { if busy { ProgressView() } }.task { await restorePending() }
                 .onChange(of: model.signedIn) { _, signedIn in if !signedIn { clearMemory() } }
         }

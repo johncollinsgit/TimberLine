@@ -26,6 +26,12 @@ $parseCsvInts = static function (?string $value): array {
 };
 
 return [
+    'customer_profile' => [
+        // Independent release gates: existing transport retries need acceptance review first.
+        'email_dispatch_enabled' => (bool) env('CUSTOMER_PROFILE_EMAIL_DISPATCH_ENABLED', false),
+        'sms_dispatch_enabled' => (bool) env('CUSTOMER_PROFILE_SMS_DISPATCH_ENABLED', false),
+    ],
+
     'square' => [
         'enabled' => (bool) env('MARKETING_SQUARE_ENABLED', false),
         'base_url' => env('SQUARE_BASE_URL', 'https://connect.squareup.com'),

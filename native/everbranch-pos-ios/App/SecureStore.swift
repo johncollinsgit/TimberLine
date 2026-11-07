@@ -9,6 +9,9 @@ enum SecureStore {
     static func read(_ key: String) -> Data? { try? readChecked(key) }
     static func readChecked(_ key: String) throws -> Data? {
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests"), ProcessInfo.processInfo.arguments.contains("--pos-lookup-isolation-ui-tests"), ["session", "pending-customer", "pending-enrollment", "lookup-pending-customer", "lookup-pending-enrollment"].contains(key) {
+            return UserDefaults.standard.data(forKey: "pos-lookup-test-" + key)
+        }
         // Synthetic-only fixtures exercise restart recovery without Keychain entitlements.
         if ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-ui-tests"), ["pending-sale", "quote-draft"].contains(key) {
             return UserDefaults.standard.data(forKey: "pos-test-" + key)
@@ -32,6 +35,10 @@ enum SecureStore {
     }
     static func write(_ key: String, _ value: Data?) throws {
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests"), ProcessInfo.processInfo.arguments.contains("--pos-lookup-isolation-ui-tests"), ["session", "pending-customer", "pending-enrollment", "lookup-pending-customer", "lookup-pending-enrollment"].contains(key) {
+            if let value { UserDefaults.standard.set(value, forKey: "pos-lookup-test-" + key) } else { UserDefaults.standard.removeObject(forKey: "pos-lookup-test-" + key) }
+            return
+        }
         if ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-ui-tests"), ["pending-sale", "quote-draft"].contains(key) {
             if let value { UserDefaults.standard.set(value, forKey: "pos-test-" + key) } else { UserDefaults.standard.removeObject(forKey: "pos-test-" + key) }
             return

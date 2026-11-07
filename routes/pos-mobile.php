@@ -16,6 +16,7 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
         Route::get('/customers/events', [PosController::class, 'customerEvents'])->middleware($read)->name('customers.events');
         Route::get('/customers', [PosController::class, 'customers'])->middleware($read)->name('customers.search');
         Route::post('/customers/{profile}/membership-review', [PosController::class, 'verifyMembership'])->middleware($write)->name('customers.membership-review');
+        Route::get('/customers/{profile}/recommendations', \App\Http\Controllers\Mobile\PosCustomerRecommendationController::class)->whereNumber('profile')->middleware($read)->name('customers.recommendations');
         Route::get('/customers/{profile}/commerce', [PosController::class, 'customerCommerce'])->whereNumber('profile')->middleware($read)->name('customers.commerce');
         Route::post('/customers', [PosController::class, 'createCustomer'])->middleware($write)->name('customers.create');
         Route::get('/customer-requests/{requestId}', [PosController::class, 'customerRequest'])->whereUuid('requestId')->middleware($read)->name('customers.request');

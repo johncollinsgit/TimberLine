@@ -47,6 +47,7 @@ class MarketingEmailExecutionService
                 'processed' => 0,
                 'sent' => 0,
                 'failed' => 0,
+                'unknown' => 0,
                 'skipped' => 0,
                 'dry_run' => 0,
             ];
@@ -57,6 +58,7 @@ class MarketingEmailExecutionService
                 'processed' => 0,
                 'sent' => 0,
                 'failed' => 0,
+                'unknown' => 0,
                 'skipped' => 0,
                 'dry_run' => 0,
             ];
@@ -81,6 +83,7 @@ class MarketingEmailExecutionService
             'processed' => 0,
             'sent' => 0,
             'failed' => 0,
+            'unknown' => 0,
             'skipped' => 0,
             'dry_run' => 0,
         ];
@@ -98,6 +101,8 @@ class MarketingEmailExecutionService
                 $summary['sent']++;
             } elseif (($result['outcome'] ?? '') === 'failed') {
                 $summary['failed']++;
+            } elseif (($result['outcome'] ?? '') === 'unknown') {
+                $summary['unknown']++;
             } else {
                 $summary['skipped']++;
             }
@@ -218,6 +223,16 @@ class MarketingEmailExecutionService
         $subjectTemplate = trim((string) (data_get($recipient->recommendation_snapshot, 'email_subject') ?: $campaign->name ?: 'Timberline Update'));
         $subject = trim($this->templateRenderer->renderCampaignMessage($campaign, $subjectTemplate, $profile));
         $rendered = $this->templateRenderer->renderCampaignMessage($campaign, $messageText, $profile);
+        $profileHtml = null;
+        if ($campaign->source_label === 'customer_profile') {
+            $prepared = app(CustomerOutreachDraft::class)->emailContent($campaign, $profile, $messageText);
+            if (! $prepared) {
+                return ['outcome' => 'failed', 'reason' => 'customer_profile_draft_changed', 'dry_run' => $dryRun];
+            }
+            $subject = $prepared['subject'];
+            $rendered = $prepared['body'];
+            $profileHtml = $prepared['html'];
+        }
         $dispatchContext = is_array($dispatchContext) ? $dispatchContext : $this->resolveProfileDispatchContext($profile);
         $dispatchTenantId = $dispatchContext['tenant_id'];
         $storeKey = $dispatchContext['store_key'];
@@ -236,7 +251,41 @@ class MarketingEmailExecutionService
             return ['outcome' => 'failed', 'reason' => 'missing_subject', 'dry_run' => $dryRun];
         }
 
-        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext, $dispatchTenantId, $storeKey, $batchId, $sourceLabel, $subject): MarketingEmailDelivery {
+        $blocked = [];
+        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext, $dispatchTenantId, $storeKey, $batchId, $sourceLabel, $subject, $messageText, $dryRun, &$blocked): ?MarketingEmailDelivery {
+            $decisionAudit = null;
+            if ($campaign->source_label === 'customer_profile') {
+                $scope = (int) $campaign->tenant_id;
+                app(CustomerAccountFence::class)->lock($scope);
+                \App\Models\Tenant::whereKey($scope)->lockForUpdate()->firstOrFail();
+                $freshCampaign = MarketingCampaign::forTenantId($scope)->whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+                $freshProfile = \App\Models\MarketingProfile::forTenantId($scope)->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+                $freshRecipient = MarketingCampaignRecipient::whereKey($recipient->id)->where('campaign_id', $freshCampaign->id)->where('marketing_profile_id', $freshProfile->id)->lockForUpdate()->firstOrFail();
+                $decision = app(CustomerOutreachExplanation::class)->dispatchDecision($freshCampaign, $freshProfile);
+                if (! in_array($freshRecipient->status, ['approved', 'scheduled'], true) || $freshRecipient->channel !== 'email'
+                    || in_array($freshCampaign->status, ['paused', 'completed', 'archived'], true)
+                    || ($freshRecipient->scheduled_for && $freshRecipient->scheduled_for->isFuture())) {
+                    $decision['reason_codes'][] = 'outreach_recipient_not_sendable';
+                }
+                if (trim((string) ($freshProfile->normalized_email ?: $freshProfile->email)) !== $email
+                    || (int) $dispatchTenantId !== $scope) {
+                    $decision['reason_codes'][] = 'outreach_customer_contact_changed';
+                }
+                $currentBody = trim((string) $freshRecipient->variant?->message_text);
+                if ($currentBody !== $messageText || ! app(CustomerOutreachDraft::class)->emailContent($freshCampaign, $freshProfile, $currentBody)
+                    || $freshCampaign->message_subject !== $subject) {
+                    $decision['reason_codes'][] = 'outreach_prepared_content_changed';
+                }
+                $decision['reason_codes'] = array_values(array_unique($decision['reason_codes']));
+                $decision['allowed'] = $decision['reason_codes'] === [];
+                $decisionAudit = app(CustomerOutreachExplanation::class)->recordDispatchDecision($freshCampaign, $freshProfile, $decision, $actorId);
+                if (! $decision['allowed']) {
+                    $blocked = $decision['reason_codes'];
+
+                    return null;
+                }
+                $recipient->setRawAttributes($freshRecipient->getAttributes(), true);
+            }
             $recipient->forceFill([
                 'status' => 'sending',
                 'send_attempt_count' => ((int) $recipient->send_attempt_count) + 1,
@@ -261,6 +310,7 @@ class MarketingEmailExecutionService
                     'provider_resolution' => $providerContext,
                 ],
                 'metadata' => [
+                    ...($campaign->source_label === 'customer_profile' ? ['purpose' => 'promotional', 'dry_run' => $dryRun, 'outreach_decision_audit_id' => $decisionAudit] : []),
                     'tenant_id' => $dispatchTenantId,
                     'customer_id' => $profile->id,
                     'store_key' => $storeKey,
@@ -277,9 +327,13 @@ class MarketingEmailExecutionService
                     'provider_using_fallback_config' => (bool) ($providerContext['using_fallback_config'] ?? false),
                 ],
             ]);
-        });
+        }, 3);
+        if (! $delivery) {
+            return ['outcome' => 'skipped', 'reason' => 'customer_outreach_policy_blocked', 'reason_codes' => $blocked, 'dry_run' => $dryRun];
+        }
 
         $send = $this->sendGridEmailService->sendEmail($email, $subject, $rendered, [
+            ...($profileHtml !== null ? ['html_body' => $profileHtml] : []),
             'dry_run' => $dryRun,
             'tenant_id' => $dispatchTenantId,
             'delivery_id' => $delivery->id,
@@ -313,6 +367,19 @@ class MarketingEmailExecutionService
         ]);
 
         $success = (bool) ($send['success'] ?? false);
+        $simulation = $dryRun || (bool) ($send['dry_run'] ?? false);
+        if ($campaign->source_label === 'customer_profile' && $simulation) {
+            $delivery->forceFill(['metadata' => [...((array) $delivery->metadata), 'dry_run' => true]])->save();
+        }
+        if ($campaign->source_label === 'customer_profile' && ! $simulation
+            && (($success && ! filled($send['message_id'] ?? null))
+                || (! $success && (($send['retryable'] ?? false) || ($send['status'] ?? '') === 'unknown'
+                    || preg_match('/exception|timeout|transport|connection/i', (string) ($send['error_code'] ?? '')))))) {
+            $delivery->forceFill(['status' => 'unknown', 'raw_payload' => [...((array) $delivery->raw_payload), 'provider_result' => $send]])->save();
+            $recipient->forceFill(['status' => 'sending', 'last_status_note' => 'Provider acceptance is unconfirmed. Reconcile this original delivery before another attempt.'])->save();
+
+            return ['outcome' => 'unknown', 'reason' => 'provider_outcome_unconfirmed', 'delivery_id' => $delivery->id, 'dry_run' => false];
+        }
         $provider = trim((string) ($send['provider'] ?? 'sendgrid')) ?: 'sendgrid';
         $delivery->forceFill([
             'provider' => $provider,

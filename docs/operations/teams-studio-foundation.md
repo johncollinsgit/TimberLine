@@ -143,6 +143,12 @@ reconciliation and supported physical-device acceptance remain release gates.
 
 ## Shared Profit Panel and customer lookup (source candidate, November 7)
 
+The subsequent shared customer-profile increment is documented in
+`shared-customer-profiles.md`, `customer-event-value.md` and
+`customer-profile-outreach-policy.md`. Those documents distinguish implemented
+profile/preferences/value/recommendation/review surfaces from remaining live
+provider, experiment, history and physical-device acceptance.
+
 - Teams and the native Pay register read one `EventCommerceReport`. An owner
   reviews an existing tenant stock/Pay event association; title/date similarity
   cannot create that association. One explicit canonical occurrence owns its

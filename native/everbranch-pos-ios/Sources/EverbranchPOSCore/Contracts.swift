@@ -38,6 +38,7 @@ public struct Register: Decodable, Identifiable, Sendable {
     public let customAmountEnabled: Bool?
     public let canViewEventStats: Bool?
     public let canSearchEventCustomers: Bool?
+    public let customerRecommendationsAvailable: Bool?
     public let canManageInventory: Bool?
     public let canManageCheckoutRules: Bool?
 }
@@ -225,4 +226,27 @@ public struct EventStats: Decodable, Sendable {
     public let eventId: Int; public let teamsEventId: String; public let eventName: String
     public let sales: Sales; public let profitability: Profitability?; public let budget: Budget?; public let travel: Travel
     public let annualHistory: [Year]; public let reviewItems: [String]; public let basis: String
+}
+
+
+public struct CustomerRecommendations: Decodable, Sendable {
+    public struct Item: Decodable, Sendable {
+        public struct Score: Decodable, Sendable { public let purchaseCount: Int; public let units: Int }
+        public let itemId: String; public let revision: String; public let rank: Int; public let recommended: Bool; public let score: Score
+    }
+    public struct Coverage: Decodable, Sendable {
+        public let hasMorePurchases: Bool; public let observedEligiblePurchaseCount: Int; public let preferenceVersion: String?
+    }
+    public let customerId: Int; public let tenantId: Int; public let registerId: String
+    public let items: [Item]; public let orderedItemIds: [String]; public let coverage: Coverage; public let basis: String
+
+    public func matches(customer: Int, tenant: Int, register: String, catalog: [CatalogItem]) -> Bool {
+        guard customerId == customer, tenantId == tenant, registerId == register, items.count == catalog.count, orderedItemIds.count == catalog.count,
+              Set(orderedItemIds).count == catalog.count, Set(items.map(\.itemId)).count == items.count,
+              Set(orderedItemIds) == Set(catalog.map(\.itemId)), Set(items.map(\.rank)) == Set(items.indices.map { $0 + 1 }) else { return false }
+        let revisions = Dictionary(uniqueKeysWithValues: catalog.map { ($0.itemId, $0.revision) })
+        let ranks = Dictionary(uniqueKeysWithValues: orderedItemIds.enumerated().map { ($0.element, $0.offset + 1) })
+        return items.allSatisfy { revisions[$0.itemId] == $0.revision && ranks[$0.itemId] == $0.rank
+            && $0.score.purchaseCount >= 0 && $0.score.units >= 0 && (!$0.recommended || ($0.score.purchaseCount > 0 && $0.score.units > 0)) }
+    }
 }
