@@ -32,7 +32,7 @@ final class PosVerifiedRewardReservationAuthority implements PosRewardReservatio
         if (! is_array($terms) || ! is_int($terms['profile_id'] ?? null) || ! is_int($terms['amount_minor'] ?? null)
             || $terms['amount_minor'] !== $amountMinor || ! is_int($terms['eligible_minor'] ?? null)
             || ! is_int($subtotal) || ! is_int($discount) || $discount < $amountMinor
-            || $terms['eligible_minor'] !== $subtotal - ($discount - $amountMinor)
+            || $terms['eligible_minor'] !== $subtotal - ($discount - $amountMinor) - ($snapshot['terms']['custom_discounted_minor'] ?? 0)
             || (int) ($snapshot['customer']['id'] ?? 0) !== $terms['profile_id']) {
             throw new PosException('reward_quote_invalid', 409);
         }

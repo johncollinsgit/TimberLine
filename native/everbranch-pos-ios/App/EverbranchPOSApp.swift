@@ -15,7 +15,7 @@ enum PayTheme {
     static let line = Color(red: 0.86, green: 0.86, blue: 0.79)
 }
 
-private struct PayButtonStyle: ButtonStyle {
+struct PayButtonStyle: ButtonStyle {
     var primary = true
     @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
@@ -76,7 +76,7 @@ private struct BasketSwipeRemove<Content: View>: View {
     }
 }
 
-private extension View {
+extension View {
     func payInput() -> some View {
         font(.body).padding(14).background(PayTheme.paper, in: RoundedRectangle(cornerRadius: 10))
             .textInputAutocapitalization(.words)
@@ -495,6 +495,9 @@ struct POSView: View {
                 }
                 if model.pendingCustomer != nil { Button("Recover customer request", action: model.recoverCustomer).frame(minHeight: 44) }
             }
+            if model.selectedRegister?.rewardsRedemptionAvailable == true && (screen != .customers || model.pending == nil) {
+                RewardCheckoutPanel(model: model, lookupOnly: screen == .customers)
+            }
         }
     }
 
@@ -525,16 +528,20 @@ struct POSView: View {
                         HStack { Text("Discounts"); Spacer(); Text("−" + POSMoney.display(discount)).monospacedDigit() }.font(.subheadline)
                     }
                     if let tax = sale.taxMinor { HStack { Text("Tax"); Spacer(); Text(POSMoney.display(tax)).monospacedDigit() }.font(.subheadline) }
+                    if let rewards = sale.rewardsRedeemedMinor, rewards > 0 { Text("Rewards used: \(POSMoney.display(rewards))").font(.subheadline) }
                     if let customer = sale.customer { Label(customer.name, systemImage: "person.crop.circle.fill") }
                     Text(sale.canonicalConfirmation ? "Payment confirmed" : sale.operationalReviewClosed == true ? "Uncollected sale closed after review" : sale.state == "quoted" ? "Review before payment" : sale.state == "cancelled" ? "Payment cancelled" : sale.state == "failed" ? "Payment unsuccessful" : "Payment not confirmed")
                         .font(.headline)
                     if model.canEditBasket { Button("Edit basket", action: model.editBasket).frame(minHeight: 44) }
+                    if model.canEditBasket && model.selectedRegister?.rewardsRedemptionAvailable == true {
+                        RewardCheckoutPanel(model: model, lookupOnly: false)
+                    }
                     if model.savedBasketUnavailable { Text("This saved basket can’t be edited on this phone. Check the original sale or close this screen.").font(.subheadline).foregroundStyle(PayTheme.muted) }
                     if sale.collectionReady != true && sale.state == "quoted" { Text(sale.inventoryAuthority == "everbranch" ? "Updating availability or awaiting register approval. You can check this basket again; no payment has started." : "Payment collection is awaiting setup or approval.").font(.subheadline).foregroundStyle(PayTheme.muted) }
                     if sale.canonicalConfirmation && !sale.receiptAvailable { Text("Payment received. Order finalization needs review. Do not charge again.").font(.subheadline) }
                     if model.pending?.collectionRequested == false && sale.state == "quoted" {
-                        if !model.tapReady { Button("Set up Tap to Pay", action: model.setup).buttonStyle(PayButtonStyle(primary: false)) }
-                        Button("Charge \(POSMoney.display(sale.amountMinor))", action: model.pay).buttonStyle(PayButtonStyle()).disabled(!model.tapReady || sale.collectionReady != true)
+                        if !model.tapReady && sale.amountMinor > 0 { Button("Set up Tap to Pay", action: model.setup).buttonStyle(PayButtonStyle(primary: false)) }
+                        Button(sale.amountMinor == 0 ? "Complete rewards purchase" : "Charge \(POSMoney.display(sale.amountMinor))", action: model.pay).buttonStyle(PayButtonStyle()).disabled((!model.tapReady && sale.amountMinor > 0) || sale.collectionReady != true)
                     }
                     if model.canEditBasket && sale.customer == nil { Button("Add customer") { contactOnly = false; showingCustomer = true }.buttonStyle(PayButtonStyle(primary: false)) }
                     if sale.canonicalConfirmation && model.receipt?.customer == nil { Button("Add customer") { contactOnly = false; showingCustomer = true }.buttonStyle(PayButtonStyle(primary: false)) }
@@ -608,8 +615,12 @@ struct POSView: View {
                 }
                 if model.sale?.managerRefundsAllowed == true {
                     PayCard(title: "Manager refund", icon: "arrow.uturn.backward") {
+                        if receipt.amountMinor == 0 {
+                            Button("Return redeemed rewards", action: model.returnRewardsOnly).buttonStyle(PayButtonStyle(primary: false)).disabled((receipt.rewardsReturnedMinor ?? 0) > 0)
+                        } else {
                         TextField("Refund amount", text: $model.refundAmount).payInput().keyboardType(.decimalPad).focused($inputFocused)
                         Button(model.pending?.refundRequestID == nil ? "Request refund" : "Check original refund", action: model.refund).buttonStyle(PayButtonStyle(primary: false))
+                        }
                         Text("Refunds do not restock merchandise automatically.").font(.caption).foregroundStyle(PayTheme.muted)
                     }
                 }

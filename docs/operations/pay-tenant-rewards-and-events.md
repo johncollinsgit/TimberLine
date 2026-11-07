@@ -1,8 +1,9 @@
 # Pay tenant rewards, customer capture and event follow-through
 
 November 6, 2026 source candidate. This is a focused extension to the shared Pay,
-customer-commerce and rewards services. End-to-end in-person redemption remains
-unfinished; this document is a release handoff, not a live-readiness claim.
+customer-commerce and rewards services. QR, saved-contact authorization, owner
+policy publication and rewards-only purchases are implemented behind independent
+rollout gates. Installation and physical acceptance remain separate release steps.
 
 ## Tenant rules
 
@@ -26,7 +27,10 @@ requires the tenant's normal policy and register review.
 `pos_candle_cash_redemption.member_max_minor` is optional and versioned with the
 standard cap. The customer disclosure and proof use the customer's effective cap.
 A native active subscription agreement with an explicit canonical-customer link
-can establish membership; an old tag or a title cannot. Reservation and start
+can establish membership. An assigned owner/admin can also record a current
+account review for at most 24 hours (and no later than event tax expiry), or revoke
+it from the customer rewards panel. This changes only the cap, never a balance or
+join metric; an old tag or a title cannot grant the larger limit. Reservation and start
 checks re-read eligibility. Existing ledger and authorization gates remain.
 
 ## Operator location
@@ -94,7 +98,8 @@ generations through mapped subscription members. Native billing activation of an
 existing subscription is not treated as a new join. Missing source timing is shown
 as unknown. Modern Forestry currently has no connected Recharge read feed, so
 membership-join coverage must be connected and accepted before claiming complete
-Candle Club attribution or membership eligibility.
+Candle Club attribution. Until then the larger cap requires current native billing
+evidence or the explicit short-lived owner account review above.
 
 ## Manual counted stock
 
@@ -112,10 +117,34 @@ quantities are inferred. Counted setup requires protected release before activat
 
 ## Remaining release work
 
-- The existing policy publisher and customer/POS QR lifecycle remain hard-disabled.
-  Finish their shared payment-start/publication fence and complete customer-facing
-  authorization, reservation, cancellation and refund acceptance before enabling
-  in-person redemption. Tier settings alone do not make checkout available.
+- Protected CI/release precedes enabling `POS_IN_PERSON_REWARDS_ENABLED`,
+  `POS_DURABLE_START_CLAIMS_ENABLED` and `POS_VERIFIED_CUSTOMER_LINKING_ENABLED`.
+  Tenant policy publication and the reviewed register binding are also required.
+  Publication locks actual tenant program/settings rows; the final native handoff
+  rechecks those rows, the identity fence, wallet hold and membership cap inside
+  its original journal transaction. Neither publication nor a scanned code starts
+  a payment. Independent MySQL processes exercise both acquisition orders.
+- Customer QR: live terms → explicit cap consent → a 120-second, one-use code →
+  cashier preview → explicit amount → original quote hold → confirmed payment.
+  Raw codes stay in memory and are removed on background/disappearance; they are
+  absent from persisted drafts. Edit/cancel releases the original unstarted hold;
+  another authorization is required to spend it on a different quote.
+- Browser alternative: `/apps/forestry/rewards/show-code` through the existing
+  Shopify app proxy. Only a fresh exact proxy signature and signed customer ID
+  authorize a linked wallet. Private consent nonces bind store, subject and terms;
+  anonymous/new-account sessions without a proxy customer ID cannot spend a wallet.
+- Saved-contact alternative: the customer requests a one-time code to the account's
+  saved email/phone. A bounded six-attempt, five-minute challenge precedes the same
+  private authorization. A durable send intent survives delivery uncertainty;
+  retries do not send a second message. Contact possession is not marketing consent.
+- Existing wallet links require an authenticated customer request, independent
+  owner review, and separate explicit finalization. Imports, bulk model writes and
+  customer merge writers share a durable tenant identity fence with issuance and
+  payment admission. Conflicts fail closed; balances are never copied or moved.
+- A basket fully covered by rewards completes atomically with wallet and stock
+  evidence and no Square descriptor or charge. Its receipt identifies Everbranch
+  rewards as the source. Owner return restores the original wallet once and does
+  not restock inventory. Zero paid spend earns no percentage or purchase bonus.
 - Card-based repeat recognition requires a supported provider identity adapter and
   current provider review. The Square SDK returns payment details after collection;
   a card tap cannot select a customer and reduce that same charge beforehand.

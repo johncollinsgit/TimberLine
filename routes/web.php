@@ -2068,6 +2068,8 @@ Route::prefix('shopify/marketing')
     ->middleware(['marketing.storefront.verify', 'throttle:120,1'])
     ->group(function () {
         Route::get('/account', [MarketingPublicEventController::class, 'customerDashboard'])->name('account');
+        Route::get('/rewards/show-code', [\App\Http\Controllers\PosStorefrontRewardsController::class, 'show'])->name('rewards.show-code');
+        Route::post('/rewards/show-code', [\App\Http\Controllers\PosStorefrontRewardsController::class, 'act'])->withoutMiddleware([VerifyCsrfToken::class])->name('rewards.show-code.issue');
         Route::post('/message', [MarketingPublicEventController::class, 'sendCustomerMessage'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('message');
@@ -2170,6 +2172,8 @@ Route::prefix('shopify/marketing/v1')
     ->middleware(['marketing.storefront.verify', 'throttle:120,1'])
     ->group(function () {
         Route::get('/account', [MarketingPublicEventController::class, 'customerDashboard'])->name('account');
+        Route::get('/rewards/show-code', [\App\Http\Controllers\PosStorefrontRewardsController::class, 'show'])->name('rewards.show-code');
+        Route::post('/rewards/show-code', [\App\Http\Controllers\PosStorefrontRewardsController::class, 'act'])->withoutMiddleware([VerifyCsrfToken::class])->name('rewards.show-code.issue');
         Route::post('/message', [MarketingPublicEventController::class, 'sendCustomerMessage'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('message');

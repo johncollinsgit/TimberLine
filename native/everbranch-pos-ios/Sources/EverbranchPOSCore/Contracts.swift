@@ -25,6 +25,7 @@ public enum POSAuthorization {
     }
 }
 public struct Register: Decodable, Identifiable, Sendable {
+    public let rewardsRedemptionAvailable: Bool?
     public let id: String
     public let name: String
     public let location: String
@@ -88,6 +89,7 @@ public struct SaleLine: Decodable, Sendable {
     public let components: [SaleComponent]?
 }
 public struct Sale: Decodable, Sendable {
+    public let rewardsRedeemedMinor: Int?
     public let customer: SaleCustomer?
     public let collectionReady: Bool?
     public let saleId: String

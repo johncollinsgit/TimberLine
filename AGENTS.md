@@ -11,6 +11,9 @@
 - Macon uses current physical counts entered by the owner in the app. Never infer
   quantities from packing totals or another event. Keep count mode scoped to its
   reviewed pool and preserve original transaction snapshots.
+- QR and saved-contact codes are ephemeral authorization, not paid evidence.
+  Preserve the shared identity/policy admission fence, original holds and retries.
+  Rewards-only purchases must never fabricate a Square charge.
 - Read `docs/operations/pay-tenant-rewards-and-events.md` for this source candidate's
   coverage and release gaps; source tests do not establish a live checkout.
 

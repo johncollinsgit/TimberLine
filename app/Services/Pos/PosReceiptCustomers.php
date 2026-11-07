@@ -8,7 +8,6 @@ use App\Models\MarketingProfile;
 use App\Services\Inventory\StockLedger;
 use App\Services\Marketing\CanonicalMarketingProfileResolver;
 use App\Services\Marketing\CustomerCommerceSnapshotService;
-use App\Services\PaymentsCore\PaymentJournal;
 use Illuminate\Support\Facades\Schema;
 
 /** An audited association is separate from the immutable financial snapshot. */
@@ -53,7 +52,7 @@ final class PosReceiptCustomers
 
     public function attach(array $scope, object $sale, array $snapshot, array $input): array
     {
-        $operation = $sale->attempt_id ? app(PaymentJournal::class)->get($scope['tenant_id'], $sale->attempt_id) : null;
+        $operation = app(PosSalePaymentEvidence::class)->read($sale, app(PosService::class)->snapshot($sale));
         if ($sale->state !== 'succeeded' || ! $operation || $operation['state'] !== 'succeeded' || ! $operation['provider_id']
             || $operation['sale_id'] !== $sale->id || $operation['request_id'] !== $sale->payment_request_id
             || $operation['kind'] !== 'payment' || (int) $operation['amount_minor'] !== (int) $sale->amount_minor

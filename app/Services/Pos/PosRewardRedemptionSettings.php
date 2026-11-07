@@ -87,4 +87,15 @@ final class PosRewardRedemptionSettings
             return false;
         }
     }
+
+    public function availableForRegister(array $scope): bool
+    {
+        try {
+            $this->forRegister($scope);
+
+            return config('pos_live.durable_start_claims_enabled', false) === true;
+        } catch (PosException) {
+            return false;
+        }
+    }
 }

@@ -41,6 +41,7 @@ final class PosService
             }
             $authorized[] = $register;
             $rows[] = ['id' => $register->id, 'name' => $register->name, 'location' => $register->location_name,
+                'rewards_redemption_available' => app(PosRewardRedemptionSettings::class)->availableForRegister($scope),
                 'catalog_source' => $register->catalog_source, 'environment' => $scope['connection']->environment,
                 'can_create_customers' => in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
                 'can_manage_checkout_rules' => ! config('enterprise.runtime') && in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
@@ -164,12 +165,13 @@ final class PosService
         $scope['customer'] = $customer;
         $terms = $this->catalog->terms($scope, $input);
         $id = bin2hex(random_bytes(16));
-        $sale = new SaleSnapshot($id, 'usd', $terms['lines']);
+        $rewardOnly = $redemption !== null && ($terms['total_minor'] ?? null) === 0;
+        $sale = new SaleSnapshot($id, 'usd', $terms['lines'], $rewardOnly);
         $snapshot = ['binding' => $binding->snapshot(), 'connection_id' => $scope['connection']->id,
             'development_acceptance_id' => app(PosDevelopmentAcceptance::class)->session($scope['register'], $scope['connection'], $scope)['id'] ?? null,
             'build' => $scope['build'], 'device_id' => $scope['device_id'], 'input_hash' => $hash, 'terms' => $terms, 'customer' => $customer ?? ($input['customer'] ?? null), 'customer_rewards' => $rewards,
             'register_name' => $scope['register']->name, 'location_name' => $scope['register']->location_name,
-            'sale' => $sale->snapshot(), 'configuration' => $settings];
+            'sale' => $sale->snapshot(), 'configuration' => $settings, ...($rewardOnly ? ['reward_only' => true] : [])];
         $claim = $terms['source'] === 'website_invoice' ? Contract::hash(['invoice', $terms['source_order_id'], $terms['invoice_hash']]) : null;
         try {
             $this->store->db->transaction(function () use ($scope, $input, $register, $id, $sale, $snapshot, $claim, $terms, $customer, $redemption, $proof): void {
@@ -216,6 +218,9 @@ final class PosService
             $sale = $this->sale($scope, $id);
             $snapshot = $this->snapshot($sale);
             $binding = MerchantBinding::restore($snapshot['binding']);
+            if ($sale->state === 'succeeded' && ($snapshot['reward_only'] ?? false)) {
+                return $this->projection($sale);
+            }
             if ($sale->attempt_id || $this->journal->findByRequest($scope['tenant_id'], $sale->payment_request_id)) {
                 // Never issue another native collection descriptor on an HTTP retry.
                 return $this->inspect($register, $id);
@@ -269,6 +274,13 @@ final class PosService
                     if (! is_string($rewardTerms['policy_version'] ?? null) || ! hash_equals($policy['version'], $rewardTerms['policy_version'])) {
                         throw new PosException('in_person_rewards_policy_changed', 409);
                     }
+                }
+                if (($snapshot['reward_only'] ?? false) === true) {
+                    app(StockPosCommerce::class)->assertOffersCurrent($scope, $snapshot);
+                    $completed = app(PosRewardOnlySale::class)->complete($scope, $sale, $snapshot, $binding);
+                    app(StockPosCommerce::class)->queuePublications($scope['tenant_id']);
+
+                    return $this->projection($completed);
                 }
                 $nativeClaim = null;
                 if (config('pos_live.durable_start_claims_enabled', false) === true) {
@@ -431,6 +443,9 @@ final class PosService
             $this->store->rows('sales', $scope['tenant_id'])->where('id', $id)->update(['payment_hint' => $this->store->encrypt(['payment_id' => $hint])]);
         }
         $snapshot = $this->snapshot($sale);
+        if (($snapshot['reward_only'] ?? false) && app(PosRewardOnlySale::class)->evidence($sale, $snapshot)) {
+            return $this->projection($sale);
+        }
         $operation = $this->journal->findByRequest($scope['tenant_id'], $sale->payment_request_id);
         if (! $operation) {
             throw new PosException('payment_not_started');
@@ -505,6 +520,15 @@ final class PosService
         }, 3);
     }
 
+    public function returnRewardsOnly(string $register, string $id): array
+    {
+        $scope = $this->access->register($register, 'refund');
+        $sale = $this->sale($scope, $id);
+        app(PosRewardOnlySale::class)->restore($scope, $sale, $this->snapshot($sale));
+
+        return $this->receipt($register, $id);
+    }
+
     public function refund(string $register, string $id, array $input): array
     {
         $scope = $this->access->register($register, 'refund');
@@ -545,7 +569,10 @@ final class PosService
             throw new PosException('receipt_not_confirmed');
         }
         $snapshot = app(PosReceiptCustomers::class)->decorate($sale, $this->snapshot($sale));
-        $operation = $this->journal->get($scope['tenant_id'], $sale->attempt_id);
+        $operation = app(PosSalePaymentEvidence::class)->read($sale, $original);
+        if (! $operation) {
+            throw new PosException('paid_receipt_required');
+        }
         $refunds = $this->store->db->table('payment_core_operations')->where('tenant_id', $scope['tenant_id'])
             ->where('original_id', $sale->attempt_id)->where('kind', 'refund')->get(['id', 'state', 'amount_minor']);
 
@@ -553,8 +580,10 @@ final class PosService
             'merchant_location' => $snapshot['location_name'], 'register_name' => $snapshot['register_name'],
             'lines' => $snapshot['terms']['display'], 'amount_minor' => (int) $sale->amount_minor, 'currency' => 'USD',
             'subtotal_minor' => $snapshot['terms']['subtotal_minor'] ?? null, 'discount_minor' => $snapshot['terms']['discount_minor'] ?? 0, 'tax_minor' => $snapshot['terms']['tax_minor'] ?? null,
+            'rewards_redeemed_minor' => $snapshot['terms']['pos_candle_cash']['amount_minor'] ?? 0,
             'applied_offers' => $snapshot['terms']['applied_offers'] ?? [],
-            'payment_reference' => $operation['provider_id'], 'customer' => $snapshot['customer'],
+            'payment_reference' => $operation['provider_id'], 'payment_source' => $operation['source'] ?? 'square',
+            'rewards_returned_minor' => $operation['rewards_returned_minor'] ?? 0, 'customer' => $snapshot['customer'],
             'payment_details' => app(PosReceiptDetails::class)->forSale($sale) ?: null,
             'rewards' => app(PosReceiptRewards::class)->forSale($sale, $snapshot),
             'contact' => ($association = app(PosReceiptCustomers::class)->association($sale)) ? ($this->store->decrypt($association->contact) ?: null) : null,
@@ -565,7 +594,7 @@ final class PosService
                     : ($this->store->rows('outbox', $scope['tenant_id'])->where('sale_id', $id)->where('effect_key', 'like', 'customer_%')->whereNotIn('state', ['completed', 'review'])->exists() ? 'pending' : 'processed'))),
             'refunds' => $refunds->map(fn ($r) => ['id' => $r->id, 'state' => $r->state, 'amount_minor' => (int) $r->amount_minor])->all(),
             'refunded_minor' => max((int) $refunds->where('state', 'succeeded')->sum('amount_minor'), app(PosCustomerPurchases::class)->confirmedRefunds($sale)),
-            'settlement_status' => 'provider_reconciliation_required'];
+            'settlement_status' => ($original['reward_only'] ?? false) ? 'no_external_payment' : 'provider_reconciliation_required'];
     }
 
     public function sale(array $scope, string $id): object
@@ -587,7 +616,7 @@ final class PosService
         $binding = MerchantBinding::restore($snapshot['binding']);
         if (! hash_equals($sale->snapshot_hash, Contract::hash($snapshot)) || $binding->runtimeId !== $this->store->runtime()
             || $binding->tenantId !== (int) $sale->tenant_id || $binding->registerId !== $sale->register_id
-            || (new SaleSnapshot($sale->id, $sale->currency, $snapshot['sale']['lines']))->amountMinor !== (int) $sale->amount_minor) {
+            || (new SaleSnapshot($sale->id, $sale->currency, $snapshot['sale']['lines'], ($snapshot['reward_only'] ?? false) === true))->amountMinor !== (int) $sale->amount_minor) {
             throw new PosException('stored_sale_integrity_error', 503);
         }
 
@@ -616,6 +645,7 @@ final class PosService
 
         return ['customer' => isset($snapshot['customer']['id']) ? $snapshot['customer'] : null,
             'sale_id' => $sale->id, 'request_id' => $sale->request_id, 'state' => $sale->state,
+            'rewards_redeemed_minor' => $snapshot['terms']['pos_candle_cash']['amount_minor'] ?? 0,
             'sdk_attempt_id' => $sale->sdk_attempt_id,
             'parked_for_review' => $sale->state === 'unknown' && $this->store->rows('events', (int) $sale->tenant_id)->where('sale_id', $sale->id)->where('code', 'payment_parked_for_review')->exists(),
             'stock_state' => $sale->stock_state, 'amount_minor' => (int) $sale->amount_minor, 'currency' => 'USD',

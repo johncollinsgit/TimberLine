@@ -20,6 +20,10 @@ final class PosEventAttribution
         if ((int) $profile->tenant_id !== (int) $scope['tenant_id']) {
             throw new PosException('scope_invalid', 403);
         }
+        if (MarketingProfileLink::query()->forTenantId($scope['tenant_id'])->where('marketing_profile_id', $profile->id)
+            ->where('source_type', 'pos_event_capture')->exists()) {
+            return;
+        }
         $settings = $this->pos->decrypt($scope['register']->configuration);
         if (! isset($settings['inventory_pool_id'])) {
             return;

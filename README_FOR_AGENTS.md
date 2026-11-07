@@ -4037,3 +4037,18 @@ unchanged server snapshot. Ask Everbranch reuses existing provider/approval/caps
 and explicit versioned budget review. No provider activation, financial action,
 public billing or production readiness follows from these source changes. See
 `docs/operations/trajectory-runbook.md` for scope, privacy and validation.
+
+
+## Pay QR and wallet completion (November 6, 2026 source candidate)
+
+The newer `docs/operations/pay-tenant-rewards-and-events.md` supersedes the November
+1 source-gap list for QR, existing-wallet finalization, cross-writer identity and
+zero-tender purchases. Customer codes require fresh explicit cap consent. Saved
+contact possession uses a bounded one-time challenge and the same one-use proof.
+All identity writers and final payment admission share the tenant database fence;
+policy publication serializes on the actual setting rows. No provider I/O occurs
+inside the journal transaction. Fully redeemed purchases have internal wallet and
+stock evidence, no Square charge, and one-time rewards restoration. Short-lived
+owner membership review changes only redemption limits, never join statistics.
+The independent birthday lane retains its existing rollout and acceptance gates.
+Signed development artifacts do not establish distribution or physical acceptance.

@@ -11,6 +11,12 @@ use Illuminate\Support\Str;
 uses(Tests\Support\PosLiveTestCase::class);
 
 beforeEach(function (): void {
+    if (DB::connection()->getDriverName() === 'mysql') {
+        foreach (['2026_10_16_120000_create_subscription_recharge_evidence.php', '2026_10_27_210000_create_subscription_pilot_evidence.php',
+            '2026_10_27_223000_create_subscription_pilot_execution.php', '2026_10_30_220000_create_subscription_billing_ledger.php'] as $migration) {
+            (require database_path('migrations/'.$migration))->up();
+        }
+    }
     config(['pos_live.runtime_id' => 'fixture_runtime', 'pos_live.in_person_rewards_enabled' => true]);
     $this->tenant = Tenant::create(['name' => 'Policy fixture', 'slug' => 'policy-'.Str::random(10), 'status' => 'active']);
     foreach (['candle_cash_program_config' => ['redeem_increment_dollars' => 10],
@@ -74,7 +80,7 @@ it('uses separate tenant member caps only with an active authoritative subscript
     expect(app(\App\Services\Pos\PosMembershipEvidence::class)->history($profile)['coverage_complete'])->toBeFalse();
     $generation = (string) \Illuminate\Support\Str::uuid();
     $connection = \App\Models\SubscriptionRechargeConnection::create(['tenant_id' => $this->tenant->id, 'shopify_store_id' => $shop->id,
-        'provider_store_id' => 'fictional', 'platform' => 'shopify', 'identifier' => 'fictional.myshopify.com', 'status' => 'verified',
+        'provider_store_id' => 'fictional-'.$this->tenant->id, 'platform' => 'shopify', 'identifier' => 'fictional-'.$this->tenant->id.'.myshopify.com', 'status' => 'verified',
         'last_complete_sync_at' => now(), 'sync_state' => ['last_complete' => ['generation_id' => $generation]]]);
     $credential = \App\Models\SubscriptionRechargeCredentialRevision::create(['tenant_id' => $this->tenant->id,
         'connection_id' => $connection->id, 'revision' => 1, 'credentials' => [], 'token_id' => 'fixture',

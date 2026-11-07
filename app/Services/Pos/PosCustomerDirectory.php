@@ -177,7 +177,7 @@ final class PosCustomerDirectory
 
     public function linkSale(array $scope, string $sale, int $profileId): void
     {
-        MarketingProfile::query()->forTenantId($scope['tenant_id'])->whereKey($profileId)->lockForUpdate()->firstOrFail();
+        $profile = MarketingProfile::query()->forTenantId($scope['tenant_id'])->whereKey($profileId)->lockForUpdate()->firstOrFail();
         if ($this->profile($scope['tenant_id'], $profileId)->id !== $profileId) {
             throw new PosException('customer_selection_changed');
         }
@@ -185,6 +185,7 @@ final class PosCustomerDirectory
             'source_type' => 'pos_sale', 'source_id' => $this->store->runtime().':'.$sale,
             'match_method' => 'register_selected', 'source_meta' => ['actor_id' => $scope['actor_id'],
                 'register_id' => $scope['register']->id, 'selected_at' => now()->toIso8601String()]]);
+        app(PosEventAttribution::class)->capture($scope, $profile, $sale);
     }
 
     private function summary(MarketingProfile $profile): array

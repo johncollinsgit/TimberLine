@@ -11,8 +11,11 @@ membership reporting. Original subscription dates are required for join metrics.
 A newly reviewed POS binding can require counted stock per pool while older pools
 retain their untracked policy. Owners can adjust available products through the
 product menu. Read `docs/operations/pay-tenant-rewards-and-events.md` for current
-source coverage and remaining release work. Policy publication, QR redemption,
-phone installation and physical acceptance remain incomplete.
+source coverage and remaining release work. QR and saved-contact redemption,
+explicit wallet-link finalization, coordinated policy publication, owner membership
+review and zero-tender wallet/stock completion are implemented. The shared durable
+identity fence covers import/merge writers and final descriptor admission. Phone
+installation and physical acceptance remain outstanding.
 
 ## Contractor management in the public campus demo (November 5)
 

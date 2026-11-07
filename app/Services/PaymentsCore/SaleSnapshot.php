@@ -13,7 +13,7 @@ final readonly class SaleSnapshot
 
     public array $lines;
 
-    public function __construct(public string $saleId, public string $currency, array $lines)
+    public function __construct(public string $saleId, public string $currency, array $lines, bool $allowRewardOnlyZero = false)
     {
         Contract::id($saleId);
         if (! preg_match('/^[a-z]{3}$/D', $currency) || count($lines) < 1 || count($lines) > 50) {
@@ -34,10 +34,10 @@ final readonly class SaleSnapshot
                 throw new DomainException('Invalid line semantics.');
             }
             $ids[$line['line_id']] = true;
-            Contract::minor($line['unit_amount_minor']);
+            Contract::minor($line['unit_amount_minor'], $allowRewardOnlyZero);
             Contract::minor($line['tax_amount_minor'], true);
             $amount += $line['quantity'] * $line['unit_amount_minor'] + $line['tax_amount_minor'];
-            Contract::minor($amount);
+            Contract::minor($amount, $allowRewardOnlyZero);
         }
         usort($lines, fn (array $a, array $b) => strcmp($a['line_id'], $b['line_id']));
         $this->lines = array_map(fn (array $line) => ['line_id' => $line['line_id'], 'kind' => $line['kind'],

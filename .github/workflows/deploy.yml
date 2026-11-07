@@ -338,7 +338,7 @@ jobs:
           POS_DISPOSABLE_MYSQL: '1'
           COMMERCE_RULES_DISPOSABLE_MYSQL: '1'
           POS_LIVE_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Integration/CommerceRuleSetMySqlRecoveryTest.php tests/Integration/PosCandleCashMySqlRecoveryTest.php tests/Integration/PosShopifyDiscountMySqlRecoveryTest.php tests/Integration/PosBirthdayAnnualHoldMySqlRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/CommerceRuleSetMySqlRecoveryTest.php tests/Integration/PosCandleCashMySqlRecoveryTest.php tests/Integration/CustomerAccountFenceMySqlRecoveryTest.php tests/Integration/PosShopifyDiscountMySqlRecoveryTest.php tests/Integration/PosBirthdayAnnualHoldMySqlRecoveryTest.php --compact
 
       - name: Rehearse prior production schema upgrade
         run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"

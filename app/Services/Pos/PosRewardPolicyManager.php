@@ -33,10 +33,9 @@ final class PosRewardPolicyManager
             'register_reviewed_version' => $config['pos_candle_cash_reviewed_version'] ?? null,
             'program_version' => $program['version'] ?? null,
             'management_enabled' => config('pos_live.reward_policy_management_enabled', false) === true,
-            // This switch alone does not establish customer authorization or
-            // the end-to-end payment lifecycle. Availability stays hard off.
             'redemption_enabled' => config('pos_live.in_person_rewards_enabled', false) === true,
-            'redemption_available' => false, 'publication_available' => false];
+            'redemption_available' => $this->available([...$scope, 'register' => $register]),
+            'publication_available' => config('pos_live.reward_policy_management_enabled', false) === true];
     }
 
     public function save(array $scope, array $input, string $expected): array
@@ -68,9 +67,41 @@ final class PosRewardPolicyManager
             throw new PosException('reward_policy_confirmation_required', 422);
         }
 
-        // Payment start and policy publication do not yet share a durable fence.
-        // A switch cannot safely override this until that race is resolved.
-        throw new PosException('reward_policy_publication_unavailable', 503);
+        return DB::transaction(function () use ($scope, $draftVersion, $previousPublished, $previousRegister, $programVersion): array {
+            $tenant = $scope['tenant_id'];
+            $this->lockTenant($tenant);
+            // These existing rows are also locked by the final native handoff. All setting writers, including bulk SQL, respect the row locks.
+            $programRows = TenantMarketingSetting::query()->forTenantId($tenant)
+                ->whereIn('key', [...PosRewardPaymentAdmission::PROGRAM_KEYS, PosRewardRedemptionSettings::SETTING_KEY, self::DRAFT_KEY])
+                ->orderBy('key')->lockForUpdate()->get();
+            $register = $this->pos->rows('registers', $tenant)->where('id', $scope['register']->id)->where('active', true)->lockForUpdate()->firstOrFail();
+            $before = $this->get($scope);
+            if ($before['draft_version'] !== $draftVersion || $before['published_version'] !== $previousPublished
+                || $before['register_reviewed_version'] !== $previousRegister || $before['program_version'] !== $programVersion) {
+                throw new PosException('reward_policy_changed', 409);
+            }
+            $draft = $before['draft'];
+            $program = $this->rewards->policy($tenant);
+            if ($draft['enabled'] && (! $program || $programRows->whereIn('key', PosRewardPaymentAdmission::PROGRAM_KEYS)->count() !== 3
+                || ($program['access']['launch_state'] ?? null) !== 'published' || ($program['access']['test_mode'] ?? false))) {
+                throw new PosException('published_live_tenant_program_required', 422);
+            }
+            $setting = array_diff_key($draft, ['channel' => true]);
+            $version = $draft['enabled'] ? app(PosRewardRedemptionSettings::class)->version($setting, $programVersion)
+                : Contract::hash(['disabled' => $draft, 'program_version' => $programVersion]);
+            $setting += ['reviewed_version' => $version, 'reviewed_by' => $scope['actor_id'], 'reviewed_at' => now()->toIso8601String()];
+            $this->write($tenant, PosRewardRedemptionSettings::SETTING_KEY, $setting);
+            $config = $this->pos->decrypt($register->configuration);
+            $config['pos_candle_cash_reviewed_version'] = $version;
+            if (($config['customer_rewards']['enabled'] ?? false) === true && $programVersion !== null) {
+                $config['customer_rewards']['policy_version'] = $programVersion;
+            }
+            $this->pos->rows('registers', $tenant)->where('id', $register->id)->update(['configuration' => $this->pos->encrypt($config)]);
+            $this->pos->event($tenant, 'reward_policy', 'reward_policy_published', ['actor_id' => $scope['actor_id'], 'register_id' => $register->id,
+                'before' => $before['published_version'], 'after' => $version, 'program_version' => $programVersion]);
+
+            return $this->get($scope);
+        }, 3);
     }
 
     private function draft(int $tenant): array
@@ -138,6 +169,20 @@ final class PosRewardPolicyManager
     {
         if (config('pos_live.reward_policy_management_enabled', false) !== true) {
             throw new PosException('reward_policy_management_disabled', 503);
+        }
+    }
+
+    private function available(array $scope): bool
+    {
+        if (config('pos_live.durable_start_claims_enabled', false) !== true) {
+            return false;
+        }
+        try {
+            app(PosRewardRedemptionSettings::class)->forRegister($scope);
+
+            return true;
+        } catch (PosException) {
+            return false;
         }
     }
 }

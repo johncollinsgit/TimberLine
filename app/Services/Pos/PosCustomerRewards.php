@@ -90,13 +90,16 @@ final class PosCustomerRewards
         if (($snapshot['customer_rewards']['historical_review_required'] ?? false) === true) {
             throw new PosException('customer_rewards_historical_review');
         }
-        $payment = $this->journal->get((int) $sale->tenant_id, $sale->attempt_id);
-        if ($sale->state !== 'succeeded' || $payment['state'] !== 'succeeded' || $payment['kind'] !== 'payment'
+        $payment = app(PosSalePaymentEvidence::class)->read($sale, app(PosService::class)->snapshot($sale));
+        if (! $payment || $sale->state !== 'succeeded' || $payment['state'] !== 'succeeded' || $payment['kind'] !== 'payment'
             || $payment['sale_id'] !== $sale->id || ! $payment['provider_id']
             || $payment['request_id'] !== $sale->payment_request_id || (int) $payment['amount_minor'] !== (int) $sale->amount_minor
             || Contract::hash($payment['binding']) !== Contract::hash($snapshot['binding'])) {
             throw new PosException('paid_evidence_required');
         }
+        if (($snapshot['reward_only'] ?? false) === true) {
+            return;
+        } // No eligible paid spend or purchase bonus on a fully redeemed basket.
         if (($payment['binding']['environment'] ?? '') !== 'live') {
             return; // Sandbox collection can never change a real rewards balance.
         }

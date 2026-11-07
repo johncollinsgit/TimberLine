@@ -30,19 +30,19 @@ final class PosExistingWalletReview
     public function __construct(private PosStore $store, private PosCustomerDirectory $customers) {}
 
     /** The caller must resolve the subject from a fresh authenticated Shopify session. */
-    public function request(int $tenant, string $shopifySubject, string $requestId): array
+    public function request(int $tenant, string $shopifySubject, string $requestId, string $storeKey = 'retail'): array
     {
         $this->enabled();
-        if ($tenant < 1 || ! Str::isUuid($requestId) || ! $this->subjectValid($shopifySubject)) {
+        if ($tenant < 1 || ! Str::isUuid($requestId) || ! $this->subjectValid($shopifySubject) || ! preg_match('/^[a-z0-9_-]{1,64}$/D', $storeKey)) {
             throw new PosException('wallet_review_invalid', 422);
         }
-        $reference = substr(Contract::hash(['existing-wallet-review', $this->store->runtime(), $tenant, $shopifySubject, strtolower($requestId)]), 0, 32);
+        $reference = substr(Contract::hash(['existing-wallet-review', $this->store->runtime(), $tenant, $shopifySubject, strtolower($requestId), ...($storeKey !== 'retail' ? [$storeKey] : [])]), 0, 32);
 
-        return $this->store->db->transaction(function () use ($tenant, $shopifySubject, $reference): array {
+        return $this->store->db->transaction(function () use ($tenant, $shopifySubject, $reference, $storeKey): array {
             Tenant::query()->whereKey($tenant)->lockForUpdate()->firstOrFail();
             $existing = $this->record($tenant, $reference, 'wallet_link_requested');
             if (! $existing) {
-                $existing = ['subject' => $shopifySubject, 'expires_at' => now()->addDay()->toIso8601String(),
+                $existing = ['subject' => $shopifySubject, 'store_key' => $storeKey, 'expires_at' => now()->addDay()->toIso8601String(),
                     'disclosure' => self::CUSTOMER_DISCLOSURE, 'disclosure_version' => self::CUSTOMER_DISCLOSURE_VERSION,
                     'disclosure_hash' => self::customerDisclosureHash()];
                 $this->store->event($tenant, $reference, 'wallet_link_requested', $existing);
@@ -51,23 +51,24 @@ final class PosExistingWalletReview
                 throw new PosException('wallet_review_unavailable', 404);
             }
 
-            return $this->customerStatus($tenant, $reference, $shopifySubject);
+            return $this->customerStatus($tenant, $reference, $shopifySubject, $storeKey);
         }, 3);
     }
 
     /** Status reveals no profile or wallet information to the customer. */
-    public function customerStatus(int $tenant, string $reference, string $shopifySubject): array
+    public function customerStatus(int $tenant, string $reference, string $shopifySubject, string $storeKey = 'retail'): array
     {
         $this->enabled();
         $request = $this->requested($tenant, $reference);
-        if (! $this->subjectValid($shopifySubject) || ! hash_equals($request['subject'], $shopifySubject)) {
+        if (! $this->subjectValid($shopifySubject) || ! hash_equals($request['subject'], $shopifySubject) || ($request['store_key'] ?? 'retail') !== $storeKey) {
             throw new PosException('wallet_review_unavailable', 404);
         }
         $expired = now()->greaterThanOrEqualTo($request['expires_at']);
         $reviewed = (bool) $this->record($tenant, $reference, 'wallet_link_reviewed');
+        $linked = (bool) $this->record($tenant, $reference, 'wallet_link_finalized');
 
-        return ['reference' => $reference, 'state' => $expired ? 'expired' : ($reviewed ? 'review_recorded' : 'awaiting_review'),
-            'linked' => false, 'finalization_available' => false, 'expires_at' => $request['expires_at']];
+        return ['reference' => $reference, 'state' => $linked ? 'linked' : ($expired ? 'expired' : ($reviewed ? 'review_recorded' : 'awaiting_review')),
+            'linked' => $linked, 'finalization_available' => true, 'expires_at' => $request['expires_at']];
     }
 
     /** The UI may show this to the assigned tenant owner; the code is not an identity proof. */
@@ -78,11 +79,12 @@ final class PosExistingWalletReview
         $tenant = (int) $scope['tenant_id'];
         $request = $this->requested($tenant, $reference);
         $review = $this->record($tenant, $reference, 'wallet_link_reviewed');
+        $linked = (bool) $this->record($tenant, $reference, 'wallet_link_finalized');
 
         return ['reference' => $reference, 'shopify_subject' => $request['subject'], 'expires_at' => $request['expires_at'],
-            'state' => now()->greaterThanOrEqualTo($request['expires_at']) ? 'expired' : ($review ? 'review_recorded' : 'awaiting_review'),
+            'state' => $linked ? 'linked' : (now()->greaterThanOrEqualTo($request['expires_at']) ? 'expired' : ($review ? 'review_recorded' : 'awaiting_review')),
             'reviewed_profile_id' => $review['profile_id'] ?? null, 'disclosure' => self::DISCLOSURE, 'disclosure_hash' => self::reviewerDisclosureHash(),
-            'linked' => false, 'finalization_available' => false];
+            'linked' => $linked, 'finalization_available' => true];
     }
 
     public function review(array $scope, string $reference, int $profileId, string $evidence, bool $confirmed, string $disclosureHash): array
@@ -117,6 +119,65 @@ final class PosExistingWalletReview
 
             return $this->reviewDetails($scope, $reference);
         }, 3);
+    }
+
+    public function finalize(array $scope, string $reference, int $profileId, bool $confirmed): array
+    {
+        $this->enabled();
+        $this->admin($scope);
+        if (! $confirmed) {
+            throw new PosException('wallet_review_confirmation_required', 422);
+        }
+        $tenant = (int) $scope['tenant_id'];
+
+        return app(\App\Services\Marketing\CustomerAccountFence::class)->forTenant($tenant, function () use ($scope, $reference, $profileId, $tenant) {
+            $request = $this->requested($tenant, $reference);
+            $review = $this->record($tenant, $reference, 'wallet_link_reviewed');
+            if (! $review || (int) $review['profile_id'] !== $profileId || $review['subject'] !== $request['subject']) {
+                throw new PosException('wallet_review_confirmation_required', 409);
+            }
+            if ($this->record($tenant, $reference, 'wallet_link_finalized')) {
+                return $this->reviewDetails($scope, $reference);
+            }
+            if (now()->greaterThanOrEqualTo($request['expires_at'])) {
+                throw new PosException('wallet_review_expired', 409);
+            }
+            $profile = \App\Models\MarketingProfile::query()->forTenantId($tenant)->whereKey($profileId)->lockForUpdate()->firstOrFail();
+            if ($this->customers->profile($tenant, $profileId)->id !== $profileId || $profile->archived_at || $profile->merged_at) {
+                throw new PosException('customer_identity_review_required', 409);
+            }
+            $accounts = app(PosVerifiedCustomerAccount::class);
+            $gid = $request['subject'];
+            $storeKey = $request['store_key'] ?? 'retail';
+            if (! $accounts->mappingsConsistent($profile, $storeKey, $gid, false)) {
+                throw new PosException('customer_account_mapping_conflict', 409);
+            }
+            preg_match('~/([1-9][0-9]*)$~D', $gid, $match);
+            $key = $storeKey.':'.$match[1];
+            $prior = \App\Models\MarketingProfileLink::query()->forTenantId($tenant)->where('source_type', PosVerifiedCustomerAccount::SOURCE)
+                ->where('source_id', $key)->lockForUpdate()->first();
+            if ($prior && (int) $prior->marketing_profile_id !== $profileId) {
+                throw new PosException('customer_account_mapping_conflict', 409);
+            }
+            $meta = ['verification_method' => 'reviewed_existing_customer_account', 'shopify_store_key' => $storeKey,
+                'shopify_customer_gid' => $gid, 'verified_profile_id' => $profileId, 'verified_at' => now()->toIso8601String(),
+                'review_reference' => $reference, 'reviewed_by' => (int) $scope['actor_id'],
+                'signature' => $accounts->signature($tenant, $profileId, $storeKey, $gid)];
+            foreach ([PosVerifiedCustomerAccount::SOURCE, 'shopify_customer'] as $source) {
+                $link = \App\Models\MarketingProfileLink::query()->updateOrCreate(['tenant_id' => $tenant, 'source_type' => $source, 'source_id' => $key],
+                    ['marketing_profile_id' => $profileId, 'source_meta' => $meta, 'match_method' => 'owner_reviewed_authenticated_account', 'confidence' => 1]);
+                if ($source === PosVerifiedCustomerAccount::SOURCE) {
+                    $attestation = (int) $link->id;
+                }
+            }
+            if (! $accounts->verified($profile, $attestation)) {
+                throw new PosException('customer_identity_review_required', 409);
+            }
+            $this->store->event($tenant, $reference, 'wallet_link_finalized', ['profile_id' => $profileId, 'account_link_id' => $attestation,
+                'subject' => $gid, 'actor_id' => (int) $scope['actor_id'], 'reviewed_by' => $review['reviewed_by']]);
+
+            return $this->reviewDetails($scope, $reference);
+        });
     }
 
     private function requested(int $tenant, string $reference): array

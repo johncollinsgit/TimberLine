@@ -18,23 +18,26 @@ final class PosMembershipEvidence
     public function active(MarketingProfile $profile): ?array
     {
         if (! Schema::hasTable('subscription_billing_agreements') || ! Schema::hasTable('subscription_pilot_members')) {
-            return null;
+            return app(PosMembershipVerification::class)->active($profile);
         }
         $tenant = (int) $profile->tenant_id;
-        foreach (SubscriptionPilotMember::query()->forTenantId($tenant)->whereNotNull('marketing_profile_id')->where('status', 'active')->limit(1000)->get() as $member) {
+        $locked = \Illuminate\Support\Facades\DB::transactionLevel() > 0;
+        foreach (SubscriptionPilotMember::query()->forTenantId($tenant)->whereNotNull('marketing_profile_id')->where('status', 'active')
+            ->orderBy('id')->limit(1000)->when($locked, fn ($query) => $query->lockForUpdate())->get() as $member) {
             $canonical = app(CanonicalMarketingProfileResolver::class)->byId($tenant, (int) $member->marketing_profile_id);
             if (! $canonical || (int) $canonical->id !== (int) $profile->id || $member->billing_owner !== 'everbranch') {
                 continue;
             }
             $agreement = SubscriptionBillingAgreement::query()->forTenantId($tenant)->where('member_id', $member->id)
-                ->where('status', 'active')->whereNotNull('activated_at')->whereNotNull('method_verified_at')->first();
+                ->where('status', 'active')->whereNotNull('activated_at')->whereNotNull('method_verified_at')
+                ->when($locked, fn ($query) => $query->lockForUpdate())->first();
             if ($agreement) {
                 return ['source' => 'subscription_billing_agreement', 'id' => $agreement->public_id,
                     'revision' => (int) $agreement->revision, 'observed_at' => now()->toIso8601String()];
             }
         }
 
-        return null;
+        return app(PosMembershipVerification::class)->active($profile);
     }
 
     /** Only provider-created dates with an explicit tenant/store/customer mapping establish a join. */

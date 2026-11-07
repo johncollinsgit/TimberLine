@@ -30,7 +30,7 @@ final class PosReceiptEmail
         }
         $sale = $this->sales->sale($scope, $saleId);
         $snapshot = $this->sales->snapshot($sale);
-        $payment = $sale->attempt_id ? $this->journal->get($scope['tenant_id'], $sale->attempt_id) : null;
+        $payment = app(PosSalePaymentEvidence::class)->read($sale, $snapshot);
         if ($sale->state !== 'succeeded' || ! $payment || $payment['kind'] !== 'payment' || $payment['state'] !== 'succeeded'
             || ! is_string($payment['provider_id'] ?? null) || $payment['provider_id'] === ''
             || $payment['sale_id'] !== $sale->id || $payment['request_id'] !== $sale->payment_request_id
