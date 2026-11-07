@@ -1,3 +1,19 @@
+## Tenant rewards, event attribution and physical counts (November 6; source candidate)
+
+Pay can recommend an already authorized event register from the signed-in user's
+current Asana Events or native Teams assignment. Shared customer history includes
+recorded locations and products. Tenant policy supports optional percentage
+purchase earning and a separate verified-member redemption cap. Receipt email
+and text are explicit choices; contact suggestions alone do not request delivery.
+New event customer records retain first-capture provenance for later online and
+membership reporting. Original subscription dates are required for join metrics.
+
+A newly reviewed POS binding can require counted stock per pool while older pools
+retain their untracked policy. Owners can adjust available products through the
+product menu. Read `docs/operations/pay-tenant-rewards-and-events.md` for current
+source coverage and remaining release work. Policy publication, QR redemption,
+phone installation and physical acceptance remain incomplete.
+
 ## Contractor management in the public campus demo (November 5)
 
 The paired standalone dashboard has a Contractors main tab, concise copy and the

@@ -49,6 +49,8 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
             Route::get('/refund-rewards-review/status', [PosController::class, 'refundRewardsReviewStatus'])->middleware($read)->name('sales.refund-rewards-review.status');
             Route::post('/refund-rewards-review', [PosController::class, 'approveRefundRewardsReview'])->middleware($write)->name('sales.refund-rewards-review.approve');
             Route::get('/receipt', [PosController::class, 'receipt'])->middleware($read)->name('sales.receipt');
+            Route::get('/receipt/sms', [PosController::class, 'receiptSmsStatus'])->middleware($read)->name('sales.receipt.sms.status');
+            Route::post('/receipt/sms', [PosController::class, 'sendReceiptSms'])->middleware($write)->name('sales.receipt.sms.send');
             Route::get('/receipt/email', [PosController::class, 'receiptEmailStatus'])->middleware($read)->name('sales.receipt.email.status');
             Route::post('/receipt/email', [PosController::class, 'sendReceiptEmail'])->middleware($write)->name('sales.receipt.email.send');
             Route::post('/receipt/customer', [PosController::class, 'attachCustomer'])->middleware($write)->name('sales.receipt.customer');

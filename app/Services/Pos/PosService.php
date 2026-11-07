@@ -29,6 +29,7 @@ final class PosService
     {
         $actor = $this->access->actor();
         $rows = [];
+        $authorized = [];
         foreach ($this->store->rows('registers', $actor['tenant_id'])->where('active', true)->orderBy('name')->limit(100)->get() as $register) {
             try {
                 $scope = $this->access->register($register->id);
@@ -38,6 +39,7 @@ final class PosService
                 }
                 throw $error;
             }
+            $authorized[] = $register;
             $rows[] = ['id' => $register->id, 'name' => $register->name, 'location' => $register->location_name,
                 'catalog_source' => $register->catalog_source, 'environment' => $scope['connection']->environment,
                 'can_create_customers' => in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
@@ -50,7 +52,7 @@ final class PosService
                 'blockers' => $this->readiness->blockers($register, $scope['connection'], null, $scope)];
         }
 
-        return ['registers' => $rows, 'runtime_id' => $this->store->runtime(), 'square_application_id' => config('pos_live.square_application_id')];
+        return ['registers' => $rows, 'operator_context' => app(PosOperatorContext::class)->resolve($actor, $authorized), 'runtime_id' => $this->store->runtime(), 'square_application_id' => config('pos_live.square_application_id')];
     }
 
     public function catalog(string $register): array
@@ -554,7 +556,9 @@ final class PosService
             'applied_offers' => $snapshot['terms']['applied_offers'] ?? [],
             'payment_reference' => $operation['provider_id'], 'customer' => $snapshot['customer'],
             'payment_details' => app(PosReceiptDetails::class)->forSale($sale) ?: null,
+            'rewards' => app(PosReceiptRewards::class)->forSale($sale, $snapshot),
             'contact' => ($association = app(PosReceiptCustomers::class)->association($sale)) ? ($this->store->decrypt($association->contact) ?: null) : null,
+            'suggested_contact' => app(PosReceiptCustomers::class)->suggestedContact($sale, $snapshot),
             'inventory_status' => $sale->stock_state,
             'customer_rewards_status' => ! ($snapshot['customer_rewards']['enabled'] ?? false) ? 'not_configured' : (empty($snapshot['customer']['id']) ? 'not_associated'
                 : ($this->store->rows('outbox', $scope['tenant_id'])->where('sale_id', $id)->where('effect_key', 'like', 'customer_%')->where('state', 'review')->exists() ? 'review_required'

@@ -36,7 +36,7 @@ final class PosRewardCustomerProof
         if (! app(PosVerifiedCustomerAccount::class)->verified($profile, $accountLinkId)) {
             throw new PosException('customer_identity_review_required', 409);
         }
-        $policy = app(PosRewardRedemptionSettings::class)->tenant((int) $profile->tenant_id);
+        $policy = app(PosRewardRedemptionSettings::class)->forProfile($profile);
         if (($accepted['max_minor'] ?? null) !== $policy['max_minor']
             || ! is_string($accepted['policy_version'] ?? null) || ! hash_equals($policy['version'], $accepted['policy_version'])
             || ($accepted['disclosure_version'] ?? null) !== self::DISCLOSURE_VERSION) {

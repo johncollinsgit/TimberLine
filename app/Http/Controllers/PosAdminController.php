@@ -27,6 +27,17 @@ final class PosAdminController extends Controller
         return response()->json($this->admin->report($this->admin->scope(), $input['from'].' 00:00:00', $input['to'].' 23:59:59'), 200, ['Cache-Control' => 'private, no-store']);
     }
 
+    public function events(Request $request)
+    {
+        $input = $request->validate(['from' => 'sometimes|date_format:Y-m-d', 'to' => 'sometimes|date_format:Y-m-d|after_or_equal:from']);
+        $scope = $this->admin->scope();
+        $report = app(\App\Services\Pos\PosEventAttribution::class)->report($scope,
+            $input['from'] ?? now()->subDays(90)->toDateString(), $input['to'] ?? now()->toDateString());
+
+        return response()->view('pos.events', ['report' => $report, 'tenantSlug' => $request->query('tenant')], 200,
+            ['Cache-Control' => 'private, no-store', 'Referrer-Policy' => 'no-referrer']);
+    }
+
     public function adjust(Request $request, string $item)
     {
         $input = $request->validate(['request_id' => 'required|uuid', 'delta' => 'required|integer|between:-1000000,1000000', 'reason' => 'required|string|min:3|max:200']);

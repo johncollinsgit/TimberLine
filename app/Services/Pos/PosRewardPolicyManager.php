@@ -92,20 +92,24 @@ final class PosRewardPolicyManager
         }
 
         // Explicit ordering keeps optimistic versions stable across MySQL JSON key ordering.
-        return ['enabled' => $value['enabled'] ?? null, 'max_minor' => $value['max_minor'] ?? null,
+        return [...(isset($value['member_max_minor']) ? ['member_max_minor' => $value['member_max_minor']] : []), 'enabled' => $value['enabled'] ?? null, 'max_minor' => $value['max_minor'] ?? null,
             'refund_policy' => $value['refund_policy'] ?? null, 'reviewed_version' => $value['reviewed_version'] ?? null,
             'reviewed_by' => $value['reviewed_by'] ?? null, 'reviewed_at' => $value['reviewed_at'] ?? null];
     }
 
     private function validateDraft(array $draft): array
     {
-        if (array_diff(array_keys($draft), ['enabled', 'max_minor', 'channel', 'refund_policy']) || ! is_bool($draft['enabled'] ?? null)
+        if (array_diff(array_keys($draft), ['enabled', 'max_minor', 'member_max_minor', 'channel', 'refund_policy']) || ! is_bool($draft['enabled'] ?? null)
             || ! is_int($draft['max_minor'] ?? null) || $draft['max_minor'] < 1 || $draft['max_minor'] > Contract::MAX_MINOR
             || ($draft['channel'] ?? null) !== 'in_person' || ($draft['refund_policy'] ?? null) !== 'restore_full_review_partial') {
             throw new PosException('reward_policy_invalid', 422);
         }
 
-        return ['enabled' => $draft['enabled'], 'max_minor' => $draft['max_minor'], 'channel' => 'in_person',
+        if (isset($draft['member_max_minor']) && (! is_int($draft['member_max_minor']) || $draft['member_max_minor'] < 1 || $draft['member_max_minor'] > Contract::MAX_MINOR)) {
+            throw new PosException('reward_policy_invalid', 422);
+        }
+
+        return [...(isset($draft['member_max_minor']) ? ['member_max_minor' => $draft['member_max_minor']] : []), 'enabled' => $draft['enabled'], 'max_minor' => $draft['max_minor'], 'channel' => 'in_person',
             'refund_policy' => 'restore_full_review_partial'];
     }
 

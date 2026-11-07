@@ -281,6 +281,7 @@ struct ExistingWalletReviewView: View {
 }
 
 private struct RedemptionDraft: Decodable {
+    let memberMaxMinor: Int?
     let enabled: Bool
     let maxMinor: Int
     let channel: String
@@ -288,6 +289,7 @@ private struct RedemptionDraft: Decodable {
 }
 
 private struct RedemptionPublished: Decodable {
+    let memberMaxMinor: Int?
     let enabled: Bool
     let maxMinor: Int
     let refundPolicy: String
@@ -312,6 +314,7 @@ struct RewardsRedemptionSettingsView: View {
     @State private var settings: RedemptionSettings?
     @State private var enabled = false
     @State private var amount = ""
+    @State private var memberAmount = ""
     @State private var busy = false
     @State private var message: String?
     @FocusState private var amountFocused: Bool
@@ -338,6 +341,9 @@ struct RewardsRedemptionSettingsView: View {
                         Toggle("Allow in-person redemption in this policy", isOn: $enabled).disabled(!settings.managementEnabled)
                         TextField("Maximum per sale", text: $amount).keyboardType(.decimalPad).focused($amountFocused)
                             .disabled(!settings.managementEnabled).accessibilityIdentifier("rewards-cap")
+                        TextField("Member maximum per sale (optional)", text: $memberAmount).keyboardType(.decimalPad)
+                            .disabled(!settings.managementEnabled).accessibilityIdentifier("rewards-member-cap")
+                        Text("The member limit requires verified active subscription membership. Leave blank to use the standard limit.").font(.caption)
                         Text("This is a per-sale maximum, not a customer's balance.").font(.caption)
                         Text("Channel: in person")
                         Text("Full refund: restore redeemed rewards. Partial refund: review required.").font(.caption)
@@ -365,6 +371,7 @@ struct RewardsRedemptionSettingsView: View {
     private var dirty: Bool {
         guard let settings else { return false }
         return enabled != settings.draft.enabled || (try? POSMoney.minor(amount)) != settings.draft.maxMinor
+            || (memberAmount.isEmpty ? nil : try? POSMoney.minor(memberAmount)) != settings.draft.memberMaxMinor
     }
     private func apply(_ result: RedemptionSettings) -> Bool {
         guard result.draft.channel == "in_person", result.draft.refundPolicy == "restore_full_review_partial",
@@ -372,6 +379,7 @@ struct RewardsRedemptionSettingsView: View {
             settings = nil; message = "This policy cannot be reviewed in this version of Pay."; return false
         }
         settings = result; enabled = result.draft.enabled; amount = String(format: "%d.%02d", result.draft.maxMinor / 100, result.draft.maxMinor % 100)
+        memberAmount = result.draft.memberMaxMinor.map { String(format: "%d.%02d", $0 / 100, $0 % 100) } ?? ""
         return true
     }
     private func load() async {
@@ -386,10 +394,15 @@ struct RewardsRedemptionSettingsView: View {
     private func save() async {
         guard let base = model.base, let settings, settings.managementEnabled, !busy else { return }
         guard let minor = try? POSMoney.minor(amount) else { message = "Enter a per-sale amount greater than zero, with up to two decimal places."; return }
+        var draft: [String: Any] = ["enabled": enabled, "max_minor": minor, "channel": "in_person", "refund_policy": "restore_full_review_partial"]
+        if !memberAmount.isEmpty {
+            guard let memberMinor = try? POSMoney.minor(memberAmount) else { message = "Enter a valid member maximum."; return }
+            draft["member_max_minor"] = memberMinor
+        }
         amountFocused = false; busy = true; defer { busy = false }
         do {
             let result: RedemptionSettings = try await model.api.request(base + "/reward-redemption/draft", method: "POST", body: [
-                "draft": ["enabled": enabled, "max_minor": minor, "channel": "in_person", "refund_policy": "restore_full_review_partial"],
+                "draft": draft,
                 "expected_draft_version": settings.draftVersion
             ])
             guard model.base == base, result.draft.enabled == enabled, result.draft.maxMinor == minor else {

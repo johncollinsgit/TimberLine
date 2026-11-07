@@ -5,7 +5,7 @@ import SwiftUI
     var body: some Scene { WindowGroup { EverbranchRegisterView() } }
 }
 
-enum POSScreen { case setup, checkout }
+enum POSScreen { case setup, checkout, customers }
 
 enum PayTheme {
     static let ink = Color(red: 0.063, green: 0.243, blue: 0.196)
@@ -136,6 +136,7 @@ struct POSView: View {
                             .accessibilityIdentifier("status-message")
                     }
                     if !model.signedIn { signIn }
+                    else if screen == .customers { customer }
                     else if model.pending != nil && !isSetup { recovery }
                     else if choosingRegister || model.selectedRegister == nil { registerPicker }
                     else if isSetup { setup }
@@ -146,7 +147,7 @@ struct POSView: View {
             .scrollDismissesKeyboard(.interactively)
             .background(PayTheme.paper)
             .foregroundStyle(PayTheme.ink)
-            .navigationTitle(!model.signedIn ? (screen == .checkout ? "Sign in to checkout" : "Welcome") : isSetup ? "Account & Tap to Pay" : model.pending != nil ? "Current sale" : model.selectedRegister == nil ? "Choose your business" : "Checkout")
+            .navigationTitle(screen == .customers ? "Customers" : !model.signedIn ? (screen == .checkout ? "Sign in to checkout" : "Welcome") : isSetup ? "Account & Tap to Pay" : model.pending != nil ? "Current sale" : model.selectedRegister == nil ? "Choose your business" : "Checkout")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(PayTheme.paper, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
@@ -159,6 +160,11 @@ struct POSView: View {
                         } label: { Text("Close").lineLimit(1).fixedSize() }.frame(minWidth: 64, minHeight: 44).disabled(model.collector.hasActivePayment || model.busy)
                     }
                 }
+                if screen != .customers && model.selectedRegister != nil && !model.collector.hasActivePayment {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Customers") { contactOnly = false; showingCustomer = true }.disabled(model.busy)
+                    }
+                }
                 if let onAccount {
                     ToolbarItem(placement: .primaryAction) { Button(action: onAccount) { Text("Account").lineLimit(1).fixedSize() }.frame(minHeight: 44) }
                 }
@@ -166,7 +172,7 @@ struct POSView: View {
                     Spacer(); Button("Done") { inputFocused = false }
                 }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { footer }
+            .safeAreaInset(edge: .bottom, spacing: 0) { if screen != .customers { footer } }
             .overlay(alignment: .top) {
                 if model.busy && model.paymentPhase != "card_entry" {
                     ProgressView(model.paymentPhase.isEmpty ? "Updating…" : model.paymentPhase)
@@ -184,7 +190,7 @@ struct POSView: View {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--pos-recovery-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-completed-ui-tests") { return }
                 #endif
-                guard model.signedIn else { return }
+                guard model.signedIn, screen != .customers else { return }
                 if shouldAutoQuote && !model.editingBasket && screen == .checkout && model.registerLoaded && model.pending == nil && model.selectedRegister?.guestCheckout == true && quoteAllowed && !automaticQuoteRequested {
                     automaticQuoteRequested = true; model.quote(); return
                 }
@@ -209,7 +215,7 @@ struct POSView: View {
                                     TextField("Phone", text: $model.receiptContactPhone).payInput().keyboardType(.phonePad)
                                     TextField("Email (optional)", text: $model.receiptContactEmail).payInput().keyboardType(.emailAddress).textInputAutocapitalization(.never)
                                     if let name = model.receipt?.paymentDetails?.cardholderName { Button("Use \(name) for this receipt") { model.receiptContactName = name }.buttonStyle(PayButtonStyle(primary: false)) }
-                                    Text("When available, saving an email requests a receipt email to that address. Find or create a customer to connect history and rewards.").font(.caption).foregroundStyle(PayTheme.muted)
+                                    Text("Confirm the customer’s details. After saving, choose Send receipt email to request delivery.").font(.caption).foregroundStyle(PayTheme.muted)
                                     Button("Save receipt contact", action: model.saveReceiptContact).buttonStyle(PayButtonStyle())
                                     Button("Find a customer") { contactOnly = false }.buttonStyle(PayButtonStyle(primary: false))
                                 }
@@ -449,7 +455,7 @@ struct POSView: View {
                 Text(customer.name).font(.title3.weight(.semibold))
                 if let email = customer.email { Text(email).font(.subheadline).foregroundStyle(PayTheme.muted) }
                 if let phone = customer.phone { Text(phone).font(.subheadline).foregroundStyle(PayTheme.muted) }
-                Text(model.receipt?.customer?.id == customer.id ? "This receipt is linked to this customer." : (model.receipt?.customer != nil ? "This receipt is linked to another customer; viewing this history does not change the link." : (model.sale?.canonicalConfirmation == true ? "Choose Link to this purchase to connect the receipt." : (model.sale?.state == "quoted" ? "Choose Add customer to this sale to update the unstarted basket." : "This customer will be linked to the purchase when you review it.")))).font(.subheadline).foregroundStyle(PayTheme.muted)
+                Text(screen == .customers ? "Customer record. Viewing does not start a sale." : model.receipt?.customer?.id == customer.id ? "This receipt is linked to this customer." : (model.receipt?.customer != nil ? "This receipt is linked to another customer; viewing this history does not change the link." : (model.sale?.canonicalConfirmation == true ? "Choose Link to this purchase to connect the receipt." : (model.sale?.state == "quoted" ? "Choose Add customer to this sale to update the unstarted basket." : "This customer will be linked to the purchase when you review it.")))).font(.subheadline).foregroundStyle(PayTheme.muted)
                 if model.customerCommerceLoading { ProgressView("Loading customer history…").font(.subheadline) }
                 else if let commerce = model.customerCommerce, commerce.customerId == customer.id { CustomerCommercePanel(commerce: commerce) }
                 else if let error = model.customerCommerceError {
@@ -471,7 +477,7 @@ struct POSView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 5) { Text(customer.name); if let email = customer.email { Text(email).font(.caption).foregroundStyle(PayTheme.muted) } }
                             Spacer(); Image(systemName: "plus.circle")
-                        }.frame(minHeight: 52)
+                        }.frame(maxWidth: .infinity, minHeight: 52).contentShape(Rectangle())
                     }
                 }
                 if model.customerEnrollmentSettings?.canCreateCustomers == true || model.selectedRegister?.canCreateCustomers == true {
@@ -554,6 +560,9 @@ struct POSView: View {
                     ForEach(Array(receipt.lines.enumerated()), id: \.offset) { _, line in Text("\(line.quantity) × \(line.title)") }
                     if let details = receipt.paymentDetails { ForEach(Array(details.lines.enumerated()), id: \.offset) { _, text in Text(text).font(.subheadline).foregroundStyle(PayTheme.muted) } }
                     Text("Refunded: \(POSMoney.display(receipt.refundedMinor))")
+                    if let rewards = receipt.rewards {
+                        ForEach(Array(rewards.lines.enumerated()), id: \.offset) { _, line in Text(line).font(.subheadline) }
+                    }
                     if receipt.refundedMinor > 0 && model.selectedRegister?.canManageCheckoutRules == true {
                         Button("Review refunded rewards") { showingRefundRewardsReview = true }.buttonStyle(PayButtonStyle(primary: false))
                     }
@@ -579,10 +588,21 @@ struct POSView: View {
                         }
                         Button("Check email status", action: model.checkReceiptEmail).frame(minHeight: 44).disabled(model.busy)
                     }
+                    if receipt.contact?.phone?.isEmpty == false {
+                        if let status = model.receiptSmsStatus {
+                            if status.state == "accepted" { Text("Receipt text accepted by the provider.").font(.subheadline) }
+                            if status.state == "not_confirmed" { Text("Text delivery is not confirmed. Use email or share this receipt.").font(.subheadline) }
+                            if status.enabled && status.state == "not_requested" {
+                                Button("Send receipt text", action: model.sendReceiptSms).frame(minHeight: 44).disabled(model.busy)
+                            }
+                        }
+                        if let error = model.receiptSmsError { Text(error).font(.caption) }
+                        Button("Check text status", action: model.checkReceiptSms).frame(minHeight: 44).disabled(model.busy)
+                    }
                     Button(receipt.contact == nil ? "Add receipt contact" : "Edit receipt contact") {
-                        model.receiptContactName = receipt.contact?.name ?? ""
-                        model.receiptContactPhone = receipt.contact?.phone ?? ""
-                        model.receiptContactEmail = receipt.contact?.email ?? ""
+                        model.receiptContactName = receipt.contact?.name ?? receipt.suggestedContact?.name ?? ""
+                        model.receiptContactPhone = receipt.contact?.phone ?? receipt.suggestedContact?.phone ?? ""
+                        model.receiptContactEmail = receipt.contact?.email ?? receipt.suggestedContact?.email ?? ""
                         contactOnly = true; showingCustomer = true
                     }.frame(minHeight: 44)
                 }

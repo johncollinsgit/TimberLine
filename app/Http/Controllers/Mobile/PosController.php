@@ -36,8 +36,9 @@ final class PosController extends Controller
 
     public function saveRewardRedemption(Request $r, string $tenant, string $register): JsonResponse
     {
-        return $this->respond($r, ['draft' => ['required', 'array:enabled,max_minor,channel,refund_policy'],
+        return $this->respond($r, ['draft' => ['required', 'array:enabled,max_minor,member_max_minor,channel,refund_policy'],
             'draft.enabled' => ['required', 'boolean'], 'draft.max_minor' => ['required', 'integer', 'min:1', 'max:100000000'],
+            'draft.member_max_minor' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000000'],
             'draft.channel' => ['required', 'in:in_person'], 'draft.refund_policy' => ['required', 'in:restore_full_review_partial'],
             'expected_draft_version' => ['required', 'regex:/^[a-f0-9]{64}$/D']],
             fn ($input) => app(\App\Services\Pos\PosRewardPolicyManager::class)->save(
@@ -340,6 +341,17 @@ final class PosController extends Controller
     public function receipt(Request $r, string $tenant, string $register, string $sale): JsonResponse
     {
         return $this->respond($r, [], fn () => $this->pos->receipt($register, $sale));
+    }
+
+    public function receiptSmsStatus(Request $r, string $tenant, string $register, string $sale): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosReceiptSms::class)->status($register, $sale));
+    }
+
+    public function sendReceiptSms(Request $r, string $tenant, string $register, string $sale): JsonResponse
+    {
+        return $this->respond($r, ['customer_requested' => ['required', 'accepted'], 'expected_phone' => ['required', 'string', 'max:40']],
+            fn ($input) => app(\App\Services\Pos\PosReceiptSms::class)->send($register, $sale, $input['customer_requested'] === true, $input['expected_phone']));
     }
 
     public function receiptEmailStatus(Request $r, string $tenant, string $register, string $sale): JsonResponse

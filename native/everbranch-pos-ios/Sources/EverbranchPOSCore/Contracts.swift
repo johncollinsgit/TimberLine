@@ -38,7 +38,12 @@ public struct Register: Decodable, Identifiable, Sendable {
     public let canManageInventory: Bool?
     public let canManageCheckoutRules: Bool?
 }
+public struct OperatorContext: Decodable, Sendable {
+    public let status: String
+    public let recommendedRegisterId: String?
+}
 public struct RegisterList: Decodable, Sendable {
+    public let operatorContext: OperatorContext?
     public let registers: [Register]
     public let runtimeId: String
     public let squareApplicationId: String?
@@ -164,6 +169,14 @@ public enum POSOrigin {
         guard url.scheme == "https", url.host == "app.theeverbranch.com", url.user == nil, url.password == nil,
               url.query == nil, url.fragment == nil, url.port == nil || url.port == 443,
               !url.path.contains("..") else { throw POSError.invalidOrigin }
+    }
+}
+
+public enum POSOperatorRegisterSelection {
+    public static func pick(pending: String?, current: String?, manual: String?, recommended: String?, saved: String?, hasBasket: Bool) -> String? {
+        if let pending { return pending }
+        if let current, hasBasket || current == manual { return current }
+        return recommended ?? current ?? saved
     }
 }
 

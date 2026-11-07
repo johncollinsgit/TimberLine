@@ -3,6 +3,7 @@
 <style>body{font:16px system-ui;background:#f4f7f5;color:#193b2b;margin:0}main{max-width:1000px;margin:auto;padding:32px}section{background:white;border:1px solid #d8e3dc;border-radius:16px;padding:24px;margin:20px 0}h1{font-size:32px}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:12px;border-bottom:1px solid #e5ebe6}small{color:#526c5d}button{background:#23563c;color:white;border:0;border-radius:8px;padding:10px 16px}input{padding:8px;max-width:160px}form{display:flex;gap:8px;flex-wrap:wrap}.scroll{overflow:auto}</style></head>
 <body><main><h1>Point of Sale</h1><p>Locations, inventory and verified payment activity.</p>
 @if($scope['admin'] && !config('enterprise.runtime'))<p><a href="{{ route('pos.admin.stock.index',['tenant'=>$tenantSlug]) }}">Manage event stock and production</a></p>@endif
+@if($scope['admin'] && !config('enterprise.runtime'))<p><a href="{{ route('pos.admin.events',['tenant'=>$tenantSlug]) }}">Event customers and later online purchases</a></p>@endif
 @if(session('status'))<section>{{ session('status') }}</section>@endif
 <section><h2>Today · UTC</h2><p>Collected ${{ number_format($report['gross_minor']/100,2) }} · Refunded ${{ number_format($report['refunded_minor']/100,2) }}</p>
 <small>{{ $report['basis'] }}</small><div class="scroll"><table><thead><tr><th>Location</th><th>Paid sales</th><th>Collected</th><th>Unresolved</th><th>Sync pending</th></tr></thead><tbody>

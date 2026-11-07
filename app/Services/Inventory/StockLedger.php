@@ -156,9 +156,10 @@ final class StockLedger
 
         return $this->operation($tenant, 'reserve:'.$hold, 'reserve', $actor, [$pool, $items], function ($key) use ($tenant, $hold, $actor, $pool, $items, $expires): array {
             $this->pool($tenant, $pool);
+            $countedPool = $this->countedPool($tenant, $pool);
             foreach ($items as $item => $quantity) {
                 $i = $this->item($tenant, $item);
-                if (! $i->tracked) {
+                if (! $i->tracked && ! $countedPool) {
                     continue;
                 }
                 $b = $this->balance($tenant, $pool, $item);
@@ -213,6 +214,24 @@ final class StockLedger
         return $this->operation($tenant, $request, 'binding', $actor, [$channel, $channelKey, $pool, $settings, $publish], function () use ($tenant, $actor, $channel, $channelKey, $pool, $settings, $publish): array {
             $this->pool($tenant, $pool);
             $old = $this->rows('bindings', $tenant)->where('channel', $channel)->where('channel_key', $channelKey)->first();
+            $oldMode = $old ? (json_decode($old->settings, true, 64, JSON_THROW_ON_ERROR)['tracking_mode'] ?? null) : null;
+            $newMode = $settings['tracking_mode'] ?? null;
+            if ($oldMode === 'counted' && $newMode !== 'counted') {
+                throw new StockException('stock_tracking_policy_immutable');
+            }
+            if (($newMode !== null && $newMode !== 'counted')
+                || (($newMode === 'counted' || $this->countedPool($tenant, $pool)) && ($channel !== 'pos' || $publish || $newMode !== 'counted'))) {
+                throw new StockException('stock_counted_pool_pos_only');
+            }
+            if ($newMode === 'counted' && ($oldMode !== 'counted' || $old?->pool_id !== $pool)) {
+                $registerId = substr($channelKey, strrpos($channelKey, ':') + 1);
+                if ($channel !== 'pos' || $publish || $this->rows('movements', $tenant)->where('pool_id', $pool)->exists()
+                    || $this->rows('reservations', $tenant)->where('pool_id', $pool)->exists()
+                    || $this->rows('bindings', $tenant)->where('pool_id', $pool)->where('active', true)->where(fn ($query) => $query->where('channel', '<>', $channel)->orWhere('channel_key', '<>', $channelKey))->exists()
+                    || ($this->db->getSchemaBuilder()->hasTable('pos_live_sales') && $this->db->table('pos_live_sales')->where('tenant_id', $tenant)->where('register_id', $registerId)->exists())) {
+                    throw new StockException('new_counted_pool_required');
+                }
+            }
             if ($old && $old->pool_id !== $pool && $this->rows('reservations', $tenant)->where('pool_id', $old->pool_id)->where('state', 'held')->exists()) {
                 throw new StockException('stock_binding_has_active_holds');
             }
@@ -227,14 +246,24 @@ final class StockLedger
         });
     }
 
+    /** A newly reviewed show can require counts without changing a legacy location's untracked policy. */
+    private function countedPool(int $tenant, string $pool): bool
+    {
+        return $this->rows('bindings', $tenant)->where('pool_id', $pool)->where('channel', 'pos')->where('active', true)->get()
+            ->contains(fn ($binding) => (json_decode($binding->settings, true, 64, JSON_THROW_ON_ERROR)['tracking_mode'] ?? null) === 'counted');
+    }
+
     public function listing(int $tenant, string $pool): array
     {
         $this->pool($tenant, $pool);
 
-        return $this->rows('items', $tenant)->where('active', true)->orderBy('title')->get()->map(function ($item) use ($tenant, $pool): array {
+        $countedPool = $this->countedPool($tenant, $pool);
+
+        return $this->rows('items', $tenant)->where('active', true)->orderBy('title')->get()->map(function ($item) use ($tenant, $pool, $countedPool): array {
             $b = $this->rows('balances', $tenant)->where('pool_id', $pool)->where('item_id', $item->id)->first();
             $bundleReview = json_decode($item->metadata ?? '{}', true)['requires_components'] ?? false;
-            $available = $item->tracked ? max(0, (int) ($b->on_hand ?? 0) - (int) ($b->reserved ?? 0)) : null;
+            $tracked = $item->tracked || $countedPool;
+            $available = $tracked ? max(0, (int) ($b->on_hand ?? 0) - (int) ($b->reserved ?? 0)) : null;
 
             return ['item_id' => $item->id, 'product_key' => $item->product_key, 'sku' => $item->sku,
                 'title' => $item->title, 'variant_label' => $item->variant_label, 'image_url' => $item->image_url,
@@ -242,7 +271,7 @@ final class StockLedger
                 'revision' => $item->revision, 'available_quantity' => $available, 'stock_pool_id' => $pool,
                 'on_hand' => (int) ($b->on_hand ?? 0), 'reserved_quantity' => (int) ($b->reserved ?? 0),
                 'counted_at' => $b?->counted_at, 'balance_version' => (int) ($b->version ?? 0),
-                'availability' => $bundleReview ? 'review_required' : (! $item->tracked || $available > 0 ? 'available' : ($b?->counted_at ? 'sold_out' : 'count_required'))];
+                'availability' => $bundleReview ? 'review_required' : (! $tracked || $available > 0 ? 'available' : ($b?->counted_at ? 'sold_out' : 'count_required'))];
         })->all();
     }
 

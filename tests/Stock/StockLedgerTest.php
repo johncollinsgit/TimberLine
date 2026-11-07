@@ -70,3 +70,19 @@ it('queues shared-pool publication once per movement and keeps separate show mov
     $this->stock->settle(1, 'show-sale', true, 'square-fixture');
     expect($this->stock->rows('publications', 1)->count())->toBe(2);
 });
+
+it('counts a new show pool without changing a legacy untracked location for the same merchandise', function (): void {
+    $this->stock->rows('items', 1)->where('id', $this->item)->update(['tracked' => false]);
+    $this->stock->bind(1, 'counted-show', 1, 'pos', 'fixture:'.str_repeat('f', 32), $this->show, ['tracking_mode' => 'counted']);
+    expect($this->stock->listing(1, $this->show)[0]['availability'])->toBe('count_required')
+        ->and($this->stock->listing(1, $this->warehouse)[0]['available_quantity'])->toBeNull();
+    expect(fn () => $this->stock->reserve(1, 'uncounted-show-sale', 1, $this->show, [$this->item => 1], now()->addMinutes(10)))->toThrow(StockException::class);
+    $this->stock->count(1, 'show-count', 1, $this->show, [$this->item => 5], 'physical_count');
+    $this->stock->reserve(1, 'counted-show-sale', 1, $this->show, [$this->item => 2], now()->addMinutes(10));
+    $this->stock->settle(1, 'counted-show-sale', true, 'fixture-payment');
+    expect($this->stock->listing(1, $this->show)[0]['available_quantity'])->toBe(3)
+        ->and($this->stock->listing(1, $this->warehouse)[0]['available_quantity'])->toBeNull()
+        ->and((bool) $this->stock->item(1, $this->item)->tracked)->toBeFalse();
+    expect(fn () => $this->stock->bind(1, 'drop-counts', 1, 'pos', 'fixture:'.str_repeat('f', 32), $this->show, []))->toThrow(StockException::class, 'stock_tracking_policy_immutable');
+    expect(fn () => $this->stock->bind(1, 'publish-counted', 1, 'shopify', '1', $this->show, [], true))->toThrow(StockException::class, 'stock_counted_pool_pos_only');
+});

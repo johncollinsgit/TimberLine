@@ -26,6 +26,14 @@ final class PosReceiptCustomers
         return $this->stock->rows('receipt_associations', (int) $sale->tenant_id)->where('runtime_id', $this->store->runtime())->where('sale_id', $sale->id)->first();
     }
 
+    /** Suggested account contact is not a delivery request or marketing consent. */
+    public function suggestedContact(object $sale, array $snapshot): ?array
+    {
+        $profile = $this->identities->byId((int) $sale->tenant_id, (int) ($snapshot['customer']['id'] ?? 0));
+
+        return $profile ? ['name' => trim($profile->first_name.' '.$profile->last_name), 'phone' => $profile->phone, 'email' => $profile->email] : null;
+    }
+
     public function decorate(object $sale, array $snapshot): array
     {
         $link = $this->association($sale);

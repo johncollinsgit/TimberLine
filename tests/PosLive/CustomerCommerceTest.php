@@ -335,3 +335,61 @@ it('honors the approved wallet cap once even after the customer spends the credi
     expect(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(1);
     expect(\App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->first()->balance)->toBe(0.0);
 });
+
+it('earns the frozen tenant percentage once and shows the original products and location without earning on reads', function (): void {
+    $sale = customerPosConfirm($this, ['purchase_earn_bps' => 250, 'enable_milestone_rewards' => false]);
+    $rewards = app(\App\Services\Pos\PosCustomerRewards::class);
+    $rewards->apply($sale);
+    $rewards->apply($sale);
+    expect((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(0.25);
+    $before = \App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->count();
+    $url = $this->base.'/sales/'.$sale->id.'/receipt';
+    $this->getJson($url)->assertOk()->assertJsonPath('rewards.earned_minor', 25)->assertJsonPath('rewards.balance_minor', 25)
+        ->assertJsonPath('suggested_contact.email', 'ada@example.invalid');
+    $this->getJson($url)->assertOk();
+    $this->getJson($this->base.'/customers/'.$this->profile->id.'/commerce')->assertOk()
+        ->assertJsonPath('commerce.purchases.0.location.name', 'Fictional store')
+        ->assertJsonPath('commerce.purchases.0.items.0.title', 'Fictional merchandise');
+    expect(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->count())->toBe($before);
+    // A later policy change cannot rewrite an already paid purchase or its refund calculation.
+    \App\Models\TenantMarketingSetting::where('tenant_id', $this->tenant->id)->where('key', 'candle_cash_policy_config')
+        ->update(['value' => json_encode(['earning_rules' => ['purchase_earn_bps' => 10000]])]);
+    $rewards->apply($sale, customerPosRefund($this, $sale, 'percentage-full-refund', 1070));
+    expect((float) \App\Models\CandleCashBalance::where('marketing_profile_id', $this->profile->id)->value('balance'))->toBe(0.0);
+});
+
+it('records a new event customer once and reports later online conversions with unknown membership timing kept explicit', function (): void {
+    $stock = app(\App\Services\Inventory\StockLedger::class);
+    $pool = bin2hex(random_bytes(16));
+    $stock->rows('pools', $this->tenant->id)->insert(['tenant_id' => $this->tenant->id, 'id' => $pool, 'name' => 'Fictional event',
+        'kind' => 'show', 'event_key' => 'event:123', 'active' => true, 'reviewed_by' => $this->actor->id, 'created_at' => now(), 'updated_at' => now()]);
+    $stock->bind($this->tenant->id, 'event-capture-binding', $this->actor->id, 'pos', $this->store->runtime().':'.$this->register, $pool);
+    $stock->rows('event_links', $this->tenant->id)->insert(['tenant_id' => $this->tenant->id, 'event_id' => 123, 'provider' => 'manual', 'external_id' => 'fictional_event',
+        'metadata' => json_encode(['name' => 'Fictional event', 'start_on' => now()->subDay()->toDateString(), 'end_on' => now()->addDay()->toDateString()]),
+        'reviewed_by' => $this->actor->id, 'created_at' => now(), 'updated_at' => now()]);
+    $settings = $this->store->decrypt($this->store->rows('registers', $this->tenant->id)->where('id', $this->register)->first()->configuration);
+    $settings['inventory_pool_id'] = $pool;
+    $this->store->rows('registers', $this->tenant->id)->where('id', $this->register)->update(['configuration' => $this->store->encrypt($settings)]);
+    $input = ['request_id' => (string) Str::uuid(), 'first_name' => 'New event customer', 'email' => 'event@example.invalid'];
+    $customer = $this->postJson($this->base.'/customers', $input)->assertOk()->json('customer');
+    $this->postJson($this->base.'/customers', $input)->assertOk();
+    expect(\App\Models\MarketingProfileLink::forTenantId($this->tenant->id)->where('source_type', 'pos_event_capture')->count())->toBe(1);
+    $this->travel(2)->hours();
+    $snapshot = Mockery::mock(\App\Services\Marketing\CustomerCommerceSnapshotService::class);
+    $snapshot->shouldReceive('forProfile')->andReturn(['has_more' => false, 'issues' => [], 'purchases' => [
+        ['id' => 'online:1', 'confirmed' => true, 'channel' => 'online', 'currency' => 'USD', 'amount_minor' => 2000,
+            'refunded_minor' => 500, 'occurred_at' => now()->subHour()->toIso8601String()],
+        ['id' => 'unconfirmed:2', 'confirmed' => false, 'channel' => 'online', 'currency' => 'USD', 'amount_minor' => 9000,
+            'refunded_minor' => 0, 'occurred_at' => now()->subHour()->toIso8601String()],
+    ]]);
+    app()->instance(\App\Services\Marketing\CustomerCommerceSnapshotService::class, $snapshot);
+    $report = app(\App\Services\Pos\PosEventAttribution::class)->report(['admin' => true, 'tenant_id' => $this->tenant->id], now()->subDay()->toDateString(), now()->toDateString());
+    expect($report['events'])->toHaveCount(1)->and($report['events'][0]['new_customer_records'])->toBe(1)
+        ->and($report['events'][0]['online_customers_after_event'])->toBe(1)->and($report['events'][0]['online_net_minor'])->toBe(1500)
+        ->and($report['events'][0]['customers'][0]['customer_id'])->toBe($customer['id'])
+        ->and($report['events'][0]['customers'][0]['membership_after_event'])->toBeNull();
+    $this->actingAs($this->actor)->get('/pos/admin/events?tenant='.$this->tenant->slug.'&from='.now()->subDay()->toDateString().'&to='.now()->toDateString())
+        ->assertOk()->assertSee('New event customer')->assertSee('Timing unavailable');
+    expect(fn () => app(\App\Services\Pos\PosEventAttribution::class)->report(['admin' => false, 'tenant_id' => $this->tenant->id], now()->toDateString(), now()->toDateString()))
+        ->toThrow(\App\Services\Pos\PosException::class);
+});

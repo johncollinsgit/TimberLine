@@ -501,7 +501,7 @@ class ModernForestryProductCatalogController extends Controller
         $available = app(\App\Services\Mobile\ModernForestryRewardAvailability::class)->available($session);
         $terms = null;
         if ($available) {
-            $policy = app(\App\Services\Pos\PosRewardRedemptionSettings::class)->tenant((int) $session->profile->tenant_id);
+            $policy = app(\App\Services\Pos\PosRewardRedemptionSettings::class)->forProfile($session->profile);
             $terms = ['max_minor' => $policy['max_minor'], 'policy_version' => $policy['version'],
                 'disclosure_version' => \App\Services\Pos\PosRewardCustomerProof::DISCLOSURE_VERSION,
                 'disclosure' => 'Showing this code permits one in-person purchase to redeem rewards up to the stated limit. The code expires in two minutes.'];

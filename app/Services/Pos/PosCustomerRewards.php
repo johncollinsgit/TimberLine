@@ -54,6 +54,9 @@ final class PosCustomerRewards
             throw new PosException('published_live_tenant_program_required', 503);
         }
         $rules = $current['policy']['earning_rules'] ?? [];
+        if (isset($rules['purchase_earn_bps']) && (! is_int($rules['purchase_earn_bps']) || $rules['purchase_earn_bps'] < 0 || $rules['purchase_earn_bps'] > 10000)) {
+            throw new PosException('reward_terms_invalid', 422);
+        }
         $channel = $rules['rewardable_channels'] ?? $current['program']['rewardable_channels'] ?? null;
         if ($channel !== 'show_issued_online_redeemed' || ($rules['event_rewards_enabled'] ?? false) !== true) {
             throw new PosException('show_rewards_not_enabled', 503);
@@ -63,7 +66,7 @@ final class PosCustomerRewards
         }
         if ($customer === null) {
             return ['enabled' => true, 'anonymous' => true, 'version' => $current['version'], 'rules' => $rules,
-                'program' => $current['program'], 'threshold_mode' => $setup['threshold_mode'] ?? null, 'redemption' => 'online_only',
+                'program' => $current['program'], 'policy' => $current['policy'], 'threshold_mode' => $setup['threshold_mode'] ?? null, 'redemption' => 'online_only',
                 'captured_at' => now()->toIso8601String(), 'refund_policy' => 'recalculate_original_rules'];
         }
         $profile = $this->identities->byId($scope['tenant_id'], $customer['id']);
@@ -72,7 +75,7 @@ final class PosCustomerRewards
             && $p['amount_minor'] !== null && ($p['refunded_minor'] ?? 0) < $p['amount_minor'])->count();
 
         return ['enabled' => true, 'version' => $current['version'], 'rules' => $rules,
-            'program' => $current['program'], 'order_number' => $prior + 1,
+            'program' => $current['program'], 'policy' => $current['policy'], 'order_number' => $prior + 1,
             'member' => app(CandleClubMembershipService::class)->isActiveMember($profile),
             'threshold_mode' => $setup['threshold_mode'] ?? null, 'redemption' => 'online_only',
             'refund_policy' => 'recalculate_original_rules'];
@@ -212,6 +215,10 @@ final class PosCustomerRewards
             $remaining ??= self::proportionalRemaining($subtotal, (int) $sale->amount_minor, $refunded);
             $rules = $terms['rules'];
             $desired = 0;
+            if ($remaining > 0 && ($rules['enable_order_based_earning'] ?? true) && isset($rules['purchase_earn_bps'])) {
+                // Integer cents, nearest-cent half-up; original terms also govern refunds.
+                $desired = intdiv($remaining * $rules['purchase_earn_bps'] + 5000, 10000);
+            }
             if ($remaining > 0 && ($rules['enable_order_based_earning'] ?? true)) {
                 $ordinal = (int) $terms['order_number'];
                 $field = [1 => 'first_order_reward_amount', 2 => 'second_order_reward_amount', 3 => 'third_order_reward_amount'][$ordinal] ?? null;

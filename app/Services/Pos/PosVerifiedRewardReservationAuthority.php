@@ -56,8 +56,13 @@ final class PosVerifiedRewardReservationAuthority implements PosRewardReservatio
             throw new PosException('customer_identity_review_required', 409);
         }
 
+        $effective = $this->settings->forProfile($canonical);
+        if ($amountMinor > $effective['max_minor']) {
+            throw new PosException('membership_redemption_limit_changed', 409);
+        }
+
         return ['profile_id' => $profileId, 'expected_amount_minor' => $terms['amount_minor'],
-            'limit_minor' => $policy['max_minor'], 'eligible_minor' => $terms['eligible_minor'],
+            'limit_minor' => $effective['max_minor'], 'eligible_minor' => $terms['eligible_minor'],
             'policy_version' => $policy['version'], 'authorization_reference' => $proof->id,
             'account_link_id' => (int) $proof->account_link_id];
     }

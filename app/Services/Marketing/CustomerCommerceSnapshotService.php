@@ -288,7 +288,7 @@ class CustomerCommerceSnapshotService
         })->all();
 
         return ['available' => true, 'ledger' => 'candle_cash', 'unit' => 'reward_credit',
-            'label' => app(\App\Services\Tenancy\TenantDisplayLabelResolver::class)->label($tenantId, 'rewards_label', 'Rewards'),
+            'label' => trim((string) data_get($settings?->value, 'label', '')) ?: app(\App\Services\Tenancy\TenantDisplayLabelResolver::class)->label($tenantId, 'rewards_label', 'Rewards'),
             'balance' => $balance ? number_format($balance->balance, 2, '.', '') : null,
             'program_status' => $settings ? 'configured' : 'not_configured',
             'history' => $history, 'has_more' => $transactions->count() > 20,

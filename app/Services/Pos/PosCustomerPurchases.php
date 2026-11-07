@@ -65,6 +65,9 @@ final class PosCustomerPurchases
                     'number' => 'Everbranch Pay · EB-'.strtoupper(substr($id, 0, 12)), 'channel' => 'in_person',
                     'status' => $refunds >= $sale->amount_minor ? 'refunded' : ($refunds > 0 ? 'partially_refunded' : 'paid'),
                     'confirmed' => true, 'amount_minor' => (int) $sale->amount_minor, 'refunded_minor' => $refunds,
+                    'location' => ['name' => $snapshot['location_name'], 'register' => $snapshot['register_name'],
+                        'address' => $snapshot['configuration']['shopify']['tax_address'] ?? null],
+                    'items' => array_map(fn ($line) => array_intersect_key($line, array_flip(['title', 'quantity', 'components'])), $snapshot['terms']['display']),
                     'currency' => 'USD', 'currency_scale' => 2, 'occurred_at' => \Carbon\CarbonImmutable::parse($sale->created_at)->toIso8601String()];
                 $result['square_payments'][] = $payment['provider_id'];
                 if ($sale->provider_order_id) {

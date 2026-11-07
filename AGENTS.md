@@ -1,3 +1,19 @@
+## Pay rewards and event attribution (owner direction, 2026-11-06)
+
+- Use the shared tenant rewards ledger and tenant-owned program identity/rules.
+  Modern Forestry's requested in-person caps are $5 standard and $10 for verified
+  active Candle Club members. Its proposed percentage matches the published retail
+  FAQ's effective 5%; publish this through tenant policy rather than interpreting
+  legacy points conversion settings as an earn rate.
+- Record explicit event customer capture, then report linked later online purchases
+  and dated membership joins. Treat absent source coverage as unknown. A source
+  billing migration, old membership tag or matching card/name is not a new join.
+- Macon uses current physical counts entered by the owner in the app. Never infer
+  quantities from packing totals or another event. Keep count mode scoped to its
+  reviewed pool and preserve original transaction snapshots.
+- Read `docs/operations/pay-tenant-rewards-and-events.md` for this source candidate's
+  coverage and release gaps; source tests do not establish a live checkout.
+
 ## Uncharged basket cancellation (November 1 UTC; source candidate)
 
 Cancel of an uncollected quote clears its basket and customer selection, retains other

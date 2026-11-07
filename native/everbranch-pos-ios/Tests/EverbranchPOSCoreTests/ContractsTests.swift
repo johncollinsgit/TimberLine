@@ -2,6 +2,17 @@ import XCTest
 @testable import EverbranchPOSCore
 
 final class ContractsTests: XCTestCase {
+    func testCurrentAssignmentReplacesAnOldIdleRegisterButPreservesInProgressOrExplicitSelection() {
+        func select(pending: String? = nil, manual: String? = nil, recommended: String? = "macon", basket: Bool = false) -> String? {
+            POSOperatorRegisterSelection.pick(pending: pending, current: "columbus", manual: manual,
+                recommended: recommended, saved: "columbus", hasBasket: basket)
+        }
+        XCTAssertEqual(select(), "macon")
+        XCTAssertEqual(select(pending: "original-sale"), "original-sale")
+        XCTAssertEqual(select(manual: "columbus"), "columbus")
+        XCTAssertEqual(select(basket: true), "columbus")
+        XCTAssertEqual(select(recommended: nil), "columbus")
+    }
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     func descriptor(_ changes: [String: Any] = [:]) throws -> CollectionDescriptor {
         var value: [String: Any] = ["applicationId": "app", "accessToken": "private-token", "locationId": "location", "merchantId": "merchant",

@@ -135,7 +135,7 @@ final class PosReceiptEmail
         return '$'.number_format($amount / 100, 2, '.', ',');
     }
 
-    private function text(array $receipt, string $merchant): string
+    public function text(array $receipt, string $merchant): string
     {
         $lines = [$merchant, $this->safe($receipt['merchant_location']), 'Receipt '.$this->safe($receipt['receipt_number']), ''];
         foreach ($receipt['lines'] as $line) {
@@ -162,6 +162,28 @@ final class PosReceiptEmail
         foreach (['card_brand', 'last_four', 'entry_method', 'application_name', 'application_identifier'] as $field) {
             if (! empty($details[$field])) {
                 $lines[] = $this->safe($details[$field]);
+            }
+        }
+
+        if ($rewards = $receipt['rewards'] ?? null) {
+            $lines[] = '';
+            $label = $this->safe($rewards['label']);
+            if ($rewards['earned_minor'] !== null) {
+                $lines[] = $label.' earned on this purchase: '.$this->money($rewards['earned_minor']);
+            }
+            if ($rewards['redeemed_minor'] > 0) {
+                $lines[] = $label.' used: '.$this->money($rewards['redeemed_minor']);
+            }
+            if ($rewards['balance_minor'] !== null) {
+                $lines[] = $label.' balance: '.$this->money($rewards['balance_minor']);
+                $lines[] = 'Balance checked: '.$this->safe($rewards['balance_as_of']);
+                $lines[] = 'Balance as of '.$this->safe($rewards['balance_as_of']);
+            }
+            foreach ($rewards['rules'] as $rule) {
+                $lines[] = $this->safe($rule);
+            }
+            if (in_array($receipt['customer_rewards_status'] ?? '', ['pending', 'review_required'], true)) {
+                $lines[] = 'Rewards for this purchase are still being processed or reviewed.';
             }
         }
 

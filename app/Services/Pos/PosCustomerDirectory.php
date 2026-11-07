@@ -107,6 +107,7 @@ final class PosCustomerDirectory
             $profile = MarketingProfile::query()->create(['tenant_id' => $scope['tenant_id'], ...$values,
                 'normalized_email' => $values['email'], 'normalized_phone' => app(\App\Support\Marketing\MarketingIdentityNormalizer::class)->normalizePhone($values['phone']), 'accepts_email_marketing' => false,
                 'accepts_sms_marketing' => false, 'source_channels' => ['everbranch_pay_manual']]);
+            app(PosEventAttribution::class)->capture($scope, $profile, $key);
             $this->store->event($scope['tenant_id'], $key, 'customer_created', ['hash' => $hash,
                 'profile_id' => $profile->id, 'actor_id' => $scope['actor_id'], 'register_id' => $scope['register']->id]);
 
