@@ -4,6 +4,7 @@ namespace App\Services\Team\Operations;
 
 use App\Models\TeamArea;
 use App\Models\TeamOperationAttempt;
+use App\Models\TeamOperationRecord;
 use App\Models\TeamProviderConnection;
 use App\Models\Tenant;
 use App\Models\User;
@@ -57,11 +58,15 @@ class EventTasks
         }
         $response = $this->providers->asana($c, 'tasks', ['assignee' => $c->settings['external_user_id'], 'workspace' => $c->settings['source']['asana_workspace'], 'completed_since' => now()->toIso8601String(), 'limit' => 100, 'offset' => $offset, 'opt_fields' => self::FIELDS]);
         $items = [];
+        $canWrite = $this->access->mayWrite($tenant, $user, $area->id);
         foreach ($response['data'] ?? [] as $task) {
             if ((string) ($task['assignee']['gid'] ?? '') !== (string) $c->settings['external_user_id'] || ! $this->project($c, $task)) {
                 continue;
             }
-            $items[(string) $task['gid']] = $this->present($c, $task);
+            $view = $this->present($c, $task);
+            $view['can_write'] = $view['can_write'] && $canWrite;
+            $view['can_comment'] = $view['can_comment'] && $canWrite;
+            $items[(string) $task['gid']] = $view;
         }
         $next = $response['next_page']['offset'] ?? null;
 
@@ -108,6 +113,22 @@ class EventTasks
             'can_comment' => $this->writable($c) && in_array('stories:write', preg_split('/\s+/', $c->settings['scopes'] ?? ''), true), 'source_mode' => ($c->settings['read_only_snapshot'] ?? false) ? 'snapshot' : 'live'];
     }
 
+    public function forOccurrence(Tenant $tenant, User $user, TeamOperationRecord $record): ?array
+    {
+        $area = $this->access->area($tenant, $user, $record->area_id);
+        if ($area->profile !== 'events' || ! isset($record->data['source_workspace'], $record->data['source_id'])) {
+            return null;
+        }
+        $projects = array_filter([$record->data['source_project'] ?? null, ...($record->data['source_projects'] ?? [])]);
+        foreach ($this->connections($tenant, $user, $area) as $connection) {
+            if ((string) $connection->settings['source']['asana_workspace'] === (string) $record->data['source_workspace'] && array_intersect($projects, $this->providers->selectedProjects($connection))) {
+                return $this->detail($tenant, $user, $area, $connection->id, $record->data['source_id']);
+            }
+        }
+
+        return null;
+    }
+
     private function version(array $task): string
     {
         $projects = collect($task['memberships'] ?? [])->pluck('project.gid')->map(fn ($id) => (string) $id)->sort()->values()->all();
@@ -130,6 +151,19 @@ class EventTasks
         if ($kind === 'task') {
             $view = $this->present($c, $task);
             $view['can_write'] = $view['can_write'] && $this->access->mayWrite($tenant, $user, $area->id);
+            $view['can_comment'] = $view['can_comment'] && $view['can_write'];
+            $record = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event', 'source_key' => hash('sha256', 'asana:'.$c->settings['source']['asana_workspace'].':'.$gid)])->first();
+            $view['occurrence'] = null;
+            if ($record) {
+                try {
+                    $this->access->record($tenant, $user, $record);
+                    $view['occurrence'] = app(OperationsWorkspace::class)->view($record, $this->access->mayWrite($tenant, $user, $area->id), $this->access->admin($this->access->actor($tenant, $user)));
+                } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+                    if (! in_array($error->getStatusCode(), [403, 404, 409], true)) {
+                        throw $error;
+                    }
+                }
+            }
 
             return $view;
         }

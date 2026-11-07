@@ -176,3 +176,32 @@ test('an unqualified possible minimum cannot be bypassed by a known commission',
     $result = app(EventCostCalculator::class)->preview(studioInputs(['expected_net_sales_minor' => 100000, 'crew' => [['id' => 'a', 'name' => 'Fictional operator', 'pay_type' => 'commission', 'work_minutes' => 600, 'days' => []]]]), $policy);
     expect($result['lines'][0]['amount_minor'])->toBeNull()->and($result['known_cost_minor'])->toBe(0)->and($result['total_cost_minor'])->toBeNull();
 });
+
+test('explicit budget recalculation freezes a new policy snapshot once without creating another event', function () {
+    [$tenant, $owner] = teamWorkspace();
+    $area = studioArea($tenant);
+    $studio = app(\App\Services\Team\Studio\TeamsStudio::class);
+    $firstPolicy = studioDefinition($tenant, $owner, $area);
+    $inputs = studioInputs(['crew' => [['id' => 'a', 'name' => 'Fictional operator', 'pay_type' => 'hourly', 'work_minutes' => 60, 'days' => []]]]);
+    $base = ['title' => 'Fictional budget event', 'step' => 4, 'logistics' => ['starts_on' => '2026-11-06', 'ends_on' => '2026-11-08', 'timezone' => 'America/New_York'], 'budget_inputs' => $inputs];
+    $draft = $studio->saveDraft($tenant, $owner, $area, $base + ['id' => (string) Str::uuid(), 'request_id' => (string) Str::uuid(), 'expected_version' => 0, 'policy_id' => $firstPolicy['id']]);
+    $created = $studio->createEvent($tenant, $owner, $area, ['request_id' => (string) Str::uuid(), 'draft_id' => $draft['id'], 'expected_version' => 1, 'accept_review_items' => true]);
+    $newPolicy = studioPolicy();
+    $newPolicy['rules'][0]['effect']['rate_minor'] = 1500;
+    $published = studioDefinition($tenant, $owner, $area, ['definition' => $newPolicy]);
+    $oldBudget = TeamOperationRecord::findOrFail($created['budget_id'])->data;
+    expect($oldBudget['preview']['total_cost_minor'])->toBe(4800)->and($oldBudget['policy_snapshot']['rules'][0]['effect']['rate_minor'])->toBe(1200);
+    $revision = ['event_id' => $created['event_id'], 'event_version' => 1, 'budget_id' => $created['budget_id'], 'reason' => 'Explicit recalculation after revised event hours and policy.'];
+    $base['budget_inputs']['crew'][0]['work_minutes'] = 120;
+    $draft = $studio->saveDraft($tenant, $owner, $area, $base + ['id' => (string) Str::uuid(), 'request_id' => (string) Str::uuid(), 'expected_version' => 0, 'policy_id' => $published['id'], 'revision' => $revision]);
+    $create = ['request_id' => (string) Str::uuid(), 'draft_id' => $draft['id'], 'expected_version' => 1, 'accept_review_items' => true];
+    $this->actingAs($owner)->postJson('/team/studio/create?tenant='.$tenant->slug.'&area='.$area->id, $create)->assertUnprocessable();
+    $command = $create + ['event_id' => $created['event_id'], 'expected_event_version' => 1, 'expected_budget_id' => $created['budget_id'], 'reason' => $revision['reason']];
+    $url = '/team/studio/budget?tenant='.$tenant->slug.'&area='.$area->id;
+    $result = $this->postJson($url, $command)->assertOk()->assertJsonPath('event_version', 2)->assertJsonPath('budget.total_cost_minor', 7500)->json();
+    $this->postJson($url, $command)->assertOk()->assertJsonPath('budget_id', $result['budget_id']);
+    $this->postJson($url, array_replace($command, ['request_id' => (string) Str::uuid()]))->assertConflict();
+    expect(TeamOperationRecord::where('kind', 'event')->count())->toBe(1)->and(TeamOperationRecord::where('kind', 'event_budget')->count())->toBe(2)
+        ->and(TeamOperationRecord::findOrFail($created['budget_id'])->data)->toBe($oldBudget)
+        ->and(TeamOperationRecord::findOrFail($created['event_id'])->data['_teams_enrichment']['budget_id'])->toBe($result['budget_id']);
+});

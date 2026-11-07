@@ -67,7 +67,7 @@ class TeamsStudio
     public function saveDraft(Tenant $tenant, User $user, TeamArea $area, array $input): array
     {
         $this->access->financial($tenant, $user);
-        $i = Validator::make($input, ['id' => 'required|uuid', 'request_id' => 'required|uuid', 'expected_version' => 'required|integer|min:0', 'title' => 'required|string|max:500', 'step' => 'required|integer|min:0|max:4', 'logistics' => 'present|array', 'budget_inputs' => 'present|array', 'policy_id' => 'nullable|uuid', 'copy_from' => 'nullable|uuid'])->validate();
+        $i = Validator::make($input, ['id' => 'required|uuid', 'request_id' => 'required|uuid', 'expected_version' => 'required|integer|min:0', 'title' => 'required|string|max:500', 'step' => 'required|integer|min:0|max:4', 'logistics' => 'present|array', 'budget_inputs' => 'present|array', 'policy_id' => 'nullable|uuid', 'copy_from' => 'nullable|uuid', 'revision' => 'nullable|array:event_id,event_version,budget_id,reason', 'revision.event_id' => 'required_with:revision|uuid', 'revision.event_version' => 'required_with:revision|integer|min:1', 'revision.budget_id' => 'present_with:revision|nullable|uuid', 'revision.reason' => 'nullable|string|max:3000'])->validate();
         $logistics = $this->logistics($i['logistics']);
         if (isset($logistics['series_id'])) {
             $series = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'series'])->findOrFail($logistics['series_id']);
@@ -79,6 +79,11 @@ class TeamsStudio
         return $this->once($tenant, $user, $area, $i, function () use ($tenant, $user, $area, $i, $logistics) {
             $draft = $this->editable($tenant, $area, $i['id'], 'event_draft', $i['expected_version']);
             abort_unless(! $draft->exists || ($draft->status === 'draft' && (int) $draft->assigned_user_id === (int) $user->id), 409, 'This draft is already created or belongs to another author.');
+            abort_if($draft->exists && ($draft->data['revision']['event_id'] ?? null) !== ($i['revision']['event_id'] ?? null), 409, 'Keep this draft attached to its original event or creation flow.');
+            if (isset($i['revision'])) {
+                $target = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event'])->findOrFail($i['revision']['event_id']);
+                $this->access->record($tenant, $user, $target);
+            }
             if (isset($i['copy_from'])) {
                 $source = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event'])->findOrFail($i['copy_from']);
                 $this->access->record($tenant, $user, $source);
@@ -86,7 +91,7 @@ class TeamsStudio
             if (isset($i['policy_id'])) {
                 $this->policyRecord($tenant, $area, $i['policy_id']);
             }
-            $draft->fill(['title' => $i['title'], 'status' => 'draft', 'visibility' => 'admin', 'assigned_user_id' => $user->id, 'data' => ['step' => $i['step'], 'logistics' => $logistics, 'budget_inputs' => $i['budget_inputs'], 'policy_id' => $i['policy_id'] ?? null, 'copied_from' => $i['copy_from'] ?? null], 'version' => $draft->version + 1])->save();
+            $draft->fill(['title' => $i['title'], 'status' => 'draft', 'visibility' => 'admin', 'assigned_user_id' => $user->id, 'data' => ['step' => $i['step'], 'logistics' => $logistics, 'budget_inputs' => $i['budget_inputs'], 'policy_id' => $i['policy_id'] ?? null, 'copied_from' => $i['copy_from'] ?? null, 'revision' => $i['revision'] ?? null], 'version' => $draft->version + 1])->save();
             $this->revision($draft, $user);
 
             return $this->view($draft);
@@ -111,6 +116,7 @@ class TeamsStudio
             $draft = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event_draft', 'assigned_user_id' => $user->id])->lockForUpdate()->findOrFail($i['draft_id']);
             abort_unless($draft->version === $i['expected_version'] && $draft->status === 'draft', 409, 'Refresh this draft before creating.');
             $data = $draft->data;
+            abort_if(isset($data['revision']), 422, 'Use the budget revision flow for this draft.');
             $logistics = $this->logistics($data['logistics'], true);
             $policy = $this->policyRecord($tenant, $area, $data['policy_id'] ?? '');
             abort_unless($policy->status === 'published', 422, 'Publish a reviewed cost policy first.');
@@ -122,7 +128,7 @@ class TeamsStudio
             $eventId = (string) Str::uuid();
             $budgetId = (string) Str::uuid();
             $authority = $this->authority($tenant, $area);
-            $event = TeamOperationRecord::create(['id' => $eventId, 'tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event', 'title' => $draft->title, 'version' => 1, 'status' => $authority['provider'] === 'asana' ? 'draft' : 'research', 'source_key' => hash('sha256', 'wizard:'.$draft->id), 'starts_on' => $logistics['starts_on'], 'ends_on' => $logistics['ends_on'], 'data' => array_diff_key($logistics, ['starts_on' => true, 'ends_on' => true]) + ['wizard_draft_id' => $draft->id, 'budget_id' => $budgetId, 'source_authority' => $authority['provider'], 'source_sync_status' => $authority['provider'] === 'asana' ? 'awaiting_source_creation' : 'native']]);
+            $event = TeamOperationRecord::create(['id' => $eventId, 'tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event', 'title' => $draft->title, 'version' => 1, 'status' => $authority['provider'] === 'asana' ? 'draft' : 'research', 'source_key' => hash('sha256', 'wizard:'.$draft->id), 'starts_on' => $logistics['starts_on'], 'ends_on' => $logistics['ends_on'], 'data' => array_diff_key($logistics, ['starts_on' => true, 'ends_on' => true]) + ['wizard_draft_id' => $draft->id, 'budget_id' => $budgetId, '_teams_enrichment' => ['budget_id' => $budgetId, 'wizard_draft_id' => $draft->id], 'source_authority' => $authority['provider'], 'source_sync_status' => $authority['provider'] === 'asana' ? 'awaiting_source_creation' : 'native']]);
             $budget = TeamOperationRecord::create(['id' => $budgetId, 'tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event_budget', 'title' => $draft->title.' budget', 'version' => 1, 'status' => 'frozen', 'source_key' => hash('sha256', 'budget:'.$draft->id), 'visibility' => 'admin', 'data' => ['event_id' => $eventId, 'policy_id' => $policy->id, 'policy_version' => $policy->version, 'policy_snapshot' => $policy->data['definition'], 'inputs' => $inputs, 'preview' => $preview, 'frozen_at' => now()->toIso8601String()]]);
             $draft->update(['status' => 'created', 'version' => $draft->version + 1, 'data' => $data + ['event_id' => $eventId, 'budget_id' => $budgetId]]);
             foreach ([$event, $budget, $draft] as $record) {
@@ -130,6 +136,39 @@ class TeamsStudio
             }
 
             return ['event_id' => $eventId, 'budget_id' => $budgetId, 'budget' => $preview, 'authority' => $authority, 'source_status' => $event->data['source_sync_status']];
+        });
+    }
+
+    public function reviseBudget(Tenant $tenant, User $user, TeamArea $area, array $input): array
+    {
+        $this->access->financial($tenant, $user);
+        $i = Validator::make($input, ['request_id' => 'required|uuid', 'draft_id' => 'required|uuid', 'expected_version' => 'required|integer|min:1', 'event_id' => 'required|uuid', 'expected_event_version' => 'required|integer|min:1', 'expected_budget_id' => 'present|nullable|uuid', 'reason' => 'required|string|min:12|max:3000', 'accept_review_items' => 'accepted'])->validate();
+
+        return $this->once($tenant, $user, $area, $i, function () use ($tenant, $user, $area, $i) {
+            $event = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event'])->lockForUpdate()->findOrFail($i['event_id']);
+            $this->access->record($tenant, $user, $event);
+            $previous = $event->data['_teams_enrichment']['budget_id'] ?? $event->data['budget_id'] ?? null;
+            abort_unless($event->version === $i['expected_event_version'] && $previous === $i['expected_budget_id'], 409, 'The event or latest budget changed. Review the current revision.');
+            $draft = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event_draft', 'assigned_user_id' => $user->id])->lockForUpdate()->findOrFail($i['draft_id']);
+            abort_unless($draft->version === $i['expected_version'] && $draft->status === 'draft', 409, 'Refresh the budget draft before saving.');
+            $target = $draft->data['revision'] ?? [];
+            abort_unless(($target['event_id'] ?? null) === $event->id && ($target['event_version'] ?? null) === $i['expected_event_version'] && ($target['budget_id'] ?? null) === $i['expected_budget_id'] && ($target['reason'] ?? null) === $i['reason'], 409, 'The revision must match the reviewed saved draft.');
+            $policy = $this->policyRecord($tenant, $area, $draft->data['policy_id'] ?? '');
+            abort_unless($policy->status === 'published', 422, 'Choose an explicitly reviewed published policy version.');
+            $inputs = $this->costs->inputs($draft->data['budget_inputs']);
+            abort_unless($event->starts_on && $event->ends_on && $inputs['starts_on'] === $event->starts_on->toDateString() && $inputs['ends_on'] === $event->ends_on->toDateString(), 422, 'Budget dates must match the recorded event occurrence.');
+            $preview = $this->costs->preview($inputs, $policy->data['definition']);
+            $budget = TeamOperationRecord::create(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event_budget', 'title' => $event->title.' budget', 'version' => 1, 'status' => 'frozen', 'source_key' => hash('sha256', 'budget:'.$draft->id), 'visibility' => 'admin', 'data' => ['event_id' => $event->id, 'previous_budget_id' => $previous, 'based_event_version' => $event->version, 'reason' => $i['reason'], 'policy_id' => $policy->id, 'policy_version' => $policy->version, 'policy_snapshot' => $policy->data['definition'], 'inputs' => $inputs, 'preview' => $preview, 'frozen_at' => now()->toIso8601String()]]);
+            $data = $event->data;
+            $data['budget_id'] = $budget->id;
+            $data['_teams_enrichment']['budget_id'] = $budget->id;
+            $event->update(['data' => $data, 'version' => $event->version + 1]);
+            $draft->update(['status' => 'budget_created', 'version' => $draft->version + 1, 'data' => $draft->data + ['event_id' => $event->id, 'budget_id' => $budget->id]]);
+            foreach ([$budget, $event, $draft] as $record) {
+                $this->revision($record, $user);
+            }
+
+            return ['event_id' => $event->id, 'event_version' => $event->version, 'budget_id' => $budget->id, 'budget' => $preview, 'source_status' => 'budget_only'];
         });
     }
 
@@ -141,6 +180,7 @@ class TeamsStudio
             'series_id' => 'required|uuid', 'occurrence_id' => 'required|uuid', 'financial_id' => 'nullable|uuid',
             'staff_ids' => 'present|array|max:100', 'staff_ids.*' => 'uuid|distinct', 'allocation_reviewed' => 'required|boolean',
             'reason' => 'required|string|min:12|max:3000', 'venue' => 'required|string|max:1000', 'timezone' => 'required|timezone:all',
+            'latitude' => 'required_with:longitude|nullable|numeric|between:-90,90', 'longitude' => 'required_with:latitude|nullable|numeric|between:-180,180',
             'verified_selling_days' => 'nullable|integer|min:1|max:366', 'verified_operating_minutes' => 'nullable|integer|min:1|max:527040',
             'daily_hours' => 'present|array|max:366', 'daily_hours.*.date' => 'required|date_format:Y-m-d|distinct', 'daily_hours.*.opens' => 'required|date_format:H:i', 'daily_hours.*.closes' => 'required|date_format:H:i',
         ])->validate();
@@ -160,7 +200,7 @@ class TeamsStudio
             $links = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event_link', 'status' => 'accepted'])->whereKeyNot($i['id'])->get();
             abort_if($links->contains(fn ($r) => $r->data['occurrence_id'] === $i['occurrence_id'] || ($primary && ($r->data['financial_id'] ?? null) === $primary->id)), 409, 'This occurrence or financial total already has a reviewed mapping. Edit that mapping instead.');
             $link = $this->editable($tenant, $area, $i['id'], 'event_link', $i['expected_version']);
-            $link->fill(['title' => $refs[$i['occurrence_id']]->title, 'status' => 'accepted', 'visibility' => 'admin', 'data' => array_diff_key($i, array_flip(['id', 'request_id', 'expected_version'])) + ['financial_version' => $primary?->version, 'reviewed_by' => (string) $user->id, 'reviewed_at' => now()->toIso8601String()], 'version' => $link->version + 1])->save();
+            $link->fill(['title' => $refs[$i['occurrence_id']]->title, 'status' => 'accepted', 'visibility' => 'admin', 'data' => array_diff_key($i, array_flip(['id', 'request_id', 'expected_version'])) + ['starts_on' => $refs[$i['occurrence_id']]->starts_on?->toDateString(), 'ends_on' => $refs[$i['occurrence_id']]->ends_on?->toDateString(), 'financial_version' => $primary?->version, 'reviewed_by' => (string) $user->id, 'reviewed_at' => now()->toIso8601String()], 'version' => $link->version + 1])->save();
             $this->revision($link, $user);
 
             return $this->view($link);

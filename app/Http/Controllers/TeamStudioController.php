@@ -28,6 +28,7 @@ class TeamStudioController extends Controller
             'definition' => $studio->saveDefinition($tenant, $request->user(), $area, $request->all()),
             'draft' => $studio->saveDraft($tenant, $request->user(), $area, $request->all()),
             'preview' => $studio->preview($tenant, $request->user(), $area, $request->all()),
+            'budget' => $studio->reviseBudget($tenant, $request->user(), $area, $request->all()),
             'create' => $studio->createEvent($tenant, $request->user(), $area, $request->all()),
             default => abort(404),
         };

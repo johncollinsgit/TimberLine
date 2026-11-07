@@ -20,7 +20,7 @@ Route::middleware(['auth', 'verified', 'tenant.access', \App\Http\Middleware\Ens
         Route::get('/events/{id}/intelligence', \App\Http\Controllers\TeamEventIntelligenceController::class)->whereUuid('id')->name('events.intelligence');
         Route::get('/studio/preset', \App\Http\Controllers\TeamStudioController::class)->defaults('action', 'preset')->name('studio.preset');
         Route::get('/studio', \App\Http\Controllers\TeamStudioController::class)->name('studio');
-        foreach (['definition', 'draft', 'preview', 'create', 'mapping'] as $action) {
+        foreach (['definition', 'draft', 'preview', 'create', 'budget', 'mapping'] as $action) {
             Route::post('/studio/'.$action, \App\Http\Controllers\TeamStudioController::class)->defaults('action', $action)->name('studio.'.$action);
         }
         Route::get('/events/my-tasks', \App\Http\Controllers\TeamEventTasksController::class)->name('events.my-tasks');

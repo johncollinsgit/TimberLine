@@ -9,10 +9,16 @@ use Illuminate\Support\Facades\Http;
 
 class OperationsWeather
 {
-    public function event(TeamOperationRecord $event): array
+    public function event(TeamOperationRecord $event, ?array $reviewed = null): array
     {
         abort_unless(config('team_operations.weather.enabled') && config('team_operations.weather.commercial') && config('team_operations.weather.api_key'), 503, 'Weather needs a configured commercial provider.');
         $d = array_replace($event->data ?? [], $event->data['reviewed_fields'] ?? []);
+        if ($reviewed !== null) {
+            $d = array_replace($d, array_fill_keys(['latitude', 'longitude', 'timezone', 'daily_hours'], null), array_intersect_key($reviewed, array_flip(['latitude', 'longitude', 'timezone', 'daily_hours'])));
+            $event = clone $event;
+            $event->starts_on = $reviewed['starts_on'] ?? $event->starts_on;
+            $event->ends_on = $reviewed['ends_on'] ?? $event->ends_on;
+        }
         $latitude = $d['latitude'] ?? null;
         $longitude = $d['longitude'] ?? null;
         abort_unless(is_numeric($latitude) && $latitude >= -90 && $latitude <= 90 && is_numeric($longitude) && $longitude >= -180 && $longitude <= 180 && $event->starts_on, 422, 'Confirm the historical venue coordinates and event dates first.');

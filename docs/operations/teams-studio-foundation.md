@@ -44,8 +44,7 @@ tenants receive their own blank policy unless an explicit tenant template is
 configured. No actual pay history was changed or program published.
 
 Further cost-policy work includes employee pay-profile administration, richer
-ceilings/overrides and qualification review UX, budget revision/recalculation
-controls, offline preview parity and complete business acceptance. Estimates
+ceilings/overrides and qualification review UX, offline preview parity and complete business acceptance. Estimates
 must remain separate from quotes, reported deposits/payments and actual expense.
 
 ## Event/source integrity
@@ -82,12 +81,16 @@ other included costs are not subtracted again. Payroll remains owner/admin-only.
 Unknown costs/refunds/daily sales remain unknown. Normalization requires reviewed
 selling-day/hour inputs. Current events are partial and excluded from completed
 YoY comparisons; multiple occurrences in one year do not produce a false
-single-occurrence YoY. Complete multi-occurrence annual aggregation remains work.
+single-occurrence YoY. Annual totals combine reviewed accessible occurrences, retain unknown refunds/costs
+and normalization inputs, suppress duplicate source IDs and compare only reconciled
+consecutive years. They explicitly exclude unmapped or inaccessible history.
 
 Weather uses occurrence coordinates/timezone and local show dates, separates
 historical reanalysis/recent estimates/forecasts, and returns show-hour samples.
 Precipitation intervals use their ending timestamps. Missing venue/date/timezone
-or commercial configuration is a visible gap. Historical venue setup and
+or commercial configuration is a visible gap. Reviewed mappings freeze dates and historical venue/timezone/coordinates; subsequent
+source date changes require identity review. A mapped occurrence with missing
+coordinates cannot fall back to a later venue. Historical venue setup and
 comparison-weather UI for every year remain required; this branch does not claim
 that Macon's live workbook/history/weather has been configured or reconciled.
 

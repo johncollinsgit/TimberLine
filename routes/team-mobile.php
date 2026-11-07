@@ -34,7 +34,7 @@ Route::prefix('mobile/v1/workspaces/{tenant}/team-work')->name('mobile.v1.team-w
         });
         Route::middleware('abilities:mobile:write')->group(function (): void {
             Route::post('/operations/areas', \App\Http\Controllers\Mobile\TeamsCompanionController::class)->defaults('action', 'areas')->name('operations.areas.create');
-            foreach (['definition', 'draft', 'preview', 'create', 'mapping'] as $action) {
+            foreach (['definition', 'draft', 'preview', 'create', 'budget', 'mapping'] as $action) {
                 Route::post('/studio/'.$action, \App\Http\Controllers\TeamStudioController::class)->defaults('action', $action)->name('studio.'.$action);
             }
             Route::post('/events/asana/changes', \App\Http\Controllers\TeamEventTasksController::class)->defaults('action', 'prepare')->name('events.changes');

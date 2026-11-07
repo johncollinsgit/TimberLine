@@ -45,7 +45,8 @@ test('reviewed mappings reconcile annual profit without subtracting COGS twice o
     $report = app(EventIntelligence::class)->detail($t, $owner, $events[1]);
     expect($report['history'])->toHaveCount(2)->and($report['history'][0]['finance']['profit_cents'])->toBe(40000)
         ->and($report['history'][0]['finance']['daily_sales'])->toBeNull()->and($report['history'][0]['finance']['profit_per_hour_cents'])->toBeNull()
-        ->and($report['history'][1]['year_over_year']['net_sales_change_percent'])->toBe(20.0);
+        ->and($report['history'][1]['year_over_year']['net_sales_change_percent'])->toBe(20.0)
+        ->and($report['annual_history'][1]['year_over_year']['net_sales_change_percent'])->toBe(20.0);
 });
 
 test('same titles do not create historical links and source changes invalidate comparable figures', function () {
@@ -95,4 +96,52 @@ test('workbook total days stay recorded without being silently classified as sel
 test('unknown payroll components do not become invented zero-cost allowances', function () {
     $rows = app(\App\Services\Team\Operations\SheetMapper::class)->rows('2026', [['Name', 'Event', 'Start Date', 'Ending Date', 'Total Payroll Owed', 'Mileage Owed', 'Per Diem Owed', 'Expense Owed'], ['Fictional operator', 'Fictional show', '2026-11-06', '2026-11-08', 100, '', '', '']]);
     expect($rows['items'][0]['payroll_cents'])->toBe(10000)->and($rows['items'][0]['costs']['staffing'])->toBeNull()->and($rows['items'][0]['costs']['mileage'])->toBeNull();
+});
+
+test('annual comparisons combine reviewed occurrences once without double charging staff or included COGS', function () {
+    [$tenant, $owner] = teamWorkspace();
+    $area = studioArea($tenant);
+    $series = intelligenceRecord($tenant, $area, 'series');
+    foreach ([[2024, '03', 100000], [2024, '11', 200000], [2025, '03', 150000], [2025, '11', 210000]] as [$year, $month, $net]) {
+        $dates = ['starts_on' => "$year-$month-01", 'ends_on' => "$year-$month-02"];
+        $event = intelligenceRecord($tenant, $area, 'event', $dates);
+        $finance = intelligenceRecord($tenant, $area, 'financial', $dates + ['data' => ['net_sales_cents' => $net, 'total_expense_cents' => 60000, 'costs' => ['cogs' => 20000, 'staffing' => 15000], 'refunds_cents' => null]]);
+        app(\App\Services\Team\Studio\TeamsStudio::class)->reviewOccurrence($tenant, $owner, $area, ['id' => (string) Str::uuid(), 'request_id' => (string) Str::uuid(), 'expected_version' => 0, 'series_id' => $series->id, 'occurrence_id' => $event->id, 'financial_id' => $finance->id, 'staff_ids' => [$finance->id], 'allocation_reviewed' => true, 'reason' => 'Reviewed distinct dated occurrences and source totals.', 'venue' => 'Fictional hall', 'timezone' => 'America/New_York', 'verified_selling_days' => 2, 'daily_hours' => []]);
+    }
+    $report = app(EventIntelligence::class)->detail($tenant, $owner, $event);
+    expect($report['annual_history'])->toHaveCount(2)->and($report['annual_history'][0]['occurrence_count'])->toBe(2)
+        ->and($report['annual_history'][0]['net_sales_cents'])->toBe(300000)->and($report['annual_history'][0]['total_expense_cents'])->toBe(120000)
+        ->and($report['annual_history'][0]['profit_cents'])->toBe(180000)->and($report['annual_history'][0]['costs']['cogs'])->toBe(40000)
+        ->and($report['annual_history'][0]['refunds_cents'])->toBeNull()->and($report['annual_history'][0]['net_sales_per_day_cents'])->toBe(75000)
+        ->and($report['annual_history'][0]['profit_per_hour_cents'])->toBeNull()->and($report['annual_history'][1]['year_over_year']['net_sales_change_percent'])->toBe(20.0);
+});
+
+test('annual unknown partial duplicated or inaccessible evidence cannot establish completed year changes', function () {
+    $finance = ['source' => ['id' => 'original'], 'net_sales_cents' => 10000, 'total_expense_cents' => null, 'profit_cents' => null, 'costs' => [], 'complete' => false, 'partial' => true];
+    $history = [['id' => 'one', 'starts_on' => '2026-11-06', 'finance' => $finance], ['id' => 'two', 'starts_on' => '2026-11-08', 'finance' => $finance]];
+    $years = app(\App\Services\Team\Studio\AnnualEventComparison::class)->summarize($history, false);
+    expect($years[0]['net_sales_cents'])->toBe(10000)->and($years[0]['total_expense_cents'])->toBeNull()->and($years[0]['profit_cents'])->toBeNull()
+        ->and($years[0]['verified_selling_days'])->toBeNull()->and($years[0]['complete'])->toBeFalse()->and($years[0]['partial'])->toBeTrue()
+        ->and($years[0]['year_over_year'])->toBeNull()->and($years[0]['review_items'])->toHaveCount(3);
+});
+
+test('reviewed historical weather uses frozen occurrence dates and venue rather than later source locations', function () {
+    [$tenant, $owner] = teamWorkspace();
+    $area = studioArea($tenant);
+    $series = intelligenceRecord($tenant, $area, 'series');
+    $event = intelligenceRecord($tenant, $area, 'event', ['data' => ['latitude' => 40, 'longitude' => -74, 'timezone' => 'America/New_York']]);
+    $map = ['id' => (string) Str::uuid(), 'request_id' => (string) Str::uuid(), 'expected_version' => 0, 'series_id' => $series->id, 'occurrence_id' => $event->id, 'financial_id' => null, 'staff_ids' => [], 'allocation_reviewed' => false, 'reason' => 'Reviewed this occurrence at its original historical venue.', 'venue' => 'Historical hall', 'timezone' => 'America/Chicago', 'latitude' => 32, 'longitude' => -83, 'daily_hours' => []];
+    app(\App\Services\Team\Studio\TeamsStudio::class)->reviewOccurrence($tenant, $owner, $area, $map);
+    $event->update(['starts_on' => '2025-11-01', 'ends_on' => '2025-11-03']);
+    config(['team_operations.weather.enabled' => true, 'team_operations.weather.commercial' => true, 'team_operations.weather.api_key' => 'fictional']);
+    Http::fake(['*' => Http::response(['daily' => ['time' => ['2024-11-01'], 'temperature_2m_max' => [70]], 'daily_units' => []])]);
+    $this->actingAs($owner)->getJson('/team/events/'.$event->id.'/weather?tenant='.$tenant->slug)->assertOk()->assertJsonPath('timezone', 'America/Chicago')->assertJsonPath('venue.latitude', 32);
+    Http::assertSent(fn ($r) => $r['latitude'] === 32 && $r['longitude'] === -83 && $r['timezone'] === 'America/Chicago' && $r['start_date'] === '2024-11-01');
+    $report = app(EventIntelligence::class)->detail($tenant, $owner, $event);
+    expect($report['history'][0]['starts_on'])->toBe('2024-11-01')->and(implode(' ', $report['history'][0]['finance']['review_items']))->toContain('dates changed');
+    $link = TeamOperationRecord::findOrFail($map['id']);
+    $data = $link->data;
+    unset($data['latitude'], $data['longitude']);
+    $link->update(['data' => $data]);
+    $this->getJson('/team/events/'.$event->id.'/weather?tenant='.$tenant->slug)->assertUnprocessable();
 });

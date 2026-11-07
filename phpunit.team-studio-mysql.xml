@@ -5,6 +5,7 @@
             <file>tests/Feature/Team/TeamStudioTest.php</file>
             <file>tests/Feature/Team/TeamEventIntelligenceTest.php</file>
             <file>tests/Feature/Team/TeamCompanionTest.php</file>
+            <file>tests/Feature/Team/TeamEventTasksTest.php</file>
         </testsuite>
     </testsuites>
     <php>

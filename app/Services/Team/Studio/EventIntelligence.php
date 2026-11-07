@@ -60,11 +60,11 @@ class EventIntelligence
         unset($item);
         $budgets = [];
         if ($admin) {
-            $budgets = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $event->area_id, 'kind' => 'event_budget'])->orderBy('created_at')->get()->filter(fn ($r) => ($r->data['event_id'] ?? null) === $event->id)->map(fn ($r) => ['id' => $r->id, 'version' => $r->version, 'frozen_at' => $r->data['frozen_at'], 'policy_id' => $r->data['policy_id'], 'policy_version' => $r->data['policy_version'], 'preview' => $r->data['preview']])->values()->all();
+            $budgets = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $event->area_id, 'kind' => 'event_budget'])->orderBy('created_at')->get()->filter(fn ($r) => ($r->data['event_id'] ?? null) === $event->id)->map(fn ($r) => ['id' => $r->id, 'version' => $r->version, 'frozen_at' => $r->data['frozen_at'], 'policy_id' => $r->data['policy_id'], 'policy_version' => $r->data['policy_version'], 'inputs' => $r->data['inputs'], 'previous_budget_id' => $r->data['previous_budget_id'] ?? null, 'reason' => $r->data['reason'] ?? 'Initial event budget', 'preview' => $r->data['preview']])->values()->all();
         }
         $area = TeamArea::where('tenant_id', $tenant->id)->findOrFail($event->area_id);
 
-        return ['contract_version' => 2, 'event' => app(OperationsWorkspace::class)->view($event, $this->access->mayWrite($tenant, $user, $event->area_id), $admin), 'authority' => app(TeamsStudio::class)->authority($tenant, $area), 'series_id' => $current?->data['series_id'] ?? null, 'history' => $history, 'budget_revisions' => $budgets, 'can_view_financials' => $admin, 'review_items' => $current ? $issues : ['Map this occurrence to a reviewed series to compare years.'], 'basis' => 'Recorded profit = recorded net sales minus recorded total expense, including costs already in that expense. Operational sales, refunds, rewards, inventory and payments retain their original services.', 'as_of' => now()->toIso8601String()];
+        return ['contract_version' => 2, 'event' => app(OperationsWorkspace::class)->view($event, $this->access->mayWrite($tenant, $user, $event->area_id), $admin), 'authority' => app(TeamsStudio::class)->authority($tenant, $area), 'series_id' => $current?->data['series_id'] ?? null, 'source_task' => app(\App\Services\Team\Operations\EventTasks::class)->forOccurrence($tenant, $user, $event), 'history' => $history, 'annual_history' => $admin ? app(AnnualEventComparison::class)->summarize($history, ! $issues) : [], 'comparison_scope' => 'Reviewed occurrences available to the current user; unmapped source history is excluded.', 'budget_revisions' => $budgets, 'can_view_financials' => $admin, 'review_items' => $current ? $issues : ['Map this occurrence to a reviewed series to compare years.'], 'basis' => 'Recorded profit = recorded net sales minus recorded total expense, including costs already in that expense. Operational sales, refunds, rewards, inventory and payments retain their original services.', 'as_of' => now()->toIso8601String()];
     }
 
     private function occurrence(Tenant $tenant, User $user, TeamOperationRecord $link, bool $admin): ?array
@@ -79,7 +79,7 @@ class EventIntelligence
         } catch (\Symfony\Component\HttpKernel\Exception\HttpException) {
             return null;
         }
-        $item = ['id' => $record->id, 'title' => $record->title, 'starts_on' => $record->starts_on?->toDateString() ?? '', 'ends_on' => $record->ends_on?->toDateString(), 'venue' => $map['venue'], 'timezone' => $map['timezone'], 'daily_hours' => $map['daily_hours'] ?? [], 'mapping' => ['id' => $link->id, 'version' => $link->version, 'reviewed_at' => $map['reviewed_at'], 'source_evidence' => $map['reason']]];
+        $item = ['id' => $record->id, 'title' => $record->title, 'starts_on' => $map['starts_on'] ?? $record->starts_on?->toDateString() ?? '', 'ends_on' => $map['ends_on'] ?? $record->ends_on?->toDateString(), 'venue' => $map['venue'], 'timezone' => $map['timezone'], 'daily_hours' => $map['daily_hours'] ?? [], 'mapping' => ['id' => $link->id, 'version' => $link->version, 'reviewed_at' => $map['reviewed_at'], 'source_evidence' => $map['reason']]];
         if (! $admin) {
             unset($item['mapping']['source_evidence']);
 
@@ -98,7 +98,10 @@ class EventIntelligence
         $net = $data['net_sales_cents'] ?? null;
         $expense = $data['total_expense_cents'] ?? null;
         $profit = $net !== null && $expense !== null ? $net - $expense : null;
-        $partial = ! $record->ends_on || $record->ends_on->toDateString() >= now($map['timezone'])->toDateString();
+        $partial = ! $item['ends_on'] || $item['ends_on'] >= now($map['timezone'])->toDateString();
+        if ($item['starts_on'] !== ($record->starts_on?->toDateString() ?? '') || $item['ends_on'] !== $record->ends_on?->toDateString()) {
+            $issues[] = 'Mapped occurrence dates changed at the source; review its identity before comparison.';
+        }
         if (! $finance) {
             $issues[] = 'Recorded financial source unavailable.';
         }
