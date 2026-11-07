@@ -39,6 +39,9 @@ final class PosReceiptRewards
         if (isset($terms['in_person_max_minor'])) {
             $rules[] = 'Use up to $'.number_format($terms['in_person_max_minor'] / 100, 2, '.', '').' per in-person purchase, limited to your balance and eligible merchandise.';
         }
+        if (isset($terms['in_person_member_max_minor']) && $terms['in_person_member_max_minor'] !== ($terms['in_person_max_minor'] ?? null)) {
+            $rules[] = 'Verified active members may use up to $'.number_format($terms['in_person_member_max_minor'] / 100, 2, '.', '').' per in-person purchase, limited to their balance and eligible merchandise.';
+        }
         if (($terms['redemption'] ?? null) === 'online_only' && ! isset($terms['in_person_max_minor'])) {
             $rules[] = 'Rewards can be redeemed online under this program’s rules.';
         }

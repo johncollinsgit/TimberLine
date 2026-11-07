@@ -900,6 +900,9 @@ it('atomically binds one capped reward to the original quote and taxes the disco
     $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->assertJsonPath('amount_minor', 535)->json();
     $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail();
     $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($sale);
+    $receiptRules = app(\App\Services\Pos\PosReceiptRewards::class)->forSale($sale, $snapshot)['rules'];
+    expect(implode(' ', $receiptRules))->toContain('Use up to $5.00')->not->toContain('redeemed online');
+    expect($snapshot['customer_rewards']['redemption'])->toBe('in_person_and_online');
     expect($snapshot['terms']['discount_minor'])->toBe(500)->and($snapshot['terms']['tax_minor'])->toBe(35)
         ->and($snapshot['terms']['pos_candle_cash']['profile_id'])->toBe($this->profile->id)
         ->and(json_encode($snapshot))->not->toContain($credential['qr_payload'])

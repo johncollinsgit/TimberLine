@@ -162,6 +162,13 @@ final class PosService
         }
         $customer = isset($input['customer_profile_id']) ? $this->customers->freeze($scope, $input['customer_profile_id']) : null;
         $rewards = ($customer || $stockCore) ? $this->rewards->freeze($scope, $customer) : ['enabled' => false];
+        if (($rewards['enabled'] ?? false) && app(PosRewardRedemptionSettings::class)->availableForRegister($scope)) {
+            $redemptionPolicy = app(PosRewardRedemptionSettings::class)->forRegister($scope);
+            // Receipt disclosures use original reviewed terms, including when no rewards were used.
+            $rewards = array_replace($rewards, ['redemption' => 'in_person_and_online',
+                'in_person_max_minor' => $redemptionPolicy['max_minor'],
+                'in_person_member_max_minor' => $redemptionPolicy['member_max_minor']]);
+        }
         $scope['customer'] = $customer;
         $terms = $this->catalog->terms($scope, $input);
         $id = bin2hex(random_bytes(16));
