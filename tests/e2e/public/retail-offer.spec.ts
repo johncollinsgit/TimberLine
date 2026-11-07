@@ -24,7 +24,7 @@ test("retail offer explains both paths and the complete customer-to-profit journ
     expect(writes).toEqual([]);
 });
 
-for (const width of [390, 820, 1440]) {
+for (const width of [320, 375, 390, 820, 1440]) {
     test("retail offer fits " + width + "px without losing its sections or primary action", async ({ page }) => {
         await page.setViewportSize({ width, height: 1000 });
         await page.emulateMedia({ reducedMotion: "reduce" });
@@ -34,6 +34,19 @@ for (const width of [390, 820, 1440]) {
         for (const id of ["choose-your-path", "customer-experience", "retail-team", "retail-tools", "launch-plan"]) {
             await page.locator("#" + id).scrollIntoViewIfNeeded();
             expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+        }
+        const fields = await page.locator('.eb-retail-assumptions input[type="number"]').evaluateAll((inputs) => inputs.slice(0, 8).map((input) => {
+            const box = input.getBoundingClientRect();
+            return { x: box.x, y: box.y, height: box.height, fontSize: parseFloat(getComputedStyle(input).fontSize) };
+        }));
+        for (const field of fields) {
+            expect(field.height).toBeGreaterThanOrEqual(44);
+            expect(field.fontSize).toBeGreaterThanOrEqual(16);
+        }
+        for (let index = 0; index < fields.length; index += 2) {
+            if (Math.abs(fields[index].x - fields[index + 1].x) > 1) {
+                expect(Math.abs(fields[index].y - fields[index + 1].y)).toBeLessThanOrEqual(1);
+            }
         }
     });
 }

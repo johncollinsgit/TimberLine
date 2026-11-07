@@ -52,15 +52,48 @@ try {
   assert.equal(await grid.locator('[data-calendar-date]').count(), 3, 'Refresh preserves selected span');
   await page.getByRole('button', { name: '2 days', exact: true }).click(); assert.equal(await grid.locator('[data-calendar-date]').count(), 2); assert.equal(await event.count(), 1);
   await page.getByRole('button', { name: '1 day', exact: true }).click(); assert.equal(await grid.locator('[data-calendar-date]').count(), 1);
-  for (const [name, viewport] of [['desktop', { width: 1440, height: 1000 }], ['phone', { width: 390, height: 844 }]]) { await page.setViewportSize(viewport); await page.getByRole('button', { name: '3 days', exact: true }).click(); await grid.scrollIntoViewIfNeeded(); assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), name + ' no page overflow'); await page.screenshot({ path: join(evidence, name + '-calendar.png') }); }
+  const geometry = [];
+  for (const [name, viewport] of [['desktop', { width: 1440, height: 1000 }], ['tablet', { width: 820, height: 1180 }], ['landscape', { width: 844, height: 390 }], ['phone-320', { width: 320, height: 844 }], ['phone-375', { width: 375, height: 844 }], ['phone', { width: 390, height: 844 }]]) {
+    await page.setViewportSize(viewport); await page.getByRole('button', { name: '3 days', exact: true }).click();
+    const measurements = await page.locator('.tops-event-calendar-controls').evaluate(toolbar => {
+      const fields = [...toolbar.querySelectorAll('input:not([hidden]),select')].map(el => { const box = el.getBoundingClientRect(), css = getComputedStyle(el); return { top: box.top, left: box.left, width: box.width, height: box.height, font: css.fontFamily, size: Number.parseFloat(css.fontSize) }; });
+      const buttons = [...toolbar.querySelectorAll('button')].map(el => ({ height: el.getBoundingClientRect().height, font: getComputedStyle(el).fontFamily }));
+      return { fields, buttons };
+    });
+    assert.ok(measurements.fields.every(field => Math.abs(field.height - 44) <= 1 && field.size >= 16), name + ' consistent readable44px fields ' + JSON.stringify(measurements));
+    assert.ok(measurements.buttons.every(button => Math.abs(button.height - 44) <= 1), name + '44px buttons');
+    assert.equal(new Set([...measurements.fields.map(field => field.font), ...measurements.buttons.map(button => button.font)]).size, 1, name + ' one UI font');
+    if (viewport.width >= 360) assert.ok(Math.abs(measurements.fields[0].top - measurements.fields[1].top) <= 1, name + ' date/color rows align');
+    else assert.ok(Math.abs(measurements.fields[0].left - measurements.fields[1].left) <= 1 && Math.abs(measurements.fields[0].width - measurements.fields[1].width) <= 1, name + ' full-width stacked fields align');
+    assert.ok(await event.first().locator('strong').evaluate(el => Number.parseFloat(getComputedStyle(el).fontSize) >= 16), name + ' readable title');
+    assert.ok(await event.first().locator('small').evaluate(el => Number.parseFloat(getComputedStyle(el).fontSize) >= 14), name + ' readable metadata');
+    await page.locator('.tops-event-calendar-controls').evaluate(el => el.scrollIntoView({ block: 'start' })); await page.locator('.tops-event-calendar-scroll').evaluate(el => { el.scrollLeft = 0; });
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), name + ' no page overflow'); await page.screenshot({ path: join(evidence, name + '-calendar.png') });
+    if (name === 'landscape') { await scrollCalendarToTop(); await page.screenshot({ path: join(evidence, 'landscape-cards.png') }); }
+    geometry.push({ width: viewport.width, height: viewport.height, ...measurements });
+  }
+  const scroll = page.getByRole('region', { name: 'Dated event calendar. Scroll horizontally for more dates.' }); await scroll.focus(); await page.keyboard.press('ArrowRight'); await page.waitForFunction(() => document.querySelector('.tops-event-calendar-scroll').scrollLeft > 0);
   await page.getByRole('button', { name: '2 days', exact: true }).click(); await page.getByLabel('Calendar first day').fill('2026-11-05');
-  await grid.locator('[data-calendar-kind="setup"]').waitFor(); await grid.scrollIntoViewIfNeeded(); await page.screenshot({ path: join(evidence, 'phone-setup.png') });
+  await grid.locator('[data-calendar-kind="setup"]').waitFor();
+  const footers = await grid.locator('.tops-calendar-crew').evaluateAll(els => els.map(el => el.getBoundingClientRect().bottom)); assert.ok(Math.max(...footers) - Math.min(...footers) <= 1, 'Crew footers align across phase cards');
+  await page.locator('.tops-event-calendar-controls').evaluate(el => el.scrollIntoView({ block: 'start' })); await scroll.evaluate(el => { el.scrollLeft = 0; }); await page.getByLabel('Calendar first day').evaluate(el => el.blur()); await page.screenshot({ path: join(evidence, 'phone-setup.png') });
   await event.first().click(); const detail = page.locator('#tops-detail'); await detail.getByRole('heading', { name: 'Dated event schedule' }).waitFor();
   await detail.getByText(/Confirmed date set · 2 distinct selling days/).waitFor(); await detail.getByText(/Asana due anchor:.*Nov.*6.*2026/).waitFor();
   assert.ok((await detail.getByRole('link', { name: 'Review schedules in Teams Studio' }).getAttribute('href')).includes('/teams/studio?tenant=' + fixture.tenant));
   await detail.getByText(/Calendar windows do not establish staff shifts/).waitFor(); await page.screenshot({ path: join(evidence, 'phone-schedule-summary.png') });
+  await page.locator('#tops-detail-close').click(); await page.getByRole('button', { name: '1 day', exact: true }).click(); await page.getByLabel('Calendar first day').fill('2026-11-10');
+  await grid.getByText('Hours unknown', { exact: true }).waitFor(); await grid.getByText('Timezone unknown', { exact: true }).waitFor(); await grid.getByText('Partial schedule', { exact: true }).waitFor();
+  await page.locator('.tops-event-calendar-controls').evaluate(el => el.scrollIntoView({ block: 'start' })); await page.screenshot({ path: join(evidence, 'phone-unknown-source.png') });
+  const singleDay = page.getByRole('button', { name: '1 day', exact: true }); await singleDay.focus(); await singleDay.press('Enter'); assert.ok(await singleDay.evaluate(el => document.activeElement === el), 'Keyboard focus stays on selected view'); await page.screenshot({ path: join(evidence, 'phone-keyboard-focus.png') });
+  await page.emulateMedia({ forcedColors: 'active' }); await page.screenshot({ path: join(evidence, 'phone-high-contrast.png') }); await page.emulateMedia({ forcedColors: 'none' });
+  const failedRead = '**/team/operations/records?*'; await page.route(failedRead, route => route.abort()); await page.locator('#tops-refresh').click(); await page.locator('#tops-notice').filter({ hasText: /Failed to fetch/ }).waitFor();
+  await page.getByRole('heading', { name: 'This view is unavailable', exact: true }).waitFor(); await page.getByText('The source or access check did not complete. This does not mean there are no records.', { exact: true }).waitFor();
+  await page.screenshot({ path: join(evidence, 'phone-network-unavailable.png') });
+  await page.unroute(failedRead); await page.locator('#tops-refresh').click(); await grid.getByText('Partial schedule', { exact: true }).waitFor(); await page.waitForFunction(() => document.querySelector('#tops-content').getAttribute('aria-busy') !== 'true');
   assert.deepEqual(errors, []); assert.deepEqual(writes, [], 'Calendar and details are read-only');
-  await writeFile(join(evidence, 'acceptance.json'), JSON.stringify({ passed: true, fictional_only: true, explicit_sessions: 3, distinct_selling_days: 2, gap_days_painted: 0, views: ['month', 1, 2, 3], crew_identity_color_stable: true, refresh_preserves_view_and_color: true, provider_or_operation_writes: writes, javascript_errors: errors }, null, 2));
+  await writeFile(join(evidence, 'acceptance.json'), JSON.stringify({ passed: true, fictional_only: true, sparse_event_explicit_sessions: 3, distinct_selling_days: 2, gap_days_painted: 0, views: ['month', 1, 2, 3], crew_identity_color_stable: true, refresh_preserves_view_and_color: true, keyboard_scroll: true, keyboard_focus: true, forced_colors: true, reduced_motion: true, long_title: true, unknown_source: true, failed_read_notice_and_recovery: true, geometry, provider_or_operation_writes: writes, javascript_errors: errors }, null, 2));
   console.log('PASS legacy calendar: real authenticated HTTP, explicit sparse dates, lighter setup, unknown/legacy labels, event/crew colors, month/1/2/3-day controls, source anchor, Studio review link, desktop/phone, no writes.');
 } catch (error) { if (page) { await page.screenshot({ path: join(evidence, 'failure.png') }); console.error((await page.locator('body').innerText()).slice(-5000)); } throw error;
 } finally { if (browser) await browser.close(); if (server && server.exitCode === null) { server.kill('SIGTERM'); await new Promise(done => server.once('exit', done)); } await rm(dir, { recursive: true, force: true }); }
+
+async function scrollCalendarToTop() { await page.locator('.tops-event-calendar-scroll').evaluate(el => el.scrollIntoView({ block: 'start' })); }

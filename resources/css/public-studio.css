@@ -192,8 +192,8 @@
 
 .eb-retail-calculator { display: grid; grid-template-columns: .9fr 1.1fr; gap: 34px; padding: 32px; border: 1px solid #cdd3c7; border-radius: 16px; background: #fffdf8; }
 .eb-retail-assumptions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-content: start; }
-.eb-retail-assumptions > label { display: grid; align-content: start; gap: 8px; color: #315748; font-size: .75rem; font-weight: 700; line-height: 1.5; }
-.eb-retail-assumptions input[type=number] { width: 100%; min-height: 44px; padding: 9px 12px; border: 1px solid #aab7a4; border-radius: 7px; background: #fff; color: #173e3b; font-size: .95rem; }
+.eb-retail-assumptions > label { display: grid; grid-template-rows: 1fr auto; min-width: 0; gap: 8px; color: #315748; font-size: .875rem; font-weight: 600; line-height: 1.45; }
+.eb-retail-assumptions input[type=number] { width: 100%; min-width: 0; min-height: 44px; padding: 9px 12px; border: 1px solid #aab7a4; border-radius: 7px; background: #fff; color: #173e3b; font: inherit; font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .eb-retail-assumptions input:focus-visible { outline: 3px solid #a55234; outline-offset: 2px; }
 .eb-retail-assumptions > p { grid-column: 1 / -1; margin: 0; color: #52615d; font-size: .73rem; line-height: 1.65; }
 .eb-retail-hotel-choice { grid-column: 1 / -1; }
@@ -222,6 +222,7 @@
 @media (max-width: 1000px) { .eb-retail-calculator { grid-template-columns: 1fr; }.eb-retail-maker-photo { height: 620px; } }
 @media (max-width: 760px) { .eb-retail-maker-photo { height: 440px; }.eb-retail-comparison { padding: 60px 0; } }
 @media (max-width: 520px) { .eb-retail-calculator { padding: 21px; gap: 30px; }.eb-retail-assumptions { gap: 15px; }.eb-retail-result-cards { grid-template-columns: 1fr; gap: 8px; }.eb-retail-result-cards > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px; }.eb-retail-result-cards span { min-height: 0; max-width: 150px; }.eb-retail-result-cards strong { flex-shrink: 0; margin: 0; font-size: 1.05rem; white-space: nowrap; }.eb-retail-value-table { font-size: .7rem; } }
+@media (max-width: 374px) { .eb-retail-assumptions { grid-template-columns: minmax(0, 1fr); } }
 
 /* Retail offer: scoped public presentation; no workspace or tenant styles. */
 .eb-retail-page { margin: 0; }

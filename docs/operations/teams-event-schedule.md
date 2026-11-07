@@ -2,6 +2,20 @@
 
 Teams uses the existing encrypted operations records, drafts, command receipts and revisions. No schema migration or second event store is needed. Source dates and frozen budgets keep their original meanings.
 
+## Presentation quality
+
+Phone and web calendars use a consistent sans-serif hierarchy, labelled aligned
+toolbars, controls of at least 44px and readable session cards. Two/three-day
+phone views scroll through deliberate day columns instead of squeezing type.
+Phase names and border treatments retain meaning without color alone. Setup
+uses a lighter shade. Unknown dates and legacy bounds use structured rows;
+source coverage and additional explanations remain accessible.
+
+Review actual 320/375/390px phone, landscape/tablet and desktop layouts, keyboard
+focus, long titles, missing dates and reduced-motion behavior. Confirm computed
+styles against inherited legacy selectors; declared CSS alone is insufficient.
+Full supported-device and offline acceptance remain separate release work.
+
 ## Shared contract
 
 Wizard logistics and native event data accept:
@@ -51,6 +65,17 @@ Its disposable SQLite/real Laravel HTTP fixture checks sparse selling dates,
 lighter setup, month/1/2/3-day controls, stable crew colors across refresh,
 unknown/legacy labels, the source anchor and Studio link at desktop/phone widths.
 It performs no provider or operation writes.
+
+The calendar toolbar uses aligned 44px controls with 16px input/select text,
+14px labels/metadata and 16px card titles in the existing Inter/system sans
+family. Phone multi-day views retain readable horizontal day columns with an
+explicit scroll hint; the date/color fields stack at narrow widths. Source
+notes use a compact disclosure and phase labels remain explicit without color.
+The local acceptance also checks 320/375/390px phones, landscape, tablet and
+desktop geometry; long titles, unknown dates/hours/timezones, keyboard focus
+and scrolling, forced colors, reduced motion, and an honest unavailable state
+plus recovery after a failed read. These are browser checks, not physical-device
+or offline support certification.
 
 Copied occurrence sessions are suggestions. schedule_complete=true with copy_from requires explicit confirm_copied_schedule=true after reviewing the new dates. Old dates cannot silently shift or contradict new occurrence bounds. Historical budgets are never recalculated.
 

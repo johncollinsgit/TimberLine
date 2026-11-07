@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\Marketing\SquareConnectionContext;
 use App\Services\Marketing\SquareCustomerIdentityService;
 use App\Services\Marketing\SquareMarketingSyncService;
+use App\Services\Marketing\TenantCustomerLookup;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -22,12 +23,27 @@ class SquareCustomerConnectionController extends Controller
     public function index(Request $request, SquareConnectionContext $connections, SquareCustomerIdentityService $identities)
     {
         [$tenant, $actor] = $this->access($request, $identities);
+        $queryInput = $request->query('customer_query');
+        $input = validator(['customer_query' => is_string($queryInput) ? trim($queryInput) : $queryInput], [
+            'customer_query' => 'nullable|string|min:2|max:120',
+        ])->validate();
+        $customerQuery = $input['customer_query'] ?? '';
+        $lookup = app(TenantCustomerLookup::class);
+        $customerSearch = $customerQuery !== '' ? $lookup->search($tenant->id, $customerQuery) : ['customers' => [], 'has_more' => false, 'page' => 1];
         $runs = MarketingImportRun::query()->where('tenant_id', $tenant->id)->whereIn('type', ['square_customers_sync', 'square_orders_sync', 'square_payments_sync', 'square_cards_sync'])->latest('id')->limit(20)->get();
         $reviews = MarketingIdentityReview::query()->where('source_type', 'square_customer')->where('payload->source_context->tenant_id', $tenant->id)->where('status', 'pending')->latest('id')->paginate(25);
+        $reviewCustomerChoices = [];
+        foreach ($reviews as $review) {
+            $candidateIds = collect((array) data_get($review->payload, 'candidate_profile_ids', []))
+                ->filter(fn ($id) => (is_int($id) || (is_string($id) && ctype_digit($id))) && (int) $id > 0)
+                ->map(fn ($id) => (int) $id)->unique()->take(100)->values()->all();
+            $reviewCustomerChoices[$review->id] = $lookup->search($tenant->id, '', $candidateIds)['customers'];
+        }
         $oauth = class_exists(\App\Services\Marketing\SquareCustomerOAuth::class) ? app(\App\Services\Marketing\SquareCustomerOAuth::class)->status($tenant, $actor) : null;
 
         return response()->view('customers.square-connection', ['tenant' => $tenant, 'connections' => $connections->available($tenant->id), 'runs' => $runs,
             'reviews' => $reviews, 'identities' => $identities, 'oauth' => $oauth,
+            'customerQuery' => $customerQuery, 'customerSearch' => $customerSearch, 'reviewCustomerChoices' => $reviewCustomerChoices,
             'counts' => ['customers' => SquareCustomer::where('tenant_id', $tenant->id)->count(), 'orders' => SquareOrder::where('tenant_id', $tenant->id)->count(), 'payments' => SquarePayment::where('tenant_id', $tenant->id)->count()],
         ])->header('Cache-Control', 'private, no-store');
     }

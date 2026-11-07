@@ -1,5 +1,16 @@
 ## Retail, Square sources and dated events (November 7; source candidate)
 
+Owner quality direction: every new surface must feel like one professionally
+finished product. Use existing brand tokens and clean sans-serif type, aligned
+responsive grids, consistent control heights of at least 44px and readable phone
+text. Do not shrink multi-day calendars to fit; use deliberate, labelled scrolling.
+Keep primary dates, amounts and customer/product names prominent; put opaque
+source identifiers and exact audit timestamps in accessible secondary details.
+Review actual phone and desktop screenshots, including narrow widths, long text,
+keyboard focus and missing/error states. Geometry checks supplement visual review.
+Preserve recovery, unknown-data labels and authorization; presentation work cannot
+establish complete offline or supported-device acceptance.
+
 The public retail overview at `/platform/retail` connects keeping Square or a
 phased move with customer profiles, tenant rewards/birthdays/app setup, Teams
 employee time, company event pay/costs and event profit. Preserve its approved

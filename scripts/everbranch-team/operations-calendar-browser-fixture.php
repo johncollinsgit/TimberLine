@@ -19,7 +19,7 @@ $sessions = [
 ];
 $make = fn ($title, $data, $start, $end) => App\Models\TeamOperationRecord::create(['id' => (string) Illuminate\Support\Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $area->id,
     'source_key' => hash('sha256', $title), 'kind' => 'event', 'title' => $title, 'status' => 'accepted', 'data' => $data, 'starts_on' => $start, 'ends_on' => $end, 'assigned_user_id' => $owner->id, 'visibility' => 'area']);
-$event = $make('Fictional sparse market', ['sessions' => $sessions, 'schedule_complete' => true, 'calendar_color' => '#325b91', 'timezone' => 'America/New_York', 'source_schedule' => ['due_on' => '2026-11-06']], '2026-11-05', '2026-11-08');
+$event = $make('Fictional seasonal makers and home goods weekend market', ['sessions' => $sessions, 'schedule_complete' => true, 'calendar_color' => '#325b91', 'timezone' => 'America/New_York', 'source_schedule' => ['due_on' => '2026-11-06']], '2026-11-05', '2026-11-08');
 $make('Fictional legacy range', [], '2026-11-06', '2026-11-15');
-$make('Fictional partial travel', ['sessions' => [['id' => (string) Illuminate\Support\Str::uuid(), 'kind' => 'travel', 'date' => null]], 'schedule_complete' => false], null, null);
+$make('Fictional partial travel', ['sessions' => [['id' => (string) Illuminate\Support\Str::uuid(), 'kind' => 'travel', 'date' => null], ['id' => (string) Illuminate\Support\Str::uuid(), 'kind' => 'travel', 'date' => '2026-11-10']], 'schedule_complete' => false], null, null);
 echo json_encode(['tenant' => $tenant->slug, 'tenant_id' => (string) $tenant->id, 'area_id' => $area->id, 'event_id' => $event->id, 'person_id' => 'native:'.$owner->id], JSON_THROW_ON_ERROR);
