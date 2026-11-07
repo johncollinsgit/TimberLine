@@ -37,6 +37,7 @@
         <div class="teams-projects"><p class="teams-section-label">Favorites</p><div id="teams-favorite-list"></div><p class="teams-section-label" style="margin-top:26px">Projects</p><input id="tw-project-nav-search" type="search" placeholder="Find a project…" aria-label="Find a project in navigation" style="width:100%;border:1px solid #ffffff20;background:#ffffff08;color:#dce7dd;padding:8px 10px;border-radius:5px;font:inherit;font-size:12px;margin-bottom:10px"><div id="teams-project-list"></div>@if(config('team_work.asana_enabled'))<p class="teams-section-label" style="margin-top:26px">Asana</p><div id="tw-asana-project-nav"></div>@endif</div>
         @endif
         <div class="teams-bottom">
+            @if(config('team_operations.enabled'))<a href="{{ route('team.studio.app', ['tenant' => $tenant->slug]) }}">Event studio &amp; budgets</a>@endif
             <button type="button" class="teams-install" data-teams-install>Install Teams</button>
             <p class="teams-install-help" data-teams-install-help hidden></p>
             <a href="{{ route('team.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link>Back to Everbranch</a>

@@ -97,7 +97,7 @@ class TeamOperationsController extends Controller
 
     public function createArea(Request $r)
     {
-        $input = $r->validate(['name' => 'required|string|max:100', 'profile' => 'required|in:events,wholesale']);
+        $input = $r->validate(['name' => 'required|string|max:100', 'profile' => 'required|in:events,wholesale,custom']);
 
         return $this->json($this->workspace->areaView($this->workspace->createArea($this->tenant($r), $r->user(), $input)));
     }
@@ -339,10 +339,16 @@ class TeamOperationsController extends Controller
     public function weather(Request $r, string $id)
     {
         $t = $this->tenant($r);
-        $event = TeamOperationRecord::query()->where(['tenant_id' => $t->id, 'kind' => 'event'])->findOrFail($id);
+        $event = TeamOperationRecord::query()->where('tenant_id', $t->id)->whereIn('kind', ['event', 'financial'])->findOrFail($id);
         $this->access->record($t, $r->user(), $event);
+        $mapping = TeamOperationRecord::where(['tenant_id' => $t->id, 'area_id' => $event->area_id, 'kind' => 'event_link', 'status' => 'accepted'])->get()->first(fn ($link) => ($link->data['occurrence_id'] ?? null) === $event->id);
+        abort_if($event->kind === 'financial' && ! $mapping, 404);
+        if ($mapping) {
+            $series = TeamOperationRecord::where(['tenant_id' => $t->id, 'area_id' => $event->area_id, 'kind' => 'series'])->findOrFail($mapping->data['series_id']);
+            $this->access->record($t, $r->user(), $series);
+        }
 
-        return $this->json(app(\App\Services\Team\Operations\OperationsWeather::class)->event($event));
+        return $this->json(app(\App\Services\Team\Operations\OperationsWeather::class)->event($event, $mapping?->data));
     }
 
     public function sales(Request $r, string $id)

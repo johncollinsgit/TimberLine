@@ -85,7 +85,7 @@ class OperationsWorkspace
 
     public function records(Tenant $tenant, User $user, TeamArea $area, array $filters): array
     {
-        $query = TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'area_id' => $area->id])->where('status', '!=', 'withdrawn')->orderByRaw('CASE WHEN starts_on IS NULL THEN 1 ELSE 0 END')->orderBy('starts_on')->orderBy('title')->orderBy('id');
+        $query = TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'area_id' => $area->id])->whereIn('kind', self::KINDS)->where('status', '!=', 'withdrawn')->orderByRaw('CASE WHEN starts_on IS NULL THEN 1 ELSE 0 END')->orderBy('starts_on')->orderBy('title')->orderBy('id');
         if (! $this->access->admin($this->access->actor($tenant, $user))) {
             $query->whereNotIn('kind', ['financial', 'staff'])->where('visibility', '!=', 'admin')->where(fn ($q) => $q->where('visibility', '!=', 'assigned')->orWhere('assigned_user_id', $user->id));
         }
@@ -167,7 +167,7 @@ class OperationsWorkspace
             unset($data['original_notes']);
         }
 
-        return ['id' => $record->id, 'area_id' => $record->area_id, 'kind' => $record->kind, 'title' => $record->title, 'status' => $record->status, 'version' => $record->version, 'assigned_user_id' => $record->assigned_user_id, 'starts_on' => $record->starts_on?->toDateString(), 'ends_on' => $record->ends_on?->toDateString(), 'data' => $data, 'source' => $record->connection_id ? ['connection_id' => $record->connection_id, 'key' => $record->source_key] : null, 'capabilities' => ['edit' => $canEdit && ! $record->connection_id && ! in_array($record->kind, ['financial', 'staff', 'document'])], 'updated_at' => $record->updated_at?->toIso8601String()];
+        return ['id' => $record->id, 'area_id' => $record->area_id, 'kind' => $record->kind, 'title' => $record->title, 'status' => $record->status, 'version' => $record->version, 'assigned_user_id' => $record->assigned_user_id, 'starts_on' => $record->starts_on?->toDateString(), 'ends_on' => $record->ends_on?->toDateString(), 'data' => $data, 'source' => $record->connection_id ? ['connection_id' => $record->connection_id, 'key' => $record->source_key] : null, 'capabilities' => ['edit' => $canEdit && in_array($record->kind, self::KINDS, true) && ! $record->connection_id && ! in_array($record->kind, ['financial', 'staff', 'document'])], 'updated_at' => $record->updated_at?->toIso8601String()];
     }
 
     public function save(Tenant $tenant, User $user, TeamArea $area, array $input): TeamOperationRecord

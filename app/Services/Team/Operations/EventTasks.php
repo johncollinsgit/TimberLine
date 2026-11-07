@@ -4,6 +4,7 @@ namespace App\Services\Team\Operations;
 
 use App\Models\TeamArea;
 use App\Models\TeamOperationAttempt;
+use App\Models\TeamOperationRecord;
 use App\Models\TeamProviderConnection;
 use App\Models\Tenant;
 use App\Models\User;
@@ -57,11 +58,15 @@ class EventTasks
         }
         $response = $this->providers->asana($c, 'tasks', ['assignee' => $c->settings['external_user_id'], 'workspace' => $c->settings['source']['asana_workspace'], 'completed_since' => now()->toIso8601String(), 'limit' => 100, 'offset' => $offset, 'opt_fields' => self::FIELDS]);
         $items = [];
+        $canWrite = $this->access->mayWrite($tenant, $user, $area->id);
         foreach ($response['data'] ?? [] as $task) {
             if ((string) ($task['assignee']['gid'] ?? '') !== (string) $c->settings['external_user_id'] || ! $this->project($c, $task)) {
                 continue;
             }
-            $items[(string) $task['gid']] = $this->present($c, $task);
+            $view = $this->present($c, $task);
+            $view['can_write'] = $view['can_write'] && $canWrite;
+            $view['can_comment'] = $view['can_comment'] && $canWrite;
+            $items[(string) $task['gid']] = $view;
         }
         $next = $response['next_page']['offset'] ?? null;
 
@@ -101,11 +106,27 @@ class EventTasks
 
     private function present(TeamProviderConnection $c, array $task): array
     {
-        return ['gid' => (string) $task['gid'], 'name' => $task['name'] ?? '', 'notes' => $task['notes'] ?? '', 'completed' => (bool) ($task['completed'] ?? false),
+        return ['event_fields' => app(OperationsSync::class)->extract($task['notes'] ?? ''), 'event_schedule' => app(EventSchedule::class)->source($task), 'memberships' => array_values(array_filter($task['memberships'] ?? [], fn ($m) => in_array((string) ($m['project']['gid'] ?? ''), $this->providers->selectedProjects($c), true))), 'gid' => (string) $task['gid'], 'name' => $task['name'] ?? '', 'notes' => $task['notes'] ?? '', 'completed' => (bool) ($task['completed'] ?? false),
             'due_on' => $task['due_on'] ?? null, 'start_on' => $task['start_on'] ?? null, 'due_at' => $task['due_at'] ?? null, 'start_at' => $task['start_at'] ?? null, 'assignee' => $task['assignee'] ?? null,
             'modified_at' => $task['modified_at'] ?? null, 'source_url' => 'https://app.asana.com/0/'.($this->project($c, $task) ?? $task['_verified_parent_project'] ?? '0').'/'.$task['gid'],
             'connection_id' => $c->id, 'parent_id' => $task['_verified_parent'] ?? null, 'version' => $this->version($task), 'can_write' => $this->writable($c),
-            'source_mode' => ($c->settings['read_only_snapshot'] ?? false) ? 'snapshot' : 'live'];
+            'can_comment' => $this->writable($c) && in_array('stories:write', preg_split('/\s+/', $c->settings['scopes'] ?? ''), true), 'source_mode' => ($c->settings['read_only_snapshot'] ?? false) ? 'snapshot' : 'live'];
+    }
+
+    public function forOccurrence(Tenant $tenant, User $user, TeamOperationRecord $record): ?array
+    {
+        $area = $this->access->area($tenant, $user, $record->area_id);
+        if ($area->profile !== 'events' || ! isset($record->data['source_workspace'], $record->data['source_id'])) {
+            return null;
+        }
+        $projects = array_filter([$record->data['source_project'] ?? null, ...($record->data['source_projects'] ?? [])]);
+        foreach ($this->connections($tenant, $user, $area) as $connection) {
+            if ((string) $connection->settings['source']['asana_workspace'] === (string) $record->data['source_workspace'] && array_intersect($projects, $this->providers->selectedProjects($connection))) {
+                return $this->detail($tenant, $user, $area, $connection->id, $record->data['source_id']);
+            }
+        }
+
+        return null;
     }
 
     private function version(array $task): string
@@ -130,6 +151,19 @@ class EventTasks
         if ($kind === 'task') {
             $view = $this->present($c, $task);
             $view['can_write'] = $view['can_write'] && $this->access->mayWrite($tenant, $user, $area->id);
+            $view['can_comment'] = $view['can_comment'] && $view['can_write'];
+            $record = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event', 'source_key' => hash('sha256', 'asana:'.$c->settings['source']['asana_workspace'].':'.$gid)])->first();
+            $view['occurrence'] = null;
+            if ($record) {
+                try {
+                    $this->access->record($tenant, $user, $record);
+                    $view['occurrence'] = app(OperationsWorkspace::class)->view($record, $this->access->mayWrite($tenant, $user, $area->id), $this->access->admin($this->access->actor($tenant, $user)));
+                } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+                    if (! in_array($error->getStatusCode(), [403, 404, 409], true)) {
+                        throw $error;
+                    }
+                }
+            }
 
             return $view;
         }
@@ -153,7 +187,7 @@ class EventTasks
         $response = $this->providers->asana($c, $kind === 'attachments' ? 'attachments' : 'tasks/'.$gid.'/'.$kind, ['limit' => 100, 'offset' => $offset, 'opt_fields' => $fields, ...($kind === 'attachments' ? ['parent' => $gid] : [])]);
         $next = $response['next_page']['offset'] ?? null;
 
-        return ['items' => $response['data'] ?? [], 'has_more' => (bool) $next,
+        return ['items' => $kind === 'attachments' ? array_map(fn ($file) => array_intersect_key($file, array_flip(['gid', 'name', 'permanent_url', 'resource_subtype'])), $response['data'] ?? []) : ($response['data'] ?? []), 'has_more' => (bool) $next,
             'next_cursor' => $next ? Crypt::encrypt(['scope' => $scope, 'offset' => $next, 'expires' => time() + 600]) : null];
     }
 
@@ -163,7 +197,11 @@ class EventTasks
         $c = $this->connection($tenant, $user, $area, $input['connection_id']);
         abort_unless($this->writable($c), 409, 'Authorize Asana task editing before saving changes.');
         $changes = $input['changes'];
-        abort_unless($changes && array_diff(array_keys($changes), ['name', 'due_on', 'start_on', 'completed']) === [], 422, 'Only title, dates and completion can be changed here. Original notes remain untouched.');
+        abort_unless($changes && array_diff(array_keys($changes), ['name', 'due_on', 'start_on', 'completed', 'notes', 'assignee', 'comment']) === [], 422, 'Use supported source fields; note edits must include their original hash.');
+        if (array_key_exists('notes', $changes)) {
+            $changes['notes'] ??= '';
+        }
+        abort_if(isset($changes['comment']) && (count($changes) !== 1 || ! in_array('stories:write', preg_split('/\s+/', $c->settings['scopes'] ?? ''), true)), 422, 'Authorize comment posting and send comments separately.');
         ksort($changes);
         $hash = hash('sha256', json_encode([$area->id, $c->id, $c->generation, $input['task_id'], $input['parent_id'] ?? null, $input['version'], $changes], JSON_THROW_ON_ERROR));
         $existing = TeamOperationAttempt::where(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'request_id' => $input['request_id']])->first();
@@ -174,6 +212,13 @@ class EventTasks
         }
         $task = $this->read($c, $input['task_id'], $input['parent_id'] ?? null);
         abort_unless(hash_equals($this->present($c, $task)['version'], $input['version']), 409, 'The Asana task changed. Refresh and review the latest version.');
+        if (array_key_exists('notes', $changes)) {
+            abort_unless(is_string($input['notes_base_hash'] ?? null) && hash_equals(hash('sha256', $task['notes'] ?? ''), $input['notes_base_hash']), 409, 'Original notes changed. Review their complete current text.');
+        }
+        if (isset($changes['assignee'])) {
+            $person = $this->providers->asana($c, 'users/'.$changes['assignee'], ['opt_fields' => 'gid,workspaces.gid'])['data'] ?? [];
+            abort_unless((string) ($person['gid'] ?? '') === $changes['assignee'] && in_array((string) $c->settings['source']['asana_workspace'], array_map('strval', array_column($person['workspaces'] ?? [], 'gid')), true), 422, 'Choose a current user in this source workspace.');
+        }
         abort_if((! empty($task['due_at']) || ! empty($task['start_at'])) && array_intersect(array_keys($changes), ['due_on', 'start_on']), 422, 'Edit timed schedules in Asana to preserve their times. Titles and completion can still be changed here.');
         abort_if(TeamOperationAttempt::where(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'area_id' => $area->id, 'connection_id' => $c->id, 'kind' => 'asana.update'])->whereIn('status', ['executing', 'unknown'])->get()->contains(fn ($a) => ($a->payload['task_id'] ?? '') === $input['task_id']), 409, 'A previous save needs review in Asana before another change.');
         if (isset($changes['start_on'])) {
@@ -228,10 +273,18 @@ class EventTasks
         }
         try {
             // No automatic provider retry. Only the explicitly reviewed fields are sent.
-            $response = $this->providers->http($c, 'PUT', 'https://app.asana.com/api/1.0/tasks/'.$task['gid'], ['data' => $attempt->payload['changes']]);
-            $accepted = $response['data'] ?? [];
-            abort_unless((string) ($accepted['gid'] ?? '') === (string) $task['gid'] && $this->matches($accepted, $attempt->payload['changes']), 502);
-            $attempt->update(['status' => 'succeeded', 'result' => ['accepted_at' => now()->toIso8601String(), 'task_id' => $task['gid']]]);
+            $comment = $attempt->payload['changes']['comment'] ?? null;
+            if ($comment !== null) {
+                abort_unless(in_array('stories:write', preg_split('/\s+/', $c->settings['scopes'] ?? ''), true), 403);
+                $response = $this->providers->http($c, 'POST', 'https://app.asana.com/api/1.0/tasks/'.$task['gid'].'/stories', ['data' => ['text' => $comment]]);
+                $accepted = $response['data'] ?? [];
+                abort_unless(ctype_digit((string) ($accepted['gid'] ?? '')) && ($accepted['text'] ?? null) === $comment, 502);
+            } else {
+                $response = $this->providers->http($c, 'PUT', 'https://app.asana.com/api/1.0/tasks/'.$task['gid'], ['data' => $attempt->payload['changes']]);
+                $accepted = $response['data'] ?? [];
+                abort_unless((string) ($accepted['gid'] ?? '') === (string) $task['gid'] && $this->matches($accepted, $attempt->payload['changes']), 502);
+            }
+            $attempt->update(['status' => 'succeeded', 'result' => ['accepted_at' => now()->toIso8601String(), 'task_id' => $task['gid'], 'resource_id' => $accepted['gid']]]);
         } catch (\Throwable $error) {
             $attempt->update(['status' => 'unknown', 'result' => ['notice' => 'The save could not be confirmed. Check Asana before making another change.']]);
         }
@@ -242,6 +295,13 @@ class EventTasks
     private function matches(array $task, array $changes): bool
     {
         foreach ($changes as $key => $value) {
+            if ($key === 'assignee') {
+                if (($task['assignee']['gid'] ?? null) !== $value) {
+                    return false;
+                }
+
+                continue;
+            }
             if (! array_key_exists($key, $task) || $task[$key] !== $value) {
                 return false;
             }

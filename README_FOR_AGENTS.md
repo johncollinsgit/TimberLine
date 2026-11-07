@@ -1,3 +1,13 @@
+## Teams Studio foundation (November 7; draft source candidate)
+
+A paired React/Capacitor Teams candidate adds private event drafts, deterministic
+cost previews, immutable tenant policies/definitions, frozen budgets, reviewed
+comparison mappings, occurrence weather and source-note/comment safeguards on
+existing Teams services. It remains a partial implementation of the approved full
+643-clause scope. Native availability/cutover are not activated; no production or
+source data was changed. Read `docs/operations/teams-studio-foundation.md` for exact
+interfaces, evidence and substantial remaining work before rollout.
+
 ## Tenant rewards, event attribution and physical counts (November 6; source candidate)
 
 Pay can recommend an already authorized event register from the signed-in user's

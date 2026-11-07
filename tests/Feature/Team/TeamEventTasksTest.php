@@ -196,3 +196,50 @@ test('installable app stays tenant bound and never caches private task responses
     expect($worker)->toContain('cache.add(OFFLINE)')->not->toContain('cache.put(');
     $this->get('/teams/offline')->assertOk()->assertSee('Saves require a connection.');
 });
+
+test('explicit note edits require the full original hash and retain the immutable before version', function () {
+    eventTaskFake($this);
+    $notes = "Original notes must survive.\n\nReviewed change.";
+    $prepared = eventTaskPrepare($this, ['notes' => $notes], ['notes_base_hash' => hash('sha256', $this->task['notes'])])->assertOk()->json();
+    expect($prepared['before']['notes'])->toBe($this->task['notes']);
+    eventTaskDispatch($this, $prepared['id'])->assertOk()->assertJsonPath('status', 'succeeded');
+    Http::assertSent(fn ($r) => $r->method() === 'PUT' && $r['data']['notes'] === $notes);
+});
+
+test('comment writes require their separate scope and uncertain posting never repeats', function () {
+    eventTaskFake($this);
+    eventTaskPrepare($this, ['comment' => 'A source comment'])->assertUnprocessable();
+    $this->connection->update(['settings' => [...$this->connection->settings, 'scopes' => 'tasks:read tasks:write stories:write']]);
+    $posts = 0;
+    Http::fake(function ($r) use (&$posts) {
+        if ($r->method() === 'POST') {
+            $posts++;
+            throw new \Illuminate\Http\Client\ConnectionException('Response lost');
+        }
+
+        return Http::response(['data' => $this->task]);
+    });
+    $prepared = eventTaskPrepare($this, ['comment' => 'A source comment'])->assertOk()->json('id');
+    eventTaskDispatch($this, $prepared)->assertOk()->assertJsonPath('status', 'unknown');
+    eventTaskDispatch($this, $prepared)->assertOk()->assertJsonPath('status', 'unknown');
+    expect($posts)->toBe(1);
+});
+
+test('attachment transport excludes ephemeral provider download links', function () {
+    Http::fake(function ($r) {
+        return Http::response(['data' => str_contains($r->url(), '/attachments?') ? [['gid' => '900', 'name' => 'Map.pdf', 'permanent_url' => 'https://app.asana.com/0/900', 'download_url' => 'https://signed.example.invalid/private', 'view_url' => 'https://signed.example.invalid/view']] : $this->task]);
+    });
+    $this->getJson('/team/events/asana/tasks/400/attachments'.$this->query.'&connection_id='.$this->connection->id)->assertOk()->assertJsonPath('items.0.gid', '900')->assertJsonMissingPath('items.0.download_url')->assertJsonMissingPath('items.0.view_url');
+});
+
+test('source details resolve the one authorized occurrence independently of task memberships and list pages', function () {
+    $this->connection->update(['settings' => [...$this->connection->settings, 'source' => ['asana_workspace' => '100', 'asana_projects' => ['200', '201']]]]);
+    $this->task['memberships'][] = ['project' => ['gid' => '201']];
+    eventTaskFake($this);
+    $event = \App\Models\TeamOperationRecord::create(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenant->id, 'area_id' => $this->area->id, 'connection_id' => $this->connection->id, 'kind' => 'event', 'source_key' => hash('sha256', 'asana:100:400'), 'title' => 'Fictional show', 'status' => 'source', 'version' => 1, 'data' => ['source_id' => '400', 'source_workspace' => '100', 'source_project' => '200', 'source_projects' => ['200', '201'], '_generation' => 1]]);
+    $this->getJson($this->detail)->assertOk()->assertJsonPath('occurrence.id', $event->id)->assertJsonCount(2, 'memberships');
+    $event->update(['visibility' => 'assigned', 'assigned_user_id' => null]);
+    $this->tenant->users()->updateExistingPivot($this->owner->id, ['role' => 'viewer']);
+    \Illuminate\Support\Facades\DB::table('team_area_members')->insert(['id' => Str::uuid(), 'tenant_id' => $this->tenant->id, 'area_id' => $this->area->id, 'user_id' => $this->owner->id, 'role' => 'viewer']);
+    $this->getJson($this->detail)->assertOk()->assertJsonPath('occurrence', null)->assertJsonPath('can_write', false)->assertJsonPath('can_comment', false);
+});
