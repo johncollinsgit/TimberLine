@@ -14,7 +14,7 @@ class OperationsWorkspace
 {
     public const KINDS = ['event', 'series', 'account', 'prospect', 'opportunity', 'followup', 'campaign', 'rule', 'email_template', 'document', 'staff', 'financial'];
 
-    public const FIELDS = ['notes', 'series_id', 'venue', 'address', 'city', 'state', 'timezone', 'environment', 'organizer', 'email', 'phone', 'website', 'setup_time', 'loadout_time', 'event_hours', 'booth', 'instructions', 'application_status', 'acceptance_status', 'payment_status', 'staffing_status', 'staff_ids', 'native_project_id', 'source_links', 'contact', 'contacts', 'locations', 'last_order_on', 'last_contact_on', 'shipping', 'pickup', 'custom_labels', 'custom_scents', 'requirements', 'next_action', 'account_id', 'amount_cents', 'probability', 'expected_on', 'template', 'subject', 'text', 'html', 'audience_ids', 'steps', 'trigger', 'channel', 'local_time', 'quiet_start', 'quiet_end', 'enabled', 'external', 'reviewed', 'alias_names', 'organizer_emails', 'latitude', 'longitude'];
+    public const FIELDS = ['notes', 'series_id', 'venue', 'address', 'city', 'state', 'timezone', 'environment', 'organizer', 'email', 'phone', 'website', 'setup_time', 'loadout_time', 'event_hours', 'booth', 'instructions', 'application_status', 'acceptance_status', 'payment_status', 'staffing_status', 'staff_ids', 'native_project_id', 'source_links', 'contact', 'contacts', 'locations', 'last_order_on', 'last_contact_on', 'shipping', 'pickup', 'custom_labels', 'custom_scents', 'requirements', 'next_action', 'account_id', 'amount_cents', 'probability', 'expected_on', 'template', 'subject', 'text', 'html', 'audience_ids', 'steps', 'trigger', 'channel', 'local_time', 'quiet_start', 'quiet_end', 'enabled', 'external', 'reviewed', 'alias_names', 'organizer_emails', 'latitude', 'longitude', 'sessions', 'schedule_complete', 'calendar_color'];
 
     public function __construct(private OperationsAccess $access) {}
 
@@ -152,8 +152,38 @@ class OperationsWorkspace
     public function view(TeamOperationRecord $record, bool $canEdit = true, bool $canFinance = false): array
     {
         $data = $record->data ?? [];
+        if ($record->kind === 'event') {
+            $sourceRange = $data['event_schedule'] ?? [];
+            $data['event_schedule'] = array_replace($sourceRange, app(EventSchedule::class)->calendar($data, $record->starts_on?->toDateString(), $record->ends_on?->toDateString()));
+            if (isset($sourceRange['basis'])) {
+                $data['event_schedule']['source_range_basis'] = $sourceRange['basis'];
+            }
+        }
         if (! $canFinance) {
-            unset($data['_teams_enrichment']['forecast_override'], $data['_teams_enrichment']['square_orders']);
+            unset($data['_teams_enrichment']['forecast_override'], $data['_teams_enrichment']['square_orders'], $data['_teams_enrichment']['related_native_proposals'], $data['_teams_enrichment']['source_adoption']);
+        } elseif ($record->kind === 'event') {
+            $data['event_schedule']['budget_review_items'] = [];
+            $budgetId = $data['budget_id'] ?? $data['_teams_enrichment']['budget_id'] ?? null;
+            $budget = $budgetId ? TeamOperationRecord::where(['tenant_id' => $record->tenant_id, 'area_id' => $record->area_id, 'kind' => 'event_budget', 'status' => 'frozen'])->find($budgetId) : null;
+            if ($budget && ($budget->data['event_id'] ?? null) === $record->id && $data['event_schedule']['schedule_complete']) {
+                $inputs = $budget->data['inputs'] ?? [];
+                $dates = $data['event_schedule']['selling_dates'];
+                if (($inputs['starts_on'] ?? null) !== ($dates[0] ?? null) || ($inputs['ends_on'] ?? null) !== ($dates ? $dates[count($dates) - 1] : null)) {
+                    $data['event_schedule']['budget_review_items'][] = 'Reviewed selling dates differ from the frozen budget dates. Review a separate budget revision; saved amounts are unchanged.';
+                }
+                if (isset($inputs['selling_days']) && $inputs['selling_days'] !== $data['event_schedule']['selling_day_count']) {
+                    $data['event_schedule']['budget_review_items'][] = 'Reviewed distinct selling-day count differs from the frozen budget. Calendar windows do not establish paid work hours.';
+                }
+            }
+            foreach ($data['_teams_enrichment']['related_native_proposals'] ?? [] as $index => $reference) {
+                $proposal = TeamOperationRecord::where(['tenant_id' => $record->tenant_id, 'area_id' => $record->area_id, 'kind' => 'event', 'status' => 'withdrawn'])->find($reference['id']);
+                if ($proposal && ($proposal->data['projection_id'] ?? null) === $record->id) {
+                    $data['_teams_enrichment']['related_native_proposals'][$index]['proposal'] = ['id' => $proposal->id, 'title' => $proposal->title, 'version' => $proposal->version,
+                        'calendar' => app(EventSchedule::class)->calendar($proposal->data, $proposal->starts_on?->toDateString(), $proposal->ends_on?->toDateString()),
+                        'frozen_budget_id' => $proposal->data['budget_id'] ?? $proposal->data['_teams_enrichment']['budget_id'] ?? null,
+                        'notice' => 'Original native proposal retained for review. Its calendar and frozen budget have not been applied to this source event.'];
+                }
+            }
         }
         if ($record->kind === 'document') {
             $data = array_intersect_key($data, array_flip(['filename', 'mime', 'checksum', 'scan', 'target_id', 'matching', 'observed_at']));
@@ -167,7 +197,27 @@ class OperationsWorkspace
             unset($data['original_notes']);
         }
 
-        return ['id' => $record->id, 'area_id' => $record->area_id, 'kind' => $record->kind, 'title' => $record->title, 'status' => $record->status, 'version' => $record->version, 'assigned_user_id' => $record->assigned_user_id, 'starts_on' => $record->starts_on?->toDateString(), 'ends_on' => $record->ends_on?->toDateString(), 'data' => $data, 'source' => $record->connection_id ? ['connection_id' => $record->connection_id, 'key' => $record->source_key] : null, 'capabilities' => ['edit' => $canEdit && in_array($record->kind, self::KINDS, true) && ! $record->connection_id && ! in_array($record->kind, ['financial', 'staff', 'document'])], 'updated_at' => $record->updated_at?->toIso8601String()];
+        return ['id' => $record->id, 'area_id' => $record->area_id, 'kind' => $record->kind, 'title' => $record->title, 'status' => $record->status, 'version' => $record->version, 'assigned_user_id' => $record->assigned_user_id, 'starts_on' => $record->starts_on?->toDateString(), 'ends_on' => $record->ends_on?->toDateString(), 'data' => $data, 'calendar_people' => $record->kind === 'event' ? $this->calendarPeople($record) : [], 'source' => $record->connection_id ? ['connection_id' => $record->connection_id, 'key' => $record->source_key] : null, 'capabilities' => ['edit' => $canEdit && in_array($record->kind, self::KINDS, true) && ! $record->connection_id && ! in_array($record->kind, ['financial', 'staff', 'document']), 'schedule' => $canEdit && $record->kind === 'event'], 'updated_at' => $record->updated_at?->toIso8601String()];
+    }
+
+    private function calendarPeople(TeamOperationRecord $record): array
+    {
+        $data = $record->data ?? [];
+        $ids = array_filter([$record->assigned_user_id, ...(is_array($data['staff_ids'] ?? null) ? $data['staff_ids'] : [])], fn ($id) => is_scalar($id) && ctype_digit((string) $id));
+        $people = User::query()->select('users.id', 'users.name')->join('tenant_user', 'tenant_user.user_id', '=', 'users.id')
+            ->where('tenant_user.tenant_id', $record->tenant_id)->where('tenant_user.membership_active', true)
+            ->whereIn('tenant_user.role', ['owner', 'tenant_owner', 'admin', 'member', 'manager'])->whereIn('users.id', $ids)
+            ->where('users.is_active', true)->whereNotNull('users.email_verified_at')
+            ->where(function ($q) use ($record) {
+                $q->whereIn('tenant_user.role', ['owner', 'tenant_owner', 'admin'])->orWhereExists(function ($member) use ($record) {
+                    $member->selectRaw('1')->from('team_area_members')->whereColumn('team_area_members.user_id', 'users.id')->where('team_area_members.tenant_id', $record->tenant_id)->where('team_area_members.area_id', $record->area_id);
+                });
+            })->distinct()->limit(100)->get()->map(fn ($user) => ['id' => 'native:'.$user->id, 'name' => $user->name, 'provider' => 'teams'])->all();
+        if ($record->connection_id && ctype_digit((string) ($data['source_workspace'] ?? '')) && ctype_digit((string) ($data['source_assignee_id'] ?? ''))) {
+            $people[] = ['id' => 'asana:'.$data['source_workspace'].':'.$data['source_assignee_id'], 'name' => $data['source_assignee_name'] ?? null, 'provider' => 'asana'];
+        }
+
+        return $people;
     }
 
     public function save(Tenant $tenant, User $user, TeamArea $area, array $input): TeamOperationRecord
@@ -175,6 +225,10 @@ class OperationsWorkspace
         $this->access->area($tenant, $user, $area->id, true);
         abort_if(in_array($input['kind'], ['financial', 'staff', 'document'], true), 403, 'These records are supplied by their authoritative source.');
         $data = array_intersect_key($input['data'] ?? [], array_flip([...self::FIELDS, 'cta_label', 'cta_url', 'template_id', 'days_after', 'stage']));
+        if ($input['kind'] === 'event') {
+            $data = array_replace($data, app(EventSchedule::class)->validate($data));
+            $input = app(EventSchedule::class)->occurrenceBounds($input, app(EventSchedule::class)->calendar($data));
+        }
         if ($input['kind'] === 'email_template') {
             $this->access->financial($tenant, $user);
             abort_unless(in_array($input['status'], ['draft', 'published', 'archived'], true), 422);

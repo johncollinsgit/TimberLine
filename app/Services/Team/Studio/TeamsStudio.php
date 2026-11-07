@@ -7,6 +7,7 @@ use App\Models\TeamOperationAttempt;
 use App\Models\TeamOperationRecord;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Team\Operations\EventSchedule;
 use App\Services\Team\Operations\OperationsAccess;
 use App\Services\Team\Operations\OperationsWorkspace;
 use Illuminate\Support\Facades\Crypt;
@@ -70,8 +71,11 @@ class TeamsStudio
     public function saveDraft(Tenant $tenant, User $user, TeamArea $area, array $input): array
     {
         $this->access->financial($tenant, $user);
-        $i = Validator::make($input, ['id' => 'required|uuid', 'request_id' => 'required|uuid', 'expected_version' => 'required|integer|min:0', 'title' => 'required|string|max:500', 'step' => 'required|integer|min:0|max:4', 'logistics' => 'present|array', 'budget_inputs' => 'present|array', 'policy_id' => 'nullable|uuid', 'copy_from' => 'nullable|uuid', 'revision' => 'nullable|array:event_id,event_version,budget_id,reason', 'revision.event_id' => 'required_with:revision|uuid', 'revision.event_version' => 'required_with:revision|integer|min:1', 'revision.budget_id' => 'nullable|uuid', 'revision.reason' => 'nullable|string|max:3000'])->validate();
+        $i = Validator::make($input, ['id' => 'required|uuid', 'request_id' => 'required|uuid', 'expected_version' => 'required|integer|min:0', 'title' => 'required|string|max:500', 'step' => 'required|integer|min:0|max:4', 'logistics' => 'present|array', 'budget_inputs' => 'present|array', 'policy_id' => 'nullable|uuid', 'copy_from' => 'nullable|uuid', 'confirm_copied_schedule' => 'sometimes|boolean', 'revision' => 'nullable|array:event_id,event_version,budget_id,reason', 'revision.event_id' => 'required_with:revision|uuid', 'revision.event_version' => 'required_with:revision|integer|min:1', 'revision.budget_id' => 'nullable|uuid', 'revision.reason' => 'nullable|string|max:3000'])->validate();
         $logistics = $this->logistics($i['logistics']);
+        if (isset($i['copy_from'])) {
+            abort_if(($logistics['schedule_complete'] ?? false) === true && ($i['confirm_copied_schedule'] ?? false) !== true, 422, 'Review the copied session dates and explicitly confirm this new occurrence.');
+        }
         if (isset($logistics['series_id'])) {
             $series = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'series'])->findOrFail($logistics['series_id']);
             $this->access->record($tenant, $user, $series);
@@ -95,7 +99,7 @@ class TeamsStudio
             if (isset($i['policy_id'])) {
                 $this->policyRecord($tenant, $area, $i['policy_id']);
             }
-            $draft->fill(['title' => $i['title'], 'status' => 'draft', 'visibility' => 'admin', 'assigned_user_id' => $user->id, 'data' => ['step' => $i['step'], 'logistics' => $logistics, 'budget_inputs' => $i['budget_inputs'], 'policy_id' => $i['policy_id'] ?? null, 'copied_from' => $i['copy_from'] ?? null, 'revision' => $i['revision'] ?? null], 'version' => $draft->version + 1])->save();
+            $draft->fill(['title' => $i['title'], 'status' => 'draft', 'visibility' => 'admin', 'assigned_user_id' => $user->id, 'data' => ['step' => $i['step'], 'logistics' => $logistics, 'budget_inputs' => $i['budget_inputs'], 'policy_id' => $i['policy_id'] ?? null, 'copied_from' => $i['copy_from'] ?? null, 'copied_schedule_confirmed' => (bool) ($i['confirm_copied_schedule'] ?? false), 'revision' => $i['revision'] ?? null], 'version' => $draft->version + 1])->save();
             $this->revision($draft, $user);
 
             return $this->view($draft);
@@ -126,6 +130,8 @@ class TeamsStudio
             abort_unless($policy->status === 'published', 422, 'Publish a reviewed cost policy first.');
             $inputs = $this->costs->inputs($data['budget_inputs']);
             abort_unless($inputs['starts_on'] === $logistics['starts_on'] && $inputs['ends_on'] === $logistics['ends_on'], 422, 'Budget dates must match the event.');
+            $calendar = app(EventSchedule::class)->calendar($logistics, $logistics['starts_on'], $logistics['ends_on']);
+            abort_if($calendar['selling_day_count'] !== null && isset($inputs['selling_days']) && $inputs['selling_days'] !== $calendar['selling_day_count'], 422, 'Budget selling days must match the reviewed distinct selling dates. Setup and travel do not add selling days.');
             $preview = $this->costs->preview($inputs, $policy->data['definition']);
             // Creation is durable locally; the existing reviewed Asana-create adapter
             // retains authority and owns uncertain provider outcomes.
@@ -160,7 +166,21 @@ class TeamsStudio
             $policy = $this->policyRecord($tenant, $area, $draft->data['policy_id'] ?? '');
             abort_unless($policy->status === 'published', 422, 'Choose an explicitly reviewed published policy version.');
             $inputs = $this->costs->inputs($draft->data['budget_inputs']);
-            abort_unless($event->starts_on && $event->ends_on && $inputs['starts_on'] === $event->starts_on->toDateString() && $inputs['ends_on'] === $event->ends_on->toDateString(), 422, 'Budget dates must match the recorded event occurrence.');
+            $calendar = app(EventSchedule::class)->calendar($event->data, $event->starts_on?->toDateString(), $event->ends_on?->toDateString());
+            $draftCalendar = app(EventSchedule::class)->calendar($draft->data['logistics'] ?? []);
+            $start = $event->starts_on?->toDateString();
+            $end = $event->ends_on?->toDateString();
+            if ($calendar['schedule_complete']) {
+                abort_if($calendar['provenance']['source_changed_since_review'] ?? false, 422, 'Review the current source calendar before freezing another budget.');
+                $dates = $calendar['selling_dates'];
+                $start = $dates[0];
+                $end = $dates[count($dates) - 1];
+                abort_if(isset($inputs['selling_days']) && $inputs['selling_days'] !== $calendar['selling_day_count'], 422, 'Budget selling days must match the reviewed distinct selling dates. Save and review calendar changes separately first.');
+                abort_if($draftCalendar['sessions'] && $draftCalendar['selling_dates'] !== $dates, 422, 'A budget draft cannot replace the saved selling calendar. Save and review calendar changes separately first.');
+            } elseif ($draftCalendar['schedule_complete']) {
+                abort(422, 'Save and review the dated event calendar before using its selling dates in a budget revision.');
+            }
+            abort_unless($start && $end && $inputs['starts_on'] === $start && $inputs['ends_on'] === $end, 422, 'Budget dates must match the current reviewed selling occurrence.');
             $preview = $this->costs->preview($inputs, $policy->data['definition']);
             $budget = TeamOperationRecord::create(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event_budget', 'title' => $event->title.' budget', 'version' => 1, 'status' => 'frozen', 'source_key' => hash('sha256', 'budget:'.$draft->id), 'visibility' => 'admin', 'data' => ['event_id' => $event->id, 'previous_budget_id' => $previous, 'based_event_version' => $event->version, 'reason' => $i['reason'], 'policy_id' => $policy->id, 'policy_version' => $policy->version, 'policy_snapshot' => $policy->data['definition'], 'inputs' => $inputs, 'preview' => $preview, 'frozen_at' => now()->toIso8601String()]]);
             $data = $event->data;
@@ -187,7 +207,20 @@ class TeamsStudio
             'latitude' => 'required_with:longitude|nullable|numeric|between:-90,90', 'longitude' => 'required_with:latitude|nullable|numeric|between:-180,180',
             'verified_selling_days' => 'nullable|integer|min:1|max:366', 'verified_operating_minutes' => 'nullable|integer|min:1|max:527040',
             'daily_hours' => 'present|array|max:366', 'daily_hours.*.date' => 'required|date_format:Y-m-d|distinct', 'daily_hours.*.opens' => 'required|date_format:H:i', 'daily_hours.*.closes' => 'required|date_format:H:i',
+            'calendar' => 'sometimes|array',
         ])->validate();
+        if (array_key_exists('calendar', $i)) {
+            $i['calendar'] = app(EventSchedule::class)->validate($i['calendar']);
+            abort_unless(($i['calendar']['timezone'] ?? null) === $i['timezone'], 422, 'The reviewed calendar must use the occurrence timezone.');
+            $summary = app(EventSchedule::class)->calendar($i['calendar']);
+            abort_if(isset($i['verified_selling_days']) && $summary['selling_day_count'] !== null && $i['verified_selling_days'] !== $summary['selling_day_count'], 422, 'Reviewed selling days must match distinct selling dates.');
+            abort_if(isset($i['verified_operating_minutes']) && $summary['operating_minutes'] !== null && $i['verified_operating_minutes'] !== $summary['operating_minutes'], 422, 'Reviewed show hours must match selling sessions.');
+            $i['sessions'] = $i['calendar']['sessions'] ?? [];
+            $i['schedule_complete'] = $i['calendar']['schedule_complete'];
+            $i['calendar'] = $summary;
+        } else {
+            $i['calendar'] = ['basis' => 'not_reviewed', 'sessions' => [], 'schedule_complete' => false];
+        }
 
         return $this->once($tenant, $user, $area, $i, function () use ($tenant, $user, $area, $i) {
             $series = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'series'])->findOrFail($i['series_id']);
@@ -296,7 +329,9 @@ class TeamsStudio
 
     private function logistics(array $input, bool $complete = false): array
     {
-        return Validator::make($input, [
+        $schedule = app(EventSchedule::class)->validate($input);
+        $input = app(EventSchedule::class)->occurrenceBounds($input, app(EventSchedule::class)->calendar($schedule));
+        $logistics = Validator::make($input, [
             'starts_on' => ($complete ? 'required' : 'nullable').'|date_format:Y-m-d', 'ends_on' => ($complete ? 'required' : 'nullable').'|date_format:Y-m-d|after_or_equal:starts_on',
             'timezone' => [$complete ? 'required' : 'nullable', 'timezone:all'],
             'venue' => 'nullable|string|max:500', 'address' => 'nullable|string|max:1000', 'city' => 'nullable|string|max:100', 'state' => 'nullable|string|max:100', 'booth' => 'nullable|string|max:100',
@@ -306,6 +341,8 @@ class TeamsStudio
             'contacts' => 'sometimes|array|max:30', 'contacts.*.name' => 'required|string|max:150', 'contacts.*.email' => 'nullable|email|max:254', 'contacts.*.phone' => 'nullable|string|max:80',
             'series_id' => 'nullable|uuid', 'staff_ids' => 'sometimes|array|max:100', 'staff_ids.*' => 'integer|distinct',
         ])->validate();
+
+        return array_replace($logistics, $schedule, ['event_schedule' => app(EventSchedule::class)->calendar($schedule, $logistics['starts_on'] ?? null, $logistics['ends_on'] ?? null)]);
     }
 
     private function blueprint(array $input): array

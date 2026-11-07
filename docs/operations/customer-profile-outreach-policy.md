@@ -159,3 +159,12 @@ scope. Provider timeout/reconciliation acceptance, physical-device review and
 protected release remain required. Recheck applicable provider terms and publishing requirements
 from `provider-terms-and-publishing.md` before activation; engineering evidence
 does not confer legal/provider approval.
+
+## Square consent provenance
+
+New personalized outreach also blocks `outreach_square_consent_requires_review`
+when retained Square imports inferred a positive permission without current
+contact-specific affirmative evidence after the latest revocation. An unrelated
+old permission or another email/phone cannot supply that proof. This is an
+eligibility review item; it does not mass-clear existing profile flags, grant
+permission, or enable either independently closed dispatch gate.

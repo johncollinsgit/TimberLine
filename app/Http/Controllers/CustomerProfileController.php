@@ -19,16 +19,28 @@ class CustomerProfileController extends Controller
         abort_unless($tenant instanceof Tenant && app(CustomerProfileAccess::class)->allows($request->user(), $tenant), 403);
         $user = $request->user();
         $membership = $user->tenants()->whereKey($tenant->id)->wherePivot('membership_active', true)->first();
+        $canManageSquare = false;
+        try {
+            app(\App\Services\Marketing\SquareCustomerIdentityService::class)->authorize($tenant->id, $user);
+            $canManageSquare = true;
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            if ($e->getStatusCode() !== 403) {
+                throw $e;
+            }
+        }
         $id = $request->route('profile');
         $query = $request->validate(['query' => 'nullable|string|min:2|max:120', 'event_id' => 'nullable|integer|min:1', 'page' => 'sometimes|integer|min:1|max:100000']);
         if (! $id) {
             $cohort = isset($query['event_id']) ? app(EventCustomerCohort::class)->read($tenant->id, (int) $query['event_id']) : null;
             $results = trim($query['query'] ?? '') !== '' || $cohort ? $lookup->search($tenant->id, $query['query'] ?? '', $cohort['profile_ids'] ?? null, (int) ($query['page'] ?? 1)) : null;
 
-            return response()->view('customers.directory', ['tenant' => $tenant, 'query' => $query, 'results' => $results, 'events' => app(EventCustomerCohort::class)->options($tenant->id), 'context' => $cohort])->header('Cache-Control', 'private, no-store');
+            return response()->view('customers.directory', ['tenant' => $tenant, 'query' => $query, 'results' => $results, 'events' => app(EventCustomerCohort::class)->options($tenant->id), 'context' => $cohort, 'canManageSquare' => $canManageSquare])->header('Cache-Control', 'private, no-store');
         }
         $detail = $lookup->details($tenant->id, (int) $id);
         $profile = MarketingProfile::forTenantId($tenant->id)->findOrFail($detail['customer']['id']);
+        // Provider/card provenance is a private operator projection, never part of
+        // the shared shopper, QR, purchase-summary or personalized draft payload.
+        $squareSource = $canManageSquare ? app(\App\Services\Marketing\SquareCustomerSource::class)->forStaff($profile, $tenant->id) : null;
         $preferences = app(\App\Services\Marketing\CustomerPreferenceService::class)->forStaff($profile, $tenant->id);
         $canEditPreferences = $user->email_verified_at && $membership && in_array($membership->pivot->role, ['owner', 'tenant_owner', 'admin', 'manager'], true);
         $canReviewAttribution = app(\App\Services\Marketing\CustomerCommerceLinkService::class)->canLink($user, $tenant->id);
@@ -56,6 +68,6 @@ class CustomerProfileController extends Controller
             $preview = $outreach->preview($tenant, $profile, $input);
         }
 
-        return response()->view('customers.profile', ['tenant' => $tenant, 'profile' => $profile, 'detail' => $detail, 'canPrepare' => $canPrepare, 'form' => $input, 'preview' => $preview, 'preferences' => $preferences, 'canEditPreferences' => (bool) $canEditPreferences, 'canReviewAttribution' => $canReviewAttribution, 'journey' => $journey, 'explanationHistory' => $canPrepare ? app(\App\Services\Marketing\CustomerOutreachExplanation::class)->history($profile) : [], 'outreachDrafts' => $canPrepare ? \App\Models\MarketingCampaign::forTenantId($tenant->id)->where('source_label', 'customer_profile')->where('target_snapshot->profile_id', $profile->id)->latest('id')->limit(20)->get() : collect()])->header('Cache-Control', 'private, no-store');
+        return response()->view('customers.profile', ['tenant' => $tenant, 'profile' => $profile, 'detail' => $detail, 'canPrepare' => $canPrepare, 'form' => $input, 'preview' => $preview, 'preferences' => $preferences, 'canEditPreferences' => (bool) $canEditPreferences, 'canReviewAttribution' => $canReviewAttribution, 'journey' => $journey, 'squareSource' => $squareSource, 'explanationHistory' => $canPrepare ? app(\App\Services\Marketing\CustomerOutreachExplanation::class)->history($profile) : [], 'outreachDrafts' => $canPrepare ? \App\Models\MarketingCampaign::forTenantId($tenant->id)->where('source_label', 'customer_profile')->where('target_snapshot->profile_id', $profile->id)->latest('id')->limit(20)->get() : collect()])->header('Cache-Control', 'private, no-store');
     }
 }

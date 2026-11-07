@@ -106,7 +106,7 @@ class EventTasks
 
     private function present(TeamProviderConnection $c, array $task): array
     {
-        return ['event_fields' => app(OperationsSync::class)->extract($task['notes'] ?? ''), 'event_schedule' => app(EventSchedule::class)->source($task), 'memberships' => array_values(array_filter($task['memberships'] ?? [], fn ($m) => in_array((string) ($m['project']['gid'] ?? ''), $this->providers->selectedProjects($c), true))), 'gid' => (string) $task['gid'], 'name' => $task['name'] ?? '', 'notes' => $task['notes'] ?? '', 'completed' => (bool) ($task['completed'] ?? false),
+        return ['date_evidence' => app(EventSchedule::class)->dateEvidence($task, $this->version($task)), 'event_fields' => app(OperationsSync::class)->extract($task['notes'] ?? ''), 'event_schedule' => app(EventSchedule::class)->source($task), 'memberships' => array_values(array_filter($task['memberships'] ?? [], fn ($m) => in_array((string) ($m['project']['gid'] ?? ''), $this->providers->selectedProjects($c), true))), 'gid' => (string) $task['gid'], 'name' => $task['name'] ?? '', 'notes' => $task['notes'] ?? '', 'completed' => (bool) ($task['completed'] ?? false),
             'due_on' => $task['due_on'] ?? null, 'start_on' => $task['start_on'] ?? null, 'due_at' => $task['due_at'] ?? null, 'start_at' => $task['start_at'] ?? null, 'assignee' => $task['assignee'] ?? null,
             'modified_at' => $task['modified_at'] ?? null, 'source_url' => 'https://app.asana.com/0/'.($this->project($c, $task) ?? $task['_verified_parent_project'] ?? '0').'/'.$task['gid'],
             'connection_id' => $c->id, 'parent_id' => $task['_verified_parent'] ?? null, 'version' => $this->version($task), 'can_write' => $this->writable($c),
@@ -138,6 +138,27 @@ class EventTasks
             $task['workspace']['gid'] ?? null, $task['parent']['gid'] ?? null, $projects], JSON_THROW_ON_ERROR));
     }
 
+    public function calendarEvidence(Tenant $tenant, User $user, TeamOperationRecord $record, array $selections): array
+    {
+        $detail = $this->forOccurrence($tenant, $user, $record);
+        abort_unless($detail && $detail['source_mode'] === 'live', 409, 'A current connected Asana read is required to verify dates; saved documents can be staff-attested instead.');
+        $candidates = $detail['date_evidence']['candidates'];
+        $cursors = array_unique(array_map(fn ($selection) => $selection['comment_cursor'] ?? '', $selections));
+        // The ordinary task page covers name/notes. Read a selected comment page
+        // only when its candidate was not present there; no unbounded history scan.
+        $missing = array_diff(array_column($selections, 'evidence_id'), array_column($candidates, 'id'));
+        if ($missing) {
+            abort_if(count($cursors) > 5, 422, 'Review at most five comment pages in one calendar edit.');
+            $area = $this->access->area($tenant, $user, $record->area_id);
+            foreach ($cursors as $cursor) {
+                $page = $this->detail($tenant, $user, $area, $detail['connection_id'], $detail['gid'], 'stories', $cursor ?: null);
+                $candidates = [...$candidates, ...($page['date_evidence']['candidates'] ?? [])];
+            }
+        }
+
+        return ['candidates' => $candidates, 'source_url' => $detail['source_url'], 'source_mode' => $detail['source_mode'], 'issues' => $detail['date_evidence']['issues']];
+    }
+
     private function writable(TeamProviderConnection $c): bool
     {
         return (bool) config('team_operations.asana_write_enabled') && ! ($c->settings['read_only_snapshot'] ?? false)
@@ -158,6 +179,21 @@ class EventTasks
                 try {
                     $this->access->record($tenant, $user, $record);
                     $view['occurrence'] = app(OperationsWorkspace::class)->view($record, $this->access->mayWrite($tenant, $user, $area->id), $this->access->admin($this->access->actor($tenant, $user)));
+                    $calendar = &$view['occurrence']['data']['event_schedule'];
+                    if (isset($calendar['provenance'])) {
+                        $changed = ($calendar['provenance']['source_version'] ?? null) !== ($task['modified_at'] ?? null);
+                        $calendar['provenance']['fresh_source_task_version'] = $view['version'];
+                        $calendar['provenance']['fresh_source_modified_at'] = $task['modified_at'] ?? null;
+                        $calendar['provenance']['source_changed_since_review'] = $calendar['provenance']['source_changed_since_review'] || $changed;
+                        $calendar['needs_review'] = $calendar['needs_review'] || $changed;
+                    }
+                    foreach ($calendar['session_evidence'] as &$evidence) {
+                        if (($evidence['status'] ?? '') === 'source_verified_at_review' && ($evidence['source_version'] ?? '') !== $view['version']) {
+                            $evidence['stale'] = true;
+                            $calendar['needs_review'] = true;
+                        }
+                    }
+                    unset($evidence, $calendar);
                 } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
                     if (! in_array($error->getStatusCode(), [403, 404, 409], true)) {
                         throw $error;
@@ -188,7 +224,7 @@ class EventTasks
         $next = $response['next_page']['offset'] ?? null;
 
         return ['items' => $kind === 'attachments' ? array_map(fn ($file) => array_intersect_key($file, array_flip(['gid', 'name', 'permanent_url', 'resource_subtype'])), $response['data'] ?? []) : ($response['data'] ?? []), 'has_more' => (bool) $next,
-            'next_cursor' => $next ? Crypt::encrypt(['scope' => $scope, 'offset' => $next, 'expires' => time() + 600]) : null];
+            'next_cursor' => $next ? Crypt::encrypt(['scope' => $scope, 'offset' => $next, 'expires' => time() + 600]) : null, 'date_evidence' => $kind === 'stories' ? app(EventSchedule::class)->dateEvidence($task, $this->version($task), $response['data'] ?? []) : null];
     }
 
     public function prepare(Tenant $tenant, User $user, TeamArea $area, array $input): array

@@ -8,6 +8,9 @@
             <file>tests/Feature/Team/TeamEventIntelligenceTest.php</file>
             <file>tests/Feature/Team/TeamCompanionTest.php</file>
             <file>tests/Feature/Team/TeamEventTasksTest.php</file>
+            <file>tests/Feature/Team/TeamEventScheduleTest.php</file>
+            <file>tests/Feature/Team/TeamEventDatedCalendarFinancialWeatherTest.php</file>
+            <file>tests/Feature/Team/TeamAsanaCreationDatesTest.php</file>
         </testsuite>
     </testsuites>
     <php>

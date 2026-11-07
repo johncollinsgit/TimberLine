@@ -7,11 +7,28 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
+use App\Models\SquareOrder;
 use App\Models\Tenant;
 use App\Services\Marketing\MarketingConversionAttributionService;
 use Carbon\Carbon;
 
-require_once __DIR__ . '/../ShopifyEmbeddedTestHelpers.php';
+require_once __DIR__.'/../ShopifyEmbeddedTestHelpers.php';
+
+test('Square source metadata remains in its customer tenant when original provider IDs collide', function () {
+    $foreign = Tenant::create(['name' => 'Other Square merchant', 'slug' => 'other-square-source']);
+    $tenant = Tenant::create(['name' => 'Current Square merchant', 'slug' => 'current-square-source']);
+    $profile = MarketingProfile::create(['tenant_id' => $tenant->id, 'first_name' => 'Current']);
+    $campaign = MarketingCampaign::create(['tenant_id' => $tenant->id, 'name' => 'Current source', 'slug' => 'current-square-source', 'channel' => 'email', 'status' => 'draft']);
+    SquareOrder::create(['tenant_id' => $foreign->id, 'square_order_id' => 'DUPLICATEPROVIDERID', 'source_name' => 'Foreign private source']);
+    $own = SquareOrder::create(['tenant_id' => $tenant->id, 'square_order_id' => 'DUPLICATEPROVIDERID', 'source_name' => 'Current original source']);
+    $builder = app(\App\Services\Marketing\MarketingCampaignConversionAttributionSnapshotBuilder::class);
+    $snapshot = $builder->build($campaign->id, $profile->id, 'square_order', 'DUPLICATEPROVIDERID');
+    expect($snapshot['source_name'])->toBe('Current original source')
+        ->and(json_encode($snapshot))->not->toContain('Foreign private source');
+    $own->delete();
+    $snapshot = $builder->build($campaign->id, $profile->id, 'square_order', 'DUPLICATEPROVIDERID');
+    expect($snapshot)->not->toHaveKey('source_name');
+});
 
 beforeEach(function () {
     $this->withoutVite();
@@ -42,7 +59,7 @@ function makeAttributionTouch(MarketingProfile $profile, string $campaignChannel
         'marketing_profile_id' => $profile->id,
         'channel' => $campaignChannel,
         'provider' => 'test',
-        'provider_message_id' => 'MSG-' . $campaign->id,
+        'provider_message_id' => 'MSG-'.$campaign->id,
         'attempt_number' => 1,
         'rendered_message' => 'Attribution touch',
         'send_status' => 'delivered',
@@ -435,9 +452,9 @@ test('dashboard attribution prefers persisted conversion snapshot over changed l
     $response = $this
         ->withHeaders(['Authorization' => 'Bearer '.retailShopifySessionToken()])
         ->getJson(route('shopify.app.api.dashboard', [
-        'timeframe' => 'last_30_days',
-        'comparison' => 'none',
-    ]));
+            'timeframe' => 'last_30_days',
+            'comparison' => 'none',
+        ]));
 
     $response->assertOk()->assertJsonPath('ok', true);
 

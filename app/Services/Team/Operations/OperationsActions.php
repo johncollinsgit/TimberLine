@@ -8,13 +8,14 @@ use App\Models\TeamOperationRecord;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class OperationsActions
 {
     public function prepare(Tenant $tenant, User $user, TeamArea $area, Request $request): array
     {
-        $input = $request->validate(['request_id' => 'required|uuid', 'kind' => 'required|in:gmail.send,sms.send,asana.create', 'record_id' => 'required|uuid', 'expected_record_version' => 'nullable|integer|min:1', 'connection_id' => 'nullable|uuid', 'recipient_user_id' => 'nullable|integer', 'recipient_profile_id' => 'nullable|integer', 'subject' => 'nullable|string|max:200|not_regex:/[\r\n]/', 'text' => 'nullable|string|max:20000', 'html' => 'nullable|string|max:40000', 'formatted' => 'sometimes|boolean', 'template_id' => 'nullable|uuid', 'starter_id' => 'nullable|string|max:100', 'cta_label' => 'nullable|string|max:100', 'cta_url' => 'nullable|url:https|max:2000', 'external' => 'sometimes|boolean', 'reviewed' => 'accepted']);
+        $input = $request->validate(['request_id' => 'required|uuid', 'kind' => 'required|in:gmail.send,sms.send,asana.create', 'record_id' => 'required|uuid', 'expected_record_version' => 'nullable|integer|min:1', 'connection_id' => 'nullable|uuid', 'asana_due_on' => 'nullable|date_format:Y-m-d', 'recipient_user_id' => 'nullable|integer', 'recipient_profile_id' => 'nullable|integer', 'subject' => 'nullable|string|max:200|not_regex:/[\r\n]/', 'text' => 'nullable|string|max:20000', 'html' => 'nullable|string|max:40000', 'formatted' => 'sometimes|boolean', 'template_id' => 'nullable|uuid', 'starter_id' => 'nullable|string|max:100', 'cta_label' => 'nullable|string|max:100', 'cta_url' => 'nullable|url:https|max:2000', 'external' => 'sometimes|boolean', 'reviewed' => 'accepted']);
         $access = app(OperationsAccess::class);
         $access->area($tenant, $user, $area->id, true);
         if ($input['kind'] !== 'asana.create') {
@@ -38,6 +39,13 @@ class OperationsActions
             abort_unless($c->area_id === $area->id && $c->provider === ($input['kind'] === 'asana.create' ? 'asana' : 'gmail'), 422);
             $input['connection_generation'] = $c->generation;
             $input['from'] = $c->account_name;
+            if ($input['kind'] === 'asana.create') {
+                $calendar = app(EventSchedule::class)->calendar($record->data, $record->starts_on?->toDateString(), $record->ends_on?->toDateString());
+                $suggested = $calendar['selling_dates'][0] ?? $record->starts_on?->toDateString();
+                $input['asana_date_anchor_basis'] = array_key_exists('asana_due_on', $input) ? 'explicit_review' : 'suggested_first_selling_date';
+                $input['asana_due_on'] = array_key_exists('asana_due_on', $input) ? $input['asana_due_on'] : $suggested;
+                $input['asana_payload'] = $this->asanaPayload($record, $c->settings['source']['asana_project'] ?? '', $input['asana_due_on'], $input['creation_reference'], $calendar);
+            }
         }
         if ($input['kind'] === 'gmail.send' || $input['kind'] === 'sms.send') {
             abort_unless(filled($input['text'] ?? '') || filled($input['html'] ?? ''), 422);
@@ -109,8 +117,19 @@ class OperationsActions
         }
         if ($attempt->kind === 'asana.create') {
             abort_unless($record->version === $input['record_version'] && empty($record->data['created_asana']), 409, 'Event changed. Review the new version before creation.');
+            abort_unless(is_array($input['asana_payload'] ?? null), 409, 'Prepare a new creation preview with a separate Asana date anchor. The original draft is retained.');
+            abort_unless(($input['asana_payload']['projects'] ?? null) === [(string) ($connection->settings['source']['asana_project'] ?? '')], 409, 'The Asana destination changed. Review a new creation preview.');
         }
-        $claimed = TeamOperationAttempt::query()->whereKey($id)->where('status', 'prepared')->update(['status' => 'executing', 'updated_at' => now()]);
+        $claim = fn () => TeamOperationAttempt::query()->whereKey($id)->where('status', 'prepared')->update(['status' => 'executing', 'updated_at' => now()]);
+        $claimed = $attempt->kind === 'asana.create' ? DB::transaction(function () use ($tenant, $record, $input, $id, $claim) {
+            $current = TeamOperationRecord::where('tenant_id', $tenant->id)->whereKey($record->id)->lockForUpdate()->firstOrFail();
+            abort_unless($current->version === $input['record_version'] && ! $current->connection_id && empty($current->data['created_asana']), 409, 'The original event changed before source creation.');
+            $original = TeamOperationAttempt::where('tenant_id', $tenant->id)->where('record_id', $record->id)->where('kind', 'asana.create')
+                ->whereKeyNot($id)->whereIn('status', ['executing', 'unknown', 'accepted'])->lockForUpdate()->first();
+            abort_if($original, 409, 'An original Asana creation is already pending or accepted. Reconcile that request before another creation.');
+
+            return $claim();
+        }, 3) : $claim();
         abort_unless($claimed === 1, 409);
         try {
             if ($attempt->kind === 'gmail.send') {
@@ -125,22 +144,17 @@ class OperationsActions
                 $project = (string) ($connection->settings['source']['asana_project'] ?? '');
                 abort_unless(ctype_digit($project), 422);
                 app(OperationsProviders::class)->read($connection, 'records'); // Recheck target project/workspace immediately before mutation.
-                $payload = ['name' => $record->title, 'projects' => [$project], 'notes' => $record->data['notes'] ?? '', 'start_on' => $record->starts_on?->toDateString(), 'due_on' => $record->ends_on?->toDateString()];
-                if ($record->starts_on && $record->ends_on) {
-                    $payload['notes'] .= "\nEvent date range: ".$record->starts_on->format('m.d.Y').' - '.$record->ends_on->format('m.d.Y');
-                }
-                foreach (['venue', 'address', 'city', 'state', 'timezone', 'organizer', 'email', 'phone', 'setup_time', 'loadout_time', 'event_hours', 'booth', 'instructions'] as $field) {
-                    if (filled($record->data[$field] ?? null)) {
-                        $payload['notes'] .= "\n".ucwords(str_replace('_', ' ', $field)).': '.$record->data[$field];
-                    }
-                }
-                $payload['notes'] .= "\n\n".$input['creation_reference'];
+                $payload = $input['asana_payload'];
                 $reply = app(OperationsProviders::class)->http($connection, 'POST', 'https://app.asana.com/api/1.0/tasks', ['data' => array_filter($payload, fn ($v) => $v !== null)]);
                 $gid = (string) ($reply['data']['gid'] ?? '');
                 abort_unless(ctype_digit($gid), 502);
                 $result = ['source_id' => $gid, 'source_url' => 'https://app.asana.com/0/'.$project.'/'.$gid];
                 $projection = app(OperationsSync::class)->adoptCreatedEvent($record, $connection, array_replace($payload, $reply['data']));
                 $result['projection_id'] = $projection->id;
+                if (($projection->data['_teams_enrichment']['source_adoption']['status'] ?? null) === 'needs_review') {
+                    $result['adoption_status'] = 'needs_review';
+                    $result['notice'] = 'The Asana task was created. Review the retained Teams proposal against the canonical event before using its calendar or budget.';
+                }
             } else {
                 $result = app(\App\Services\Marketing\Messaging\TenantMessagingGateway::class)->sendSms($tenant->id, $input['to'], $input['text'], ['idempotency_key' => $attempt->id, 'source_type' => 'team_operations', 'source_id' => null]);
                 abort_unless($result['success'] ?? false, 503, 'SMS provider did not confirm acceptance.');
@@ -149,9 +163,48 @@ class OperationsActions
 
             return ['id' => $id, 'status' => 'accepted', 'result' => $result];
         } catch (\Throwable $e) {
+            if ($attempt->kind === 'asana.create' && ctype_digit((string) ($result['source_id'] ?? ''))) {
+                // Retain the known provider identity even when local projection
+                // adoption fails. Reconciliation must never create a replacement.
+                $result = [...$result, 'adoption_status' => 'needs_review', 'notice' => 'Asana confirmed this task identity; local event adoption needs review. Do not create another task.'];
+                $attempt->update(['status' => 'accepted', 'result' => $result]);
+
+                return ['id' => $id, 'status' => 'accepted', 'result' => $result];
+            }
             $attempt->update(['status' => 'unknown', 'result' => ['notice' => 'Provider outcome is unconfirmed. Do not repeat; reconcile this attempt.']]);
             throw $e;
         }
+    }
+
+    /** Freeze exactly what the reviewer sees; the Asana date is a single anchor. */
+    private function asanaPayload(TeamOperationRecord $record, string $project, ?string $anchor, string $reference, array $calendar): array
+    {
+        abort_unless(ctype_digit($project), 422, 'Choose the Asana destination project first.');
+        $notes = (string) ($record->data['notes'] ?? '');
+        if ($calendar['sessions']) {
+            $notes .= "\n\nTeams dated sessions (gaps are not event days):";
+            foreach ($calendar['sessions'] as $session) {
+                $notes .= "\n".ucfirst($session['kind']).': '.($session['date'] ?? 'Date unknown');
+                if (isset($session['opens'], $session['closes'])) {
+                    $notes .= ' '.$session['opens'].'–'.$session['closes'];
+                }
+                if (filled($session['label'] ?? null)) {
+                    $notes .= ' · '.$session['label'];
+                }
+            }
+            $notes .= "\nCalendar timezone: ".($calendar['timezone'] ?? 'Unknown')."\nThese calendar windows do not establish paid staff shifts.";
+        } elseif ($record->starts_on && $record->ends_on) {
+            $notes .= "\nEvent occurrence bounds: ".$record->starts_on->format('m.d.Y').' - '.$record->ends_on->format('m.d.Y')."\nExact selling/setup days need review; intervening dates are not assumed.";
+        }
+        foreach (['venue', 'address', 'city', 'state', 'timezone', 'organizer', 'email', 'phone', 'setup_time', 'loadout_time', 'event_hours', 'booth', 'instructions'] as $field) {
+            if (filled($record->data[$field] ?? null)) {
+                $notes .= "\n".ucwords(str_replace('_', ' ', $field)).': '.$record->data[$field];
+            }
+        }
+        $notes .= "\n\n".$reference;
+        abort_if(mb_strlen($notes) > 20000, 422, 'Keep the reviewed Asana creation notes within 20,000 characters. The original Teams notes are retained.');
+
+        return ['name' => $record->title, 'projects' => [$project], 'notes' => $notes, 'due_on' => $anchor];
     }
 
     public function safeHtml(string $html): string

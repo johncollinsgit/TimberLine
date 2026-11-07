@@ -29,6 +29,38 @@ contract, verification and remaining hardware/provider acceptance.
 
 # Everbranch
 
+## Retail: one connected operating workspace
+
+The public retail offer at `/platform/retail` connects the whole retail journey:
+sell, build customer loyalty, plan employee time, review event pay and costs,
+understand event profit, and give customers a reason to return. Shops can keep
+Square at the counter while reviewing supported history imports and refreshes,
+or move website, customer, rewards and team workflows in phases.
+
+This is a guided offer, not a claim that every payment or app route is generally
+available. Named tenant rewards and birthday programs need their own rules,
+eligibility and customer choices. Square history import does not add automatic
+Everbranch earning/redemption inside standard Square POS. Native Website wallet
+earning/spending is unfinished; generic customer QR is not assumed outside its
+supported checkout. Pay remains a registered-device development pilot.
+
+Teams is separately priced. Retail setup can scope crew scheduling, employee
+timekeeping, company pay profiles, hourly/commission/minimum calculations,
+setup allowances, per diem, mileage and optional hotel/meals/gifts costs. Current
+timekeeping and profile configuration require assisted review; estimates and
+frozen budget versions do not process payroll or infer paid hours from show
+hours. Existing systems, original payment evidence and old budgets stay intact.
+See [the retail offer contract](docs/operations/everbranch-retail-offer.md) for
+source-backed claims, onboarding, public catalog visibility and release checks.
+
+In the authenticated workspace, **Customers → Square connection and import**
+reuses existing connections or provides a customer-source read authorization
+without requiring Pay. Owners/admins preview and refresh supported customers,
+orders, payments and card references, then review ambiguous associations.
+Historical imports do not spend rewards or infer marketing opt-in. Read
+[the Square source runbook](docs/operations/square-customer-source.md) for original
+merchant ownership, checkpoints, renewal and remaining release acceptance.
+
 Ask Everbranch has a separate default-off, source-only voice prototype with
 permission-scoped job grounding, replaceable generation, bounded history/cost
 reservations, cancellation and exact manual email/SMS draft previews. Fake tests
@@ -81,6 +113,12 @@ for access boundaries, isolated validation and release checks.
 Everbranch Mail now has tenant-scoped shared inboxes and guided domain setup. A Cloudflare quick path can add the ownership record with a zone-scoped token; the direct SMTP/JMAP transport remains gated until a dedicated host passes delivery checks. See [Everbranch mail service rollout](docs/operations/everbranch-mail-service.md).
 
 ## Everbranch public marketing site
+
+The canonical retail page at `/platform/retail` uses the existing public studio
+design, shared navigation, catalog-filtered branch links and unchanged
+demo/start/contact intake. The fictional retail example remains a separate,
+clearly labeled presentation. No tenant website or workspace is created by
+reading either page.
 
 The platform marketing site is a separate public-only surface with a warm
 product-studio visual system. Its Simple access request is the primary

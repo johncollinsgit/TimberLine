@@ -1,3 +1,31 @@
+## Retail, Square sources and dated events (November 7; source candidate)
+
+The public retail overview at `/platform/retail` connects keeping Square or a
+phased move with customer profiles, tenant rewards/birthdays/app setup, Teams
+employee time, company event pay/costs and event profit. Preserve its approved
+responsive photos, fictional graph labels, scoped asset entry and availability
+language. Catalog, payment and outreach gates remain unchanged; see
+`docs/operations/everbranch-retail-offer.md`.
+
+Core Customers' Square connection is tenant owner/admin only and independent of
+Pay/global Marketing roles. Reuse existing encrypted source settings, original
+merchant/environment ownership, caches, import checkpoints and identity reviews.
+Contact/card similarities are review candidates, never identity authorization or
+marketing permission. History refresh must not invoke reward earning/redemption,
+wallet linking or checkout. Keep card references private to authorized operators
+and out of shopper/QR/AI-draft payloads. No live import or provider grant follows
+from a successful source test. Read `docs/operations/square-customer-source.md`
+for connection, renewal, source-only import and identity-review contracts.
+
+Read `docs/operations/teams-event-schedule.md` before changing event dates.
+Explicit local sessions include setup/selling/teardown/travel and preserve gaps;
+Asana due/start fields are separate source anchors. Source evidence is reviewed
+against fresh notes/comments and exact versions. Never turn source bounds into
+invented selling days, sales or paid staff shifts. Retain frozen budgets/policies;
+editing an occurrence requires a new version and a consistent reviewed calendar.
+Preserve original Asana create commands and confirmed GIDs during recovery.
+Modern Forestry remains Asana-authoritative throughout 2026.
+
 ## Shared customer profiles and event value (November 7; source candidate)
 
 Core Customers, Website accounts, Teams and Pay reuse canonical identities and

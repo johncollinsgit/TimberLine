@@ -128,6 +128,9 @@ jobs:
       - name: Verify Teams Studio with real authenticated Laravel HTTP
         run: node tests/e2e/team-studio-live.browser.mjs
 
+      - name: Verify explicit event calendar in the existing Teams workspace
+        run: node tests/e2e/team-operations-calendar.browser.mjs
+
       - name: Verify shared customer profiles and message review with real Laravel HTTP
         run: node tests/e2e/customer-profile-live.browser.mjs
 

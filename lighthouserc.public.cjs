@@ -4,7 +4,7 @@ module.exports = {
             startServerCommand: "sh scripts/qa/serve-public-visual.sh",
             startServerReadyPattern: "Server running on",
             startServerReadyTimeout: 60_000,
-            url: ["http://127.0.0.1:4177/platform/promo", "http://127.0.0.1:4177/platform/plans", "http://127.0.0.1:4177/explore/modules"],
+            url: ["http://127.0.0.1:4177/platform/promo", "http://127.0.0.1:4177/platform/plans", "http://127.0.0.1:4177/explore/modules", "http://127.0.0.1:4177/platform/retail"],
             numberOfRuns: 2,
             settings: { preset: "desktop" },
         },

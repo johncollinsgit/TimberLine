@@ -12,6 +12,9 @@
             <file>tests/Feature/Marketing/CustomerProfileIntegrationTest.php</file>
             <file>tests/Feature/Marketing/CustomerProfileSafetyTest.php</file>
             <file>tests/Feature/Marketing/CustomerOutreachReviewTest.php</file>
+            <file>tests/Feature/Marketing/SquareCustomerSourceReviewTest.php</file>
+            <file>tests/Feature/Marketing/SquareCustomerRefreshTest.php</file>
+            <file>tests/Feature/Marketing/MarketingCampaignConversionAttributionSnapshotTest.php</file>
         </testsuite>
     </testsuites>
     <php>

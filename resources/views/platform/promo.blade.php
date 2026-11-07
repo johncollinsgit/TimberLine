@@ -28,6 +28,7 @@
             <div class="eb-studio-nav__links" aria-label="Explore Everbranch">
                 <a href="#how-it-works">How it works</a>
                 <a href="#industries">Who it helps</a>
+                <a href="{{ route('platform.retail') }}">For retailers</a>
                 <a href="#customer-loop">Customer Loop</a>
                 <a class="eb-studio-nav__demo-link" href="{{ route('platform.industry-demo', ['discipline' => 'field']) }}">Explore a system</a>
                 <a href="{{ route('platform.pest-control-fleet-demo') }}">Fleet demo</a>
@@ -144,7 +145,7 @@
     <footer class="eb-studio-footer">
         <div class="eb-studio-container eb-studio-footer__grid">
             <div><img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" /><p>One place to run the work that matters.</p><p>Everbranch is operated by <a href="https://evergrovesoftware.com">Evergrove Software LLC</a>.</p></div>
-            <div><a href="#how-it-works">How it works</a><a href="{{ route('platform.modules.explore') }}">Branches</a><a href="{{ route('platform.plans') }}">Plans</a></div>
+            <div><a href="#how-it-works">How it works</a><a href="{{ route('platform.retail') }}">For retailers · keep Square or move in phases</a><a href="{{ route('platform.modules.explore') }}">Branches</a><a href="{{ route('platform.plans') }}">Plans</a></div>
             <div><a href="{{ route('platform.contact') }}">Contact</a><a href="{{ route('legal.privacy') }}">Privacy</a><a href="{{ route('legal.terms') }}">Terms</a><a href="{{ route('legal.sms') }}">SMS terms</a></div>
         </div>
     </footer>

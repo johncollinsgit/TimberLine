@@ -6,6 +6,7 @@ use App\Models\BirthdayRewardIssuance;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashReferral;
 use App\Models\MarketingCampaign;
+use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
 use App\Models\SquareOrder;
@@ -40,8 +41,7 @@ class MarketingCampaignConversionAttributionSnapshotBuilder
     public function __construct(
         protected MarketingAttributionSourceMetaBuilder $sourceMetaBuilder,
         protected ShopifyEmbeddedDashboardAttributionClassifier $classifier
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string,mixed>  $existingSnapshot
@@ -136,14 +136,14 @@ class MarketingCampaignConversionAttributionSnapshotBuilder
                 if ($order->shopify_customer_id) {
                     $meta = $this->sourceMetaBuilder->mergeSourceMeta(
                         $meta,
-                        $this->linkMeta($profileId, 'shopify_customer', $storeKey . ':' . $order->shopify_customer_id)
+                        $this->linkMeta($profileId, 'shopify_customer', $storeKey.':'.$order->shopify_customer_id)
                     );
                 }
 
                 if ($order->shopify_order_id) {
                     $meta = $this->sourceMetaBuilder->mergeSourceMeta(
                         $meta,
-                        $this->linkMeta($profileId, 'shopify_order', $storeKey . ':' . $order->shopify_order_id)
+                        $this->linkMeta($profileId, 'shopify_order', $storeKey.':'.$order->shopify_order_id)
                     );
                 }
 
@@ -152,7 +152,12 @@ class MarketingCampaignConversionAttributionSnapshotBuilder
         }
 
         if ($sourceType === 'square_order') {
+            $profile = MarketingProfile::query()->find($profileId, ['id', 'tenant_id']);
+            if (! $profile) {
+                return $meta;
+            }
             $squareOrder = SquareOrder::query()
+                ->where('tenant_id', $profile->tenant_id)
                 ->where('square_order_id', $sourceId)
                 ->first(['square_order_id', 'source_name']);
 

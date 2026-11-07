@@ -17,6 +17,7 @@ class OperationsSync
 
     public function adoptCreatedEvent(TeamOperationRecord $draft, TeamProviderConnection $c, array $source): TeamOperationRecord
     {
+        abort_unless($c->provider === 'asana' && (int) $draft->tenant_id === (int) $c->tenant_id && (string) $draft->area_id === (string) $c->area_id && $draft->kind === 'event', 404);
         $gid = (string) ($source['gid'] ?? '');
         abort_unless(ctype_digit($gid), 502);
 
@@ -26,9 +27,20 @@ class OperationsSync
             $key = hash('sha256', 'asana:'.$c->settings['source']['asana_workspace'].':'.$gid);
             $existing = TeamOperationRecord::where(['tenant_id' => $c->tenant_id, 'area_id' => $c->area_id, 'kind' => 'event', 'source_key' => $key])->lockForUpdate()->first();
             $draft = TeamOperationRecord::whereKey($draft->id)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $draft->tenant_id === (int) $c->tenant_id && (string) $draft->area_id === (string) $c->area_id && $draft->kind === 'event', 404);
             if ($existing && $existing->id !== $draft->id) {
-                $draft->update(['status' => 'withdrawn', 'version' => $draft->version + 1, 'data' => [...$draft->data, 'projection_id' => $existing->id]]);
+                $related = $existing->data['_teams_enrichment']['related_native_proposals'] ?? [];
+                if ($draft->status === 'withdrawn' && ($draft->data['projection_id'] ?? null) === $existing->id && collect($related)->contains('id', $draft->id)) {
+                    return $existing;
+                }
+                abort_if(count($related) >= 30, 409, 'Review existing native proposals before linking another draft. The confirmed source identity remains in the original creation attempt.');
+                $draft->update(['status' => 'withdrawn', 'version' => $draft->version + 1, 'data' => [...$draft->data, 'projection_id' => $existing->id, 'adoption_status' => 'needs_review']]);
                 $this->workspace->revision($draft, $c->user_id);
+                $data = $existing->data;
+                $data['_teams_enrichment']['related_native_proposals'][] = ['id' => $draft->id, 'title' => $draft->title, 'version' => $draft->version, 'review_state' => 'needs_review'];
+                $data['_teams_enrichment']['source_adoption'] = ['status' => 'needs_review', 'canonical_projection_id' => $existing->id, 'proposal_id' => $draft->id, 'source_id' => $gid];
+                $existing->update(['data' => $data, 'version' => $existing->version + 1]);
+                $this->workspace->revision($existing, $c->user_id);
                 foreach (TeamOperationRecord::where(['tenant_id' => $c->tenant_id, 'area_id' => $c->area_id, 'kind' => 'document'])->cursor() as $doc) {
                     if (($doc->data['target_id'] ?? null) === $draft->id) {
                         $doc->update(['data' => [...$doc->data, 'target_id' => $existing->id], 'version' => $doc->version + 1]);
@@ -41,8 +53,15 @@ class OperationsSync
             $project = (string) $c->settings['source']['asana_project'];
             $notes = (string) ($source['notes'] ?? $draft->data['notes'] ?? '');
             $schedule = app(EventSchedule::class)->source($source);
+            $nativeCalendar = array_intersect_key($draft->data, array_flip(['sessions', 'schedule_complete', 'calendar_color', 'timezone', 'session_evidence']));
             $data = ['event_schedule' => $schedule, 'source_schedule' => $schedule['source_schedule'], 'source_id' => $gid, 'source_project' => $project, 'source_projects' => [$project], 'source_workspace' => (string) $c->settings['source']['asana_workspace'], 'original_notes' => $notes, 'source_url' => 'https://app.asana.com/0/'.$project.'/'.$gid, 'source_version' => $source['modified_at'] ?? now()->toIso8601String(), 'fields' => $this->extract($notes), 'reviewed_fields' => array_intersect_key($draft->data, array_flip(['venue', 'address', 'city', 'state', 'timezone', 'environment', 'organizer', 'email', 'phone', 'setup_time', 'loadout_time', 'event_hours', 'booth', 'instructions'])), '_teams_enrichment' => array_replace($draft->data['_teams_enrichment'] ?? [], ['created_from_draft' => $draft->id]), '_generation' => $c->generation, 'observed_at' => now()->toIso8601String()];
-            $draft->update(['connection_id' => $c->id, 'source_key' => $key, 'status' => 'source', 'title' => $source['name'] ?? $draft->title, 'starts_on' => $schedule['starts_on'] ?? $draft->starts_on, 'ends_on' => $schedule['ends_on'] ?? $draft->ends_on, 'data' => $data, 'version' => $draft->version + 1]);
+            if ($nativeCalendar) {
+                $data['_teams_enrichment']['calendar'] ??= $nativeCalendar + ['source_version' => $data['source_version'], 'reviewed_by' => (string) $c->user_id, 'reviewed_at' => now()->toIso8601String()];
+            }
+            $data['staff_ids'] = $draft->data['staff_ids'] ?? [];
+            $data['source_assignee_id'] = (string) ($source['assignee']['gid'] ?? '');
+            $data['source_assignee_name'] = $source['assignee']['name'] ?? null;
+            $draft->update(['connection_id' => $c->id, 'source_key' => $key, 'status' => 'source', 'title' => $source['name'] ?? $draft->title, 'starts_on' => $draft->starts_on ?? $schedule['starts_on'], 'ends_on' => $draft->ends_on ?? $schedule['ends_on'], 'data' => $data, 'version' => $draft->version + 1]);
             $this->workspace->revision($draft, $c->user_id);
 
             return $draft;
@@ -128,6 +147,7 @@ class OperationsSync
                                 $data['source_schedule'] = $schedule['source_schedule'];
                             }
                             $data['source_assignee_id'] = (string) ($task['assignee']['gid'] ?? '');
+                            $data['source_assignee_name'] = $task['assignee']['name'] ?? null;
                             $data['source_projects'] = collect([$projectId, ...collect($task['memberships'] ?? [])->pluck('project.gid')->all()])->map(fn ($id) => (string) $id)->filter()->unique()->values()->all();
                             $record = $this->upsert($c, $kind, (string) $task['gid'], trim($task['name'] ?? '') ?: 'Untitled source record', ($task['completed'] ?? false) ? 'completed' : 'source', $data, $kind === 'event' ? $schedule['starts_on'] : ($task['start_on'] ?? $task['due_on'] ?? null), $kind === 'event' ? $schedule['ends_on'] : ($task['due_on'] ?? null));
                             $seen[] = $record->id;

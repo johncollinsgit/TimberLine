@@ -151,6 +151,10 @@ class CustomerOutreachPolicy
         if ($ids === null) {
             $reasons[] = 'outreach_identity_history_ambiguous';
         }
+        $squareConsent = app(SquareCustomerSource::class)->legacyConsentRisk($canonical, $ids ?? [$canonical->id]);
+        if ($squareConsent[$channel]['review_required']) {
+            $reasons[] = 'outreach_square_consent_requires_review';
+        }
         $records = $ids === null ? [] : $this->deliveries($tenantId, $ids, $cutoff, $at, $coverage);
         $bounded = collect($records)->contains(fn ($row) => $row['coverage_limit_reached'] ?? false);
         if ($bounded) {

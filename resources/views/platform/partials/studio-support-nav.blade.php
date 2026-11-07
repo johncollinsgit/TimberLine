@@ -9,6 +9,7 @@
             <img src="{{ asset($studioBrandLockupPath) }}?v={{ $studioBrandAssetVersion }}" alt="Everbranch" />
         </a>
         <div>
+            <a href="{{ route('platform.retail') }}" @if(request()->routeIs('platform.retail')) aria-current="page" @endif>For retailers</a>
             <a class="eb-studio-support-nav__demo" href="{{ route('platform.industry-demo', ['discipline' => 'field']) }}">Explore a system</a>
             <a href="{{ route('platform.modules.explore') }}">Branches</a>
             <a href="{{ route('platform.plans') }}">Plans</a>

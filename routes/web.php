@@ -583,6 +583,7 @@ Route::post('/platform/bud/conversations', [PublicBudConversationController::cla
     ->middleware('throttle:20,1')
     ->name('platform.bud.conversations');
 Route::get('/platform/promo', [PlatformProductPagesController::class, 'promo'])->name('platform.promo');
+Route::get('/platform/retail', [PlatformProductPagesController::class, 'retail'])->name('platform.retail');
 Route::view('/story/field-notes-7c8b', 'platform.rickroll-story')->name('platform.story.rickroll');
 Route::get('/platform/examples/{discipline?}', [PlatformProductPagesController::class, 'industryDemo'])
     ->where('discipline', 'retail|field|projects|studio|practice|community')
@@ -2749,6 +2750,7 @@ require __DIR__.'/ai-branch.php';
 require __DIR__.'/website-invoices.php';
 
 require __DIR__.'/pos.php';
+require __DIR__.'/square-customer.php';
 
 require __DIR__.'/campus-demo.php';
 

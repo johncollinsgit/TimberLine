@@ -1,3 +1,30 @@
+## Retail, Square sources and dated events (November 7; source candidate)
+
+The public retail overview at `/platform/retail` connects keeping Square or a
+phased move with customer profiles, tenant rewards/birthdays/app setup, Teams
+employee time, company event pay/costs and event profit. Approved responsive
+photos and explicitly fictional graphs use a scoped retail-only Vite entry.
+Catalog visibility and existing rollout/payment/outreach gates are unchanged.
+See `docs/operations/everbranch-retail-offer.md`.
+
+Core Customers provides a tenant owner/admin Square connection and refresh lane,
+independent of Pay and global Marketing roles. It reuses existing source caches,
+identity reviews, encrypted settings and import runs. Original merchant and
+environment ownership is fenced across source and Pay connections. Importing
+history does not earn/redeem rewards, link wallets or prove marketing consent;
+contact/card similarities require review. No provider grant or live import was
+created during source work. See `docs/operations/square-customer-source.md` for
+the original-merchant, renewal and historical-import boundaries.
+
+Teams events retain explicit local setup, selling, teardown and travel dates,
+including gaps. Asana due dates remain separate source anchors. Setup evidence
+and fresh source versions govern reviewed calendar dates; they do not establish
+paid staff hours. Frozen budgets retain their original policy/input snapshot;
+new revisions must reconcile reviewed selling days. Source-create retries retain
+one original command and confirmed source identity. Read
+`docs/operations/teams-event-schedule.md`. Macon private evidence and physical
+phone acceptance remain separate from these source changes.
+
 ## Shared customer profiles and event value (November 7; source candidate)
 
 Core Customers, Website accounts, Teams and Pay reuse canonical identities and

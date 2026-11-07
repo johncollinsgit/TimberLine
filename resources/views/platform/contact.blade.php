@@ -21,6 +21,7 @@
             </a>
             <div class="fb-hero-cta fb-hero-cta--nav">
                 <a href="{{ route('platform.promo') }}" class="fb-btn fb-btn-secondary">Home</a>
+                <a href="{{ route('platform.retail') }}" class="fb-btn fb-btn-secondary">Retail setup</a>
                 <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
             </div>
         </nav>

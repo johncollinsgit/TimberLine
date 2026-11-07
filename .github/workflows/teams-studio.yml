@@ -57,12 +57,20 @@ jobs:
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
       - name: Prepare test environment
         run: cp .env.example .env
+      - name: Verify Core Square source OAuth and credential renewal without provider transport
+        run: php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.team.xml tests/Integration/CustomerSquareOAuthTest.php --compact
       - name: Verify policies, tenant isolation and native authorization on MySQL
         run: php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.team-studio-mysql.xml --compact
       - name: Verify interrupted event creation and competing commands
         run: php scripts/everbranch-team/studio-mysql-concurrency.php
       - name: Verify shared customer profiles, preferences and outreach on MySQL
         run: php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml --compact
+      - name: Verify Core and Pay merchant ownership and source renewal contention
+        env:
+          POS_LIVE_DISPOSABLE_MYSQL: '1'
+        run: |
+          php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml tests/Integration/CustomerSquareOwnershipMySqlTest.php --compact
+          php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml tests/Integration/SquareHistoricalSourceAdmissionMySqlTest.php --compact
       - name: Verify cross-channel caps and legacy unsubscribe races
         run: php scripts/everbranch-team/customer-outreach-mysql-concurrency.php
       - name: Verify customer fence recovery and existing rewards concurrency
@@ -71,3 +79,4 @@ jobs:
         run: |
           php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml tests/PosLive/OwnedStockCheckoutTest.php --filter='serializes actual policy publication|serializes a conflicting identity import|completes a fully redeemed basket once' --compact
           php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml tests/Integration/CustomerAccountFenceAdmissionMySqlTest.php --compact
+          php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml tests/Integration/TeamAsanaCreationAdmissionMySqlTest.php --compact

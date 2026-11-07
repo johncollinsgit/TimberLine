@@ -144,6 +144,7 @@ class MarketingProvidersIntegrationsController extends Controller
             ];
 
         return view('marketing/providers-integrations/index', [
+            'squareSourceTenantSlug' => $tenantId ? Tenant::whereKey($tenantId)->value('slug') : null,
             'section' => MarketingSectionRegistry::section('providers-integrations'),
             'sections' => $this->navigationItems(),
             'mappings' => $mappings,
@@ -333,35 +334,9 @@ class MarketingProvidersIntegrationsController extends Controller
                 ]);
         }
 
-        $data = $request->validate([
-            'sync_type' => ['required', 'in:customers,orders,payments'],
-            'limit' => ['nullable', 'integer', 'min:1'],
-            'since' => ['nullable', 'date'],
-            'dry_run' => ['nullable', 'boolean'],
-        ]);
+        app(\App\Services\Marketing\SquareCustomerIdentityService::class)->authorize($tenantId, $request->user());
 
-        $options = [
-            'limit' => isset($data['limit']) ? (int) $data['limit'] : null,
-            'since' => $data['since'] ?? null,
-            'dry_run' => (bool) ($data['dry_run'] ?? false),
-            'created_by' => auth()->id(),
-            'tenant_id' => $tenantId,
-        ];
-
-        $result = match ($data['sync_type']) {
-            'customers' => $syncService->syncCustomers($options),
-            'orders' => $syncService->syncOrders($options),
-            'payments' => $syncService->syncPayments($options),
-        };
-
-        $toastStyle = $result['status'] === 'blocked' ? 'error' : 'success';
-        $toastMessage = $result['status'] === 'blocked'
-            ? 'Square sync blocked: '.($result['reason'] ?? 'missing tenant context or configuration.')
-            : 'Square sync started and logged.';
-
-        return redirect()
-            ->route('marketing.providers-integrations')
-            ->with('toast', ['style' => $toastStyle, 'message' => $toastMessage]);
+        return redirect()->route('customers.square.index', ['tenant' => Tenant::whereKey($tenantId)->value('slug')])->with('toast', ['style' => 'success', 'message' => 'Choose the original Square connection and review a bounded source refresh.']);
     }
 
     public function importLegacy(Request $request, MarketingLegacyImportService $importService): RedirectResponse

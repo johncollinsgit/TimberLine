@@ -2,6 +2,7 @@
     <main class="mx-auto max-w-6xl space-y-5 p-5">
         <h1 class="text-2xl font-semibold">{{ $tenant->name }} · Customers</h1>
         <p>Find a customer across online and in-person purchases, rewards and events.</p>
+        @if($canManageSquare)<a class="inline-block rounded border p-2" href="{{ route('customers.square.index', ['tenant' => $tenant->slug]) }}">Square connection and import</a>@endif
         <form method="GET" action="{{ route('customers.directory') }}" class="grid gap-3 sm:grid-cols-3">
             <input type="hidden" name="tenant" value="{{ $tenant->slug }}">
             <label>Name, phone or email<input class="block w-full rounded border p-2" name="query" value="{{ $query['query'] ?? '' }}" minlength="2"></label>

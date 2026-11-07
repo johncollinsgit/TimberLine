@@ -1,0 +1,7 @@
+/* Retail-only entry: reuse the public baseline without workspace utilities. */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
+@import './forestry-ui.css';
+@import './public-studio.css';
+@import './everbranch-workspace.css';

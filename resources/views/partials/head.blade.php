@@ -56,7 +56,11 @@
 <link rel="preconnect" href="https://fonts.bunny.net">
 <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700&family=fraunces:400,500,600,700" rel="stylesheet" />
 
-@vite(['resources/css/app.css', 'resources/js/app.js'])
+@if($retail_public_assets ?? false)
+    @vite(['resources/css/public-retail.css', 'resources/js/public-retail-entry.js'])
+@else
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+@endif
 
 @fluxAppearance
 @livewireStyles

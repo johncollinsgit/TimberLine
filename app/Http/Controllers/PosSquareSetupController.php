@@ -56,6 +56,7 @@ final class PosSquareSetupController extends Controller
         // Durable unique keys bind one legal seller to one organization even
         // when two owner callbacks arrive concurrently on different hosts.
         $this->store->db->transaction(function () use ($state, $result): void {
+            app(\App\Services\Pos\SquareMerchantOwnership::class)->claim($state['tenant_id'], $result->json('merchant_id'), $state['environment']);
             $this->store->rows('merchants', $state['tenant_id'])->insertOrIgnore($this->store->values($state['tenant_id'], [
                 'merchant_id' => $result->json('merchant_id'), 'environment' => $state['environment'],
             ]));

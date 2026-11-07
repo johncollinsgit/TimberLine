@@ -19,9 +19,12 @@ class SquareClient
     /**
      * @return array{items:array<int,array<string,mixed>>,cursor:?string}
      */
-    public function fetchCustomers(?string $cursor = null, int $limit = 100): array
+    public function fetchCustomers(?string $cursor = null, int $limit = 100, ?CarbonInterface $since = null): array
     {
-        $response = $this->request()->get($this->url('/v2/customers'), array_filter([
+        $response = $since ? $this->request()->post($this->url('/v2/customers/search'), array_filter([
+            'cursor' => $cursor, 'limit' => min(max($limit, 1), 100),
+            'query' => ['filter' => ['updated_at' => ['start_at' => $since->toIso8601String()]], 'sort' => ['field' => 'CREATED_AT', 'order' => 'ASC']],
+        ])) : $this->request()->get($this->url('/v2/customers'), array_filter([
             'cursor' => $cursor,
             'limit' => min(max($limit, 1), 100),
             'sort_field' => 'CREATED_AT',
@@ -37,8 +40,25 @@ class SquareClient
         ];
     }
 
+    public function retrieveMerchant(string $id): array
+    {
+        return $this->request()->get($this->url('/v2/merchants/'.rawurlencode($id)))->throw()->json('merchant') ?? [];
+    }
+
+    public function retrieveLocation(string $id): array
+    {
+        return $this->request()->get($this->url('/v2/locations/'.rawurlencode($id)))->throw()->json('location') ?? [];
+    }
+
+    public function fetchCards(?string $cursor = null): array
+    {
+        $result = $this->request()->get($this->url('/v2/cards'), array_filter(['cursor' => $cursor, 'include_disabled' => 'true']))->throw()->json();
+
+        return ['items' => $result['cards'] ?? [], 'cursor' => $result['cursor'] ?? null];
+    }
+
     /**
-     * @param array<int,string> $locationIds
+     * @param  array<int,string>  $locationIds
      * @return array{items:array<int,array<string,mixed>>,cursor:?string}
      */
     public function searchOrders(
@@ -109,6 +129,6 @@ class SquareClient
 
     protected function url(string $path): string
     {
-        return $this->baseUrl . '/' . ltrim($path, '/');
+        return $this->baseUrl.'/'.ltrim($path, '/');
     }
 }

@@ -7,6 +7,10 @@
     {
       "path": "/platform/examples/field",
       "label": "Everbranch Field Service Example"
+    },
+    {
+      "path": "/platform/retail",
+      "label": "Everbranch Retail Offer"
     }
   ],
   "dangerousActionGuards": [

@@ -6,6 +6,7 @@
         <x-customer-commerce :snapshot="$detail['commerce']" :rewards-label="$detail['commerce']['rewards']['label']" />
         @include('customers.preferences', compact('preferences', 'tenant', 'profile', 'canEditPreferences'))
         @if($journey) @include('customers.journey', compact('journey', 'tenant', 'profile', 'canReviewAttribution')) @endif
+        @if($squareSource) @include('customers.square-source', compact('squareSource', 'tenant')) @endif
         @if($canPrepare)
             <section class="space-y-3 rounded border p-4" aria-label="Personalized messages">
                 <h2 class="text-xl font-semibold">Personalized email or text</h2>

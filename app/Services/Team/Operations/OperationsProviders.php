@@ -145,22 +145,14 @@ class OperationsProviders
         if (strtoupper($method) === 'GET') {
             return $this->request($c, $method, $url, $parameters);
         }
-        // Serialize provider mutations against disconnects and source changes. Never
-        // let a database retry replay an external write after an uncertain response.
-        $result = DB::transaction(function () use ($c, $method, $url, $parameters) {
+        // Admit the current connection before transport. The caller's durable
+        // operation claim serializes writes; no database retry may replay them.
+        DB::transaction(function () use ($c) {
             $current = TeamProviderConnection::whereKey($c->id)->lockForUpdate()->firstOrFail();
             abort_unless($current->generation === $c->generation && $current->status === 'connected', 409);
-            try {
-                return ['data' => $this->request($c, $method, $url, $parameters)];
-            } catch (HttpException $e) {
-                return ['error' => $e];
-            }
         }, 1);
-        if (isset($result['error'])) {
-            throw $result['error'];
-        }
 
-        return $result['data'];
+        return $this->request($c, $method, $url, $parameters);
     }
 
     private function request(TeamProviderConnection $c, string $method, string $url, array $parameters): array
@@ -202,7 +194,7 @@ class OperationsProviders
     public function verifyAsanaRecord(TeamProviderConnection $c, string $id, string $project): array
     {
         abort_unless(ctype_digit($id) && in_array($project, $this->selectedProjects($c), true), 403);
-        $task = $this->asana($c, 'tasks/'.$id, ['opt_fields' => 'gid,name,notes,modified_at,workspace.gid,memberships.project.gid'])['data'] ?? [];
+        $task = $this->asana($c, 'tasks/'.$id, ['opt_fields' => 'gid,name,notes,modified_at,workspace.gid,memberships.project.gid,start_on,due_on,start_at,due_at,assignee.gid,assignee.name'])['data'] ?? [];
         abort_unless((string) ($task['gid'] ?? '') === $id && (string) ($task['workspace']['gid'] ?? '') === (string) ($c->settings['source']['asana_workspace'] ?? '') && collect($task['memberships'] ?? [])->contains(fn ($m) => (string) ($m['project']['gid'] ?? '') === $project), 403);
 
         return $task;
@@ -255,7 +247,7 @@ class OperationsProviders
                 abort_unless($resource === 'records' && isset($projects[$index]), 422, 'Select a project first.');
                 $projectId = $projects[$index];
                 $project = $this->verifyAsanaProject($c, $projectId);
-                $data = $this->asana($c, 'projects/'.$projectId.'/tasks', ['limit' => 100, 'offset' => $taskOffset, 'opt_fields' => 'gid,name,notes,modified_at,completed,due_on,start_on,due_at,start_at,assignee.gid,memberships.project.gid,memberships.section.name']);
+                $data = $this->asana($c, 'projects/'.$projectId.'/tasks', ['limit' => 100, 'offset' => $taskOffset, 'opt_fields' => 'gid,name,notes,modified_at,completed,due_on,start_on,due_at,start_at,assignee.gid,assignee.name,memberships.project.gid,memberships.section.name']);
                 $extra['project'] = $project;
                 $extra['project_id'] = $projectId;
             }

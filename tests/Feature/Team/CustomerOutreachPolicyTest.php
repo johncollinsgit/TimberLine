@@ -3,6 +3,7 @@
 use App\Models\LandlordOperatorAction;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
+use App\Models\MarketingConsentEvent;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
@@ -119,6 +120,27 @@ test('reviewing a tenant policy cannot enable personalized email through the ind
     $decision = app(CustomerOutreachPolicy::class)->decision($profile, 'email');
     expect($decision['allowed'])->toBeFalse()->and($decision['reason_codes'])->toContain('outreach_email_safety_review_required')
         ->and($decision['policy']['status'])->toBe('published');
+    Http::assertNothingSent();
+});
+
+test('new personalized outreach blocks legacy Square inferred consent until current contact permission is proven', function () {
+    [$tenant, $owner, $profile] = outreachWorkspace();
+    outreachRevision($tenant, $owner);
+    $alias = MarketingProfile::create(['tenant_id' => $tenant->id, 'merged_into_profile_id' => $profile->id]);
+    $event = ['tenant_id' => $tenant->id, 'marketing_profile_id' => $alias->id, 'channel' => 'email'];
+    MarketingConsentEvent::create($event + ['event_type' => 'confirmed', 'source_type' => 'verified_customer_choice',
+        'details' => ['email' => $profile->email], 'occurred_at' => now()->subDays(3)]);
+    MarketingConsentEvent::create($event + ['event_type' => 'revoked', 'source_type' => 'customer_choice', 'occurred_at' => now()->subDays(2)]);
+    MarketingConsentEvent::create($event + ['event_type' => 'imported', 'source_type' => 'square_customer_sync', 'occurred_at' => now()->subDay()]);
+    $decision = app(CustomerOutreachPolicy::class)->decision($profile, 'email');
+    expect($decision['allowed'])->toBeFalse()->and($decision['reason_codes'])->toContain('outreach_square_consent_requires_review')
+        ->and($profile->fresh()->accepts_email_marketing)->toBeTrue();
+    MarketingConsentEvent::create($event + ['event_type' => 'confirmed', 'source_type' => 'verified_customer_choice',
+        'details' => ['email' => 'different-contact@example.test'], 'occurred_at' => now()]);
+    expect(app(CustomerOutreachPolicy::class)->decision($profile, 'email')['reason_codes'])->toContain('outreach_square_consent_requires_review');
+    MarketingConsentEvent::create($event + ['event_type' => 'confirmed', 'source_type' => 'verified_customer_choice',
+        'details' => ['email' => $profile->email], 'occurred_at' => now()]);
+    expect(app(CustomerOutreachPolicy::class)->decision($profile, 'email')['allowed'])->toBeTrue();
     Http::assertNothingSent();
 });
 

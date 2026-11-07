@@ -15,6 +15,12 @@ Artisan::command('inspire', function () {
 Schedule::command('stock:sync')->everyMinute()->withoutOverlapping(5)->runInBackground();
 
 // Square -> canonical marketing profile sync cadence.
+// Renew only existing owner-authorized Core source grants; no imports or Pay grants.
+Schedule::command('customer-sources:renew-square', ['--limit' => 200])
+    ->dailyAt('00:40')
+    ->withoutOverlapping(30)
+    ->runInBackground();
+
 Schedule::command('marketing:sync-square-customers')
     ->dailyAt('01:10')
     ->withoutOverlapping(240)

@@ -55,10 +55,18 @@ test('verified tenant roles discover Core customers without a global marketing o
     expect($entry['href'])->toBe(route('customers.directory', ['tenant' => $tenant->slug]))
         ->and($navigation['marketing_sub_groups'])->toBe([])
         ->and(collect($navigation['quick_actions'])->firstWhere('label', 'Find customer')['href'])->toBe($entry['href']);
-    $this->actingAs($member)->get(route('customers.directory', ['tenant' => $tenant->slug, 'query' => 'Ada']))
+    $directory = $this->actingAs($member)->get(route('customers.directory', ['tenant' => $tenant->slug, 'query' => 'Ada']))
         ->assertOk()->assertSeeText('Ada Core')->assertDontSeeText('PRIVATE marketing-only note');
+    $managesSource = in_array($role, ['owner', 'tenant_owner', 'admin'], true);
+    $directory->assertViewHas('canManageSquare', $managesSource);
+    if ($managesSource) {
+        $directory->assertSee(route('customers.square.index', ['tenant' => $tenant->slug]), false);
+    } else {
+        $directory->assertDontSeeText('Square connection and import');
+    }
     $this->get(route('customers.profile', ['tenant' => $tenant->slug, 'profile' => $customer->id]))
-        ->assertOk()->assertSeeText('Ada Core')->assertDontSeeText('PRIVATE marketing-only note');
+        ->assertOk()->assertSeeText('Ada Core')->assertDontSeeText('PRIVATE marketing-only note')
+        ->assertViewHas('squareSource', fn ($source) => $managesSource ? is_array($source) : $source === null);
     Http::assertNothingSent();
 })->with(['owner', 'tenant_owner', 'admin', 'member', 'manager']);
 

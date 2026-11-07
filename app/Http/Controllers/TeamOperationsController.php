@@ -88,7 +88,7 @@ class TeamOperationsController extends Controller
     {
         $t = $this->tenant($r);
         $record = TeamOperationRecord::where('tenant_id', $t->id)->findOrFail($id);
-        $i = $r->validate(['request_id' => 'required|uuid', 'expected_version' => 'required|integer|min:1', 'reviewed' => 'accepted', 'action' => 'required|in:fields,forecast,square', 'field_indices' => 'required_if:action,fields|array|max:50', 'field_indices.*' => 'integer|min:0|max:1000|distinct', 'low_cents' => 'required_if:action,forecast|integer|min:-100000000000|max:100000000000', 'base_cents' => 'required_if:action,forecast|integer|min:-100000000000|max:100000000000', 'high_cents' => 'required_if:action,forecast|integer|min:-100000000000|max:100000000000', 'reason' => 'required_if:action,forecast|string|min:8|max:2000', 'order_ids' => 'required_if:action,square|array|max:1000', 'order_ids.*' => 'string|max:192|distinct']);
+        $i = $r->validate(['request_id' => 'required|uuid', 'expected_version' => 'required|integer|min:1', 'reviewed' => 'accepted', 'action' => 'required|in:fields,forecast,square,schedule', 'schedule' => 'required_if:action,schedule|array', 'field_indices' => 'required_if:action,fields|array|max:50', 'field_indices.*' => 'integer|min:0|max:1000|distinct', 'low_cents' => 'required_if:action,forecast|integer|min:-100000000000|max:100000000000', 'base_cents' => 'required_if:action,forecast|integer|min:-100000000000|max:100000000000', 'high_cents' => 'required_if:action,forecast|integer|min:-100000000000|max:100000000000', 'reason' => 'required_if:action,forecast|string|min:8|max:2000', 'order_ids' => 'required_if:action,square|array|max:1000', 'order_ids.*' => 'string|max:192|distinct']);
         $saved = app(\App\Services\Team\Operations\OperationsEnrichment::class)->review($t, $r->user(), $record, $i);
         $this->access->record($t, $r->user(), $saved);
 
@@ -426,7 +426,9 @@ class TeamOperationsController extends Controller
 
                 continue;
             }
-            $visible[] = ['id' => $attempt->id, 'kind' => $attempt->kind, 'status' => $attempt->status, 'created_at' => $attempt->created_at, 'title' => $record->title];
+            $visible[] = ['id' => $attempt->id, 'kind' => $attempt->kind, 'status' => $attempt->status, 'created_at' => $attempt->created_at, 'title' => $record->title,
+                'adoption_recovery_available' => $attempt->kind === 'asana.create' && $attempt->status === 'accepted'
+                    && ($attempt->result['adoption_status'] ?? null) === 'needs_review' && empty($attempt->result['projection_id'])];
         }
 
         return $this->json(['items' => $visible, 'page' => $items->currentPage(), 'has_more' => $items->hasMorePages(), 'partial' => $partial, 'notice' => $partial ? 'Some communication history is hidden because current work access could not be verified.' : null]);

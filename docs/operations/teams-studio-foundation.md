@@ -39,7 +39,9 @@ and unresolved totals. Expected sales are optional; commission stays provisional
 without them. A known commission does not bypass an unknown minimum.
 
 Modern Forestry's written criteria are an editable draft. Publication refuses
-its commission-minimum discrepancy until the owner resolves the rule. Other
+its unresolved setup-hour/commission-minimum precedence discrepancy until the owner resolves the rule. The written setup allowance and workbook formulas differ;
+the draft effective date also requires confirmation rather than being presented
+as a workbook fact. Other
 tenants receive their own blank policy unless an explicit tenant template is
 configured. No actual pay history was changed or program published.
 
@@ -54,6 +56,12 @@ source start/due fields. Conflicting/absent ranges stay unconfirmed. Source task
 keys already include tenant, workspace, kind and GID, so two project memberships
 remain one event. Original notes, source version and independent task deadline
 are retained. Exact source passages remain suggestions until reviewed.
+
+The dated-calendar increment adds explicit local sessions for setup, selling,
+teardown and travel, sparse days, person colors and 1/2/3-day client views.
+Fresh note/comment evidence can verify individual phase/date facts; no task due
+date or generic range verifies intervening days. See `teams-event-schedule.md`
+for the complete calendar, source-proof and frozen-budget consistency contract.
 
 Task changes additionally support explicitly hash-fenced complete-note edits,
 verified workspace assignee IDs and separately scoped comments. Durable original

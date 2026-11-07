@@ -42,6 +42,9 @@
         <section class="eb-industry-page-intro" aria-labelledby="industry-page-title">
             <p class="eb-studio-eyebrow">A connected example</p>
             <h1 id="industry-page-title" data-industry-page-title>{{ $disciplines[$discipline] }} in motion.</h1>
+            @if($discipline === 'retail')
+                <p><a href="{{ route('platform.retail') }}">See the retail offer: keep Square or move in phases →</a></p>
+            @endif
             <p>This is a fictional Everbranch demonstration, not a live customer website or workspace. Explore the customer-facing website and the shared operating system behind it using demo-only content.</p>
         </section>
 
