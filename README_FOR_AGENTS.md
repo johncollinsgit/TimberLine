@@ -11,6 +11,17 @@ keyboard focus and missing/error states. Geometry checks supplement visual revie
 Preserve recovery, unknown-data labels and authorization; presentation work cannot
 establish complete offline or supported-device acceptance.
 
+Teams uses the exact product masthead “Everbranch Teams” with the existing
+Everbranch leaf and a self-hosted painted green-tree band. Keep the tenant/company
+context separate. Artwork is decorative, with readable text and usable controls
+when images fail or forced colors are enabled. Do not alter app identifiers,
+signing or tenant/source identities for a branding change.
+Teams-specific favicons, touch icons and separate any/maskable manifest assets
+are served from `/teams-workspace/brand/icons/`. Preserve tenant-bound manifest
+IDs/start URLs and the workspace/studio surface; never substitute a generic
+installation manifest or change Field/Pay icons. Offline fallback remains only
+a public reconnect explanation, with no authenticated response caching.
+
 The public retail overview at `/platform/retail` connects keeping Square or a
 phased move with customer profiles, tenant rewards/birthdays/app setup, Teams
 employee time, company event pay/costs and event profit. Preserve its approved

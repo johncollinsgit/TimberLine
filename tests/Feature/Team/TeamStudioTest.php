@@ -152,6 +152,7 @@ test('the shared browser shell injects only current authenticated escaped boot d
     [$tenant, $owner] = teamWorkspace();
     $tenant->update(['name' => '</script><script>unsafe()</script>']);
     $response = $this->actingAs($owner)->get('/teams/studio?tenant='.$tenant->slug)->assertOk()->assertSee('<script id="teams-boot" type="application/json">', false)->assertDontSee('</script><script>unsafe()', false)->assertSee('/teams-workspace/assets/', false);
+    $response->assertSee('rel="manifest"', false)->assertSee(e(route('team.manifest', ['tenant' => $tenant->slug, 'surface' => 'studio'])), false)->assertDontSee('<!--teams-manifest-->', false);
     expect($response->headers->get('Cache-Control'))->toContain('no-store', 'private');
 });
 

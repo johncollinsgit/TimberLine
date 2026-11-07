@@ -25,6 +25,11 @@ one original command and confirmed source identity. Read
 `docs/operations/teams-event-schedule.md`. Macon private evidence and physical
 phone acceptance remain separate from these source changes.
 
+Teams presentation uses the Everbranch leaf and the exact “Everbranch Teams”
+product masthead with owner-requested painted green trees. The self-hosted WebP
+is decorative; company identity, navigation and existing authorization remain
+separate. Browser/device release acceptance remains governed by the runbooks.
+
 ## Shared customer profiles and event value (November 7; source candidate)
 
 Core Customers, Website accounts, Teams and Pay reuse canonical identities and

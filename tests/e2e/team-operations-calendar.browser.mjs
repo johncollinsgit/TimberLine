@@ -25,6 +25,49 @@ try {
   const csrf = (await (await context.request.get(origin + '/login')).text()).match(/<meta name="csrf-token" content="([^"]+)"/)?.[1]; assert.ok(csrf);
   const login = await context.request.post(origin + '/login', { form: { email: 'owner@fixture.invalid', password: 'Fictional-local-only-2026!', _token: csrf }, headers: { Accept: 'application/json' } }); assert.ok(login.ok(), await login.text());
   page = await context.newPage(); const errors = [], writes = []; page.setDefaultTimeout(12000); page.on('pageerror', error => errors.push(error.message)); page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/team/') && !['GET', 'HEAD'].includes(request.method())) writes.push(request.url()); });
+  page.on('console', message => { if (message.type() === 'error' && /Content Security Policy|Refused to (?:load|execute|apply)|\bCSP\b/i.test(message.text())) errors.push(message.text()); });
+  const branding = [];
+  for (const surface of ['standalone', 'embedded']) {
+    for (const width of [320, 390, 1440]) {
+      await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
+      const artworkResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/brand/everbranch-teams-trees-v1.webp' && response.status() === 200);
+      const response = await page.goto(`${origin}/${surface === 'standalone' ? 'teams' : 'team'}?tenant=${fixture.tenant}`);
+      await artworkResponse;
+      assert.equal(response.status(), 200, surface + ' authenticated Teams page');
+      await page.waitForFunction(() => window.TeamPremium?.context?.ready());
+      const brand = page.locator('[data-teams-product-brand]');
+      assert.equal(await brand.count(), 1, 'One compact product masthead');
+      await brand.getByText('Everbranch Teams', { exact: true }).waitFor();
+      const measured = await brand.evaluate(element => {
+        const art = element.querySelector('.eb-teams-tree-canopy'), lockup = element.querySelector('.eb-teams-product-lockup');
+        return { width: innerWidth, height: element.getBoundingClientRect().height, artHeight: art.getBoundingClientRect().height, artBottom: art.getBoundingClientRect().bottom, lockupTop: lockup.getBoundingClientRect().top, lockupColor: getComputedStyle(lockup).backgroundColor, font: getComputedStyle(lockup).fontFamily, decorative: art.getAttribute('aria-hidden'), artBackground: getComputedStyle(art).backgroundImage, pageWidth: document.documentElement.scrollWidth };
+      });
+      assert.ok(measured.height <= 100 && measured.artHeight === 40, 'Compact painted-tree canopy');
+      assert.ok(measured.lockupTop >= measured.artBottom, 'Artwork stays above product text and controls');
+      assert.equal(measured.lockupColor, 'rgb(255, 255, 255)', 'Plain readable wordmark background');
+      assert.equal(measured.decorative, 'true', 'CSS forest artwork is decorative');
+      assert.ok(measured.artBackground.includes('/brand/everbranch-teams-trees-v1.webp'), 'Approved local tree asset is used');
+      assert.ok(measured.pageWidth <= width + 1, surface + width + ' no page overflow');
+      await page.locator('#tw-workspace-label').filter({ hasText: 'Workspace:' }).waitFor();
+      await brand.evaluate(element => element.scrollIntoView({ block: 'start' }));
+      await page.screenshot({ path: join(evidence, `brand-${surface}-${width}.png`) });
+      branding.push({ surface, ...measured });
+    }
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/brand/everbranch-teams-trees-v1.webp', route => route.abort());
+  await page.route('**/brand/everbranch-mark.svg', route => route.abort());
+  await page.goto(`${origin}/teams?tenant=${fixture.tenant}`);
+  await page.waitForFunction(() => window.TeamPremium?.context?.ready());
+  await page.locator('[data-teams-product-brand]').getByText('Everbranch Teams', { exact: true }).waitFor();
+  assert.equal(await page.locator('[data-teams-product-brand] img').count(), 0, 'Decorative CSS fallback cannot display broken image glyphs');
+  assert.equal(await page.locator('#tw-workspaces').isEnabled(), true, 'Workspace controls stay usable with unavailable artwork');
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Unavailable artwork never causes overflow');
+  await page.screenshot({ path: join(evidence, 'brand-artwork-blocked-390.png') });
+  await page.unroute('**/brand/everbranch-teams-trees-v1.webp');
+  await page.unroute('**/brand/everbranch-mark.svg');
+  branding.push({ artworkBlocked: true, readableProductName: true, usableWorkspaceControl: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${origin}/teams?tenant=${fixture.tenant}&area=${fixture.area_id}&area_view=calendar`);
   await page.waitForFunction(() => window.TeamPremium?.context?.ready());
   await page.locator('#tops-areas button').first().click();
@@ -91,7 +134,7 @@ try {
   await page.screenshot({ path: join(evidence, 'phone-network-unavailable.png') });
   await page.unroute(failedRead); await page.locator('#tops-refresh').click(); await grid.getByText('Partial schedule', { exact: true }).waitFor(); await page.waitForFunction(() => document.querySelector('#tops-content').getAttribute('aria-busy') !== 'true');
   assert.deepEqual(errors, []); assert.deepEqual(writes, [], 'Calendar and details are read-only');
-  await writeFile(join(evidence, 'acceptance.json'), JSON.stringify({ passed: true, fictional_only: true, sparse_event_explicit_sessions: 3, distinct_selling_days: 2, gap_days_painted: 0, views: ['month', 1, 2, 3], crew_identity_color_stable: true, refresh_preserves_view_and_color: true, keyboard_scroll: true, keyboard_focus: true, forced_colors: true, reduced_motion: true, long_title: true, unknown_source: true, failed_read_notice_and_recovery: true, geometry, provider_or_operation_writes: writes, javascript_errors: errors }, null, 2));
+  await writeFile(join(evidence, 'acceptance.json'), JSON.stringify({ passed: true, fictional_only: true, sparse_event_explicit_sessions: 3, distinct_selling_days: 2, gap_days_painted: 0, views: ['month', 1, 2, 3], crew_identity_color_stable: true, refresh_preserves_view_and_color: true, keyboard_scroll: true, keyboard_focus: true, forced_colors: true, reduced_motion: true, long_title: true, unknown_source: true, failed_read_notice_and_recovery: true, geometry, branding, provider_or_operation_writes: writes, javascript_errors: errors }, null, 2));
   console.log('PASS legacy calendar: real authenticated HTTP, explicit sparse dates, lighter setup, unknown/legacy labels, event/crew colors, month/1/2/3-day controls, source anchor, Studio review link, desktop/phone, no writes.');
 } catch (error) { if (page) { await page.screenshot({ path: join(evidence, 'failure.png') }); console.error((await page.locator('body').innerText()).slice(-5000)); } throw error;
 } finally { if (browser) await browser.close(); if (server && server.exitCode === null) { server.kill('SIGTERM'); await new Promise(done => server.once('exit', done)); } await rm(dir, { recursive: true, force: true }); }

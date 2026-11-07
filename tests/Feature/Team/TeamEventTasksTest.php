@@ -189,12 +189,28 @@ test('event date-only edits cannot discard an existing timed schedule', function
 });
 
 test('installable app stays tenant bound and never caches private task responses', function () {
-    $this->get('/teams/manifest.webmanifest?tenant='.$this->tenant->slug)->assertOk()->assertJsonPath('start_url', '/teams/app?app=events&tenant='.$this->tenant->slug);
+    $manifest = $this->get('/teams/manifest.webmanifest?tenant='.$this->tenant->slug)->assertOk()
+        ->assertHeader('Content-Type', 'application/manifest+json')
+        ->assertJsonPath('start_url', '/teams/app?app=events&tenant='.$this->tenant->slug)
+        ->assertJsonPath('icons.0.src', '/teams-workspace/brand/icons/icon-192.png')->assertJsonPath('icons.2.purpose', 'maskable');
+    expect($manifest->headers->get('Cache-Control'))->toContain('no-store', 'private');
     $this->get('/teams/app?app=events&tenant='.$this->tenant->slug)->assertOk()->assertSee('Install Teams')->assertSee('apple-mobile-web-app-capable');
     $response = $this->get('/teams/sw.js')->assertOk()->assertHeader('Service-Worker-Allowed', '/teams/');
     $worker = file_get_contents($response->baseResponse->getFile()->getPathname());
     expect($worker)->toContain('cache.add(OFFLINE)')->not->toContain('cache.put(');
     $this->get('/teams/offline')->assertOk()->assertSee('Saves require a connection.');
+});
+
+test('shared Teams manifest preserves the chosen tenant and application surface', function () {
+    $this->get('/teams/manifest.webmanifest?surface=studio&tenant='.$this->tenant->slug)->assertOk()
+        ->assertJsonPath('id', '/teams/studio?tenant='.$this->tenant->slug)
+        ->assertJsonPath('start_url', '/teams/studio?tenant='.$this->tenant->slug)
+        ->assertJsonPath('scope', '/teams/')->assertJsonPath('name', 'Everbranch Teams');
+    $this->get('/teams/manifest.webmanifest?tenant=other-fictional-company')->assertOk()
+        ->assertJsonPath('id', '/teams/app?tenant=other-fictional-company');
+    $this->get('/teams/manifest.webmanifest?surface=outside')->assertUnprocessable();
+    $this->get('/teams/manifest.webmanifest?surface[]=studio')->assertUnprocessable();
+    $this->get('/teams/manifest.webmanifest?tenant=../other')->assertUnprocessable();
 });
 
 test('explicit note edits require the full original hash and retain the immutable before version', function () {

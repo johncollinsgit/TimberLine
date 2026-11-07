@@ -1,1 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="220" fill="#294f39"/><path d="M250 280h524v118H572v358H452V398H250z" fill="#f1edda"/><path d="M572 545c116-7 177-72 184-174-99 15-162 72-184 174z" fill="#b8cf8f"/><circle cx="312" cy="649" r="55" fill="#b8cf8f"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Everbranch Teams</title>
+  <desc id="desc">An ivory T and sage leaf on a forest green square.</desc>
+  <rect width="1024" height="1024" fill="#183e32"/>
+  <g id="teams-mark" transform="translate(512 512) scale(1.15) translate(-512 -512)">
+    <path d="M250 280h524v118H572v358H452V398H250z" fill="#fffaf0"/>
+    <path d="M572 545c116-7 177-72 184-174-99 15-162 72-184 174z" fill="#b8cf8f"/>
+  </g>
+</svg>

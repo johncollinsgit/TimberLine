@@ -107,6 +107,30 @@ try {
     await page
         .getByRole("heading", { name: "Your team. Your next event." })
         .waitFor();
+    const manifestHref = await page.locator('link[rel="manifest"]').getAttribute("href");
+    assert.ok(manifestHref, "Authenticated studio has a tenant-bound manifest");
+    const manifestResponse = await context.request.get(manifestHref);
+    assert.ok(manifestResponse.ok());
+    const manifest = await manifestResponse.json();
+    assert.equal(manifest.id, `/teams/studio?tenant=${fixture.tenant}`);
+    assert.equal(manifest.start_url, `/teams/studio?tenant=${fixture.tenant}`);
+    assert.equal(manifest.scope, "/teams/");
+    assert.equal(manifest.name, "Everbranch Teams");
+    assert.deepEqual(new Set(manifest.icons.map((icon) => icon.purpose)), new Set(["any", "maskable"]));
+    for (const icon of manifest.icons) {
+        const response = await context.request.get(origin + icon.src);
+        assert.ok(response.ok(), `Teams icon ${icon.src} loads`);
+        const png = await response.body();
+        const [width, height] = icon.sizes.split("x").map(Number);
+        assert.equal(png.readUInt32BE(16), width);
+        assert.equal(png.readUInt32BE(20), height);
+    }
+    for (const selector of ['link[rel="icon"]', 'link[rel="apple-touch-icon"]']) {
+        assert.ok(await page.locator(selector).count(), `Teams provides ${selector}`);
+        for (const href of await page.locator(selector).evaluateAll((links) => links.map((link) => link.href))) {
+            assert.ok((await context.request.get(href)).ok(), `Teams browser icon ${href} loads`);
+        }
+    }
     await page.getByRole("button", { name: "＋ Create event" }).click();
     await page
         .getByLabel("Event name", { exact: true })
@@ -191,6 +215,7 @@ try {
                 transport: "real Laravel HTTP and private SQLite",
                 checks: [
                     "Fortify login and authenticated boot",
+                    "tenant-bound studio manifest and actual favicon, touch, any and maskable icon assets",
                     "server cost preview and wizard creation",
                     "lost creation response creates one canonical event",
                     "native task and comment persist through shared commands",
