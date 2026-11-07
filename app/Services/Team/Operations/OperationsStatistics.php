@@ -15,6 +15,25 @@ class OperationsStatistics
         $access->financial($tenant, $user);
         $access->area($tenant, $user, $area->id);
         $rows = TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'financial'])->where('status', '!=', 'withdrawn')->get();
+        $byFinancial = [];
+        $byEvent = [];
+        foreach (TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event_link', 'status' => 'accepted'])->cursor() as $link) {
+            $map = $link->data;
+            $series = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'series'])->find($map['series_id'] ?? '');
+            if (! $series || $series->status === 'withdrawn') {
+                continue;
+            }
+            try {
+                $access->record($tenant, $user, $series);
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException) {
+                continue;
+            }
+            $mapped = $map + ['series_label' => $series->title.' ('.substr($series->id, 0, 8).')'];
+            if (! empty($map['financial_id'])) {
+                $byFinancial[$map['financial_id']] = $mapped;
+            }
+            $byEvent[$map['occurrence_id']] = $mapped;
+        }
         $totals = ['net_sales_cents' => 0, 'expense_cents' => 0, 'profit_cents' => 0];
         $costs = [];
         $history = [];
@@ -49,7 +68,11 @@ class OperationsStatistics
 
                 continue;
             }
-            $key = mb_strtolower(trim($row->title));
+            $mapping = $byFinancial[$row->id] ?? null;
+            if ($mapping && ($mapping['financial_version'] ?? null) !== $row->version) {
+                $mapping = null;
+            }
+            $key = $mapping['series_id'] ?? null;
             $computedProfit = $data['net_sales_cents'] - $data['total_expense_cents'];
             if (isset($data['profit_cents']) && abs($data['profit_cents'] - $computedProfit) > 1) {
                 $excluded++;
@@ -57,7 +80,7 @@ class OperationsStatistics
 
                 continue;
             }
-            foreach (['year' => (string) $row->starts_on->year, ...($row->starts_on->year === $year ? ['month' => $row->starts_on->format('Y-m'), 'series' => $row->title, 'location' => $data['state'] ?? 'Unknown'] : [])] as $dimension => $group) {
+            foreach (['year' => (string) $row->starts_on->year, ...($row->starts_on->year === $year ? ['month' => $row->starts_on->format('Y-m'), 'series' => $mapping['series_label'] ?? 'Unmapped occurrences', 'location' => $data['state'] ?? 'Unknown'] : [])] as $dimension => $group) {
                 $bucket = $comparisons[$dimension][$group] ?? ['net_sales_cents' => 0, 'expense_cents' => 0, 'profit_cents' => 0, 'occurrences' => 0];
                 $bucket['net_sales_cents'] += $data['net_sales_cents'];
                 $bucket['expense_cents'] += $data['total_expense_cents'];
@@ -65,8 +88,8 @@ class OperationsStatistics
                 $bucket['occurrences']++;
                 $comparisons[$dimension][$group] = $bucket;
             }
-            $days = max(1, $data['selling_days'] ?? 1);
-            if (($data['selling_days'] ?? 0) > 0) {
+            $days = $mapping['verified_selling_days'] ?? null;
+            if ($key && $days > 0) {
                 $history[$key][] = ['revenue_per_day' => intdiv($data['net_sales_cents'], $days), 'cost_per_day' => intdiv($data['total_expense_cents'], $days)];
             }
             if ($row->starts_on?->year !== $year) {
@@ -96,7 +119,8 @@ class OperationsStatistics
 
                 continue;
             }
-            $sample = $history[mb_strtolower(trim($event->title))] ?? [];
+            $eventMapping = $byEvent[$event->id] ?? null;
+            $sample = $history[$eventMapping['series_id'] ?? ''] ?? [];
             $override = $event->data['_teams_enrichment']['forecast_override'] ?? null;
             if ($override && ($override['source_version'] ?? null) === ($event->data['source_version'] ?? null) && ($override['starts_on'] ?? null) === $event->starts_on?->toDateString() && ($override['ends_on'] ?? null) === $event->ends_on?->toDateString()) {
                 foreach ($override['profit_cents'] as $scenario => $cents) {
@@ -122,17 +146,23 @@ class OperationsStatistics
             sort($revenues);
             $expenses = array_column($sample, 'cost_per_day');
             sort($expenses);
-            $days = max(1, (int) ($event->starts_on?->diffInDays($event->ends_on ?? $event->starts_on) ?? 0) + 1);
+            $days = $eventMapping['verified_selling_days'] ?? null;
+            if (! $days) {
+                $forecasts[] = ['id' => $event->id, 'title' => $event->title, 'status' => 'selling_days_need_review', 'sample_size' => count($sample)];
+                $unknown++;
+
+                continue;
+            }
             $cost = $expenses[(int) floor((count($expenses) - 1) / 2)];
             $estimates = [];
             foreach (['low' => .25, 'base' => .5, 'high' => .75] as $scenario => $q) {
                 $estimates[$scenario] = ($revenues[(int) floor((count($revenues) - 1) * $q)] - $cost) * $days;
                 $projection[$scenario] += $estimates[$scenario];
             }
-            $forecasts[] = ['id' => $event->id, 'title' => $event->title, 'status' => 'estimate', 'sample_size' => count($sample), 'profit_cents' => $estimates, 'method' => 'Historical exact-title occurrence daily revenue quartiles minus median daily recorded costs. Review series identity and comparability.'];
+            $forecasts[] = ['id' => $event->id, 'title' => $event->title, 'status' => 'estimate', 'sample_size' => count($sample), 'profit_cents' => $estimates, 'method' => 'Reviewed series occurrence revenue per verified selling day quartiles minus median recorded cost per verified selling day.'];
         }
         $health = app(OperationsHealth::class)->area($area, $user->id, 'sheets');
 
-        return [...$totals, 'currency' => 'USD', 'year' => $year, 'comparisons' => $comparisons, 'discrepancies' => $discrepancies, 'planning_rows' => $planning, 'margin_percent' => $totals['net_sales_cents'] > 0 ? round($totals['profit_cents'] / $totals['net_sales_cents'] * 100, 2) : null, 'costs' => $costs, 'missing_cost_categories' => $missingCosts, 'events' => $events, 'excluded_rows' => $excluded, 'forecast' => ['year_end_profit_cents' => $projection, 'events' => $forecasts, 'unknown_events' => $unknown, 'complete' => $unknown === 0 && $excluded === 0 && $health['complete']], 'basis' => 'Recorded spreadsheet event margin. Square is reconciliation evidence, never additional revenue.', 'complete' => $excluded === 0 && $health['complete'], 'freshness' => $health, 'as_of' => now()->toIso8601String()];
+        return [...$totals, 'currency' => 'USD', 'year' => $year, 'comparisons' => $comparisons, 'discrepancies' => $discrepancies, 'planning_rows' => $planning, 'margin_percent' => $totals['net_sales_cents'] > 0 ? round($totals['profit_cents'] / $totals['net_sales_cents'] * 100, 2) : null, 'costs' => $costs, 'missing_cost_categories' => $missingCosts, 'events' => $events, 'excluded_rows' => $excluded, 'forecast' => ['year_end_profit_cents' => $projection, 'events' => $forecasts, 'unknown_events' => $unknown, 'complete' => $unknown === 0 && $excluded === 0 && $planning === 0 && $health['complete']], 'basis' => 'Recorded spreadsheet event margin. Square is reconciliation evidence, never additional revenue.', 'complete' => $excluded === 0 && $planning === 0 && $health['complete'], 'freshness' => $health, 'as_of' => now()->toIso8601String()];
     }
 }

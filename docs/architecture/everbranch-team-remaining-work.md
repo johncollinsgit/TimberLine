@@ -2,6 +2,18 @@
 
 Updated 2026-10-19 UTC after the minimum-replacement workflow assessment and project-discovery increment. None of A-E is declared fully complete. The canonical inventory remains **643 clauses / 36 supplied sections** in `everbranch-team-mobile-parity.json` and its generated Markdown; each row carries a milestone, rules, dependencies, edge cases and evidence. The accompanying generated `everbranch-team-milestone-index.json` indexes every clause exactly once by milestone, preserving the original IDs. Counts describe inventory, not a percentage of parity or test accuracy.
 
+## November 7 Studio/native foundation candidate
+
+See `../operations/teams-studio-foundation.md` and the paired mobile
+`docs/teams-foundation.md`. This draft adds shared event/cost/definition interfaces,
+reviewed comparison/weather read models, dedicated native projects and an owned
+queue engine. It does not complete the approved full product. All original A-E
+scope and clause-level acceptance remain. Forms/templates/dashboards have definition
+authoring, not complete runtime parity. Automatic source handoff/expanded bridge,
+offline startup/recovery/files/push, complete workflows and physical acceptance
+remain required. Modern Forestry cutover stays disabled, including automatically
+in 2027. No clause counts are raised by inference from these local tests.
+
 ## Standalone application packaging checkpoint
 
 The user's clarified Everbranch link plus independent company Teams web app is

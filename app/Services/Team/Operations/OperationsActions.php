@@ -126,6 +126,9 @@ class OperationsActions
                 abort_unless(ctype_digit($project), 422);
                 app(OperationsProviders::class)->read($connection, 'records'); // Recheck target project/workspace immediately before mutation.
                 $payload = ['name' => $record->title, 'projects' => [$project], 'notes' => $record->data['notes'] ?? '', 'start_on' => $record->starts_on?->toDateString(), 'due_on' => $record->ends_on?->toDateString()];
+                if ($record->starts_on && $record->ends_on) {
+                    $payload['notes'] .= "\nEvent date range: ".$record->starts_on->format('m.d.Y').' - '.$record->ends_on->format('m.d.Y');
+                }
                 foreach (['venue', 'address', 'city', 'state', 'timezone', 'organizer', 'email', 'phone', 'setup_time', 'loadout_time', 'event_hours', 'booth', 'instructions'] as $field) {
                     if (filled($record->data[$field] ?? null)) {
                         $payload['notes'] .= "\n".ucwords(str_replace('_', ' ', $field)).': '.$record->data[$field];

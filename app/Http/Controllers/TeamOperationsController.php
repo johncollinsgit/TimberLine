@@ -97,7 +97,7 @@ class TeamOperationsController extends Controller
 
     public function createArea(Request $r)
     {
-        $input = $r->validate(['name' => 'required|string|max:100', 'profile' => 'required|in:events,wholesale']);
+        $input = $r->validate(['name' => 'required|string|max:100', 'profile' => 'required|in:events,wholesale,custom']);
 
         return $this->json($this->workspace->areaView($this->workspace->createArea($this->tenant($r), $r->user(), $input)));
     }

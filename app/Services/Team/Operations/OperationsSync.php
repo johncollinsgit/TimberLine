@@ -40,8 +40,9 @@ class OperationsSync
             }
             $project = (string) $c->settings['source']['asana_project'];
             $notes = (string) ($source['notes'] ?? $draft->data['notes'] ?? '');
-            $data = ['source_id' => $gid, 'source_project' => $project, 'source_projects' => [$project], 'source_workspace' => (string) $c->settings['source']['asana_workspace'], 'original_notes' => $notes, 'source_url' => 'https://app.asana.com/0/'.$project.'/'.$gid, 'source_version' => $source['modified_at'] ?? now()->toIso8601String(), 'fields' => $this->extract($notes), 'reviewed_fields' => array_intersect_key($draft->data, array_flip(['venue', 'address', 'city', 'state', 'timezone', 'environment', 'organizer', 'email', 'phone', 'setup_time', 'loadout_time', 'event_hours', 'booth', 'instructions'])), '_teams_enrichment' => ['created_from_draft' => $draft->id], '_generation' => $c->generation, 'observed_at' => now()->toIso8601String()];
-            $draft->update(['connection_id' => $c->id, 'source_key' => $key, 'status' => 'source', 'title' => $source['name'] ?? $draft->title, 'starts_on' => $source['start_on'] ?? $source['due_on'] ?? $draft->starts_on, 'ends_on' => $source['due_on'] ?? $draft->ends_on, 'data' => $data, 'version' => $draft->version + 1]);
+            $schedule = app(EventSchedule::class)->source($source);
+            $data = ['event_schedule' => $schedule, 'source_schedule' => $schedule['source_schedule'], 'source_id' => $gid, 'source_project' => $project, 'source_projects' => [$project], 'source_workspace' => (string) $c->settings['source']['asana_workspace'], 'original_notes' => $notes, 'source_url' => 'https://app.asana.com/0/'.$project.'/'.$gid, 'source_version' => $source['modified_at'] ?? now()->toIso8601String(), 'fields' => $this->extract($notes), 'reviewed_fields' => array_intersect_key($draft->data, array_flip(['venue', 'address', 'city', 'state', 'timezone', 'environment', 'organizer', 'email', 'phone', 'setup_time', 'loadout_time', 'event_hours', 'booth', 'instructions'])), '_teams_enrichment' => ['created_from_draft' => $draft->id], '_generation' => $c->generation, 'observed_at' => now()->toIso8601String()];
+            $draft->update(['connection_id' => $c->id, 'source_key' => $key, 'status' => 'source', 'title' => $source['name'] ?? $draft->title, 'starts_on' => $schedule['starts_on'] ?? $draft->starts_on, 'ends_on' => $schedule['ends_on'] ?? $draft->ends_on, 'data' => $data, 'version' => $draft->version + 1]);
             $this->workspace->revision($draft, $c->user_id);
 
             return $draft;
@@ -121,9 +122,14 @@ class OperationsSync
                             if ($projectAccounts) {
                                 $data['account_id'] = $account->id;
                             }
+                            $schedule = app(EventSchedule::class)->source($task);
+                            if ($kind === 'event') {
+                                $data['event_schedule'] = $schedule;
+                                $data['source_schedule'] = $schedule['source_schedule'];
+                            }
                             $data['source_assignee_id'] = (string) ($task['assignee']['gid'] ?? '');
                             $data['source_projects'] = collect([$projectId, ...collect($task['memberships'] ?? [])->pluck('project.gid')->all()])->map(fn ($id) => (string) $id)->filter()->unique()->values()->all();
-                            $record = $this->upsert($c, $kind, (string) $task['gid'], trim($task['name'] ?? '') ?: 'Untitled source record', ($task['completed'] ?? false) ? 'completed' : 'source', $data, $task['start_on'] ?? $task['due_on'] ?? null, $task['due_on'] ?? null);
+                            $record = $this->upsert($c, $kind, (string) $task['gid'], trim($task['name'] ?? '') ?: 'Untitled source record', ($task['completed'] ?? false) ? 'completed' : 'source', $data, $kind === 'event' ? $schedule['starts_on'] : ($task['start_on'] ?? $task['due_on'] ?? null), $kind === 'event' ? $schedule['ends_on'] : ($task['due_on'] ?? null));
                             $seen[] = $record->id;
                         }
                     } else {
@@ -251,7 +257,7 @@ class OperationsSync
 
     public function extract(string $notes): array
     {
-        $map = ['applied' => 'application_status', 'accepted' => 'acceptance_status', 'cost' => 'fee', 'worker' => 'staff', 'address' => 'address', 'set up time' => 'setup_time', 'event hours' => 'event_hours', 'email' => 'email', 'phone' => 'phone', 'booth size' => 'booth', 'attendance' => 'attendance', 'special directions' => 'instructions', 'contact' => 'contact', 'last order date' => 'last_order_on', 'last contact date' => 'last_contact_on', 'shipping address' => 'shipping', 'store address' => 'address', 'custom labels' => 'custom_labels', 'custom scents' => 'custom_scents', 'website' => 'website'];
+        $map = ['date' => 'event_date', 'venue' => 'venue', 'hotel' => 'hotel', 'parking' => 'parking', 'tear down' => 'loadout_time', 'teardown' => 'loadout_time', 'pick up' => 'pickup', 'pickup' => 'pickup', 'return' => 'return_instructions', 'booth number' => 'booth_number', 'total cost' => 'venue_fee_unconfirmed', 'tax' => 'tax_source_note', 'applied' => 'application_status', 'accepted' => 'acceptance_status', 'cost' => 'fee', 'worker' => 'staff', 'address' => 'address', 'set up time' => 'setup_time', 'event hours' => 'event_hours', 'email' => 'email', 'phone' => 'phone', 'booth size' => 'booth', 'attendance' => 'attendance', 'special directions' => 'instructions', 'contact' => 'contact', 'last order date' => 'last_order_on', 'last contact date' => 'last_contact_on', 'shipping address' => 'shipping', 'store address' => 'address', 'custom labels' => 'custom_labels', 'custom scents' => 'custom_scents', 'website' => 'website'];
         $fields = [];
         foreach (preg_split('/\R/u', $notes) as $line) {
             if (preg_match('/^\s*([^:]{2,35}):\s*(.+)$/u', $line, $match) && isset($map[mb_strtolower(trim($match[1]))])) {
