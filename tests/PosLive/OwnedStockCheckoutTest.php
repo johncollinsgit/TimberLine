@@ -1941,8 +1941,8 @@ it('resolves a fully evidenced owner-attested partial allocation once or retains
     Http::assertNotSent(fn ($request) => $request->method() !== 'GET');
 })->with(['normal', 'shortfall', 'race', 'stale', 'changed_after_approval', 'changed_after_write', 'postcheck_outage', 'association_changed', 'association_after_approval', 'disabled_queued', 'lost_response']);
 
-it('completes a fully redeemed basket once without a Square charge and returns the same wallet once', function (): void {
-    $this->stock->rows('items', $this->tenant->id)->where('id', $this->item)->update(['unit_amount_minor' => 500]);
+it('completes a fully redeemed basket once without a Square charge and returns the same wallet once', function (int $price): void {
+    $this->stock->rows('items', $this->tenant->id)->where('id', $this->item)->update(['unit_amount_minor' => $price]);
     $credential = ownedStockRewardCredential($this);
     $input = [...$this->selection, 'reward_redemption' => ['proof' => $credential['qr_payload'], 'amount_minor' => 500]];
     $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->assertJsonPath('amount_minor', 0)->json();
@@ -1950,15 +1950,15 @@ it('completes a fully redeemed basket once without a Square charge and returns t
     $this->postJson($url.'/collect')->assertOk()->assertJsonPath('canonical_confirmation', true)->assertJsonMissingPath('collection');
     $this->postJson($url.'/collect')->assertOk()->assertJsonPath('canonical_confirmation', true)->assertJsonMissingPath('collection');
     $this->postJson($url.'/reconcile')->assertOk()->assertJsonPath('canonical_confirmation', true);
-    $this->getJson($url.'/receipt')->assertOk()->assertJsonPath('payment_source', 'everbranch_rewards_only')->assertJsonPath('rewards_redeemed_minor', 500);
+    $this->getJson($url.'/receipt')->assertOk()->assertJsonPath('payment_source', 'everbranch_rewards_only')->assertJsonPath('rewards_redeemed_minor', $price);
     expect(DB::table('payment_core_operations')->where('tenant_id', $this->tenant->id)->count())->toBe(0)
         ->and(DB::table('pos_candle_cash_reservations')->where('sale_id', $quote['sale_id'])->value('state'))->toBe('spent');
     $this->postJson($url.'/return-rewards', ['confirmed' => false])->assertUnprocessable();
-    $this->postJson($url.'/return-rewards', ['confirmed' => true])->assertOk()->assertJsonPath('rewards_returned_minor', 500);
-    $this->postJson($url.'/return-rewards', ['confirmed' => true])->assertOk()->assertJsonPath('rewards_returned_minor', 500);
+    $this->postJson($url.'/return-rewards', ['confirmed' => true])->assertOk()->assertJsonPath('rewards_returned_minor', $price);
+    $this->postJson($url.'/return-rewards', ['confirmed' => true])->assertOk()->assertJsonPath('rewards_returned_minor', $price);
     expect((float) \App\Models\CandleCashBalance::find($this->profile->id)->balance)->toBe(10.0)
         ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'pos_reservation_refund')->count())->toBe(1);
-});
+})->with([400, 500]);
 
 it('serializes actual policy publication and the final native descriptor in either acquisition order', function (bool $publishFirst): void {
     if (DB::connection()->getDriverName() !== 'mysql' || getenv('POS_LIVE_DISPOSABLE_MYSQL') !== '1' || ! function_exists('pcntl_fork')) {

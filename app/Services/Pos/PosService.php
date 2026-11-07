@@ -195,7 +195,7 @@ final class PosService
                 }
                 if ($redemption !== null) {
                     $reservation = new PosCandleCashReservation($this->store, app(PosVerifiedRewardReservationAuthority::class), app(PosRewardRedemptionPolicy::class));
-                    $reservation->reserve($scope['tenant_id'], $id, $redemption['amount_minor'], $proof);
+                    $reservation->reserve($scope['tenant_id'], $id, $terms['pos_candle_cash']['amount_minor'], $proof);
                 }
             }, 3);
         } catch (QueryException $error) {

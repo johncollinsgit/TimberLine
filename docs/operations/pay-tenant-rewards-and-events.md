@@ -129,7 +129,7 @@ quantities are inferred. Counted setup requires protected release before activat
   its original journal transaction. Neither publication nor a scanned code starts
   a payment. Independent MySQL processes exercise both acquisition orders.
 - Customer QR: live terms → explicit cap consent → a 120-second, one-use code →
-  cashier preview → explicit amount → original quote hold → confirmed payment.
+  cashier preview → explicit maximum (capped to eligible basket value) → original quote hold → confirmed payment.
   Raw codes stay in memory and are removed on background/disappearance; they are
   absent from persisted drafts. Edit/cancel releases the original unstarted hold;
   another authorization is required to spend it on a different quote.

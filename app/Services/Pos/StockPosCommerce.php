@@ -166,6 +166,8 @@ final class StockPosCommerce
                 throw new PosException('reward_quote_invalid', 422);
             }
             $eligible = array_sum($offers['lines_minor']) - ($offers['lines_minor']['custom'] ?? 0);
+            // The customer chooses a maximum. Do not redeem more than this basket's eligible merchandise.
+            $reward['amount_minor'] = min($reward['amount_minor'], $eligible);
             $offers = app(PosRewardAllocation::class)->apply($offers, $reward['amount_minor']);
             $reward['eligible_minor'] = $eligible;
         }
