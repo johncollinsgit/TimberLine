@@ -14,7 +14,9 @@ it('allocates wallet value after existing unit discounts without losing cents', 
         ->and($result['offers'][0]['amount_minor'])->toBe(500);
 });
 
-it('rejects over-redemption and free payments', function (): void {
+it('rejects over-redemption and permits exactly covered merchandise', function (): void {
     $offers = ['lines_minor' => ['one' => 500], 'discount_minor' => 0, 'offers' => [], 'version' => null];
-    expect(fn () => app(PosRewardAllocation::class)->apply($offers, 500))->toThrow(PosException::class, 'reward_amount_unavailable');
+    expect(fn () => app(PosRewardAllocation::class)->apply($offers, 501))->toThrow(PosException::class, 'reward_amount_unavailable');
+    expect(app(PosRewardAllocation::class)->apply($offers, 500)['lines_minor']['one'])->toBe(0);
+    expect(fn () => app(PosRewardAllocation::class)->apply($offers, 0))->toThrow(PosException::class, 'reward_amount_unavailable');
 });

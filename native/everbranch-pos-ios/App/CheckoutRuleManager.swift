@@ -135,7 +135,8 @@ struct CheckoutRuleManager: View {
     @State private var onlineRule: CheckoutRule?
     @State private var busy = false
     @State private var error: String?
-    @State private var editor = false
+    private struct EditorPresentation: Identifiable { let id = UUID() }
+    @State private var editor: EditorPresentation?
     @State private var editingID: String?
     @State private var name = ""
     @State private var kind = "fixed"
@@ -171,7 +172,7 @@ struct CheckoutRuleManager: View {
                         }
                         .swipeActions(allowsFullSwipe: false) { Button("Delete", role: .destructive) { remove(rule) } }
                     }
-                    Button("Add rule") { reset(); editor = true }
+                    Button("Add rule") { reset(); editor = EditorPresentation() }
                 }
                 Section("Online discounts") {
                     Text("Only a single public, whole-sale discount can be published. It cannot combine with other discounts.").font(.footnote).foregroundStyle(.secondary)
@@ -187,7 +188,7 @@ struct CheckoutRuleManager: View {
             .disabled(busy)
             .overlay { if busy { ProgressView() } }
             .task { await reload() }
-            .sheet(isPresented: $editor) { editForm }
+            .sheet(item: $editor) { presentation in editForm.id(presentation.id) }
             .sheet(item: $review) { snapshot in reviewSheet(snapshot) }
             .sheet(item: $onlineRule) { rule in ShopifyOnlineDiscountSheet(model: model, rule: rule, version: version) }
         }
@@ -214,7 +215,7 @@ struct CheckoutRuleManager: View {
                     Section("Eligible products") {
                         Toggle("One add-on per regular product", isOn: $requiresOtherItem)
                         Text("Each regular product can qualify one add-on across all offers. Bundles, custom amounts, and add-ons do not qualify.").font(.caption).foregroundStyle(.secondary)
-                        Toggle("Allow additional discounts", isOn: $allowAdditionalDiscounts)
+                        Toggle("Allow additional discounts", isOn: $allowAdditionalDiscounts).accessibilityIdentifier("rule-allow-additional-discounts")
                             .onChange(of: allowAdditionalDiscounts) { _, _ in additionalDiscountsChanged = true }
                         Text(legacyAddon && !additionalDiscountsChanged ? "This existing add-on allows additional discounts. Change this setting to update it." : "When off, item and whole-sale discounts do not reduce this add-on price.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -227,7 +228,7 @@ struct CheckoutRuleManager: View {
             }
             .navigationTitle(editingID == nil ? "Add rule" : "Edit rule")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { editor = false } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { editor = nil } }
                 ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.disabled(busy) }
             }
             .disabled(busy)
@@ -245,7 +246,7 @@ struct CheckoutRuleManager: View {
         active = rule.active; requiresOtherItem = rule.requiresOtherItem ?? true
         legacyAddon = rule.kind == "addon" && rule.allowAdditionalDiscounts == nil
         allowAdditionalDiscounts = rule.kind == "addon" ? (rule.allowAdditionalDiscounts ?? true) : false
-        additionalDiscountsChanged = false; eligible = Set(rule.eligibleItemIds ?? []); error = nil; editor = true
+        additionalDiscountsChanged = false; eligible = Set(rule.eligibleItemIds ?? []); error = nil; editor = EditorPresentation()
     }
     private func reload() async {
         guard let base = model.base else { error = "Choose a register first."; return }
@@ -341,7 +342,7 @@ struct CheckoutRuleManager: View {
             busy = true
             Task {
                 defer { busy = false }
-                do { let result: CheckoutRuleList = try await model.api.request(base + "/checkout-rules", method: "POST", body: ["version": version, "rule": rule]); rules = result.rules; version = result.version; editor = false; error = nil }
+                do { let result: CheckoutRuleList = try await model.api.request(base + "/checkout-rules", method: "POST", body: ["version": version, "rule": rule]); rules = result.rules; version = result.version; editor = nil; error = nil }
                 catch { self.error = "Could not save. Refresh rules and try again." }
             }
         } catch { self.error = "Enter a valid amount." }
