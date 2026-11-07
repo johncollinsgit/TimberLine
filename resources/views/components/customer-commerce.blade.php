@@ -2,7 +2,7 @@
 @if(is_array($snapshot))
     @once
         <style>
-            .customer-commerce{border:1px solid #dedfe2;border-radius:16px;padding:20px;background:#fff;color:#18181b;font:14px/1.5 system-ui,sans-serif;margin:16px 0}
+            .customer-commerce{border:1px solid #dedfe2;border-radius:16px;padding:20px;background:#fff;color:#18181b;font:14px/1.5 system-ui,sans-serif;margin:16px 0;min-width:0;overflow-wrap:anywhere}
             .customer-commerce h2{font:600 18px/1.4 system-ui,sans-serif;margin:0}
             .customer-commerce h3{font:600 15px/1.4 system-ui,sans-serif;margin:0}
             .customer-commerce p{margin:6px 0 0;color:#52525b}
@@ -15,11 +15,15 @@
             .customer-commerce th{font-weight:500;color:#71717a;border-bottom:1px solid #dedfe2;padding:8px 12px 8px 0}
             .customer-commerce td{padding:12px 12px 12px 0;border-bottom:1px solid #f0f0f1;vertical-align:top}
             .customer-commerce th:last-child,.customer-commerce td:last-child{text-align:right;padding-right:0}
-            .customer-commerce-refund,.customer-commerce-coverage{font-size:12px;color:#71717a}
+            .customer-commerce-refund,.customer-commerce-coverage{font-size:14px;color:#71717a}
             .customer-commerce-rewards{margin-top:20px;padding-top:16px;border-top:1px solid #dedfe2}
             .customer-commerce ul{list-style:none;margin:8px 0 0;padding:0}
-            .customer-commerce li{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #f0f0f1}
+            .customer-commerce li{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:4px 16px;padding:10px 0;border-bottom:1px solid #f0f0f1}
+            .customer-commerce li>span{min-width:0}
+            .customer-commerce-count{white-space:nowrap;font-variant-numeric:tabular-nums;color:#52525b}
+            .customer-commerce h3.customer-commerce-ranking-title{margin-top:16px}
             .customer-commerce .customer-commerce-coverage{margin-top:12px}
+            @media(max-width:640px){.customer-commerce li{grid-template-columns:minmax(0,1fr)}.customer-commerce-count{white-space:normal}}
         </style>
     @endonce
     <section class="customer-commerce" aria-label="Purchases and rewards">
@@ -46,10 +50,10 @@
             <div class="customer-commerce-rewards">
                 <h3>Customer purchase profile</h3>
                 <p>Confirmed purchases in this history window: online {{ $snapshot['behavior']['channels']['online'] }} · in person {{ $snapshot['behavior']['channels']['in_person'] }} · channel unknown {{ $snapshot['behavior']['channels']['unknown'] }}.</p>
-                <h3>Most purchased scents</h3>
-                <ul>@forelse($snapshot['behavior']['most_purchased_scents'] as $scent)<li><span>{{ $scent['name'] }}</span><span>{{ $scent['units'] }} units · {{ $scent['purchase_count'] }} purchases</span></li>@empty<li>Recorded scent details are not available in this history window.</li>@endforelse</ul>
-                <h3>Most purchased products</h3>
-                <ul>@forelse($snapshot['behavior']['most_purchased_products'] as $product)<li><span>{{ $product['name'] }}</span><span>{{ $product['units'] }} units · {{ $product['purchase_count'] }} purchases</span></li>@empty<li>Recorded item details are not available in this history window.</li>@endforelse</ul>
+                <h3 class="customer-commerce-ranking-title">Most purchased scents</h3>
+                <ul>@forelse($snapshot['behavior']['most_purchased_scents'] as $scent)<li><span class="customer-commerce-name">{{ $scent['name'] }}</span><span class="customer-commerce-count">{{ $scent['units'] }} {{ (float) $scent['units'] === 1.0 ? 'unit' : 'units' }} · {{ $scent['purchase_count'] }} {{ (float) $scent['purchase_count'] === 1.0 ? 'purchase' : 'purchases' }}</span></li>@empty<li>Recorded scent details are not available in this history window.</li>@endforelse</ul>
+                <h3 class="customer-commerce-ranking-title">Most purchased products</h3>
+                <ul>@forelse($snapshot['behavior']['most_purchased_products'] as $product)<li><span class="customer-commerce-name">{{ $product['name'] }}</span><span class="customer-commerce-count">{{ $product['units'] }} {{ (float) $product['units'] === 1.0 ? 'unit' : 'units' }} · {{ $product['purchase_count'] }} {{ (float) $product['purchase_count'] === 1.0 ? 'purchase' : 'purchases' }}</span></li>@empty<li>Recorded item details are not available in this history window.</li>@endforelse</ul>
                 <p class="customer-commerce-coverage">{{ $snapshot['behavior']['basis'] }}</p>
             </div>
         @endif

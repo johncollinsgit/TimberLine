@@ -97,10 +97,32 @@ try {
   await page.waitForURL(profile);
   await page.getByRole("heading", { name: "Ada Browser", exact: true }).waitFor();
   const pine = page.locator("li").filter({ has: page.getByText("Fictional Pine", { exact: true }) });
-  await pine.getByText("3 units · 1 purchases", { exact: true }).waitFor();
+  await pine.getByText("3 units · 1 purchase", { exact: true }).waitFor();
+  await page.locator(".customer-commerce li").filter({ has: page.getByText("Fictional Cedar", { exact: true }) }).getByText("1 unit · 1 purchase", { exact: true }).waitFor();
   assert.equal(await page.getByText("PRIVATE marketing-only fixture note", { exact: true }).count(), 0);
   await snapshot("profile-desktop", { width: 1440, height: 1000 });
   await snapshot("profile-mobile", { width: 390, height: 844 });
+  await snapshot("profile-small-phone", { width: 320, height: 844 });
+  const commerce = page.getByRole("region", { name: "Purchases and rewards", exact: true });
+  const originalNames = await commerce.locator(".customer-commerce-name").allTextContents();
+  await commerce.locator(".customer-commerce-name").evaluateAll((names) => names.forEach((name, index) => {
+    name.textContent = index % 2 ? "FictionalCedarCandleWithAnUnbrokenRecordedProductNameThatMustWrap" : "Fictional Pine · Northern Woodland Collection · Large Candle";
+  }));
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
+    const rows = await commerce.locator("li:has(.customer-commerce-count)").evaluateAll((items) => items.map((row) => {
+      const name = row.querySelector(".customer-commerce-name").getBoundingClientRect();
+      const count = row.querySelector(".customer-commerce-count").getBoundingClientRect();
+      const bounds = row.getBoundingClientRect();
+      return { fits: name.right <= bounds.right + 1 && count.right <= bounds.right + 1, stacked: count.top >= name.bottom - 1, aligned: Math.abs(count.top - name.top) <= 1 };
+    }));
+    assert.equal(rows.every((row) => row.fits && (width <= 640 ? row.stacked : row.aligned)), true, `Shared commerce count alignment at ${width}`);
+    await commerce.getByText("No rewards balance recorded", { exact: true }).waitFor();
+    await snapshot(`commerce-long-names-${width}`, { width, height: width === 1440 ? 1000 : 844 }, commerce);
+    await snapshot(`commerce-ranked-products-${width}`, { width, height: width === 1440 ? 1000 : 844 }, commerce.locator("li:has(.customer-commerce-count)").last());
+  }
+  await commerce.locator(".customer-commerce-name").evaluateAll((names, originals) => names.forEach((name, index) => { name.textContent = originals[index]; }), originalNames);
+  await page.setViewportSize({ width: 390, height: 844 });
   const preferences = page.getByRole("region", { name: "Customer preferences", exact: true });
   const receiptEmail = preferences.locator('select[name="changes[receipt_email]"]');
   const receiptSms = preferences.locator('select[name="changes[receipt_sms]"]');
@@ -217,6 +239,7 @@ try {
     "Content approval never sends or grants consent; explicit send remains blocked",
     "Ordinary member reads without edit/review authority; missing CSRF and foreign tenant/customer denied",
     "Desktop/mobile pages have no horizontal overflow or JavaScript errors",
+    "Shared commerce names/counts align at 320/390/1440; long labels wrap, singular labels are accurate, and unknown rewards stay unknown",
     "No provider HTTP, delivery rows or consent grants",
   ], report, screenshots, blocked_external_browser_hosts: [...new Set(blockedNetwork)] };
   await writeFile(join(evidence, "acceptance.json"), JSON.stringify(result, null, 2));
