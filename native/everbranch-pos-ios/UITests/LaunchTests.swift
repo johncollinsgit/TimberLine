@@ -212,6 +212,8 @@ final class LaunchTests: XCTestCase {
             let manage = app.buttons["Manage checkout rules"]; XCTAssertTrue(manage.waitForExistence(timeout: 5)); app.swipeUp(); manage.tap()
             let legacy = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Legacy add-on'")).firstMatch
             XCTAssertTrue(legacy.waitForExistence(timeout: 10)); legacy.tap()
+            XCTAssertTrue(app.navigationBars["Edit rule"].waitForExistence(timeout: 5))
+            XCTAssertEqual(app.textFields["Name"].value as? String, "Legacy add-on")
             let toggle = app.switches["rule-allow-additional-discounts"]
             for _ in 0..<4 where !toggle.exists || toggle.frame.maxY > app.frame.maxY - 100 { app.swipeUp() }
             XCTAssertTrue(toggle.waitForExistence(timeout: 5)); XCTAssertEqual(toggle.value as? String, "1")
