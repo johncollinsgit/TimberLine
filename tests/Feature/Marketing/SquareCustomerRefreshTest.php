@@ -24,6 +24,7 @@ use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(function () {
+    $this->withoutVite();
     Http::preventStrayRequests();
     config(['marketing.square.enabled' => false, 'marketing.square.access_token' => 'foreign-global-token', 'pos_live.enabled' => false, 'pos_live.runtime_id' => null]);
     $this->tenant = Tenant::create(['name' => 'Fictional source shop', 'slug' => 'square-refresh-'.Str::lower(Str::random(8))]);
