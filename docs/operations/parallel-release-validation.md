@@ -1,12 +1,41 @@
 # Parallel release validation
 
-The protected release retains full test coverage while executing independent
-checks on separate runners. A scoped local change needs proportionate local
-verification; protected CI remains the authoritative full regression run.
+Protected CI chooses validation from the exact diff. Small, proven presentation
+edits avoid unrelated regression matrices. Everything else retains full coverage
+on parallel runners. Local verification remains proportional to the change.
 
 ## Pull requests
 
-`.github/workflows/tests.yml` runs:
+### Presentation validation
+
+Only up-to-date PRs to `main` can qualify. The classifier is loaded from the
+trusted base commit, so changing policy/tests/workflows in a PR cannot approve
+that PR for the fast path. There is no manual label or agent override.
+
+`scripts/ci/presentation-policy.py` is the executable allowlist. It accepts at
+most 12 modified existing regular files and 200 changed lines in selected public
+and Teams views/styles, optionally with `docs/ui/UI_CHANGELOG.md`. It proves:
+
+- Blade edits change visible literal text or known visual/layout utility classes.
+  Markup, links, handlers, other attributes, PHP/Blade expressions and directives
+  stay identical. Numeric/currency copy and script/template content stay full.
+- CSS edits keep selectors, rules, conditions, declaration order/property names
+  and `!important` flags. Only listed visual values can change. Visibility,
+  display, pointer handling, custom properties, imports and URL edits stay full.
+- New/deleted/renamed files, JavaScript, routes, backend code, dependencies,
+  configuration, permissions, payments, schema and uncertain edits stay full.
+
+Presentation validation retains the production build for both frontends,
+TypeScript and source/protocol checks, compiled Blade views, focused auth,
+tenant isolation, IDOR and embedded-surface tests, plus desktop/mobile Chromium
+and WebKit smoke for login, public navigation, Teams controls and guest denial.
+Browser fixtures use disposable SQLite and fictional data; they perform no live
+provider or Teams mutations. Failed smoke retains diagnostic artifacts.
+
+### Full validation
+
+All other diffs, manual/reusable runs and the nightly 08:00 UTC schedule run:
+
 
 - A single frontend build and shared source/protocol checks. Only public build
   outputs and the checksum-verified pinned label tracer are shared as artifacts
@@ -35,15 +64,21 @@ verification; protected CI remains the authoritative full regression run.
   before running; they do not depend on the schema group. Tests inside a group remain sequential because many deliberately
   rebuild or modify their database and test real commit/concurrency semantics.
 
-The stable required check `ci (8.4)` waits for the build and every PHP/browser
-matrix member. `mysql migration recovery` waits for all four MySQL members.
-Both aggregate jobs run after failures and explicitly require `success` for all
-expected dependencies. Missing, failed, cancelled, skipped, or malformed results
-fail closed. Matrix fail-fast is disabled so other lanes retain useful evidence;
+The stable required check `ci (8.4)` waits for the plan, build and PHP/browser
+matrix; `mysql migration recovery` waits for the plan, build and MySQL matrix.
+Both aggregate jobs always evaluate exact prerequisites through
+`scripts/ci/require-release-results.py`. Full plans require every job to succeed.
+Presentation plans require the trusted reason, matching head SHA and successful
+build/safety smoke; only their deliberately unused full matrices may be skipped.
+The summary explicitly reports that unchanged backend/schema did not need those
+suites. Missing, failed, cancelled, unexpected skipped or malformed results fail
+closed. Matrix fail-fast is disabled so other lanes retain useful evidence;
 no validation lane uses continue-on-error.
 
-Superseded revisions cancel within the same PR's validation group. Enterprise
-browser checks retain all scenarios and their established twelve-runner limit.
+Superseded revisions cancel within the same PR's validation group.
+Nightly/manual CI and reusable production validation have separate cancellation
+groups, so scheduled work cannot cancel a production release gate.
+Enterprise browser checks retain all scenarios and their established twelve-runner limit.
 They remain isolated from the main PHP/browser/MySQL jobs; the shared runner pool
 and actual queue time determine overall capacity.
 Production deployment remains serialized and is never cancelled by a newer push.
@@ -82,16 +117,19 @@ and available GitHub runner capacity; this is not a guaranteed deployment SLA.
 Inspect actual job timings before increasing shard count. Preserve real commit,
 partial migration, original-attempt, tenant-isolation, and provider safety tests.
 Investigate slow fixtures separately instead of weakening assertions or moving
-required regression coverage behind an optional/nightly-only workflow.
+behavioral regression coverage behind an optional/nightly-only workflow.
+Presentation eligibility is a narrow proof of unchanged behavior, not a label
+that substitutes nightly tests for required checks.
 
 Local checks for workflow changes:
 
 ```sh
 python3 -m unittest discover -s tests/ci -p 'test_parallel_release.py' -v
+python3 -m unittest discover -s tests/ci -p 'test_presentation_policy.py' -v
 actionlint .github/workflows/tests.yml .github/workflows/deploy.yml
 git diff --check
 ```
 
-The Python contract tests need PyYAML 6.0.3. A full protected PR run is required
+The Python contract tests need PyYAML 6.0.3 and tinycss2 1.4.0. A full protected PR run is required
 before merging a workflow change. A live deploy must still report the exact
 merged revision before it is described as complete.

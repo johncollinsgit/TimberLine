@@ -7,6 +7,9 @@
 - `tests/ci/test_parallel_release.py` checks the parallel gates, retained safety
   coverage and short agent entry guide. Keep this workflow in force across chats;
   feature-specific owner directions below still apply to their affected domains.
+- Small visual/copy changes use the automatic, trusted presentation policy in
+  protected CI. Follow `docs/operations/parallel-release-validation.md`; do not
+  replace the policy with an agent's judgment or a manual check bypass.
 
 ## Pay rewards and event attribution (owner direction, 2026-11-06)
 

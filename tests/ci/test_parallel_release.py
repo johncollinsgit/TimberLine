@@ -78,15 +78,15 @@ class ParallelReleaseTest(unittest.TestCase):
             self.assertNotIn('continue-on-error', self.jobs[job])
 
     def test_stable_required_checks_depend_on_all_work_and_always_verify_success(self):
-        for job_id, name, dependencies in [('ci', 'ci (8.4)', ['build', 'php', 'browser']),
-                                            ('mysql-migration', 'mysql migration recovery', ['mysql'])]:
+        for job_id, name, dependencies in [('ci', 'ci (8.4)', ['plan', 'build', 'php', 'browser']),
+                                            ('mysql-migration', 'mysql migration recovery', ['plan', 'build', 'mysql'])]:
             job = self.jobs[job_id]
             self.assertEqual(job['name'], name)
             self.assertEqual(job['needs'], dependencies)
             self.assertIn('always()', job['if'])
             step = job['steps'][-1]
             self.assertEqual(step['env']['JOB_RESULTS'], '${{ toJSON(needs) }}')
-            self.assertEqual(step['run'], 'python3 scripts/ci/require-job-results.py ' + ' '.join(dependencies))
+            self.assertEqual(step['run'], 'python3 scripts/ci/require-release-results.py ' + ('ci' if job_id == 'ci' else 'mysql'))
 
     def test_mysql_groups_are_isolated_and_no_group_can_be_omitted(self):
         job = self.jobs['mysql']

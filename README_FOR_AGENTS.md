@@ -20,8 +20,8 @@ require an audit of the whole repository or its release history.
 
 ## Local verification
 
-Choose checks from the behavior being changed, then let protected CI run the
-full application suite and all MySQL, browser, and concurrency checks.
+Choose checks from the behavior being changed, then let protected CI choose the
+validation tier from the exact diff. Do not manually bypass or force a tier.
 
 | Change | Local checks before pushing |
 | --- | --- |
@@ -53,10 +53,15 @@ full application suite and all MySQL, browser, and concurrency checks.
 1. Make a focused branch from current `origin/main`, reusing a suitable checkout
    when available. Include the relevant tests and documentation.
 2. Commit and push once the scoped local checks pass. Open a PR against `main`.
-3. Wait for the exact current revision's required checks. `ci (8.4)` aggregates
-   the build, six PHP shards, and three browser groups; `mysql migration recovery`
-   aggregates four independent MySQL jobs. A failed, cancelled, missing, or
-   unexpectedly skipped prerequisite cannot satisfy either aggregate check.
+3. Wait for the exact current revision's required checks. The trusted base policy
+   automatically admits small literal copy/visual edits in approved views/CSS
+   to presentation validation: production build, compiled views, auth/tenant/IDOR
+   checks and desktop/mobile Chromium/WebKit smoke. Unknown, mixed, behavioral,
+   financial, schema and CI changes run the full six PHP shards, three browser
+   groups and four MySQL groups. Required check names remain `ci (8.4)` and
+   `mysql migration recovery`; only policy-proven presentation skips are valid.
+   Missing, failed, cancelled or unexpected skipped prerequisites fail closed.
+   See the release runbook for exact eligibility. Nightly CI also runs full coverage.
 4. Merge the completed scope after protected checks pass unless the user requested
    review only or a concrete release/acceptance condition requires a hold. Check
    that the PR still targets the tested tree when another release advances main.

@@ -1,8 +1,11 @@
-## Parallel release validation (November 8; candidate)
+## Parallel and presentation release validation (November 8)
 
-Protected PR checks retain their names and full coverage while running six PHP
-shards, three browser groups and four isolated MySQL groups. Aggregate checks
-require every prerequisite to succeed; schema and CI changes retain production
+Protected PR checks retain their names. Unknown/behavioral changes run six PHP
+shards, three browser groups and four isolated MySQL groups. A trusted base policy
+admits only small, proven copy/visual edits to production build, compiled views,
+auth/tenant safety tests and desktop/mobile Chromium/WebKit smoke. Full coverage
+also runs nightly; only policy-proven skips satisfy the aggregates.
+Schema and CI changes retain production
 migration rehearsal and exact-SHA Forge readiness. Routine local verification
 is scoped to the change. `README_FOR_AGENTS.md` is the concise entry point;
 detailed domain contracts are preserved in `docs/agents/operating-reference.md`.
