@@ -974,6 +974,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/orders/{order}/freight/book', [\App\Http\Controllers\WebsiteFreightController::class, 'book'])->name('orders.freight.book');
             Route::post('/orders/{order}/freight/check', [\App\Http\Controllers\WebsiteFreightController::class, 'check'])->name('orders.freight.check');
             Route::post('/orders/{order}/freight/cancel', [\App\Http\Controllers\WebsiteFreightController::class, 'cancel'])->name('orders.freight.cancel');
+            Route::post('/orders/{order}/freight/handoff', [\App\Http\Controllers\WebsiteFreightController::class, 'handoff'])->name('orders.freight.handoff');
             Route::get('/orders/{order}/freight/documents/{index}', [\App\Http\Controllers\WebsiteFreightController::class, 'document'])->whereNumber('index')->name('orders.freight.document');
             Route::post('/orders/{order}/fulfill', [WebsiteCommerceController::class, 'fulfill'])->name('orders.fulfill');
             Route::post('/orders/{order}/cancel', [WebsiteCommerceController::class, 'cancel'])->name('orders.cancel');

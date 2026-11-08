@@ -134,6 +134,11 @@ test('booking saves the original attempt before a single carrier request and rep
         ->and(data_get(($this->plan)(), 'booking.bol_reference'))->toBe('BOL-FIXTURE')
         ->and(data_get(($this->plan)(), 'api_attempt.tracking.status'))->toBe('in_transit')
         ->and($this->order->fresh()->fulfillment_status)->toBe('unfulfilled')->and($this->order->shipments()->count())->toBe(0);
+    $bookedPage = $this->actingAs($this->actor)->get(route('managed-website.orders.freight', [$this->order, 'tenant' => $this->tenant->id]))
+        ->assertOk()->assertSeeText('Confirm physical carrier handoff')->assertSeeText('Download bill of lading PDF')->assertDontSee($this->key);
+    if (getenv('FREIGHT_PROVIDER_FIXTURES')) {
+        file_put_contents(storage_path('framework/testing/freight/booked.html'), $bookedPage->getContent());
+    }
     expect(fn () => $this->provider->book($this->order, $input, $this->actor))->toThrow(HttpException::class);
     expect(fn () => $this->provider->book($this->order, array_replace($input, ['version' => ($this->plan)()['version']]), $this->actor))->toThrow(HttpException::class);
     $url = route('managed-website.orders.freight.document', [$this->order, 0, 'tenant' => $this->tenant->id]);
@@ -272,10 +277,38 @@ test('cancellation is sent once and an uncertain pickup cannot unlock a new book
 
 test('API freight setup does not borrow another tenant connection or permit marketing users', function (): void {
     $this->actor->tenants()->updateExistingPivot($this->tenant->id, ['role' => 'marketing_manager']);
-    foreach (['account', 'quotes', 'book', 'check', 'cancel'] as $action) {
+    foreach (['account', 'quotes', 'book', 'check', 'cancel', 'handoff'] as $action) {
         $this->actingAs($this->actor)->post(route('managed-website.orders.freight.'.$action, [$this->order, 'tenant' => $this->tenant->id]))->assertForbidden();
     }
     Http::assertNothingSent();
+});
+
+test('physical freight handoff requires staff pickup evidence and creates fulfillment once', function (): void {
+    ($this->fakeProvider)();
+    $input = ($this->prepareBooking)();
+    $this->provider->book($this->order, $input, $this->actor);
+    expect($this->order->fresh()->fulfillment_status)->toBe('unfulfilled');
+    $handoff = ['version' => ($this->plan)()['version'], 'confirmed' => true, 'evidence_reference' => 'Fixture signed pickup BOL'];
+    $this->provider->handoff($this->order, $handoff, $this->actor);
+    expect($this->order->fresh()->fulfillment_status)->toBe('fulfilled')->and($this->order->fulfillments()->count())->toBe(1)
+        ->and($this->order->fulfillments()->firstOrFail()->lines()->sum('quantity'))->toBe(2)
+        ->and(data_get(($this->plan)(), 'handoff.evidence_reference'))->toBe('Fixture signed pickup BOL');
+    expect(DB::table('website_orders')->where('id', $this->order->id)->value('service_request'))->not->toContain('Fixture signed pickup BOL');
+    expect(fn () => $this->provider->handoff($this->order, $handoff, $this->actor))->toThrow(HttpException::class);
+    expect(fn () => $this->provider->cancel($this->order, ($this->plan)()['version'], $this->actor))->toThrow(HttpException::class, 'handed off');
+    expect($this->order->fulfillments()->count())->toBe(1);
+    expect(Http::recorded(fn ($r) => $r->method() === 'DELETE'))->toHaveCount(0);
+});
+
+test('cancelled carrier freight and missing pickup evidence cannot be marked handed off', function (): void {
+    ($this->fakeProvider)();
+    $input = ($this->prepareBooking)();
+    $this->provider->book($this->order, $input, $this->actor);
+    expect(fn () => $this->provider->handoff($this->order, ['version' => ($this->plan)()['version'], 'confirmed' => true], $this->actor))->toThrow(ValidationException::class);
+    $this->shipment['status'] = 'cancelled';
+    expect(fn () => $this->provider->handoff($this->order, ['version' => ($this->plan)()['version'], 'confirmed' => true,
+        'evidence_reference' => 'Fixture unverified pickup'], $this->actor))->toThrow(HttpException::class, 'active shipment');
+    expect($this->order->fresh()->fulfillment_status)->toBe('unfulfilled')->and($this->order->fulfillments()->count())->toBe(0);
 });
 
 test('freight setup verifies provider accounts and never flashes a rejected API key', function (): void {
@@ -337,7 +370,7 @@ test('freight cost exports separate API approvals from manual records and final 
 test('tenant and site boundaries protect freight accounts operations and documents', function (): void {
     $other = Tenant::query()->create(['name' => 'Other freight fixture', 'slug' => 'other-freight-fixture']);
     $this->actor->tenants()->attach($other->id, ['role' => 'admin', 'membership_active' => true]);
-    foreach (['account', 'quotes', 'book', 'check', 'cancel'] as $action) {
+    foreach (['account', 'quotes', 'book', 'check', 'cancel', 'handoff'] as $action) {
         $this->actingAs($this->actor)->post(route('managed-website.orders.freight.'.$action, [$this->order, 'tenant' => $other->id]))->assertNotFound();
     }
     $this->get(route('managed-website.orders.freight.document', [$this->order, 0, 'tenant' => $other->id]))->assertNotFound();

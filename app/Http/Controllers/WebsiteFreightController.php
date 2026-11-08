@@ -90,6 +90,14 @@ class WebsiteFreightController extends Controller
         return back()->with('status', 'Cancellation requested once. Review provider status and pickup cancellation; fees and customer refunds require separate reconciliation.');
     }
 
+    public function handoff(Request $request, WebsiteOrder $order, WebsiteFreightService $freight, WebsiteFreightProviderService $provider): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order, $freight);
+        $provider->handoff($order, $request->only('version', 'confirmed', 'evidence_reference'), $request->user());
+
+        return back()->with('status', 'Staff-confirmed physical freight handoff recorded once. Pickup evidence is retained; delivery remains separate.');
+    }
+
     public function document(Request $request, WebsiteOrder $order, int $index, WebsiteFreightService $freight, WebsiteFreightProviderService $provider): \Illuminate\Http\Response
     {
         $this->authorizeOrder($request, $order, $freight);

@@ -20,16 +20,21 @@ test('desktop and mobile freight operators review an exact cost and cannot reboo
     const browser = await chromium.launch({headless: true, ...(process.platform === 'win32' ? {channel: 'msedge'} : {})});
     try {
         for (const width of [1440, 390]) {
-            for (const view of ['quotes', 'booking', 'unknown']) {
+            for (const view of ['quotes', 'booking', 'booked', 'unknown']) {
                 const page = await browser.newPage({viewport: {width, height: 1000}});
                 const raw = fs.readFileSync(path.join(fixtures, `${view}.html`), 'utf8');
                 const html = raw.replace('</head>', `<style>${css}</style></head>`);
                 let bookingRequest;
+                let handoffRequest;
                 await page.route('**/*', async route => {
                     if (route.request().url() === 'https://freight.test/review') return route.fulfill({contentType: 'text/html', body: html});
                     if (route.request().method() === 'POST' && new URL(route.request().url()).pathname.endsWith('/freight/book')) {
                         bookingRequest = new URLSearchParams(route.request().postData());
                         return route.fulfill({contentType: 'text/html', body: '<p>Fictional intercepted booking submission</p>'});
+                    }
+                    if (route.request().method() === 'POST' && new URL(route.request().url()).pathname.endsWith('/freight/handoff')) {
+                        handoffRequest = new URLSearchParams(route.request().postData());
+                        return route.fulfill({contentType: 'text/html', body: '<p>Fictional intercepted handoff submission</p>'});
                     }
                     return route.abort(); // No provider, app, font or third-party traffic.
                 });
@@ -59,6 +64,22 @@ test('desktop and mobile freight operators review an exact cost and cannot reboo
                     assert.equal(bookingRequest.get('amount_cents'), '84237');
                     assert.equal(bookingRequest.get('ready_time'), '09:00');
                     assert.equal(bookingRequest.get('confirmed'), '1');
+                } else if (view === 'booked') {
+                    const details = page.locator('details').filter({has: page.locator('summary').filter({hasText: 'Confirm physical carrier handoff'})});
+                    await details.locator('summary').click();
+                    const form = details.locator('form');
+                    await form.scrollIntoViewIfNeeded();
+                    await form.locator('[name="evidence_reference"]').fill('Fictional signed BOL reference');
+                    assert.equal(await form.evaluate(element => element.checkValidity()), false);
+                    await form.locator('[name="confirmed"]').check();
+                    if (process.env.FREIGHT_SCREENSHOT_DIR) {
+                        await page.screenshot({path: path.join(process.env.FREIGHT_SCREENSHOT_DIR, `ltl-handoff-${width}.png`)});
+                    }
+                    await form.getByRole('button', {name: 'Record physical handoff'}).click();
+                    await page.getByText('Fictional intercepted handoff submission').waitFor();
+                    assert.equal(handoffRequest.get('evidence_reference'), 'Fictional signed BOL reference');
+                    assert.equal(handoffRequest.get('confirmed'), '1');
+                    assert.equal(bookingRequest, undefined);
                 } else if (process.env.FREIGHT_SCREENSHOT_DIR) {
                     await page.getByRole('heading', {name: view === 'unknown' ? 'Original API operation' : 'Freight account'}).scrollIntoViewIfNeeded();
                     await page.screenshot({path: path.join(process.env.FREIGHT_SCREENSHOT_DIR, `ltl-${view}-${width}.png`)});

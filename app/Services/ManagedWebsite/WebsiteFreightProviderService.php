@@ -5,6 +5,8 @@ namespace App\Services\ManagedWebsite;
 use App\Models\IntegrationConnection;
 use App\Models\TenantSite;
 use App\Models\User;
+use App\Models\WebsiteFulfillment;
+use App\Models\WebsiteFulfillmentLine;
 use App\Models\WebsiteOrder;
 use App\Models\WebsiteOrderEvent;
 use Carbon\CarbonImmutable;
@@ -106,6 +108,7 @@ class WebsiteFreightProviderService
             abort_unless($this->bookingEnabled($locked), 423, 'API freight booking is paused for this workspace. Quotes and existing-booking recovery remain available.');
             app(WebsitePaymentService::class)->assertFulfillable($locked);
             abort_unless(strtolower($locked->currency) === 'usd' && $locked->fulfillment_status === 'unfulfilled', 422, 'Review a paid, unfulfilled USD order before booking freight.');
+            abort_if($locked->lines()->where('product_type', '!=', 'physical')->exists(), 422, 'This freight booking workflow requires a whole order of physical goods. Review mixed service orders separately.');
             abort_if($locked->shipments()->exists() || $locked->fulfillments()->where('status', '!=', 'cancelled')->exists(), 409, 'Resolve the existing parcel shipment or fulfillment before booking freight.');
             $quote = collect($plan['quotes'] ?? [])->firstWhere('id', $data['quote_id']);
             abort_if(data_get($plan, 'api_attempt.quote_id') === $data['quote_id'], 409, 'Request fresh quotes and approve a new offer after the rejected attempt.');
@@ -236,6 +239,8 @@ class WebsiteFreightProviderService
     {
         $plan = $this->locked($order, $actor, function (WebsiteOrder $locked, array $plan) use ($version): array {
             abort_unless(($plan['version'] ?? 0) === $version && data_get($plan, 'api_attempt.state') === 'booked', 409, 'Check the original freight booking before requesting cancellation.');
+            abort_if(! empty($plan['handoff']) || in_array(data_get($plan, 'api_attempt.provider_status'), ['in_transit', 'delivered'], true),
+                422, 'The freight has been handed off or is in transit. Review changes directly with the original provider.');
             $this->connection($locked, $plan['api_attempt']['connection_id'], $plan['api_attempt']['account_fingerprint']);
             $plan['api_attempt']['state'] = 'cancelling';
 
@@ -251,6 +256,40 @@ class WebsiteFreightProviderService
             $this->attemptUpdate($order, $actor, $attempt['operation_id'], ['state' => 'cancellation_unknown']);
         }
         $this->refresh($order, $actor);
+    }
+
+    public function handoff(WebsiteOrder $order, array $input, User $actor): void
+    {
+        $this->freight->authorize($order, $actor);
+        $data = Validator::make($input, ['version' => ['required', 'integer', 'min:0'],
+            'confirmed' => ['required', 'accepted'], 'evidence_reference' => ['required', 'string', 'max:500']])->validate();
+        $attempt = data_get($order->fresh()->service_request, 'freight.api_attempt', []);
+        abort_unless(($attempt['state'] ?? '') === 'booked' && $this->client->validId($attempt['freight_shipment_id'] ?? null), 409, 'Confirm the original freight booking before recording handoff.');
+        $connection = $this->connection($order, $attempt['connection_id'], $attempt['account_fingerprint']);
+        $response = $this->client->request($connection->access_token, 'GET', '/freight/shipments/'.$attempt['freight_shipment_id']);
+        $this->client->assertResponse($response);
+        abort_unless($response->json('freight_shipment_id') === $attempt['freight_shipment_id']
+            && $response->json('freight_provider_account_id') === $this->client->accountId($connection)
+            && in_array($response->json('status'), ['booked', 'in_transit', 'delivered'], true), 409, 'The original provider has not confirmed an active shipment. Check status before handoff.');
+        $this->locked($order, $actor, function (WebsiteOrder $locked, array $plan) use ($data, $actor, $attempt): array {
+            abort_unless(($plan['version'] ?? 0) === (int) $data['version'] && data_get($plan, 'api_attempt.operation_id') === $attempt['operation_id']
+                && data_get($plan, 'api_attempt.state') === 'booked', 409, 'Freight changed. Reload before recording handoff.');
+            app(WebsitePaymentService::class)->assertFulfillable($locked);
+            abort_unless(empty($plan['handoff']) && $locked->fulfillment_status === 'unfulfilled'
+                && ! $locked->lines()->where('product_type', '!=', 'physical')->exists()
+                && ! $locked->fulfillments()->where('status', '!=', 'cancelled')->exists(), 409, 'Review existing fulfillment before recording this handoff.');
+            $fulfillment = WebsiteFulfillment::query()->create(['tenant_id' => $locked->tenant_id, 'website_order_id' => $locked->id,
+                'status' => 'fulfilled', 'method' => 'ship', 'fulfilled_at' => now(), 'fulfilled_by_user_id' => $actor->id,
+                'note' => 'Staff confirmed freight handoff. See protected freight pickup evidence.']);
+            foreach ($locked->lines()->get() as $line) {
+                WebsiteFulfillmentLine::query()->create(['tenant_id' => $locked->tenant_id, 'website_fulfillment_id' => $fulfillment->id,
+                    'website_order_line_id' => $line->id, 'quantity' => $line->quantity]);
+            }
+            $locked->update(['fulfillment_status' => 'fulfilled', 'fulfilled_at' => now()]);
+            $plan['handoff'] = ['by' => $actor->id, 'at' => now()->toIso8601String(), 'evidence_reference' => $data['evidence_reference'], 'fulfillment_id' => $fulfillment->id];
+
+            return $plan;
+        }, 'physical_handoff_recorded');
     }
 
     private function connection(WebsiteOrder $order, int $id, ?string $fingerprint = null): IntegrationConnection

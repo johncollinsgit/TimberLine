@@ -48,10 +48,15 @@ in private operations records.
    never sends an API key to the browser.
 9. Check original booking status to refresh canonical status and carrier tracking.
    Observations retain timestamps. Booking/tracking do not mark the order shipped
-   or delivered, change inventory/payment truth, or send notifications. Record
-   physical handoff through the existing reviewed fulfillment workflow.
+   or delivered, change inventory/payment truth, or send notifications. Use
+   **Confirm physical carrier handoff** after the carrier accepts all goods. It
+   requires a current active original-account shipment read, paid-order checks,
+   an explicit staff confirmation and retained signed BOL/pickup evidence. It
+   creates one native fulfillment with physical order-line quantities and marks
+   fulfillment complete. Evidence stays encrypted; delivery remains separate.
 10. Request cancellation once; a subsequent GET must confirm shipment cancellation.
-    Pickup cancellation is separate: a cancelled shipment without confirmed pickup
+   Staff-confirmed handoff or known transit/delivery blocks API cancellation.
+   Pickup cancellation is separate: a cancelled shipment without confirmed pickup
     cancellation requires direct provider follow-up. Reconcile final carrier
     invoices, cancellation fees, adjustments and customer refunds independently.
 
