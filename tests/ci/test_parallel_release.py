@@ -90,6 +90,7 @@ class ParallelReleaseTest(unittest.TestCase):
         groups = job['strategy']['matrix']['group']
         self.assertEqual(set(groups), {'schema', 'subscriptions', 'mail', 'concurrency'})
         self.assertEqual(job['services']['mysql']['image'], 'mysql:8.4')
+        self.assertIn('!cancelled()', job['if'])
         for step in job['steps']:
             if step.get('if'):
                 admitted = sum(f"matrix.group == '{group}'" in step['if'] for group in groups)

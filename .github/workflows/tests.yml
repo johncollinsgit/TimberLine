@@ -25,7 +25,7 @@ name: tests
         default: all
         required: false
 concurrency:
-  group: release-validation-${{ github.event.pull_request.number || github.ref }}
+  group: release-validation-v2-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 permissions:
   contents: read
@@ -572,7 +572,7 @@ jobs:
     - name: Verify AI chat, briefing replay and approval concurrency on MySQL
       run: php ./vendor/bin/pest tests/Integration/AiBranchMySqlConcurrencyTest.php --compact
       if: matrix.group == 'concurrency'
-    if: inputs.mysql_mode != 'skip'
+    if: '!cancelled() && inputs.mysql_mode != ''skip'''
     strategy:
       fail-fast: false
       matrix:
