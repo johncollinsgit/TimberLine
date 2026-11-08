@@ -119,7 +119,7 @@ export function installOperations(nativeRoot) {
       root.classList.add('tops-inline-calendar'); host.append(root); $('search').value = String(options.query || '').trim();
       inlineOptions = { layout: ['list', 'board', 'calendar'].includes(options.layout) ? options.layout : 'calendar', renderCard: options.renderCard };
       if (inlineOptions.layout !== 'calendar') document.getElementById('tops-inline-options')?.remove();
-      await openArea(target, inlineOptions.layout === 'calendar' ? 'calendar' : 'events', true);
+      await openArea(target, 'calendar', true);
       return ticket === inlineEpoch && root.classList.contains('tops-inline-calendar');
     },
     mountEventCalendar: (...args) => window.TeamOperations.mountEventSurface(...args),
@@ -207,7 +207,24 @@ export function installOperations(nativeRoot) {
         $('prev').hidden = $('next').hidden = true;
         $('scope').textContent = items.length + ' loaded event records · ' + calendarPages.pages + ' checked pages';
         renderCalendar(items, result);
-        const grid = $('content').querySelector('.tops-event-calendar-scroll');
+        let grid = $('content').querySelector('.tops-event-calendar-scroll');
+        if (root.classList.contains('tops-inline-calendar') && inlineOptions?.layout !== 'calendar' && typeof inlineOptions?.renderCard === 'function') {
+          const container = el('div', '', inlineOptions.layout === 'board' ? 'teams-event-board' : 'teams-event-list');
+          const window = result.calendar_window || {}, validDay = day => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day);
+          const order = item => {
+            const schedule = item.data?.event_schedule || {}, evidence = schedule.session_evidence || [];
+            const days = (schedule.sessions || []).filter(session => validDay(session.date) && session.date >= window.from && session.date <= window.to && evidence.some(row => row.session_id === session.id && ['source_verified_at_review', 'staff_attested', 'staff_attested_external'].includes(row.status))).map(session => session.date).sort();
+            if (days.length) return { date: days[0], basis: 'reviewed_session' };
+            const start = item.starts_on, due = item.data?.source_schedule?.due_on || schedule.source_schedule?.due_on;
+            if (validDay(start)) return { date: start, basis: item.source && start === due ? 'source_due' : 'recorded_start' };
+            return validDay(due) ? { date: due, basis: 'source_due' } : { date: null, basis: 'unknown' };
+          };
+          const ordered = items.map(item => ({ item, sort: order(item) })).sort((a, b) => String(a.sort.date || '9999-99-99').localeCompare(String(b.sort.date || '9999-99-99')) || a.item.title.localeCompare(b.item.title) || String(a.item.id).localeCompare(String(b.item.id)));
+          for (const { item, sort } of ordered) container.append(inlineOptions.renderCard({ ...item, calendar_order: sort }, () => details(item)));
+          if (!items.length) container.append(el('p', 'No matching events in this loaded date window.', 'tops-muted'));
+          grid.replaceWith(container); grid = container;
+          $('content').querySelectorAll(':scope > .tops-calendar-records').forEach(section => section.remove());
+        }
         if (result.has_more && items.length < 90) grid.before(button('Load more events', () => { page++; return load(true); }, 'tops-calendar-more'));
         else if (result.has_more) { grid.before(el('p', items.length + ' events loaded. Continue replaces this batch; dates outside the loaded batch remain unchecked.', 'tops-muted'), button('Continue with next events', () => { calendarPages = null; page++; return load(true); }, 'tops-calendar-more')); }
         if (result.source_access_incomplete) grid.before(el('p', 'Earlier loaded pages were cleared because a current source access check was unavailable.', 'tops-muted'));
@@ -228,11 +245,6 @@ export function installOperations(nativeRoot) {
   }
   function renderRecords(items, parent = $('content')) {
     if (!items?.length) { empty('Ready for connected work', 'Create a draft or choose a source in Connections. Unavailable source work is never represented as an empty complete import.', parent); return; }
-    if (root.classList.contains('tops-inline-calendar') && view === 'events' && typeof inlineOptions?.renderCard === 'function') {
-      const container = el('div', '', inlineOptions.layout === 'board' ? 'teams-event-board' : 'teams-event-list');
-      for (const item of items) container.append(inlineOptions.renderCard(item, () => details(item)));
-      parent.append(container); return;
-    }
     table(['Name', 'Status', 'Date', 'Source'], items.map(item => [button(item.title, () => details(item), 'tops-record-title'), el('span', label(item.status), 'tops-badge'), item.starts_on ? date(item.starts_on) : '—', item.source ? 'Connected · read only' : 'Teams']), parent);
   }
   function navigate(tab) { view = tab; page = 1; controls(); return load(); }
