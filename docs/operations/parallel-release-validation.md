@@ -15,6 +15,9 @@ verification; protected CI remains the authoritative full regression run.
   Input artifact names are scoped to the immutable workflow run rather than its
   attempt, so a failed-job retry can reuse a successful build. A full retry may
   overwrite that same run's inputs; it cannot consume another run's artifacts.
+  Both `public/build` and `apps/enterprise/public/build` are retained and restored
+  at their original paths. Workers verify both manifests and the Node image
+  renderer before starting PHP tests, so missing inputs fail immediately.
 - Six PHP 8.4 file partitions generated from every directory/file configured in
   `phpunit.xml`, each retaining Pest's `--parallel`. Explicit file discovery keeps
   legacy unnamespaced test classes in the suite. The generated configuration

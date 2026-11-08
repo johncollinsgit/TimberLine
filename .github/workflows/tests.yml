@@ -129,7 +129,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: release-build-${{ github.run_id }}
-        path: public/build
+        path: |
+          public/build
+          apps/enterprise/public/build
         if-no-files-found: error
         retention-days: 3
         overwrite: true
@@ -191,7 +193,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: release-build-${{ github.run_id }}
-        path: public/build
+        path: .
     - name: Use official Ubuntu package mirrors
       timeout-minutes: 2
       shell: bash
@@ -216,6 +218,11 @@ jobs:
         sha256sum --check vtracer-0.6.5.sha256
         chmod +x vtracer-0.6.5
         echo "WHOLESALE_LABEL_VTRACER=$RUNNER_TEMP/label-tools/vtracer-0.6.5" >> "$GITHUB_ENV"
+    - name: Verify PHP runtime inputs before the suite
+      run: |-
+        test -f public/build/manifest.json
+        test -f apps/enterprise/public/build/manifest.json
+        node --input-type=module -e "await import('sharp')"
     - name: Run PHP test shard in parallel
       run: |-
         python3 scripts/ci/php-test-shards.py --index=${{ matrix.shard }} --total=6
@@ -275,7 +282,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: release-build-${{ github.run_id }}
-        path: public/build
+        path: .
     - name: Use official Ubuntu package mirrors
       timeout-minutes: 2
       shell: bash

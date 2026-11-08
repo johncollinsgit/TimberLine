@@ -139,11 +139,17 @@ class ParallelReleaseTest(unittest.TestCase):
         artifact = next(step for step in build if step.get('name') == "Retain this run's frontend build")
         self.assertEqual(artifact['with']['name'], 'release-build-${{ github.run_id }}')
         self.assertIs(artifact['with']['overwrite'], True)
+        self.assertEqual(set(artifact['with']['path'].splitlines()), {'public/build', 'apps/enterprise/public/build'})
         tracer = next(step for step in build if step.get('name') == 'Retain pinned Linux label tracer')
         self.assertIs(tracer['with']['overwrite'], True)
         for job in ['php', 'browser']:
             restore = next(step for step in self.jobs[job]['steps'] if step.get('name') == "Restore this run's frontend build")
             self.assertEqual(restore['with']['name'], artifact['with']['name'])
+            self.assertEqual(restore['with']['path'], '.')
+        prerequisites = next(step for step in self.jobs['php']['steps'] if step.get('name') == 'Verify PHP runtime inputs before the suite')
+        self.assertIn('test -f public/build/manifest.json', prerequisites['run'])
+        self.assertIn('test -f apps/enterprise/public/build/manifest.json', prerequisites['run'])
+        self.assertIn("await import('sharp')", prerequisites['run'])
 
     def test_file_partition_includes_unnamespaced_and_new_tests_once(self):
         with tempfile.TemporaryDirectory() as directory:
