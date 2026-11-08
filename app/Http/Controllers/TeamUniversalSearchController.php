@@ -41,7 +41,7 @@ class TeamUniversalSearchController extends Controller
             $payload = $apps->search(mb_substr($input['q'] ?? '', 0, 120), ['tenant_id' => $tenant->id, 'user' => $request->user(), 'request' => $request, 'surface' => 'teams', 'limit' => 20]);
             foreach ($payload['results'] as $row) {
                 if ($url = $this->destination($request, $tenant, $row['url'] ?? null)) {
-                    $id = 'app:'.hash('sha256', ($row['type'] ?? '').'|'.$url);
+                    $id = $this->appIdentity($row, $url);
                     if (empty($input['type']) || $input['type'] === ($row['type'] ?? '')) {
                         $appRows[$id] = ['id' => $id, 'type' => $row['type'], 'title' => $row['title'], 'context' => $row['badge'], 'snippet' => $row['subtitle'], 'source' => 'Everbranch', 'target' => ['kind' => 'app', 'url' => $url]];
                     }
@@ -84,6 +84,28 @@ class TeamUniversalSearchController extends Controller
         return response()->json(['items' => $items, 'next_cursor' => $more ? Crypt::encryptString(json_encode($cursor)) : null, 'facets' => $facets,
             'coverage' => $cursor['coverage'], 'app_limit' => 20])
             ->header('Cache-Control', 'private, no-store');
+    }
+
+    /** Stable provider-scoped record identity; a shared destination is not a record ID. */
+    private function appIdentity(array $row, string $url): string
+    {
+        $key = match ($row['subtype'] ?? '') {
+            'storefront', 'integration_health' => 'event_id',
+            'marketing_run', 'shopify_run' => 'run_id',
+            'profile' => 'profile_id',
+            'record' => 'order_id',
+            'field_service_job' => 'job_id',
+            'quickbooks_document' => 'document_id',
+            'workspace_asset' => 'asset_id',
+            'catalog' => 'module_key',
+            default => null,
+        };
+        $identity = $key ? data_get($row, 'meta.'.$key) : null;
+        if (! is_string($identity) && ! is_int($identity)) {
+            $identity = null;
+        }
+
+        return 'app:'.hash('sha256', json_encode([$row['type'] ?? '', $row['subtype'] ?? '', $key, $identity, $url], JSON_THROW_ON_ERROR));
     }
 
     /** Reuse destination role/module middleware without invoking a page or provider. */
