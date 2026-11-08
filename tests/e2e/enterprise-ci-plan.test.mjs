@@ -68,7 +68,7 @@ test('every mandatory matrix lane and both engines remain scheduled without nest
   }
   assert.equal(browser.split('node scripts/proposals/reviewer-legacy-capture-browser.mjs').length - 1, 1);
   assert.match(sharedSteps.find(step => step.includes("if: matrix.kind == 'shared-workspace'")), /PROPOSAL_WORKSPACE_SCENARIO=directory/);
-  assert.match(browser, /max-parallel: 6/);
+  assert.match(browser, /max-parallel: 12/);
   assert.match(browser, /VOICE_WEBKIT: '1'/);
   assert.match(browser, /ENTERPRISE_OPERATIONS_SCENARIO: all/);
   assert.match(browser, /ENTERPRISE_OPERATIONS_GROUP: \$\{\{ matrix.group \}\}/);

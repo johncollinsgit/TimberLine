@@ -256,8 +256,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
-      # Leave runner capacity for the six PHP, three browser and four MySQL lanes.
-      max-parallel: 6
+      max-parallel: 12
       matrix:
         include:
         - id: operations-work-chromium
