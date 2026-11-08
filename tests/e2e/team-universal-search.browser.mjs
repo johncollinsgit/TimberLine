@@ -42,7 +42,13 @@ try {
       await page.getByRole('combobox', { name: 'All work', exact: true }).selectOption(''); await result.waitFor();
       await filterLink.click(); assert.ok(await filters.isHidden());
       assert.ok(['rgb(214, 229, 215)', 'rgb(225, 237, 223)'].includes(await input.evaluate(node => getComputedStyle(node).backgroundColor)), 'Search uses a solid green background in focused and resting states');
-      if (width === 1440) assert.ok((await input.boundingBox()).width > 560, 'Desktop search expands beyond its old narrow maximum');
+      if (width === 1440) {
+        // At 1440 the sidebar, tabs and controls can leave less than 560px with
+        // Linux fonts. Verify expansion where there is actually room to grow.
+        await page.setViewportSize({ width: 1920, height: 900 });
+        assert.ok((await input.boundingBox()).width > 800, 'Wide desktop search expands beyond its old 560px maximum');
+        await page.setViewportSize({ width, height: 900 });
+      }
       assert.ok(await page.locator('.teams-search-coverage').isVisible(), 'Saved-source coverage remains visible');
       const panel = await page.locator('[data-team-universal-search] .eb-search-panel').boundingBox(); assert.ok(panel.x >= -1 && panel.x + panel.width <= width + 1, 'Search stays in viewport');
       await page.screenshot({ path: join(evidence, `${name}-${width}-search.png`) });
