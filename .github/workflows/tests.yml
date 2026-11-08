@@ -134,6 +134,7 @@ jobs:
           node tests/e2e/team-event-calendar-window.browser.mjs
           node tests/e2e/team-browser-toolbar.browser.mjs
           node tests/e2e/team-main-event-surface.browser.mjs
+          node tests/e2e/team-event-detail-lifecycle.browser.mjs
           node tests/e2e/team-task-cards.browser.mjs
           node tests/e2e/team-universal-search.browser.mjs
           node tests/e2e/team-assistant.browser.mjs
