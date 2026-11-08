@@ -132,6 +132,15 @@ jobs:
           node tests/e2e/team-event-calendar-window.browser.mjs
           node tests/e2e/team-browser-toolbar.browser.mjs
 
+      - name: Retain Teams browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teams-browser-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/team-*/
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Verify Trajectory mobile household navigation
         run: npm run test:trajectory:mobile
 
