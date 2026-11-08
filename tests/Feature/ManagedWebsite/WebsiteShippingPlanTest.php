@@ -324,6 +324,108 @@ test('an expired quote gives an actionable error and preserves its evidence', fu
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'stripe.com'));
 });
 
+test('approved USPS UPS and FedEx services are priced in ascending order without exposing unsupported services', function (): void {
+    $origin = WebsiteFulfillmentLocation::query()->firstOrFail();
+    $origin->update(['address' => $origin->address + ['phone' => '5125550100']]);
+    $this->destination['phone'] = '5125550101';
+    $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => ['USPS:GroundAdvantage', 'UPS:Ground', 'FedEx:GROUND_HOME_DELIVERY']], $this->actor);
+    $this->carrierResponse = shippingPlanResponse([
+        ['id' => 'rate_usps', 'carrier' => 'USPS', 'service' => 'GroundAdvantage', 'rate' => '9.25', 'currency' => 'USD'],
+        ['id' => 'rate_fedex', 'carrier' => 'FedEx', 'service' => 'GROUND_HOME_DELIVERY', 'rate' => '7.25', 'currency' => 'USD'],
+        ['id' => 'rate_ups', 'carrier' => 'UPS', 'service' => 'Ground', 'rate' => '5.25', 'currency' => 'USD'],
+        ['id' => 'rate_unapproved', 'carrier' => 'UPS', 'service' => 'NextDayAir', 'rate' => '3.25', 'currency' => 'USD'],
+    ]);
+    expect(collect($this->shipping->quote($this->cart, $this->destination))->pluck('carrier')->all())->toBe(['UPS', 'FedEx', 'USPS']);
+});
+
+test('each approved parcel carrier completes payment label purchase reprint evidence and confirmed handoff', function (string $carrier, string $service): void {
+    $origin = WebsiteFulfillmentLocation::query()->firstOrFail();
+    $origin->update(['address' => $origin->address + ['phone' => '5125550100']]);
+    $this->destination['phone'] = '5125550101';
+    $this->buyer['shipping_address'] = $this->destination;
+    $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => [$carrier.':'.$service]], $this->actor);
+    $this->carrierResponse = shippingPlanResponse([['id' => 'rate_pilot', 'carrier' => $carrier, 'service' => $service, 'rate' => '5.25', 'currency' => 'USD']]);
+    $quote = $this->shipping->quote($this->cart, $this->destination)[0];
+    $order = $this->commerce->beginCheckout($this->cart, $this->buyer + ['shipping_rate_quote_id' => $quote->id], 'https://pilot.test/success', 'https://pilot.test/cart')['order'];
+    $this->commerce->processStripeEvent(WebsiteStripeFixture::event($order));
+    $shipment = $this->shipping->purchaseLabel($order->fresh(), $quote, $this->actor);
+    $lifecycle = app(\App\Services\ManagedWebsite\WebsiteShipmentLifecycleService::class);
+    expect($shipment->carrier)->toBe($carrier)->and($shipment->service)->toBe($service)
+        ->and($order->fresh()->fulfillment_status)->toBe('unfulfilled')
+        ->and(data_get($lifecycle->providerEvidence($shipment), 'postage_label.label_size'))->toBe('4x6');
+    expect($this->shipping->purchaseLabel($order->fresh(), $quote, $this->actor)->id)->toBe($shipment->id);
+    $lifecycle->pack($shipment, $this->actor);
+    $lifecycle->handoff($shipment, $this->actor);
+    expect($order->fresh()->fulfillment_status)->toBe('fulfilled');
+    expect(collect(Http::recorded())->filter(fn ($pair) => str_ends_with($pair[0]->url(), '/buy')))->toHaveCount(1);
+})->with([['USPS', 'GroundAdvantage'], ['UPS', 'Ground'], ['FedEx', 'GROUND_HOME_DELIVERY']]);
+
+test('FedEx never offers a rate that lacks mandatory shipper or recipient contacts', function (): void {
+    $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => ['FedEx:GROUND_HOME_DELIVERY']], $this->actor);
+    expect(fn () => $this->shipping->quote($this->cart, $this->destination))->toThrow(ValidationException::class, 'store completes');
+    $origin = WebsiteFulfillmentLocation::query()->firstOrFail();
+    $this->setup->saveLocation($this->site, ['location_id' => $origin->id, 'name' => 'Warehouse', 'street1' => '1 Main St', 'city' => 'Austin', 'state' => 'TX', 'zip' => '78701', 'phone' => '+1 (512) 555-0100'], $this->actor);
+    expect($origin->fresh()->address['phone'])->toBe('5125550100');
+    expect(fn () => $this->shipping->quote($this->cart, $this->destination))->toThrow(ValidationException::class, '10-digit');
+    expect(fn () => $this->shipping->quote($this->cart, $this->destination + ['phone' => '5125550101 ext 12']))->toThrow(ValidationException::class, 'without an extension');
+    Http::assertNothingSent();
+    $this->destination['phone'] = '+1 (512) 555-0101';
+    $this->carrierResponse = shippingPlanResponse([['id' => 'rate_fedex', 'carrier' => 'FedEx', 'service' => 'GROUND_HOME_DELIVERY', 'rate' => '7.25', 'currency' => 'USD']]);
+    $quote = $this->shipping->quote($this->cart, $this->destination)[0];
+    Http::assertSent(fn ($request) => $request['shipment']['from_address']['phone'] === '5125550100' && $request['shipment']['to_address']['phone'] === '5125550101');
+    expect($quote->destination['phone'])->toBe('5125550101')
+        ->and($this->plans->selectedQuote($this->cart, $quote->id, $this->destination)->id)->toBe($quote->id);
+});
+
+test('missing FedEx contacts leave approved USPS options available instead of advertising unusable FedEx postage', function (): void {
+    $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => ['USPS:GroundAdvantage', 'FedEx:FEDEX_GROUND']], $this->actor);
+    $this->carrierResponse = shippingPlanResponse([
+        ['id' => 'rate_usps', 'carrier' => 'USPS', 'service' => 'GroundAdvantage', 'rate' => '5.25', 'currency' => 'USD'],
+        ['id' => 'rate_fedex', 'carrier' => 'FedEx', 'service' => 'FEDEX_GROUND', 'rate' => '4.25', 'currency' => 'USD'],
+    ]);
+    expect(collect($this->shipping->quote($this->cart, $this->destination))->pluck('carrier')->all())->toBe(['USPS']);
+});
+
+test('lowest cost comparison retains the exact measured package selected by the buyer', function (): void {
+    $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => ['USPS:GroundAdvantage'], 'package_selection' => 'lowest_cost'], $this->actor);
+    $small = $this->setup->savePackage($this->site, array_replace($this->packageData, ['name' => 'Compact', 'length_inches' => 8, 'width_inches' => 6,
+        'height_inches' => 4, 'inner_length_inches' => 6, 'inner_width_inches' => 4, 'inner_height_inches' => 3, 'is_default' => false]), $this->actor);
+    Http::swap(new \Illuminate\Http\Client\Factory);
+    Http::preventStrayRequests();
+    Http::fake(['https://api.easypost.com/v2/shipments' => fn ($request) => Http::response([
+        'id' => 'shp_size_'.$request['shipment']['parcel']['length'], 'mode' => 'test', 'rates' => [
+            ['id' => 'rate_size_'.$request['shipment']['parcel']['length'], 'carrier' => 'USPS', 'service' => 'GroundAdvantage',
+                'rate' => $request['shipment']['parcel']['length'] === 8 ? '4.50' : '8.50', 'currency' => 'USD'],
+        ],
+    ])]);
+    $quotes = $this->shipping->quote($this->cart, $this->destination);
+    expect($quotes)->toHaveCount(2)->and($quotes[0]->amount_cents)->toBe(450)
+        ->and(data_get($quotes[0]->parcel, '_shipping_plan.package_id'))->toBe($small->id)
+        ->and($this->plans->selectedQuote($this->cart, $quotes[0]->id, $this->destination)->id)->toBe($quotes[0]->id);
+    $this->setup->setActive($this->site, 'packages', $small->id, false, $this->actor);
+    expect(fn () => $this->plans->selectedQuote($this->cart, $quotes[0]->id, $this->destination))->toThrow(ValidationException::class);
+});
+
+test('residential classification is sent to the carrier and cannot change after rate selection', function (): void {
+    $address = $this->destination + ['residential' => '1'];
+    $quote = $this->shipping->quote($this->cart, $address)[0];
+    Http::assertSent(fn ($request) => $request['shipment']['to_address']['residential'] === true);
+    expect($this->plans->selectedQuote($this->cart, $quote->id, $address)->id)->toBe($quote->id);
+    expect(fn () => $this->plans->selectedQuote($this->cart, $quote->id, array_replace($address, ['residential' => '0'])))->toThrow(ValidationException::class);
+});
+
+test('tenant scoped preset edits reuse the record and preserve purchased order evidence', function (): void {
+    $updated = $this->setup->savePackage($this->site, array_replace($this->packageData, ['package_id' => $this->package->id, 'name' => 'Updated box', 'weight_ounces' => 4]), $this->actor);
+    expect($updated->id)->toBe($this->package->id)->and(WebsiteShippingPackage::query()->count())->toBe(1)->and($updated->weight_ounces)->toBe(4);
+    $this->actingAs($this->actor)->get(route('managed-website.commerce.shipping', ['tenant' => $this->tenant->id, 'package' => $updated->id]))
+        ->assertOk()->assertSeeText('Editing Updated box')->assertSee('value="4"', false);
+    $other = Tenant::query()->create(['name' => 'Other store', 'slug' => 'other-boxes']);
+    $otherSite = TenantSite::query()->create(['tenant_id' => $other->id, 'subdomain' => 'other-boxes']);
+    $box = WebsiteShippingPackage::query()->create(['tenant_id' => $other->id, 'tenant_site_id' => $otherSite->id, 'name' => 'Private', 'length_inches' => 1, 'width_inches' => 1, 'height_inches' => 1, 'weight_ounces' => 1]);
+    expect(fn () => $this->setup->savePackage($this->site, $this->packageData + ['package_id' => $box->id], $this->actor))->toThrow(Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    expect($box->fresh()->name)->toBe('Private');
+});
+
 test('JSON object key reordering does not invalidate carrier or order evidence', function (): void {
     $reorder = function (array $value) use (&$reorder): array {
         foreach ($value as $key => $item) {

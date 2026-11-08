@@ -43,6 +43,25 @@ it('prices multi-line quotes on the server, snapshots tracked inventory, and cre
     Http::assertNothingSent();
 });
 
+it('invalidates unbooked freight on draft revision and preserves its prior evidence', function () {
+    $order = $this->quotes->create($this->site, $this->input, $this->actor);
+    $request = $order->service_request;
+    $request['freight'] = ['version' => 3, 'specification' => ['weight_pounds' => 250], 'quotes' => [['reference' => 'Original broker quote']], 'approved' => ['amount_cents' => 25000]];
+    $request['other_evidence'] = 'Retained source reference';
+    $order->update(['service_request' => $request]);
+    $revised = $this->quotes->revise($order, $this->input, $this->actor, 1);
+    expect(data_get($revised->service_request, 'freight.version'))->toBe(4)
+        ->and(data_get($revised->service_request, 'freight.specification'))->toBeNull()
+        ->and(data_get($revised->service_request, 'freight.quotes'))->toBe([])
+        ->and(data_get($revised->service_request, 'other_evidence'))->toBe('Retained source reference');
+    $history = $revised->events->firstWhere('event_type', 'invoice_version_replaced');
+    expect(data_get($history->data, 'snapshot.service_request.freight.quotes.0.reference'))->toBe('Original broker quote');
+    $request = $revised->service_request;
+    $request['freight']['booking'] = ['reference' => 'Original carrier booking'];
+    $revised->update(['service_request' => $request]);
+    expect(fn () => $this->quotes->revise($revised, $this->input, $this->actor, 2))->toThrow(HttpException::class, 'original freight booking');
+});
+
 it('retains prior versions, freezes issued terms, and accepts exactly the issued quote once', function () {
     $order = $this->quotes->create($this->site, $this->input, $this->actor);
     $revised = [...$this->input, 'lines' => [['title' => 'Custom large barrel', 'quantity' => 1, 'unit_price_cents' => 50001]]];

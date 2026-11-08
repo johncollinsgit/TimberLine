@@ -107,6 +107,19 @@ test('shipping health renders without provider calls or credential disclosure wh
     Http::assertNothingSent();
 });
 
+test('paused tenants can complete setup without enabling rates or buying postage', function (): void {
+    $this->actingAs($this->actor)->get(route('managed-website.commerce.shipping', ['tenant' => $this->tenant->id]))
+        ->assertOk()->assertSeeText('Get ready to ship')->assertSeeText('FedEx Home Delivery')->assertSeeText('Reviewed package presets');
+    $this->post(route('managed-website.commerce.shipping.policy.store', ['tenant' => $this->tenant->id]),
+        ['mode' => 'test', 'services' => ['USPS:GroundAdvantage', 'UPS:Ground', 'FedEx:FEDEX_GROUND'], 'package_selection' => 'lowest_cost'])->assertRedirect()->assertSessionHasNoErrors();
+    $this->post(route('managed-website.commerce.shipping.packages.store', ['tenant' => $this->tenant->id]),
+        ['name' => 'Reviewed box', 'length_inches' => 8, 'width_inches' => 6, 'height_inches' => 4, 'weight_ounces' => 2,
+            'inner_length_inches' => 6, 'inner_width_inches' => 4, 'inner_height_inches' => 3, 'max_items' => 1, 'max_weight_ounces' => 32])->assertRedirect()->assertSessionHasNoErrors();
+    expect(config('managed_website.commerce_shipping_enabled'))->toBeFalse()
+        ->and(data_get($this->site->fresh()->settings, 'shipping.services'))->toHaveCount(3);
+    Http::assertNothingSent();
+});
+
 test('shipping health counts ambiguous refunds even when postage itself was confirmed', function (): void {
     $parcel = $this->shipment->parcel;
     $parcel['_native']['refund_state'] = 'unknown';

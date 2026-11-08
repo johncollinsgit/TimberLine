@@ -431,9 +431,10 @@ test('pickup tax origin can be configured without shipping rollout or a carrier 
     $this->actingAs($this->actor)->withSession(['active_tenant_id' => $this->tenant->id]);
     $host = 'https://payment-pilot.theeverbranch.com';
     $this->get($host.'/website/products')->assertOk()->assertSeeText('Pickup & shipping');
-    $this->get($host.'/website/commerce/shipping')->assertOk()->assertSeeText('Pickup / ship-from locations')->assertDontSeeText('Carrier services')->assertDontSeeText('Reviewed package presets');
+    $this->get($host.'/website/commerce/shipping')->assertOk()->assertSeeText('Pickup / ship-from locations')->assertSeeText('Carrier services')->assertSeeText('Reviewed package presets');
     $this->post($host.'/website/commerce/shipping/locations', ['name' => 'Pickup desk', 'street1' => '1 Main St', 'city' => 'Austin', 'state' => 'TX', 'zip' => '78701', 'is_default' => true])->assertRedirect()->assertSessionHasNoErrors();
-    $this->post($host.'/website/commerce/shipping/policy', ['mode' => 'production', 'services' => ['USPS:Priority']])->assertStatus(423);
+    $this->post($host.'/website/commerce/shipping/policy', ['mode' => 'production', 'services' => ['USPS:Priority']])->assertRedirect()->assertSessionHasNoErrors();
+    expect(config('managed_website.commerce_shipping_enabled'))->toBeFalse();
     expect($this->variant->fresh()->shipping_weight_ounces)->toBeNull();
     expect(($this->begin)()['order']->fulfillment_method)->toBe('pickup');
     Http::assertNotSent(fn ($request) => str_contains($request->url(), 'easypost'));

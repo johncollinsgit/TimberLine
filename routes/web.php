@@ -947,6 +947,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/commerce/shipping/locations', [WebsiteCommerceController::class, 'saveFulfillmentLocation'])->name('commerce.shipping.locations.store');
             Route::post('/commerce/shipping/packages', [WebsiteCommerceController::class, 'saveShippingPackage'])->name('commerce.shipping.packages.store');
             Route::post('/commerce/shipping/policy', [WebsiteCommerceController::class, 'saveShippingPolicy'])->name('commerce.shipping.policy.store');
+            Route::post('/commerce/shipping/presets/{kind}/{preset}', [WebsiteCommerceController::class, 'shippingPresetStatus'])->whereIn('kind', ['packages', 'locations'])->whereNumber('preset')->name('commerce.shipping.presets.status');
             Route::get('/products/export', [WebsiteCommerceController::class, 'exportProducts'])->name('products.export');
             Route::post('/products/import', [WebsiteCommerceController::class, 'importProducts'])->name('products.import');
             Route::get('/products/shipping-weights', [\App\Http\Controllers\WebsiteCatalogController::class, 'shippingWeights'])->name('products.shipping-weights');
@@ -966,6 +967,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/orders/drafts', [WebsiteCommerceController::class, 'storeDraftOrder'])->name('orders.drafts.store');
             Route::get('/orders/{order}', [WebsiteCommerceController::class, 'showOrder'])->name('orders.show');
             Route::get('/orders/{order}/print', [WebsiteCommerceController::class, 'printOrder'])->name('orders.print');
+            Route::get('/orders/{order}/freight', [\App\Http\Controllers\WebsiteFreightController::class, 'show'])->name('orders.freight');
+            Route::post('/orders/{order}/freight', [\App\Http\Controllers\WebsiteFreightController::class, 'save'])->name('orders.freight.save');
             Route::post('/orders/{order}/fulfill', [WebsiteCommerceController::class, 'fulfill'])->name('orders.fulfill');
             Route::post('/orders/{order}/cancel', [WebsiteCommerceController::class, 'cancel'])->name('orders.cancel');
             Route::post('/orders/{order}/refund', [WebsiteCommerceController::class, 'refund'])->name('orders.refund');

@@ -8,7 +8,7 @@
     <a class="mt-4 inline-block font-semibold text-emerald-800 underline" href="{{ route('managed-website.printing.settings') }}">Set up printers and run a no-postage test</a>
 </section>
 <section class="rounded-2xl border bg-white p-6">
-    <h2 class="text-lg font-bold">Tenant-owned carrier account</h2>
+    <h2 id="shipping-account" class="text-lg font-bold">Tenant-owned carrier account</h2>
     <p class="mt-2 text-sm text-zinc-600">Save this store’s EasyPost key and webhook secret. A new credential set is used for new rates; existing shipments keep their original account for recovery. Saving credentials does not purchase postage or enable checkout.</p>
     @if($shippingHealth['connection_label'])<p class="mt-3 text-sm">Current credential set: {{ $shippingHealth['connection_label'] }}</p>@endif
     <p class="mt-3 break-all text-sm">EasyPost webhook endpoint: {{ route('managed-website.store.shipping-webhook') }}</p>

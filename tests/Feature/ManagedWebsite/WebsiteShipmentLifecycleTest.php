@@ -147,6 +147,25 @@ test('a durable postage attempt recovers its label without buying again or fulfi
     Http::assertSent(fn ($r) => $r->url() === 'https://api.easypost.com/v2/shipments' && $r['shipment']['options'] === ['label_format' => 'PNG', 'label_size' => '4x6']);
 });
 
+test('rotation before the first label retains the paid orders original account even when the new account is incomplete', function (): void {
+    IntegrationConnection::query()->create(['tenant_id' => $this->tenant->id, 'provider' => 'easypost', 'external_account_id' => 'native:new-account',
+        'status' => 'connected', 'access_token' => 'EZTK_new_account_without_webhook']);
+    $shipment = ($this->purchase)();
+    expect(data_get($shipment->parcel, '_native.connection_id'))->toBe($this->connection->id)->and($this->buyCalls)->toBe(1);
+    Http::assertSent(fn ($request) => str_ends_with($request->url(), '/buy')
+        && $request->hasHeader('Authorization', 'Basic '.base64_encode('EZTK_fixture:')));
+    ($this->purchase)();
+    expect($this->buyCalls)->toBe(1);
+});
+
+test('a missing original credential cannot retarget paid postage to a new account', function (): void {
+    $this->connection->update(['access_token' => '']);
+    IntegrationConnection::query()->create(['tenant_id' => $this->tenant->id, 'provider' => 'easypost', 'external_account_id' => 'native:new-account',
+        'status' => 'connected', 'access_token' => 'EZTK_new_account', 'external_account_secret' => 'new-secret']);
+    expect(fn () => ($this->purchase)())->toThrow(HttpException::class, 'original carrier credential');
+    expect($this->buyCalls)->toBe(0)->and(WebsiteShipment::query()->count())->toBe(0);
+});
+
 test('lost purchase responses recover with GET only while new commerce is paused', function (): void {
     $this->losePurchase = true;
     expect(fn () => ($this->purchase)())->toThrow(ConnectionException::class);
