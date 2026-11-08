@@ -1,3 +1,13 @@
+## Stable idle event refresh (November 8; candidate)
+
+Visible event views retain their current contents without fading during the
+one-minute access refresh. Interactions remain blocked until fresh admission
+finishes; failures clear the unverifiable records. Timer ticks do not overlap
+in-flight loads, disrupt an open editor/detail or replace focused event controls.
+Account/session loss stops polling and requires original-account verification.
+Hidden-tab invalidation and fresh detail admission remain unchanged. See
+`docs/operations/everbranch-team-connected-operations-runbook.md` for diagnostics.
+
 ## Native Website freight API (November 8; candidate)
 
 Read `docs/operations/native-ltl-quote-book.md` before freight rollout. The
