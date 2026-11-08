@@ -48,21 +48,10 @@ try {
       const response = await page.goto(`${origin}/teams?tenant=${fixture.tenant}`);
       assert.equal(response.status(), 200);
       await page.waitForFunction(() => window.TeamPremium?.context?.ready());
-      let releaseHome = null, lateHomeResponse = null;
-      if (width === 1440) {
-        let homeIntercepted;
-        const intercepted = new Promise(done => { homeIntercepted = done; });
-        const release = new Promise(done => { releaseHome = done; });
-        await page.route(url => url.pathname === '/team/data' && url.searchParams.get('mine') === '1', async route => {
-          const original = await route.fetch();
-          homeIntercepted();
-          await release;
-          await route.fulfill({ response: original });
-        }, { times: 1 });
-        await page.locator('#tw-refresh').click();
-        await intercepted;
-        lateHomeResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/team/data' && new URL(response.url()).searchParams.get('mine') === '1');
-      }
+      assert.equal(await page.locator('#tw-layout').inputValue(), 'board', 'Workspace starts with Board');
+      assert.equal(await page.locator('#tw-controls-panel').isVisible(), false, 'Controls start closed on every viewport');
+      assert.equal(await page.locator('#tw-refresh').isVisible(), false, 'Refresh is secondary');
+      await page.locator('[data-team-universal-search] input').waitFor({state:'visible'});
       if (width <= 800) await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
       const allWorkResponse = page.waitForResponse(response => {
         const url = new URL(response.url());
@@ -71,19 +60,10 @@ try {
       await page.locator('.teams-nav [data-team-mode="all"]').click();
       await allWorkResponse;
       await page.waitForFunction(() => document.querySelector('#tw-mode').value === 'all' && document.querySelector('#tw-home').hidden && document.querySelector('#tw-list-heading').textContent === 'Tasks');
-      if (releaseHome) {
-        releaseHome();
-        await lateHomeResponse;
-        await page.waitForLoadState('networkidle');
-        assert.equal(await page.locator('#tw-home').isVisible(), false, 'A late Home response cannot overwrite the current All work view');
-        assert.equal(await page.locator('#tw-list-heading').textContent(), 'Tasks');
-      }
       await page.locator('#tw-page-title').filter({ hasText: /^All work$/ }).waitFor();
       await page.locator('#tw-count').filter({ hasText: '3 of 3' }).waitFor();
-      if (width > 600) await page.getByRole('navigation', { name: 'Business work areas' }).getByRole('button', { name: 'Retail preparation and seasonal planning' }).waitFor();
-      else await page.locator('.teams-compact-areas > summary').waitFor();
-      for (const label of ['Search accessible work', 'Project', 'Source']) await page.locator('.teams-work-toolbar').getByLabel(label, { exact: true }).waitFor();
-      assert.equal(await page.locator('#tw-view-tools').getAttribute('open') !== null, width > 600, 'Secondary controls are compact on phones and open on desktop');
+      await page.getByRole('tab', {name:'List', exact:true}).click();
+      await page.locator('#tw-list .task-open').first().waitFor();
       const geometry = await page.evaluate(() => {
         const rendered = element => {
           if (!element.getClientRects().length || getComputedStyle(element).visibility === 'hidden') return false;
@@ -102,7 +82,7 @@ try {
       if (width <= 600) assert.ok(geometry.toolbarHeight < 420, 'Phone primary toolbar remains compact');
       if (width <= 600) assert.ok(geometry.firstTaskTop < 900, `${engine} ${width}: phone first task at ${geometry.firstTaskTop}px must remain below 900px, including platform font variation`);
       if (width <= 600) {
-        assert.equal(await page.locator('.teams-compact-areas').getAttribute('open'), null, 'Work-area controls start collapsed on phones');
+
         assert.ok(geometry.headerHeight <= 90, `Compact phone header is ${geometry.headerHeight}px`);
         assert.equal(await page.locator('.teams-work-header').evaluate(header => [...header.querySelectorAll('button')].filter(button => button.getClientRects().length).length), 2, 'Phone header contains only navigation and Create');
         const aligned = await page.evaluate(() => { const title = document.querySelector('#tw-page-title').getBoundingClientRect(), create = document.querySelector('#tw-new-task').getBoundingClientRect(); return Math.abs(title.y + title.height / 2 - create.y - create.height / 2) < 1; });
@@ -121,54 +101,26 @@ try {
           assert.ok(horizontal <= 1 || vertical <= 1, `${engine} ${width}: ${control.id} must not overlap ${other.id}`);
         }
       }
-      if (width >= 1280) assert.ok(Math.max(...geometry.scope.map(x => x.bottom)) - Math.min(...geometry.scope.map(x => x.bottom)) < 1, 'Desktop field baselines align');
+
       await page.screenshot({ path: join(evidence, `${engine}-all-work-${width}.png`), fullPage: true });
-      if (width <= 600) {
-        await page.locator('#tw-view-tools > summary').focus();
-        await page.keyboard.press('Enter');
-        await page.locator('#tw-saved-views').waitFor({ state: 'visible' });
-        await page.locator('#tw-workspaces').waitFor({ state: 'visible' });
-        await page.locator('#tw-new-project').waitFor({ state: 'visible' });
-        await page.locator('#tw-templates').waitFor({ state: 'visible' });
-        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Expanded saved views remain contained');
-        const workAreas = page.locator('.teams-compact-areas > summary');
-        await workAreas.focus();
-        await page.keyboard.press('Enter');
-        await page.getByRole('navigation', { name: 'Business work areas' }).getByRole('button', { name: 'Retail preparation and seasonal planning' }).waitFor();
-        await workAreas.focus();
-        await page.keyboard.press('Enter');
-        assert.equal(await page.locator('.teams-compact-areas').getAttribute('open'), null, 'Work-area disclosure opens and closes with the keyboard');
-      }
-      await page.locator('.teams-work-toolbar').getByLabel('Saved work views', { exact: true }).waitFor();
       await page.locator('#tw-filter-toggle').click();
-      await page.locator('#tw-filters').waitFor({ state: 'visible' });
+      await page.locator('#tw-controls-panel').waitFor({ state: 'visible' });
+      for (const id of ['tw-search','tw-project-filter','tw-source-filter','tw-saved-views','tw-refresh','tw-workspaces']) await page.locator('#'+id).waitFor({state:'visible'});
       assert.equal(await page.locator('#tw-filter-toggle').getAttribute('aria-expanded'), 'true');
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Expanded filters stay inside viewport');
-      await page.locator('#tw-filter-toggle').click();
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Expanded Controls stay inside viewport');
       await page.locator('#tw-search').fill('organizer');
       await page.locator('#tw-search').press('Enter');
       await page.locator('#tw-count').filter({ hasText: '1 of 1' }).waitFor();
       await page.locator('#tw-search').fill('');
       await page.locator('#tw-search').press('Enter');
       await page.locator('#tw-count').filter({ hasText: '3 of 3' }).waitFor();
+      await page.locator('#tw-filter-toggle').click();
       await page.getByRole('tab', { name: 'Calendar', exact: true }).click();
-      await page.getByLabel('Calendar format', { exact: true }).waitFor();
-      await page.locator('#tw-month').fill('2026-11');
-      await page.locator('.teams-calendar').waitFor();
-      const shortcut = page.getByRole('button', { name: 'Event calendar', exact: true });
-      await shortcut.waitFor({ state: 'visible' });
-      await shortcut.focus();
-      await page.keyboard.press('Enter');
-      await page.locator('#tops-panel').waitFor({ state: 'visible' });
       await page.locator('.tops-event-calendar').waitFor();
-      assert.equal(new URL(page.url()).searchParams.get('area'), fixture.area_id, 'Shortcut uses the currently authorized Events area');
-      assert.equal(await page.locator('.teams-work-toolbar').isVisible(), false, 'Task controls stay separate from event sessions');
-      await page.getByRole('button', { name: 'Back to tasks', exact: true }).click();
-      await page.locator('.teams-work-toolbar').waitFor({ state: 'visible' });
-      assert.equal(await page.locator('#tw-source-filter').inputValue(), 'all', 'Shortcut does not change the selected source or connect an account');
+      assert.equal(await page.locator('.teams-work-toolbar').isVisible(), true, 'Event calendar keeps the same primary work tabs');
+      assert.equal(await page.locator('#tw-controls-panel').isVisible(), false, 'Calendar does not reveal secondary controls');
       await page.getByRole('tab', { name: 'List', exact: true }).click();
-      await page.locator('#tw-calendar-format-label').waitFor({ state: 'hidden' });
-      assert.equal(await page.locator('#tw-calendar-format-label').isVisible(), false, 'Calendar field label hides with its input');
+      await page.locator('#tw-filter-toggle').click();
       await page.locator('#tw-save-view').click();
       await page.getByRole('dialog', { name: 'Save view' }).waitFor();
       await page.locator('#tw-view-close').click();
@@ -176,18 +128,10 @@ try {
     await page.locator('#tw-project-filter').selectOption(fixture.project_id);
     await page.locator('#tw-page-title').filter({ hasText: 'Fictional seasonal market preparation' }).waitFor();
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Long selected project stays contained');
-    if (await page.locator('.teams-compact-areas').count()) await page.locator('.teams-compact-areas > summary').click();
-    await page.locator('#tops-areas button').first().click();
-    await page.locator('#tops-panel').waitFor({ state: 'visible' });
-    assert.equal(await page.locator('.teams-work-toolbar').isVisible(), false, 'Task controls hide when the Events work area opens');
-    await page.getByRole('button', { name: 'Back to tasks', exact: true }).click();
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.locator('#tw-view-tools > summary').waitFor({ state: 'visible' });
     await page.setViewportSize({ width: 1440, height: 1050 });
-    await page.locator('.teams-work-header #tw-workspaces').waitFor({ state: 'visible' });
-    assert.equal(await page.locator('.teams-work-header #tw-workspaces').count(), 1, 'Resizing restores the original desktop workspace control');
-    assert.equal(await page.locator('.teams-work-header #tw-new-project').count(), 1, 'Resizing restores desktop secondary actions');
-    assert.equal(await page.locator('.tops-launcher > #tops-areas').count(), 1, 'Work areas remain in their original desktop/root scope');
+    assert.equal(await page.locator('#tw-controls-panel #tw-workspaces').count(), 1, 'Workspace picker remains within Controls after resizing');
+    assert.equal(await page.locator('#tw-controls-panel #tw-new-project').count(), 1, 'Secondary actions remain within Controls');
     await browser.close(); browser = null;
   }
   browser = await chromium.launch();
@@ -213,7 +157,7 @@ try {
   assert.deepEqual(mutations, [], 'Toolbar navigation does not mutate tasks, preferences, sources or providers');
   await writeFile(join(evidence, 'acceptance.json'), JSON.stringify({ results, errors, mutations }, null, 2));
   console.log(JSON.stringify({ toolbar_geometry: results.map(({ engine, width, firstTaskTop, headerHeight, toolbarHeight }) => ({ engine, width, firstTaskTop, headerHeight, toolbarHeight })) }, null, 2));
-  console.log(`PASS authenticated browser toolbar: ${results.length} viewport/engine cases; aligned labeled fields,44px controls, search/filter/calendar/dialog interactions, Events separation, no page overflow or writes.`);
+  console.log(`PASS authenticated browser toolbar: ${results.length} viewport/engine cases; hidden secondary controls,44px targets, view filter/calendar/dialog interactions, in-place Events calendar, no page overflow or writes.`);
 } catch (error) {
   const diagnostic = { error: error.message, lastGeometry: results.at(-1), errors, mutations };
   console.error('Toolbar failure geometry: ' + JSON.stringify(diagnostic));

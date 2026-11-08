@@ -98,3 +98,26 @@
   .teams-compact-area-options { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 8px 0; }
   .teams-premium #team-work-app #team-operations #tops-setup { width: 100%; }
 }
+
+/* One primary work row. Scope and administration appear on demand. */
+.teams-work-viewbar { display: grid; grid-template-columns: auto minmax(220px, 640px) auto; justify-content: space-between; gap: 16px; align-items: center; margin: 0; padding: 0; border: 0; }
+.teams-universal-search { min-width: 0; width: 100%; justify-self: center; }
+.teams-work-view-tools { flex-wrap: nowrap; }
+.teams-controls-panel { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px; }
+.teams-controls-panel[hidden] { display: none !important; }
+.teams-controls-panel .teams-work-secondary { margin-top: 12px; }
+.teams-controls-panel .teams-work-secondary > summary { display: none; }
+.teams-controls-panel .teams-compact-context { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.teams-controls-panel .teams-compact-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.teams-controls-panel .teams-compact-context > span:not(#tw-workspace-label) { display: none; }
+@media (max-width: 1100px) {
+ .teams-work-viewbar { grid-template-columns: auto minmax(160px, 1fr); }
+ .teams-universal-search { grid-column: 2; grid-row: 1; }
+ .teams-work-view-tools { grid-column: 1 / -1; justify-content: flex-end; }
+}
+@media (max-width: 600px) {
+ .teams-work-viewbar { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+ .teams-work-viewbar .teams-tabs { grid-row: 1; width: 100%; }
+ .teams-universal-search { grid-column: 1; grid-row: 2; }
+ .teams-work-view-tools { grid-column: 1; grid-row: 3; }
+}
