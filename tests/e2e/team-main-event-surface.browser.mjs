@@ -30,7 +30,7 @@ try {
     const errors = [], reads = []; page.on('pageerror', error => errors.push(error.message)); page.on('request', request => { const url = new URL(request.url()); if (url.pathname === '/team/operations/records') reads.push(url); });
     await page.goto(`${origin}/teams?tenant=${fixture.tenant}`); await page.waitForFunction(() => window.TeamPremium?.context?.ready());
     const tabs = page.locator('[data-team-layout]'), target = 'Fictional seasonal makers and home goods weekend market';
-    const openEvent = async () => { await page.locator('#tw-list').getByText(target, { exact: true }).first().click(); const detail = page.locator('#tops-detail'); await detail.getByRole('heading', { name: target }).waitFor(); await detail.getByRole('heading', { name: 'Dated event schedule' }).waitFor(); await detail.locator('#tops-detail-close').click(); };
+    const openEvent = async () => { await page.locator('#tw-list .teams-event-board button.teams-task-card:visible, #tw-list .teams-event-list button.teams-task-card:visible, #tw-list .tops-event-calendar button.tops-calendar-session:visible').filter({ hasText: target }).first().click(); const detail = page.locator('#tops-detail'); await detail.getByRole('heading', { name: target }).waitFor(); await detail.getByRole('heading', { name: 'Dated event schedule' }).waitFor(); await detail.locator('#tops-detail-close').click(); };
     await tabs.filter({ hasText: 'Board' }).click(); await page.locator('#tw-list .teams-event-board').waitFor();
     assert.equal(await page.getByText('Loading events for the selected dates…', { exact: true }).count(), 0, 'Loading placeholder clears after the surface mounts');
     await openEvent();
