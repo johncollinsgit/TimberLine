@@ -21,10 +21,20 @@ for ($i = 0; $i < 35; $i++) {
 }
 App\Models\TeamOperationRecord::create([
     'id' => (string) Illuminate\Support\Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $area->id,
-    'source_key' => hash('sha256', 'main-unconfirmed-due'), 'kind' => 'event', 'title' => 'Fictional Asana due marker',
+    'source_key' => hash('sha256', 'main-unconfirmed-due'), 'kind' => 'event', 'title' => '11.09.26 - 11.10.26 Fictional Asana due marker',
     'status' => 'accepted', 'visibility' => 'area', 'starts_on' => null, 'ends_on' => null,
     'data' => ['source_schedule' => ['due_on' => '2026-11-09']],
 ]);
+// More than one transport batch, including events outside the current month.
+for ($i = 0; $i < 205; $i++) {
+    App\Models\TeamOperationRecord::create([
+        'id' => (string) Illuminate\Support\Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $area->id,
+        'source_key' => hash('sha256', 'all-events-'.$i), 'kind' => 'event', 'title' => sprintf('Future event %03d', $i),
+        'status' => 'accepted', 'visibility' => 'area', 'starts_on' => '2027-01-10', 'ends_on' => '2027-01-10',
+        'data' => ['sessions' => [['id' => (string) Illuminate\Support\Str::uuid(), 'kind' => 'selling', 'date' => '2027-01-10']]],
+    ]);
+}
+$fixture['event_count'] = App\Models\TeamOperationRecord::where('area_id', $area->id)->where('kind', 'event')->count();
 [$other, $otherOwner] = teamWorkspace();
 $other->update(['slug' => 'fictional-no-events']);
 $otherOwner->update(['email' => 'no-events@fixture.invalid', 'email_verified_at' => now(), 'password' => Illuminate\Support\Facades\Hash::make('Fictional-local-only-2026!')]);

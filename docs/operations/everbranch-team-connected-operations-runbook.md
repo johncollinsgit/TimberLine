@@ -64,3 +64,36 @@ The current native app only displays source fields; it does not submit field
 approvals. The native review transport supports the same revision contract for
 clients that implement that interaction later. No production field corrections or
 new Asana write scopes are applied merely by deploying the parser.
+
+## All-event work views (November 8; candidate)
+
+The main Home Events Board/List/Calendar use `event_scope=all` without a date
+window. The server still pages transport internally with encrypted viewer/tenant/
+area/query-bound cursors; clients automatically drain and deduplicate those batches
+before declaring the collection loaded. Missing/repeated cursors or failed source
+rechecks fail the collection rather than presenting an earlier batch as complete.
+There is no Board month selector or user page control. Calendar date movement
+paints the mounted collection without a network request. The periodic refresh,
+visibility/account/workspace invalidation and fresh detail access checks remain.
+The explicit work-area calendar retains its bounded-date interface for older
+clients. Loaded retained records do not establish complete provider history.
+
+Collection access setup and crew lookup are reused within a request only. Compact
+cards omit original notes, candidate parsing and finance detail; opening a card
+retrieves those details through the existing authorized record endpoint. Search
+fuzzy scoring deduplicates repeated note words and memoizes edit distance within
+a single query; it does not store source content or access decisions between
+requests. Verify real signed-in browser timing separately from fictional fixture
+benchmarks. Required acceptance includes >200 events, cross-year Board content,
+chronological List, zero-request Calendar movement, continuation access failure,
+late-response retirement, tenant switching and full original details.
+
+For a collection, Asana task membership is checked against a fresh, paginated
+inventory of each selected project under the current user's OAuth connection.
+Only exact IDs with matching workspace and project membership are admitted.
+Oversized inventories fall back to fresh individual task admission for unresolved
+IDs; inventory limits do not silently exclude them. Provider failure, changed
+connection generation or uncertain pagination invalidates the collection. A
+completed inventory's exact denial hides that record and retains a partial-source
+notice while allowing other authorized events. No inventory becomes a stored
+access grant; record details retain the original fresh task checks.

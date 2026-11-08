@@ -1,3 +1,16 @@
+## Complete event browsing and faster search (November 8; candidate)
+
+The main Events Board and List automatically drain the authorized saved-event
+collection across all dates, without user pagination. Calendar navigation renders
+from that mounted collection; visibility changes, access loss, refresh and the
+existing periodic recheck retire or revalidate it. Detail opening always performs
+fresh admission. Compact collection responses omit notes/financial presentation;
+source completeness remains separate from loading every retained event.
+Event names lead cards, followed by quieter dates. The wider green universal
+search keeps optional filters behind a small Filters control and shows active
+filter counts. Fuzzy note matching reuses distance work only within one query;
+no authorization decision is cached across requests.
+
 ## Unified Teams work views (November 8; candidate)
 
 The main work toolbar exposes List, Board, Calendar, an authorized universal

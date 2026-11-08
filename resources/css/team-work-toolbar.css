@@ -100,7 +100,7 @@
 }
 
 /* One primary work row. Scope and administration appear on demand. */
-.teams-work-viewbar { display: grid; grid-template-columns: auto minmax(220px, 640px) auto; justify-content: space-between; gap: 16px; align-items: center; margin: 0; padding: 0; border: 0; }
+.teams-work-viewbar { display: grid; grid-template-columns: auto minmax(220px, 1fr) auto; justify-content: space-between; gap: 24px; align-items: center; margin: 0; padding: 0; border: 0; }
 .teams-universal-search { min-width: 0; width: 100%; justify-self: center; }
 .teams-work-view-tools { flex-wrap: nowrap; }
 .teams-controls-panel { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px; }

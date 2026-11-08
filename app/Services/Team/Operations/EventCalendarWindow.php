@@ -13,8 +13,12 @@ use Illuminate\Support\Facades\Validator;
 /** Date selection over encrypted calendars. SQL bounds prioritize, never exclude, reviewed outliers. */
 class EventCalendarWindow
 {
-    /** Continuations recheck project access even when their new rows do not use that source. */
-    public function sourcesAvailable(Tenant $tenant, User $user, TeamArea $area): bool
+    /**
+     * Continuations recheck project access even when new rows do not use that source.
+     * Legacy manual windows keep their short scan budget; complete collections
+     * check every selected project, with normal provider timeout/revocation guards.
+     */
+    public function sourcesAvailable(Tenant $tenant, User $user, TeamArea $area, bool $bounded = true): bool
     {
         $providers = app(OperationsProviders::class);
         $deadline = $this->monotonicSeconds() + 8;
@@ -36,13 +40,13 @@ class EventCalendarWindow
             }
             foreach ($projects as $project) {
                 $checks[] = [$connection, $project];
-                if (count($checks) > 8) {
+                if ($bounded && count($checks) > 8) {
                     return false;
                 }
             }
         }
         foreach ($checks as [$connection, $project]) {
-            if ($this->monotonicSeconds() >= $deadline) {
+            if ($bounded && $this->monotonicSeconds() >= $deadline) {
                 return false;
             }
             try {
@@ -54,7 +58,7 @@ class EventCalendarWindow
 
                 return false;
             }
-            if ($this->monotonicSeconds() >= $deadline) {
+            if ($bounded && $this->monotonicSeconds() >= $deadline) {
                 return false;
             }
         }

@@ -46,6 +46,17 @@ test('one search finds canonical tasks comments and saved source events before i
     Http::assertNothingSent();
 });
 
+test('opening a saved event revalidates that record without rerunning other app searches', function (): void {
+    [$tenant, $owner] = teamWorkspace();
+    [, $connection, $event] = universalSearchSource($tenant, $owner, 'Macon market');
+    $this->mock(GlobalSearchCoordinator::class, fn ($mock) => $mock->shouldNotReceive('search'));
+    $this->actingAs($owner)->getJson(universalSearchPath($tenant, ['q' => 'Macon', 'ref' => 'operation:'.$event->id]))
+        ->assertOk()->assertJsonPath('item.target.id', $event->id);
+    $connection->update(['generation' => 2]);
+    $this->getJson(universalSearchPath($tenant, ['q' => 'Macon', 'ref' => 'operation:'.$event->id]))->assertNotFound();
+    Http::assertNothingSent();
+});
+
 test('private work tenant boundaries and revoked access are rechecked for results and selection', function (): void {
     [$tenant, $owner] = teamWorkspace();
     $guest = teamMember($tenant, 'guest');

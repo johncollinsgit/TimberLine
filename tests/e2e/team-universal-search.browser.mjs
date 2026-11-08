@@ -32,6 +32,23 @@ try {
       assert.equal(await input.count(), 1, 'One main search'); assert.equal(await page.locator('#eb-teams-search').count(), 0, 'No duplicate legacy search header');
       assert.ok((await input.boundingBox()).height >= 44); await page.keyboard.press('Control+k'); assert.ok(await input.evaluate(node => node === document.activeElement));
       await input.fill('seasonal'); const result = page.locator('[data-team-universal-search] .eb-search-option').filter({ hasText: 'Fictional seasonal makers' }); await result.waitFor();
+      const filters = page.locator('[data-team-universal-search] .eb-search-filters');
+      const filterLink = page.locator('[data-team-universal-search] .eb-search-filter-toggle');
+      assert.ok(await filters.isHidden(), 'Search filters stay hidden until requested');
+      assert.equal(await filterLink.getAttribute('aria-expanded'), 'false');
+      await filterLink.click(); assert.ok(await filters.isVisible());
+      await page.getByRole('combobox', { name: 'All work', exact: true }).selectOption('active');
+      await result.waitFor(); assert.equal(await filterLink.innerText(), 'Filters (1)', 'Hidden active filters remain discoverable');
+      await page.getByRole('combobox', { name: 'All work', exact: true }).selectOption(''); await result.waitFor();
+      await filterLink.click(); assert.ok(await filters.isHidden());
+      assert.ok(['rgb(214, 229, 215)', 'rgb(225, 237, 223)'].includes(await input.evaluate(node => getComputedStyle(node).backgroundColor)), 'Search uses a solid green background in focused and resting states');
+      if (width === 1440) {
+        // At 1440 the sidebar, tabs and controls can leave less than 560px with
+        // Linux fonts. Verify expansion where there is actually room to grow.
+        await page.setViewportSize({ width: 1920, height: 900 });
+        assert.ok((await input.boundingBox()).width > 800, 'Wide desktop search expands beyond its old 560px maximum');
+        await page.setViewportSize({ width, height: 900 });
+      }
       assert.ok(await page.locator('.teams-search-coverage').isVisible(), 'Saved-source coverage remains visible');
       const panel = await page.locator('[data-team-universal-search] .eb-search-panel').boundingBox(); assert.ok(panel.x >= -1 && panel.x + panel.width <= width + 1, 'Search stays in viewport');
       await page.screenshot({ path: join(evidence, `${name}-${width}-search.png`) });
@@ -51,10 +68,11 @@ try {
           await page.locator('#tops-content:not([aria-busy])').waitFor();
           const month = page.locator('#tw-list input[aria-label="Calendar month"]');
           if (layout === 'calendar') {
-            const changed = page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/team/operations/records' && url.searchParams.get('calendar_from') === '2031-03-01' && response.ok(); });
-            await month.fill('2031-03'); await month.blur(); await changed; await page.locator('#tops-content:not([aria-busy])').waitFor();
+            const reads = navigationReads.length; await month.fill('2031-03'); await month.blur();
+            await page.locator('[data-calendar-date="2031-03-01"]').waitFor();
+            assert.equal(navigationReads.length, reads, 'Changing calendar month paints the loaded collection without a new records request');
           }
-          const before = { url: page.url(), month: await month.inputValue(), reads: navigationReads.length };
+          const before = { url: page.url(), month: layout === 'calendar' ? await month.inputValue() : null, reads: navigationReads.length };
           await input.fill('seasonal'); await result.waitFor();
           const revalidated = page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/team/search/all' && url.searchParams.get('ref') === 'operation:' + fixture.event_id && response.ok(); });
           const opened = page.waitForResponse(response => new URL(response.url()).pathname === '/team/operations/records/' + fixture.event_id && response.ok());
@@ -67,7 +85,7 @@ try {
           assert.equal(navigationReads.length, before.reads, `${layout}: same-area selection only reads the authorized record`);
           assert.ok(await page.locator('#tw-list #team-operations.tops-inline-calendar').isVisible(), `${layout}: inline event surface remains mounted`);
           assert.equal(await page.locator(`[data-team-layout="${layout}"]`).getAttribute('aria-selected'), 'true', `${layout}: selected tab remains unchanged`);
-          assert.equal(await month.inputValue(), before.month, `${layout}: selected date window remains unchanged`);
+          if (layout === 'calendar') assert.equal(await month.inputValue(), before.month, `${layout}: selected date window remains unchanged`);
           assert.ok(await page.locator('.teams-work-toolbar').isVisible(), `${layout}: main toolbar remains visible`);
           assert.ok(await page.locator('#tw-controls-panel').isHidden(), `${layout}: Controls remain collapsed`);
           await page.locator('[data-team-universal-search] .eb-search-panel').waitFor({ state: 'hidden' });

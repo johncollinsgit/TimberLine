@@ -11,6 +11,8 @@ class SearchMatcher
 
     private array $normalized = [];
 
+    private array $distances = [];
+
     public function normalize(string $value): string
     {
         if (isset($this->normalized[$value])) {
@@ -46,6 +48,10 @@ class SearchMatcher
 
     public function distance(string $a, string $b, int $maximum): int
     {
+        $key = $maximum."\0".$a."\0".$b;
+        if (isset($this->distances[$key])) {
+            return $this->distances[$key];
+        }
         $a = mb_str_split($a);
         $b = mb_str_split($b);
         if (abs(count($a) - count($b)) > $maximum) {
@@ -66,7 +72,13 @@ class SearchMatcher
             $previous = $row;
         }
 
-        return $previous[count($b)];
+        $result = $previous[count($b)];
+        // Request-local text work only; this memo never stores an access decision.
+        if (count($this->distances) < 50000) {
+            $this->distances[$key] = $result;
+        }
+
+        return $result;
     }
 
     public function score(array $document, array $query): ?array
@@ -93,7 +105,7 @@ class SearchMatcher
             return [0, 0, 0, 0, $document['id']];
         }
         $titleWords = array_values(array_filter(explode(' ', $title), fn ($v) => $v !== ''));
-        $allWords = array_values(array_filter(explode(' ', $combined), fn ($v) => $v !== ''));
+        $allWords = array_values(array_unique(array_filter(explode(' ', $combined), fn ($v) => $v !== '')));
         $idWords = array_values(array_filter(explode(' ', $id), fn ($v) => $v !== ''));
         $typos = $bodyMatches = 0;
         foreach ($query['terms'] as $i => $term) {

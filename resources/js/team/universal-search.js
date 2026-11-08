@@ -16,7 +16,7 @@ export function installUniversalSearch(root) {
   coverage.className = 'teams-search-coverage'; coverage.hidden = true;
   let query = '';
   const palette = globalThis.EverbranchSearch.palette({
-    host, scope, id: 'teams-universal', available: () => !!bridge()?.available(),
+    host, scope, id: 'teams-universal', collapsibleFilters: true, available: () => !!bridge()?.available(),
     beforeOpen: () => document.body.classList.remove('teams-menu-open'),
     async search({ q, filters, cursor, limit, recent, signal }) {
       query = q;

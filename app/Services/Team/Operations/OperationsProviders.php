@@ -208,6 +208,39 @@ class OperationsProviders
         return $task;
     }
 
+    /** Fresh exact task membership for one collection request, never a stored access grant. */
+    public function visibleAsanaTasks(TeamProviderConnection $connection, string $project): array
+    {
+        abort_unless(in_array($project, $this->selectedProjects($connection), true), 403);
+        $workspace = (string) ($connection->settings['source']['asana_workspace'] ?? '');
+        abort_unless(ctype_digit($workspace), 403);
+        $tasks = [];
+        $offset = null;
+        $seen = [];
+        $deadline = hrtime(true) / 1_000_000_000 + 8;
+        for ($page = 0; $page < 20; $page++) {
+            if (hrtime(true) / 1_000_000_000 >= $deadline) {
+                return ['tasks' => $tasks, 'complete' => false];
+            }
+            $response = $this->asana($connection, 'projects/'.$project.'/tasks', ['limit' => 100, 'offset' => $offset, 'opt_fields' => 'gid,workspace.gid,memberships.project.gid']);
+            abort_unless(is_array($response['data'] ?? null), 502, 'Current source tasks could not be verified.');
+            foreach ($response['data'] as $task) {
+                $id = (string) ($task['gid'] ?? '');
+                if (ctype_digit($id) && (string) ($task['workspace']['gid'] ?? '') === $workspace && collect($task['memberships'] ?? [])->contains(fn ($membership) => (string) ($membership['project']['gid'] ?? '') === $project)) {
+                    $tasks[$id] = true;
+                }
+            }
+            if (($response['next_page'] ?? null) === null) {
+                return ['tasks' => $tasks, 'complete' => true];
+            }
+            $offset = $response['next_page']['offset'] ?? null;
+            abort_unless(is_string($offset) && $offset !== '' && strlen($offset) <= 4096 && ! isset($seen[$offset]), 502, 'Current source task pagination could not be verified.');
+            $seen[$offset] = true;
+        }
+
+        return ['tasks' => $tasks, 'complete' => false];
+    }
+
     public function selectedProjects(TeamProviderConnection $c): array
     {
         $source = $c->settings['source'] ?? [];

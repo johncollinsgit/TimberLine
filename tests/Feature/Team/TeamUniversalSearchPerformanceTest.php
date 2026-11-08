@@ -8,7 +8,7 @@ use Illuminate\Support\Str;
 
 require_once __DIR__.'/../../Support/TeamFixtures.php';
 
-test('canonical search batches one thousand saved events without repeating area connection or budget reads', function (): void {
+test('canonical Macon search handles one thousand long saved notes without repeated policy or fuzzy work', function (): void {
     $this->withoutVite();
     config(['team_work.enabled' => true, 'team_work.premium_enabled' => true, 'team_operations.enabled' => true,
         'team_work.search_enabled' => false, 'team_work.search_index_enabled' => false]);
@@ -18,13 +18,14 @@ test('canonical search batches one thousand saved events without repeating area 
     $connection = TeamProviderConnection::create(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'user_id' => $owner->id, 'area_id' => $area->id, 'provider' => 'asana', 'account_key' => hash('sha256', 'fictional-profile'), 'account_name' => 'Fictional source', 'status' => 'connected', 'generation' => 1, 'credentials' => [], 'settings' => ['source' => ['asana_workspace' => '100', 'asana_project' => '200']], 'sync_state' => []]);
     $budget = (string) Str::uuid();
     $rows = [];
+    $notes = str_repeat('Organizer contact information vendor application insurance certificate parking instructions Thursday setup access window Friday Saturday Sunday hotel reservation booth schedule teardown return pickup travel compensation staff assignment candle stock count map venue address https madeinthesouthshows com savannah detail ', 8);
     for ($i = 0; $i < 1000; $i++) {
-        $rows[] = ['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $area->id, 'connection_id' => $connection->id, 'kind' => 'event', 'title' => 'Fictional copper event '.$i, 'source_key' => hash('sha256', 'event-'.$i), 'status' => 'source', 'visibility' => 'area', 'version' => 1, 'data' => \Illuminate\Support\Facades\Crypt::encryptString(json_encode(['_generation' => 1, 'source_project' => '200', 'source_workspace' => '100', 'original_notes' => 'Copper lantern setup', 'budget_id' => $budget])), 'created_at' => now(), 'updated_at' => now()];
+        $rows[] = ['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $area->id, 'connection_id' => $connection->id, 'kind' => 'event', 'title' => $i === 0 ? 'Made in the South Macon' : 'Fictional holiday market '.$i, 'source_key' => hash('sha256', 'event-'.$i), 'status' => 'source', 'visibility' => 'area', 'version' => 1, 'data' => \Illuminate\Support\Facades\Crypt::encryptString(json_encode(['_generation' => 1, 'source_project' => '200', 'source_workspace' => '100', 'original_notes' => $notes.' Reference event '.$i, 'budget_id' => $budget])), 'created_at' => now(), 'updated_at' => now()];
     }
     foreach (array_chunk($rows, 100) as $chunk) {
         DB::table('team_operation_records')->insert($chunk);
     }
-    $metrics = ['events' => 1000, 'query_count' => 0, 'area_queries' => 0, 'connection_queries' => 0, 'record_queries' => 0];
+    $metrics = ['events' => 1000, 'query' => 'Macon', 'note_words' => str_word_count($notes), 'query_count' => 0, 'area_queries' => 0, 'connection_queries' => 0, 'record_queries' => 0];
     $measuring = true;
     DB::listen(function ($event) use (&$metrics, &$measuring): void {
         if (! $measuring) {
@@ -38,7 +39,7 @@ test('canonical search batches one thousand saved events without repeating area 
         }
     });
     $started = microtime(true);
-    $response = $this->actingAs($owner)->getJson(route('team.search.all', ['tenant' => $tenant->slug, 'q' => 'copper', 'type' => 'event']));
+    $response = $this->actingAs($owner)->getJson(route('team.search.all', ['tenant' => $tenant->slug, 'q' => 'Macon']));
     $elapsed = round((microtime(true) - $started) * 1000, 1);
     $measuring = false;
     $metrics['elapsed_ms'] = $elapsed;
@@ -50,7 +51,7 @@ test('canonical search batches one thousand saved events without repeating area 
         chmod($path, 0600);
     }
     $response->assertOk()->assertJsonPath('coverage.complete', true);
-    expect($response->json('items'))->not->toBeEmpty();
+    expect($response->json('items.0.title'))->toBe('Made in the South Macon');
     expect($metrics['query_count'])->toBeLessThan(250);
     expect($metrics['area_queries'])->toBeLessThan(25)->and($metrics['connection_queries'])->toBeLessThan(10)->and($metrics['record_queries'])->toBeLessThan(10);
     Http::assertNothingSent();

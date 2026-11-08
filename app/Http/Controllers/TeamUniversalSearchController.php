@@ -37,7 +37,8 @@ class TeamUniversalSearchController extends Controller
         }
         $appRows = [];
         // Project/person/state filters describe Teams work, not other applications.
-        if (empty($input['project']) && empty($input['person']) && empty($input['state']) && ! str_starts_with(trim($input['q'] ?? ''), '>')) {
+        $needsApps = empty($input['ref']) || str_starts_with($input['ref'], 'app:');
+        if ($needsApps && empty($input['project']) && empty($input['person']) && empty($input['state']) && ! str_starts_with(trim($input['q'] ?? ''), '>')) {
             $payload = $apps->search(mb_substr($input['q'] ?? '', 0, 120), ['tenant_id' => $tenant->id, 'user' => $request->user(), 'request' => $request, 'surface' => 'teams', 'limit' => 20]);
             foreach ($payload['results'] as $row) {
                 if ($url = $this->destination($request, $tenant, $row['url'] ?? null)) {

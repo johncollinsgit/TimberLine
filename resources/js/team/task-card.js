@@ -23,7 +23,7 @@ export function taskCard({ title, dueOn, dueAt, completed = false, onOpen, dateL
     const detail = document.createElement('span'); detail.textContent = date.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', ...(day ? { timeZone: 'UTC' } : { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }) });
     badge.append(basis, prominent, detail);
   } else badge.textContent = unknownLabel;
-  card.append(badge, heading);
+  card.append(heading, badge);
   if (note) { const context = document.createElement('span'); context.className = 'teams-task-card-context'; context.textContent = note; card.append(context); }
   if (completed) { const status = document.createElement('span'); status.textContent = 'Completed'; card.append(status); }
   card.onclick = onOpen;

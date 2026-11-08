@@ -85,6 +85,13 @@ class OperationsWorkspace
 
     public function records(Tenant $tenant, User $user, TeamArea $area, array $filters): array
     {
+        return $this->access->readCollection($tenant, $user, $area, fn () => $this->readRecords($tenant, $user, $area, $filters), ($filters['event_scope'] ?? null) === 'all');
+    }
+
+    private function readRecords(Tenant $tenant, User $user, TeamArea $area, array $filters): array
+    {
+        $allEvents = ($filters['event_scope'] ?? null) === 'all';
+        abort_if($allEvents && (($filters['kind'] ?? null) !== 'event' || isset($filters['calendar_from']) || isset($filters['calendar_to']) || $area->profile !== 'events'), 422, 'The complete event collection requires an Events area without a date window.');
         $query = TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'area_id' => $area->id])->whereIn('kind', self::KINDS)->where('status', '!=', 'withdrawn')->orderByRaw('CASE WHEN starts_on IS NULL THEN 1 ELSE 0 END')->orderBy('starts_on')->orderBy('title')->orderBy('id');
         if (! $this->access->admin($this->access->actor($tenant, $user))) {
             $query->whereNotIn('kind', ['financial', 'staff'])->where('visibility', '!=', 'admin')->where(fn ($q) => $q->where('visibility', '!=', 'assigned')->orWhere('assigned_user_id', $user->id));
@@ -118,7 +125,8 @@ class OperationsWorkspace
         // checks stay bounded and private source titles remain inside encrypted cursors.
         $items = [];
         $unavailable = false;
-        $sourceAccessIncomplete = $window && ! empty($filters['calendar_recheck_sources']) && ! $calendarQuery->sourcesAvailable($tenant, $user, $area);
+        $sourceAccessIncomplete = ($window || $allEvents) && ! empty($filters['calendar_recheck_sources']) && ! $calendarQuery->sourcesAvailable($tenant, $user, $area, ! $allEvents);
+        $collectionAccessIncomplete = $sourceAccessIncomplete;
         $canEdit = $this->access->mayWrite($tenant, $user, $area->id);
         $admin = $this->access->admin($this->access->actor($tenant, $user));
         $scanned = 0;
@@ -129,7 +137,7 @@ class OperationsWorkspace
         $scanLimited = false;
         $failedConnections = [];
         foreach ($records() as [$record, $phase]) {
-            if ($scanned >= 200 || ($scanned > 0 && microtime(true) - $started > 8)) {
+            if ($scanned >= ($allEvents ? 1000 : 200) || ($scanned > 0 && microtime(true) - $started > 8)) {
                 $more = true;
                 $unavailable = true;
                 $scanLimited = true;
@@ -150,11 +158,11 @@ class OperationsWorkspace
             }
             try {
                 $this->access->record($tenant, $user, $record);
-                if (count($items) === 30) {
+                if (count($items) === ($allEvents ? 200 : 30)) {
                     $more = true;
                     break;
                 }
-                $items[] = $this->view($record, $canEdit, $admin);
+                $items[] = $allEvents ? $record : $this->view($record, $canEdit, $admin);
             } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
                 if (! in_array($e->getStatusCode(), [403, 404, 409, 429, 502, 503])) {
                     throw $e;
@@ -167,12 +175,31 @@ class OperationsWorkspace
             $resume = $record;
             $resumePhase = $phase;
         }
+        if ($allEvents) {
+            $collectionAccessIncomplete = $collectionAccessIncomplete || ! $this->access->collectionSourcesAvailable();
+            $people = $this->collectionPeople($items, $tenant, $area);
+            $items = array_map(fn ($record) => $this->eventCollectionView($record, $canEdit, $people), $items);
+        }
         $page = (int) ($filters['page'] ?? 1);
         $health = app(OperationsHealth::class)->area($area, $user->id);
 
-        return ['items' => $items, 'count' => count($items), 'page' => $page, 'has_more' => $more, 'next_cursor' => $more && $resume ? $cursorService->encode($scope, $resume, $resumePhase) : null, 'complete' => ! $window && ! $unavailable && ! $more && $health['complete'], 'freshness' => $health, 'source_access_incomplete' => $sourceAccessIncomplete,
+        return ['items' => $items, 'count' => count($items), 'page' => $page, 'has_more' => $more, 'next_cursor' => $more && $resume ? $cursorService->encode($scope, $resume, $resumePhase) : null, 'complete' => ! $window && ! $unavailable && ! $more && $health['complete'], 'freshness' => $health, 'source_access_incomplete' => $sourceAccessIncomplete, 'collection_access_incomplete' => $collectionAccessIncomplete,
+            'event_collection' => $allEvents ? ['local_scan_complete' => ! $more, 'scan_limited' => $scanLimited, 'source_coverage_complete' => $health['complete'] && ! $sourceAccessIncomplete && ! $collectionAccessIncomplete] : null,
             'calendar_window' => $window ? [...$window, 'local_scan_complete' => ! $more, 'scan_limited' => $scanLimited, 'unknown_dates_remain_unknown' => true] : null,
             'notice' => $scanLimited ? 'Calendar checking is partial. Continue to check more retained records for dates outside their original source bounds.' : ($unavailable ? 'Some source records could not be verified and are hidden. Results are partial; continue checking or refresh the source.' : $health['notice'])];
+    }
+
+    /** Collection cards need schedules, not original notes, candidate parsing or finance detail. */
+    private function eventCollectionView(TeamOperationRecord $record, bool $canEdit, array $people): array
+    {
+        $data = $record->data ?? [];
+        $schedule = app(EventSchedule::class)->calendar($data, $record->starts_on?->toDateString(), $record->ends_on?->toDateString());
+
+        return ['id' => $record->id, 'area_id' => $record->area_id, 'kind' => $record->kind, 'title' => $record->title, 'status' => $record->status, 'version' => $record->version,
+            'assigned_user_id' => $record->assigned_user_id, 'starts_on' => $record->starts_on?->toDateString(), 'ends_on' => $record->ends_on?->toDateString(),
+            'data' => ['event_schedule' => $schedule, 'source_schedule' => $data['source_schedule'] ?? $data['event_schedule']['source_schedule'] ?? null],
+            'calendar_people' => $this->calendarPeople($record, $people), 'source' => $record->connection_id ? ['connection_id' => $record->connection_id, 'key' => $record->source_key] : null,
+            'capabilities' => ['edit' => $canEdit && ! $record->connection_id, 'schedule' => $canEdit], 'updated_at' => $record->updated_at?->toIso8601String()];
     }
 
     public function view(TeamOperationRecord $record, bool $canEdit = true, bool $canFinance = false, bool $includePresentationDetails = true): array
@@ -232,19 +259,44 @@ class OperationsWorkspace
         return ['id' => $record->id, 'area_id' => $record->area_id, 'kind' => $record->kind, 'title' => $record->title, 'status' => $record->status, 'version' => $record->version, 'assigned_user_id' => $record->assigned_user_id, 'starts_on' => $record->starts_on?->toDateString(), 'ends_on' => $record->ends_on?->toDateString(), 'data' => $data, 'calendar_people' => $includePresentationDetails && $record->kind === 'event' ? $this->calendarPeople($record) : [], 'source' => $record->connection_id ? ['connection_id' => $record->connection_id, 'key' => $record->source_key] : null, 'capabilities' => ['edit' => $canEdit && in_array($record->kind, self::KINDS, true) && ! $record->connection_id && ! in_array($record->kind, ['financial', 'staff', 'document']), 'schedule' => $canEdit && $record->kind === 'event'], 'updated_at' => $record->updated_at?->toIso8601String()];
     }
 
-    private function calendarPeople(TeamOperationRecord $record): array
+    private function collectionPeople(array $records, Tenant $tenant, TeamArea $area): array
     {
-        $data = $record->data ?? [];
-        $ids = array_filter([$record->assigned_user_id, ...(is_array($data['staff_ids'] ?? null) ? $data['staff_ids'] : [])], fn ($id) => is_scalar($id) && ctype_digit((string) $id));
-        $people = User::query()->select('users.id', 'users.name')->join('tenant_user', 'tenant_user.user_id', '=', 'users.id')
-            ->where('tenant_user.tenant_id', $record->tenant_id)->where('tenant_user.membership_active', true)
+        $ids = [];
+        foreach ($records as $record) {
+            $ids = [...$ids, ...$this->calendarPersonIds($record)];
+        }
+        if (! $ids) {
+            return [];
+        }
+
+        return $this->calendarPeopleQuery($tenant->id, $area->id, array_unique($ids))->get()->keyBy('id')->map(fn ($user) => ['id' => 'native:'.$user->id, 'name' => $user->name, 'provider' => 'teams'])->all();
+    }
+
+    private function calendarPersonIds(TeamOperationRecord $record): array
+    {
+        return array_filter([$record->assigned_user_id, ...(is_array($record->data['staff_ids'] ?? null) ? $record->data['staff_ids'] : [])], fn ($id) => is_scalar($id) && ctype_digit((string) $id));
+    }
+
+    private function calendarPeopleQuery(int $tenantId, string $areaId, array $ids)
+    {
+        return User::query()->select('users.id', 'users.name')->join('tenant_user', 'tenant_user.user_id', '=', 'users.id')
+            ->where('tenant_user.tenant_id', $tenantId)->where('tenant_user.membership_active', true)
             ->whereIn('tenant_user.role', ['owner', 'tenant_owner', 'admin', 'member', 'manager'])->whereIn('users.id', $ids)
             ->where('users.is_active', true)->whereNotNull('users.email_verified_at')
-            ->where(function ($q) use ($record) {
-                $q->whereIn('tenant_user.role', ['owner', 'tenant_owner', 'admin'])->orWhereExists(function ($member) use ($record) {
-                    $member->selectRaw('1')->from('team_area_members')->whereColumn('team_area_members.user_id', 'users.id')->where('team_area_members.tenant_id', $record->tenant_id)->where('team_area_members.area_id', $record->area_id);
+            ->where(function ($q) use ($tenantId, $areaId) {
+                $q->whereIn('tenant_user.role', ['owner', 'tenant_owner', 'admin'])->orWhereExists(function ($member) use ($tenantId, $areaId) {
+                    $member->selectRaw('1')->from('team_area_members')->whereColumn('team_area_members.user_id', 'users.id')->where('team_area_members.tenant_id', $tenantId)->where('team_area_members.area_id', $areaId);
                 });
-            })->distinct()->limit(100)->get()->map(fn ($user) => ['id' => 'native:'.$user->id, 'name' => $user->name, 'provider' => 'teams'])->all();
+            })->distinct();
+    }
+
+    private function calendarPeople(TeamOperationRecord $record, ?array $collectionPeople = null): array
+    {
+        $data = $record->data ?? [];
+        $ids = $this->calendarPersonIds($record);
+        $people = $collectionPeople !== null
+            ? array_values(array_slice(array_intersect_key($collectionPeople, array_fill_keys($ids, true)), 0, 100))
+            : ($ids ? $this->calendarPeopleQuery($record->tenant_id, $record->area_id, $ids)->limit(100)->get()->map(fn ($user) => ['id' => 'native:'.$user->id, 'name' => $user->name, 'provider' => 'teams'])->all() : []);
         if ($record->connection_id && ctype_digit((string) ($data['source_workspace'] ?? '')) && ctype_digit((string) ($data['source_assignee_id'] ?? ''))) {
             $people[] = ['id' => 'asana:'.$data['source_workspace'].':'.$data['source_assignee_id'], 'name' => $data['source_assignee_name'] ?? null, 'provider' => 'asana'];
         }
