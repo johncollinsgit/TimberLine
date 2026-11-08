@@ -116,7 +116,7 @@ export function installOperations(nativeRoot) {
       if (ticket !== inlineEpoch || !host.isConnected || identityLost) return false;
       const target = areas.find(item => item.id === options.areaId && item.profile === 'events') || areas.find(item => item.profile === 'events');
       if (!target) return false;
-      root.classList.add('tops-inline-calendar'); host.append(root); $('search').value = String(options.query || '').trim();
+      root.classList.add('tops-inline-calendar'); host.replaceChildren(root); $('search').value = String(options.query || '').trim();
       inlineOptions = { layout: ['list', 'board', 'calendar'].includes(options.layout) ? options.layout : 'calendar', renderCard: options.renderCard };
       if (inlineOptions.layout !== 'calendar') document.getElementById('tops-inline-options')?.remove();
       await openArea(target, 'calendar', true);
