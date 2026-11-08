@@ -21,6 +21,8 @@ verification; protected CI remains the authoritative full regression run.
   preserves the original bootstrap, environment and source settings. Together
   the partitions execute the unchanged default suite; new files are included
   automatically and unsupported discovery definitions fail closed.
+  Each worker retains Node 22/npm dependencies, Ghostscript and the pinned
+  tracer because PHP's real label-conversion tests invoke those tools.
 - Three browser groups: Teams, commerce, and other workspaces. Chromium and
   WebKit coverage, fixture-specific PHP checks, TypeScript checks, and Shopify
   Function validation remain in their original commands.

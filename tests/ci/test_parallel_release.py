@@ -70,6 +70,9 @@ class ParallelReleaseTest(unittest.TestCase):
         command = next(step['run'] for step in php['steps'] if step.get('name') == 'Run PHP test shard in parallel')
         self.assertEqual(command, 'python3 scripts/ci/php-test-shards.py --index=${{ matrix.shard }} --total=6\n'
                          'php -d memory_limit=1G ./vendor/bin/pest --parallel --compact --configuration=.phpunit-ci.xml')
+        node = next(step for step in php['steps'] if step.get('uses', '').startswith('actions/setup-node'))
+        self.assertEqual(node['with']['node-version'], '22')
+        self.assertIn('npm ci', [step.get('run') for step in php['steps']])
         for job in ['php', 'browser', 'mysql']:
             self.assertIs(self.jobs[job]['strategy']['fail-fast'], False)
             self.assertNotIn('continue-on-error', self.jobs[job])
