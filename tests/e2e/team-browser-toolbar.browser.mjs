@@ -129,6 +129,7 @@ try {
       await page.getByRole('dialog', { name: 'Save view' }).waitFor();
       await page.locator('#tw-view-close').click();
     }
+    if (!await page.locator('#tw-controls-panel').isVisible()) await page.locator('#tw-filter-toggle').click();
     await page.locator('#tw-project-filter').selectOption(fixture.project_id);
     await page.locator('#tw-page-title').filter({ hasText: 'Fictional seasonal market preparation' }).waitFor();
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Long selected project stays contained');
