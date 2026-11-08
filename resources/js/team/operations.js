@@ -17,7 +17,9 @@ export function installOperations(nativeRoot) {
   let areas = [], members = [], area, view = 'overview', page = 1, serial = 0, returnFocus, draft, busy = false, identityLost = false, timer, searchTimer, editorSequence = 0, pageCursors = [null], statisticsYear = new Date().getFullYear();
   const drafts = new Map();
   const emailDrafts = new Map();
-  let calendarPages = null;
+  let calendarPages = null, areasReady, inlineEpoch = 0, inlineOptions = null, detailSequence = 0;
+  const originalPosition = document.createComment('Teams work area position');
+  root.before(originalPosition);
   const eventTasks = installEventTasks({ api, el, button, field, dialog, section, note, area: () => area, content: $('content'), navigate });
   async function api(path, options = {}) {
     if (identityLost && !options.verify) throw new Error('Verify the original account before continuing. Area drafts are retained in this page.');
@@ -55,12 +57,12 @@ export function installOperations(nativeRoot) {
     if (options) { for (const option of options) { const o = el('option', typeof option === 'string' ? label(option) : option.name); o.value = typeof option === 'string' ? option : option.id; input.append(o); } input.value = value ?? ''; }
     wrap.append(input); form.append(wrap); return input;
   }
-  function dialog(title) { if (!$('detail').open) returnFocus = document.activeElement; $('detail-title').textContent = title; const body = el('div'); $('detail-body').replaceChildren(body); if (!$('detail').open) $('detail').showModal(); return body; }
+  function dialog(title) { detailSequence++; if (!$('detail').open) returnFocus = document.activeElement; $('detail-title').textContent = title; const body = el('div'); $('detail-body').replaceChildren(body); if (!$('detail').open) $('detail').showModal(); return body; }
   function closeDetail() { $('detail').close(); returnFocus?.focus(); }
   $('detail-close').onclick = closeDetail;
-  $('detail').addEventListener('close', () => { if (returnFocus?.isConnected) returnFocus.focus(); else $('heading').focus(); });
+  $('detail').addEventListener('close', () => { if (!$('detail').open) detailSequence++; if (returnFocus?.isConnected) returnFocus.focus(); else $('heading').focus(); });
   function controls() {
-    const url = new URL(location.href); url.searchParams.set('area', area.id); url.searchParams.set('area_view', view); history.replaceState(null, '', url);
+    if (!root.classList.contains('tops-inline-calendar')) { const url = new URL(location.href); url.searchParams.set('area', area.id); url.searchParams.set('area_view', view); history.replaceState(null, '', url); }
     $('heading').textContent = area.name;
     $('tabs').replaceChildren(); $('groups').replaceChildren();
     const groups = Object.entries(area.groups || {}), currentGroup = groups.find(([, tabs]) => tabs.includes(view));
@@ -74,15 +76,17 @@ export function installOperations(nativeRoot) {
     $('prev').hidden = $('next').hidden = true;
     $('search').closest('label').hidden = ['my_tasks', 'connections', 'statistics', 'communications', 'orders', 'prospects', 'followups', 'templates'].includes(view);
   }
-  async function openArea(item, initialView = 'overview') {
+  async function openArea(item, initialView = 'overview', inline = false) {
+    if (!inline && root.classList.contains('tops-inline-calendar')) restoreInline();
     if (window.TeamPremium?.context && !window.TeamPremium.context.ready()) return;
     if (area) keepDraft();
     eventTasks.reset();
     area = item; view = item.views.includes(initialView) ? initialView : 'overview'; page = 1; serial++;
-    root.classList.add('tops-active'); $('panel').hidden = false;
+    root.classList.toggle('tops-active', !inline); root.classList.toggle('tops-inline-calendar', inline); $('panel').hidden = false;
     document.querySelectorAll('#tops-areas button').forEach(b => b.setAttribute('aria-current', b.dataset.area === area.id ? 'page' : 'false'));
-    controls(); $('heading').focus(); await load();
-    const memberArea = item.id; const result = await api('/areas/' + memberArea + '/members'); if (area.id === memberArea) members = result.items;
+    controls(); $('heading').focus(); const loading = load(), requestSerial = serial; await loading;
+    if (requestSerial !== serial || area?.id !== item.id || $('panel').hidden || identityLost) return;
+    const memberArea = item.id; const result = await api('/areas/' + memberArea + '/members', { query: { area: memberArea } }); if (requestSerial === serial && area?.id === memberArea && !identityLost) members = result.items;
   }
   function renderAreas() {
     $('areas').replaceChildren(); for (const item of areas) { const b = button(item.name, () => openArea(item)); b.dataset.area = item.id; $('areas').append(b); }
@@ -96,12 +100,31 @@ export function installOperations(nativeRoot) {
     entry.hidden = identityLost || !target || context?.layout !== 'calendar';
     entry.onclick = () => { if (!identityLost && window.TeamPremium?.context?.ready()) { $('search').value = ''; openArea(target, 'calendar').catch(report); } };
   }
-  function native() { keepDraft(); serial++; $('panel').hidden = true; root.classList.remove('tops-active'); const url = new URL(location.href); url.searchParams.delete('area'); url.searchParams.delete('area_view'); history.replaceState(null, '', url); }
+  function restoreInline() {
+    inlineEpoch++; serial++; calendarPages = null; inlineOptions = null; document.getElementById('tops-inline-options')?.remove(); $('content').replaceChildren();
+    if ($('detail').open) $('detail').close();
+    root.classList.remove('tops-inline-calendar'); originalPosition.after(root);
+  }
+  function native() { keepDraft(); if (root.classList.contains('tops-inline-calendar')) restoreInline(); serial++; $('panel').hidden = true; root.classList.remove('tops-active'); const url = new URL(location.href); url.searchParams.delete('area'); url.searchParams.delete('area_view'); history.replaceState(null, '', url); }
   $('menu').onclick = () => document.querySelector('[data-teams-menu]')?.click();
   $('native').onclick = () => { native(); document.querySelector('#tw-search')?.focus(); };
   document.querySelector('.teams-sidebar')?.addEventListener('click', event => { if (event.target.closest('[data-team-mode],#teams-create,#teams-project-list button,#teams-favorite-list button')) native(); });
   let personalTicket = 0;
   window.TeamOperations = {
+    mountEventSurface: async (host, options = {}) => {
+      const ticket = ++inlineEpoch;
+      await areasReady;
+      if (ticket !== inlineEpoch || !host.isConnected || identityLost) return false;
+      const target = areas.find(item => item.id === options.areaId && item.profile === 'events') || areas.find(item => item.profile === 'events');
+      if (!target) return false;
+      root.classList.add('tops-inline-calendar'); host.replaceChildren(root); $('search').value = String(options.query || '').trim();
+      inlineOptions = { layout: ['list', 'board', 'calendar'].includes(options.layout) ? options.layout : 'calendar', renderCard: options.renderCard };
+      if (inlineOptions.layout !== 'calendar') document.getElementById('tops-inline-options')?.remove();
+      await openArea(target, 'calendar', true);
+      return ticket === inlineEpoch && root.classList.contains('tops-inline-calendar');
+    },
+    mountEventCalendar: (...args) => window.TeamOperations.mountEventSurface(...args),
+    unmountEventCalendar: () => { if (!root.classList.contains('tops-inline-calendar')) { inlineEpoch++; return; } restoreInline(); $('panel').hidden = true; },
     settingsAreas: () => identityLost ? [] : areas.map(item => ({ id: item.id, name: item.name })),
     openSettingsArea: async (areaId, settingsView) => {
       if (identityLost) throw new Error('Verify the original account before opening area settings.');
@@ -185,7 +208,24 @@ export function installOperations(nativeRoot) {
         $('prev').hidden = $('next').hidden = true;
         $('scope').textContent = items.length + ' loaded event records · ' + calendarPages.pages + ' checked pages';
         renderCalendar(items, result);
-        const grid = $('content').querySelector('.tops-event-calendar-scroll');
+        let grid = $('content').querySelector('.tops-event-calendar-scroll');
+        if (root.classList.contains('tops-inline-calendar') && inlineOptions?.layout !== 'calendar' && typeof inlineOptions?.renderCard === 'function') {
+          const container = el('div', '', inlineOptions.layout === 'board' ? 'teams-event-board' : 'teams-event-list');
+          const window = result.calendar_window || {}, validDay = day => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day);
+          const order = item => {
+            const schedule = item.data?.event_schedule || {}, evidence = schedule.session_evidence || [];
+            const days = (schedule.sessions || []).filter(session => validDay(session.date) && session.date >= window.from && session.date <= window.to && evidence.some(row => row.session_id === session.id && ['source_verified_at_review', 'staff_attested', 'staff_attested_external'].includes(row.status))).map(session => session.date).sort();
+            if (days.length) return { date: days[0], basis: 'reviewed_session' };
+            const start = item.starts_on, due = item.data?.source_schedule?.due_on || schedule.source_schedule?.due_on;
+            if (validDay(start)) return { date: start, basis: item.source && start === due ? 'source_due' : 'recorded_start' };
+            return validDay(due) ? { date: due, basis: 'source_due' } : { date: null, basis: 'unknown' };
+          };
+          const ordered = items.map(item => ({ item, sort: order(item) })).sort((a, b) => String(a.sort.date || '9999-99-99').localeCompare(String(b.sort.date || '9999-99-99')) || a.item.title.localeCompare(b.item.title) || String(a.item.id).localeCompare(String(b.item.id)));
+          for (const { item, sort } of ordered) container.append(inlineOptions.renderCard({ ...item, calendar_order: sort }, () => details(item)));
+          if (!items.length) container.append(el('p', 'No matching events in this loaded date window.', 'tops-muted'));
+          grid.replaceWith(container); grid = container;
+          $('content').querySelectorAll(':scope > .tops-calendar-records').forEach(section => section.remove());
+        }
         if (result.has_more && items.length < 90) grid.before(button('Load more events', () => { page++; return load(true); }, 'tops-calendar-more'));
         else if (result.has_more) { grid.before(el('p', items.length + ' events loaded. Continue replaces this batch; dates outside the loaded batch remain unchecked.', 'tops-muted'), button('Continue with next events', () => { calendarPages = null; page++; return load(true); }, 'tops-calendar-more')); }
         if (result.source_access_incomplete) grid.before(el('p', 'Earlier loaded pages were cleared because a current source access check was unavailable.', 'tops-muted'));
@@ -277,8 +317,13 @@ export function installOperations(nativeRoot) {
     }), label(item.status), [item.city, item.state, item.due_at ? date(item.due_at) : '', item.amount !== undefined ? '$' + item.amount : ''].filter(Boolean).join(' · ')]));
   }
   async function details(item) {
-    const captured = area.id, body = dialog(item.title); note('Checking current access…', body);
-    const record = await api('/operations/records/' + item.id); if (captured !== area.id || !$('detail').open) return;
+    const captured = area.id, body = dialog(item.title), sequence = detailSequence; note('Checking current access…', body);
+    const current = () => sequence === detailSequence && captured === area?.id && !identityLost && $('detail').open && body.isConnected && $('detail-body').firstElementChild === body;
+    let record;
+    try { record = await api('/operations/records/' + item.id); } catch (error) { if (current()) throw error; return; }
+    if (!current()) return;
+    if (String(record.id) !== String(item.id)) throw new Error('The selected record changed. Close details and open it again.');
+    $('detail-title').textContent = record.title;
     body.replaceChildren(); note(label(record.status) + ' · ' + (record.source ? 'Connected source · read only' : 'Teams draft') + ' · Version ' + record.version, body);
     if (record.data.source_url) { const a = el('a', 'Open in Asana'); a.href = record.data.source_url; a.target = '_blank'; a.rel = 'noopener noreferrer'; if (a.href.startsWith('https://app.asana.com/')) body.append(a); }
     const data = Object.entries(record.data).filter(([key, value]) => !key.startsWith('_') && !['source_url', 'fields', 'original_notes', 'source_values', 'costs', 'schedule_complete', 'calendar_color'].includes(key) && value !== null && typeof value !== 'object');
@@ -288,7 +333,7 @@ export function installOperations(nativeRoot) {
     if (record.assignments) { const assignments = section('Recorded assignments and compensation', body); note(record.identity_notice, assignments); table(['Event', 'Date', 'Hours', 'Payroll', 'Pay week', 'Sheet source'], record.assignments.map(a => [a.title, date(a.starts_on), a.hours ?? 'Unknown', money(a.payroll_cents), a.pay_week ?? '—', a.source_tab + ' · row ' + a.source_row]), assignments); }
     if (record.data.fields?.length) { const fields = section('Structured note candidates', body); note('Review each candidate against its source passage. Approval adds a Teams field; the original notes remain unchanged.', fields); const choices = [];
       table(['Approve', 'Field', 'Candidate', 'Source passage', 'Review'], record.data.fields.map((f, index) => { const input = el('input'); input.type = 'checkbox'; input.setAttribute('aria-label', 'Approve ' + label(f.field) + ': ' + f.value); input.disabled = !area.capabilities?.write || f.review_state === 'approved'; choices.push({ index, input }); return [input, label(f.field), f.value, f.passage, label(f.review_state)]; }), fields);
-      if (area.capabilities?.write) fields.append(button('Approve selected fields', async () => { const selected = choices.filter(c => c.input.checked).map(c => c.index); if (!selected.length) throw new Error('Choose the fields you have reviewed.'); await api('/operations/records/' + record.id + '/review', { method: 'POST', body: { request_id: crypto.randomUUID(), expected_version: record.version, reviewed: true, action: 'fields', field_indices: selected, ...(record.data.fields_revision ? { expected_fields_revision: record.data.fields_revision } : {}) } }); await details(record); }));
+      if (area.capabilities?.write) fields.append(button('Approve selected fields', async () => { const selected = choices.filter(c => c.input.checked).map(c => c.index); if (!selected.length) throw new Error('Choose the fields you have reviewed.'); await api('/operations/records/' + record.id + '/review', { method: 'POST', body: { request_id: crypto.randomUUID(), expected_version: record.version, reviewed: true, action: 'fields', field_indices: selected, ...(record.data.fields_revision ? { expected_fields_revision: record.data.fields_revision } : {}) } }); if (current()) await details(record); }));
     }
     if (record.capabilities.edit) body.append(button('Edit ' + label(record.kind).toLowerCase(), () => { closeDetail(); edit(record); }, 'primary'));
     if (record.kind === 'event') body.append(button('Weather at this event', async () => { const result = await api('/events/' + record.id + '/weather'); const weather = section('Weather', body); note(result.notice || result.status || result.source || 'Weather result', weather); if (result.daily) table(['Date', 'High', 'Low', 'Precipitation'], result.daily.time.map((d, i) => [date(d), result.daily.temperature_2m_max?.[i], result.daily.temperature_2m_min?.[i], result.daily.precipitation_sum?.[i]]), weather); }));
@@ -507,5 +552,5 @@ export function installOperations(nativeRoot) {
     load();
   }, 60000); } });
   document.dispatchEvent(new Event('visibilitychange'));
-  api('/areas').then(async data => { areas = data.items; renderAreas(); const url = new URL(location.href), eventApp = url.searchParams.get('app') === 'events', initial = areas.find(a => a.id === url.searchParams.get('area')) || (eventApp ? areas.find(a => a.profile === 'events') : null); if (initial) await openArea(initial, url.searchParams.get('area_view') || (eventApp ? 'my_tasks' : 'overview')); }).catch(report);
+  areasReady = api('/areas').then(async data => { areas = data.items; renderAreas(); const url = new URL(location.href), eventApp = url.searchParams.get('app') === 'events', initial = areas.find(a => a.id === url.searchParams.get('area')) || (eventApp ? areas.find(a => a.profile === 'events') : null); if (initial) await openArea(initial, url.searchParams.get('area_view') || (eventApp ? 'my_tasks' : 'overview')); }).catch(report);
 }

@@ -70,6 +70,18 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
   if (coverage.calendar_window) host.append(node('p', when(coverage.calendar_window.from) + ' → ' + when(coverage.calendar_window.to) + (coverage.calendar_window.scan_limited ? ' · Load more events to continue checking retained dates.' : ' · Unspecified dates remain unknown.'), 'tops-calendar-scope'));
   const guide = node('details', '', 'tops-calendar-guide'); guide.append(node('summary', 'Calendar scope & source notes'), node('p', 'Explicit sessions show reviewed activity; gap days stay empty. Setup is lighter. Dashed task dates and range-start markers identify unconfirmed dates; they do not establish event activity. Other pages and unavailable source feeds are not included.'), node('p', 'Crew colors identify recorded event assignments, not shifts or attendance at each session. Event times use the displayed local timezone.')); host.append(guide);
   const hint = node('p', 'Swipe or scroll across the dates →', 'tops-calendar-scroll-hint'); host.append(hint);
+  if (host.closest('#team-operations')?.classList.contains('tops-inline-calendar')) {
+    const compact = node('nav', '', 'tops-inline-calendar-nav'); compact.setAttribute('aria-label', 'Event calendar navigation');
+    const previousButton = button('‹', () => shift(-1)); previousButton.setAttribute('aria-label', 'Previous period');
+    const todayButton = button('Today', () => { anchor = localToday; month.value = anchor.slice(0, 7); day.value = anchor; changeWindow(); });
+    const nextButton = button('›', () => shift(1)); nextButton.setAttribute('aria-label', 'Next period');
+    document.getElementById('tops-inline-options')?.remove();
+    const settings = node('section', '', 'tops-inline-calendar-options'); settings.id = 'tops-inline-options'; settings.append(node('h3', 'Event calendar'));
+    dateField.remove(); periods.remove(); compact.append(previousButton, todayButton, nextButton, month, day);
+    settings.append(controls, ...host.querySelectorAll(':scope > .tops-calendar-scope'), guide);
+    document.getElementById('tw-controls-panel')?.append(settings);
+    host.prepend(compact);
+  }
   const scroll = node('div', '', 'tops-event-calendar-scroll'), grid = node('div', '', 'tops-calendar tops-event-calendar'); scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Dated event calendar. Scroll horizontally for more dates.'); scroll.append(grid); host.append(scroll);
   function shift(direction) {
     const value = new Date(anchor + 'T12:00:00Z');
@@ -81,6 +93,9 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
     const crew = people(item), chip = button('', () => open(item)); chip.className = 'tops-calendar-session is-' + session.kind;
     const color = colorMode === 'person' && crew.length ? stableColor(tenant + '|' + (crew[0].provider || '') + '|' + crew[0].id) : eventColor(item, tenant);
     chip.style.setProperty('--event-color', color); chip.dataset.calendarEvent = item.id; chip.dataset.calendarSession = session.id || ''; chip.dataset.calendarKind = session.kind;
+    const description = [item.title, title(session.kind), hours(session), calendar(item).timezone || 'Timezone unknown', session.label, !calendar(item).schedule_complete ? 'Partial schedule' : '', calendar(item).provenance?.source_changed_since_review ? 'Source changed; review needed' : '', ...(colorMode === 'person' ? (crew.length ? crew.map(personName) : ['No verified crew identity']) : [])].filter(Boolean).join(' · ');
+    chip.setAttribute('aria-label', description); chip.title = description;
+    if (calendar(item).provenance?.source_changed_since_review) chip.dataset.calendarNeedsReview = 'true';
     const timezone = calendar(item).timezone, zone = node('small', timezone ? timezone.split('/').at(-1).replaceAll('_', ' ') + ' · local' : 'Timezone unknown');
     if (timezone) { zone.title = timezone; zone.setAttribute('aria-label', 'Local timezone: ' + timezone); }
     chip.append(node('span', title(session.kind), 'tops-calendar-phase'), node('strong', item.title), node('span', hours(session), 'tops-calendar-hours'), zone);
@@ -118,11 +133,13 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
         for (const session of sessions(item)) if (validDate(session.date) && session.date === key) cell.append(card(item, session));
         if (validDate(dueOn(item)) && dueOn(item) === key && !sessions(item).some(session => session.date === key)) {
           const marker = button('', () => open(item)); marker.className = 'tops-calendar-session is-source-due'; marker.dataset.calendarEvent = item.id; marker.dataset.calendarKind = 'source_due';
+          marker.setAttribute('aria-label', item.title + ' · Asana due date · Task date, not a confirmed event day'); marker.title = marker.getAttribute('aria-label');
           marker.append(node('span', 'Asana due date', 'tops-calendar-phase'), node('strong', item.title), node('span', 'Task date · not a confirmed event day', 'tops-calendar-status')); cell.append(marker);
         }
         const [start, end] = legacyBounds(item);
         if (dueOn(item) !== start && !sessions(item).some(session => validDate(session.date)) && validDate(start) && start === key) {
           const marker = button('', () => open(item)); marker.className = 'tops-calendar-session is-range-anchor'; marker.dataset.calendarEvent = item.id; marker.dataset.calendarKind = 'range_anchor';
+          marker.setAttribute('aria-label', item.title + ' · Unconfirmed range · ' + when(start) + (validDate(end) && end !== start ? ' – ' + when(end) : '')); marker.title = marker.getAttribute('aria-label');
           marker.append(node('span', 'Unconfirmed range', 'tops-calendar-phase'), node('strong', item.title), node('span', when(start) + (validDate(end) && end !== start ? ' – ' + when(end) : ''), 'tops-calendar-status')); cell.append(marker);
         }
       }

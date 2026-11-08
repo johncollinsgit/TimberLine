@@ -21,15 +21,16 @@ test('both Teams surfaces contain settings without a platform profile navigation
     }
 });
 
-test('contained settings retains the current workspace search on both Teams surfaces', function () {
+test('contained settings retains the unified workspace search on both Teams surfaces', function () {
     config(['team_work.search_enabled' => true]);
     [$tenant, $owner] = teamWorkspace();
 
     foreach (['team.app', 'team.index'] as $route) {
         $this->actingAs($owner)->get(route($route, ['tenant' => $tenant->slug]))->assertOk()
             ->assertSee('id="tw-settings-dialog"', false)
-            ->assertSee('aria-label="Workspace search"', false)
-            ->assertSee(route('team.search', ['tenant' => $tenant->slug]), false);
+            ->assertSee('data-team-universal-search', false)
+            ->assertSee(route('team.search.all', ['tenant' => $tenant->slug]), false)
+            ->assertDontSee('aria-label="Workspace search"', false);
     }
 });
 

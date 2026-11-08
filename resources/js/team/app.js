@@ -5,6 +5,7 @@ import { installOperations } from './operations.js';
 import { installSettings } from './settings.js';
 import { installTeamsApp } from './install-app.js';
 import { installTeamsAssistant } from './assistant.js';
+import { installUniversalSearch } from './universal-search.js';
 import '../../css/team-assistant.css';
 
 void installTeamsAssistant(document.querySelector('[data-team-standalone]'));
@@ -16,6 +17,7 @@ if (root) {
   installOperations(root);
   installSettings(root);
   installTeamsApp();
+  installUniversalSearch(root);
   import(/* @vite-ignore */ root.dataset.coreUrl).catch(() => {
     document.getElementById('tw-status').textContent = 'Teams could not start. Refresh this page to try again.';
   });

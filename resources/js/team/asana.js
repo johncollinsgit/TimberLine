@@ -1,4 +1,5 @@
 import { renderPlanning } from './planning.js';
+import { taskCard } from './task-card.js';
 /** Live read-only Asana UI. No source content or credentials enter browser storage. */
 export function installAsana(root, api) {
   const { node } = api, $ = id => document.getElementById('tw-' + id);
@@ -119,7 +120,7 @@ export function installAsana(root, api) {
     if ($('priority-filter').value) { work.append(node('p', 'Asana priority is represented by custom fields and cannot use the native priority filter.', 'teams-source-error')); tasks = []; }
     if (onlyMine) tasks = tasks.filter(task => !task.completed || $('mode').value !== 'home');
     if (ctx.layout === 'calendar') tasks = tasks.filter(task => (task.due_on || task.due_at?.slice(0, 10) || '').slice(0, 7) === $('month').value);
-    const sort = $('sort').value; if (['due', 'start', 'title'].includes(sort)) tasks.sort((a, b) => String(sort === 'title' ? a.name : a[sort + '_on'] || a[sort + '_at'] || '9999').localeCompare(String(sort === 'title' ? b.name : b[sort + '_on'] || b[sort + '_at'] || '9999')) || a.gid.localeCompare(b.gid));
+    const sort = $('sort').value || 'due'; if (['due', 'start', 'title'].includes(sort)) tasks.sort((a, b) => String(sort === 'title' ? a.name : a[sort + '_on'] || a[sort + '_at'] || '9999').localeCompare(String(sort === 'title' ? b.name : b[sort + '_on'] || b[sort + '_at'] || '9999')) || a.gid.localeCompare(b.gid));
     const heading = node('div', '', 'teams-connection-title'); heading.append(node('h2', selectedProject ? projects.get(selectedProject)?.name || 'Asana work' : 'Your Asana work'), node('span', 'Live · Read only', 'teams-asana-badge')); work.append(heading);
     const partial = [...pages.values()].some(page => page.has_more);
     work.append(node('p', `${tasks.length} matching tasks in loaded Asana pages. ${partial ? 'More source work is available below. ' : ''}Teams totals above exclude Asana. Search applies to loaded task titles and fields.`, 'muted'));
@@ -128,8 +129,8 @@ export function installAsana(root, api) {
       const members = [...new Map(tasks.filter(task => task.assignee).map(task => [String(task.assignee.gid), { id: String(task.assignee.gid), name: task.assignee.name }])).values()];
       renderPlanning(list, tasks.map(task => ({ ...task, id: task.gid, title: task.name, completed_at: task.completed ? 'completed' : null, assignee_id: task.assignee ? String(task.assignee.gid) : null })), { node, layout: ctx.layout, members, openTask });
     } else if (ctx.layout === 'board') {
-      const groups = new Map(); for (const task of tasks) { const section = task.memberships.find(member => !selectedProject || String(member.project.gid) === selectedProject)?.section; const id = section?.gid || ''; if (!groups.has(id)) groups.set(id, { name: section?.name || 'Unsectioned', tasks: [] }); groups.get(id).tasks.push(task); }
-      for (const group of groups.values()) { const column = node('section', '', 'board-column'); column.append(node('h2', group.name + ' · ' + group.tasks.length)); group.tasks.forEach(task => column.append(taskRow(task))); list.append(column); }
+      list.className = 'teams-task-card-grid';
+      for (const task of tasks) list.append(taskCard({ title: task.name, dueOn: task.due_on, dueAt: task.due_at, completed: task.completed, onOpen: () => { if (api.context?.ready()) openTask(task.gid); } }));
     } else if (ctx.layout === 'calendar' && $('calendar-style').value !== 'agenda') {
       const wrap = node('div', '', 'teams-calendar-wrap'), calendar = node('div', '', 'teams-calendar'); for (const day of ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']) calendar.append(node('div', day, 'teams-calendar-weekday'));
       const [year, month] = $('month').value.split('-').map(Number), first = new Date(Date.UTC(year, month - 1, 1)), offset = (first.getUTCDay() + 6) % 7, count = new Date(Date.UTC(year, month, 0)).getUTCDate();

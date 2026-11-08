@@ -57,9 +57,9 @@ try {
       assert.equal(measured.lockupColor, 'rgb(255, 255, 255)', 'Plain readable wordmark background');
       assert.equal(measured.decorative, 'true', 'CSS forest artwork is decorative');
       assert.ok(measured.pageWidth <= width + 1, surface + width + ' no page overflow');
-      if (width <= 600) await page.locator('#tw-view-tools > summary').click();
+      await page.locator('#tw-filter-toggle').click();
       await page.locator('#tw-workspace-label').filter({ hasText: 'Workspace:' }).waitFor();
-      if (width <= 600) await page.locator('#tw-view-tools > summary').click();
+      await page.locator('#tw-filter-toggle').click();
       await brand.evaluate(element => element.scrollIntoView({ block: 'start' }));
       await page.screenshot({ path: join(evidence, `brand-${surface}-${width}.png`) });
       branding.push({ surface, ...measured });
@@ -81,9 +81,8 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${origin}/teams?tenant=${fixture.tenant}&area=${fixture.area_id}&area_view=calendar`);
   await page.waitForFunction(() => window.TeamPremium?.context?.ready());
-  await page.locator('#tops-areas button').first().click();
-  await page.locator('#tops-groups').getByRole('button', { name: 'Plan & prepare', exact: true }).click();
-  await page.locator('#tops-tabs').getByRole('button', { name: 'Calendar', exact: true }).click();
+  await page.locator('#tops-panel').waitFor();
+  await page.locator('#tops-tabs').getByRole('button', { name: 'Calendar', exact: true }).waitFor();
   await page.locator('#team-operations').getByLabel('Calendar month', { exact: true }).fill('2026-11');
   const grid = page.locator('.tops-event-calendar'), event = grid.locator(`[data-calendar-event="${fixture.event_id}"]`);
   await event.first().waitFor(); assert.equal(await event.count(), 3);
@@ -91,12 +90,12 @@ try {
   assert.equal(await grid.locator('[data-calendar-date="2026-11-07"] button').count(), 0, 'Gap Saturday must remain empty');
   const legacyAnchor = grid.locator('[data-calendar-date="2026-11-06"] [data-calendar-kind="range_anchor"]').filter({ hasText: 'Fictional legacy range' });
   assert.equal(await legacyAnchor.count(), 1, 'A legacy range is represented only by its first-day marker');
-  await legacyAnchor.getByText('Unconfirmed range', { exact: true }).waitFor();
+  assert.match(await legacyAnchor.getAttribute('aria-label'), /Unconfirmed range/);
   assert.equal(await grid.locator('[data-calendar-date="2026-11-07"] [data-calendar-kind="range_anchor"]').count(), 0, 'Legacy ranges do not paint intervening days');
   await page.getByRole('heading', { name: 'Legacy ranges · activity unconfirmed' }).waitFor(); await page.getByRole('heading', { name: 'Sessions with unknown dates' }).waitFor();
   const setup = grid.locator('[data-calendar-kind="setup"]'), selling = grid.locator('[data-calendar-kind="selling"]').first();
   assert.notEqual(await setup.evaluate(el => getComputedStyle(el).backgroundColor), await selling.evaluate(el => getComputedStyle(el).backgroundColor), 'Setup has a distinct lighter treatment');
-  await page.getByLabel('Calendar colors').selectOption('person'); await grid.locator(`[data-calendar-person="${fixture.person_id}"]`).first().waitFor(); const crewColor = await event.first().evaluate(el => el.style.getPropertyValue('--event-color'));
+  await page.getByLabel('Calendar colors').selectOption('person'); assert.ok(await grid.locator(`[data-calendar-person="${fixture.person_id}"]`).count() > 0, 'Recorded crew remains available in the event card'); const crewColor = await event.first().evaluate(el => el.style.getPropertyValue('--event-color'));
   const calendarReady = () => page.waitForFunction(() => document.querySelector('#tops-content').getAttribute('aria-busy') !== 'true');
   await page.getByRole('button', { name: '3 days', exact: true }).click(); await calendarReady();
   assert.equal(await page.getByLabel('Calendar colors').inputValue(), 'person', 'Crew mode is retained when changing the view');

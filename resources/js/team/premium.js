@@ -1,5 +1,6 @@
 import { installAsana } from './asana.js';
 import { renderPlanning } from './planning.js';
+import { taskCard } from './task-card.js';
 
 const icons = {
   home: '<path d="m3 10 9-7 9 7v10H4V10m5 10v-7h6v7"/>',
@@ -37,17 +38,17 @@ export function installPremium(root) {
   const createLabel = $('new-task').textContent;
   $('new-task').setAttribute('aria-label', 'Create task');
   function compactWorkControls() {
-    const compact = compactTools.matches;
-    secondaryTools.open = !compact;
-    compactContext.hidden = compactActions.hidden = !compact;
+    secondaryTools.open = true;
+    compactContext.hidden = compactActions.hidden = false;
     secondaryTools.querySelector('summary').textContent = 'Workspace & tools';
-    for (const item of contextParts) compact ? compactContext.append(item) : originalPositions.get(item).after(item);
-    for (const item of secondaryActions) compact ? compactActions.append(item) : originalPositions.get(item).after(item);
-    $('new-task').textContent = compact ? '+ Create' : createLabel;
+    for (const item of contextParts) compactContext.append(item);
+    for (const item of secondaryActions) compactActions.append(item);
+    $('new-task').textContent = compactTools.matches ? '+ Create' : createLabel;
     if (areaLauncher) {
-      if (areaLabel) areaLabel.hidden = compact;
-      if (compact) { areaPicker.open = false; areaLauncher.append(areaPicker); for (const item of areaParts) areaOptions.append(item); }
-      else { for (const item of areaParts) originalPositions.get(item).after(item); areaPicker.remove(); }
+      areaLauncher.hidden = true;
+      if (areaLabel) areaLabel.hidden = true;
+      compactContext.append(areaPicker);
+      for (const item of areaParts) areaOptions.append(item);
     }
   }
   compactWorkControls();
@@ -60,14 +61,19 @@ export function installPremium(root) {
     addEventListener('resize', updateInset); updateInset();
   }
   document.querySelectorAll('[data-team-mode]').forEach(button => button.prepend(icon(button.dataset.teamMode)));
-  root.querySelectorAll('[data-team-layout]').forEach(button => { button.prepend(icon(button.dataset.teamLayout)); button.setAttribute('aria-controls', 'tw-list-card'); button.onclick = () => { if (!context?.ready()) return; if (['home', 'inbox'].includes($('mode').value)) $('mode').value = 'all'; $('layout').value = button.dataset.teamLayout; $('layout').dispatchEvent(new Event('change', { bubbles: true })); }; });
+  root.querySelectorAll('[data-team-layout]').forEach(button => { button.prepend(icon(button.dataset.teamLayout)); button.setAttribute('aria-controls', 'tw-list-card'); button.onclick = () => { if (!context?.ready()) return; if ($('mode').value === 'inbox') $('mode').value = 'all'; $('layout').value = button.dataset.teamLayout; $('layout').dispatchEvent(new Event('change', { bubbles: true })); }; });
   root.querySelector('.teams-tabs').addEventListener('keydown', event => { if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return; event.preventDefault(); const tabs = [...root.querySelectorAll('[data-team-layout]')], index = tabs.indexOf(document.activeElement), next = tabs[(index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length]; next.focus(); next.click(); });
   root.querySelectorAll('[data-team-search-icon]').forEach(item => item.prepend(icon('search')));
-  $('filter-toggle').onclick = () => { const expanded = $('filters').hidden; $('filters').hidden = !expanded; $('filter-toggle').setAttribute('aria-expanded', String(expanded)); };
+  const controlsPanel = $('controls-panel');
+  function closeControls(focus = false) { controlsPanel.hidden = true; $('filter-toggle').setAttribute('aria-expanded', 'false'); if (focus) $('filter-toggle').focus(); }
+  controlsPanel.hidden = true; $('filters').hidden = false;
+  $('filter-toggle').onclick = () => { const expanded = controlsPanel.hidden; controlsPanel.hidden = !expanded; $('filter-toggle').setAttribute('aria-expanded', String(expanded)); };
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && !controlsPanel.hidden && !document.querySelector('dialog[open]')) { event.preventDefault(); event.stopImmediatePropagation(); closeControls(true); } });
+  document.addEventListener('pointerdown', event => { if (!controlsPanel.hidden && !controlsPanel.contains(event.target) && !$('filter-toggle').contains(event.target)) closeControls(); });
   $('clear-filters').onclick = () => { if (!context?.ready()) return; $('completion').value = 'incomplete'; $('priority-filter').value = ''; $('date-filter').value = 'all'; $('sort').value = ''; $('search').value = ''; $('completion').dispatchEvent(new Event('change', { bubbles: true })); };
   $('refresh').onclick = () => { if (context?.ready()) { asana?.invalidate(); context.load(); } };
   $('calendar-style').onchange = () => { if (context?.ready()) context.load(); };
-  $('more-views').onchange = () => { if (!$('more-views').value || !context?.ready()) return; if (['home', 'inbox'].includes($('mode').value)) $('mode').value = 'all'; $('layout').value = $('more-views').value; $('layout').dispatchEvent(new Event('change', { bubbles: true })); };
+  $('more-views').onchange = () => { if (!$('more-views').value || !context?.ready()) return; if ($('mode').value === 'inbox') $('mode').value = 'all'; $('layout').value = $('more-views').value; $('layout').dispatchEvent(new Event('change', { bubbles: true })); };
   $('save-view').onclick = async () => { if (!context?.ready()) return; $('view-name').value = ''; $('view-dialog').showModal(); };
   $('view-close').onclick = () => $('view-dialog').close();
   $('view-form').onsubmit = async event => { event.preventDefault(); const name = $('view-name').value.trim(); if (!name) return; const view = { id: crypto.randomUUID(), name, layout: $('layout').value, project: $('project-filter').value || null, completion: $('completion').value, sort: $('sort').value || null, date_filter: $('date-filter').value }; if (await preferences({ views: [...views, view] })) $('view-dialog').close(); };
@@ -195,16 +201,32 @@ export function installPremium(root) {
     }
     $('list').before(bar);
   }
+  function squareTask(task, ctx) {
+    const card = taskCard({ id: task.id, title: task.title, dueOn: task.due_on, dueAt: task.due_at, completed: !!task.completed_at,
+      onOpen: event => { if (!ctx.ready()) return; focusedRow = event.currentTarget; ctx.openTask(task.id); } });
+    const project = ctx.projects.find(item => item.id === ctx.selectedProject);
+    if (task.can_edit && project?.can_add_task) {
+      card.draggable = true;
+      card.ondragstart = event => { if (!ctx.ready()) { event.preventDefault(); return; } event.dataTransfer.setData('application/x-team-task', task.id); card.classList.add('teams-dragging'); };
+      card.ondragend = () => card.classList.remove('teams-dragging');
+    }
+    return card;
+  }
+  function eventCard(item, open) {
+    const order = item.calendar_order ?? {};
+    return taskCard({ title: item.title, dueOn: order.date, dateLabel: ({ reviewed_session: 'Reviewed session', recorded_start: 'Recorded start', source_due: 'Asana due date' })[order.basis] ?? 'Recorded date', unknownLabel: 'Date unknown',
+      note: order.basis === 'source_due' ? 'Task date · not a confirmed event day' : '', onOpen: () => { const owner = context; if (owner?.ready()) Promise.resolve(open()).catch(error => { if (context === owner) owner.notice(error.message); }); } });
+  }
   function renderNative(ctx) {
     const list = $('list'), data = ctx.data, layout = ctx.layout, project = ctx.projects.find(p => p.id === ctx.selectedProject);
     list.className = layout === 'board' ? 'board' : ''; list.replaceChildren();
     selectedIds = new Set([...selectedIds].filter(id => data.tasks.some(task => task.id === id))); selectionBar(ctx);
     if (['timeline', 'workload', 'dashboard'].includes(layout)) { renderPlanning(list, data.tasks, { node, layout, members: ctx.members, openTask: ctx.openTask }); return; }
     if (layout === 'board') {
-      if (!project) { empty(list, 'Choose a project', 'Select a project to see its board.'); return; }
+      if (!project) { list.className = selectionMode ? '' : 'teams-task-card-grid'; for (const task of data.tasks) list.append(selectionMode ? row(task, ctx, layout) : squareTask(task, ctx)); if (!data.tasks.length) empty(list, 'No loaded tasks match', 'Change the task filters or search accessible work.'); return; }
       for (const [id, name] of [['', 'Unsectioned'], ...Object.entries(project.sections)]) {
         const column = node('section', '', 'board-column'), tasks = data.tasks.filter(t => (t.memberships[project.id]?.section_id || '') === id), heading = node('h2', name); heading.append(node('span', String(tasks.length), 'teams-section-count')); column.append(heading);
-        for (const task of tasks) column.append(row(task, ctx, layout));
+        for (const task of tasks) column.append(selectionMode ? row(task, ctx, layout) : squareTask(task, ctx));
         if (project.can_add_task) { const add = node('button', '+ Add task'); add.onclick = () => { if (!ctx.ready()) return; ctx.createTask(); $('create-section').value = id; }; column.append(add); }
         column.ondragover = e => { if (!e.dataTransfer.types.includes('application/x-team-task')) return; e.preventDefault(); column.classList.add('teams-drop-target'); }; column.ondragleave = () => column.classList.remove('teams-drop-target'); column.ondrop = e => { e.preventDefault(); column.classList.remove('teams-drop-target'); const task = data.tasks.find(t => t.id === e.dataTransfer.getData('application/x-team-task')); if (task?.can_edit && project.can_add_task && ctx.ready()) ctx.mutate(task, { kind: 'task.membership', project_id: project.id, section_id: id || null, position: task.memberships[project.id]?.position || 0 }); }; list.append(column);
       }
@@ -239,20 +261,40 @@ export function installPremium(root) {
   function ctxCreate() { if (context?.data.can_create_task) context.createTask(); }
   return {
     get context() { return context; },
+    beforeLoad() { window.TeamOperations?.unmountEventCalendar(); },
     closeMenu() { setMenu(false); },
-    navigate() { asana?.clearProject(); $('source-filter').value = 'all'; setMenu(false); },
-    reset() { asana?.reset(); for (const id of ['teams-project-list', 'teams-favorite-list']) document.getElementById(id)?.replaceChildren(); $('selection-bar')?.remove(); selectedIds.clear(); selectionMode = false; $('page-title').textContent = 'Verify your work access'; favorites.clear(); views = []; $('saved-views').replaceChildren(new Option('Saved views', '')); $('view-name').value = ''; $('view-dialog').close(); loadedPreferences = false; context = null; },
+    navigate() { closeControls(); asana?.clearProject(); $('source-filter').value = 'all'; setMenu(false); },
+    reset() { window.TeamOperations?.unmountEventCalendar(); closeControls(); asana?.reset(); for (const id of ['teams-project-list', 'teams-favorite-list']) document.getElementById(id)?.replaceChildren(); $('selection-bar')?.remove(); selectedIds.clear(); selectionMode = false; $('page-title').textContent = 'Verify your work access'; favorites.clear(); views = []; $('saved-views').replaceChildren(new Option('Saved views', '')); $('view-name').value = ''; $('view-dialog').close(); loadedPreferences = false; context = null; },
     render(ctx) {
       context = ctx; if (!loadedPreferences) { loadedPreferences = true; preferences(); }
       $('more-views').value = ['timeline', 'workload', 'dashboard'].includes(ctx.layout) ? ctx.layout : '';
       navigation(ctx); root.querySelectorAll('[data-team-layout]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.teamLayout === ctx.layout)));
       const activeFilters = ['completion', 'priority-filter', 'date-filter', 'sort'].filter(id => $(id).value !== ({ completion: 'incomplete', 'date-filter': 'all' }[id] || ''));
-      $('filter-toggle').textContent = '☷ Filters' + (activeFilters.length ? ' · ' + activeFilters.length : '');
+      $('filter-toggle').textContent = 'Controls' + (activeFilters.length ? ' · ' + activeFilters.length : '');
       $('filter-toggle').title = activeFilters.map(id => $(id).selectedOptions[0]?.textContent).join(' · ');
       $('clear-filters').disabled = !activeFilters.length && !$('search').value;
       $('remove-view').disabled = !$('saved-views').value;
       $('calendar-style').hidden = ctx.layout !== 'calendar'; $('month-label').hidden = ctx.layout !== 'calendar'; $('calendar-format-label').hidden = ctx.layout !== 'calendar'; $('task-calendar-context').hidden = ctx.layout !== 'calendar';
       for (const button of $('home-counts').children) { const match = button.textContent.match(/^(.*): (\d+)$/); if (match) button.replaceChildren(node('span', match[1]), node('strong', match[2], 'teams-home-number')); }
+      const explicitArea = new URL(location.href).searchParams.has('area') || document.getElementById('team-operations')?.classList.contains('tops-active');
+      const eventSurface = !explicitArea && $('source-filter').value === 'all' && !ctx.selectedProject && !asana?.selectedProject
+        && (['board', 'calendar'].includes(ctx.layout) || ($('mode').value === 'home' && ctx.layout === 'list')) && $('mode').value !== 'inbox';
+      if (eventSurface && window.TeamOperations?.mountEventSurface) {
+        $('home').hidden = true; $('list-heading').hidden = true; $('count').hidden = true; $('prev').hidden = $('next').hidden = true;
+        $('list').hidden = false; $('list').className = ''; $('list').replaceChildren(node('p', 'Loading events for the selected dates…', 'muted'));
+        if ($('selection-bar')) $('selection-bar').hidden = true;
+        if ($('asana-work')) $('asana-work').hidden = true;
+        const personal = document.getElementById('tops-personal'); if (personal) personal.hidden = true;
+        $('save-view').disabled = true;
+        for (const id of ['calendar-style', 'month-label', 'calendar-format-label', 'task-calendar-context']) $(id).hidden = true;
+        window.TeamOperations.mountEventSurface($('list'), { layout: ctx.layout, query: $('search').value, renderCard: eventCard }).then(mounted => {
+          if (context !== ctx || !ctx.ready() || mounted) return;
+          $('count').hidden = $('list-heading').hidden = false; renderNative(ctx); if ($('asana-work')) $('asana-work').hidden = false;
+          asana?.render(ctx); window.TeamOperations?.renderPersonal(ctx);
+        }).catch(error => { if (context === ctx) ctx.notice(error.message); });
+        return true;
+      }
+      if ($('asana-work')) $('asana-work').hidden = false;
       const nativeHidden = $('mode').value !== 'inbox' && ($('source-filter').value === 'asana' || !!asana?.selectedProject);
       $('save-view').disabled = nativeHidden;
       $('count').hidden = nativeHidden; $('list-heading').hidden = nativeHidden;

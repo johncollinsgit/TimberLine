@@ -182,24 +182,22 @@ class FieldServiceSearchProvider implements GlobalSearchProvider
 
         if (Schema::hasTable('workspace_assets')) {
             $tenantSlug = (string) $membership?->slug;
-            $visibleJobIds = null;
-            if (! $includeFinancial) {
-                $visibleJobs = FieldServiceJob::query()->forTenantId($tenantId);
-                $this->fieldServiceAccess->scopeVisibleJobs($visibleJobs, $user, $tenant);
-                $visibleJobIds = $visibleJobs->pluck('id');
-            }
+            $visibleJobs = FieldServiceJob::query()->forTenantId($tenantId);
+            $this->fieldServiceAccess->scopeVisibleJobs($visibleJobs, $user, $tenant);
+            $authorizedJobIds = $visibleJobs->pluck('id');
+            $visibleJobIds = $includeFinancial ? null : $authorizedJobIds;
             $assets = WorkspaceAsset::query()->forTenantId($tenantId)
-                ->with('jobs:id,title')
+                ->with(['jobs' => fn ($jobs) => $jobs->whereIn('field_service_jobs.id', $authorizedJobIds)->select(['field_service_jobs.id', 'title'])])
                 ->when(! $includeFinancial, fn (Builder $builder) => $builder->where('visibility', 'team'))
                 ->when($visibleJobIds !== null, fn (Builder $builder) => $builder->where(fn (Builder $visible) => $visible
                     ->whereDoesntHave('jobs')->orWhereHas('jobs', fn (Builder $jobs) => $jobs->whereIn('field_service_jobs.id', $visibleJobIds))))
-                ->when($normalized !== '', function (Builder $builder) use ($normalized): void {
+                ->when($normalized !== '', function (Builder $builder) use ($normalized, $authorizedJobIds): void {
                     $like = '%'.$normalized.'%';
-                    $builder->where(function (Builder $search) use ($like): void {
+                    $builder->where(function (Builder $search) use ($like, $authorizedJobIds): void {
                         $search->where('file_name', 'like', $like)
                             ->orWhere('caption', 'like', $like)
                             ->orWhere('search_text', 'like', $like)
-                            ->orWhereHas('jobs', fn (Builder $jobs) => $jobs->where('title', 'like', $like));
+                            ->orWhereHas('jobs', fn (Builder $jobs) => $jobs->whereIn('field_service_jobs.id', $authorizedJobIds)->where('title', 'like', $like));
                     });
                 })
                 ->latest()->limit(6)->get();
