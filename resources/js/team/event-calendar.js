@@ -73,7 +73,7 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
   month.type = 'month'; month.value = anchor.slice(0, 7); month.setAttribute('aria-label', 'Calendar month');
   day.type = 'date'; day.value = anchor; day.setAttribute('aria-label', 'Calendar first day'); day.hidden = mode === 'month'; month.hidden = mode !== 'month';
   colors.setAttribute('aria-label', 'Calendar colors');
-  for (const [value, text] of [['event', 'Event colors'], ['person', 'Crew colors']]) { const option = node('option', text); option.value = value; colors.append(option); }
+  for (const [value, text] of [['event', 'Event colors'], ['person', 'Team member colors']]) { const option = node('option', text); option.value = value; colors.append(option); }
   const button = (text, action) => { const element = node('button', text); element.type = 'button'; element.onclick = action; return element; };
   for (const [value, text] of [['month', 'Month'], ['1', '1 day'], ['2', '2 days'], ['3', '3 days']]) { const tab = button(text, () => { if (mode === value) return; mode = value; month.hidden = mode !== 'month'; day.hidden = mode === 'month'; changeWindow(); }); tab.dataset.calendarView = value; modes.append(tab); }
   const filters = node('div', '', 'tops-calendar-filters'), dateField = node('div'), dateLabel = node('span'), colorField = node('label');
@@ -82,7 +82,7 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
   periods.append(button('Previous period', () => shift(-1)), button('Next period', () => shift(1))); controls.append(modes, filters, periods); host.append(controls);
   host.append(node('p', 'Loaded results · ' + items.length + ' event records' + (coverage.has_more ? ' · more pages remain' : '') + (coverage.partial || coverage.complete === false ? ' · source coverage partial or unconfirmed' : ''), 'tops-calendar-scope'));
   if (coverage.calendar_window) host.append(node('p', when(coverage.calendar_window.from) + ' → ' + when(coverage.calendar_window.to) + (coverage.calendar_window.scan_limited ? ' · Load more events to continue checking retained dates.' : ' · Unspecified dates remain unknown.'), 'tops-calendar-scope'));
-  const guide = node('details', '', 'tops-calendar-guide'); guide.append(node('summary', 'Calendar scope & source notes'), node('p', 'Explicit sessions show reviewed activity; gap days stay empty. Setup is lighter. Dashed task dates and range-start markers identify unconfirmed dates; they do not establish event activity. Other pages and unavailable source feeds are not included.'), node('p', 'Crew colors identify recorded event assignments, not shifts or attendance at each session. Event times use the displayed local timezone.')); host.append(guide);
+  const guide = node('details', '', 'tops-calendar-guide'); guide.append(node('summary', 'Calendar scope & source notes'), node('p', 'Explicit sessions show reviewed activity; gap days stay empty. Setup is lighter. Dashed task dates and range-start markers identify unconfirmed dates; they do not establish event activity. Other pages and unavailable source feeds are not included.'), node('p', 'Team member colors identify recorded event assignments, not shifts or attendance at each session. Event times use the displayed local timezone.')); host.append(guide);
   const hint = node('p', 'Swipe or scroll across the dates →', 'tops-calendar-scroll-hint'); host.append(hint);
   if (host.closest('#team-operations')?.classList.contains('tops-inline-calendar')) {
     const compact = node('nav', '', 'tops-inline-calendar-nav'); compact.setAttribute('aria-label', 'Event calendar navigation');
@@ -107,7 +107,7 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
     const crew = people(item), chip = button('', () => open(item)); chip.className = 'tops-calendar-session is-' + session.kind;
     const color = colorMode === 'person' && crew.length ? stableColor(tenant + '|' + (crew[0].provider || '') + '|' + crew[0].id) : eventColor(item, tenant);
     chip.style.setProperty('--event-color', color); chip.dataset.calendarEvent = item.id; chip.dataset.calendarSession = session.id || ''; chip.dataset.calendarKind = session.kind;
-    const description = [item.title, title(session.kind), hours(session), calendar(item).timezone || 'Timezone unknown', session.label, !calendar(item).schedule_complete ? 'Partial schedule' : '', calendar(item).provenance?.source_changed_since_review ? 'Source changed; review needed' : '', ...(colorMode === 'person' ? (crew.length ? crew.map(personName) : ['No verified crew identity']) : [])].filter(Boolean).join(' · ');
+    const description = [item.title, title(session.kind), hours(session), calendar(item).timezone || 'Timezone unknown', session.label, !calendar(item).schedule_complete ? 'Partial schedule' : '', calendar(item).provenance?.source_changed_since_review ? 'Source changed; review needed' : '', ...(colorMode === 'person' ? (crew.length ? crew.map(personName) : ['No recorded team member']) : [])].filter(Boolean).join(' · ');
     chip.setAttribute('aria-label', description); chip.title = description;
     if (calendar(item).provenance?.source_changed_since_review) chip.dataset.calendarNeedsReview = 'true';
     const timezone = calendar(item).timezone, zone = node('small', timezone ? timezone.split('/').at(-1).replaceAll('_', ' ') + ' · local' : 'Timezone unknown');
@@ -118,7 +118,7 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
     if (calendar(item).provenance?.source_changed_since_review) chip.append(node('span', 'Source changed · review needed', 'tops-calendar-status'));
     if (colorMode === 'person') {
       const footer = node('span', '', 'tops-calendar-crew');
-      if (!crew.length) footer.append(node('span', 'No verified crew identity'));
+      if (!crew.length) footer.append(node('span', 'No recorded team member'));
       for (const person of crew) { const badge = node('span', personName(person), 'tops-calendar-person'); badge.style.setProperty('--person-color', stableColor(tenant + '|' + (person.provider || '') + '|' + person.id)); badge.dataset.calendarPerson = person.id; footer.append(badge); }
       chip.append(footer);
     }

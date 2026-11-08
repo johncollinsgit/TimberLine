@@ -87,6 +87,11 @@ jobs:
           npm run test:team-work-local
           node --test tests/e2e/team-assistant-loader.test.mjs
 
+      - name: Verify Teams scanner protocol and operator script contracts
+        run: |
+          python3 tests/Unit/Operations/test_teams_clamav_health.py
+          bash -n scripts/ops/install-teams-clamav.sh
+
       - name: Prepare safe PDF conversion
         run: |
           if ! command -v gs >/dev/null; then
@@ -135,6 +140,8 @@ jobs:
           node tests/e2e/team-browser-toolbar.browser.mjs
           node tests/e2e/team-main-event-surface.browser.mjs
           node tests/e2e/team-event-detail-lifecycle.browser.mjs
+          node tests/e2e/team-event-updates.browser.mjs
+          node tests/e2e/team-setup.browser.mjs
           node tests/e2e/team-task-cards.browser.mjs
           node tests/e2e/team-universal-search.browser.mjs
           node tests/e2e/team-assistant.browser.mjs

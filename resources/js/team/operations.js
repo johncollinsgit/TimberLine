@@ -1,6 +1,10 @@
 import '../../css/team-operations.css';
 import '../../css/team-events.css';
 import { installEventTasks } from './event-tasks';
+import { installEventDetail, eventDetailTitle, hasEventTravelDrafts } from './event-detail';
+import { installEventUpdates, hasEventUpdateDrafts } from './event-updates';
+import '../../css/team-event-updates.css';
+import { createTeamsSetup, hasTeamsSetupDrafts } from './setup';
 import { eventCalendarWindow, eventToday, setEventCalendarTimezone, renderEventCalendar, renderScheduleSummary } from './event-calendar';
 
 // Business workspaces share the Teams shell and services. Private drafts stay in memory.
@@ -22,22 +26,26 @@ export function installOperations(nativeRoot) {
   const originalPosition = document.createComment('Teams work area position');
   root.before(originalPosition);
   const eventTasks = installEventTasks({ api, el, button, field, dialog, section, note, area: () => area, content: $('content'), navigate });
+  let eventDetail, eventUpdates;
+  const detailFooter = el('footer', '', 'event-detail-footer'); $('detail').append(detailFooter);
+  function retireDetail(seal = false) { eventDetail?.dispose(); eventUpdates?.dispose({ seal }); eventDetail = eventUpdates = null; detailFooter.replaceChildren(); }
+  document.addEventListener('team:access-lost', () => { identityLost = true; serial++; personalTicket++; keepDraft(); retireDetail(true); $('content').replaceChildren(); $('personal').replaceChildren(); $('personal').hidden = true; $('detail-body').replaceChildren(); $('detail').close(); $('editor').close(); });
   async function api(path, options = {}) {
     if (identityLost && !options.verify) throw new Error('Verify the original account before continuing. Area drafts are retained in this page.');
     const url = new URL(root.dataset.url + path, location.origin);
     url.searchParams.set('tenant', root.dataset.tenant);
     if (area) url.searchParams.set('area', area.id);
     Object.entries(options.query || {}).forEach(([key, value]) => { if (value !== null && value !== undefined && value !== '') url.searchParams.set(key, value); });
-    const response = await fetch(url, { credentials: 'same-origin', method: options.method || 'GET', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '', 'X-Team-Viewer': root.dataset.user, 'X-Team-Workspace': nativeRoot.dataset.workspaceId }, body: options.body ? JSON.stringify(options.body) : undefined });
+    const response = await fetch(url, { credentials: 'same-origin', method: options.method || 'GET', headers: { Accept: 'application/json', 'Content-Type': options.raw ? 'application/octet-stream' : 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '', 'X-Team-Viewer': root.dataset.user, 'X-Team-Workspace': nativeRoot.dataset.workspaceId }, body: options.body !== undefined ? (options.raw ? options.body : JSON.stringify(options.body)) : undefined });
     let data;
     try { data = await response.json(); } catch { throw new Error('The server did not return a valid response. Your draft remains available.'); }
     if ([401, 419].includes(response.status) || data.error === 'page_identity_changed' || (response.ok && (response.headers.get('X-Team-Viewer') !== root.dataset.user || response.headers.get('X-Team-Workspace') !== nativeRoot.dataset.workspaceId))) {
-      identityLost = true; serial++; personalTicket++; keepDraft(); $('content').replaceChildren(); $('personal').replaceChildren(); $('personal').hidden = true; $('detail-body').replaceChildren(); $('detail').close(); $('editor').close();
+      identityLost = true; serial++; personalTicket++; keepDraft(); retireDetail(true); $('content').replaceChildren(); $('personal').replaceChildren(); $('personal').hidden = true; $('detail-body').replaceChildren(); $('detail').close(); $('editor').close();
       $('content').inert = false; $('content').removeAttribute('aria-busy'); $('content').removeAttribute('data-background-refresh');
       $('content').append(button('Verify original account', async () => { await api('/areas', { verify: true }); identityLost = false; await load(); }));
       throw new Error('Your account or workspace changed. Restore and verify the original account before continuing. Drafts are retained in this page.');
     }
-    if (!response.ok) throw new Error(data.message || Object.values(data.errors || {}).flat().join(' ') || 'This request could not be completed.');
+    if (!response.ok) throw Object.assign(new Error(data.message || Object.values(data.errors || {}).flat().join(' ') || 'This request could not be completed.'), { status: response.status, data });
     return data;
   }
   function report(error) { const text = error.message || 'This action could not be completed.'; $('notice').textContent = text; if ($('editor').open) $('editor-notice').textContent = text; else if ($('detail').open) { let node = $('detail-body').querySelector('.tops-inline-error'); if (!node) { node = el('p', '', 'tops-inline-error'); node.setAttribute('role', 'alert'); $('detail-body').prepend(node); } node.textContent = text; } }
@@ -58,11 +66,12 @@ export function installOperations(nativeRoot) {
     if (options) { for (const option of options) { const o = el('option', typeof option === 'string' ? label(option) : option.name); o.value = typeof option === 'string' ? option : option.id; input.append(o); } input.value = value ?? ''; }
     wrap.append(input); form.append(wrap); return input;
   }
-  function dialog(title) { detailSequence++; if (!$('detail').open) returnFocus = document.activeElement; $('detail-title').textContent = title; const body = el('div'); $('detail-body').replaceChildren(body); if (!$('detail').open) $('detail').showModal(); return body; }
-  function closeDetail() { $('detail').close(); returnFocus?.focus(); }
+  function dialog(title) { detailSequence++; retireDetail(); $('detail').classList.remove('event-detail-dialog'); $('detail-close').textContent = 'Close details'; $('detail-close').removeAttribute('aria-label'); if (!$('detail').open) returnFocus = document.activeElement; $('detail-title').textContent = title; const body = el('div'); $('detail-body').replaceChildren(body); if (!$('detail').open) $('detail').showModal(); return body; }
+  function closeDetail() { retireDetail(); $('detail').close(); returnFocus?.focus(); }
   $('detail-close').onclick = closeDetail;
   $('detail').addEventListener('close', () => {
     if ($('detail').open) return;
+    retireDetail();
     detailSequence++;
     // A queued native close event must not steal focus from a new user action.
     const focused = document.activeElement;
@@ -112,11 +121,14 @@ export function installOperations(nativeRoot) {
     inlineEpoch++; serial++; calendarPages = null; inlineOptions = null; document.getElementById('tops-inline-options')?.remove(); document.getElementById('tops-event-window-options')?.remove(); $('content').replaceChildren();
     if ($('detail').open) $('detail').close();
     root.classList.remove('tops-inline-calendar'); originalPosition.after(root);
+    syncMainCreate();
   }
+  function isEventSurface() { return !identityLost && area?.profile === 'events' && root.classList.contains('tops-inline-calendar') && !$('panel').hidden; }
+  function syncMainCreate() { const active = isEventSurface(), primary = document.getElementById('tw-new-task'), sidebar = document.getElementById('teams-create'); if (primary) { primary.dataset.eventCreate = active ? '1' : '0'; primary.textContent = active ? '+ Create event' : '+ Create task'; primary.setAttribute('aria-label', active ? 'Create event' : 'Create task'); primary.disabled = active ? !area.capabilities?.write : !window.TeamPremium?.context?.data?.can_create_task; } if (sidebar) { sidebar.textContent = active ? 'Create event' : 'Create task'; sidebar.disabled = primary?.disabled ?? false; } }
   function native() { keepDraft(); if (root.classList.contains('tops-inline-calendar')) restoreInline(); serial++; $('panel').hidden = true; root.classList.remove('tops-active'); const url = new URL(location.href); url.searchParams.delete('area'); url.searchParams.delete('area_view'); history.replaceState(null, '', url); }
   $('menu').onclick = () => document.querySelector('[data-teams-menu]')?.click();
   $('native').onclick = () => { native(); document.querySelector('#tw-search')?.focus(); };
-  document.querySelector('.teams-sidebar')?.addEventListener('click', event => { if (event.target.closest('[data-team-mode],#teams-create,#teams-project-list button,#teams-favorite-list button')) native(); });
+  document.querySelector('.teams-sidebar')?.addEventListener('click', event => { if (event.target.closest('#teams-create') && isEventSurface()) return; if (event.target.closest('[data-team-mode],#teams-create,#teams-project-list button,#teams-favorite-list button')) native(); });
   let personalTicket = 0;
   window.TeamOperations = {
     mountEventSurface: async (host, options = {}) => {
@@ -130,9 +142,12 @@ export function installOperations(nativeRoot) {
       if (inlineOptions.layout !== 'calendar') document.getElementById('tops-inline-options')?.remove();
       else document.getElementById('tops-event-window-options')?.remove();
       await openArea(target, 'calendar', true);
+      syncMainCreate();
       return ticket === inlineEpoch && root.classList.contains('tops-inline-calendar');
     },
     mountEventCalendar: (...args) => window.TeamOperations.mountEventSurface(...args),
+    isEventSurface,
+    createFromMain: () => { if (!isEventSurface() || !area.capabilities?.write) return false; edit(); return true; },
     unmountEventCalendar: () => { if (!root.classList.contains('tops-inline-calendar')) { inlineEpoch++; return; } restoreInline(); $('panel').hidden = true; },
     settingsAreas: () => identityLost ? [] : areas.map(item => ({ id: item.id, name: item.name })),
     openSettingsArea: async (areaId, settingsView) => {
@@ -172,12 +187,11 @@ export function installOperations(nativeRoot) {
       } catch (error) { if (ticket === personalTicket) note('Area work is unavailable: ' + error.message, node); }
     },
   };
-  $('setup').onclick = () => {
-    const body = dialog('Create a work area'), form = el('form', '', 'tops-form'); body.append(form);
-    const name = field(form, 'name', 'Area name'), profile = field(form, 'profile', 'Workspace profile', 'events', 'text', ['events', 'wholesale']); name.required = true; name.maxLength = 100;
-    note('Wholesale uses the tenant’s existing Wholesale entitlement and commerce services. Connections and automation rules belong to this area.', form);
-    form.append(button('Create area', async () => { if (!form.reportValidity()) return; const item = await api('/areas', { method: 'POST', body: { name: name.value, profile: profile.value } }); item.capabilities = { write: true }; areas.push(item); renderAreas(); closeDetail(); await openArea(item); }, 'primary'));
-  };
+  const setup = admin ? createTeamsSetup({ api, scope: JSON.stringify([root.dataset.tenant, root.dataset.user, nativeRoot.dataset.workspaceId]), trigger: $('setup'), openDialog: dialog, closeDialog: closeDetail, onComplete: async result => {
+    const fresh = await api('/areas'); areas = fresh.items; renderAreas();
+    if (result.connection_next === 'asana') { const selected = areas.find(item => item.id === result.area.id); if (selected) await openArea(selected, 'connections'); }
+    else document.getElementById('tw-refresh')?.click();
+  } }) : null;
   $('settings').onclick = () => {
     const body = dialog(area.name + ' settings'), form = el('form', '', 'tops-form'); body.append(form);
     const stages = field(form, 'stages', 'Stages, one per line', area.settings.stages.join('\n'), 'textarea');
@@ -409,12 +423,30 @@ export function installOperations(nativeRoot) {
   }
   async function details(item, returnTo = null) {
     const captured = area.id, body = dialog(item.title), sequence = detailSequence; note('Checking current access…', body);
+    if (item.kind === 'event' || (area.profile === 'events' && view === 'calendar')) { $('detail').classList.add('event-detail-dialog'); $('detail-title').textContent = eventDetailTitle(item.title); $('detail-close').textContent = '×'; $('detail-close').setAttribute('aria-label', 'Close details'); }
     if (returnTo?.isConnected) returnFocus = returnTo;
     const current = () => sequence === detailSequence && captured === area?.id && !identityLost && $('detail').open && body.isConnected && $('detail-body').firstElementChild === body;
     let record;
     try { record = await api('/operations/records/' + item.id); } catch (error) { if (current()) throw error; return; }
     if (!current()) return;
     if (String(record.id) !== String(item.id)) throw new Error('The selected record changed. Close details and open it again.');
+    if (record.kind === 'event') {
+      body.replaceChildren(); $('detail').classList.add('event-detail-dialog'); $('detail-title').textContent = eventDetailTitle(record.title); $('detail-close').textContent = '×'; $('detail-close').setAttribute('aria-label', 'Close details');
+      const scope = JSON.stringify([root.dataset.tenant, root.dataset.user, nativeRoot.dataset.workspaceId, record.id]);
+      const actions = [];
+      if (area.capabilities?.write && record.data.fields?.some(candidate => candidate.review_state !== 'approved')) actions.push({ render: tools => {
+        const review = el('details', '', 'event-note-review'); review.append(el('summary', 'Confirm event details')); const choices = [];
+        for (const [index, candidate] of record.data.fields.entries()) { if (candidate.review_state === 'approved') continue; const line = el('label'), input = el('input'); input.type = 'checkbox'; input.setAttribute('aria-label', 'Approve ' + label(candidate.field) + ': ' + candidate.value); line.append(input, document.createTextNode(label(candidate.field) + ': ' + candidate.value)); review.append(line); choices.push({ index, input }); }
+        review.append(button('Approve selected fields', async () => { const selected = choices.filter(choice => choice.input.checked).map(choice => choice.index); if (!selected.length) throw new Error('Select the event details you have confirmed.'); try { await api('/operations/records/' + record.id + '/review', { method: 'POST', body: { request_id: crypto.randomUUID(), expected_version: record.version, reviewed: true, action: 'fields', field_indices: selected, ...(record.data.fields_revision ? { expected_fields_revision: record.data.fields_revision } : {}) } }); if (current()) await details(record); } catch (error) { if (current()) throw error; } })); tools.append(review);
+      } });
+      if (record.capabilities?.edit) actions.push({ label: 'Edit event', run: () => { closeDetail(); edit(record); } });
+      if (admin) actions.push({ label: 'Review sales and costs', run: () => financialReview(record) });
+      actions.push({ label: 'Prepare an email', run: () => compose(record, 'gmail.send') });
+      eventDetail = installEventDetail(body, { record, api, tenant: root.dataset.tenant, scope, current, actions });
+      eventUpdates = installEventUpdates(eventDetail.updatesHost, { api, record, scope, current, composerHost: detailFooter, dropTarget: $('detail'), onEnableUpdates: async () => { if (!current()) return; const target = areas.find(item => item.id === captured); closeDetail(); if (target) await openArea(target, 'connections').catch(report); } });
+      await Promise.allSettled([eventDetail.ready, eventUpdates.ready]);
+      return;
+    }
     $('detail-title').textContent = record.title;
     body.replaceChildren(); note(label(record.status) + ' · ' + (record.source ? 'Connected source · read only' : 'Teams draft') + ' · Version ' + record.version, body);
     if (record.data.source_url) { const a = el('a', 'Open in Asana'); a.href = record.data.source_url; a.target = '_blank'; a.rel = 'noopener noreferrer'; if (a.href.startsWith('https://app.asana.com/')) body.append(a); }
@@ -458,7 +490,7 @@ export function installOperations(nativeRoot) {
     }
     try { await readSales(); } catch (error) { sales.replaceChildren(el('h3', 'Square reconciliation')); note(error.message, sales); }
   }
-  const editorFields = ['venue', 'address', 'city', 'state', 'timezone', 'environment', 'organizer', 'email', 'phone', 'setup_time', 'loadout_time', 'event_hours', 'booth', 'instructions', 'application_status', 'acceptance_status', 'payment_status', 'staffing_status'];
+  const editorFields = ['venue', 'address', 'city', 'state', 'timezone', 'hotel', 'hotel_address', 'coordinator', 'coordinator_phone', 'coordinator_email', 'environment', 'organizer', 'email', 'phone', 'setup_time', 'loadout_time', 'event_hours', 'booth', 'instructions', 'application_status', 'acceptance_status', 'payment_status', 'staffing_status'];
   function kindForView() { return { pipeline: 'opportunity', prospects: 'prospect', followups: 'followup', templates: 'email_template', campaigns: 'campaign', automations: 'rule' }[view] || (area.profile === 'events' ? 'event' : 'account'); }
   function edit(record, starter = false) {
     const remembered = !record ? drafts.get(area.id) : null;
@@ -637,7 +669,7 @@ export function installOperations(nativeRoot) {
     }, 'primary'));
   }
   function renderAttempts(items) { note('Your prepared and submitted actions. Unknown outcomes require reconciliation; retrying does not send a second copy.'); if (!items.length) empty('No communication attempts yet', 'Prepare an update from an event or account.'); else table(['Action', 'State', 'Created', 'Review'], items.map(a => [label(a.kind), label(a.status), new Date(a.created_at).toLocaleString(), ['unknown', 'executing'].includes(a.status) || a.adoption_recovery_available ? button(a.adoption_recovery_available ? 'Finish original event link' : 'Reconcile outcome', async () => { const result = await api('/communications/' + a.id + '/reconcile', { method: 'POST' }); await load(); if (result.notice || result.result?.notice) $('notice').textContent = result.notice || result.result.notice; }) : '—'])); }
-  addEventListener('beforeunload', event => { if (draft?.dirty || drafts.size || emailDrafts.size) { event.preventDefault(); event.returnValue = ''; } });
+  addEventListener('beforeunload', event => { if (draft?.dirty || drafts.size || emailDrafts.size || hasEventUpdateDrafts() || hasEventTravelDrafts() || hasTeamsSetupDrafts()) { event.preventDefault(); event.returnValue = ''; } });
   document.addEventListener('visibilitychange', () => { clearInterval(timer); if (document.hidden && view === 'calendar') { serial++; calendarPages = null; $('content').replaceChildren(); } else if (!document.hidden) { if (view === 'calendar' && !$('panel').hidden) load(); timer = setInterval(() => {
     if (identityLost || $('panel').hidden || draft?.dirty || $('detail').open || $('editor').open || $('content').getAttribute('aria-busy') === 'true' || $('content').contains(document.activeElement)) return;
     if (view === 'calendar' && (page > 1 || (calendarPages?.pages ?? 0) > 1)) return;
@@ -645,4 +677,5 @@ export function installOperations(nativeRoot) {
   }, 60000); } });
   document.dispatchEvent(new Event('visibilitychange'));
   areasReady = api('/areas').then(async data => { areas = data.items; renderAreas(); const url = new URL(location.href), eventApp = url.searchParams.get('app') === 'events', initial = areas.find(a => a.id === url.searchParams.get('area')) || (eventApp ? areas.find(a => a.profile === 'events') : null); if (initial) await openArea(initial, url.searchParams.get('area_view') || (eventApp ? 'my_tasks' : 'overview')); }).catch(report);
+  areasReady.then(() => setup?.inspect()).catch(report);
 }

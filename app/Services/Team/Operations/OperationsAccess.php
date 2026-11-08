@@ -17,6 +17,19 @@ class OperationsAccess
 {
     private array $verifiedFiles = [];
 
+    /** Informational result from the last exact admission, never an authorization cache. */
+    private array $admittedAsanaVersions = [];
+
+    public function admittedAsanaVersion(Tenant $tenant, User $user, TeamOperationRecord $record): ?string
+    {
+        $hint = $this->admittedAsanaVersions[$tenant->id.':'.$user->id.':'.$record->id] ?? null;
+        if (! $hint || $hint['record_version'] !== $record->version || $hint['connection_id'] !== $record->connection_id || $hint['source_id'] !== ($record->data['source_id'] ?? null)) {
+            return null;
+        }
+
+        return $hint['modified_at'];
+    }
+
     /** Exists only while one authorized collection is assembled; never survives a request. */
     private ?array $recordReadScope = null;
 
@@ -147,6 +160,8 @@ class OperationsAccess
 
     public function record(Tenant $tenant, User $user, TeamOperationRecord $record, bool $write = false): void
     {
+        $hintKey = $tenant->id.':'.$user->id.':'.$record->id;
+        unset($this->admittedAsanaVersions[$hintKey]);
         abort_unless((int) $record->tenant_id === (int) $tenant->id, 404);
         $scoped = ! $write && $this->recordReadScope !== null
             && (int) $this->recordReadScope['tenant'] === (int) $tenant->id
@@ -190,7 +205,9 @@ class OperationsAccess
                     if ($scoped && $this->recordReadScope['collection_asana']) {
                         $this->verifyCollectionTask($providers, $connection, (string) ($record->data['source_id'] ?? ''), $selectedProject);
                     } else {
-                        $providers->verifyAsanaRecord($connection, $record->data['source_id'] ?? '', $selectedProject);
+                        $task = $providers->verifyAsanaRecord($connection, $record->data['source_id'] ?? '', $selectedProject);
+                        $this->admittedAsanaVersions[$hintKey] = ['record_version' => $record->version, 'connection_id' => $record->connection_id, 'source_id' => $record->data['source_id'] ?? null,
+                            'modified_at' => is_string($task['modified_at'] ?? null) && $task['modified_at'] !== '' ? $task['modified_at'] : null];
                     }
                 }
             } else {

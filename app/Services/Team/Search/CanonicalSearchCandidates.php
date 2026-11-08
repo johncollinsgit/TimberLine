@@ -40,7 +40,7 @@ class CanonicalSearchCandidates
             foreach (TeamOperationRecord::where('tenant_id', $tenant->id)->orderBy('id')->cursor() as $row) {
                 yield (object) ['kind' => 'operation', 'entity_id' => $row->id, 'record' => $row];
             }
-            foreach (DB::table('team_file_uploads')->where('tenant_id', $tenant->id)->where('status', 'ready')->orderBy('id')->select('id')->cursor() as $row) {
+            foreach (DB::table('team_file_uploads')->where('tenant_id', $tenant->id)->where('target_type', 'task')->where('status', 'ready')->orderBy('id')->select('id')->cursor() as $row) {
                 yield (object) ['kind' => 'file', 'entity_id' => $row->id];
             }
             foreach (DB::table('team_source_snapshots')->where('tenant_id', $tenant->id)->whereNotNull('search_generation')

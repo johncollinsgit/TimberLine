@@ -17,12 +17,22 @@ Route::middleware(['auth', 'verified', 'tenant.access', \App\Http\Middleware\Ens
     Route::get('/teams', [TeamWorkController::class, 'app'])->name('team.app');
     Route::get('/teams/app', [TeamWorkController::class, 'app'])->name('team.installed');
     Route::prefix('team')->name('team.')->group(function (): void {
+        Route::get('/setup', \App\Http\Controllers\TeamSetupController::class)->defaults('action', 'status')->name('setup');
+        Route::post('/setup/draft', \App\Http\Controllers\TeamSetupController::class)->defaults('action', 'draft')->name('setup.draft');
+        Route::post('/setup/finish', \App\Http\Controllers\TeamSetupController::class)->defaults('action', 'finish')->name('setup.finish');
         Route::get('/customers/events', \App\Http\Controllers\TeamCustomerLookupController::class)->defaults('action', 'events')->name('customers.events');
         Route::get('/customers/{profile}', \App\Http\Controllers\TeamCustomerLookupController::class)->whereNumber('profile')->defaults('action', 'detail')->name('customers.detail');
         Route::get('/customers', \App\Http\Controllers\TeamCustomerLookupController::class)->name('customers.search');
         Route::get('/events/{event}/customer-value', \App\Http\Controllers\TeamCustomerEventValueController::class)->whereUuid('event')->name('events.customer-value');
         Route::get('/events/{id}/profitability', \App\Http\Controllers\TeamEventProfitabilityController::class)->whereUuid('id')->name('events.profitability');
         Route::get('/events/{id}/intelligence', \App\Http\Controllers\TeamEventIntelligenceController::class)->whereUuid('id')->name('events.intelligence');
+        Route::get('/events/{id}/essentials', \App\Http\Controllers\TeamEventEssentialsController::class)->whereUuid('id')->name('events.essentials');
+        Route::post('/events/{id}/travel', \App\Http\Controllers\TeamEventEssentialsController::class)->whereUuid('id')->name('events.travel');
+        Route::get('/events/{id}/updates', [\App\Http\Controllers\TeamEventUpdatesController::class, 'index'])->whereUuid('id')->name('events.updates');
+        Route::post('/events/{id}/updates', [\App\Http\Controllers\TeamEventUpdatesController::class, 'store'])->whereUuid('id')->name('events.updates.store');
+        Route::post('/events/{id}/updates/{attempt}/reconcile', [\App\Http\Controllers\TeamEventUpdatesController::class, 'reconcile'])->whereUuid(['id', 'attempt'])->name('events.updates.reconcile');
+        Route::post('/events/{id}/updates/files', [\App\Http\Controllers\TeamEventUpdatesController::class, 'beginFile'])->whereUuid('id')->name('events.updates.files');
+        Route::get('/events/{id}/updates/files/{upload}/preview', [\App\Http\Controllers\TeamEventUpdatesController::class, 'preview'])->whereUuid(['id', 'upload'])->name('events.updates.preview');
         Route::get('/studio/preset', \App\Http\Controllers\TeamStudioController::class)->defaults('action', 'preset')->name('studio.preset');
         Route::get('/studio', \App\Http\Controllers\TeamStudioController::class)->name('studio');
         foreach (['definition', 'draft', 'preview', 'create', 'budget', 'mapping', 'commerce'] as $action) {

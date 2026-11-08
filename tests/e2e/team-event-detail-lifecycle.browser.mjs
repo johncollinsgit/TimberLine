@@ -52,7 +52,7 @@ try {
     });
     const deferred = (denied = false) => { let started, release, timer; const ready = new Promise((done, reject) => { timer = setTimeout(() => reject(new Error('Expected held request did not start')), 12000); started = () => { clearTimeout(timer); done(); }; }), promise = new Promise(done => { release = done; }); return { ready, started, promise, release, denied }; };
     const snapshot = async () => ({ title: await page.locator('#tops-detail-title').innerText(), body: await page.locator('#tops-detail-body').innerText(), status: await page.locator('#tw-status').innerText() });
-    const openB = async () => { await cardB.click(); await page.locator('#tops-detail-body table').first().waitFor(); assert.equal(await page.locator('#tops-detail-title').innerText(), titleB); };
+    const openB = async () => { await cardB.click(); await page.locator('#tops-detail-body .event-glance').waitFor(); await dialog.getByText('More event options', { exact: true }).waitFor(); await dialog.locator('.event-updates-empty').filter({ hasText: 'Loading updates…' }).waitFor({ state: 'hidden' }); assert.equal(await page.locator('#tops-detail-title').innerText(), titleB); };
     console.log(name + ': settled tab request counts captured');
     for (const denied of [false, true]) {
       console.log(name + ': checking retired detail ' + (denied ? 'denial' : 'success'));
@@ -70,7 +70,7 @@ try {
       await route.fulfill({ json: { id: fixture.event_id, version: 2 }, headers: { 'X-Team-Viewer': headers['x-team-viewer'], 'X-Team-Workspace': headers['x-team-workspace'] } }); // Fake acceptance; no DB/provider mutation.
     });
     console.log(name + ': checking retired approval');
-    await cardA.click(); await dialog.getByLabel('Approve Venue: Fictional review candidate').check();
+    await cardA.click(); await dialog.getByText('More event options', { exact: true }).click(); await dialog.getByText('Confirm event details', { exact: true }).click(); await dialog.getByLabel('Approve Venue: Fictional review candidate').check();
     const pendingApproval = deferred(); holdApproval = pendingApproval;
     await dialog.getByRole('button', { name: 'Approve selected fields', exact: true }).click(); await pendingApproval.ready;
     await page.locator('#tops-detail-close').click(); await openB(); const beforeApproval = await snapshot(), countBefore = calls.filter(call => call.path === '/team/operations/records/' + fixture.event_id).length;

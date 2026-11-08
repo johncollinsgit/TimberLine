@@ -2,8 +2,10 @@
 
 namespace App\Services\Team;
 
+use App\Models\TeamOperationRecord;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Team\Operations\OperationsAccess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -16,8 +18,17 @@ class TeamFileService
 
     public function __construct(private TeamWorkAccess $access, private TeamWorkRepository $repository, private WorkGraph $graph) {}
 
-    private function authorize(Tenant $tenant, User $user, string $taskId, bool $write): array
+    private function authorize(Tenant $tenant, User $user, string $taskId, bool $write, string $targetType = 'task'): array
     {
+        if ($targetType === 'event') {
+            $event = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'kind' => 'event'])->findOrFail($taskId);
+            $access = app(OperationsAccess::class);
+            $access->record($tenant, $user, $event);
+            $access->area($tenant, $user, $event->area_id, $write);
+
+            return $access->actor($tenant, $user);
+        }
+        abort_unless($targetType === 'task', 404);
         $actor = $this->access->context($user, $tenant);
         abort_unless($this->graph->can($this->repository->state($tenant->id), $actor, 'task', $taskId, $write), 404);
 
@@ -38,10 +49,23 @@ class TeamFileService
     {
         $row = DB::table('team_file_uploads')->where('tenant_id', $tenant->id)->where('id', $id)->first();
         abort_unless($row, 404);
-        $this->authorize($tenant, $user, $row->task_id, $write);
+        [$type, $target] = $this->target($row);
+        $this->authorize($tenant, $user, $target, $write, $type);
         abort_if($write && (int) $row->uploader_user_id !== (int) $user->id, 404);
 
         return $row;
+    }
+
+    private function target(object $row): array
+    {
+        if ($row->target_type === 'event') {
+            abort_unless($row->task_id === 'event-updates' && Str::isUuid($row->event_id), 404);
+
+            return ['event', $row->event_id];
+        }
+        abort_unless($row->target_type === 'task' && $row->event_id === null, 404);
+
+        return ['task', $row->task_id];
     }
 
     private function prefix(object $upload): string
@@ -63,7 +87,7 @@ class TeamFileService
             });
         }
 
-        return ['id' => $row->id, 'task_id' => $row->task_id, 'filename' => $row->filename, 'mime_type' => $row->mime_type,
+        return ['id' => $row->id, 'task_id' => $row->target_type === 'task' ? $row->task_id : null, 'event_id' => $row->event_id, 'target_type' => $row->target_type, 'filename' => $row->filename, 'mime_type' => $row->mime_type,
             'size' => (int) $row->expected_size, 'sha256' => $row->sha256, 'status' => $row->status,
             'received_bytes' => (int) $chunks->sum('size'), 'received_chunks' => $chunks->pluck('chunk_index')->map(fn ($i) => (int) $i)->all(),
             'chunk_bytes' => self::CHUNK_BYTES, 'downloadable' => $row->status === 'ready'];
@@ -71,8 +95,18 @@ class TeamFileService
 
     public function begin(Tenant $tenant, User $user, string $taskId, array $input): array
     {
-        return $this->locked($tenant, function () use ($tenant, $user, $taskId, $input): array {
-            $this->authorize($tenant, $user, $taskId, true);
+        return $this->beginTarget($tenant, $user, $taskId, $input, 'task');
+    }
+
+    public function beginEvent(Tenant $tenant, User $user, string $eventId, array $input): array
+    {
+        return $this->beginTarget($tenant, $user, $eventId, $input, 'event');
+    }
+
+    private function beginTarget(Tenant $tenant, User $user, string $taskId, array $input, string $targetType): array
+    {
+        return $this->locked($tenant, function () use ($tenant, $user, $taskId, $input, $targetType): array {
+            $this->authorize($tenant, $user, $taskId, true, $targetType);
             $filename = trim($input['filename']);
             abort_if($filename === '' || preg_match('/[\x00-\x1f\x7f\\\\\/]/u', $filename), 422, 'Use a filename without paths or control characters.');
             abort_unless(in_array($input['mime_type'], self::MIMES, true), 422, 'This file type is not supported.');
@@ -81,7 +115,7 @@ class TeamFileService
             abort_if($input['size'] < 1 || $input['size'] > config('team_work.file_max_bytes'), 422, 'This file exceeds the upload limit.');
             $existing = DB::table('team_file_uploads')->where('tenant_id', $tenant->id)->where('uploader_user_id', $user->id)->where('client_key', $input['client_key'])->first();
             if ($existing) {
-                abort_unless($existing->task_id === $taskId && $existing->filename === $filename && $existing->mime_type === $input['mime_type']
+                abort_unless($this->target($existing) === [$targetType, $taskId] && $existing->filename === $filename && $existing->mime_type === $input['mime_type']
                     && (int) $existing->expected_size === $input['size'] && hash_equals($existing->sha256, $input['sha256']), 409, 'This upload key belongs to different content.');
 
                 return $this->dto($existing, true);
@@ -92,7 +126,7 @@ class TeamFileService
             $reserved += app(TeamFileQuota::class)->operationBytes($tenant->id);
             abort_if($reserved + $input['size'] > config('team_work.file_tenant_quota_bytes'), 422, 'The workspace file quota is full.');
             $id = (string) Str::uuid();
-            DB::table('team_file_uploads')->insert(['id' => $id, 'tenant_id' => $tenant->id, 'task_id' => $taskId, 'uploader_user_id' => $user->id,
+            DB::table('team_file_uploads')->insert(['id' => $id, 'tenant_id' => $tenant->id, 'task_id' => $targetType === 'task' ? $taskId : 'event-updates', 'target_type' => $targetType, 'event_id' => $targetType === 'event' ? $taskId : null, 'uploader_user_id' => $user->id,
                 'client_key' => $input['client_key'], 'filename' => $filename, 'mime_type' => $input['mime_type'], 'expected_size' => $input['size'],
                 'sha256' => $input['sha256'], 'status' => 'uploading', 'storage_key' => null, 'created_at' => now(), 'updated_at' => now()]);
 
@@ -168,11 +202,12 @@ class TeamFileService
             if (! $disk->exists($key) || $disk->size($key) !== (int) $row->expected_size || ! hash_equals($row->sha256, hash_file('sha256', $disk->path($key)))) {
                 $scan = 'rejected';
             }
-            $this->authorize($tenant, $user, $row->task_id, true); // Recheck after scan; an upload cannot restore removed access.
+            [$type, $target] = $this->target($row);
+            $this->authorize($tenant, $user, $target, true, $type); // Recheck after scan; an upload cannot restore removed access.
             $status = match ($scan) {
                 'clean' => 'ready', 'rejected' => 'rejected', default => 'quarantined'
             };
-            if ($status === 'ready') {
+            if ($status === 'ready' && $type === 'task') {
                 $state = $this->repository->state($tenant->id);
                 $this->repository->execute($tenant->id, fn () => $this->access->context($user, $tenant), ['kind' => 'task.attachment', 'id' => $row->task_id,
                     'attachment_id' => $id, 'expected_version' => $state['tasks'][$row->task_id]['version'], 'idempotency_key' => $id]);
@@ -204,7 +239,7 @@ class TeamFileService
         $actor = $this->authorize($tenant, $user, $taskId, false);
         $canWrite = $this->graph->can($this->repository->state($tenant->id), $actor, 'task', $taskId, true);
 
-        return DB::table('team_file_uploads')->where('tenant_id', $tenant->id)->where('task_id', $taskId)
+        return DB::table('team_file_uploads')->where('tenant_id', $tenant->id)->where('task_id', $taskId)->where('target_type', 'task')
             ->where(function ($query) use ($user) {
                 $query->where('status', 'ready')->orWhere('uploader_user_id', $user->id);
             })
@@ -213,10 +248,20 @@ class TeamFileService
                 + ((int) $row->uploader_user_id === (int) $user->id ? ['client_key' => $row->client_key] : []))->all();
     }
 
-    private function verifiedReadyFile(Tenant $tenant, User $user, string $id, ?string $taskId = null): array
+    public function eventListing(Tenant $tenant, User $user, string $eventId): array
+    {
+        $this->authorize($tenant, $user, $eventId, false, 'event');
+
+        return DB::table('team_file_uploads')->where(['tenant_id' => $tenant->id, 'target_type' => 'event', 'event_id' => $eventId])
+            ->where(fn ($query) => $query->where('status', 'ready')->orWhere('uploader_user_id', $user->id))
+            ->where('status', '!=', 'cancelled')->orderBy('created_at')->get()->map(fn ($row) => $this->dto($row))->all();
+    }
+
+    private function verifiedReadyFile(Tenant $tenant, User $user, string $id, ?string $taskId = null, ?string $targetType = null): array
     {
         $row = $this->upload($tenant, $user, $id, false);
-        abort_unless(($taskId === null || $row->task_id === $taskId) && $row->status === 'ready'
+        [$type, $target] = $this->target($row);
+        abort_unless(($taskId === null || $target === $taskId) && ($targetType === null || $type === $targetType) && $row->status === 'ready'
             && $row->storage_key === $this->prefix($row).'/original', 404);
         $disk = Storage::disk('team_private');
         abort_unless($disk->exists($row->storage_key) && $disk->size($row->storage_key) === (int) $row->expected_size
@@ -226,9 +271,9 @@ class TeamFileService
     }
 
     /** A presentation of existing scanned bytes; this never scans or promotes a file. */
-    public function preview(Tenant $tenant, User $user, string $id, string $taskId)
+    public function preview(Tenant $tenant, User $user, string $id, string $taskId, string $targetType = 'task')
     {
-        [$row, $disk] = $this->verifiedReadyFile($tenant, $user, $id, $taskId);
+        [$row, $disk] = $this->verifiedReadyFile($tenant, $user, $id, $taskId, $targetType);
         abort_unless(in_array($row->mime_type, ['image/jpeg', 'image/png'], true), 404);
         abort_unless((int) $row->expected_size > 0 && (int) $row->expected_size <= config('team_work.file_max_bytes'), 404);
         $path = $disk->path($row->storage_key);

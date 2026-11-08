@@ -43,7 +43,7 @@ export function installPremium(root) {
     secondaryTools.querySelector('summary').textContent = 'Workspace & tools';
     for (const item of contextParts) compactContext.append(item);
     for (const item of secondaryActions) compactActions.append(item);
-    $('new-task').textContent = compactTools.matches ? '+ Create' : createLabel;
+    $('new-task').textContent = compactTools.matches ? '+ Create' : $('new-task').dataset.eventCreate === '1' ? '+ Create event' : createLabel;
     if (areaLauncher) {
       areaLauncher.hidden = true;
       if (areaLabel) areaLabel.hidden = true;
@@ -263,7 +263,7 @@ export function installPremium(root) {
     if (event.key === 'n' && context?.ready()) { event.preventDefault(); ctxCreate(); }
     if (['ArrowDown', 'ArrowUp'].includes(event.key) && event.target.closest('#tw-list')) { const rows = [...$('list').querySelectorAll('.task-open')]; const current = rows.indexOf(document.activeElement); event.preventDefault(); rows[Math.max(0, Math.min(rows.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)))]?.focus(); }
   });
-  function ctxCreate() { if (context?.data.can_create_task) context.createTask(); }
+  function ctxCreate() { if (context?.data.can_create_task || window.TeamOperations?.isEventSurface?.()) context.createTask(); }
   return {
     get context() { return context; },
     beforeLoad() { window.TeamOperations?.unmountEventCalendar(); },
@@ -293,7 +293,7 @@ export function installPremium(root) {
         $('save-view').disabled = true;
         for (const id of ['calendar-style', 'month-label', 'calendar-format-label', 'task-calendar-context']) $(id).hidden = true;
         window.TeamOperations.mountEventSurface($('list'), { layout: ctx.layout, query: $('search').value, renderCard: eventCard }).then(mounted => {
-          if (context !== ctx || !ctx.ready() || mounted) return;
+          if (context !== ctx || mounted || !ctx.ready()) return;
           $('count').hidden = $('list-heading').hidden = false; renderNative(ctx); if ($('asana-work')) $('asana-work').hidden = false;
           asana?.render(ctx); window.TeamOperations?.renderPersonal(ctx);
         }).catch(error => { if (context === ctx) ctx.notice(error.message); });

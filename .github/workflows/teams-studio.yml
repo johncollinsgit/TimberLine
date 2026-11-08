@@ -59,4 +59,7 @@ jobs:
       - name: Verify policies, tenant isolation and native authorization on MySQL
         run: php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.team-studio-mysql.xml --compact
       - name: Verify interrupted event creation and competing commands
-        run: php scripts/everbranch-team/studio-mysql-concurrency.php
+        run: |
+          php scripts/everbranch-team/studio-mysql-concurrency.php
+          php scripts/everbranch-team/setup-mysql-concurrency.php
+          php scripts/everbranch-team/event-updates-mysql-concurrency.php

@@ -84,7 +84,7 @@ class SearchDocuments
                     $this->index->put($tenantId, $kind, $id, $this->native($kind, $record));
                 }
                 if ($kind === 'task') {
-                    foreach (DB::table('team_file_uploads')->where('tenant_id', $tenantId)->whereIn('id', $record['attachment_ids'] ?? [])->get() as $file) {
+                    foreach (DB::table('team_file_uploads')->where('tenant_id', $tenantId)->where('target_type', 'task')->whereIn('id', $record['attachment_ids'] ?? [])->get() as $file) {
                         $this->index->put($tenantId, 'file', $file->id, $this->file($file));
                     }
                 }
@@ -297,7 +297,7 @@ class SearchDocuments
                 return $member ? $this->person($member) : null;
             }
             if ($kind === 'file') {
-                $file = DB::table('team_file_uploads')->where(['tenant_id' => $tenant->id, 'id' => $id, 'status' => 'ready'])->first();
+                $file = DB::table('team_file_uploads')->where(['tenant_id' => $tenant->id, 'id' => $id, 'status' => 'ready', 'target_type' => 'task'])->first();
                 if (! $file || ! $this->graph->can($state, $actor, 'task', $file->task_id)
                     || ! in_array($id, $state['tasks'][$file->task_id]['attachment_ids'] ?? [], true)) {
                     return null;

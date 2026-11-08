@@ -1,3 +1,27 @@
+## Event details, updates and first-time Teams setup (November 8; candidate)
+
+Read `docs/operations/teams-event-details-and-setup.md` before changing event
+cards, updates/uploads, setup or travel. Reuse the shared operations/Studio/Pay
+read models; never show technical hashes as tenant-facing event information,
+combine workbook/Pay revenue or infer historical matches from names. Missing
+facts remain unknown. Unique note candidates may be displayed without silently
+approving them.
+
+Setup is owner/admin, versioned and tenant-scoped. Preserve unrelated metadata,
+existing area authority and saved event/budget inputs; default people are not
+invitations, access grants or source assignments. Asana is optional for native
+Teams. Preserve Modern Forestry's planned 2027 acceptance/cutover guard.
+
+Event updates use typed existing file storage and frozen source-command receipts.
+Never turn a claimed/unknown source post into an unsent draft or retry its POST.
+Only exact database-backed unsent proof can retire the original child identity;
+source comment edits take precedence over old receipt text. Downloads/previews
+require current target admission, ready scanning and integrity checks.
+
+This candidate still needs protected release, live browser and production scanner
+acceptance. Scanner operator/client tests are local contracts, not live antivirus
+evidence. Keep the documented guarded MySQL, browser and scanner checks in CI.
+
 ## Stable idle event refresh (November 8; candidate)
 
 Visible event views retain their current contents without fading during the

@@ -239,7 +239,7 @@ class EventTasks
         }
         abort_if(isset($changes['comment']) && (count($changes) !== 1 || ! in_array('stories:write', preg_split('/\s+/', $c->settings['scopes'] ?? ''), true)), 422, 'Authorize comment posting and send comments separately.');
         ksort($changes);
-        $hash = hash('sha256', json_encode([$area->id, $c->id, $c->generation, $input['task_id'], $input['parent_id'] ?? null, $input['version'], $changes], JSON_THROW_ON_ERROR));
+        $hash = $this->commandHash($area, $c->id, $c->generation, $input['task_id'], $input['parent_id'] ?? null, $input['version'], $changes);
         $existing = TeamOperationAttempt::where(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'request_id' => $input['request_id']])->first();
         if ($existing) {
             abort_unless($existing->kind === 'asana.update' && hash_equals($existing->input_hash, $hash), 409, 'This request already belongs to different changes.');
@@ -271,6 +271,34 @@ class EventTasks
         return $this->receipt($attempt);
     }
 
+    private function commandHash(TeamArea $area, string $connection, int $generation, string $taskId, ?string $parentId, string $version, array $changes): string
+    {
+        ksort($changes);
+
+        return hash('sha256', json_encode([$area->id, $connection, $generation, $taskId, $parentId, $version, $changes], JSON_THROW_ON_ERROR));
+    }
+
+    /** Caller holds the source-task lock and its parent receipt row transaction. */
+    public function retireUnsentComment(Tenant $tenant, User $user, TeamArea $area, array $source, string $comment, array $proof): TeamOperationAttempt
+    {
+        $this->access->area($tenant, $user, $area->id, true);
+        TeamProviderConnection::where(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'area_id' => $area->id])->findOrFail($source['connection_id']);
+        abort_unless(is_int($source['connection_generation'] ?? null) && $source['connection_generation'] > 0, 409, 'The frozen source generation is unavailable. Keep this draft for review.');
+        $changes = ['comment' => $comment];
+        $hash = $this->commandHash($area, $source['connection_id'], $source['connection_generation'], $source['task_id'], null, $source['version'], $changes);
+        // Reserve the exact original child key even if preparation never made a
+        // row. An old worker past its initial lookup cannot create/post it later.
+        $child = TeamOperationAttempt::firstOrCreate(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'request_id' => $source['request_id']], ['id' => (string) Str::uuid(), 'area_id' => $area->id, 'connection_id' => $source['connection_id'], 'kind' => 'asana.update', 'status' => 'prepared', 'input_hash' => $hash,
+            'payload' => ['task_id' => $source['task_id'], 'parent_id' => null, 'connection_generation' => $source['connection_generation'], 'version' => $source['version'], 'changes' => $changes, 'before' => []]]);
+        $child = TeamOperationAttempt::where('tenant_id', $tenant->id)->whereKey($child->id)->lockForUpdate()->firstOrFail();
+        abort_unless($child->kind === 'asana.update' && $child->area_id === $area->id && $child->connection_id === $source['connection_id'] && hash_equals($child->input_hash, $hash), 409, 'The original child key belongs to different content.');
+        if ($child->status === 'prepared') {
+            $child->update(['status' => 'reviewed', 'result' => $proof]);
+        }
+
+        return $child->fresh();
+    }
+
     private function attempt(Tenant $tenant, User $user, TeamArea $area, string $id): TeamOperationAttempt
     {
         $this->access->area($tenant, $user, $area->id, true);
@@ -278,23 +306,31 @@ class EventTasks
         return TeamOperationAttempt::where(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'area_id' => $area->id, 'kind' => 'asana.update'])->findOrFail($id);
     }
 
-    public function dispatch(Tenant $tenant, User $user, TeamArea $area, string $id): array
+    /** Serialization only; callers must perform current object admission. */
+    public function withSourceTaskLock(Tenant $tenant, string $workspace, string $taskId, callable $perform): mixed
     {
-        $attempt = $this->attempt($tenant, $user, $area, $id);
-        $c = $this->connection($tenant, $user, $area, $attempt->connection_id);
-        abort_unless($this->writable($c) && $c->generation === $attempt->payload['connection_generation'], 409, 'The connection or its write permission changed.');
-        // Serialize this app's saves across accounts viewing the same source task.
-        // Asana users can still edit concurrently; the provider offers no atomic CAS here.
-        $lock = Cache::lock('team-event-save:'.hash('sha256', $tenant->id.':'.$c->settings['source']['asana_workspace'].':'.$attempt->payload['task_id']), 180);
+        abort_unless(ctype_digit($workspace) && ctype_digit($taskId), 409, 'The original source identity is unavailable.');
+        $lock = Cache::lock('team-event-save:'.hash('sha256', $tenant->id.':'.$workspace.':'.$taskId), 180);
         abort_unless($lock->get(), 409, 'Another save is in progress. Refresh before continuing.');
         try {
-            return $this->dispatchLocked($tenant, $area, $c, $attempt->fresh());
+            return $perform();
         } finally {
             $lock->release();
         }
     }
 
-    private function dispatchLocked(Tenant $tenant, TeamArea $area, TeamProviderConnection $c, TeamOperationAttempt $attempt): array
+    public function dispatch(Tenant $tenant, User $user, TeamArea $area, string $id, ?callable $beforeClaim = null): array
+    {
+        $attempt = $this->attempt($tenant, $user, $area, $id);
+        $c = $this->connection($tenant, $user, $area, $attempt->connection_id);
+        abort_unless($this->writable($c) && $c->generation === $attempt->payload['connection_generation'], 409, 'The connection or its write permission changed.');
+
+        // Serialize this app's saves across accounts viewing the same source task.
+        // Asana users can still edit concurrently; the provider offers no atomic CAS here.
+        return $this->withSourceTaskLock($tenant, (string) $c->settings['source']['asana_workspace'], (string) $attempt->payload['task_id'], fn () => $this->dispatchLocked($tenant, $area, $c, $attempt->fresh(), $beforeClaim));
+    }
+
+    private function dispatchLocked(Tenant $tenant, TeamArea $area, TeamProviderConnection $c, TeamOperationAttempt $attempt, ?callable $beforeClaim = null): array
     {
         $id = $attempt->id;
         if ($attempt->status !== 'prepared') {
@@ -303,7 +339,12 @@ class EventTasks
         abort_if(TeamOperationAttempt::where(['tenant_id' => $tenant->id, 'kind' => 'asana.update'])->whereKeyNot($id)->whereIn('status', ['executing', 'unknown'])->get()->contains(fn ($a) => ($a->payload['task_id'] ?? '') === $attempt->payload['task_id']), 409, 'An earlier save for this task needs review before another change.');
         $task = $this->read($c, $attempt->payload['task_id'], $attempt->payload['parent_id'] ?? null);
         abort_unless(hash_equals($this->present($c, $task)['version'], $attempt->payload['version']), 409, 'Asana changed after review. Refresh before saving.');
-        $claimed = TeamOperationAttempt::whereKey($id)->where('status', 'prepared')->update(['status' => 'executing', 'updated_at' => now()]);
+        $claim = fn () => TeamOperationAttempt::whereKey($id)->where('status', 'prepared')->update(['status' => 'executing', 'updated_at' => now()]);
+        $claimed = $beforeClaim ? \Illuminate\Support\Facades\DB::transaction(function () use ($beforeClaim, $claim) {
+            $beforeClaim();
+
+            return $claim();
+        }, 3) : $claim();
         if (! $claimed) {
             return $this->receipt($attempt->fresh());
         }
