@@ -205,3 +205,27 @@ provider, experiment, history and physical-device acceptance.
   evidence/refund/tenant tests, intercepted browser acceptance, Swift contract
   tests and unsigned simulator compilation. Production rollout, actual Macon
   mappings/rates and supported physical-device acceptance remain outstanding.
+
+## Ask Everbranch entry (source candidate)
+
+Premium standalone Teams mounts the existing `app-ai-assistant` only after
+`AiAssistantAccess::allows`. Its own Teams loader imports `mountAiAssistantNow`
+without the unrelated workspace shell. Opening reads the existing tenant-bound
+assistant session; only an explicit question dispatches AI. Existing owner/admin,
+verification, entitlement, model, cap and prepaid-credit checks remain unchanged.
+Unapproved workspaces and non-premium Teams retain the guarded real setup link;
+a failed lazy import reveals the same tenant-bound fallback. No iframe is used.
+
+The dialog explicitly excludes Teams event details and Asana notes from current
+workspace context. A future event provider needs actor-owned source authorization
+before AI account locks and version admission afterward. Do not add cached notes
+to the prompt or infer access from an event name. This entry creates no new key,
+credit purchase, automatic reload, provider activation or source mutation.
+
+Focused verification: `node --test tests/e2e/team-assistant-loader.test.mjs`,
+`php vendor/bin/pest -c phpunit.team.xml tests/Feature/Team/TeamAskEntryTest.php`,
+then build the existing Vite entries and run
+`node tests/e2e/team-assistant.browser.mjs`. The browser fixture renders the actual
+guarded Blade view through the testing framework, uses the compiled Teams loader
+and shared dialog, and intercepts all API/provider requests. It is source evidence,
+not production AI access or physical-device proof.

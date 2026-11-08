@@ -4158,3 +4158,12 @@ original paid receipt evidence and the shared canonical customer service. Never
 recompute a frozen budget from today's company policy, infer event identity by
 name/date, or label a captured contact as a confirmed purchaser. New Pay event
 controls stay default-off pending protected release and acceptance.
+
+### Teams Ask Everbranch entry candidate
+
+Standalone premium Teams reuses the guarded existing assistant host and lazy
+loader; approved workspace chat stays in place, while unapproved access retains
+the tenant-bound setup link. Selected Teams events and Asana notes are explicitly
+outside current AI context. No spending approval, credit purchase or provider
+activation is implied. See the Ask section in
+`docs/operations/teams-studio-foundation.md` for guards and focused acceptance.

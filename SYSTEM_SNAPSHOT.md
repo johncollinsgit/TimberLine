@@ -4817,3 +4817,12 @@ services retain authority. Pay controls require default-off
 included. Coverage limits and release gaps are in
 `docs/operations/teams-studio-foundation.md`. The full Teams parity backlog remains
 open; this candidate is not a completion or deployment claim.
+
+## Teams Ask Everbranch entry candidate (2026-11-08 UTC)
+
+The standalone premium Teams sidebar can mount the existing approved workspace
+assistant in place through its own lazy loader. Existing AI access, spending and
+prepaid-credit authorities remain; setup-only users retain the guarded real link.
+Teams event/Asana note context is explicitly excluded pending a separately
+authorized source adapter. Fake-provider source/browser tests do not establish
+production AI access, funding or physical-device acceptance.
