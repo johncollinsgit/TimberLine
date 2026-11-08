@@ -1,4 +1,4 @@
-@if(config('team_work.search_enabled'))
+@if(config('team_work.search_enabled') && ! config('team_work.premium_enabled'))
 <link rel="stylesheet" href="{{ asset('css/everbranch-search.css') }}?v={{ filemtime(public_path('css/everbranch-search.css')) }}">
 <header class="eb-workspace-header" aria-label="Workspace search">
     <span class="eb-header-start">{{ $teamAppName ?? 'Everbranch Teams' }}</span>

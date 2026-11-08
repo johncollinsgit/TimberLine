@@ -20,10 +20,26 @@ class TeamSearchController extends Controller
     public function __invoke(Request $request, SearchIndex $index, SearchDocuments $documents, SearchMatcher $matcher)
     {
         abort_unless(config('team_work.search_enabled'), 404);
+        abort_unless($index->available(), 503, 'Workspace search is being prepared.');
+
+        return $this->search($request, $index, $documents, $matcher);
+    }
+
+    /** The toolbar can search canonical saved work before an index rollout. */
+    public function workspace(Request $request, SearchIndex $index, SearchDocuments $documents, SearchMatcher $matcher)
+    {
+        $tenant = $request->attributes->get('current_tenant');
+        $prepared = $tenant instanceof Tenant && config('team_work.search_enabled') && $index->available()
+            && \Illuminate\Support\Facades\DB::table('team_search_runs')->where('tenant_id', $tenant->id)->where('schema_version', SearchMatcher::VERSION)->where('warnings', 0)->whereNotNull('completed_at')->exists();
+
+        return $this->search($request, $index, $documents, $matcher, ! $prepared);
+    }
+
+    private function search(Request $request, SearchIndex $index, SearchDocuments $documents, SearchMatcher $matcher, bool $canonical = false)
+    {
         $tenant = $request->attributes->get('current_tenant');
         abort_unless($tenant instanceof Tenant, 403);
         $actor = app(TeamWorkAccess::class)->context($request->user(), $tenant);
-        abort_unless($index->available(), 503, 'Workspace search is being prepared.');
         $input = $request->validate(['q' => 'nullable|string|max:500', 'type' => 'nullable|string|max:32', 'project' => 'nullable|string|max:120',
             'person' => 'nullable|string|max:120', 'state' => 'nullable|in:active,closed', 'cursor' => 'nullable|string|max:4096',
             'limit' => 'nullable|integer|min:1|max:25', 'recent' => 'nullable|array|max:8', 'recent.*' => 'string|max:160', 'ref' => 'nullable|string|max:160']);
@@ -58,6 +74,7 @@ class TeamSearchController extends Controller
         $commands = $this->commands($tenant, $request, $actor, $state);
         $items = [];
         $scores = [];
+        $coverage = null;
         if (! $query['commandsOnly']) {
             if ($query['text'] === '') {
                 foreach ($input['recent'] ?? [] as $ref) {
@@ -68,7 +85,7 @@ class TeamSearchController extends Controller
                 }
             } else {
                 $fast = [];
-                foreach ($index->fastCandidates($tenant->id, $input['q'] ?? '')->cursor() as $candidate) {
+                foreach ($canonical ? [] : $index->fastCandidates($tenant->id, $input['q'] ?? '')->cursor() as $candidate) {
                     $indexedRank = [(int) $candidate->bucket, 0, (int) $candidate->sort_closed, -(int) $candidate->sort_updated, $candidate->kind.':'.$candidate->entity_id];
                     if ($after && ($indexedRank <=> $after) <= 0) {
                         continue;
@@ -91,7 +108,9 @@ class TeamSearchController extends Controller
                 }
                 $completeTopPage = count($fast) > $limit;
                 $items = $fast;
-                $candidates = $completeTopPage ? [] : $index->candidates($tenant->id, $input['q'] ?? '')->select(['id', 'kind', 'entity_id'])->orderBy('id')->cursor();
+                $candidates = $canonical
+                    ? app(\App\Services\Team\Search\CanonicalSearchCandidates::class)->references($tenant, $state, $coverage)
+                    : ($completeTopPage ? [] : $index->candidates($tenant->id, $input['q'] ?? '')->select(['id', 'kind', 'entity_id'])->orderBy('id')->cursor());
                 foreach ($candidates as $candidate) {
                     $item = $documents->resolve($tenant, $request->user(), $actor, $state, $candidate->kind, $candidate->entity_id);
                     if ($item && ($score = $matcher->score($item, $query)) !== null) {
@@ -162,7 +181,8 @@ class TeamSearchController extends Controller
             'matching_ms' => round(($matchedAt - $stateReadAt) * 1000), 'presentation_ms' => round((microtime(true) - $matchedAt) * 1000), 'result_count' => count($items), 'has_more' => $more]);
 
         return response()->json(['items' => array_map(fn ($item) => $this->display($item, $input['q'] ?? '', $matcher), $items),
-            'next_cursor' => $cursor, 'facets' => array_map('array_values', $facets), 'schema_version' => SearchMatcher::VERSION])
+            'next_cursor' => $cursor, 'facets' => array_map('array_values', $facets), 'schema_version' => SearchMatcher::VERSION,
+            ...($coverage ? ['coverage' => $coverage] : [])])
             ->header('Cache-Control', 'private, no-store');
     }
 

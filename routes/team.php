@@ -34,6 +34,7 @@ Route::middleware(['auth', 'verified', 'tenant.access', \App\Http\Middleware\Ens
         Route::post('/events/asana/changes/{id}/dispatch', \App\Http\Controllers\TeamEventTasksController::class)->whereUuid('id')->defaults('action', 'dispatch')->name('events.dispatch');
         Route::post('/events/asana/changes/{id}/reconcile', \App\Http\Controllers\TeamEventTasksController::class)->whereUuid('id')->defaults('action', 'reconcile')->name('events.reconcile');
         Route::get('/search', \App\Http\Controllers\TeamSearchController::class)->withoutMiddleware('throttle:120,1')->middleware('throttle:team-search')->name('search');
+        Route::get('/search/all', \App\Http\Controllers\TeamUniversalSearchController::class)->withoutMiddleware('throttle:120,1')->middleware('throttle:team-search')->name('search.all');
         Route::controller(\App\Http\Controllers\TeamOperationsController::class)->name('operations.')->group(function (): void {
             Route::get('/areas', 'areas')->name('areas');
             Route::post('/areas', 'createArea')->name('areas.create');

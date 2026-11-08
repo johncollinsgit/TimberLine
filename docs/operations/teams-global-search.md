@@ -1,8 +1,56 @@
 # Everbranch global search and command palette
 
-Source feature, default off in native Teams. Deployment and runtime activation are separate.
+The standalone indexed `/team/search` surface is default off. The premium Teams
+toolbar also offers the unified saved-work search described below. Deployment and
+runtime activation remain separate.
 The public campus demo embeds the same first-party palette and relevance implementation;
 it remains a fictional browser simulation with `connect-src 'none'`.
+
+## Unified Teams toolbar
+
+Premium Teams uses one centered `[data-team-universal-search]` entry and the same
+first-party palette as the campus demo. `GET /team/search/all` adapts the existing
+Teams search resolver/matcher and `GlobalSearchCoordinator`; it creates no search
+store or provider connection. Current TeamWork access, active membership and the
+viewer/workspace request and response fences apply to every request. App results
+retain their provider's visibility policy and are additionally checked against
+the destination's existing role/module middleware. App URLs are bound to the
+current tenant and same origin. Every selection is resolved again before opening;
+opening work still respects retained-edit/navigation guards.
+
+Saved Teams events, projects, tasks/comments, current project updates, ready file
+metadata and attested saved Gmail copies are searchable independently of loaded
+list/board/calendar rows. If an index is not enabled and complete for the current
+matcher version with zero warnings, a read-only canonical-reference scan uses the
+same `SearchDocuments::resolve` authorization and projections. It is capped at
+2,500 references per request (`team_work.search_canonical_limit`, hard maximum
+10,000); reaching the cap returns `coverage.complete=false` and a visible notice,
+without inaccessible counts. The coverage ceiling does not grant access. Saved
+source coverage is distinguished from live source freshness. No provider calls,
+index writes, source refreshes or rollout flag changes occur while typing. TeamWork
+and Operations authorization/entitlement gates remain effective in this fallback.
+For larger workspaces use the reviewed index rollout below; this UI does not run it.
+
+Teams filters apply to Teams records; project/person/state filters suppress other
+app matches rather than applying unrelated IDs to them. App providers currently
+return a bounded top 20 matches; refine the query for more specific results. Pages
+combine current app matches and Teams keyset pages under an encrypted cursor
+bound to actor, tenant, query and filters. No total-workspace completeness claim
+is made. Existing `tw-search` remains a view filter within Controls; it does not
+drive the unified search.
+
+Focused acceptance:
+
+```sh
+vendor/bin/pest -c phpunit.team.xml tests/Feature/Team/TeamUniversalSearchTest.php tests/Feature/Team/TeamGlobalSearchTest.php --compact
+node tests/e2e/team-universal-search.browser.mjs
+```
+
+The browser test creates a guarded disposable SQLite database, uses real
+authenticated local HTTP with fictional records, blocks foreign-origin traffic,
+and checks Chromium/WebKit at 320, 390 and 1440px. It verifies the single entry,
+saved event search with index flags off, keyboard/focus, source coverage, and the
+long-name workspace chooser without business writes.
 
 ## Experience and contract
 
