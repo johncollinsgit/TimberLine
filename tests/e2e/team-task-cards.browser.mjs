@@ -44,7 +44,8 @@ try {
     await page.goto(`${origin}/teams?tenant=${fixture.tenant}`); await page.waitForFunction(() => window.TeamPremium?.context?.ready());
     await page.locator('#tw-filter-toggle').click(); await page.locator('#tw-source-filter').selectOption('native');
     await page.locator('#tw-list .teams-task-card').filter({ hasText: 'Fictional early task' }).waitFor();
-    await page.locator('#tw-controls-panel').press('Escape');
+    await page.locator('#tw-filter-toggle').focus(); await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#tw-controls-panel').isVisible(), false);
     assert.equal(await page.locator('#tw-filter-toggle').evaluate(node => node === document.activeElement), true);
     const native = page.locator('#tw-list .teams-task-card'); assert.equal(await native.count(), 6);
     const dates = await native.locator('time').evaluateAll(nodes => nodes.map(node => node.dateTime));
@@ -52,8 +53,9 @@ try {
     for (const width of [320, 390, 1440]) {
       await page.setViewportSize({ width, height: 1000 });
       const geometry = await native.evaluateAll(nodes => nodes.map(node => { const b = node.getBoundingClientRect(); return { width: b.width, height: b.height, nested: node.querySelectorAll('button,input,select,a').length }; }));
-      assert.ok(geometry.every(b => Math.abs(b.width - b.height) < 2 && b.width >= 220 && b.nested === 0));
+      assert.ok(geometry.every(b => Math.abs(b.width - b.height) < 2 && b.width >= 220 && b.width <= 281 && b.height <= 281 && b.nested === 0));
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+      if (width === 1440) assert.ok(await native.evaluateAll(nodes => new Set(nodes.map(node => Math.round(node.getBoundingClientRect().left))).size) >= 3, 'Desktop board has multiple compact columns');
       await page.screenshot({ path: join(evidence, `${engine}-native-board-${width}.png`), fullPage: true });
     }
     await native.filter({ hasText: 'Fictional early task' }).click();
