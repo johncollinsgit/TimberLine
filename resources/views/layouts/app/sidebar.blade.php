@@ -197,6 +197,7 @@
   {{-- Sidebar --}}
   <flux:sidebar
     id="app-sidebar"
+    data-sidebar-workspace="{{ (! $isLandlordShell && ! $isNeutralTenantSurface) ? $activeTenant?->slug : '' }}"
     sticky
     :collapsible="true"
     class="relative overflow-hidden mf-transition border-e mf-sidebar-theme-shell"
