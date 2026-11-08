@@ -13,7 +13,7 @@
 <section class="teams-work-toolbar" aria-label="Work controls">
 <div class="teams-work-viewbar">
     <div class="teams-tabs" role="tablist" aria-label="Work layout"><button type="button" data-team-layout="list" role="tab" aria-selected="true">List</button><button type="button" data-team-layout="board" role="tab" aria-selected="false">Board</button><button type="button" data-team-layout="calendar" role="tab" aria-selected="false">Calendar</button></div>
-    <div data-team-universal-search class="teams-universal-search"></div>
+    <div data-team-universal-search data-search-url="{{ route('team.search.all', ['tenant' => $tenant->slug]) }}" class="teams-universal-search"></div>
     <div class="teams-work-view-tools"><label><span class="sr-only">More work views</span><select id="tw-more-views"><option value="">More views</option><option value="timeline">Timeline</option><option value="workload">Workload</option><option value="dashboard">Dashboard</option></select></label><button id="tw-filter-toggle" type="button" aria-expanded="false" aria-controls="tw-controls-panel">Controls</button></div>
 </div>
 <div id="tw-controls-panel" class="teams-controls-panel" hidden>
@@ -28,7 +28,7 @@
     <label>Completion<select id="tw-completion"><option value="incomplete">Incomplete</option><option value="all">All tasks</option><option value="completed">Completed</option></select></label>
     <label>Priority filter<select id="tw-priority-filter"><option value="">Any priority</option><option>low</option><option>normal</option><option>high</option><option>urgent</option></select></label>
     <label>Due date filter<select id="tw-date-filter"><option value="all">Any date</option><option value="today">Today</option><option value="tomorrow">Tomorrow</option><option value="overdue">Overdue incomplete</option><option value="week">This week</option><option value="undated">No due date</option></select></label>
-    <label>Sort tasks<select id="tw-sort"><option value="">Project order / default</option><option value="due">Due date</option><option value="start">Start date</option><option value="priority">Priority</option><option value="created">Created date (oldest first)</option><option value="title">Title</option></select></label><button id="tw-clear-filters" type="button">Reset filters</button>
+    <label>Sort tasks<select id="tw-sort"><option value="">Date order (default)</option><option value="due">Due date</option><option value="start">Start date</option><option value="priority">Priority</option><option value="created">Created date (oldest first)</option><option value="title">Title</option></select></label><button id="tw-clear-filters" type="button">Reset filters</button>
 </div>
 <div class="teams-work-calendar-options"><label id="tw-month-label" hidden>Calendar month<input id="tw-month" type="month"></label><label id="tw-calendar-format-label" hidden>Calendar format<select id="tw-calendar-style" aria-label="Calendar format" hidden><option value="grid">Month grid (UTC)</option><option value="agenda">Agenda (UTC)</option></select></label><button id="tw-event-calendar-entry" type="button" hidden>Event calendar</button><p id="tw-task-calendar-context" hidden>Task due dates use UTC. Event calendars keep reviewed setup and selling days separate.</p></div>
 <details id="tw-view-tools" class="teams-work-secondary" open>

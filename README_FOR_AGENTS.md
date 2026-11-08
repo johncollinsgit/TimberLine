@@ -1,3 +1,14 @@
+## Unified Teams work views (November 8; candidate)
+
+The main work toolbar exposes List, Board, Calendar, an authorized universal
+search, More views and Controls. Secondary filters, source/project choices,
+saved views, work areas, workspace tools and refresh stay inside Controls.
+Home uses the same authorized Events surface for each work layout when an Events
+area exists; explicit task/project views retain task semantics. Event schedule
+evidence, source freshness and incomplete coverage remain distinct from Asana
+task due dates. Browser acceptance and protected release are required before
+claiming this candidate live.
+
 ## Dedicated Teams app release (November 7; source candidate)
 
 Read `docs/operations/everbranch-team-connected-operations-runbook.md` before

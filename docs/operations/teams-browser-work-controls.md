@@ -68,3 +68,14 @@ continued page, so results are not discarded during active browsing. Explicit
 Refresh and returning to a visible tab still restart the selected window and
 recheck current access. Previously loaded source records are not continuously
 reverified while the user remains on the page.
+
+## Unified Teams work views (November 8; candidate)
+
+The main work toolbar exposes List, Board, Calendar, an authorized universal
+search, More views and Controls. Secondary filters, source/project choices,
+saved views, work areas, workspace tools and refresh stay inside Controls.
+Home uses the same authorized Events surface for each work layout when an Events
+area exists; explicit task/project views retain task semantics. Event schedule
+evidence, source freshness and incomplete coverage remain distinct from Asana
+task due dates. Browser acceptance and protected release are required before
+claiming this candidate live.

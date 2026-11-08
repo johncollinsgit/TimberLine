@@ -62,6 +62,9 @@ try {
       await page.waitForFunction(() => document.querySelector('#tw-mode').value === 'all' && document.querySelector('#tw-home').hidden && document.querySelector('#tw-list-heading').textContent === 'Tasks');
       await page.locator('#tw-page-title').filter({ hasText: /^All work$/ }).waitFor();
       await page.locator('#tw-count').filter({ hasText: '3 of 3' }).waitFor();
+      await page.locator('#tw-filter-toggle').click();
+      await page.locator('#tw-source-filter').selectOption('native');
+      await page.locator('#tw-filter-toggle').click();
       await page.getByRole('tab', {name:'List', exact:true}).click();
       await page.locator('#tw-list .task-open').first().waitFor();
       const geometry = await page.evaluate(() => {
@@ -114,6 +117,7 @@ try {
       await page.locator('#tw-search').fill('');
       await page.locator('#tw-search').press('Enter');
       await page.locator('#tw-count').filter({ hasText: '3 of 3' }).waitFor();
+      await page.locator('#tw-source-filter').selectOption('all');
       await page.locator('#tw-filter-toggle').click();
       await page.getByRole('tab', { name: 'Calendar', exact: true }).click();
       await page.locator('.tops-event-calendar').waitFor();
