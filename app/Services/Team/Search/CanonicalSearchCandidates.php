@@ -2,6 +2,7 @@
 
 namespace App\Services\Team\Search;
 
+use App\Models\TeamOperationRecord;
 use App\Models\Tenant;
 use Illuminate\Support\Facades\DB;
 
@@ -17,18 +18,20 @@ class CanonicalSearchCandidates
             foreach (['project' => 'projects', 'task' => 'tasks'] as $kind => $key) {
                 foreach ($state[$key] as $id => $record) {
                     yield (object) ['kind' => $kind, 'entity_id' => (string) $id];
-                    if ($kind === 'project' && isset($record['current_status']['project_version'])) {
-                        yield (object) ['kind' => 'update', 'entity_id' => $id.':'.$record['current_status']['project_version']];
-                    }
                 }
             }
-            foreach (DB::table('team_operation_records')->where('tenant_id', $tenant->id)->orderBy('id')->select('id')->cursor() as $row) {
-                yield (object) ['kind' => 'operation', 'entity_id' => $row->id];
+            foreach (DB::table('team_work_versions')->where(['tenant_id' => $tenant->id, 'entity_type' => 'project'])->whereIn('entity_id', array_keys($state['projects']))->orderBy('entity_id')->orderBy('version')->cursor() as $row) {
+                yield (object) ['kind' => 'update', 'entity_id' => $row->entity_id.':'.$row->version, 'version_row' => $row];
+            }
+            foreach (TeamOperationRecord::where('tenant_id', $tenant->id)->orderBy('id')->cursor() as $row) {
+                yield (object) ['kind' => 'operation', 'entity_id' => $row->id, 'record' => $row];
             }
             foreach (DB::table('team_file_uploads')->where('tenant_id', $tenant->id)->where('status', 'ready')->orderBy('id')->select('id')->cursor() as $row) {
                 yield (object) ['kind' => 'file', 'entity_id' => $row->id];
             }
-            foreach (DB::table('team_source_snapshots')->where('tenant_id', $tenant->id)->whereNotNull('search_generation')->select('connection_id', 'resource_key')->distinct()->orderBy('connection_id')->orderBy('resource_key')->cursor() as $row) {
+            foreach (DB::table('team_source_snapshots')->where('tenant_id', $tenant->id)->whereNotNull('search_generation')
+                ->whereIn('connection_id', DB::table('team_provider_connections')->where(['tenant_id' => $tenant->id, 'provider' => 'gmail', 'status' => 'connected'])->select('id'))
+                ->select('connection_id', 'resource_key')->distinct()->orderBy('connection_id')->orderBy('resource_key')->cursor() as $row) {
                 yield (object) ['kind' => 'source', 'entity_id' => $row->connection_id.':'.$row->resource_key];
             }
         };

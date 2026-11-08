@@ -40,6 +40,7 @@ class TeamSearchController extends Controller
         $tenant = $request->attributes->get('current_tenant');
         abort_unless($tenant instanceof Tenant, 403);
         $actor = app(TeamWorkAccess::class)->context($request->user(), $tenant);
+        $documents->beginRequest();
         $input = $request->validate(['q' => 'nullable|string|max:500', 'type' => 'nullable|string|max:32', 'project' => 'nullable|string|max:120',
             'person' => 'nullable|string|max:120', 'state' => 'nullable|in:active,closed', 'cursor' => 'nullable|string|max:4096',
             'limit' => 'nullable|integer|min:1|max:25', 'recent' => 'nullable|array|max:8', 'recent.*' => 'string|max:160', 'ref' => 'nullable|string|max:160']);
@@ -90,7 +91,7 @@ class TeamSearchController extends Controller
                     if ($after && ($indexedRank <=> $after) <= 0) {
                         continue;
                     }
-                    $item = $documents->resolve($tenant, $request->user(), $actor, $state, $candidate->kind, $candidate->entity_id);
+                    $item = $documents->resolve($tenant, $request->user(), $actor, $state, $candidate->kind, $candidate->entity_id, $candidate);
                     if (! $item || ! $this->matchesFilters($item, $input)) {
                         continue;
                     }
@@ -112,7 +113,7 @@ class TeamSearchController extends Controller
                     ? app(\App\Services\Team\Search\CanonicalSearchCandidates::class)->references($tenant, $state, $coverage)
                     : ($completeTopPage ? [] : $index->candidates($tenant->id, $input['q'] ?? '')->select(['id', 'kind', 'entity_id'])->orderBy('id')->cursor());
                 foreach ($candidates as $candidate) {
-                    $item = $documents->resolve($tenant, $request->user(), $actor, $state, $candidate->kind, $candidate->entity_id);
+                    $item = $documents->resolve($tenant, $request->user(), $actor, $state, $candidate->kind, $candidate->entity_id, $candidate);
                     if ($item && ($score = $matcher->score($item, $query)) !== null) {
                         $items[$item['id']] = $item;
                         $scores[$item['id']] = $score;

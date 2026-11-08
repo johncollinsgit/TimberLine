@@ -18,7 +18,7 @@ the destination's existing role/module middleware. App URLs are bound to the
 current tenant and same origin. Every selection is resolved again before opening;
 opening work still respects retained-edit/navigation guards.
 
-Saved Teams events, projects, tasks/comments, current project updates, ready file
+Saved Teams events, projects, tasks/comments, authorized project update history, ready file
 metadata and attested saved Gmail copies are searchable independently of loaded
 list/board/calendar rows. If an index is not enabled and complete for the current
 matcher version with zero warnings, a read-only canonical-reference scan uses the
@@ -29,7 +29,14 @@ without inaccessible counts. The coverage ceiling does not grant access. Saved
 source coverage is distinguished from live source freshness. No provider calls,
 index writes, source refreshes or rollout flag changes occur while typing. TeamWork
 and Operations authorization/entitlement gates remain effective in this fallback.
-For larger workspaces use the reviewed index rollout below; this UI does not run it.
+The fallback streams full record/version candidates once, then uses the existing
+current policy and safe display projection. Area, actor and connection decisions
+are memoized only within that search request; the next query or selected-item
+request starts with fresh decisions. It omits non-Gmail evidence snapshots that
+the resolver cannot present, and skips unused calendar/crew/budget presentation
+queries when constructing search text. Historic statuses still require the
+original checksum and current project access. For larger workspaces use the
+reviewed index rollout below; this UI does not run it.
 
 Teams filters apply to Teams records; project/person/state filters suppress other
 app matches rather than applying unrelated IDs to them. App providers currently
@@ -43,6 +50,7 @@ Focused acceptance:
 
 ```sh
 vendor/bin/pest -c phpunit.team.xml tests/Feature/Team/TeamUniversalSearchTest.php tests/Feature/Team/TeamGlobalSearchTest.php --compact
+vendor/bin/pest -c phpunit.team.xml tests/Feature/Team/TeamUniversalSearchPerformanceTest.php --compact
 node tests/e2e/team-universal-search.browser.mjs
 ```
 

@@ -178,3 +178,56 @@ test('app search asset subtitles and matching never include a recycled or foreig
     }
     Http::assertNothingSent();
 });
+
+test('canonical fallback searches authorized older project statuses and revalidates their history', function (): void {
+    [$tenant, $owner] = teamWorkspace();
+    $guest = teamMember($tenant, 'guest');
+    $project = teamProject($tenant, $owner);
+    $project = teamPost($tenant, $owner, ['kind' => 'project.member', 'id' => $project['id'], 'expected_version' => $project['version'], 'user_id' => $guest->id, 'access' => 'viewer'])->assertOk()->json('result');
+    $post = function ($project, $summary) use ($tenant, $owner) {
+        return teamPost($tenant, $owner, ['kind' => 'project.status', 'id' => $project['id'], 'expected_version' => $project['version'], 'status_code' => 'on_track', 'summary' => $summary, 'highlights' => '', 'blockers' => '', 'next_steps' => '', 'acknowledge_sharing' => true])->assertOk()->json('result');
+    };
+    $older = $post($project, 'Saffron lantern historic review');
+    $current = $post($older, 'New weekly summary');
+    $ref = 'update:'.$project['id'].':'.$older['current_status']['project_version'];
+    $this->actingAs($guest)->getJson(universalSearchPath($tenant, ['q' => 'saffron', 'type' => 'update']))->assertOk()->assertJsonPath('items.0.id', $ref)->assertJsonPath('coverage.complete', true);
+    $this->getJson(universalSearchPath($tenant, ['q' => 'saffron', 'ref' => $ref]))->assertOk()->assertJsonPath('item.id', $ref);
+    teamPost($tenant, $owner, ['kind' => 'project.member', 'id' => $project['id'], 'expected_version' => $current['version'], 'user_id' => $guest->id, 'remove' => true])->assertOk();
+    $this->actingAs($guest)->getJson(universalSearchPath($tenant, ['q' => 'saffron', 'type' => 'update']))->assertOk()->assertJsonCount(0, 'items');
+    $this->getJson(universalSearchPath($tenant, ['q' => 'saffron', 'ref' => $ref]))->assertNotFound();
+    Http::assertNothingSent();
+});
+
+test('search memo is reset between requests before area source or tenant actor access is admitted', function (): void {
+    [$tenant, $owner] = teamWorkspace();
+    [$area, $connection, $event] = universalSearchSource($tenant, $owner);
+    DB::table('tenant_user')->where(['tenant_id' => $tenant->id, 'user_id' => $owner->id])->update(['role' => 'member']);
+    $membership = ['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $area->id, 'user_id' => $owner->id, 'role' => 'editor'];
+    DB::table('team_area_members')->insert($membership);
+    // Deliberately reuse the same instance across HTTP requests to prove explicit reset.
+    app()->instance(\App\Services\Team\Search\SearchDocuments::class, app(\App\Services\Team\Search\SearchDocuments::class));
+    $path = universalSearchPath($tenant, ['q' => 'copper', 'type' => 'event']);
+    $this->actingAs($owner)->getJson($path)->assertOk()->assertJsonPath('items.0.id', 'operation:'.$event->id);
+    DB::table('team_area_members')->where('id', $membership['id'])->delete();
+    $this->getJson($path)->assertOk()->assertJsonCount(0, 'items');
+    DB::table('team_area_members')->insert($membership);
+    $connection->update(['status' => 'disconnected']);
+    $this->getJson($path)->assertOk()->assertJsonCount(0, 'items');
+    $this->getJson(universalSearchPath($tenant, ['ref' => 'operation:'.$event->id]))->assertNotFound();
+    $connection->update(['status' => 'connected', 'settings' => ['source' => ['asana_workspace' => 'different', 'asana_project' => '200']]]);
+    $this->getJson($path)->assertOk()->assertJsonCount(0, 'items');
+    DB::table('tenant_user')->where(['tenant_id' => $tenant->id, 'user_id' => $owner->id])->update(['membership_active' => false]);
+    $this->getJson($path)->assertForbidden();
+    Http::assertNothingSent();
+});
+
+test('canonical references omit non Gmail snapshots without spending their coverage budget', function (): void {
+    [$tenant, $owner] = teamWorkspace();
+    [, $connection, $event] = universalSearchSource($tenant, $owner);
+    for ($i = 0; $i < 5; $i++) {
+        \App\Models\TeamSourceSnapshot::create(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'connection_id' => $connection->id, 'resource_key' => 'asana-'.$i, 'checksum' => hash('sha256', 'asana-'.$i), 'payload' => ['notes' => 'Raw private evidence'], 'observed_at' => now(), 'search_generation' => 1]);
+    }
+    config(['team_work.search_canonical_limit' => 1]);
+    $this->actingAs($owner)->getJson(universalSearchPath($tenant, ['q' => 'copper', 'type' => 'event']))->assertOk()->assertJsonPath('items.0.id', 'operation:'.$event->id)->assertJsonPath('coverage.complete', true)->assertDontSee('Raw private evidence');
+    Http::assertNothingSent();
+});

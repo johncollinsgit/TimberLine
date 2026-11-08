@@ -18,7 +18,19 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 /** Index projections never grant access. Display projections always use current policy. */
 class SearchDocuments
 {
+    private ?SearchReadAccess $readAccess = null;
+
+    private array $readAreas = [];
+
+    private array $readConnections = [];
+
     public function __construct(private SearchIndex $index, private WorkGraph $graph) {}
+
+    public function beginRequest(): void
+    {
+        $this->readAccess = new SearchReadAccess;
+        $this->readAreas = $this->readConnections = [];
+    }
 
     private function text(mixed $value): string
     {
@@ -83,16 +95,16 @@ class SearchDocuments
 
     public function operation(TeamOperationRecord $record, bool $financial = false): array
     {
-        $view = app(OperationsWorkspace::class)->view($record, false, $financial);
+        $view = app(OperationsWorkspace::class)->view($record, false, $financial, false);
         // Search only fields the existing record presentation discloses; never raw evidence.
         $allowed = array_intersect_key($view['data'], array_flip(['description', 'notes', 'original_notes', 'fields', 'body', 'subject', 'filename', 'location', 'address', 'next_step', 'stage', 'name', 'summary']));
-        $connection = $record->connection_id ? TeamProviderConnection::find($record->connection_id) : null;
+        $connection = $record->connection_id ? ($this->readConnections[$record->connection_id] ?? TeamProviderConnection::find($record->connection_id)) : null;
 
         return ['id' => 'operation:'.$record->id, 'type' => $record->kind, 'entity_id' => $record->id,
             'title' => $record->title, 'identifier' => $record->id, 'body' => $this->text($allowed),
             'projects' => array_values(array_filter([$record->area_id, $record->data['native_project_id'] ?? null])),
             'people' => array_values(array_filter([(string) $record->assigned_user_id])),
-            'context' => TeamArea::find($record->area_id)?->name ?? '', 'status' => $record->status,
+            'context' => ($this->readAreas[$record->area_id] ?? TeamArea::find($record->area_id))?->name ?? '', 'status' => $record->status,
             'completed' => in_array($record->status, ['completed', 'cancelled', 'lost'], true), 'archived' => $record->status === 'archived',
             'updated_at' => $record->updated_at?->toIso8601String(), 'source' => $connection ? ucfirst($connection->provider) : 'Everbranch',
             'synced_at' => $connection?->last_success_at?->toIso8601String(),
@@ -123,7 +135,7 @@ class SearchDocuments
         $payload = $snapshot->payload;
         // Asana/Sheets snapshots are raw evidence; their current canonical records are indexed above.
         // Only retained Gmail messages with a current read attestation enter this additional lane.
-        $connection = TeamProviderConnection::find($snapshot->connection_id);
+        $connection = $this->readConnections[$snapshot->connection_id] ?? TeamProviderConnection::find($snapshot->connection_id);
         if (! $connection || $connection->provider !== 'gmail' || ! isset($payload['id'], $payload['payload']) || ! $snapshot->search_generation) {
             return null;
         }
@@ -147,7 +159,7 @@ class SearchDocuments
         return ['id' => 'source:'.$ref, 'type' => 'message', 'identifier' => (string) $payload['id'],
             'title' => $headers['subject'] ?? 'Saved email', 'body' => trim(($headers['from'] ?? '').' '.($payload['snippet'] ?? '').' '.$parts($payload['payload'])),
             'projects' => [$connection->area_id], 'people' => [(string) $connection->user_id],
-            'context' => TeamArea::find($connection->area_id)?->name ?? '', 'source' => 'Gmail', 'status' => 'Saved copy',
+            'context' => ($this->readAreas[$connection->area_id] ?? TeamArea::find($connection->area_id))?->name ?? '', 'source' => 'Gmail', 'status' => 'Saved copy',
             'synced_at' => ($snapshot->search_observed_at ?? $snapshot->observed_at)?->toIso8601String(), 'updated_at' => ($snapshot->search_observed_at ?? $snapshot->observed_at)?->toIso8601String(),
             'target' => ['kind' => 'saved-message', 'id' => $ref]];
     }
@@ -176,13 +188,14 @@ class SearchDocuments
     /** Narrow saved-source access: current owner, generation and selection, no provider transport. */
     private function savedOperation(Tenant $tenant, User $user, TeamOperationRecord $record, array $actor, array $state): bool
     {
+        $access = $this->readAccess ?? app(OperationsAccess::class);
         if (! $record->connection_id) {
-            app(OperationsAccess::class)->record($tenant, $user, $record);
+            $access->record($tenant, $user, $record);
+            $this->readAreas[$record->area_id] = $access->area($tenant, $user, $record->area_id);
 
             return true;
         }
-        $access = app(OperationsAccess::class);
-        $access->area($tenant, $user, $record->area_id);
+        $this->readAreas[$record->area_id] = $access->area($tenant, $user, $record->area_id);
         if ($record->status === 'withdrawn') {
             return false;
         }
@@ -193,6 +206,7 @@ class SearchDocuments
             return false;
         }
         $connection = $access->connection($tenant, $user, $record->connection_id);
+        $this->readConnections[$record->connection_id] = $connection;
         if ($connection->status !== 'connected' || ($record->data['_generation'] ?? null) !== $connection->generation) {
             return false;
         }
@@ -214,7 +228,7 @@ class SearchDocuments
         return true;
     }
 
-    public function resolve(Tenant $tenant, User $user, array $actor, array $state, string $kind, string $id): ?array
+    public function resolve(Tenant $tenant, User $user, array $actor, array $state, string $kind, string $id, ?object $candidate = null): ?array
     {
         try {
             if (in_array($kind, ['task', 'project'], true)) {
@@ -226,7 +240,8 @@ class SearchDocuments
                 return $this->native($kind, $projection, $state['projects']);
             }
             if ($kind === 'operation') {
-                $record = TeamOperationRecord::where('tenant_id', $tenant->id)->find($id);
+                $record = ($candidate->record ?? null) instanceof TeamOperationRecord && (int) $candidate->record->tenant_id === (int) $tenant->id && $candidate->record->id === $id
+                    ? $candidate->record : TeamOperationRecord::where('tenant_id', $tenant->id)->find($id);
                 if (! $record || ! $this->savedOperation($tenant, $user, $record, $actor, $state)) {
                     return null;
                 }
@@ -235,7 +250,10 @@ class SearchDocuments
             }
             if ($kind === 'source') {
                 [$connectionId, $key] = array_pad(explode(':', $id, 2), 2, '');
-                $connection = app(OperationsAccess::class)->connection($tenant, $user, $connectionId);
+                $access = $this->readAccess ?? app(OperationsAccess::class);
+                $connection = $access->connection($tenant, $user, $connectionId);
+                $this->readConnections[$connectionId] = $connection;
+                $this->readAreas[$connection->area_id] = $access->area($tenant, $user, $connection->area_id);
                 if ($connection->status !== 'connected' || $connection->provider !== 'gmail') {
                     return null;
                 }
@@ -249,7 +267,10 @@ class SearchDocuments
                 if (! $this->graph->can($state, $actor, 'project', $projectId)) {
                     return null;
                 }
-                $row = DB::table('team_work_versions')->where(['tenant_id' => $tenant->id, 'entity_type' => 'project', 'entity_id' => $projectId, 'version' => $version])->first();
+                $row = $candidate->version_row ?? null;
+                if (! $row || (int) $row->tenant_id !== (int) $tenant->id || $row->entity_type !== 'project' || $row->entity_id !== $projectId || (string) $row->version !== $version) {
+                    $row = DB::table('team_work_versions')->where(['tenant_id' => $tenant->id, 'entity_type' => 'project', 'entity_id' => $projectId, 'version' => $version])->first();
+                }
                 if (! $row || ! hash_equals($row->sha256, hash('sha256', $row->snapshot))) {
                     return null;
                 }
@@ -281,6 +302,8 @@ class SearchDocuments
 
                 return $this->file($file) + ['projects' => $context['projects'], 'people' => $context['people']];
             }
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            return null;
         } catch (HttpException $e) {
             if (! in_array($e->getStatusCode(), [403, 404, 409], true)) {
                 throw $e;

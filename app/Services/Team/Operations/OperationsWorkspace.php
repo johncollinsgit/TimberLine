@@ -175,7 +175,7 @@ class OperationsWorkspace
             'notice' => $scanLimited ? 'Calendar checking is partial. Continue to check more retained records for dates outside their original source bounds.' : ($unavailable ? 'Some source records could not be verified and are hidden. Results are partial; continue checking or refresh the source.' : $health['notice'])];
     }
 
-    public function view(TeamOperationRecord $record, bool $canEdit = true, bool $canFinance = false): array
+    public function view(TeamOperationRecord $record, bool $canEdit = true, bool $canFinance = false, bool $includePresentationDetails = true): array
     {
         $data = $record->data ?? [];
         if ($record->kind === 'event') {
@@ -184,14 +184,16 @@ class OperationsWorkspace
                 $data['fields_revision'] = app(OperationsSync::class)->eventFieldsRevision($data);
             }
             $sourceRange = $data['event_schedule'] ?? [];
-            $data['event_schedule'] = array_replace($sourceRange, app(EventSchedule::class)->calendar($data, $record->starts_on?->toDateString(), $record->ends_on?->toDateString()));
-            if (isset($sourceRange['basis'])) {
-                $data['event_schedule']['source_range_basis'] = $sourceRange['basis'];
+            if ($includePresentationDetails) {
+                $data['event_schedule'] = array_replace($sourceRange, app(EventSchedule::class)->calendar($data, $record->starts_on?->toDateString(), $record->ends_on?->toDateString()));
+                if (isset($sourceRange['basis'])) {
+                    $data['event_schedule']['source_range_basis'] = $sourceRange['basis'];
+                }
             }
         }
         if (! $canFinance) {
             unset($data['_teams_enrichment']['forecast_override'], $data['_teams_enrichment']['square_orders'], $data['_teams_enrichment']['related_native_proposals'], $data['_teams_enrichment']['source_adoption']);
-        } elseif ($record->kind === 'event') {
+        } elseif ($record->kind === 'event' && $includePresentationDetails) {
             $data['event_schedule']['budget_review_items'] = [];
             $budgetId = $data['budget_id'] ?? $data['_teams_enrichment']['budget_id'] ?? null;
             $budget = $budgetId ? TeamOperationRecord::where(['tenant_id' => $record->tenant_id, 'area_id' => $record->area_id, 'kind' => 'event_budget', 'status' => 'frozen'])->find($budgetId) : null;
@@ -227,7 +229,7 @@ class OperationsWorkspace
             unset($data['original_notes']);
         }
 
-        return ['id' => $record->id, 'area_id' => $record->area_id, 'kind' => $record->kind, 'title' => $record->title, 'status' => $record->status, 'version' => $record->version, 'assigned_user_id' => $record->assigned_user_id, 'starts_on' => $record->starts_on?->toDateString(), 'ends_on' => $record->ends_on?->toDateString(), 'data' => $data, 'calendar_people' => $record->kind === 'event' ? $this->calendarPeople($record) : [], 'source' => $record->connection_id ? ['connection_id' => $record->connection_id, 'key' => $record->source_key] : null, 'capabilities' => ['edit' => $canEdit && in_array($record->kind, self::KINDS, true) && ! $record->connection_id && ! in_array($record->kind, ['financial', 'staff', 'document']), 'schedule' => $canEdit && $record->kind === 'event'], 'updated_at' => $record->updated_at?->toIso8601String()];
+        return ['id' => $record->id, 'area_id' => $record->area_id, 'kind' => $record->kind, 'title' => $record->title, 'status' => $record->status, 'version' => $record->version, 'assigned_user_id' => $record->assigned_user_id, 'starts_on' => $record->starts_on?->toDateString(), 'ends_on' => $record->ends_on?->toDateString(), 'data' => $data, 'calendar_people' => $includePresentationDetails && $record->kind === 'event' ? $this->calendarPeople($record) : [], 'source' => $record->connection_id ? ['connection_id' => $record->connection_id, 'key' => $record->source_key] : null, 'capabilities' => ['edit' => $canEdit && in_array($record->kind, self::KINDS, true) && ! $record->connection_id && ! in_array($record->kind, ['financial', 'staff', 'document']), 'schedule' => $canEdit && $record->kind === 'event'], 'updated_at' => $record->updated_at?->toIso8601String()];
     }
 
     private function calendarPeople(TeamOperationRecord $record): array
