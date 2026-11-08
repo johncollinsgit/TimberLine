@@ -13,6 +13,11 @@ on:
         required: true
         default: false
         type: boolean
+      enable_mobile:
+        description: Also enable the Teams native client; existing tenant and membership gates still apply
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -46,6 +51,7 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           TARGET_TENANT: ${{ inputs.tenant_slug }}
           EXPECTED_RELEASE: ${{ github.sha }}
+          ENABLE_MOBILE: ${{ inputs.enable_mobile }}
         run: |
           set -euo pipefail
           for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do test -n "${!var}"; done
@@ -54,8 +60,10 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          mobile_option=""
+          if [ "$ENABLE_MOBILE" = "true" ]; then mobile_option="--enable-mobile"; fi
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -euo pipefail; export RELEASE_ID='$EXPECTED_RELEASE'; cd '$DEPLOY_PATH'; php artisan team:launch '$TARGET_TENANT'; php artisan team:launch '$TARGET_TENANT' --apply --force-production --activate-config --authorization='approved-teams-launch-$GITHUB_RUN_ID'; php artisan team:launch '$TARGET_TENANT' --verify; php artisan queue:restart"
+            "set -euo pipefail; export RELEASE_ID='$EXPECTED_RELEASE'; cd '$DEPLOY_PATH'; php artisan team:launch '$TARGET_TENANT' $mobile_option; php artisan team:launch '$TARGET_TENANT' --apply --force-production --activate-config $mobile_option --authorization='approved-teams-launch-$GITHUB_RUN_ID'; php artisan team:launch '$TARGET_TENANT' --verify $mobile_option; php artisan queue:restart"
 
       - name: Verify application readiness after activation
         env:

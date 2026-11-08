@@ -4,14 +4,71 @@ use App\Models\TeamArea;
 use App\Models\TeamProviderConnection;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleEntitlement;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 
 require_once __DIR__.'/../../Support/TeamFixtures.php';
 
 beforeEach(function () {
     Http::preventStrayRequests();
-    config(['team_work.enabled' => false, 'team_work.premium_enabled' => false, 'team_operations.enabled' => false]);
+    config(['team_work.enabled' => false, 'team_work.premium_enabled' => false, 'team_operations.enabled' => false, 'team_work.mobile_enabled' => false]);
 });
+
+test('mobile launch preview is read only and mobile apply requires protected configuration activation', function () {
+    [$tenant] = teamWorkspace();
+    $this->artisan('team:launch', ['tenant' => $tenant->slug, '--enable-mobile' => true])->assertSuccessful();
+    $this->artisan('team:launch', ['tenant' => $tenant->slug, '--apply' => true, '--enable-mobile' => true, '--authorization' => 'approved-mobile-rollout'])
+        ->expectsOutputToContain('Mobile activation requires protected configuration activation')->assertFailed();
+    expect(TeamArea::count())->toBe(0)->and(config('team_work.mobile_enabled'))->toBeFalse();
+    Http::assertNothingSent();
+});
+
+test('protected mobile activation preserves unrelated flags and restores the environment if caching fails', function (bool $cacheSucceeds) {
+    [$tenant] = teamWorkspace();
+    $directory = sys_get_temp_dir().'/teams-launch-'.Str::uuid();
+    File::makeDirectory($directory, 0700);
+    $path = $directory.'/.env';
+    $original = "APP_KEY=fictional-test-key\nPOS_LIVE_NATIVE_CLIENT_ENABLED=false\nTEAM_OPERATIONS_SEND_ENABLED=false\nTEAM_WORK_MOBILE_ENABLED=false\nUNRELATED_SETTING=retained\n";
+    file_put_contents($path, $original);
+    chmod($path, 0600);
+    $previousEnvironment = app()->environment();
+    $previousEnvironmentPath = app()->environmentPath();
+    $previousEnvironmentFile = app()->environmentFile();
+    $previousRelease = getenv('RELEASE_ID');
+    app()->instance('env', 'production');
+    app()->useEnvironmentPath($directory)->loadEnvironmentFrom('.env');
+    config(['app.release_id' => str_repeat('b', 40), 'team_work.tenant_allowlist' => ['existing-tenant']]);
+    putenv('RELEASE_ID='.str_repeat('b', 40));
+    $kernel = Artisan::getFacadeRoot();
+    Artisan::shouldReceive('call')->with('config:cache')->times($cacheSucceeds ? 1 : 2)->andReturn(...($cacheSucceeds ? [0] : [1, 0]));
+    Artisan::shouldReceive('call')->with('team:launch', \Mockery::type('array'), \Mockery::any())
+        ->andReturnUsing(fn ($name, $arguments, $output) => $kernel->call($name, $arguments, $output));
+    try {
+        $command = $this->artisan('team:launch', ['tenant' => $tenant->slug, '--apply' => true, '--force-production' => true, '--activate-config' => true, '--enable-mobile' => true, '--authorization' => 'approved-mobile-rollout']);
+        if ($cacheSucceeds) {
+            $command->assertSuccessful()->run();
+            expect(file_get_contents($path))->toContain('TEAM_WORK_MOBILE_ENABLED=true', 'TEAM_WORK_TENANT_ALLOWLIST=existing-tenant,'.$tenant->id, 'POS_LIVE_NATIVE_CLIENT_ENABLED=false', 'TEAM_OPERATIONS_SEND_ENABLED=false', 'UNRELATED_SETTING=retained');
+        } else {
+            try {
+                $command->run();
+                $this->fail('Configuration failure must be reported.');
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+                expect($exception->getStatusCode())->toBe(503);
+            }
+            expect(file_get_contents($path))->toBe($original);
+        }
+        expect(file_get_contents($path.'.teams-backup-approved-mobile-rollout'))->toBe($original)
+            ->and(fileperms($path) & 0777)->toBe(0600);
+        Http::assertNothingSent();
+    } finally {
+        app()->instance('env', $previousEnvironment);
+        app()->useEnvironmentPath($previousEnvironmentPath)->loadEnvironmentFrom($previousEnvironmentFile);
+        putenv($previousRelease === false ? 'RELEASE_ID' : 'RELEASE_ID='.$previousRelease);
+        File::deleteDirectory($directory);
+    }
+})->with([true, false]);
 
 test('launch preview does not grant access or create work areas', function () {
     [$tenant] = teamWorkspace();

@@ -1,3 +1,25 @@
+## Dedicated Teams app access (November 7; release candidate)
+
+The dedicated Teams client has its own exact OAuth callback and a public,
+read-only availability check. Native workspace discovery returns only currently
+authorized Teams companies, rather than the general mobile company's first
+alphabetical result. Existing tenant allowlists, entitlements, verified active
+memberships and per-user source permissions remain authoritative.
+
+The shared Teams Studio/event APIs include frozen budget revisions, reviewed
+calendar sessions, event intelligence, read-only commerce comparisons and the
+paired browser package. Macon remains one source identity across its two Asana
+memberships. Asana is authoritative during 2026; full migration and automatic
+cutover remain disabled. These interfaces are not completion of the full Teams
+acceptance backlog.
+
+Production native activation uses the existing protected Teams launch workflow's
+explicit `enable_mobile` option after exact-release readiness verification. See
+`docs/operations/everbranch-team-connected-operations-runbook.md`. Release and
+physical login/Macon acceptance must be recorded separately; source tests alone
+do not establish live readiness. This release does not activate Square customer
+imports, customer outreach, Pay collection or rewards policy changes.
+
 ## Tenant rewards, event attribution and physical counts (November 6; source candidate)
 
 Pay can recommend an already authorized event register from the signed-in user's

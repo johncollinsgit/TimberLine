@@ -11,11 +11,12 @@ return [
     'google' => ['client_id' => env('TEAM_GOOGLE_CLIENT_ID'), 'client_secret' => env('TEAM_GOOGLE_CLIENT_SECRET'), 'pubsub_topic' => env('TEAM_GOOGLE_PUBSUB_TOPIC'), 'push_service_account' => env('TEAM_GOOGLE_PUSH_SERVICE_ACCOUNT'), 'push_audience' => env('TEAM_GOOGLE_PUSH_AUDIENCE')],
     'weather' => ['enabled' => (bool) env('TEAM_WEATHER_ENABLED', false), 'commercial' => (bool) env('TEAM_WEATHER_COMMERCIAL', false), 'api_key' => env('TEAM_WEATHER_API_KEY')],
     'profiles' => [
+        'custom' => ['name' => 'Custom work area', 'stages' => ['planned', 'active', 'completed'], 'views' => ['overview', 'calendar', 'templates', 'connections'], 'groups' => []],
         'events' => ['name' => 'Events', 'stages' => ['research', 'applied', 'accepted', 'staffing', 'ready', 'completed', 'cancelled'], 'views' => ['my_tasks', 'overview', 'events', 'calendar', 'applications', 'staffing', 'documents', 'communications', 'templates', 'statistics', 'automations', 'connections'], 'groups' => ['My work' => ['my_tasks'], 'Plan & prepare' => ['overview', 'events', 'calendar', 'applications'], 'Run the event' => ['staffing', 'documents', 'communications'], 'Review & improve' => ['statistics', 'templates', 'automations', 'connections']]],
         'wholesale' => ['name' => 'Wholesale', 'stages' => ['discovery', 'qualified', 'outreach', 'negotiation', 'converted', 'retention', 'reactivation', 'lost'], 'views' => ['overview', 'accounts', 'prospects', 'pipeline', 'orders', 'followups', 'communications', 'templates', 'campaigns', 'statistics', 'automations', 'connections'], 'groups' => ['Relationships' => ['overview', 'accounts', 'prospects', 'pipeline'], 'Orders & follow-up' => ['orders', 'followups', 'communications'], 'Grow & improve' => ['templates', 'campaigns', 'automations', 'statistics', 'connections']]],
     ],
     'presets' => ['modern-forestry' => [
-        'events' => ['asana_workspace' => '1200605651567450', 'asana_project' => '1201541082238924', 'mailbox' => 'modernforestryevents@gmail.com', 'spreadsheet_id' => '1V9FAzTg6FA7tzEnGyDQDQ-OYgHqbxiBot9PWlj7txDw', 'tabs' => ['2024', '2025', '2026', 'Payment Criteria']],
-        'wholesale' => ['asana_workspace' => '17375094536655', 'mailbox' => 'modernforestryteam@gmail.com', 'asana_account_model' => 'projects'],
+        'events' => ['migration_not_before' => '2027-01-01', 'compensation_template' => 'modern_forestry_criteria', 'asana_workspace' => '1200605651567450', 'asana_project' => '1201541082238924', 'mailbox' => 'modernforestryevents@gmail.com', 'spreadsheet_id' => '1V9FAzTg6FA7tzEnGyDQDQ-OYgHqbxiBot9PWlj7txDw', 'tabs' => ['2024', '2025', '2026', 'Payment Criteria']],
+        'wholesale' => ['migration_not_before' => '2027-01-01', 'asana_workspace' => '17375094536655', 'mailbox' => 'modernforestryteam@gmail.com', 'asana_account_model' => 'projects'],
     ]],
 ];

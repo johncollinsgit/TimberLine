@@ -26,7 +26,8 @@ class TeamEventTasksController extends Controller
             $result = $tasks->detail($tenant, $request->user(), $area, $request->input('connection_id'), $id, $kind, $request->input('cursor'), $request->input('parent_id'));
         } elseif ($action === 'prepare') {
             $input = $request->validate(['connection_id' => 'required|uuid', 'task_id' => 'required|regex:/^[0-9]{1,120}$/', 'request_id' => 'required|uuid', 'version' => 'required|string|size:64',
-                'changes' => 'required|array:name,due_on,start_on,completed|min:1|max:4', 'changes.name' => 'sometimes|required|string|max:500',
+                'notes_base_hash' => 'required_with:changes.notes|string|size:64', 'changes' => 'required|array:name,due_on,start_on,completed,notes,assignee,comment|min:1|max:6', 'changes.name' => 'sometimes|required|string|max:500',
+                'changes.notes' => 'sometimes|nullable|string|max:100000', 'changes.assignee' => 'sometimes|nullable|regex:/^[0-9]{1,120}$/D', 'changes.comment' => 'sometimes|required|string|max:100000',
                 'changes.due_on' => 'sometimes|nullable|date_format:Y-m-d', 'changes.start_on' => 'sometimes|nullable|date_format:Y-m-d', 'changes.completed' => 'sometimes|boolean']);
             if (isset($input['changes']['completed'])) {
                 $input['changes']['completed'] = filter_var($input['changes']['completed'], FILTER_VALIDATE_BOOLEAN);

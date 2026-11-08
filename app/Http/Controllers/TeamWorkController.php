@@ -168,7 +168,7 @@ class TeamWorkController extends Controller
         $members = in_array($actor['role'], ['guest', 'viewer'], true) ? collect([$request->user()])
             : $tenant->users()->wherePivot('membership_active', true)->where('users.is_active', true)->get();
 
-        return response()->json(['workspace' => ['id' => (string) $tenant->id, 'name' => $tenant->name, 'slug' => $tenant->slug], 'projects' => $projects, 'project_search' => $projectSearch, 'tasks' => $tasks, 'page' => $page, 'has_more' => $hasMore, 'total' => $total, 'home' => $home,
+        return response()->json(['viewer' => ['id' => (string) $request->user()->id, 'name' => $request->user()->name], 'workspace' => ['id' => (string) $tenant->id, 'name' => $tenant->name, 'slug' => $tenant->slug], 'projects' => $projects, 'project_search' => $projectSearch, 'tasks' => $tasks, 'page' => $page, 'has_more' => $hasMore, 'total' => $total, 'home' => $home,
             'members' => $members->map(fn ($member) => ['id' => (string) $member->id, 'name' => $member->name])->values(),
             'can_create_project' => in_array($actor['role'], ['owner', 'admin', 'member'], true), 'can_create_task' => in_array($actor['role'], ['owner', 'admin', 'member'], true) || collect($projects)->contains('can_add_task', true)])
             ->header('Cache-Control', 'private, no-store');

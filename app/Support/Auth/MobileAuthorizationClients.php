@@ -6,6 +6,10 @@ use Illuminate\Validation\ValidationException;
 
 final class MobileAuthorizationClients
 {
+    public const TEAMS_CLIENT = 'everbranch-teams';
+
+    public const TEAMS_REDIRECT = 'everbranchteams://auth/callback';
+
     public const PAYMENTS_CLIENT = 'evergrove-payments-ios';
 
     public const PAYMENTS_REDIRECT = 'evergrovepayments://auth/callback';
@@ -17,6 +21,7 @@ final class MobileAuthorizationClients
     public static function assertAllowed(string $client, string $redirect): void
     {
         $legacy = $client === 'everbranch-mobile' && in_array($redirect, ['everbranch://auth/callback', 'https://app.theeverbranch.com/field/'], true);
+        $teams = $client === self::TEAMS_CLIENT && $redirect === self::TEAMS_REDIRECT && config('team_work.mobile_enabled') === true;
         $payments = self::isPayments($client)
             && $client === self::PAYMENTS_CLIENT
             && $redirect === self::PAYMENTS_REDIRECT
@@ -24,7 +29,7 @@ final class MobileAuthorizationClients
         $pos = $client === self::POS_CLIENT && $redirect === self::POS_REDIRECT
             && config('pos_live.native_client_enabled') === true;
 
-        if ((config('enterprise.runtime') === true && ! $pos) || (! $legacy && ! $payments && ! $pos)) {
+        if ((config('enterprise.runtime') === true && ! $pos) || (! $legacy && ! $payments && ! $pos && ! $teams)) {
             throw ValidationException::withMessages(['client_id' => 'This mobile client and callback pair is unavailable.']);
         }
     }
