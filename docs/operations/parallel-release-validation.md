@@ -12,6 +12,9 @@ verification; protected CI remains the authoritative full regression run.
   outputs and the checksum-verified pinned label tracer are shared as artifacts
   within the same workflow run. PHP/Node dependencies and credentials are not
   bundled into artifacts.
+  Input artifact names are scoped to the immutable workflow run rather than its
+  attempt, so a failed-job retry can reuse a successful build. A full retry may
+  overwrite that same run's inputs; it cannot consume another run's artifacts.
 - Six PHP 8.4 file partitions generated from every directory/file configured in
   `phpunit.xml`, each retaining Pest's `--parallel`. Explicit file discovery keeps
   legacy unnamespaced test classes in the suite. The generated configuration

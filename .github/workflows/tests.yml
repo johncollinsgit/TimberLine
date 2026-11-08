@@ -116,6 +116,7 @@ jobs:
           ${{ runner.temp }}/label-tools/vtracer-0.6.5.sha256
         if-no-files-found: error
         retention-days: 7
+        overwrite: true
     - name: Prepare application key
       run: |
         cp .env.example .env
@@ -127,10 +128,11 @@ jobs:
     - name: Retain this run's frontend build
       uses: actions/upload-artifact@v4
       with:
-        name: release-build-${{ github.run_id }}-${{ github.run_attempt }}
+        name: release-build-${{ github.run_id }}
         path: public/build
         if-no-files-found: error
         retention-days: 3
+        overwrite: true
   php:
     name: PHP 8.4 shard ${{ matrix.shard }}/6
     needs: build
@@ -181,7 +183,7 @@ jobs:
     - name: Restore this run's frontend build
       uses: actions/download-artifact@v4
       with:
-        name: release-build-${{ github.run_id }}-${{ github.run_attempt }}
+        name: release-build-${{ github.run_id }}
         path: public/build
     - name: Use official Ubuntu package mirrors
       timeout-minutes: 2
@@ -265,7 +267,7 @@ jobs:
     - name: Restore this run's frontend build
       uses: actions/download-artifact@v4
       with:
-        name: release-build-${{ github.run_id }}-${{ github.run_attempt }}
+        name: release-build-${{ github.run_id }}
         path: public/build
     - name: Use official Ubuntu package mirrors
       timeout-minutes: 2

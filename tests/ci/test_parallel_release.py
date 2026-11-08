@@ -131,6 +131,17 @@ class ParallelReleaseTest(unittest.TestCase):
                     for private in ['vendor', 'node_modules', '.env', 'auth.json', 'storage/']:
                         self.assertNotIn(private, paths)
 
+    def test_failed_job_retries_reuse_the_same_runs_inputs_and_full_retries_can_rebuild(self):
+        build = self.jobs['build']['steps']
+        artifact = next(step for step in build if step.get('name') == "Retain this run's frontend build")
+        self.assertEqual(artifact['with']['name'], 'release-build-${{ github.run_id }}')
+        self.assertIs(artifact['with']['overwrite'], True)
+        tracer = next(step for step in build if step.get('name') == 'Retain pinned Linux label tracer')
+        self.assertIs(tracer['with']['overwrite'], True)
+        for job in ['php', 'browser']:
+            restore = next(step for step in self.jobs[job]['steps'] if step.get('name') == "Restore this run's frontend build")
+            self.assertEqual(restore['with']['name'], artifact['with']['name'])
+
     def test_file_partition_includes_unnamespaced_and_new_tests_once(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
