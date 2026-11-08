@@ -11,7 +11,19 @@ final class EnterpriseSchema
     /** @return list<Migration> */
     public static function sharedVersionOne(): array
     {
-        $manifest = require base_path('apps/enterprise/database/shared-schema-v1.php');
+        return self::load('shared-schema-v1.php');
+    }
+
+    /** @return list<Migration> */
+    public static function sharedVersionTwo(): array
+    {
+        return self::load('shared-schema-v2.php');
+    }
+
+    /** @return list<Migration> */
+    private static function load(string $manifestFile): array
+    {
+        $manifest = require base_path('apps/enterprise/database/'.$manifestFile);
         $migrations = [];
         foreach ($manifest as $filename => $sha256) {
             $path = base_path('database/migrations/'.$filename);

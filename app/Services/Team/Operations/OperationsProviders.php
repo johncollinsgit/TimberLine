@@ -79,10 +79,27 @@ class OperationsProviders
         $state['send'] = $state['send'] && in_array($sendScope, $granted, true);
         abort_if(in_array('comments', $state['operations'] ?? [], true) && ! in_array('stories:write', $granted, true), 403, 'Comment posting consent was not granted.');
         $state['scopes'] = implode(' ', $granted);
-        $connection = TeamProviderConnection::query()->firstOrNew(['tenant_id' => $tenant->id, 'user_id' => $request->user()->id, 'area_id' => $area->id, 'provider' => $provider, 'account_key' => hash('sha256', $account)]);
-        $connection->fill(['id' => $connection->id ?: (string) Str::uuid(), 'account_name' => $identity['email'] ?? $identity['name'] ?? 'Connected account', 'generation' => ($connection->generation ?? 0) + 1, 'status' => 'connected', 'credentials' => ['access_token' => $token['access_token'], 'refresh_token' => $token['refresh_token']], 'settings' => ['scopes' => $state['scopes'], 'enabled_operations' => $state['operations'] ?? [], 'send_authorized' => $state['send'], 'source' => $area->settings['preset'] ?? []], 'sync_state' => ['complete' => false, 'status' => 'selection_required'], 'expires_at' => now()->addSeconds((int) ($token['expires_in'] ?? 3600)), 'last_success_at' => null]);
-        $connection->settings = [...$connection->settings, 'external_user_id' => $account];
-        $connection->save();
+        // Reconsent changes credentials and grants, not the owner's reviewed
+        // source mapping. Serialize with selection/disconnect writes and load the
+        // current settings only after locking this verified account identity.
+        DB::transaction(function () use ($tenant, $request, $area, $provider, $account, $identity, $token, $state) {
+            DB::table('team_work_locks')->insertOrIgnore(['tenant_id' => $tenant->id]);
+            DB::table('team_work_locks')->where('tenant_id', $tenant->id)->lockForUpdate()->first();
+            app(OperationsAccess::class)->area($tenant, $request->user(), $area->id, $state['send']);
+            $connection = TeamProviderConnection::query()->where(['tenant_id' => $tenant->id, 'user_id' => $request->user()->id, 'area_id' => $area->id, 'provider' => $provider, 'account_key' => hash('sha256', $account)])->lockForUpdate()->first();
+            $existing = $connection !== null;
+            $connection ??= new TeamProviderConnection(['tenant_id' => $tenant->id, 'user_id' => $request->user()->id, 'area_id' => $area->id, 'provider' => $provider, 'account_key' => hash('sha256', $account)]);
+            $settings = $connection->settings ?? [];
+            $selectionRequired = ! $existing || ($settings['selection_required'] ?? false) || ($connection->sync_state['status'] ?? null) === 'selection_required' || empty($settings['source']);
+            $settings = array_replace($settings, ['scopes' => $state['scopes'], 'enabled_operations' => $state['operations'] ?? [], 'send_authorized' => $state['send'], 'external_user_id' => $account, 'selection_required' => $selectionRequired]);
+            if (! array_key_exists('source', $settings)) {
+                $settings['source'] = $area->fresh()->settings['preset'] ?? [];
+            }
+            $connection->fill(['id' => $connection->id ?: (string) Str::uuid(), 'account_name' => $identity['email'] ?? $identity['name'] ?? 'Connected account', 'generation' => ($connection->generation ?? 0) + 1,
+                'status' => 'connected', 'credentials' => ['access_token' => $token['access_token'], 'refresh_token' => $token['refresh_token']], 'settings' => $settings,
+                'sync_state' => ['complete' => false, 'status' => $selectionRequired ? 'selection_required' : 'refresh_required', 'refresh_required' => ! $selectionRequired],
+                'expires_at' => now()->addSeconds((int) ($token['expires_in'] ?? 3600)), 'last_success_at' => null])->save();
+        }, 3);
         $request->session()->flash('team_operations.connected_area', $area->id);
 
         return $tenant;

@@ -1,4 +1,4 @@
-## Event details, updates and first-time Teams setup (November 8; candidate)
+## Event details, updates and first-time Teams setup (November 8)
 
 Read `docs/operations/teams-event-details-and-setup.md` before changing event
 cards, updates/uploads, setup or travel. Reuse the shared operations/Studio/Pay
@@ -18,9 +18,11 @@ Only exact database-backed unsent proof can retire the original child identity;
 source comment edits take precedence over old receipt text. Downloads/previews
 require current target admission, ready scanning and integrity checks.
 
-This candidate still needs protected release, live browser and production scanner
-acceptance. Scanner operator/client tests are local contracts, not live antivirus
-evidence. Keep the documented guarded MySQL, browser and scanner checks in CI.
+Use the protected release and live browser acceptance process. Scanner operator
+contracts do not replace real antivirus and upload checks; see the scanner runbook
+for the November 8 host acceptance. Keep guarded MySQL, browser and scanner checks
+in CI. Enterprise isolated work uses the additive pinned shared-schema-v2 for file
+target identity; never rewrite the immutable version-one manifest.
 
 ## Stable idle event refresh (November 8; candidate)
 

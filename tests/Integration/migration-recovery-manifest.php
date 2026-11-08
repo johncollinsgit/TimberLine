@@ -139,6 +139,10 @@ return [
         'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
         'scenarios' => ['pinned shared schema repairs missing operation/file tables and project/record indexes while retaining native work evidence'],
     ],
+    '2026_11_08_000800_add_enterprise_file_targets.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['checksum-pinned typed file target upgrade repairs partial columns and missing named index; legacy task default and original upload evidence survive replay and non-destructive code rollback'],
+    ],
     '2026_10_22_150000_create_service_proposal_tables.php' => [
         'test' => 'tests/Integration/ServiceProposalMySqlRecoveryTest.php',
         'scenarios' => ['retained encrypted client/catalog/draft/version/request/comment evidence before named index and foreign-key DDL', 'repeated completed DDL before migration bookkeeping', 'publication replay unique index recovered without replacing tokens'],

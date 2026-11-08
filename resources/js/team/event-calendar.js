@@ -97,6 +97,13 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
     host.prepend(compact);
   }
   const scroll = node('div', '', 'tops-event-calendar-scroll'), grid = node('div', '', 'tops-calendar tops-event-calendar'); scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Dated event calendar. Scroll horizontally for more dates.'); scroll.append(grid); host.append(scroll);
+  scroll.addEventListener('keydown', event => {
+    if (event.target !== scroll || event.altKey || event.ctrlKey || event.metaKey || scroll.scrollWidth <= scroll.clientWidth) return;
+    const step = Math.max(120, Math.round(scroll.clientWidth * .75));
+    const next = { ArrowLeft: scroll.scrollLeft - step, ArrowRight: scroll.scrollLeft + step, Home: 0, End: scroll.scrollWidth - scroll.clientWidth }[event.key];
+    if (next === undefined) return;
+    event.preventDefault(); scroll.scrollLeft = next;
+  });
   function shift(direction) {
     const value = new Date(anchor + 'T12:00:00Z');
     if (mode === 'month') { value.setUTCDate(1); value.setUTCMonth(value.getUTCMonth() + direction); } else value.setUTCDate(value.getUTCDate() + direction * Number(mode));

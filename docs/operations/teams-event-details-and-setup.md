@@ -1,8 +1,8 @@
 # Teams event details and first-time setup
 
-Status: November 8, 2026 source candidate. Protected release and live browser
-acceptance are pending. Scanner installation and acceptance are underway; the
-local client-contract tests are not proof of a working production scanner.
+November 8 implementation. Release acceptance requires the protected GitHub/Forge
+gates and a real native-event photo upload. Host scanner and actual Laravel-client
+checks passed; see `teams-clamav-scanner.md` for the separate live scanner evidence.
 
 ## Event workspace
 
@@ -173,3 +173,10 @@ Before claiming this candidate live, complete protected GitHub/Forge checks,
 exact-release `/ready`, production scanner acceptance and actual tenant browser
 verification. Preserve Asana authority, unknown outcomes, drafts and file evidence
 when any part of that acceptance fails.
+
+Asana comment access is requested explicitly through Authorize event updates.
+Renewing consent for the same verified account preserves its reviewed project
+selections and unrelated settings, replaces grants strictly from the new token,
+and requires fresh reconciliation. Native event updates require no connection.
+Enterprise isolated work installs file target identity through the additive pinned
+shared-schema-v2 migration; its version-one manifest remains immutable.

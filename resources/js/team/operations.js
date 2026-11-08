@@ -580,6 +580,11 @@ export function installOperations(nativeRoot) {
         }));
         box.append(button('Authorize hidden identifier writes', async () => { if (drafts.size || emailDrafts.size || draft?.dirty) throw new Error('Save or discard area drafts before OAuth.'); const result = await api('/integrations/sheets/connect', { method: 'POST', body: { send: true } }); location.assign(result.url); }));
       }
+      if (connection.provider === 'asana') box.append(button('Authorize event updates', async () => {
+        if (drafts.size || emailDrafts.size || draft?.dirty) throw new Error('Save or discard area drafts before OAuth.');
+        const result = await api('/integrations/asana/connect', { method: 'POST', body: { send: true, asana_operations: ['comments'] } });
+        location.assign(result.url);
+      }));
       if (connection.provider === 'asana' || connection.provider === 'gmail') box.append(button('Authorize ' + (connection.provider === 'asana' ? 'reviewed task changes and event creation' : 'email sending'), async () => { if (drafts.size || emailDrafts.size || draft?.dirty) throw new Error('Save or discard area drafts before OAuth.'); const result = await api('/integrations/' + connection.provider + '/connect', { method: 'POST', body: { send: true } }); location.assign(result.url); }));
     }
   }

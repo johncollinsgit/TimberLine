@@ -249,6 +249,19 @@ to test scanning. Record the real acceptance separately from source tests.
   backups. Do not re-enable a different default daemon or open the network port as
   an automatic rollback shortcut.
 
-Verification performed for the prepared source: shell syntax, Python syntax and
-protocol-client unit tests. Production package installation, real daemon checks,
-runtime flag activation and actual photo acceptance remain operator work.
+November 8 server acceptance: Forge recipe 192422 installed Ubuntu ClamAV
+1.5.4 on the existing Everbranch host, with the exact configuration-file
+AppArmor additions and both dedicated services active. Real loopback checks
+passed PING, fresh loaded signatures, benign/EICAR and both size boundaries.
+The real Laravel scanner client returned `clean` for a synthetic PNG and
+`rejected` for EICAR. Sampled available memory stayed above 3.6 GiB during
+bootstrap/startup/reload; sampled app readiness returned 200 throughout.
+
+The three scanner settings were saved through Safari's Forge environment editor;
+a hash comparison confirmed all other nonblank environment lines unchanged.
+Forge recaches configuration when saving that editor, so its cache can lose the
+release-only `RELEASE_ID` process variable. Verify the exact approved release
+identity after the next protected release; do not mistake HTTP 200 alone for
+release acceptance. Actual event-composer photo acceptance remains pending that
+release and a controlled native-event upload. No test update has been posted to
+Asana. Source checks include 14 protocol/installer contracts and shell validation.

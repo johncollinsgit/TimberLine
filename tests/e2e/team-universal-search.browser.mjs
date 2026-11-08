@@ -79,6 +79,7 @@ try {
           await result.click(); await revalidated; const admitted = await (await opened).json();
           assert.equal(admitted.record?.id || admitted.id, fixture.event_id, 'Selection opens its actual authorized event after revalidation');
           await page.locator('#tops-detail').getByRole('heading', { name: 'Fictional seasonal makers and home goods weekend market', exact: true }).waitFor();
+          await page.locator('#tops-detail[open] .event-detail-notes').getByText('Event notes', { exact: true }).click();
           await page.locator('#tops-detail[open]').getByText('Copper lantern setup', { exact: true }).waitFor();
           await page.locator('#tops-detail-close').click();
           assert.equal(page.url(), before.url, `${layout}: search details does not navigate to an area overview`);
@@ -132,6 +133,7 @@ try {
         assert.match(await stagedStatus.innerText(), /Searching other apps/);
         const earlyOpen = page.waitForResponse(response => new URL(response.url()).pathname === '/team/operations/records/' + fixture.event_id && response.ok());
         await result.click(); await earlyOpen;
+        await page.locator('#tops-detail[open] .event-detail-notes').getByText('Event notes', { exact: true }).click();
         await page.locator('#tops-detail[open]').getByText('Copper lantern setup', { exact: true }).waitFor();
         pending.release(); await pending.finished; await page.locator('#tops-detail-close').click();
         assert.ok(await page.locator('[data-team-universal-search] .eb-search-panel').isHidden(), 'Opening a Team result retires the unfinished app search');

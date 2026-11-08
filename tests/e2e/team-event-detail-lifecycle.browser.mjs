@@ -91,6 +91,20 @@ try {
     oldWindow.release(); await page.waitForLoadState('networkidle');
     assert.equal(calls.filter(call => /\/members$/.test(call.path)).length, membersBefore, 'Retired area load does not issue another members request');
     assert.equal(await dialog.isVisible(), false); assert.deepEqual(errors, []);
+    await page.route('**/team/integrations?*', async route => {
+      const headers = route.request().headers();
+      await route.fulfill({ json: { preset: {}, items: [{ id: 'fictional-provider', provider: 'asana', account_name: 'Fictional Asana account', status: 'connected', generation: 1, source: {}, scopes: 'tasks:read tasks:write', capabilities: { read: true }, sync: { complete: true, status: 'ready' } }] }, headers: { 'X-Team-Viewer': headers['x-team-viewer'], 'X-Team-Workspace': headers['x-team-workspace'] } });
+    });
+    let consentRequest;
+    await page.route('**/team/integrations/asana/connect?*', async route => {
+      consentRequest = route.request().postDataJSON();
+      await route.fulfill({ status: 422, json: { message: 'Fictional consent preview; no provider request was sent.' } });
+    });
+    await page.evaluate(areaId => window.TeamOperations.openSettingsArea(areaId, 'connections'), fixture.area_id);
+    await page.getByRole('button', { name: 'Authorize event updates', exact: true }).click();
+    await page.getByText('Fictional consent preview; no provider request was sent.', { exact: true }).waitFor();
+    assert.deepEqual(consentRequest, { send: true, asana_operations: ['comments'] }, 'Event update authorization explicitly requests comment scope');
+    assert.deepEqual(errors, []);
     summary.push({ browser: name, initial_reads: initialReads, per_tab_reads: perTab, delayed_success_fenced: true, delayed_denial_fenced: true, obsolete_approval_reread_suppressed: true, obsolete_members_read_suppressed: true });
     await context.close(); await browser.close(); browser = null;
   }

@@ -13,10 +13,12 @@ $errors = [];
 foreach (glob(dirname(__DIR__).'/database/migrations/*.php') as $path) {
     $errors = [...$errors, ...$linter->lintMigration($path, file_get_contents($path), $manifest)];
 }
-foreach (require dirname(__DIR__).'/database/shared-schema-v1.php' as $filename => $expected) {
-    $source = file_get_contents($root.'/database/migrations/'.$filename);
-    if ($source === false || ! hash_equals($expected, hash('sha256', str_replace("\r\n", "\n", $source)))) {
-        $errors[] = 'Shared schema checksum mismatch: '.$filename;
+foreach (glob(dirname(__DIR__).'/database/shared-schema-v*.php') as $manifestPath) {
+    foreach (require $manifestPath as $filename => $expected) {
+        $source = file_get_contents($root.'/database/migrations/'.$filename);
+        if ($source === false || ! hash_equals($expected, hash('sha256', str_replace("\r\n", "\n", $source)))) {
+            $errors[] = 'Shared schema checksum mismatch: '.$filename;
+        }
     }
 }
 if ($errors !== []) {
