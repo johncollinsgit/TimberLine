@@ -276,7 +276,8 @@ export function installPremium(root) {
       $('remove-view').disabled = !$('saved-views').value;
       $('calendar-style').hidden = ctx.layout !== 'calendar'; $('month-label').hidden = ctx.layout !== 'calendar'; $('calendar-format-label').hidden = ctx.layout !== 'calendar'; $('task-calendar-context').hidden = ctx.layout !== 'calendar';
       for (const button of $('home-counts').children) { const match = button.textContent.match(/^(.*): (\d+)$/); if (match) button.replaceChildren(node('span', match[1]), node('strong', match[2], 'teams-home-number')); }
-      const eventSurface = $('source-filter').value === 'all' && !ctx.selectedProject && !asana?.selectedProject
+      const explicitArea = new URL(location.href).searchParams.has('area') || document.getElementById('team-operations')?.classList.contains('tops-active');
+      const eventSurface = !explicitArea && $('source-filter').value === 'all' && !ctx.selectedProject && !asana?.selectedProject
         && (['board', 'calendar'].includes(ctx.layout) || ($('mode').value === 'home' && ctx.layout === 'list')) && $('mode').value !== 'inbox';
       if (eventSurface && window.TeamOperations?.mountEventSurface) {
         $('home').hidden = true; $('list-heading').hidden = true; $('count').hidden = true; $('prev').hidden = $('next').hidden = true;
