@@ -151,3 +151,22 @@ Website workspace action and membership rules remain shared with the dashboard.
 Event candidate prefiltering uses a conservative in-memory superset only; current
 policy, sanitized display projection and final matching remain mandatory. Private
 raw candidate text is not returned, indexed, counted for display, or sent to AI.
+
+## Idle refresh diagnostics (November 8)
+
+The one-minute event timer previously cleared calendar, Board and List contents
+before its network request, producing a blank view for the request duration.
+Background refresh now retains the existing view at full opacity and blocks its
+interactions until fresh admission completes. Errors still clear records; session
+or account changes still retire data and stop automatic polling. Hidden-tab
+invalidation is retained. Manual navigation and refresh retain explicit loading.
+Browser acceptance gates a pending refresh, confirms no blank/fade/overlap, and
+checks both transient failure and expired-session retirement in Chromium/WebKit.
+
+Read-only production diagnostics on November 8 found eight successful database
+probes at 0.46–2.11 ms, three healthy `/ready` requests at 509–646 ms, and an event
+service read at 2,375–2,743 ms (SQL 107–272 ms). Safari captured a records request
+at 3.27 s. These bounded samples establish no observed database disconnect during
+the checks; they are not a prolonged soak or a claim that provider checks are fast.
+Database-backed sessions are configured for 120 idle minutes, not tested here by
+waiting for two hours. Never extend session lifetimes to conceal refresh defects.

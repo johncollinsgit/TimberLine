@@ -33,7 +33,7 @@ export function installOperations(nativeRoot) {
     try { data = await response.json(); } catch { throw new Error('The server did not return a valid response. Your draft remains available.'); }
     if ([401, 419].includes(response.status) || data.error === 'page_identity_changed' || (response.ok && (response.headers.get('X-Team-Viewer') !== root.dataset.user || response.headers.get('X-Team-Workspace') !== nativeRoot.dataset.workspaceId))) {
       identityLost = true; serial++; personalTicket++; keepDraft(); $('content').replaceChildren(); $('personal').replaceChildren(); $('personal').hidden = true; $('detail-body').replaceChildren(); $('detail').close(); $('editor').close();
-      $('content').inert = false; $('content').removeAttribute('aria-busy');
+      $('content').inert = false; $('content').removeAttribute('aria-busy'); $('content').removeAttribute('data-background-refresh');
       $('content').append(button('Verify original account', async () => { await api('/areas', { verify: true }); identityLost = false; await load(); }));
       throw new Error('Your account or workspace changed. Restore and verify the original account before continuing. Drafts are retained in this page.');
     }
@@ -220,12 +220,16 @@ export function installOperations(nativeRoot) {
   }
   function query(kind) { return { kind, page, q: $('search').value.trim(), cursor: pageCursors[page - 1], ...(view === 'calendar' ? { ...(inlineEventSurface() ? { event_scope: 'window', ...selectedEventWindow() } : eventCalendarWindow(root.dataset.tenant + '|' + area.id)), calendar_recheck_sources: page > 1 ? 1 : 0 } : {}) }; }
 
-  async function load(appendCalendar = false) {
+  async function load(appendCalendar = false, background = false) {
     if (!area || $('panel').hidden) return;
-    if (view === 'calendar' && !appendCalendar) { page = 1; calendarPages = null; $('content').replaceChildren(); $('scope').textContent = 'Checking selected dates…'; }
-    const ticket = ++serial, current = area.id, collectionWindow = inlineEventSurface() ? selectedEventWindow() : null; $('notice').textContent = 'Loading ' + label(view).toLowerCase() + '…';
+    // Keep the admitted view visible during the periodic check. It remains inert
+    // until fresh admission succeeds; failures below still retire its records.
+    if (view === 'calendar' && !appendCalendar) { page = 1; calendarPages = null; if (!background) { $('content').replaceChildren(); $('scope').textContent = 'Checking selected dates…'; } }
+    const ticket = ++serial, current = area.id, collectionWindow = inlineEventSurface() ? selectedEventWindow() : null;
+    if (!background) $('notice').textContent = 'Loading ' + label(view).toLowerCase() + '…';
     if (page === 1) pageCursors = [null];
     $('content').setAttribute('aria-busy', 'true');
+    $('content').toggleAttribute('data-background-refresh', background);
     $('content').inert = true;
     try {
       let result;
@@ -322,7 +326,7 @@ export function installOperations(nativeRoot) {
         if (result.commerceNotice) note('Existing Wholesale source unavailable: ' + result.commerceNotice);
       }
     } catch (error) { if (ticket === serial) { calendarPages = null; $('content').replaceChildren(); empty('This view is unavailable', 'The source or access check did not complete. This does not mean there are no records.'); if (page > 1) $('content').append(button('Return to first page', () => { page = 1; return load(); })); report(error); } }
-    finally { if (ticket === serial) { $('content').removeAttribute('aria-busy'); $('content').inert = false; } }
+    finally { if (ticket === serial) { $('content').removeAttribute('aria-busy'); $('content').removeAttribute('data-background-refresh'); $('content').inert = false; } }
   }
   function renderRecords(items, parent = $('content')) {
     if (!items?.length) { empty('Ready for connected work', 'Create a draft or choose a source in Connections. Unavailable source work is never represented as an empty complete import.', parent); return; }
@@ -635,9 +639,9 @@ export function installOperations(nativeRoot) {
   function renderAttempts(items) { note('Your prepared and submitted actions. Unknown outcomes require reconciliation; retrying does not send a second copy.'); if (!items.length) empty('No communication attempts yet', 'Prepare an update from an event or account.'); else table(['Action', 'State', 'Created', 'Review'], items.map(a => [label(a.kind), label(a.status), new Date(a.created_at).toLocaleString(), ['unknown', 'executing'].includes(a.status) || a.adoption_recovery_available ? button(a.adoption_recovery_available ? 'Finish original event link' : 'Reconcile outcome', async () => { const result = await api('/communications/' + a.id + '/reconcile', { method: 'POST' }); await load(); if (result.notice || result.result?.notice) $('notice').textContent = result.notice || result.result.notice; }) : '—'])); }
   addEventListener('beforeunload', event => { if (draft?.dirty || drafts.size || emailDrafts.size) { event.preventDefault(); event.returnValue = ''; } });
   document.addEventListener('visibilitychange', () => { clearInterval(timer); if (document.hidden && view === 'calendar') { serial++; calendarPages = null; $('content').replaceChildren(); } else if (!document.hidden) { if (view === 'calendar' && !$('panel').hidden) load(); timer = setInterval(() => {
-    if ($('panel').hidden || draft?.dirty || $('detail').open || $('editor').open) return;
-    if (view === 'calendar' && (page > 1 || (calendarPages?.pages ?? 0) > 1 || $('content').getAttribute('aria-busy') === 'true')) return;
-    load();
+    if (identityLost || $('panel').hidden || draft?.dirty || $('detail').open || $('editor').open || $('content').getAttribute('aria-busy') === 'true' || $('content').contains(document.activeElement)) return;
+    if (view === 'calendar' && (page > 1 || (calendarPages?.pages ?? 0) > 1)) return;
+    load(false, true);
   }, 60000); } });
   document.dispatchEvent(new Event('visibilitychange'));
   areasReady = api('/areas').then(async data => { areas = data.items; renderAreas(); const url = new URL(location.href), eventApp = url.searchParams.get('app') === 'events', initial = areas.find(a => a.id === url.searchParams.get('area')) || (eventApp ? areas.find(a => a.profile === 'events') : null); if (initial) await openArea(initial, url.searchParams.get('area_view') || (eventApp ? 'my_tasks' : 'overview')); }).catch(report);
