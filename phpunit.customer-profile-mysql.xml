@@ -14,6 +14,7 @@
             <file>tests/Feature/Marketing/CustomerOutreachReviewTest.php</file>
             <file>tests/Feature/Marketing/SquareCustomerSourceReviewTest.php</file>
             <file>tests/Feature/Marketing/SquareCustomerHistoryTest.php</file>
+            <file>tests/Feature/Marketing/ProviderPostRetryTest.php</file>
             <file>tests/Feature/Marketing/SquareCustomerChoiceTest.php</file>
             <file>tests/Feature/Marketing/SquareCustomerRefreshTest.php</file>
             <file>tests/Feature/Marketing/MarketingCampaignConversionAttributionSnapshotTest.php</file>

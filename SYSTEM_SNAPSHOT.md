@@ -51,6 +51,12 @@ before use. Read `docs/operations/shared-customer-profiles.md` and its linked
 runbooks for exact coverage, MySQL races and remaining release work. No new
 ledger, migration, live message, policy publication or production activation.
 
+Shared SendGrid/Twilio message POSTs now make one HTTP attempt; GET verification
+retains retries. Uncertain Twilio results cannot trigger an MMS-to-SMS fallback
+or a fresh personal delivery. Fake-transport tests cover the actual requests and
+existing personal-message journals; live provider reconciliation remains open,
+and both profile dispatch gates remain closed.
+
 ## Teams Studio foundation (November 7; draft source candidate)
 
 Native Teams now has a read-only availability contract and an explicit browser

@@ -79,12 +79,37 @@ delivery or rewards ledger is introduced.
 Independently closed release gates
 `CUSTOMER_PROFILE_SMS_DISPATCH_ENABLED=false` and
 `CUSTOMER_PROFILE_EMAIL_DISPATCH_ENABLED=false` prevent new profile-based SMS
-and email dispatch even after tenant policy publication. Existing Twilio and
-SendGrid transports use internal retries; some transport failures are collapsed
-into failed results. Before opening either gate, prove the exact supported
-provider path avoids blind retries and reconciles original provider receipts
-under timeout/5xx/lost-response cases. Source tests do not supply that evidence.
-The shared provider implementations and legacy campaigns are unchanged.
+and email dispatch even after tenant policy publication. Message POSTs in the
+shared Twilio and SendGrid clients now make one transport attempt and refuse
+redirects; their read-only request helpers retain existing retries. Twilio marks
+server/connection uncertainty explicitly unknown, including when a provider error
+code obscures the HTTP 5xx status. An MMS failure can fall back only after a
+definitive non-rate-limited 4xx rejection without a message SID. A 5xx error or
+retained SID cannot authorize another SMS. Existing legacy campaign journals and
+manual retry policies retain their separate behavior.
+
+`ProviderPostRetryTest` exercises the real clients with fake HTTP: one POST on
+timeout/500/503, a valid rejected-MMS fallback, retained message identity, and GET
+health-check retries. Its personal-message journal tests preserve one original
+delivery and block ordinary/forced replay plus cross-channel outreach after an
+uncertain response. Sender routing/readiness is faked, while the actual provider
+request and delivery journal run. These tests do not send messages.
+
+This closes the internal transport retry hazard; it is not complete live
+delivery acceptance. Direct stateless provider calls still require their caller's
+original durable journal: an idempotency option alone does not add a new provider
+deduplication service. Before opening either gate, prove the selected real
+provider path and original receipt reconciliation under timeout/5xx/lost-response
+cases. Legacy retry/metering behavior and independently implemented SES safety
+are separate acceptance boundaries. Both profile release gates remain closed.
+
+The applied `twilio-developer-kit:twilio-reliability-patterns` skill distinguishes
+explicit rate-limit rejection from uncertain failures. Twilio documents
+[429 as unprocessed and safe to retry with backoff](https://www.twilio.com/docs/api/errors/20429);
+this bounded change leaves POST resubmission to existing caller review instead
+of introducing an automatic send retry. GET retries remain in place. SendGrid's
+[Mail Send contract](https://www.twilio.com/docs/sendgrid/api-reference/mail-send/mail-send)
+and existing delivery/webhook authorities remain the integration surface.
 
 The new SMS hook takes `CustomerAccountFence`, then the tenant row, then the
 profile and recipient rows. It validates frozen text, current choices, contact,

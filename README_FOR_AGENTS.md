@@ -70,6 +70,13 @@ before use. Read `docs/operations/shared-customer-profiles.md` and its linked
 runbooks for exact coverage, MySQL races and remaining release work. No new
 ledger, migration, live message, policy publication or production activation.
 
+Do not reintroduce blanket retries or redirects on SendGrid/Twilio send POSTs.
+Read-only checks retain retries. Personal-message timeout/5xx outcomes preserve
+the original unresolved delivery, including when Twilio returns a separate error
+code. MMS fallback requires a definitive rejection and no original message SID.
+Transport tests use fake HTTP; keep both profile send gates closed until the
+selected provider's actual receipt/reconciliation path is accepted.
+
 ## Teams Studio foundation (November 7; draft source candidate)
 
 Check `/api/mobile/v1/auth/teams-availability` before opening the native sign-in

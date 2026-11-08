@@ -189,10 +189,11 @@ class TwilioProviderClient
         ], fn ($value) => $value !== null && $value !== '');
 
         try {
-            $response = $this->request()->post($this->messagesUrl(), $payload);
+            // Retry/reconciliation belongs to the original delivery, never an uncertain POST.
+            $response = $this->request()->retry(1, 0, throw: false)->withoutRedirecting()->post($this->messagesUrl(), $payload);
             $json = is_array($response->json()) ? $response->json() : [];
 
-            if ($sendAsMms && $response->failed() && $this->shouldFallbackToSms($json, $options)) {
+            if ($sendAsMms && $response->clientError() && $response->status() !== 429 && empty($json['sid']) && $this->shouldFallbackToSms($json, $options)) {
                 $fallbackOptions = $options;
                 $fallbackOptions['send_as_mms'] = false;
                 $fallbackOptions['fallback_to_sms_on_mms_failure'] = false;
@@ -208,12 +209,12 @@ class TwilioProviderClient
                 return $fallbackResult;
             }
 
-            if ($response->failed()) {
+            if (! $response->successful()) {
                 return [
                     'success' => false,
                     'provider' => 'twilio',
                     'provider_message_id' => $this->nullableString($json['sid'] ?? null),
-                    'status' => $this->normalizeTwilioStatus($json['status'] ?? 'failed'),
+                    'status' => $response->serverError() || $response->redirect() ? 'unknown' : $this->normalizeTwilioStatus($json['status'] ?? 'failed'),
                     'error_code' => $this->nullableString($json['code'] ?? null) ?: (string) $response->status(),
                     'error_message' => $this->sanitizeTwilioErrorMessage($json['message'] ?? null, $sender) ?: 'Twilio request failed.',
                     'sender_key' => $sender['key'] ?? null,
@@ -246,7 +247,7 @@ class TwilioProviderClient
                 'success' => false,
                 'provider' => 'twilio',
                 'provider_message_id' => null,
-                'status' => 'failed',
+                'status' => 'unknown',
                 'error_code' => 'exception',
                 'error_message' => $this->sanitizeTwilioErrorMessage($e->getMessage(), $sender) ?: 'Twilio request exception.',
                 'sender_key' => $sender['key'] ?? null,
