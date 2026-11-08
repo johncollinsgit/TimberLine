@@ -24,12 +24,63 @@ name: tests
         type: string
         default: all
         required: false
+  schedule:
+  - cron: 0 8 * * *
 concurrency:
   group: release-validation-v2-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 permissions:
   contents: read
 jobs:
+  plan:
+    name: Classify the exact change
+    runs-on: ubuntu-24.04
+    outputs:
+      tier: ${{ steps.policy.outputs.tier }}
+      head: ${{ steps.policy.outputs.head }}
+      reason: ${{ steps.policy.outputs.reason }}
+      verify_presentation: ${{ steps.policy.outputs.verify_presentation }}
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Install presentation parser
+      run: python3 -m pip install --disable-pip-version-check tinycss2==1.4.0
+    - name: Use the trusted base policy; unknown changes stay full
+      id: policy
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+        EVENT_NAME: ${{ github.event_name }}
+      run: |
+        set -euo pipefail
+        if [ -z "$BASE_SHA" ]; then BASE_SHA="$(git rev-parse HEAD^)"; fi
+        report="$RUNNER_TEMP/presentation-plan.json"
+        if [ "$EVENT_NAME" = 'pull_request' ] && [ "$BASE_REF" = 'main' ] && git show "$BASE_SHA:scripts/ci/presentation-policy.py" > "$RUNNER_TEMP/trusted-presentation-policy.py" 2>/dev/null; then
+          python3 "$RUNNER_TEMP/trusted-presentation-policy.py" --base "$BASE_SHA" --head "$HEAD_SHA" --output "$report"
+        else
+          python3 - "$report" "$BASE_SHA" "$HEAD_SHA" <<'PYTHON'
+        import json,sys
+        from pathlib import Path
+        Path(sys.argv[1]).write_text(json.dumps({'tier':'full','reason':'policy_not_on_base','base':sys.argv[2],'head':sys.argv[3]}))
+        PYTHON
+        fi
+        python3 - "$report" "$BASE_SHA" "$HEAD_SHA" <<'PYTHON'
+        import json,os,subprocess,sys
+        from pathlib import Path
+        report=json.loads(Path(sys.argv[1]).read_text())
+        if report.get('tier') not in {'full','presentation'} or report.get('head') != sys.argv[3]:
+            raise SystemExit('Invalid validation plan')
+        changed=subprocess.check_output(['git','diff','--name-only',sys.argv[2],sys.argv[3]]).decode().splitlines()
+        policy_inputs={'.github/workflows/tests.yml','scripts/ci/presentation-policy.py','scripts/ci/require-release-results.py','tests/ci/test_presentation_policy.py','tests/e2e/presentation-smoke.browser.mjs'}
+        verify=report['tier']=='presentation' or bool(set(changed)&policy_inputs)
+        with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+            for key,value in {'tier':report['tier'],'head':sys.argv[3],'reason':report['reason'],'verify_presentation':str(verify).lower()}.items():
+                output.write(f'{key}={value}\n')
+        with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as summary:
+            summary.write(f"Validation plan: **{report['tier']}** ({report['reason']}).\n")
+        PYTHON
   build:
     name: Build and shared contracts
     runs-on: ubuntu-24.04
@@ -41,8 +92,9 @@ jobs:
         fetch-depth: 0
     - name: Check release workflow contracts
       run: |-
-        python3 -m pip install --disable-pip-version-check PyYAML==6.0.3
+        python3 -m pip install --disable-pip-version-check PyYAML==6.0.3 tinycss2==1.4.0
         python3 -m unittest discover -s tests/ci -p "test_parallel_release.py" -v
+        python3 -m unittest discover -s tests/ci -p "test_presentation_policy.py" -v
     - name: Use official Ubuntu package mirrors
       timeout-minutes: 2
       shell: bash
@@ -107,6 +159,7 @@ jobs:
         CARGO_BUILD_TARGET=x86_64-unknown-linux-musl CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld scripts/labels/install-vtracer.sh "$RUNNER_TEMP/label-tools"
         (cd "$RUNNER_TEMP/label-tools" && sha256sum vtracer-0.6.5 > vtracer-0.6.5.sha256)
         echo "WHOLESALE_LABEL_VTRACER=$RUNNER_TEMP/label-tools/vtracer-0.6.5" >> "$GITHUB_ENV"
+      if: needs.plan.outputs.tier == 'full'
     - name: Retain pinned Linux label tracer
       uses: actions/upload-artifact@v4
       with:
@@ -117,6 +170,7 @@ jobs:
         if-no-files-found: error
         retention-days: 7
         overwrite: true
+      if: needs.plan.outputs.tier == 'full'
     - name: Prepare application key
       run: |
         cp .env.example .env
@@ -135,9 +189,29 @@ jobs:
         if-no-files-found: error
         retention-days: 3
         overwrite: true
+    - name: Install browsers for presentation validation
+      if: needs.plan.outputs.verify_presentation == 'true'
+      run: npx playwright install --with-deps chromium webkit
+    - name: Verify presentation safety and browser smoke
+      if: needs.plan.outputs.verify_presentation == 'true'
+      run: |-
+        php artisan view:cache
+        php -d memory_limit=1G vendor/bin/pest --compact tests/Feature/Auth/AuthTenantContextTest.php tests/Feature/Tenancy/TenantIsolationGuardrailTest.php tests/Feature/Tenancy/CrossTenantIdorGuardTest.php tests/Feature/ShopifyEmbeddedSurfaceIsolationTest.php
+        node tests/e2e/presentation-smoke.browser.mjs
+    - name: Retain presentation failure evidence
+      if: failure() && needs.plan.outputs.verify_presentation == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: presentation-failure-${{ github.run_id }}-${{ github.run_attempt }}
+        path: test-results/presentation-smoke/
+        if-no-files-found: ignore
+        retention-days: 3
+    needs: plan
   php:
     name: PHP 8.4 shard ${{ matrix.shard }}/6
-    needs: build
+    needs:
+    - plan
+    - build
     runs-on: ubuntu-24.04
     environment: Testing
     strategy:
@@ -227,9 +301,12 @@ jobs:
       run: |-
         python3 scripts/ci/php-test-shards.py --index=${{ matrix.shard }} --total=6
         php -d memory_limit=1G ./vendor/bin/pest --parallel --compact --configuration=.phpunit-ci.xml
+    if: needs.plan.outputs.tier == 'full'
   browser:
     name: Browser checks (${{ matrix.group }})
-    needs: build
+    needs:
+    - plan
+    - build
     runs-on: ubuntu-24.04
     environment: Testing
     strategy:
@@ -375,10 +452,12 @@ jobs:
         path: test-results/
         if-no-files-found: ignore
         retention-days: 3
+    if: needs.plan.outputs.tier == 'full'
   ci:
     name: ci (8.4)
     runs-on: ubuntu-24.04
     needs:
+    - plan
     - build
     - php
     - browser
@@ -388,7 +467,8 @@ jobs:
     - name: Require every validation job to succeed
       env:
         JOB_RESULTS: ${{ toJSON(needs) }}
-      run: python3 scripts/ci/require-job-results.py build php browser
+        EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      run: python3 scripts/ci/require-release-results.py ci
   mysql:
     name: MySQL 8.4 (${{ matrix.group }})
     runs-on: ubuntu-latest
@@ -588,7 +668,7 @@ jobs:
     - name: Verify AI chat, briefing replay and approval concurrency on MySQL
       run: php ./vendor/bin/pest tests/Integration/AiBranchMySqlConcurrencyTest.php --compact
       if: matrix.group == 'concurrency'
-    if: '!cancelled() && inputs.mysql_mode != ''skip'''
+    if: '!cancelled() && inputs.mysql_mode != ''skip'' && needs.plan.outputs.tier == ''full'''
     strategy:
       fail-fast: false
       matrix:
@@ -597,10 +677,13 @@ jobs:
         - subscriptions
         - mail
         - concurrency
+    needs: plan
   mysql-migration:
     name: mysql migration recovery
     runs-on: ubuntu-24.04
     needs:
+    - plan
+    - build
     - mysql
     if: always() && inputs.mysql_mode != 'skip'
     steps:
@@ -608,4 +691,5 @@ jobs:
     - name: Require every validation job to succeed
       env:
         JOB_RESULTS: ${{ toJSON(needs) }}
-      run: python3 scripts/ci/require-job-results.py mysql
+        EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      run: python3 scripts/ci/require-release-results.py mysql
