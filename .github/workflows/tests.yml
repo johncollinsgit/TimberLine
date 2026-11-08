@@ -27,7 +27,7 @@ name: tests
   schedule:
   - cron: 0 8 * * *
 concurrency:
-  group: release-validation-v2-${{ github.event.pull_request.number || github.ref }}
+  group: release-validation-v2-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 permissions:
   contents: read

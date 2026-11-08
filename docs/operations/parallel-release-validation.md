@@ -75,8 +75,10 @@ suites. Missing, failed, cancelled, unexpected skipped or malformed results fail
 closed. Matrix fail-fast is disabled so other lanes retain useful evidence;
 no validation lane uses continue-on-error.
 
-Superseded revisions cancel within the same PR's validation group. Enterprise
-browser checks retain all scenarios and their established twelve-runner limit.
+Superseded revisions cancel within the same PR's validation group.
+Nightly/manual CI and reusable production validation have separate cancellation
+groups, so scheduled work cannot cancel a production release gate.
+Enterprise browser checks retain all scenarios and their established twelve-runner limit.
 They remain isolated from the main PHP/browser/MySQL jobs; the shared runner pool
 and actual queue time determine overall capacity.
 Production deployment remains serialized and is never cancelled by a newer push.

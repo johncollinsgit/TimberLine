@@ -176,6 +176,8 @@ class PresentationGateTest(unittest.TestCase):
         self.assertIn('presentation-smoke.browser.mjs', smoke['run'])
         self.assertEqual(smoke['if'], "needs.plan.outputs.verify_presentation == 'true'")
         self.assertEqual(workflow['on']['schedule'], [{'cron': '0 8 * * *'}])
+        self.assertIn('github.workflow', workflow['concurrency']['group'])
+        self.assertIn('github.event_name', workflow['concurrency']['group'])
 
 
 if __name__ == '__main__':
