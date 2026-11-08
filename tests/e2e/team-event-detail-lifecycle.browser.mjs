@@ -24,7 +24,7 @@ try {
   for (const [engine, name] of [[chromium, 'chromium'], [webkit, 'webkit']]) {
     browser = await engine.launch();
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-    await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+    await context.route('**/*', route => { const url = new URL(route.request().url()); if (url.origin !== origin || (url.pathname.startsWith('/team/') && !['GET', 'HEAD'].includes(route.request().method()))) return route.abort(); return route.continue(); });
     const csrf = (await (await context.request.get(origin + '/login')).text()).match(/<meta name="csrf-token" content="([^"]+)"/)?.[1];
     assert.ok((await context.request.post(origin + '/login', { form: { email: 'owner@fixture.invalid', password: 'Fictional-local-only-2026!', _token: csrf }, headers: { Accept: 'application/json' } })).ok());
     page = await context.newPage(); page.setDefaultTimeout(12000); await page.clock.setFixedTime(new Date('2026-11-07T12:00:00Z'));
@@ -49,22 +49,26 @@ try {
       if (pending) { pending.started(); await pending.promise; }
       await route.fulfill(pending?.denied ? { status: 403, json: { message: 'Fictional obsolete source denial.' } } : { response, json: payload });
     });
-    const deferred = (denied = false) => { let started, release; const ready = new Promise(done => { started = done; }), promise = new Promise(done => { release = done; }); return { ready, started, promise, release, denied }; };
+    const deferred = (denied = false) => { let started, release, timer; const ready = new Promise((done, reject) => { timer = setTimeout(() => reject(new Error('Expected held request did not start')), 12000); started = () => { clearTimeout(timer); done(); }; }), promise = new Promise(done => { release = done; }); return { ready, started, promise, release, denied }; };
     const snapshot = async () => ({ title: await page.locator('#tops-detail-title').innerText(), body: await page.locator('#tops-detail-body').innerText(), status: await page.locator('#tw-status').innerText() });
     const openB = async () => { await cards.nth(1).click(); await page.locator('#tops-detail-body table').first().waitFor(); assert.equal(await page.locator('#tops-detail-title').innerText(), titleB); };
+    console.log(name + ': settled tab request counts captured');
     for (const denied of [false, true]) {
+      console.log(name + ': checking retired detail ' + (denied ? 'denial' : 'success'));
       const pending = deferred(denied); holdRead = pending;
       await cards.nth(0).click(); await pending.ready; await page.locator('#tops-detail-close').click(); await openB();
       const before = await snapshot(); pending.release(); await page.waitForLoadState('networkidle');
       assert.deepEqual(await snapshot(), before, `${name}: late ${denied ? 'denied' : 'successful'} A read cannot change B title, body or status`);
       await page.locator('#tops-detail-close').click();
     }
-    await page.route('**/team/operations/records/*/review', async route => {
+    await page.route(url => /^\/team\/operations\/records\/[^/]+\/review$/.test(url.pathname), async route => {
       assert.equal(route.request().method(), 'POST');
       const body = route.request().postDataJSON(); assert.equal(body.action, 'fields'); assert.equal(body.expected_fields_revision, 'fictional-revision');
       const pending = holdApproval; holdApproval = null; assert.ok(pending); pending.started(); await pending.promise;
-      await route.fulfill({ json: { id: fixture.event_id, version: 2 } }); // Fake acceptance; no DB/provider mutation.
+      const headers = route.request().headers();
+      await route.fulfill({ json: { id: fixture.event_id, version: 2 }, headers: { 'X-Team-Viewer': headers['x-team-viewer'], 'X-Team-Workspace': headers['x-team-workspace'] } }); // Fake acceptance; no DB/provider mutation.
     });
+    console.log(name + ': checking retired approval');
     await cards.nth(0).click(); await dialog.getByLabel('Approve Venue: Fictional review candidate').check();
     const pendingApproval = deferred(); holdApproval = pendingApproval;
     await dialog.getByRole('button', { name: 'Approve selected fields', exact: true }).click(); await pendingApproval.ready;
@@ -77,6 +81,7 @@ try {
       const pending = holdWindow; if (!pending) return route.continue(); holdWindow = null;
       const response = await route.fetch(); pending.started(); await pending.promise; await route.fulfill({ response });
     });
+    console.log(name + ': checking retired window');
     const oldWindow = deferred(); holdWindow = oldWindow;
     await page.getByRole('tab', { name: 'Calendar', exact: true }).click(); await oldWindow.ready;
     const latestMembers = page.waitForResponse(response => /\/team\/areas\/[^/]+\/members$/.test(new URL(response.url()).pathname));
