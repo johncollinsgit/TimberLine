@@ -19,6 +19,12 @@ for ($i = 0; $i < 35; $i++) {
         ]]],
     ]);
 }
+App\Models\TeamOperationRecord::create([
+    'id' => (string) Illuminate\Support\Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $area->id,
+    'source_key' => hash('sha256', 'main-unconfirmed-due'), 'kind' => 'event', 'title' => 'Fictional Asana due marker',
+    'status' => 'accepted', 'visibility' => 'area', 'starts_on' => null, 'ends_on' => null,
+    'data' => ['source_schedule' => ['due_on' => '2026-11-09']],
+]);
 [$other, $otherOwner] = teamWorkspace();
 $other->update(['slug' => 'fictional-no-events']);
 $otherOwner->update(['email' => 'no-events@fixture.invalid', 'email_verified_at' => now(), 'password' => Illuminate\Support\Facades\Hash::make('Fictional-local-only-2026!')]);
