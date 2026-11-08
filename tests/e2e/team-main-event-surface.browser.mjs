@@ -79,4 +79,8 @@ try {
 } catch (error) {
   if (page) await page.screenshot({ path: join(evidence, 'failure.png') }).catch(() => {});
   throw error;
-} finally { if (browser) await browser.close(); if (server) server.kill('SIGTERM'); await rm(dir, { recursive: true, force: true }); }
+} finally {
+  if (browser) await browser.close();
+  if (server && server.exitCode === null) { const stopped = new Promise(done => server.once('exit', done)); server.kill('SIGTERM'); await stopped; }
+  await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
