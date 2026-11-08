@@ -74,6 +74,7 @@ class WebsiteQuoteOrderService
             $this->assertNoFinancialActivity($order);
             abort_unless(($data['workflow'] === 'quote' ? 'staff_quote' : 'staff_draft_invoice') === $order->source, 422, 'Keep the original quote or invoice workflow.');
             abort_if(data_get($order->service_request, 'freight.booking'), 409, 'Resolve the original freight booking before revising this draft. Its shipment and cost evidence must be retained.');
+            abort_if(data_get($order->service_request, 'freight.api_attempt'), 409, 'Retain the original freight API attempt. Resolve its provider outcome before revising this draft.');
             $this->event($order, 'invoice_version_replaced', 'The previous draft version was retained before revision.', $actor, ['version' => $version, 'snapshot' => $this->snapshot($order)]);
             if (data_get($order->service_request, 'freight')) {
                 $request = (array) $order->service_request;

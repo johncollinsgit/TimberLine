@@ -39,6 +39,10 @@ class WebsiteFreightService
         $rules = match ($action) {
             'specification' => [
                 'origin_id' => ['required', 'integer', 'min:1'], 'pickup_phone' => ['required', 'string', 'max:40'],
+                'pickup_name' => ['nullable', 'string', 'max:190'], 'pickup_company' => ['nullable', 'string', 'max:190'],
+                'destination_company' => ['nullable', 'string', 'max:190'],
+                'pickup_location_type' => ['nullable', Rule::in(['commercial', 'residential', 'limited_access'])],
+                'pickup_residential' => ['nullable', 'boolean'],
                 'destination_name' => ['required', 'string', 'max:190'], 'destination_street1' => ['required', 'string', 'max:190'],
                 'destination_street2' => ['nullable', 'string', 'max:190'], 'destination_city' => ['required', 'string', 'max:120'],
                 'destination_state' => ['required', 'string', 'size:2'], 'destination_zip' => ['required', 'string', 'max:10'],
@@ -75,6 +79,8 @@ class WebsiteFreightService
             $before = (array) ($request['freight'] ?? []);
             abort_unless(($before['version'] ?? 0) === (int) $data['version'], 409, 'Freight details changed. Reload before saving.');
             $freight = $before;
+            abort_if(! empty($before['api_attempt']) && data_get($before, 'api_attempt.state') !== 'rejected'
+                && $action !== 'invoice', 409, 'Use the original API freight operation and its status/cancellation controls. Do not create another booking or replace its evidence.');
             if ($action === 'specification') {
                 abort_if(! empty($before['booking']), 409, 'Keep the booked freight evidence. Resolve the existing booking before planning a separate shipment.');
                 $origin = \App\Models\WebsiteFulfillmentLocation::query()->forTenantId($order->tenant_id)

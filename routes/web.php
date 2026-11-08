@@ -969,6 +969,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/orders/{order}/print', [WebsiteCommerceController::class, 'printOrder'])->name('orders.print');
             Route::get('/orders/{order}/freight', [\App\Http\Controllers\WebsiteFreightController::class, 'show'])->name('orders.freight');
             Route::post('/orders/{order}/freight', [\App\Http\Controllers\WebsiteFreightController::class, 'save'])->name('orders.freight.save');
+            Route::post('/orders/{order}/freight/account', [\App\Http\Controllers\WebsiteFreightController::class, 'connect'])->name('orders.freight.account');
+            Route::post('/orders/{order}/freight/quotes', [\App\Http\Controllers\WebsiteFreightController::class, 'quote'])->name('orders.freight.quotes');
+            Route::post('/orders/{order}/freight/book', [\App\Http\Controllers\WebsiteFreightController::class, 'book'])->name('orders.freight.book');
+            Route::post('/orders/{order}/freight/check', [\App\Http\Controllers\WebsiteFreightController::class, 'check'])->name('orders.freight.check');
+            Route::post('/orders/{order}/freight/cancel', [\App\Http\Controllers\WebsiteFreightController::class, 'cancel'])->name('orders.freight.cancel');
+            Route::post('/orders/{order}/freight/handoff', [\App\Http\Controllers\WebsiteFreightController::class, 'handoff'])->name('orders.freight.handoff');
+            Route::get('/orders/{order}/freight/documents/{index}', [\App\Http\Controllers\WebsiteFreightController::class, 'document'])->whereNumber('index')->name('orders.freight.document');
             Route::post('/orders/{order}/fulfill', [WebsiteCommerceController::class, 'fulfill'])->name('orders.fulfill');
             Route::post('/orders/{order}/cancel', [WebsiteCommerceController::class, 'cancel'])->name('orders.cancel');
             Route::post('/orders/{order}/refund', [WebsiteCommerceController::class, 'refund'])->name('orders.refund');

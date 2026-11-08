@@ -25,6 +25,8 @@ class WebsiteShipmentLifecycleService
         $this->authorize($actor, $order->tenant_id);
         $shipment = $this->orderLock($order, function (WebsiteOrder $order) use ($quote, $actor): WebsiteShipment {
             app(WebsitePaymentService::class)->assertFulfillable($order);
+            abort_if(data_get($order->service_request, 'freight.booking') || data_get($order->service_request, 'freight.api_attempt'),
+                409, 'Resolve the existing freight operation before purchasing parcel postage.');
             abort_unless($order->fulfillment_method === 'ship', 422, 'This is not a shipping order.');
             $existing = $order->shipments()->lockForUpdate()->get();
             if ($existing->isNotEmpty()) {

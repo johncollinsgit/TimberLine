@@ -182,6 +182,11 @@ jobs:
       - name: Verify Fleet embedding and allowance in Chromium and WebKit
         run: npm run test:highlevel-fleet
 
+      - name: Verify native parcel and freight workflows with fictional providers
+        run: |
+          npm run test:shipping
+          npm run test:freight
+
       - name: Verify email photo selection with fictional files
         run: |
           npx tsc --noEmit --jsx react-jsx --module ESNext --moduleResolution Bundler --target ES2022 --lib ES2022,DOM --esModuleInterop --skipLibCheck resources/js/shopify/wholesale-messaging.tsx

@@ -186,6 +186,11 @@ jobs:
       - name: Verify Fleet embedding and allowance in Chromium and WebKit
         run: npm run test:highlevel-fleet
 
+      - name: Verify native parcel and freight workflows with fictional providers
+        run: |
+          npm run test:shipping
+          npm run test:freight
+
       - name: Verify workspace branch settings in Chromium and WebKit
         run: |
           BRANCH_SETTINGS_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Everbranch/BranchSettingsTest.php
