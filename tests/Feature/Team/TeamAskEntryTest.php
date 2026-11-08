@@ -17,7 +17,7 @@ beforeEach(function (): void {
 test('Teams owner Ask entry opens the real tenant assistant without enabling or spending AI usage', function (): void {
     [$tenant, $owner] = teamWorkspace();
     $this->actingAs($owner)->get(route('team.app', ['tenant' => $tenant->slug]))->assertOk()
-        ->assertSee('href="'.route('ai-branch.index', ['tenant' => $tenant->slug]).'" data-team-surface-link>Ask Everbranch', false)
+        ->assertSee('href="'.route('ai-branch.index', ['tenant' => $tenant->slug]).'">Ask Everbranch', false)
         ->assertDontSeeText('AI Voice Branch');
     $this->getJson(route('ai-branch.assistant.session', ['tenant' => $tenant->slug]))->assertStatus(404);
     expect(AiBranchAccount::count())->toBe(0)->and(AiBranchConversation::count())->toBe(0);
@@ -55,7 +55,11 @@ test('approved Teams owner receives the existing in-place assistant host with ex
     $this->blade('<x-app-ai-assistant :tenant="$tenant" />', ['tenant' => $tenant])
         ->assertSee('data-page-finder-enabled="true"', false);
     $account->update(['enabled' => false]);
-    $this->get(route('team.app', ['tenant' => $tenant->slug]))->assertOk()->assertDontSee('data-ai-assistant', false)
-        ->assertSee('href="'.route('ai-branch.index', ['tenant' => $tenant->slug]).'" data-team-surface-link>Ask Everbranch', false);
+    $settings = $this->get(route('team.app', ['tenant' => $tenant->slug]))->assertOk()->assertDontSee('data-ai-assistant', false)
+        ->assertSee('href="'.route('ai-branch.index', ['tenant' => $tenant->slug]).'">Ask Everbranch', false);
+    if ($path) {
+        file_put_contents($path.'.settings.html', $settings->getContent());
+        chmod($path.'.settings.html', 0600);
+    }
     Http::assertNothingSent();
 });
