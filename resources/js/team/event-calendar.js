@@ -1,5 +1,6 @@
 // Read-only dated event windows. A source deadline or a range never fills gap days.
 const phases = new Set(['setup', 'selling', 'teardown', 'travel']);
+const timezones = new Map();
 const viewState = new Map(); // Presentation choices only, isolated to this page and tenant/area.
 const palette = ['#315b4a', '#4c64a0', '#985331', '#795d99', '#266f76', '#776622'];
 const node = (tag, text = '', cls = '') => { const element = document.createElement(tag); element.textContent = text; element.className = cls; return element; };
@@ -11,8 +12,21 @@ const sessions = item => (Array.isArray(calendar(item).sessions) ? calendar(item
 const dueOn = item => item.data?.source_schedule?.due_on ?? calendar(item).source_schedule?.due_on;
 const legacyBounds = item => [calendar(item).legacy_starts_on || item.starts_on, calendar(item).legacy_ends_on || item.ends_on];
 
+export function eventToday(timezone) {
+  const now = new Date();
+  if (typeof timezone === 'string' && timezone) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+      const value = type => parts.find(part => part.type === type)?.value;
+      return [value('year'), value('month'), value('day')].join('-');
+    } catch { /* Older definitions fall back to the device calendar date. */ }
+  }
+  return [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+}
+export function setEventCalendarTimezone(scope, timezone) { timezones.set(scope, timezone); }
+
 export function eventCalendarWindow(scope) {
-  const today = new Date(), localToday = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
+  const localToday = eventToday(timezones.get(scope));
   const state = viewState.get(scope) || { mode: 'month', anchor: localToday, colorMode: 'event' };
   viewState.set(scope, state);
   const end = new Date(state.anchor + 'T12:00:00Z');
@@ -51,7 +65,7 @@ export function renderScheduleSummary(parent, item, tenant) {
 }
 
 export function renderEventCalendar(host, items, coverage, tenant, open, scope = tenant, onWindowChange) {
-  const today = new Date(), localToday = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
+  const localToday = eventToday(timezones.get(scope));
   const previous = viewState.get(scope);
   let mode = previous?.mode || 'month', anchor = previous?.anchor || localToday, colorMode = previous?.colorMode || 'event';
   const controls = node('div', '', 'tops-event-calendar-controls'), modes = node('div', '', 'tops-calendar-views'), month = node('input'), day = node('input'), colors = node('select');
@@ -146,14 +160,28 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
       if (cell.childElementCount === 1 && mode !== 'month') cell.append(node('p', 'No dated sessions on this page', 'tops-calendar-empty'));
       grid.append(cell);
     }
+    paintRecords(keys[0], keys.at(-1));
   }
   month.onchange = () => { if (!/^\d{4}-\d{2}$/.test(month.value)) return; anchor = month.value + '-01'; day.value = anchor; changeWindow(); }; day.onchange = () => { if (!validDate(day.value)) return; anchor = day.value; month.value = anchor.slice(0, 7); changeWindow(); }; colors.onchange = () => { colorMode = colors.value; paint(); }; paint();
-  const pending = items.flatMap(item => sessions(item).filter(session => !validDate(session.date)).map(session => ({ item, session })));
-  const recordRow = (item, text) => { const row = node('div', '', 'tops-calendar-record-row'), action = button(item.title, () => open(item)); action.className = 'tops-calendar-record-open'; row.append(action, node('span', text)); return row; };
-  if (pending.length) { const section = node('section', '', 'tops-section tops-calendar-records'); section.append(node('h3', 'Sessions with unknown dates')); for (const { item, session } of pending) section.append(recordRow(item, title(session.kind) + ' · date unknown')); host.append(section); }
-  const bounds = legacyBounds;
-  const legacy = items.filter(item => !sessions(item).some(session => validDate(session.date)) && bounds(item).some(validDate));
-  if (legacy.length) { const section = node('section', '', 'tops-section tops-calendar-legacy tops-calendar-records'); section.append(node('h3', 'Legacy ranges · activity unconfirmed'), node('p', 'Stored bounds only. Activity on the dates between them is unconfirmed.', 'tops-calendar-record-note')); for (const item of legacy) section.append(recordRow(item, when(bounds(item)[0]) + ' → ' + when(bounds(item)[1]))); host.append(section); }
-  const undated = items.filter(item => !sessions(item).length && !bounds(item).some(validDate));
-  if (undated.length) { const section = node('section', '', 'tops-section tops-calendar-records'); section.append(node('h3', 'Events without dates')); for (const item of undated) section.append(recordRow(item, 'Calendar unknown')); host.append(section); }
+  function paintRecords(from, to) {
+    host.querySelectorAll(':scope > .tops-calendar-records').forEach(section => section.remove());
+    const within = day => validDate(day) && day >= from && day <= to;
+    const visible = items.filter(item => {
+      const dates = sessions(item).map(session => session.date).filter(validDate), due = dueOn(item);
+      if (dates.some(within) || within(due)) return true;
+      if (dates.length) return false;
+      const [start, end] = legacyBounds(item);
+      if (validDate(start) || validDate(end)) return (validDate(start) ? start : end) <= to && (validDate(end) ? end : start) >= from;
+      return !validDate(due);
+    });
+    const pending = visible.flatMap(item => sessions(item).filter(session => !validDate(session.date)).map(session => ({ item, session })));
+    const recordRow = (item, text) => { const row = node('div', '', 'tops-calendar-record-row'), action = button(item.title, () => open(item)); action.className = 'tops-calendar-record-open'; row.append(action, node('span', text)); return row; };
+    if (pending.length) { const section = node('section', '', 'tops-section tops-calendar-records'); section.append(node('h3', 'Sessions with unknown dates')); for (const { item, session } of pending) section.append(recordRow(item, title(session.kind) + ' · date unknown')); host.append(section); }
+    const bounds = legacyBounds;
+    const legacy = visible.filter(item => !sessions(item).some(session => validDate(session.date)) && bounds(item).some(validDate));
+    if (legacy.length) { const section = node('section', '', 'tops-section tops-calendar-legacy tops-calendar-records'); section.append(node('h3', 'Legacy ranges · activity unconfirmed'), node('p', 'Stored bounds only. Activity on the dates between them is unconfirmed.', 'tops-calendar-record-note')); for (const item of legacy) section.append(recordRow(item, when(bounds(item)[0]) + ' → ' + when(bounds(item)[1]))); host.append(section); }
+    const undated = visible.filter(item => !sessions(item).length && !bounds(item).some(validDate));
+    if (undated.length) { const section = node('section', '', 'tops-section tops-calendar-records'); section.append(node('h3', 'Events without dates')); for (const item of undated) section.append(recordRow(item, 'Calendar unknown')); host.append(section); }
+  }
+
 }

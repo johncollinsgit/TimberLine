@@ -1,15 +1,23 @@
-## Complete event browsing and faster search (November 8; candidate)
+## Upcoming event browsing and search (November 8; candidate)
 
-The main Events Board and List automatically drain the authorized saved-event
-collection across all dates, without user pagination. Calendar navigation renders
-from that mounted collection; visibility changes, access loss, refresh and the
-existing periodic recheck retire or revalidate it. Detail opening always performs
-fresh admission. Compact collection responses omit notes/financial presentation;
-source completeness remains separate from loading every retained event.
-Event names lead cards, followed by quieter dates. The wider green universal
-search keeps optional filters behind a small Filters control and shows active
-filter counts. Fuzzy note matching reuses distance work only within one query;
-no authorization decision is cached across requests.
+The main Events Board and List default to the next 30 local dates, including
+ongoing occurrences. Controls exposes explicit From/Through dates and an
+Upcoming 30 days reset; older years stay available through date selection and
+search. Calendar reads its selected month. All matching transport batches load
+automatically; no Board page controls or whole-history DOM is needed. Within a
+loaded calendar window, day/view/color changes repaint locally. Leaving that
+window fetches its bounded collection. Visibility, account/access changes,
+refresh and periodic rechecks retire or revalidate retained data; details always
+perform fresh admission. Resolved work-area timezone determines the local day.
+
+Event names lead cards with quieter dates. The wider green universal search keeps
+optional filters behind Filters and shows active-filter counts. Search renders
+currently permitted Teams matches first, then merges other app matches without
+blocking those first results; ordinary pagination and fresh selection admission
+remain shared. Wholly undated events stay searchable outside the upcoming grid. Event search
+prefers relevant ongoing/upcoming occurrences before older occurrences; explicit
+historical dates remain searchable. Unknown dates remain unknown. Source history
+coverage is separate from loading all matches in the selected dates.
 
 ## Unified Teams work views (November 8; candidate)
 

@@ -13,6 +13,8 @@ class SearchMatcher
 
     private array $distances = [];
 
+    private array $fuzzyDistances = [];
+
     public function normalize(string $value): string
     {
         if (isset($this->normalized[$value])) {
@@ -81,6 +83,30 @@ class SearchMatcher
         return $result;
     }
 
+    private function fuzzyDistance(string $term, string $word, int $maximum, bool $last): int
+    {
+        $key = $maximum."\0".(int) $last."\0".$term."\0".$word;
+        if (isset($this->fuzzyDistances[$key])) {
+            return $this->fuzzyDistances[$key];
+        }
+        $variants = [$word];
+        if ($last) {
+            $wordLength = mb_strlen($word);
+            $termLength = mb_strlen($term);
+            foreach ([$termLength - 1, $termLength, $termLength + 1] as $length) {
+                if ($length > 0 && $length < $wordLength) {
+                    $variants[] = mb_substr($word, 0, $length);
+                }
+            }
+        }
+        $result = min(array_map(fn ($value) => $this->distance($term, $value, $maximum), $variants));
+        if (count($this->fuzzyDistances) < 50000) {
+            $this->fuzzyDistances[$key] = $result;
+        }
+
+        return $result;
+    }
+
     public function score(array $document, array $query): ?array
     {
         if ($query['commandsOnly'] && $document['type'] !== 'command') {
@@ -134,15 +160,7 @@ class SearchMatcher
             $best = $allowed + 1;
             $inTitle = false;
             foreach ($allWords as $word) {
-                $variants = [$word];
-                if ($last) {
-                    foreach ([mb_strlen($term) - 1, mb_strlen($term), mb_strlen($term) + 1] as $length) {
-                        if ($length > 0 && $length < mb_strlen($word)) {
-                            $variants[] = mb_substr($word, 0, $length);
-                        }
-                    }
-                }
-                $edit = min(array_map(fn ($v) => $this->distance($term, $v, $allowed), $variants));
+                $edit = $this->fuzzyDistance($term, $word, $allowed, $last);
                 if ($edit < $best) {
                     $best = $edit;
                     $inTitle = in_array($word, $titleWords, true);

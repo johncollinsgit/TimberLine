@@ -18,6 +18,8 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 /** Index projections never grant access. Display projections always use current policy. */
 class SearchDocuments
 {
+    public const OPERATION_SEARCH_FIELDS = ['description', 'notes', 'original_notes', 'fields', 'body', 'subject', 'filename', 'location', 'address', 'next_step', 'stage', 'name', 'summary'];
+
     private ?SearchReadAccess $readAccess = null;
 
     private array $readAreas = [];
@@ -93,16 +95,19 @@ class SearchDocuments
         }
     }
 
-    public function operation(TeamOperationRecord $record, bool $financial = false): array
+    public function operation(TeamOperationRecord $record, bool $financial = false, ?array $data = null): array
     {
+        $data ??= $record->data ?? [];
         $view = app(OperationsWorkspace::class)->view($record, false, $financial, false);
         // Search only fields the existing record presentation discloses; never raw evidence.
-        $allowed = array_intersect_key($view['data'], array_flip(['description', 'notes', 'original_notes', 'fields', 'body', 'subject', 'filename', 'location', 'address', 'next_step', 'stage', 'name', 'summary']));
+        $allowed = array_intersect_key($view['data'], array_flip(self::OPERATION_SEARCH_FIELDS));
         $connection = $record->connection_id ? ($this->readConnections[$record->connection_id] ?? TeamProviderConnection::find($record->connection_id)) : null;
 
-        return ['id' => 'operation:'.$record->id, 'type' => $record->kind, 'entity_id' => $record->id,
-            'title' => $record->title, 'identifier' => $record->id, 'body' => $this->text($allowed),
-            'projects' => array_values(array_filter([$record->area_id, $record->data['native_project_id'] ?? null])),
+        $occurrence = $record->kind === 'event' ? app(EventSearchOrder::class)->dates($record, $data) : null;
+
+        return [...($occurrence ? ['event_occurrence' => $occurrence] : []), 'id' => 'operation:'.$record->id, 'type' => $record->kind, 'entity_id' => $record->id,
+            'title' => $record->title, 'identifier' => $record->id, 'body' => trim($this->text($allowed).' '.implode(' ', $occurrence['dates'] ?? [])),
+            'projects' => array_values(array_filter([$record->area_id, $data['native_project_id'] ?? null])),
             'people' => array_values(array_filter([(string) $record->assigned_user_id])),
             'context' => ($this->readAreas[$record->area_id] ?? TeamArea::find($record->area_id))?->name ?? '', 'status' => $record->status,
             'completed' => in_array($record->status, ['completed', 'cancelled', 'lost'], true), 'archived' => $record->status === 'archived',
@@ -186,7 +191,7 @@ class SearchDocuments
     }
 
     /** Narrow saved-source access: current owner, generation and selection, no provider transport. */
-    private function savedOperation(Tenant $tenant, User $user, TeamOperationRecord $record, array $actor, array $state): bool
+    private function savedOperation(Tenant $tenant, User $user, TeamOperationRecord $record, array $actor, array $state, array $data): bool
     {
         $access = $this->readAccess ?? app(OperationsAccess::class);
         if (! $record->connection_id) {
@@ -207,7 +212,7 @@ class SearchDocuments
         }
         $connection = $access->connection($tenant, $user, $record->connection_id);
         $this->readConnections[$record->connection_id] = $connection;
-        if ($connection->status !== 'connected' || ($record->data['_generation'] ?? null) !== $connection->generation) {
+        if ($connection->status !== 'connected' || ($data['_generation'] ?? null) !== $connection->generation) {
             return false;
         }
         if ($connection->provider === 'sheets') {
@@ -216,12 +221,12 @@ class SearchDocuments
         if ($connection->provider === 'asana') {
             $source = $connection->settings['source'] ?? [];
             $selected = array_map('strval', [$source['asana_project'] ?? '', ...($source['asana_projects'] ?? [])]);
-            $projects = array_map('strval', [$record->data['source_project'] ?? '', ...($record->data['source_projects'] ?? [])]);
-            if (! array_intersect(array_filter($selected), array_filter($projects)) || ($source['asana_workspace'] ?? '') !== ($record->data['source_workspace'] ?? '')) {
+            $projects = array_map('strval', [$data['source_project'] ?? '', ...($data['source_projects'] ?? [])]);
+            if (! array_intersect(array_filter($selected), array_filter($projects)) || ($source['asana_workspace'] ?? '') !== ($data['source_workspace'] ?? '')) {
                 return false;
             }
         }
-        if ($project = ($record->data['native_project_id'] ?? null)) {
+        if ($project = ($data['native_project_id'] ?? null)) {
             return $this->graph->can($state, $actor, 'project', $project);
         }
 
@@ -242,11 +247,12 @@ class SearchDocuments
             if ($kind === 'operation') {
                 $record = ($candidate->record ?? null) instanceof TeamOperationRecord && (int) $candidate->record->tenant_id === (int) $tenant->id && $candidate->record->id === $id
                     ? $candidate->record : TeamOperationRecord::where('tenant_id', $tenant->id)->find($id);
-                if (! $record || ! $this->savedOperation($tenant, $user, $record, $actor, $state)) {
+                $data = $record && ($candidate->record ?? null) === $record && is_array($candidate->decoded_data ?? null) ? $candidate->decoded_data : ($record?->data ?? []);
+                if (! $record || ! $this->savedOperation($tenant, $user, $record, $actor, $state, $data)) {
                     return null;
                 }
 
-                return $this->operation($record, in_array($actor['role'], ['owner', 'admin'], true));
+                return $this->operation($record, in_array($actor['role'], ['owner', 'admin'], true), $data);
             }
             if ($kind === 'source') {
                 [$connectionId, $key] = array_pad(explode(':', $id, 2), 2, '');

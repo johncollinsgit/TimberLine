@@ -167,7 +167,7 @@
     }
     const status = element('p', '', 'eb-search-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     const list = element('div', null, 'eb-search-list'); list.id = uid + '-list'; list.setAttribute('role', 'listbox'); list.setAttribute('aria-label', 'Workspace search results');
-    const more = element('button', 'View all results', 'eb-search-more'); more.type = 'button';
+    const more = element('button', 'View all results', 'eb-search-more'); more.type = 'button'; more.onmousedown = event => event.preventDefault();
     const footer = element('div', '↑ ↓ Navigate   ↵ Open   Esc Close   > Commands', 'eb-search-footer');
     panel.append(head, filters, status, list, more, footer); panel.hidden = true; host.replaceChildren(form, panel);
     let serial = 0, controller, timer, rows = [], active = -1, cursor = null, expanded = false, scope = '', recent = [], opened = false, composing = false, bodyOverflow;
@@ -209,9 +209,9 @@
       }
       updateFilterLabel();
     }
-    function paint(result, append) {
-      const previousActive = active;
-      rows = append ? [...rows, ...(result.items || [])] : (result.items || []);
+    function paint(result, append, preserveSelection = false) {
+      const previousActive = active, selectedId = preserveSelection ? rows[active]?.id : null;
+      rows = append ? [...new Map([...rows, ...(result.items || [])].map(row => [row.id, row])).values()] : (result.items || []);
       cursor = result.next_cursor || null; facets(result.facets);
       list.replaceChildren(); active = -1; input.removeAttribute('aria-activedescendant');
       for (const [i, row] of rows.entries()) {
@@ -223,9 +223,12 @@
         if (row.snippet || row.body) { const snippet = element('span', null, 'eb-search-snippet'); highlight(snippet, row.snippet || row.body.slice(0, 180), input.value); text.append(snippet); }
         option.append(badge, text); option.onpointermove = () => choose(i); option.onmousedown = event => event.preventDefault(); option.onclick = () => activate(i); list.append(option);
       }
-      if (rows.length) choose(append ? Math.max(0, previousActive) : 0);
-      status.textContent = rows.length ? (input.value.trim() ? rows.length + ' results' : 'Recent items and commands') + (cursor ? ' · More available' : '') : 'No results. Try fewer words or clear a filter.';
+      if (rows.length) { const retained = selectedId ? rows.findIndex(row => row.id === selectedId) : -1; choose(retained >= 0 ? retained : append ? Math.max(0, previousActive) : 0); }
+      status.textContent = rows.length ? (input.value.trim() ? rows.length + ' results' : 'Recent items and commands') + (cursor ? ' · More available' : '') : result.partial_notice ? '' : 'No results. Try fewer words or clear a filter.';
+      if (result.partial_notice) status.textContent += (status.textContent ? ' · ' : '') + result.partial_notice;
+      const returnToInput = document.activeElement === more && !cursor;
       more.hidden = !cursor; more.textContent = expanded ? 'Load more results' : 'View all results'; more.disabled = false;
+      if (returnToInput) input.focus({ preventScroll: true });
     }
     async function run(append = false) {
       clearTimeout(timer); if (!opened || options.available?.() === false) return;
@@ -233,9 +236,15 @@
       if (!append) { expanded = false; cursor = null; rows = []; list.replaceChildren(); input.removeAttribute('aria-activedescendant'); }
       status.textContent = 'Searching…'; more.disabled = true;
       try {
-        const result = await options.search({ q: input.value, filters: selectedFilters(), cursor: append ? cursor : null, limit: append ? 25 : 8, recent, signal: controller.signal });
+        let progressed = false;
+        const result = await options.search({ q: input.value, filters: selectedFilters(), cursor: append ? cursor : null, limit: append ? 25 : 8, recent, signal: controller.signal, onProgress: partial => {
+          if (ticket !== serial || currentScope !== scope || !opened) return false;
+          paint(partial, append, progressed); progressed = true;
+          status.textContent = (rows.length ? rows.length + ' results · ' : '') + 'Searching other apps…';
+          return true;
+        } });
         if (ticket !== serial || currentScope !== scope || !opened) return;
-        paint(result, append);
+        paint(result, append, progressed);
       } catch (error) {
         if (ticket !== serial || error.name === 'AbortError') return;
         list.replaceChildren(); rows = []; cursor = null; more.hidden = true; status.textContent = error.message || 'Search is unavailable. Try again.';
@@ -258,7 +267,7 @@
     const shortcutHandler = event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && options.available?.() !== false) { if (document.querySelector('dialog[open]') && !host.closest('dialog')) return; event.preventDefault(); event.stopImmediatePropagation(); input.focus(); show(); } };
     document.addEventListener('pointerdown', outside); document.addEventListener('keydown', shortcutHandler, true);
     host.addEventListener('focusout', () => { setTimeout(() => { if (opened && !host.contains(document.activeElement)) closePanel(false); }, 0); });
-    close.onclick = () => closePanel(); more.onclick = () => { expanded = true; run(true); };
+    close.onclick = () => closePanel(); more.onclick = () => { expanded = true; input.focus({ preventScroll: true }); run(true); };
     changeScope(options.scope || '');
     return { input, panel, show, close: closePanel, refresh: () => opened && run(), setScope: changeScope, destroy() { closePanel(false); document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', shortcutHandler, true); host.replaceChildren(); } };
   }

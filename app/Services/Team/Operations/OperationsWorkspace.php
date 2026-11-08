@@ -22,6 +22,7 @@ class OperationsWorkspace
     {
         $this->access->actor($tenant, $user);
         $items = [];
+        $calendarContext = app(\App\Services\Team\Search\EventSearchOrder::class)->context($tenant);
         foreach (TeamArea::query()->where('tenant_id', $tenant->id)->orderBy('name')->get() as $area) {
             try {
                 $this->access->area($tenant, $user, $area->id);
@@ -30,15 +31,20 @@ class OperationsWorkspace
                     continue;
                 } throw $e;
             }
-            $items[] = [...$this->areaView($area), 'capabilities' => ['write' => $this->access->mayWrite($tenant, $user, $area->id)]];
+            $items[] = [...$this->areaView($area, $calendarContext), 'capabilities' => ['write' => $this->access->mayWrite($tenant, $user, $area->id)]];
         }
 
         return $items;
     }
 
-    public function areaView(TeamArea $area): array
+    public function areaView(TeamArea $area, ?array $calendarContext = null): array
     {
-        return ['id' => $area->id, 'name' => $area->name, 'profile' => $area->profile, 'slug' => $area->slug, 'version' => $area->version, 'settings' => $area->settings ?? [], 'views' => config('team_operations.profiles.'.$area->profile.'.views', []), 'groups' => config('team_operations.profiles.'.$area->profile.'.groups', [])];
+        if ($area->profile === 'events' && $calendarContext === null) {
+            $calendarContext = app(\App\Services\Team\Search\EventSearchOrder::class)->context(Tenant::findOrFail($area->tenant_id));
+        }
+        $timezone = $area->profile === 'events' ? ($calendarContext['areas'][(string) $area->id]['timezone'] ?? $calendarContext['timezone']) : null;
+
+        return ['timezone' => $timezone, 'id' => $area->id, 'name' => $area->name, 'profile' => $area->profile, 'slug' => $area->slug, 'version' => $area->version, 'settings' => $area->settings ?? [], 'views' => config('team_operations.profiles.'.$area->profile.'.views', []), 'groups' => config('team_operations.profiles.'.$area->profile.'.groups', [])];
     }
 
     public function personal(Tenant $tenant, User $user, string $query, bool $mine, int $page): array
@@ -85,12 +91,15 @@ class OperationsWorkspace
 
     public function records(Tenant $tenant, User $user, TeamArea $area, array $filters): array
     {
-        return $this->access->readCollection($tenant, $user, $area, fn () => $this->readRecords($tenant, $user, $area, $filters), ($filters['event_scope'] ?? null) === 'all');
+        return $this->access->readCollection($tenant, $user, $area, fn () => $this->readRecords($tenant, $user, $area, $filters), in_array($filters['event_scope'] ?? null, ['all', 'window'], true));
     }
 
     private function readRecords(Tenant $tenant, User $user, TeamArea $area, array $filters): array
     {
         $allEvents = ($filters['event_scope'] ?? null) === 'all';
+        $windowEvents = ($filters['event_scope'] ?? null) === 'window';
+        $compactEvents = $allEvents || $windowEvents;
+        abort_if($windowEvents && (($filters['kind'] ?? null) !== 'event' || $area->profile !== 'events'), 422, 'The event window requires an Events area and event records.');
         abort_if($allEvents && (($filters['kind'] ?? null) !== 'event' || isset($filters['calendar_from']) || isset($filters['calendar_to']) || $area->profile !== 'events'), 422, 'The complete event collection requires an Events area without a date window.');
         $query = TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'area_id' => $area->id])->whereIn('kind', self::KINDS)->where('status', '!=', 'withdrawn')->orderByRaw('CASE WHEN starts_on IS NULL THEN 1 ELSE 0 END')->orderBy('starts_on')->orderBy('title')->orderBy('id');
         if (! $this->access->admin($this->access->actor($tenant, $user))) {
@@ -105,6 +114,7 @@ class OperationsWorkspace
         $cursorService = app(OperationsCursor::class);
         $calendarQuery = app(EventCalendarWindow::class);
         $window = $calendarQuery->fromFilters($filters);
+        abort_if($windowEvents && ! $window, 422, 'Choose the start and end of the event window.');
         $scope = $cursorService->scope($tenant, $user, $area, $filters);
         $firstPhase = $window ? $cursorService->phase($scope, $filters['cursor'] ?? null) : 0;
         $records = function () use ($query, $window, $calendarQuery, $cursorService, $scope, $filters, $firstPhase) {
@@ -125,7 +135,7 @@ class OperationsWorkspace
         // checks stay bounded and private source titles remain inside encrypted cursors.
         $items = [];
         $unavailable = false;
-        $sourceAccessIncomplete = ($window || $allEvents) && ! empty($filters['calendar_recheck_sources']) && ! $calendarQuery->sourcesAvailable($tenant, $user, $area, ! $allEvents);
+        $sourceAccessIncomplete = ($window || $compactEvents) && ! empty($filters['calendar_recheck_sources']) && ! $calendarQuery->sourcesAvailable($tenant, $user, $area, ! $compactEvents);
         $collectionAccessIncomplete = $sourceAccessIncomplete;
         $canEdit = $this->access->mayWrite($tenant, $user, $area->id);
         $admin = $this->access->admin($this->access->actor($tenant, $user));
@@ -137,14 +147,14 @@ class OperationsWorkspace
         $scanLimited = false;
         $failedConnections = [];
         foreach ($records() as [$record, $phase]) {
-            if ($scanned >= ($allEvents ? 1000 : 200) || ($scanned > 0 && microtime(true) - $started > 8)) {
+            if ($scanned >= ($compactEvents ? 1000 : 200) || ($scanned > 0 && microtime(true) - $started > 8)) {
                 $more = true;
                 $unavailable = true;
                 $scanLimited = true;
                 break;
             }
             $scanned++;
-            if (($window && ! $calendarQuery->matches($record, $window)) || (! empty($filters['target_id']) && ($record->data['target_id'] ?? null) !== $filters['target_id'])) {
+            if (($window && ! $calendarQuery->matches($record, $window, ! $windowEvents)) || (! empty($filters['target_id']) && ($record->data['target_id'] ?? null) !== $filters['target_id'])) {
                 $resume = $record;
                 $resumePhase = $phase;
 
@@ -158,11 +168,11 @@ class OperationsWorkspace
             }
             try {
                 $this->access->record($tenant, $user, $record);
-                if (count($items) === ($allEvents ? 200 : 30)) {
+                if (count($items) === ($compactEvents ? 200 : 30)) {
                     $more = true;
                     break;
                 }
-                $items[] = $allEvents ? $record : $this->view($record, $canEdit, $admin);
+                $items[] = $compactEvents ? $record : $this->view($record, $canEdit, $admin);
             } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
                 if (! in_array($e->getStatusCode(), [403, 404, 409, 429, 502, 503])) {
                     throw $e;
@@ -175,7 +185,7 @@ class OperationsWorkspace
             $resume = $record;
             $resumePhase = $phase;
         }
-        if ($allEvents) {
+        if ($compactEvents) {
             $collectionAccessIncomplete = $collectionAccessIncomplete || ! $this->access->collectionSourcesAvailable();
             $people = $this->collectionPeople($items, $tenant, $area);
             $items = array_map(fn ($record) => $this->eventCollectionView($record, $canEdit, $people), $items);
@@ -184,7 +194,7 @@ class OperationsWorkspace
         $health = app(OperationsHealth::class)->area($area, $user->id);
 
         return ['items' => $items, 'count' => count($items), 'page' => $page, 'has_more' => $more, 'next_cursor' => $more && $resume ? $cursorService->encode($scope, $resume, $resumePhase) : null, 'complete' => ! $window && ! $unavailable && ! $more && $health['complete'], 'freshness' => $health, 'source_access_incomplete' => $sourceAccessIncomplete, 'collection_access_incomplete' => $collectionAccessIncomplete,
-            'event_collection' => $allEvents ? ['local_scan_complete' => ! $more, 'scan_limited' => $scanLimited, 'source_coverage_complete' => $health['complete'] && ! $sourceAccessIncomplete && ! $collectionAccessIncomplete] : null,
+            'event_collection' => $compactEvents ? ['local_scan_complete' => ! $more, 'scan_limited' => $scanLimited, 'source_coverage_complete' => $health['complete'] && ! $sourceAccessIncomplete && ! $collectionAccessIncomplete] : null,
             'calendar_window' => $window ? [...$window, 'local_scan_complete' => ! $more, 'scan_limited' => $scanLimited, 'unknown_dates_remain_unknown' => true] : null,
             'notice' => $scanLimited ? 'Calendar checking is partial. Continue to check more retained records for dates outside their original source bounds.' : ($unavailable ? 'Some source records could not be verified and are hidden. Results are partial; continue checking or refresh the source.' : $health['notice'])];
     }
@@ -208,7 +218,7 @@ class OperationsWorkspace
         if ($record->kind === 'event') {
             if ($record->connection_id && isset($data['source_id'], $data['source_workspace']) && is_string($data['original_notes'] ?? null)) {
                 $data['fields'] = app(OperationsSync::class)->eventFields($data);
-                $data['fields_revision'] = app(OperationsSync::class)->eventFieldsRevision($data);
+                $data['fields_revision'] = app(OperationsSync::class)->eventFieldsRevision($data, $data['fields']);
             }
             $sourceRange = $data['event_schedule'] ?? [];
             if ($includePresentationDetails) {

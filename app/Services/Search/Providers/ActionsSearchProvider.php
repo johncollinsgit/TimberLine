@@ -13,8 +13,7 @@ class ActionsSearchProvider implements GlobalSearchProvider
 
     public function __construct(
         protected UnifiedDashboardService $dashboardService
-    ) {
-    }
+    ) {}
 
     public function search(string $query, array $context = []): array
     {
@@ -23,10 +22,10 @@ class ActionsSearchProvider implements GlobalSearchProvider
             $request = request();
         }
 
-        $dashboard = $this->dashboardService->forRequest($request, $context['user'] ?? $request->user());
+        $actions = $this->dashboardService->nextActionsForRequest($request, $context['user'] ?? $request->user());
         $normalized = trim($query);
 
-        return collect((array) ($dashboard['next_actions'] ?? []))
+        return collect($actions)
             ->filter(function (array $action) use ($normalized): bool {
                 if ($normalized === '') {
                     return true;

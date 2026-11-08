@@ -67,8 +67,8 @@ new Asana write scopes are applied merely by deploying the parser.
 
 ## All-event work views (November 8; candidate)
 
-The main Home Events Board/List/Calendar use `event_scope=all` without a date
-window. The server still pages transport internally with encrypted viewer/tenant/
+The `event_scope=all` compatibility interface reads all retained events without
+a date window. The main Board default uses the upcoming window described below. The server still pages transport internally with encrypted viewer/tenant/
 area/query-bound cursors; clients automatically drain and deduplicate those batches
 before declaring the collection loaded. Missing/repeated cursors or failed source
 rechecks fail the collection rather than presenting an earlier batch as complete.
@@ -97,3 +97,57 @@ connection generation or uncertain pagination invalidates the collection. A
 completed inventory's exact denial hides that record and retains a partial-source
 notice while allowing other authorized events. No inventory becomes a stored
 access grant; record details retain the original fresh task checks.
+
+## Upcoming default and explicit history (November 8; follow-up candidate)
+
+The main event surfaces request `event_scope=window` with required `calendar_from`
+and `calendar_to` (maximum 62 days). Board and List default to 30 local dates,
+retaining ongoing events. Calendar requests its chosen month. Controls can choose
+an older window; universal search retains history independently of that window.
+All matching server batches drain automatically. Matching encrypted schedules
+happens before provider checks; reviewed outliers are preserved even when they
+fall outside old source bounds. Compact window responses exclude historical card
+payloads and original notes. Existing `event_scope=all` remains compatible for
+explicit callers; it is no longer the main Board default.
+
+Event date preference supplements search relevance using recorded bounds or
+reviewed schedule evidence, with unknown dates kept unknown. Explicit historical
+year searches still honor that intent. Search pagination binds ranking version
+and the work-area local day so midnight or ranking changes cannot reuse an old
+cursor. Verify real source request timings separately from synthetic benchmarks.
+
+### Release queue observation (November 8)
+
+An older shipping workflow approved `3ebb38c7` while main advanced to `4eaf2849`.
+The unqualified Forge webhook cloned current main, so `/ready` correctly exposed
+`4eaf2849` while the older workflow waited for its prior SHA. Only that obsolete
+verification wait was cancelled; the workflow for the actual `4eaf2849` release
+subsequently passed its own combined gates and exact-release readiness check.
+
+This is an existing deployment pinning gap, not a completed safety improvement.
+Keep a single publication owner. A follow-up needs both a pre-hook main-SHA
+check and a trusted Forge candidate check against a custom expected-SHA parameter
+before dependencies, migrations, or activation. Derive readiness release identity
+from the candidate's actual Git HEAD. Forge's `forge_deploy_commit` parameter is
+[a display label](https://laravel.com/forge/docs/sites/deployments#using-query-parameters)
+and must never be treated as proof of deployed source. The pre-hook check alone retains a race between checking and cloning. Preserve the
+healthy prior release if the new candidate does not match the approved SHA.
+
+### Progressive search and inexpensive action lookup
+
+A first search requests `stage=teams`, admitting only current permitted Teams
+results and returning an encrypted continuation marked for deferred app work.
+The client publishes those results, then requests `stage=apps` with that exact
+cursor. App destinations use current role/module checks; their cursor retains
+the exact Team continuation. Later pagination uses the existing combined read.
+Both stages bind actor, tenant, filters, ranking version and local dates. Query,
+account or scope changes abort and retire delayed responses. A failed app read
+retains the initial permitted Team rows with a visible retry notice; it does not
+claim that other apps had no matches. Selecting a row still revalidates it.
+
+The app action provider now calls the same permitted dashboard action builder
+without calculating dashboard finance, sales or reporting summaries. Soccer and
+Website workspace action and membership rules remain shared with the dashboard.
+Event candidate prefiltering uses a conservative in-memory superset only; current
+policy, sanitized display projection and final matching remain mandatory. Private
+raw candidate text is not returned, indexed, counted for display, or sent to AI.
