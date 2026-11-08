@@ -1,3 +1,13 @@
+## Native Website freight API (November 8; candidate)
+
+Read `docs/operations/native-ltl-quote-book.md` before freight rollout. The
+ShipStation v2 adapter quotes and books only native Website physical orders using
+tenant-owned encrypted credentials and explicit carrier cost approval. Booking
+requires independent global/tenant gates and paid-order verification. Preserve
+durable unknown attempts, original credentials and all encrypted financial
+evidence. Never retry an uncertain booking or adopt an unverified shipment ID.
+Source/browser fixtures do not establish live provider or physical acceptance.
+
 ## Upcoming event browsing and search (November 8; candidate)
 
 The main Events Board and List default to the next 30 local dates, including
@@ -14,7 +24,8 @@ Event names lead cards with quieter dates. The wider green universal search keep
 optional filters behind Filters and shows active-filter counts. Search renders
 currently permitted Teams matches first, then merges other app matches without
 blocking those first results; ordinary pagination and fresh selection admission
-remain shared. Wholly undated events stay searchable outside the upcoming grid. Event search
+remain shared. Wholly undated events stay searchable outside the upcoming grid.
+Event search
 prefers relevant ongoing/upcoming occurrences before older occurrences; explicit
 historical dates remain searchable. Unknown dates remain unknown. Source history
 coverage is separate from loading all matches in the selected dates.

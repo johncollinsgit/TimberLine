@@ -1,3 +1,13 @@
+## Native Website freight API (November 8; candidate)
+
+The freight workspace now has a ShipStation v2 quote/booking adapter with
+encrypted tenant-owned accounts, reviewed pallet/accessorial specifications,
+exact cost approval, a durable single-send booking claim, original-account GET
+recovery, protected BOL/pallet PDF downloads, tracking and cancellation. Actual
+booking stays behind its independent global/tenant gates, paid-order checks and
+an explicit shipment/cost confirmation. Provider acceptance and physical freight
+evidence are outstanding. See `docs/operations/native-ltl-quote-book.md`.
+
 ## Upcoming event browsing and search (November 8; candidate)
 
 The main Events Board and List default to the next 30 local dates, including
@@ -14,7 +24,8 @@ Event names lead cards with quieter dates. The wider green universal search keep
 optional filters behind Filters and shows active-filter counts. Search renders
 currently permitted Teams matches first, then merges other app matches without
 blocking those first results; ordinary pagination and fresh selection admission
-remain shared. Wholly undated events stay searchable outside the upcoming grid. Event search
+remain shared. Wholly undated events stay searchable outside the upcoming grid.
+Event search
 prefers relevant ongoing/upcoming occurrences before older occurrences; explicit
 historical dates remain searchable. Unknown dates remain unknown. Source history
 coverage is separate from loading all matches in the selected dates.
