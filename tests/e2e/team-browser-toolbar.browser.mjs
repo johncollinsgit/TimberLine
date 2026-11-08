@@ -39,6 +39,20 @@ try {
     const login = await context.request.post(origin + '/login', { form: { email: 'owner@fixture.invalid', password: 'Fictional-local-only-2026!', _token: csrf }, headers: { Accept: 'application/json' } });
     assert.ok(login.ok(), 'Real Fortify login succeeded');
     page = await context.newPage();
+    await page.addInitScript(() => {
+      const trace = []; window.__teamControlTrace = trace;
+      const state = () => ({ panelHidden: document.getElementById('tw-controls-panel')?.hidden, expanded: document.getElementById('tw-filter-toggle')?.getAttribute('aria-expanded'), source: document.getElementById('tw-source-filter')?.value, mode: document.getElementById('tw-mode')?.value, layout: document.getElementById('tw-layout')?.value, listHidden: document.getElementById('tw-list')?.hidden, asanaHidden: document.getElementById('tw-asana-work')?.hidden, taskCount: document.querySelectorAll('#tw-list .task-open').length, count: document.getElementById('tw-count')?.textContent, active: document.activeElement?.id, rootInert: document.getElementById('team-work-app')?.inert, scrollY, width: innerWidth });
+      window.__teamControlMark = label => { trace.push({ at: Math.round(performance.now()), event: label, ...state() }); if (trace.length > 120) trace.shift(); };
+      for (const type of ['pointerdown', 'pointerup', 'click', 'change', 'focusin', 'keydown']) document.addEventListener(type, event => {
+        if (type === 'keydown' && event.key !== 'Escape') return;
+        const target = event.target, id = target?.closest?.('[id]')?.id;
+        if (id?.startsWith('tw-') || target?.closest?.('[data-team-layout],[data-team-mode]')) { window.__teamControlMark(`${type}:${id || target.tagName}`); queueMicrotask(() => window.__teamControlMark(`${type}:after`)); }
+      }, true);
+      document.addEventListener('DOMContentLoaded', () => {
+        const panel = document.getElementById('tw-controls-panel');
+        if (panel) new MutationObserver(() => window.__teamControlMark('panel:hidden mutation')).observe(panel, { attributes: true, attributeFilter: ['hidden'] });
+      });
+    });
     page.setDefaultTimeout(12000);
     page.on('pageerror', error => errors.push({ engine, message: error.message }));
     page.on('console', message => { if (message.type() === 'error' && /Content Security Policy|Refused to (?:load|execute|apply)/i.test(message.text())) errors.push({ engine, message: message.text() }); });
@@ -105,7 +119,9 @@ try {
         }
       }
 
+      await page.evaluate(() => window.__teamControlMark?.('before full-page screenshot'));
       await page.screenshot({ path: join(evidence, `${engine}-all-work-${width}.png`), fullPage: true });
+      await page.evaluate(() => window.__teamControlMark?.('after full-page screenshot'));
       await page.locator('#tw-filter-toggle').click();
       await page.locator('#tw-controls-panel').waitFor({ state: 'visible' });
       for (const id of ['tw-search','tw-project-filter','tw-source-filter','tw-saved-views','tw-refresh','tw-workspaces']) await page.locator('#'+id).waitFor({state:'visible'});
@@ -164,7 +180,8 @@ try {
   console.log(JSON.stringify({ toolbar_geometry: results.map(({ engine, width, firstTaskTop, headerHeight, toolbarHeight }) => ({ engine, width, firstTaskTop, headerHeight, toolbarHeight })) }, null, 2));
   console.log(`PASS authenticated browser toolbar: ${results.length} viewport/engine cases; hidden secondary controls,44px targets, view filter/calendar/dialog interactions, in-place Events calendar, no page overflow or writes.`);
 } catch (error) {
-  const diagnostic = { error: error.message, lastGeometry: results.at(-1), errors, mutations };
+  const controlTrace = page && !page.isClosed() ? await page.evaluate(() => window.__teamControlTrace || []).catch(() => []) : [];
+  const diagnostic = { error: error.message, lastGeometry: results.at(-1), controlTrace, errors, mutations };
   console.error('Toolbar failure geometry: ' + JSON.stringify(diagnostic));
   await writeFile(join(evidence, 'failure-geometry.json'), JSON.stringify(diagnostic, null, 2)).catch(() => {});
   if (page && !page.isClosed()) await page.screenshot({ path: join(evidence, 'failure.png'), fullPage: true }).catch(() => {});
