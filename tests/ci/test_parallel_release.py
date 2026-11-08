@@ -5,7 +5,9 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 import yaml
 
@@ -14,6 +16,9 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('gate', ROOT / 'scripts/ci/require-job-results.py')
 gate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate)
+shard_spec = importlib.util.spec_from_file_location('shards', ROOT / 'scripts/ci/php-test-shards.py')
+shards = importlib.util.module_from_spec(shard_spec)
+shard_spec.loader.exec_module(shards)
 
 
 class ParallelReleaseTest(unittest.TestCase):
@@ -63,7 +68,8 @@ class ParallelReleaseTest(unittest.TestCase):
         php = self.jobs['php']
         self.assertEqual(php['strategy']['matrix']['shard'], list(range(1, 7)))
         command = next(step['run'] for step in php['steps'] if step.get('name') == 'Run PHP test shard in parallel')
-        self.assertEqual(command, 'php -d memory_limit=1G ./vendor/bin/pest --parallel --compact --shard=${{ matrix.shard }}/6')
+        self.assertEqual(command, 'python3 scripts/ci/php-test-shards.py --index=${{ matrix.shard }} --total=6\n'
+                         'php -d memory_limit=1G ./vendor/bin/pest --parallel --compact --configuration=.phpunit-ci.xml')
         for job in ['php', 'browser', 'mysql']:
             self.assertIs(self.jobs[job]['strategy']['fail-fast'], False)
             self.assertNotIn('continue-on-error', self.jobs[job])
@@ -86,7 +92,12 @@ class ParallelReleaseTest(unittest.TestCase):
         self.assertEqual(job['services']['mysql']['image'], 'mysql:8.4')
         for step in job['steps']:
             if step.get('if'):
-                self.assertEqual(sum(f"matrix.group == '{group}'" in step['if'] for group in groups), 1)
+                admitted = sum(f"matrix.group == '{group}'" in step['if'] for group in groups)
+                self.assertEqual(admitted, 2 if step['name'] == 'Initialize isolated schema for durable suites' else 1)
+        setup = next(step for step in job['steps'] if step.get('name') == 'Initialize isolated schema for durable suites')
+        self.assertIn('127.0.0.1', setup['run'])
+        self.assertIn('everbranch_ci', setup['run'])
+        self.assertIn('php artisan migrate --force', setup['run'])
         for step in self.jobs['browser']['steps']:
             if step.get('if', '').startswith('matrix.group'):
                 self.assertEqual(sum(f"matrix.group == '{group}'" in step['if']
@@ -113,6 +124,44 @@ class ParallelReleaseTest(unittest.TestCase):
                     paths = step['with']['path']
                     for private in ['vendor', 'node_modules', '.env', 'auth.json', 'storage/']:
                         self.assertNotIn(private, paths)
+
+    def test_file_partition_includes_unnamespaced_and_new_tests_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'tests/Feature').mkdir(parents=True)
+            for name in ['LegacyTest.php', 'NamespacedTest.php', 'NewTest.php']:
+                (root / 'tests/Feature' / name).write_text('<?php // a configured test')
+            (root / 'tests/Feature/helper.php').write_text('not a test')
+            (root / 'phpunit.xml').write_text('<phpunit bootstrap="vendor/autoload.php"><testsuites>'
+                '<testsuite name="Feature"><directory>tests/Feature</directory></testsuite></testsuites>'
+                '<php><env name="DB_CONNECTION" value="sqlite"/></php></phpunit>')
+            _, groups = shards.partition(root, 2)
+            self.assertEqual(set().union(*map(set, groups)), {
+                f'tests/Feature/{name}Test.php' for name in ['Legacy', 'Namespaced', 'New']})
+            self.assertFalse(set(groups[0]) & set(groups[1]))
+            output = root / '.phpunit-ci.xml'
+            shards.write_config(root, 1, 2, output)
+            config = ET.parse(output).getroot()
+            self.assertEqual(config.get('bootstrap'), 'vendor/autoload.php')
+            self.assertEqual(config.find('php/env').get('value'), 'sqlite')
+            self.assertEqual([entry.text for entry in config.findall('testsuites/testsuite/file')], groups[0])
+
+    def test_file_partition_refuses_unsupported_discovery_and_empty_shards(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'phpunit.xml').write_text('<phpunit><testsuites><testsuite><unknown>tests</unknown>'
+                                            '</testsuite></testsuites></phpunit>')
+            with self.assertRaises(ValueError):
+                shards.partition(root, 6)
+
+    def test_agent_entry_point_stays_short_and_scoped_with_preserved_safety_reference(self):
+        guide = (ROOT / 'README_FOR_AGENTS.md').read_text()
+        self.assertLessEqual(len(guide.splitlines()), 160)
+        self.assertIn('not a mandatory duplicate of CI', guide)
+        self.assertIn('docs/agents/operating-reference.md', guide)
+        self.assertIn('Never bypass required checks', guide)
+        self.assertIn('README_FOR_AGENTS.md', (ROOT / 'AGENTS.md').read_text())
+        self.assertTrue((ROOT / 'docs/agents/operating-reference.md').is_file())
 
 
 if __name__ == '__main__':

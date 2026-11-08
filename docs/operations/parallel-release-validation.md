@@ -12,14 +12,19 @@ verification; protected CI remains the authoritative full regression run.
   outputs and the checksum-verified pinned label tracer are shared as artifacts
   within the same workflow run. PHP/Node dependencies and credentials are not
   bundled into artifacts.
-- Six PHP 8.4 shards using Pest 4's supported `--shard=1/6` through `6/6`, each
-  retaining `--parallel`. Together they execute the unchanged default suite.
+- Six PHP 8.4 file partitions generated from every directory/file configured in
+  `phpunit.xml`, each retaining Pest's `--parallel`. Explicit file discovery keeps
+  legacy unnamespaced test classes in the suite. The generated configuration
+  preserves the original bootstrap, environment and source settings. Together
+  the partitions execute the unchanged default suite; new files are included
+  automatically and unsupported discovery definitions fail closed.
 - Three browser groups: Teams, commerce, and other workspaces. Chromium and
   WebKit coverage, fixture-specific PHP checks, TypeScript checks, and Shopify
   Function validation remain in their original commands.
 - Four MySQL 8.4 groups: schema/recovery, durable subscription workflows, platform
   email outbox, and concurrency. Each runner owns a separate disposable MySQL
-  service. Tests inside a group remain sequential because many deliberately
+  service. Durable subscription/concurrency groups initialize their own schema
+  before running; they do not depend on the schema group. Tests inside a group remain sequential because many deliberately
   rebuild or modify their database and test real commit/concurrency semantics.
 
 The stable required check `ci (8.4)` waits for the build and every PHP/browser
@@ -32,7 +37,9 @@ no validation lane uses continue-on-error.
 The coverage fixture `tests/Fixtures/ci/required-release-checks.json` records the
 pre-split validation commands and safety environment flags. Contract tests ensure
 these remain present, check all shard indexes and group admission, and exercise
-aggregate failure behavior. Do not remove checks merely to reduce runtime.
+aggregate failure behavior. They also keep the agent entry guide short and
+linked from root instructions so historical append-only notes cannot silently
+replace the scoped workflow. Do not remove checks merely to reduce runtime.
 
 ## Production
 

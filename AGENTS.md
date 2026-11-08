@@ -1,3 +1,13 @@
+# Permanent delivery workflow
+
+- Read `README_FOR_AGENTS.md` before making changes. It is the current delivery
+  contract: scoped local checks, a focused PR, all protected CI checks, normal
+  Forge deployment, then exact-SHA `/ready` verification. Do not choose a different
+  deployment route or repeat a full local suite for every small change.
+- `tests/ci/test_parallel_release.py` checks the parallel gates, retained safety
+  coverage and short agent entry guide. Keep this workflow in force across chats;
+  feature-specific owner directions below still apply to their affected domains.
+
 ## Pay rewards and event attribution (owner direction, 2026-11-06)
 
 - Use the shared tenant rewards ledger and tenant-owned program identity/rules.

@@ -208,7 +208,9 @@ jobs:
         chmod +x vtracer-0.6.5
         echo "WHOLESALE_LABEL_VTRACER=$RUNNER_TEMP/label-tools/vtracer-0.6.5" >> "$GITHUB_ENV"
     - name: Run PHP test shard in parallel
-      run: php -d memory_limit=1G ./vendor/bin/pest --parallel --compact --shard=${{ matrix.shard }}/6
+      run: |-
+        python3 scripts/ci/php-test-shards.py --index=${{ matrix.shard }} --total=6
+        php -d memory_limit=1G ./vendor/bin/pest --parallel --compact --configuration=.phpunit-ci.xml
   browser:
     name: Browser checks (${{ matrix.group }})
     needs: build
@@ -435,6 +437,15 @@ jobs:
         fi
         echo "sha=$base_sha" >> "$GITHUB_OUTPUT"
       if: matrix.group == 'schema'
+    - name: Initialize isolated schema for durable suites
+      if: matrix.group == 'subscriptions' || matrix.group == 'concurrency'
+      run: |-
+        set -euo pipefail
+        if [ "$DB_HOST" != '127.0.0.1' ] || [ "$DB_DATABASE" != 'everbranch_ci' ]; then
+          echo "::error::Refusing schema setup outside this runner's disposable MySQL."
+          exit 1
+        fi
+        php artisan migrate --force
     - name: Lint changed migrations
       run: php scripts/ci/lint-migrations.php --base="${{ steps.migration-base.outputs.sha }}"
       if: matrix.group == 'schema'
