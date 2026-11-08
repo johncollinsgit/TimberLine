@@ -4068,3 +4068,12 @@ stock evidence, no Square charge, and one-time rewards restoration. Short-lived
 owner membership review changes only redemption limits, never join statistics.
 The independent birthday lane retains its existing rollout and acceptance gates.
 Signed development artifacts do not establish distribution or physical acceptance.
+
+### Teams Ask Everbranch entry candidate
+
+Standalone premium Teams reuses the guarded existing assistant host and lazy
+loader; approved workspace chat stays in place, while unapproved access retains
+the tenant-bound setup link. Selected Teams events and Asana notes are explicitly
+outside current AI context. No spending approval, credit purchase or provider
+activation is implied. See the Ask section in
+`docs/operations/teams-studio-foundation.md` for guards and focused acceptance.

@@ -1,0 +1,6 @@
+[data-team-standalone] .teams-assistant-entry{min-width:0}
+[data-team-standalone] .teams-assistant-entry .everbranch-assistant-launcher{position:static;display:flex;align-items:center;justify-content:center;min-height:44px;width:100%;padding:10px 14px;border:1px solid #547461;border-radius:10px;background:#f5f8f0;color:#183e32;font:600 14px/1.4 Inter,system-ui,sans-serif;box-shadow:none;cursor:pointer}
+[data-team-standalone] .teams-assistant-entry .everbranch-assistant-launcher:focus-visible{outline:3px solid #ba7f25;outline-offset:3px}
+[data-team-standalone] .teams-assistant-entry [data-team-assistant-status]{margin:8px 0;font:400 14px/1.45 Inter,system-ui,sans-serif}
+[data-team-standalone] .teams-assistant-entry [hidden]{display:none!important}
+@media(forced-colors:active){[data-team-standalone] .teams-assistant-entry .everbranch-assistant-launcher{border:1px solid ButtonText}}

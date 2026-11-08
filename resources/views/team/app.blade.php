@@ -42,8 +42,15 @@
             <button type="button" class="teams-install" data-teams-install>Install Teams</button>
             <p class="teams-install-help" data-teams-install-help hidden></p>
             <a href="{{ route('team.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link>Back to Everbranch</a>
-            @if(app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, auth()->user()))
-            <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link>AI Voice Branch</a>
+            @if(config('team_work.premium_enabled') && app(\App\Services\AiBranch\AiAssistantAccess::class)->allows($tenant, auth()->user()))
+            <div class="teams-assistant-entry" data-team-assistant-entry>
+                <x-app-ai-assistant :tenant="$tenant" scope-notice="Teams event details and Asana notes are not included in this workspace context." />
+                <p role="status" data-team-assistant-status hidden></p>
+                <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link data-team-assistant-fallback hidden>Open Ask Everbranch</a>
+                <noscript><a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}">Open Ask Everbranch</a></noscript>
+            </div>
+            @elseif(app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, auth()->user()))
+            <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link>Ask Everbranch</a>
             @endif
             @if(config('team_work.premium_enabled'))
             <button type="button" class="teams-settings-entry" data-team-settings aria-haspopup="dialog">Settings</button>
