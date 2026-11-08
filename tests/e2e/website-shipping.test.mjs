@@ -45,6 +45,7 @@ test('desktop and mobile shoppers select, expire, and replace rates without stal
             assert.equal(await page.locator('[data-shipping-price]').innerText(), '$7.25');
             assert.equal(await page.locator('[data-estimated-total]').innerText(), '$27.25');
             assert.equal(requestBody.shipping_address.residential, '1');
+            assert.equal(requestBody.shipping_address.name, 'Fixture', 'The delivery recipient must not be overwritten with the buyer name');
             await page.clock.fastForward('20:01');
             assert.equal(await pay.isDisabled(), true);
             assert.equal(await page.getByRole('radio').count(), 0);

@@ -4,7 +4,7 @@
 @endphp
 <fieldset id="website-shipping-fields" style="border:0;padding:0;margin:18px 0" data-rates-url="{{ route('managed-website.store.shipping-rates') }}" data-checkout-ready="{{ $checkoutReady ? 1 : 0 }}" data-threshold="{{ $shippingThreshold }}" data-subtotal="{{ $shippingSubtotal }}">
     <legend style="font-weight:700;margin-bottom:12px">Delivery address</legend>
-    <input type="hidden" name="shipping_address[name]">
+    <label style="display:block;margin:10px 0">Recipient full name (defaults to your name)<input name="shipping_address[name]" autocomplete="shipping name" maxlength="190" style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #b7c3b7;border-radius:5px"></label>
     @foreach(['street1' => ['Street address', 'address-line1'], 'street2' => ['Apartment / suite', 'address-line2'], 'city' => ['City', 'address-level2'], 'state' => ['State', 'address-level1'], 'zip' => ['ZIP code', 'postal-code']] as $key => [$label, $autocomplete])
         <label style="display:block;margin:10px 0">{{ $label }}<input @required($key !== 'street2') name="shipping_address[{{ $key }}]" autocomplete="{{ $autocomplete }}" @if($key === 'state') maxlength="2" @endif style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #b7c3b7;border-radius:5px"></label>
     @endforeach
@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fields.addEventListener('input', event => { if (event.target.name?.startsWith('shipping_address[')) reset(); });
     name.addEventListener('input', reset);
     finder.addEventListener('click', async () => {
-        fields.querySelector('[name="shipping_address[name]"]').value = name.value;
+        fields.querySelector('[name="shipping_address[name]"]').value ||= name.value;
         if (!form.reportValidity()) return;
         reset(); const requestedRevision = revision; controller = new AbortController(); finder.disabled = true;
         const address = {};
@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     form.addEventListener('submit', event => {
-        fields.querySelector('[name="shipping_address[name]"]').value = name.value;
+        fields.querySelector('[name="shipping_address[name]"]').value ||= name.value;
         const selected = fields.querySelector('[name="shipping_rate_quote_id"]:checked');
         if (ships() && (!selected || !(Date.parse(selected.dataset.expiresAt) > Date.now()))) {
             event.preventDefault(); results.textContent = 'Find and select a shipping option before continuing.';
