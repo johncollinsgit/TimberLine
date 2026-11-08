@@ -110,7 +110,7 @@ try {
     await search('Fictional legacy range');
     const legacyAnchor = grid.locator('[data-calendar-date="2026-11-06"] [data-calendar-kind="range_anchor"]');
     await legacyAnchor.waitFor();
-    await legacyAnchor.getByText('Unconfirmed range', { exact: true }).waitFor();
+    assert.match(await legacyAnchor.getAttribute('aria-label'), /Unconfirmed range/);
     assert.equal(await grid.locator('[data-calendar-date="2026-11-07"] [data-calendar-kind="range_anchor"]').count(), 0, 'A range marker does not invent activity on intervening days');
     const compact = await grid.evaluate(element => {
       const day = element.querySelector('.tops-day[data-calendar-date]'), card = element.querySelector('[data-calendar-kind="range_anchor"]');

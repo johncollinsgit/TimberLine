@@ -74,16 +74,18 @@
 
 /* Month view stays scannable: details remain in the accessible name and event dialog. */
 .teams-premium #team-operations .tops-event-calendar.is-month .tops-calendar-session {
-  display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:5px;
+  display:grid; grid-template-columns:minmax(0,1fr); align-items:center; gap:5px;
   min-height:44px; padding:5px 7px; border-radius:7px; line-height:1.25;
 }
-.tops-event-calendar.is-month .tops-calendar-session strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px }
-.tops-event-calendar.is-month .tops-calendar-phase { overflow:hidden; max-width:7.5em; font-size:11px; text-overflow:ellipsis; white-space:nowrap }
+.tops-event-calendar.is-month .tops-calendar-session strong { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; white-space:normal; overflow-wrap:anywhere; font-size:13px }
+.tops-event-calendar.is-month .tops-calendar-phase { display:none }
+.tops-event-calendar.is-month .is-source-due strong::before { content:'Due · '; font-weight:600 }
+.tops-event-calendar.is-month .is-range-anchor strong::before { content:'Range? · '; font-weight:600 }
 .tops-event-calendar.is-month .tops-calendar-session > :is(.tops-calendar-hours,small,.tops-calendar-session-label,.tops-calendar-status,.tops-calendar-crew) { display:none }
 .tops-event-calendar.is-month .tops-day { min-height:105px; gap:4px; padding:7px }
 .tops-event-calendar.is-month .tops-calendar-date { min-height:20px; line-height:20px }
 
-.tops-event-calendar.is-month .tops-calendar-session[data-calendar-needs-review=true] { grid-template-columns:auto minmax(0,1fr) auto }
+.tops-event-calendar.is-month .tops-calendar-session[data-calendar-needs-review=true] { grid-template-columns:minmax(0,1fr) auto }
 .tops-event-calendar.is-month .tops-calendar-session[data-calendar-needs-review=true]::after { content:'!'; font-weight:700; color:#7e4a14 }
 .teams-premium #team-operations.tops-inline-calendar .tops-inline-calendar-nav { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin:0 0 14px }
 .teams-premium #team-operations.tops-inline-calendar .tops-inline-calendar-nav > button { min-width:44px; min-height:44px; margin:0; padding:6px 12px; border:1px solid #d7e0d4; border-radius:7px; background:#fff; font-size:14px }
