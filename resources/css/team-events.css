@@ -60,3 +60,5 @@
 @media(max-width:1000px){.tops-event-calendar-controls{grid-template-columns:minmax(0,1fr)}}
 @media(forced-colors:active){.teams-premium #team-operations .tops-calendar-views button[aria-pressed=true]{outline:2px solid Highlight;outline-offset:-4px}.tops-calendar-person:before{background:CanvasText}}
 @media(min-width:1001px){.tops-calendar-views{width:100%;max-width:460px}}
+.teams-premium #team-operations .tops-event-calendar .tops-calendar-session.is-source-due{background:#f5f7f4;color:#45564a;border:1px dashed #84927e;border-left:3px dashed #84927e;box-shadow:none}
+.teams-premium #team-operations .tops-event-calendar .tops-calendar-session.is-source-due:hover{background:#edf1e9}

@@ -1,0 +1,100 @@
+/* Browser work controls only. Task/source behavior and the host shell are unchanged. */
+.teams-premium #team-work-app .teams-work-header,
+.teams-premium #team-work-app .teams-work-toolbar,
+.teams-premium #team-work-app #team-operations .tops-launcher {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.teams-premium #team-work-app header.teams-work-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 32px; min-height: 0; }
+.teams-work-heading { min-width: 0; }
+.teams-work-heading .teams-breadcrumb { flex-wrap: wrap; gap: 4px 10px; margin: 0 0 6px; font-size: 14px; }
+.teams-work-heading #tw-workspace-label { overflow-wrap: anywhere; }
+.teams-work-heading .teams-breadcrumb > span:nth-last-of-type(1) { color: #b0bdb2; }
+.teams-premium #team-work-app .teams-work-header .teams-breadcrumb #tw-workspaces { min-height: 44px !important; padding: 8px 0 !important; font-size: 14px !important; color: #365c45 !important; text-decoration: underline; text-underline-offset: 3px; }
+.teams-premium #team-work-app .teams-work-header h1 { font-size: 28px; line-height: 1.25; letter-spacing: -.5px; }
+.teams-work-header .teams-heading-actions { flex: 0 1 auto; justify-content: flex-end; margin: 0; }
+.teams-premium #team-work-app .teams-work-header button,
+.teams-premium #team-work-app .teams-work-toolbar button,
+.teams-premium #team-work-app .teams-work-toolbar input,
+.teams-premium #team-work-app .teams-work-toolbar select,
+.teams-premium #team-work-app #team-operations .tops-launcher button { min-height: 44px; margin: 0; padding: 10px 14px; font-size: 14px; line-height: 1.4; border-radius: 8px; }
+.teams-premium #team-work-app .teams-work-toolbar { padding: 0 32px 20px; border-bottom: 1px solid var(--line); background: #fff; }
+.teams-work-viewbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; border-bottom: 1px solid var(--line); margin-bottom: 20px; padding: 0 0 12px; }
+.teams-work-viewbar .teams-tabs { gap: 4px; align-self: auto; }
+.teams-premium #team-work-app .teams-work-toolbar .teams-tabs button { gap: 8px; min-width: 86px; padding: 10px 14px; border: 1px solid transparent; border-radius: 8px; background: transparent; font-size: 14px; }
+.teams-premium #team-work-app .teams-work-toolbar .teams-tabs button[aria-selected=true] { color: #244d3b; border-color: #cfddcb; background: #ecf2e8; }
+.teams-work-toolbar .teams-tabs button[aria-selected=true]::after { display: none; }
+.teams-work-view-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.teams-premium #team-work-app .teams-work-toolbar #tw-more-views { border: 1px solid #d0dace; max-width: 100%; padding: 10px 14px; font-size: 14px; background: #fff; }
+.teams-work-scope { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.1fr) minmax(150px, .7fr); gap: 16px; }
+.teams-premium #team-work-app .teams-work-toolbar label { display: grid; gap: 6px; align-content: end; min-width: 0; margin: 0; font-size: 14px; font-weight: 500; color: #4d6255; }
+.teams-premium #team-work-app .teams-work-toolbar input,
+.teams-premium #team-work-app .teams-work-toolbar select { width: 100%; min-width: 0; max-width: 100%; height: 44px; border: 1px solid #c7d3c3; font-size: 16px; font-weight: 400; background: #fff; overflow: hidden; text-overflow: ellipsis; }
+.teams-work-toolbar .teams-search-wrap { min-width: 0; }
+.teams-premium #team-work-app .teams-work-toolbar .teams-search-wrap input { padding-left: 38px; }
+.teams-work-toolbar .teams-search-wrap svg { top: auto; bottom: 13px; left: 12px; width: 18px; height: 18px; pointer-events: none; }
+.teams-work-view-options { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px; margin-top: 18px; }
+.teams-work-secondary > summary { display: none; }
+.teams-compact-context, .teams-compact-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.teams-work-toolbar .teams-compact-context #tw-workspace-label { flex-basis: 100%; overflow-wrap: anywhere; }
+.teams-work-toolbar .teams-compact-context #tw-workspaces { text-decoration: underline; text-underline-offset: 3px; }
+.teams-work-saved { display: flex; flex: 0 1 680px; flex-wrap: wrap; gap: 10px; align-items: flex-end; min-width: 0; }
+.teams-work-saved > label { flex: 1 1 210px; }
+.teams-work-saved-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.teams-premium #team-work-app .teams-work-toolbar #tw-remove-view { border-color: transparent; background: transparent; color: #637269; }
+.teams-work-project-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.teams-work-project-actions:not(:has(> button:not([hidden]))) { display: none; }
+.teams-work-project-actions:has(> button:not([hidden])) { margin-top: 14px; }
+.teams-premium #team-work-app .teams-work-toolbar #tw-asana-notice { margin: 14px 0 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.teams-work-toolbar #tw-asana-notice:empty { display: none; }
+.teams-premium #team-work-app:has(.tops-active) > .teams-work-toolbar { display: none; }
+.teams-work-calendar-options { display: grid; grid-template-columns: repeat(2, minmax(0, 240px)) auto; gap: 16px; align-items: end; }
+.teams-work-calendar-options #tw-event-calendar-entry { justify-self: start; }
+.teams-work-calendar-options #tw-task-calendar-context { grid-column: 1 / -1; margin: 0; color: #617367; }
+.teams-work-calendar-options:has(> label:not([hidden])) { margin-top: 18px; }
+.teams-premium #team-work-app .teams-work-toolbar .teams-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 18px; margin: 18px 0 0; border: 1px solid #dce5d6; border-radius: 10px; background: #f6f8f3; }
+.teams-work-toolbar .teams-filters button { align-self: end; justify-self: start; }
+.teams-work-toolbar [hidden], .teams-work-header [hidden] { display: none !important; }
+.teams-premium #team-work-app #team-operations .tops-launcher { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px 20px; padding: 16px 32px; }
+.teams-premium #team-work-app #team-operations .tops-launcher > span { font: 600 14px/1.5 Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: 0; text-transform: none; }
+.teams-premium #team-work-app #team-operations #tops-areas { display: flex; flex-wrap: wrap; min-width: 0; gap: 8px; }
+.teams-premium #team-work-app #team-operations #tops-areas button { min-width: 0; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.teams-premium #team-work-app #team-operations #tops-setup { margin: 0; }
+@media (max-width: 1100px) {
+  .teams-premium #team-work-app header.teams-work-header { align-items: flex-start; flex-wrap: wrap; }
+  .teams-work-header .teams-heading-actions { justify-content: flex-start; }
+  .teams-work-scope { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .teams-work-scope .teams-search-wrap { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .teams-premium #team-work-app header.teams-work-header { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; padding: 14px 16px; gap: 8px; }
+  .teams-work-header .teams-work-heading, .teams-work-header .teams-breadcrumb { display: contents; }
+  .teams-premium #team-work-app .teams-work-header h1 { grid-column: 2; grid-row: 1; font-size: 22px; margin: 0; letter-spacing: -.3px; }
+  .teams-premium #team-work-app .teams-work-header .teams-heading-actions { display: contents; }
+  .teams-premium #team-work-app .teams-work-header #tw-new-task { grid-column: 3; grid-row: 1; white-space: nowrap; }
+  .teams-work-header #tw-status-resume:not([hidden]) { grid-column: 1 / -1; }
+  .teams-premium #team-work-app .teams-work-header #tw-templates { display: block; }
+  .teams-premium #team-work-app .teams-work-toolbar { padding: 0 16px 18px; }
+  .teams-work-viewbar { gap: 12px; padding-bottom: 16px; margin-bottom: 18px; }
+  .teams-work-viewbar .teams-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; gap: 4px; }
+  .teams-premium #team-work-app .teams-work-toolbar .teams-tabs button { justify-content: center; min-width: 0; padding: 10px 6px; }
+  .teams-work-view-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; width: 100%; gap: 6px; }
+  .teams-premium #team-work-app .teams-work-toolbar .teams-work-view-tools button { padding: 10px; }
+  .teams-work-scope { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .teams-work-calendar-options { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .teams-work-secondary { margin-top: 18px; border-top: 1px solid var(--line); }
+  .teams-work-secondary > summary { display: list-item; min-height: 44px; padding: 12px 0 0; color: #365c45; cursor: pointer; }
+  .teams-work-secondary[open] > summary { padding-bottom: 0; }
+  .teams-work-secondary .teams-work-view-options { margin-top: 12px; }
+  .teams-work-secondary .teams-compact-context, .teams-work-secondary .teams-compact-actions { padding-top: 12px; }
+  .teams-work-secondary .teams-compact-context > span:not(#tw-workspace-label) { display: none; }
+  .teams-work-toolbar .teams-compact-context .team-app-entry { flex-basis: 100%; min-height: 44px; padding: 10px 0; }
+  .teams-work-view-options, .teams-work-saved { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; gap: 12px; }
+  .teams-work-saved-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .teams-premium #team-work-app .teams-work-toolbar .teams-filters { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+  .teams-premium #team-work-app #team-operations .tops-launcher { display: block; padding: 8px 16px; }
+  .teams-compact-areas > summary { min-height: 44px; padding: 11px 0; color: #365c45; cursor: pointer; }
+  .teams-compact-area-options { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 8px 0; }
+  .teams-premium #team-work-app #team-operations #tops-setup { width: 100%; }
+}

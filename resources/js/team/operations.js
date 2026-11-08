@@ -1,7 +1,7 @@
 import '../../css/team-operations.css';
 import '../../css/team-events.css';
 import { installEventTasks } from './event-tasks';
-import { renderEventCalendar, renderScheduleSummary } from './event-calendar';
+import { eventCalendarWindow, renderEventCalendar, renderScheduleSummary } from './event-calendar';
 
 // Business workspaces share the Teams shell and services. Private drafts stay in memory.
 export function installOperations(nativeRoot) {
@@ -17,6 +17,7 @@ export function installOperations(nativeRoot) {
   let areas = [], members = [], area, view = 'overview', page = 1, serial = 0, returnFocus, draft, busy = false, identityLost = false, timer, searchTimer, editorSequence = 0, pageCursors = [null], statisticsYear = new Date().getFullYear();
   const drafts = new Map();
   const emailDrafts = new Map();
+  let calendarPages = null;
   const eventTasks = installEventTasks({ api, el, button, field, dialog, section, note, area: () => area, content: $('content'), navigate });
   async function api(path, options = {}) {
     if (identityLost && !options.verify) throw new Error('Verify the original account before continuing. Area drafts are retained in this page.');
@@ -87,6 +88,14 @@ export function installOperations(nativeRoot) {
   function renderAreas() {
     $('areas').replaceChildren(); for (const item of areas) { const b = button(item.name, () => openArea(item)); b.dataset.area = item.id; $('areas').append(b); }
     $('setup').hidden = !admin;
+    calendarEntry(window.TeamPremium?.context);
+  }
+  function calendarEntry(context) {
+    const entry = document.getElementById('tw-event-calendar-entry');
+    if (!entry) return;
+    const target = areas.find(item => item.id === area?.id && item.profile === 'events') || areas.find(item => item.profile === 'events');
+    entry.hidden = identityLost || !target || context?.layout !== 'calendar';
+    entry.onclick = () => { if (!identityLost && window.TeamPremium?.context?.ready()) { $('search').value = ''; openArea(target, 'calendar').catch(report); } };
   }
   function native() { keepDraft(); serial++; $('panel').hidden = true; root.classList.remove('tops-active'); const url = new URL(location.href); url.searchParams.delete('area'); url.searchParams.delete('area_view'); history.replaceState(null, '', url); }
   $('menu').onclick = () => document.querySelector('[data-teams-menu]')?.click();
@@ -105,6 +114,7 @@ export function installOperations(nativeRoot) {
     create: async areaId => { const target = areas.find(a => a.id === areaId); if (!target) throw new Error('This area is no longer accessible.'); await openArea(target); edit(); },
     open: async (areaId, recordId) => { const target = areas.find(a => a.id === areaId); if (!target) throw new Error('This area is no longer accessible.'); await openArea(target); await details({ id: recordId, title: 'Work details' }); },
     renderPersonal: async (context, workPage = 1) => {
+      calendarEntry(context);
       const node = $('personal'), mode = document.getElementById('tw-mode').value, q = document.getElementById('tw-search').value.trim(), ticket = ++personalTicket;
       node.hidden = !['home', 'mine'].includes(mode) && !q || !!context.selectedProject;
       if (node.hidden || identityLost) return;
@@ -133,9 +143,10 @@ export function installOperations(nativeRoot) {
   $('prev').onclick = () => { if (page > 1) page--; load(); };
   $('next').onclick = () => { page++; load(); };
   $('search').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { page = 1; load(); }, 300); };
-  function query(kind) { return { kind, page, q: $('search').value.trim(), cursor: pageCursors[page - 1] }; }
-  async function load() {
+  function query(kind) { return { kind, page, q: $('search').value.trim(), cursor: pageCursors[page - 1], ...(view === 'calendar' ? { ...eventCalendarWindow(root.dataset.tenant + '|' + area.id), calendar_recheck_sources: page > 1 ? 1 : 0 } : {}) }; }
+  async function load(appendCalendar = false) {
     if (!area || $('panel').hidden) return;
+    if (view === 'calendar' && !appendCalendar) { page = 1; calendarPages = null; $('content').replaceChildren(); $('scope').textContent = 'Checking selected dates…'; }
     const ticket = ++serial, current = area.id; $('notice').textContent = 'Loading ' + label(view).toLowerCase() + '…';
     if (page === 1) pageCursors = [null];
     $('content').setAttribute('aria-busy', 'true');
@@ -165,7 +176,21 @@ export function installOperations(nativeRoot) {
       else if (view === 'automations') renderAutomations(result.items);
       else if (view === 'campaigns') { note('Campaign plans retain wording for review. Automated external sequences are not enabled in this candidate. Individual email updates are prepared from an account using its current permissions.'); renderRecords(result.items); }
       else if (view === 'statistics') renderStats(result);
-      else if (view === 'calendar') renderCalendar(result.items, result);
+      else if (view === 'calendar') {
+        const key = JSON.stringify([current, $('search').value.trim(), eventCalendarWindow(root.dataset.tenant + '|' + current)]);
+        const continuing = appendCalendar && calendarPages?.key === key && !result.source_access_incomplete;
+        const prior = continuing ? calendarPages.items : [];
+        // Keep the complete fetched page: its cursor already advances past every row.
+        const items = [...new Map([...prior, ...result.items].map(item => [item.id, item])).values()];
+        calendarPages = { key, items, pages: continuing ? calendarPages.pages + 1 : 1 };
+        $('prev').hidden = $('next').hidden = true;
+        $('scope').textContent = items.length + ' loaded event records · ' + calendarPages.pages + ' checked pages';
+        renderCalendar(items, result);
+        if (result.has_more && items.length < 90) $('content').append(button('Load more events', () => { page++; return load(true); }));
+        else if (result.has_more) { note(items.length + ' events loaded. Continue replaces this batch; dates outside the loaded batch remain unchecked.'); $('content').append(button('Continue with next events', () => { calendarPages = null; page++; return load(true); })); }
+        if (result.source_access_incomplete) note('Earlier loaded pages were cleared because a current source access check was unavailable.');
+        if (appendCalendar && prior.length) note('Includes previously loaded pages. Refresh rechecks current access and restarts this date window.');
+      }
       else if (view === 'pipeline') renderPipeline(result.items);
       else if (view === 'communications') renderAttempts(result.items);
       else if (area.profile === 'wholesale' && view === 'orders') renderCommerce(result.items);
@@ -176,7 +201,7 @@ export function installOperations(nativeRoot) {
         if (result.commerce) { section('Existing Wholesale service'); note('Source records are shown separately from Teams relationship notes. Review identity links before merging customer context.'); renderCommerce(result.commerce.items); }
         if (result.commerceNotice) note('Existing Wholesale source unavailable: ' + result.commerceNotice);
       }
-    } catch (error) { if (ticket === serial) { $('content').replaceChildren(); empty('This view is unavailable', 'The source or access check did not complete. This does not mean there are no records.'); if (page > 1) $('content').append(button('Return to first page', () => { page = 1; return load(); })); report(error); } }
+    } catch (error) { if (ticket === serial) { calendarPages = null; $('content').replaceChildren(); empty('This view is unavailable', 'The source or access check did not complete. This does not mean there are no records.'); if (page > 1) $('content').append(button('Return to first page', () => { page = 1; return load(); })); report(error); } }
     finally { if (ticket === serial) { $('content').removeAttribute('aria-busy'); $('content').inert = false; } }
   }
   function renderRecords(items, parent = $('content')) {
@@ -224,7 +249,7 @@ export function installOperations(nativeRoot) {
     const stages = [...new Set([...area.settings.stages, ...items.map(i => i.status)])];
     for (const stage of stages) { const lane = el('section', '', 'tops-lane'), matches = items.filter(i => i.status === stage); lane.append(el('h3', label(stage) + ' · ' + matches.length)); for (const item of matches) { const card = el('div', '', 'tops-pipeline-card'); card.append(button(item.title, () => details(item)), el('p', money(item.data.amount_cents))); lane.append(card); } board.append(lane); }
   }
-  function renderCalendar(items, coverage) { renderEventCalendar($('content'), items, coverage, root.dataset.tenant, item => details(item).catch(report), root.dataset.tenant + '|' + area.id); }
+  function renderCalendar(items, coverage) { renderEventCalendar($('content'), items, coverage, root.dataset.tenant, item => details(item).catch(report), root.dataset.tenant + '|' + area.id, () => { page = 1; return load(); }); }
   function renderStats(data) {
     if (area.profile === 'events') {
       const filters = el('div', '', 'tops-form'); $('content').append(filters); const year = field(filters, '', 'Reporting year', data.year, 'number'); year.min = 2000; year.max = 2100; filters.append(button('Show this year', () => { if (!year.reportValidity() || !year.value) return; statisticsYear = Number(year.value); return load(); }));
@@ -476,7 +501,7 @@ export function installOperations(nativeRoot) {
   }
   function renderAttempts(items) { note('Your prepared and submitted actions. Unknown outcomes require reconciliation; retrying does not send a second copy.'); if (!items.length) empty('No communication attempts yet', 'Prepare an update from an event or account.'); else table(['Action', 'State', 'Created', 'Review'], items.map(a => [label(a.kind), label(a.status), new Date(a.created_at).toLocaleString(), ['unknown', 'executing'].includes(a.status) || a.adoption_recovery_available ? button(a.adoption_recovery_available ? 'Finish original event link' : 'Reconcile outcome', async () => { const result = await api('/communications/' + a.id + '/reconcile', { method: 'POST' }); await load(); if (result.notice || result.result?.notice) $('notice').textContent = result.notice || result.result.notice; }) : '—'])); }
   addEventListener('beforeunload', event => { if (draft?.dirty || drafts.size || emailDrafts.size) { event.preventDefault(); event.returnValue = ''; } });
-  document.addEventListener('visibilitychange', () => { clearInterval(timer); if (!document.hidden) timer = setInterval(() => { if (!$('panel').hidden && !draft?.dirty && !$('detail').open && !$('editor').open) load(); }, 60000); });
+  document.addEventListener('visibilitychange', () => { clearInterval(timer); if (document.hidden && view === 'calendar') { serial++; calendarPages = null; $('content').replaceChildren(); } else if (!document.hidden) { if (view === 'calendar' && !$('panel').hidden) load(); timer = setInterval(() => { if (!$('panel').hidden && !draft?.dirty && !$('detail').open && !$('editor').open) load(); }, 60000); } });
   document.dispatchEvent(new Event('visibilitychange'));
   api('/areas').then(async data => { areas = data.items; renderAreas(); const url = new URL(location.href), eventApp = url.searchParams.get('app') === 'events', initial = areas.find(a => a.id === url.searchParams.get('area')) || (eventApp ? areas.find(a => a.profile === 'events') : null); if (initial) await openArea(initial, url.searchParams.get('area_view') || (eventApp ? 'my_tasks' : 'overview')); }).catch(report);
 }

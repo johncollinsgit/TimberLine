@@ -8,6 +8,20 @@ const when = value => validDate(value) ? new Intl.DateTimeFormat(undefined, { da
 const title = value => String(value || '').replace(/^./, letter => letter.toUpperCase());
 const calendar = item => item.data?.event_schedule || {};
 const sessions = item => (Array.isArray(calendar(item).sessions) ? calendar(item).sessions : []).filter(session => session && phases.has(session.kind));
+const dueOn = item => item.data?.source_schedule?.due_on ?? calendar(item).source_schedule?.due_on;
+
+export function eventCalendarWindow(scope) {
+  const today = new Date(), localToday = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
+  const state = viewState.get(scope) || { mode: 'month', anchor: localToday, colorMode: 'event' };
+  viewState.set(scope, state);
+  const end = new Date(state.anchor + 'T12:00:00Z');
+  if (state.mode === 'month') {
+    end.setUTCMonth(end.getUTCMonth() + 1, 0);
+    return { calendar_from: state.anchor.slice(0, 7) + '-01', calendar_to: end.toISOString().slice(0, 10) };
+  }
+  end.setUTCDate(end.getUTCDate() + Number(state.mode) - 1);
+  return { calendar_from: state.anchor, calendar_to: end.toISOString().slice(0, 10) };
+}
 const people = item => (Array.isArray(item.calendar_people) ? item.calendar_people : []).filter(person => typeof person?.id === 'string' && /^(native:[1-9]\d*|asana:\d+:\d+)$/.test(person.id));
 const personName = person => person.name || 'Recorded ' + (person.provider || 'source') + ' identity ' + person.id;
 const stableColor = key => { let hash = 0; for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0; return palette[hash % palette.length]; };
@@ -35,7 +49,7 @@ export function renderScheduleSummary(parent, item, tenant) {
   section.append(studioLink(tenant)); parent.append(section);
 }
 
-export function renderEventCalendar(host, items, coverage, tenant, open, scope = tenant) {
+export function renderEventCalendar(host, items, coverage, tenant, open, scope = tenant, onWindowChange) {
   const today = new Date(), localToday = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
   const previous = viewState.get(scope);
   let mode = previous?.mode || 'month', anchor = previous?.anchor || localToday, colorMode = previous?.colorMode || 'event';
@@ -46,20 +60,22 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
   colors.setAttribute('aria-label', 'Calendar colors');
   for (const [value, text] of [['event', 'Event colors'], ['person', 'Crew colors']]) { const option = node('option', text); option.value = value; colors.append(option); }
   const button = (text, action) => { const element = node('button', text); element.type = 'button'; element.onclick = action; return element; };
-  for (const [value, text] of [['month', 'Month'], ['1', '1 day'], ['2', '2 days'], ['3', '3 days']]) { const tab = button(text, () => { mode = value; month.hidden = mode !== 'month'; day.hidden = mode === 'month'; paint(); }); tab.dataset.calendarView = value; modes.append(tab); }
+  for (const [value, text] of [['month', 'Month'], ['1', '1 day'], ['2', '2 days'], ['3', '3 days']]) { const tab = button(text, () => { if (mode === value) return; mode = value; month.hidden = mode !== 'month'; day.hidden = mode === 'month'; changeWindow(); }); tab.dataset.calendarView = value; modes.append(tab); }
   const filters = node('div', '', 'tops-calendar-filters'), dateField = node('div'), dateLabel = node('span'), colorField = node('label');
   dateField.append(dateLabel, month, day); colorField.append(node('span', 'Color by'), colors); filters.append(dateField, colorField);
   const periods = node('div', '', 'tops-calendar-periods'); periods.setAttribute('role', 'group'); periods.setAttribute('aria-label', 'Calendar period');
   periods.append(button('Previous period', () => shift(-1)), button('Next period', () => shift(1))); controls.append(modes, filters, periods); host.append(controls);
-  host.append(node('p', 'This page only · ' + items.length + ' event records' + (coverage.has_more ? ' · more pages remain' : '') + (coverage.partial || coverage.complete === false ? ' · source coverage partial or unconfirmed' : ''), 'tops-calendar-scope'));
-  const guide = node('details', '', 'tops-calendar-guide'); guide.append(node('summary', 'Calendar scope & source notes'), node('p', 'Only explicit dated sessions appear; gap days stay empty. Setup is lighter. Other pages and unavailable source feeds are not included.'), node('p', 'Crew colors identify recorded event assignments, not shifts or attendance at each session. Event times use the displayed local timezone.')); host.append(guide);
+  host.append(node('p', 'Loaded results · ' + items.length + ' event records' + (coverage.has_more ? ' · more pages remain' : '') + (coverage.partial || coverage.complete === false ? ' · source coverage partial or unconfirmed' : ''), 'tops-calendar-scope'));
+  if (coverage.calendar_window) host.append(node('p', when(coverage.calendar_window.from) + ' → ' + when(coverage.calendar_window.to) + (coverage.calendar_window.scan_limited ? ' · Load more events to continue checking retained dates.' : ' · Unspecified dates remain unknown.'), 'tops-calendar-scope'));
+  const guide = node('details', '', 'tops-calendar-guide'); guide.append(node('summary', 'Calendar scope & source notes'), node('p', 'Explicit sessions show reviewed activity; gap days stay empty. Setup is lighter. A dashed Asana due date is a task anchor, not a confirmed selling or setup day. Other pages and unavailable source feeds are not included.'), node('p', 'Crew colors identify recorded event assignments, not shifts or attendance at each session. Event times use the displayed local timezone.')); host.append(guide);
   const hint = node('p', 'Swipe or scroll across the dates →', 'tops-calendar-scroll-hint'); host.append(hint);
   const scroll = node('div', '', 'tops-event-calendar-scroll'), grid = node('div', '', 'tops-calendar tops-event-calendar'); scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Dated event calendar. Scroll horizontally for more dates.'); scroll.append(grid); host.append(scroll);
   function shift(direction) {
     const value = new Date(anchor + 'T12:00:00Z');
     if (mode === 'month') { value.setUTCDate(1); value.setUTCMonth(value.getUTCMonth() + direction); } else value.setUTCDate(value.getUTCDate() + direction * Number(mode));
-    anchor = value.toISOString().slice(0, 10); month.value = anchor.slice(0, 7); day.value = anchor; paint();
+    anchor = value.toISOString().slice(0, 10); month.value = anchor.slice(0, 7); day.value = anchor; changeWindow();
   }
+  function changeWindow() { paint(); onWindowChange?.(); }
   function card(item, session) {
     const crew = people(item), chip = button('', () => open(item)); chip.className = 'tops-calendar-session is-' + session.kind;
     const color = colorMode === 'person' && crew.length ? stableColor(tenant + '|' + (crew[0].provider || '') + '|' + crew[0].id) : eventColor(item, tenant);
@@ -97,12 +113,18 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
     }
     for (const key of keys) {
       const cell = node('section', '', 'tops-day'), heading = node('time', mode === 'month' ? key.slice(-2).replace(/^0/, '') : new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(key + 'T12:00:00Z')), 'tops-calendar-date'); heading.dateTime = key; cell.dataset.calendarDate = key; cell.setAttribute('aria-label', when(key)); cell.append(heading);
-      for (const item of items) for (const session of sessions(item)) if (validDate(session.date) && session.date === key) cell.append(card(item, session));
+      for (const item of items) {
+        for (const session of sessions(item)) if (validDate(session.date) && session.date === key) cell.append(card(item, session));
+        if (validDate(dueOn(item)) && dueOn(item) === key && !sessions(item).some(session => session.date === key)) {
+          const marker = button('', () => open(item)); marker.className = 'tops-calendar-session is-source-due'; marker.dataset.calendarEvent = item.id; marker.dataset.calendarKind = 'source_due';
+          marker.append(node('span', 'Asana due date', 'tops-calendar-phase'), node('strong', item.title), node('span', 'Task date · not a confirmed event day', 'tops-calendar-status')); cell.append(marker);
+        }
+      }
       if (cell.childElementCount === 1 && mode !== 'month') cell.append(node('p', 'No dated sessions on this page', 'tops-calendar-empty'));
       grid.append(cell);
     }
   }
-  month.onchange = () => { anchor = month.value + '-01'; day.value = anchor; paint(); }; day.onchange = () => { anchor = day.value; month.value = anchor.slice(0, 7); paint(); }; colors.onchange = () => { colorMode = colors.value; paint(); }; paint();
+  month.onchange = () => { if (!/^\d{4}-\d{2}$/.test(month.value)) return; anchor = month.value + '-01'; day.value = anchor; changeWindow(); }; day.onchange = () => { if (!validDate(day.value)) return; anchor = day.value; month.value = anchor.slice(0, 7); changeWindow(); }; colors.onchange = () => { colorMode = colors.value; paint(); }; paint();
   const pending = items.flatMap(item => sessions(item).filter(session => !validDate(session.date)).map(session => ({ item, session })));
   const recordRow = (item, text) => { const row = node('div', '', 'tops-calendar-record-row'), action = button(item.title, () => open(item)); action.className = 'tops-calendar-record-open'; row.append(action, node('span', text)); return row; };
   if (pending.length) { const section = node('section', '', 'tops-section tops-calendar-records'); section.append(node('h3', 'Sessions with unknown dates')); for (const { item, session } of pending) section.append(recordRow(item, title(session.kind) + ' · date unknown')); host.append(section); }

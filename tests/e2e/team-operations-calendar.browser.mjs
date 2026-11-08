@@ -48,7 +48,9 @@ try {
       assert.equal(measured.decorative, 'true', 'CSS forest artwork is decorative');
       assert.ok(measured.artBackground.includes('/brand/everbranch-teams-trees-v1.webp'), 'Approved local tree asset is used');
       assert.ok(measured.pageWidth <= width + 1, surface + width + ' no page overflow');
+      if (width <= 600) await page.locator('#tw-view-tools > summary').click();
       await page.locator('#tw-workspace-label').filter({ hasText: 'Workspace:' }).waitFor();
+      if (width <= 600) await page.locator('#tw-view-tools > summary').click();
       await brand.evaluate(element => element.scrollIntoView({ block: 'start' }));
       await page.screenshot({ path: join(evidence, `brand-${surface}-${width}.png`) });
       branding.push({ surface, ...measured });
@@ -76,16 +78,18 @@ try {
   await page.locator('#team-operations').getByLabel('Calendar month', { exact: true }).fill('2026-11');
   const grid = page.locator('.tops-event-calendar'), event = grid.locator(`[data-calendar-event="${fixture.event_id}"]`);
   await event.first().waitFor(); assert.equal(await event.count(), 3);
-  await page.getByText(/This page only · 3 event records/).waitFor();
+  await page.getByText(/Loaded results · 3 event records/).waitFor();
   assert.equal(await grid.locator('[data-calendar-date="2026-11-07"] button').count(), 0, 'Gap Saturday must remain empty');
   assert.equal(await grid.getByText('Fictional legacy range', { exact: true }).count(), 0, 'Legacy bounds never paint inferred activity');
   await page.getByRole('heading', { name: 'Legacy ranges · activity unconfirmed' }).waitFor(); await page.getByRole('heading', { name: 'Sessions with unknown dates' }).waitFor();
   const setup = grid.locator('[data-calendar-kind="setup"]'), selling = grid.locator('[data-calendar-kind="selling"]').first();
   assert.notEqual(await setup.evaluate(el => getComputedStyle(el).backgroundColor), await selling.evaluate(el => getComputedStyle(el).backgroundColor), 'Setup has a distinct lighter treatment');
   await page.getByLabel('Calendar colors').selectOption('person'); await grid.locator(`[data-calendar-person="${fixture.person_id}"]`).first().waitFor(); const crewColor = await event.first().evaluate(el => el.style.getPropertyValue('--event-color'));
-  await page.getByRole('button', { name: '3 days', exact: true }).click();
+  const calendarReady = () => page.waitForFunction(() => document.querySelector('#tops-content').getAttribute('aria-busy') !== 'true');
+  await page.getByRole('button', { name: '3 days', exact: true }).click(); await calendarReady();
   assert.equal(await page.getByLabel('Calendar colors').inputValue(), 'person', 'Crew mode is retained when changing the view');
   await page.getByLabel('Calendar first day').fill('2026-11-06');
+  await page.getByLabel('Calendar first day').blur(); await calendarReady();
   assert.equal(await page.getByLabel('Calendar colors').inputValue(), 'person', 'Crew mode is retained when changing the date');
   assert.equal(await grid.locator('[data-calendar-date]').count(), 3); assert.equal(await event.count(), 2); assert.equal(await grid.locator('[data-calendar-date="2026-11-07"] button').count(), 0);
   assert.equal(await event.first().evaluate(el => el.style.getPropertyValue('--event-color')), crewColor, 'Crew identity color is stable between views');
@@ -93,11 +97,11 @@ try {
   await page.waitForFunction(() => document.querySelector('#tops-content').getAttribute('aria-busy') !== 'true');
   assert.equal(await page.getByLabel('Calendar colors').inputValue(), 'person', 'Refresh preserves crew mode');
   assert.equal(await grid.locator('[data-calendar-date]').count(), 3, 'Refresh preserves selected span');
-  await page.getByRole('button', { name: '2 days', exact: true }).click(); assert.equal(await grid.locator('[data-calendar-date]').count(), 2); assert.equal(await event.count(), 1);
-  await page.getByRole('button', { name: '1 day', exact: true }).click(); assert.equal(await grid.locator('[data-calendar-date]').count(), 1);
+  await page.getByRole('button', { name: '2 days', exact: true }).click(); await calendarReady(); assert.equal(await grid.locator('[data-calendar-date]').count(), 2); assert.equal(await event.count(), 1);
+  await page.getByRole('button', { name: '1 day', exact: true }).click(); await calendarReady(); assert.equal(await grid.locator('[data-calendar-date]').count(), 1);
   const geometry = [];
   for (const [name, viewport] of [['desktop', { width: 1440, height: 1000 }], ['tablet', { width: 820, height: 1180 }], ['landscape', { width: 844, height: 390 }], ['phone-320', { width: 320, height: 844 }], ['phone-375', { width: 375, height: 844 }], ['phone', { width: 390, height: 844 }]]) {
-    await page.setViewportSize(viewport); await page.getByRole('button', { name: '3 days', exact: true }).click();
+    await page.setViewportSize(viewport); await page.getByRole('button', { name: '3 days', exact: true }).click(); await calendarReady();
     const measurements = await page.locator('.tops-event-calendar-controls').evaluate(toolbar => {
       const fields = [...toolbar.querySelectorAll('input:not([hidden]),select')].map(el => { const box = el.getBoundingClientRect(), css = getComputedStyle(el); return { top: box.top, left: box.left, width: box.width, height: box.height, font: css.fontFamily, size: Number.parseFloat(css.fontSize) }; });
       const buttons = [...toolbar.querySelectorAll('button')].map(el => ({ height: el.getBoundingClientRect().height, font: getComputedStyle(el).fontFamily }));

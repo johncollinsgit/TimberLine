@@ -129,6 +129,8 @@ jobs:
         run: |
           node tests/e2e/team-studio-live.browser.mjs
           node tests/e2e/team-operations-calendar.browser.mjs
+          node tests/e2e/team-event-calendar-window.browser.mjs
+          node tests/e2e/team-browser-toolbar.browser.mjs
 
       - name: Verify Trajectory mobile household navigation
         run: npm run test:trajectory:mobile
