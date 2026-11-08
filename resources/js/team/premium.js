@@ -68,7 +68,7 @@ export function installPremium(root) {
   function closeControls(focus = false) { controlsPanel.hidden = true; $('filter-toggle').setAttribute('aria-expanded', 'false'); if (focus) $('filter-toggle').focus(); }
   controlsPanel.hidden = true; $('filters').hidden = false;
   $('filter-toggle').onclick = () => { const expanded = controlsPanel.hidden; controlsPanel.hidden = !expanded; $('filter-toggle').setAttribute('aria-expanded', String(expanded)); };
-  controlsPanel.addEventListener('keydown', event => { if (event.key === 'Escape' && !controlsPanel.hidden) { event.preventDefault(); event.stopPropagation(); closeControls(true); } });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && !controlsPanel.hidden && !document.querySelector('dialog[open]')) { event.preventDefault(); event.stopImmediatePropagation(); closeControls(true); } });
   document.addEventListener('pointerdown', event => { if (!controlsPanel.hidden && !controlsPanel.contains(event.target) && !$('filter-toggle').contains(event.target)) closeControls(); });
   $('clear-filters').onclick = () => { if (!context?.ready()) return; $('completion').value = 'incomplete'; $('priority-filter').value = ''; $('date-filter').value = 'all'; $('sort').value = ''; $('search').value = ''; $('completion').dispatchEvent(new Event('change', { bubbles: true })); };
   $('refresh').onclick = () => { if (context?.ready()) { asana?.invalidate(); context.load(); } };
