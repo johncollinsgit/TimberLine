@@ -8,6 +8,7 @@
     "test:highlevel-fleet": "node --test tests/e2e/highlevel-fleet*.test.mjs",
     "test:shop-pay": "node --test tests/e2e/website-shop-pay.test.mjs",
     "test:shipping": "node --test tests/e2e/website-shipping.test.mjs",
+    "test:freight": "node --test tests/e2e/website-freight.test.mjs",
     "test:trajectory": "node --test tests/e2e/trajectory-*.test.mjs",
     "test:ai-voice": "node --test tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs",
     "media:optimize-public": "node scripts/media/optimize-public-image.mjs",

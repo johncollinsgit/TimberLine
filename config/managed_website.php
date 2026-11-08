@@ -33,6 +33,9 @@ return [
     'commerce_operations_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_OPERATIONS_TENANT_IDS'),
     'commerce_shipping_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_SHIPPING_ENABLED'),
     'commerce_shipping_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_SHIPPING_TENANT_IDS'),
+    // Staff can prepare accounts and quotes while actual freight bookings are paused.
+    'freight_booking_enabled' => $bool('MANAGED_WEBSITE_FREIGHT_BOOKING_ENABLED'),
+    'freight_booking_tenant_ids' => $tenantIds('MANAGED_WEBSITE_FREIGHT_BOOKING_TENANT_IDS'),
     // Transactional native order updates never use a marketing/provider fallback.
     'order_notifications_enabled' => $bool('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_ENABLED'),
     'order_notifications_tenant_ids' => $tenantIds('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_TENANT_IDS'),

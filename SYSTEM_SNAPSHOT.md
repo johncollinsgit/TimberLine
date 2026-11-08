@@ -1,3 +1,13 @@
+## Native Website freight API (November 8; candidate)
+
+The freight workspace now has a ShipStation v2 quote/booking adapter with
+encrypted tenant-owned accounts, reviewed pallet/accessorial specifications,
+exact cost approval, a durable single-send booking claim, original-account GET
+recovery, protected BOL/pallet PDF downloads, tracking and cancellation. Actual
+booking stays behind its independent global/tenant gates, paid-order checks and
+an explicit shipment/cost confirmation. Provider acceptance and physical freight
+evidence are outstanding. See `docs/operations/native-ltl-quote-book.md`.
+
 ## Complete event browsing and faster search (November 8; candidate)
 
 The main Events Board and List automatically drain the authorized saved-event

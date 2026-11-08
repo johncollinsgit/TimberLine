@@ -1,3 +1,13 @@
+## Native Website freight API (November 8; candidate)
+
+Read `docs/operations/native-ltl-quote-book.md` before freight rollout. The
+ShipStation v2 adapter quotes and books only native Website physical orders using
+tenant-owned encrypted credentials and explicit carrier cost approval. Booking
+requires independent global/tenant gates and paid-order verification. Preserve
+durable unknown attempts, original credentials and all encrypted financial
+evidence. Never retry an uncertain booking or adopt an unverified shipment ID.
+Source/browser fixtures do not establish live provider or physical acceptance.
+
 ## Complete event browsing and faster search (November 8; candidate)
 
 The main Events Board and List automatically drain the authorized saved-event

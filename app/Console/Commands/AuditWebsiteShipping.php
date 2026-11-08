@@ -47,11 +47,11 @@ class AuditWebsiteShipping extends Command
         $rows = [];
         foreach ($tenants as $tenant) {
             $sites = TenantSite::query()->forTenant($tenant)->get();
-            $accounts = IntegrationConnection::query()->forTenant($tenant)->whereIn('provider', ['easypost', 'shippo', 'shipstation', 'freightview', 'freightquote', 'goship'])
+            $accounts = IntegrationConnection::query()->forTenant($tenant)->whereIn('provider', ['easypost', 'shippo', 'shipstation', 'shipstation_freight', 'freightview', 'freightquote', 'goship'])
                 ->orderBy('id')->get()->map(fn ($connection) => ['id' => $connection->id, 'provider' => $connection->provider,
                     'status' => $connection->status, 'credential_present' => filled($connection->access_token),
                     'webhook_secret_present' => filled($connection->external_account_secret),
-                    'mode' => data_get($connection->metadata, 'native_shipping.mode'),
+                    'mode' => data_get($connection->metadata, 'native_shipping.mode') ?? data_get($connection->metadata, 'native_freight.mode'),
                     'last_rate_verified_at' => data_get($connection->metadata, 'native_shipping.verified_at')])->all();
             $serviceTotals = [];
             $orderIds = [];
@@ -78,6 +78,7 @@ class AuditWebsiteShipping extends Command
                 ->where('currency', 'usd')->where('purchased_at', '>=', $start)->where('purchased_at', '<', $end)
                 ->where(fn ($query) => $query->whereNull('parcel->_native->mode')->orWhere('parcel->_native->mode', '!=', 'production'))->count();
             $freight = ['recorded_bookings' => 0, 'final_invoice_cents' => 0, 'missing_final_invoices' => 0];
+            $apiFreight = ['confirmed_bookings' => 0, 'approved_quote_cents' => 0, 'final_invoice_cents' => 0, 'missing_final_invoices' => 0];
             foreach (WebsiteOrder::query()->forTenant($tenant)->whereIn('source', ['native', 'staff_quote', 'staff_draft_invoice'])->cursor() as $order) {
                 $plan = data_get($order->service_request, 'freight');
                 if (! is_array($plan)) {
@@ -87,11 +88,21 @@ class AuditWebsiteShipping extends Command
                 if (! $booked || CarbonImmutable::parse($booked)->lt($start) || CarbonImmutable::parse($booked)->gte($end)) {
                     continue;
                 }
-                $freight['recorded_bookings']++;
-                if (isset($plan['invoice']['amount_cents'])) {
-                    $freight['final_invoice_cents'] += (int) $plan['invoice']['amount_cents'];
+                if (data_get($plan, 'booking.source') === 'shipstation_api') {
+                    $apiFreight['confirmed_bookings']++;
+                    $apiFreight['approved_quote_cents'] += (int) data_get($plan, 'api_attempt.amount_cents', 0);
+                    if (isset($plan['invoice']['amount_cents'])) {
+                        $apiFreight['final_invoice_cents'] += (int) $plan['invoice']['amount_cents'];
+                    } else {
+                        $apiFreight['missing_final_invoices']++;
+                    }
                 } else {
-                    $freight['missing_final_invoices']++;
+                    $freight['recorded_bookings']++;
+                    if (isset($plan['invoice']['amount_cents'])) {
+                        $freight['final_invoice_cents'] += (int) $plan['invoice']['amount_cents'];
+                    } else {
+                        $freight['missing_final_invoices']++;
+                    }
                 }
             }
             $rows[] = ['tenant_id' => $tenant->id, 'slug' => $tenant->slug, 'provider_connections' => $accounts,
@@ -100,7 +111,7 @@ class AuditWebsiteShipping extends Command
                     'provider_confirmed_refund_label_cents' => $refundCost, 'associated_order_count' => count($orderIds),
                     'associated_original_customer_shipping_cents' => $customerCharges,
                     'gross_label_cost_minus_original_shipping_charge_cents' => $labelCost - $customerCharges, 'by_service' => $serviceTotals],
-                'manual_freight' => $freight];
+                'manual_freight' => $freight, 'api_freight' => $apiFreight];
         }
         $this->line(json_encode(['generated_at' => now()->toIso8601String(), 'release_id' => config('app.release_id'),
             'timezone' => config('app.timezone'), 'period' => $dates, 'currency' => 'USD', 'tenants' => $rows,
@@ -109,6 +120,7 @@ class AuditWebsiteShipping extends Command
                 'Purchased labels use purchase dates; associated customer charges use that same distinct order cohort, not period sales.',
                 'Original customer charges are not net of refunds. The gross difference is not profit or a fully reconciled shipping subsidy.',
                 'Carrier adjustments, actual refund credits, API subscriptions, insurance, materials, handling, and unrecorded freight invoices need provider/accounting reconciliation.',
+                'API freight approved quote amounts are not final invoices or cash costs; cancellations can still incur fees. Current plans only; archived events require separate reconciliation.',
                 'Readiness is saved local configuration and observed worker evidence; it does not verify account funding, physical acceptance, or negotiated-rate eligibility.']], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
 
         return self::SUCCESS;
