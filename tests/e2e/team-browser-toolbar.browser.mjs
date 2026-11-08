@@ -170,7 +170,7 @@ try {
       await page.locator('#tw-calendar-format-label').waitFor({ state: 'hidden' });
       assert.equal(await page.locator('#tw-calendar-format-label').isVisible(), false, 'Calendar field label hides with its input');
       await page.locator('#tw-save-view').click();
-      await page.getByRole('dialog', { name: 'Keep a useful perspective' }).waitFor();
+      await page.getByRole('dialog', { name: 'Save view' }).waitFor();
       await page.locator('#tw-view-close').click();
     }
     await page.locator('#tw-project-filter').selectOption(fixture.project_id);
