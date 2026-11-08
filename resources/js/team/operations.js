@@ -17,7 +17,7 @@ export function installOperations(nativeRoot) {
   let areas = [], members = [], area, view = 'overview', page = 1, serial = 0, returnFocus, draft, busy = false, identityLost = false, timer, searchTimer, editorSequence = 0, pageCursors = [null], statisticsYear = new Date().getFullYear();
   const drafts = new Map();
   const emailDrafts = new Map();
-  let calendarPages = null, areasReady, inlineEpoch = 0, inlineOptions = null;
+  let calendarPages = null, areasReady, inlineEpoch = 0, inlineOptions = null, detailSequence = 0;
   const originalPosition = document.createComment('Teams work area position');
   root.before(originalPosition);
   const eventTasks = installEventTasks({ api, el, button, field, dialog, section, note, area: () => area, content: $('content'), navigate });
@@ -57,10 +57,10 @@ export function installOperations(nativeRoot) {
     if (options) { for (const option of options) { const o = el('option', typeof option === 'string' ? label(option) : option.name); o.value = typeof option === 'string' ? option : option.id; input.append(o); } input.value = value ?? ''; }
     wrap.append(input); form.append(wrap); return input;
   }
-  function dialog(title) { if (!$('detail').open) returnFocus = document.activeElement; $('detail-title').textContent = title; const body = el('div'); $('detail-body').replaceChildren(body); if (!$('detail').open) $('detail').showModal(); return body; }
+  function dialog(title) { detailSequence++; if (!$('detail').open) returnFocus = document.activeElement; $('detail-title').textContent = title; const body = el('div'); $('detail-body').replaceChildren(body); if (!$('detail').open) $('detail').showModal(); return body; }
   function closeDetail() { $('detail').close(); returnFocus?.focus(); }
   $('detail-close').onclick = closeDetail;
-  $('detail').addEventListener('close', () => { if (returnFocus?.isConnected) returnFocus.focus(); else $('heading').focus(); });
+  $('detail').addEventListener('close', () => { if (!$('detail').open) detailSequence++; if (returnFocus?.isConnected) returnFocus.focus(); else $('heading').focus(); });
   function controls() {
     if (!root.classList.contains('tops-inline-calendar')) { const url = new URL(location.href); url.searchParams.set('area', area.id); url.searchParams.set('area_view', view); history.replaceState(null, '', url); }
     $('heading').textContent = area.name;
@@ -84,8 +84,9 @@ export function installOperations(nativeRoot) {
     area = item; view = item.views.includes(initialView) ? initialView : 'overview'; page = 1; serial++;
     root.classList.toggle('tops-active', !inline); root.classList.toggle('tops-inline-calendar', inline); $('panel').hidden = false;
     document.querySelectorAll('#tops-areas button').forEach(b => b.setAttribute('aria-current', b.dataset.area === area.id ? 'page' : 'false'));
-    controls(); $('heading').focus(); await load();
-    const memberArea = item.id; const result = await api('/areas/' + memberArea + '/members', { query: { area: memberArea } }); if (area?.id === memberArea) members = result.items;
+    controls(); $('heading').focus(); const loading = load(), requestSerial = serial; await loading;
+    if (requestSerial !== serial || area?.id !== item.id || $('panel').hidden || identityLost) return;
+    const memberArea = item.id; const result = await api('/areas/' + memberArea + '/members', { query: { area: memberArea } }); if (requestSerial === serial && area?.id === memberArea && !identityLost) members = result.items;
   }
   function renderAreas() {
     $('areas').replaceChildren(); for (const item of areas) { const b = button(item.name, () => openArea(item)); b.dataset.area = item.id; $('areas').append(b); }
@@ -316,8 +317,12 @@ export function installOperations(nativeRoot) {
     }), label(item.status), [item.city, item.state, item.due_at ? date(item.due_at) : '', item.amount !== undefined ? '$' + item.amount : ''].filter(Boolean).join(' · ')]));
   }
   async function details(item) {
-    const captured = area.id, body = dialog(item.title); note('Checking current access…', body);
-    const record = await api('/operations/records/' + item.id); if (captured !== area.id || !$('detail').open) return;
+    const captured = area.id, body = dialog(item.title), sequence = detailSequence; note('Checking current access…', body);
+    const current = () => sequence === detailSequence && captured === area?.id && !identityLost && $('detail').open && body.isConnected && $('detail-body').firstElementChild === body;
+    let record;
+    try { record = await api('/operations/records/' + item.id); } catch (error) { if (current()) throw error; return; }
+    if (!current()) return;
+    if (String(record.id) !== String(item.id)) throw new Error('The selected record changed. Close details and open it again.');
     $('detail-title').textContent = record.title;
     body.replaceChildren(); note(label(record.status) + ' · ' + (record.source ? 'Connected source · read only' : 'Teams draft') + ' · Version ' + record.version, body);
     if (record.data.source_url) { const a = el('a', 'Open in Asana'); a.href = record.data.source_url; a.target = '_blank'; a.rel = 'noopener noreferrer'; if (a.href.startsWith('https://app.asana.com/')) body.append(a); }
@@ -328,7 +333,7 @@ export function installOperations(nativeRoot) {
     if (record.assignments) { const assignments = section('Recorded assignments and compensation', body); note(record.identity_notice, assignments); table(['Event', 'Date', 'Hours', 'Payroll', 'Pay week', 'Sheet source'], record.assignments.map(a => [a.title, date(a.starts_on), a.hours ?? 'Unknown', money(a.payroll_cents), a.pay_week ?? '—', a.source_tab + ' · row ' + a.source_row]), assignments); }
     if (record.data.fields?.length) { const fields = section('Structured note candidates', body); note('Review each candidate against its source passage. Approval adds a Teams field; the original notes remain unchanged.', fields); const choices = [];
       table(['Approve', 'Field', 'Candidate', 'Source passage', 'Review'], record.data.fields.map((f, index) => { const input = el('input'); input.type = 'checkbox'; input.setAttribute('aria-label', 'Approve ' + label(f.field) + ': ' + f.value); input.disabled = !area.capabilities?.write || f.review_state === 'approved'; choices.push({ index, input }); return [input, label(f.field), f.value, f.passage, label(f.review_state)]; }), fields);
-      if (area.capabilities?.write) fields.append(button('Approve selected fields', async () => { const selected = choices.filter(c => c.input.checked).map(c => c.index); if (!selected.length) throw new Error('Choose the fields you have reviewed.'); await api('/operations/records/' + record.id + '/review', { method: 'POST', body: { request_id: crypto.randomUUID(), expected_version: record.version, reviewed: true, action: 'fields', field_indices: selected, ...(record.data.fields_revision ? { expected_fields_revision: record.data.fields_revision } : {}) } }); await details(record); }));
+      if (area.capabilities?.write) fields.append(button('Approve selected fields', async () => { const selected = choices.filter(c => c.input.checked).map(c => c.index); if (!selected.length) throw new Error('Choose the fields you have reviewed.'); await api('/operations/records/' + record.id + '/review', { method: 'POST', body: { request_id: crypto.randomUUID(), expected_version: record.version, reviewed: true, action: 'fields', field_indices: selected, ...(record.data.fields_revision ? { expected_fields_revision: record.data.fields_revision } : {}) } }); if (current()) await details(record); }));
     }
     if (record.capabilities.edit) body.append(button('Edit ' + label(record.kind).toLowerCase(), () => { closeDetail(); edit(record); }, 'primary'));
     if (record.kind === 'event') body.append(button('Weather at this event', async () => { const result = await api('/events/' + record.id + '/weather'); const weather = section('Weather', body); note(result.notice || result.status || result.source || 'Weather result', weather); if (result.daily) table(['Date', 'High', 'Low', 'Precipitation'], result.daily.time.map((d, i) => [date(d), result.daily.temperature_2m_max?.[i], result.daily.temperature_2m_min?.[i], result.daily.precipitation_sum?.[i]]), weather); }));

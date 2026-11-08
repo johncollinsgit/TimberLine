@@ -79,3 +79,14 @@ area exists; explicit task/project views retain task semantics. Event schedule
 evidence, source freshness and incomplete coverage remain distinct from Asana
 task due dates. Browser acceptance and protected release are required before
 claiming this candidate live.
+
+### Main-tab request coverage
+
+A private authenticated browser trace records five initial Teams GETs (areas,
+native work data, preferences, the current event window and area members). Each
+settled Board/List/Calendar change currently repeats three sequential GETs: native
+work data, the selected event date window and area members. This is a known
+performance limit, not a claim of complete production latency coverage. Obsolete
+area-load continuations skip their members read; in-flight source reads remain
+subject to existing authorization and response-generation checks. No broad cache
+or source-access relaxation is included.
