@@ -73,7 +73,13 @@ class WebsiteQuoteOrderService
             abort_if(! empty($invoice['issued_at']) || ! empty($invoice['accepted_at']) || $order->order_status !== 'draft', 409, 'Issued quotes and invoices are frozen. Create a new draft for new terms.');
             $this->assertNoFinancialActivity($order);
             abort_unless(($data['workflow'] === 'quote' ? 'staff_quote' : 'staff_draft_invoice') === $order->source, 422, 'Keep the original quote or invoice workflow.');
+            abort_if(data_get($order->service_request, 'freight.booking'), 409, 'Resolve the original freight booking before revising this draft. Its shipment and cost evidence must be retained.');
             $this->event($order, 'invoice_version_replaced', 'The previous draft version was retained before revision.', $actor, ['version' => $version, 'snapshot' => $this->snapshot($order)]);
+            if (data_get($order->service_request, 'freight')) {
+                $request = (array) $order->service_request;
+                $request['freight'] = ['version' => (int) data_get($request, 'freight.version', 0) + 1, 'specification' => null, 'quotes' => [], 'approved' => null];
+                $order->service_request = $request;
+            }
             $this->applyPricing($order, $site, $data, $version + 1, $actor, $invoice['create_request_hash'] ?? null);
             $this->event($order, 'invoice_draft_revised', 'The priced draft was revised.', $actor, ['version' => $version + 1]);
 
@@ -195,7 +201,7 @@ class WebsiteQuoteOrderService
         $order->forceFill([
             'website_customer_id' => $customer->id, 'customer_snapshot' => ['name' => trim($data['customer_name']), 'email' => strtolower(trim($data['customer_email'])), 'phone' => trim((string) ($data['customer_phone'] ?? ''))],
             'fulfillment_method' => $data['fulfillment_method'], 'subtotal_cents' => $subtotal, 'discount_cents' => $discount['amount_cents'], 'tax_cents' => (int) $data['tax_cents'], 'shipping_cents' => (int) $data['shipping_cents'], 'total_cents' => $total,
-            'service_request' => ['staff_note' => trim((string) ($data['note'] ?? '')), 'invoice' => ['version' => $version, 'create_request_hash' => $requestHash, 'accepted_at' => null, 'issued_at' => null, 'deposit_cents' => $deposit, 'deposit_type' => $data['deposit_type'], 'deposit_value' => $data['deposit_value'] ?? null, 'inventory_committed' => false, 'manual_tax_confirmed' => (bool) $data['manual_tax_confirmed'], 'tax_basis' => trim((string) ($data['tax_basis'] ?? '')), 'delivery_confirmed' => (bool) $data['delivery_confirmed'], 'delivery_details' => trim((string) ($data['delivery_details'] ?? '')), 'discount' => $discount['snapshot'], 'quote_request_id' => $request?->id, 'prepared_by' => $actor->id]],
+            'service_request' => [...(array) $order->service_request, 'staff_note' => trim((string) ($data['note'] ?? '')), 'invoice' => ['version' => $version, 'create_request_hash' => $requestHash, 'accepted_at' => null, 'issued_at' => null, 'deposit_cents' => $deposit, 'deposit_type' => $data['deposit_type'], 'deposit_value' => $data['deposit_value'] ?? null, 'inventory_committed' => false, 'manual_tax_confirmed' => (bool) $data['manual_tax_confirmed'], 'tax_basis' => trim((string) ($data['tax_basis'] ?? '')), 'delivery_confirmed' => (bool) $data['delivery_confirmed'], 'delivery_details' => trim((string) ($data['delivery_details'] ?? '')), 'discount' => $discount['snapshot'], 'quote_request_id' => $request?->id, 'prepared_by' => $actor->id]],
         ])->save();
         $order->lines()->delete();
         foreach ($lines as $line) {

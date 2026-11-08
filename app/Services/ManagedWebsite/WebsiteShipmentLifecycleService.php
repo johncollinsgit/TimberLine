@@ -34,10 +34,10 @@ class WebsiteShipmentLifecycleService
 
                 return $shipment;
             }
-            abort_unless(app(WebsiteCommerceShippingService::class)->enabledFor(Tenant::query()->findOrFail($order->tenant_id)), 423, 'New native shipping is paused.');
+            abort_unless(app(WebsiteCommerceShippingService::class)->rolloutEnabledFor(Tenant::query()->findOrFail($order->tenant_id)), 423, 'New native shipping is paused.');
             $plans = app(WebsiteShippingPlanService::class);
             $plans->assertOrderQuote($order, $quote);
-            $connection = $plans->connection($order->tenant_id);
+            $connection = $plans->orderConnection($order);
             abort_unless(filled($connection->external_account_secret), 423, 'Configure this carrier account\'s signed webhook before buying postage.');
             $fulfillment = WebsiteFulfillment::query()->create(['tenant_id' => $order->tenant_id, 'website_order_id' => $order->id,
                 'status' => 'pending', 'method' => 'ship', 'fulfilled_by_user_id' => $actor->id, 'note' => 'Native parcel preparation. Label purchase does not confirm handoff.']);
@@ -84,8 +84,9 @@ class WebsiteShipmentLifecycleService
             if (data_get($shipment->parcel, '_native.buy_state') !== 'prepared' || data_get($shipment->parcel, '_native.retired')) {
                 return false;
             }
-            abort_unless(app(WebsiteCommerceShippingService::class)->enabledFor(Tenant::query()->findOrFail($order->tenant_id))
-                && app(WebsiteEasyPostService::class)->connection($shipment)->isConnected(), 423, 'New postage is paused for this carrier account.');
+            abort_unless(app(WebsiteCommerceShippingService::class)->rolloutEnabledFor(Tenant::query()->findOrFail($order->tenant_id))
+                && app(WebsiteEasyPostService::class)->connection($shipment)->isConnected()
+                && filled(app(WebsiteEasyPostService::class)->connection($shipment)->external_account_secret), 423, 'New postage is paused for this carrier account.');
             $this->assertReplacementOrigin($shipment);
             $this->metadata($shipment, ['buy_state' => 'purchasing', 'buy_started_at' => now()->toIso8601String()]);
             $shipment->update(['status' => 'purchasing']);
@@ -285,7 +286,8 @@ class WebsiteShipmentLifecycleService
         $send = $this->locked($shipment, function ($order, $shipment) use ($actor): bool {
             abort_unless(data_get($shipment->parcel, '_native.buy_state') === 'purchased', 422, 'Resolve the postage purchase first.');
             abort_if(data_get($shipment->parcel, '_native.handed_over_at') || data_get($shipment->parcel, '_native.carrier_accepted_at'), 422, 'This parcel has already been handed over or accepted.');
-            abort_if($shipment->purchased_at?->lt(now()->subDays(30)), 422, 'This USPS label needs provider review outside the refund window.');
+            $refundDays = in_array($shipment->carrier, ['UPS', 'FedEx'], true) ? 90 : 30;
+            abort_if($shipment->purchased_at?->lt(now()->subDays($refundDays)), 422, 'This carrier label needs provider review outside the refund window.');
             if (data_get($shipment->parcel, '_native.refund_state')) {
                 return false;
             }
@@ -318,7 +320,7 @@ class WebsiteShipmentLifecycleService
         $original = $this->reconcile($original);
         $replacement = $this->locked($original, function ($order, $original) use ($actor): WebsiteShipment {
             app(WebsitePaymentService::class)->assertFulfillable($order);
-            abort_unless(app(WebsiteCommerceShippingService::class)->enabledFor(Tenant::query()->findOrFail($order->tenant_id)), 423, 'New postage is paused.');
+            abort_unless(app(WebsiteCommerceShippingService::class)->rolloutEnabledFor(Tenant::query()->findOrFail($order->tenant_id)), 423, 'New postage is paused.');
             abort_unless(data_get($original->parcel, '_native.retired') && data_get($original->parcel, '_native.refund_state'), 422, 'Request the unused original label refund first.');
             abort_if(data_get($original->parcel, '_native.handed_over_at') || data_get($original->parcel, '_native.carrier_accepted_at'), 422, 'An accepted parcel cannot be replaced here.');
             if ($id = data_get($original->parcel, '_native.replacement_id')) {
@@ -405,7 +407,7 @@ class WebsiteShipmentLifecycleService
         $this->checkReplacementOrigin($shipment);
         $shipment = $this->locked($shipment, function ($order, $shipment) use ($rateId, $costCents, $actor): WebsiteShipment {
             app(WebsitePaymentService::class)->assertFulfillable($order);
-            abort_unless(app(WebsiteCommerceShippingService::class)->enabledFor(Tenant::query()->findOrFail($order->tenant_id)), 423, 'New postage is paused.');
+            abort_unless(app(WebsiteCommerceShippingService::class)->rolloutEnabledFor(Tenant::query()->findOrFail($order->tenant_id)), 423, 'New postage is paused.');
             abort_unless(data_get($shipment->parcel, '_native.replaces_id') && ! data_get($shipment->parcel, '_native.retired'), 422);
             $this->assertReplacementOrigin($shipment);
             $state = data_get($shipment->parcel, '_native.buy_state');

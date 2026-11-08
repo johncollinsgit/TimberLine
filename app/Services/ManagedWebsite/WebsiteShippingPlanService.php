@@ -43,16 +43,29 @@ class WebsiteShippingPlanService
             throw ValidationException::withMessages([$field => 'Enter a complete address in a US state or the District of Columbia.']);
         }
 
-        return array_filter($result, fn ($value) => $value !== '');
+        $result = array_filter($result, fn ($value) => $value !== '');
+        if (array_key_exists('residential', $address) && $address['residential'] !== null) {
+            if (! in_array($address['residential'], [true, false, 1, 0, '1', '0'], true)) {
+                throw ValidationException::withMessages([$field => 'Choose a residential or business delivery address.']);
+            }
+            $result['residential'] = (bool) $address['residential'];
+        }
+
+        return $result;
     }
 
     public function addressFingerprint(array $address): string
     {
-        return $this->fingerprint(array_map('strtolower', $this->address($address)));
+        $address = $this->address($address);
+        // Provider classification may be filled in on retrieval. The customer’s
+        // explicit classification is separately bound to the cart quote context.
+        unset($address['residential']);
+
+        return $this->fingerprint(array_map('strtolower', $address));
     }
 
     /** @return array{parcel:array,context:array,origin:array,connection:IntegrationConnection} */
-    public function build(WebsiteCart $cart, array $destination): array
+    public function build(WebsiteCart $cart, array $destination, ?int $packageId = null): array
     {
         $destination = $this->address($destination);
         abort_unless($cart->status === 'active', 422, 'This cart is no longer active.');
@@ -93,6 +106,9 @@ class WebsiteShippingPlanService
         $packages = WebsiteShippingPackage::query()->forTenantId($cart->tenant_id)->where('tenant_site_id', $site->id)
             ->where('active', true)->orderByDesc('is_default')->orderByRaw('length_inches * width_inches * height_inches')->orderBy('id')->get();
         foreach ($packages as $package) {
+            if ($packageId !== null && $package->id !== $packageId) {
+                continue;
+            }
             $rule = (array) data_get($policy, 'packages.'.$package->id, []);
             $parcel = $this->pack($physical, $package, $rule);
             if ($parcel === null) {
@@ -107,12 +123,41 @@ class WebsiteShippingPlanService
                 'mode' => $policy['mode'], 'services' => array_values($policy['services']), 'currency' => 'usd',
                 'free_shipping_threshold_cents' => (int) data_get($site->publishedSiteVersion?->settings, 'free_shipping_threshold_cents', 0),
                 'customer_policy' => app(WebsiteShippingPolicyService::class)->forSite($site),
+                'package_selection' => $policy['package_selection'] ?? 'preferred',
             ];
+            if (array_key_exists('residential', $destination)) {
+                $context['destination_residential'] = $destination['residential'];
+            }
             $context['fingerprint'] = $this->fingerprint($context);
 
             return ['parcel' => $parcel, 'context' => $context, 'origin' => $originAddress, 'connection' => $connection];
         }
         throw ValidationException::withMessages(['cart' => 'This cart does not fit a reviewed package. Choose another delivery option or contact the store for shipping.']);
+    }
+
+    /** Limit quote requests while comparing only packages that actually fit. */
+    public function candidates(WebsiteCart $cart, array $destination): array
+    {
+        $first = $this->build($cart, $destination);
+        if ($first['context']['package_selection'] !== 'lowest_cost') {
+            return [$first];
+        }
+        $plans = [$first];
+        $packages = WebsiteShippingPackage::query()->forTenantId($cart->tenant_id)->where('tenant_site_id', $cart->tenant_site_id)
+            ->where('active', true)->whereKeyNot($first['context']['package_id'])
+            ->orderByRaw('length_inches * width_inches * height_inches')->orderBy('id')->limit(20)->get();
+        foreach ($packages as $package) {
+            try {
+                $plans[] = $this->build($cart, $destination, $package->id);
+            } catch (ValidationException) {
+                // A non-fitting preset is not a candidate; never guess its fit.
+            }
+            if (count($plans) === 3) {
+                break;
+            }
+        }
+
+        return $plans;
     }
 
     /** A conservative vertical stack, or merchant-tested capacity for an approved product mix. */
@@ -171,7 +216,8 @@ class WebsiteShippingPlanService
         if (! $quote->expires_at || $quote->expires_at->lte(now())) {
             throw ValidationException::withMessages(['shipping_rate_quote_id' => 'This shipping option expired. Request new shipping options before paying.']);
         }
-        $current = $this->build($cart, $destination);
+        $current = $this->build($cart, $destination, data_get($quote->parcel, '_shipping_plan.package_selection') === 'lowest_cost'
+            ? (int) data_get($quote->parcel, '_shipping_plan.package_id') : null);
         if (! ($quote->provider === 'easypost' && $quote->currency === 'usd'
             && hash_equals($current['context']['fingerprint'], (string) data_get($quote->parcel, '_shipping_plan.fingerprint', ''))
             && $this->addressFingerprint($quote->destination) === $this->addressFingerprint($destination))) {
@@ -214,7 +260,7 @@ class WebsiteShippingPlanService
         $order->assertNotPosSimulation();
         $snapshot = $order->shipping_rate_snapshot ?? [];
         $expected = $this->orderSnapshot($quote, $order->shipping_cents);
-        $connection = $this->connection($order->tenant_id);
+        $connection = $this->orderConnection($order);
         $context = (array) ($snapshot['plan'] ?? []);
         $fingerprint = (string) ($context['fingerprint'] ?? '');
         unset($context['fingerprint']);
@@ -231,6 +277,18 @@ class WebsiteShippingPlanService
     public function parcel(WebsiteShippingRateQuote $quote): array
     {
         return Arr::only($quote->parcel, ['length', 'width', 'height', 'weight']);
+    }
+
+    /** Paid orders retain the accepted account; rotation only affects new quotes. */
+    public function orderConnection(WebsiteOrder $order): IntegrationConnection
+    {
+        $connection = IntegrationConnection::query()->forTenantId($order->tenant_id)->where('provider', 'easypost')
+            ->find(data_get($order->shipping_rate_snapshot, 'plan.connection_id'));
+        abort_unless($connection && $connection->isConnected() && filled($connection->access_token)
+            && hash_equals((string) data_get($order->shipping_rate_snapshot, 'plan.account_fingerprint', ''), $this->accountFingerprint($connection)),
+            423, 'Restore the original carrier credential set for this order. A newer account cannot purchase its postage.');
+
+        return $connection;
     }
 
     public function accountFingerprint(IntegrationConnection $connection): string

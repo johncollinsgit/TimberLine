@@ -28,10 +28,15 @@ class WebsiteCommerceShippingService
     {
         $connection = $this->connectionFor($tenant);
 
+        return $this->rolloutEnabledFor($tenant)
+            && $connection?->isConnected() && filled($connection->access_token) && filled($connection->external_account_secret);
+    }
+
+    public function rolloutEnabledFor(Tenant $tenant): bool
+    {
         return $this->commerce->enabledFor($tenant)
             && (bool) config('managed_website.commerce_shipping_enabled', false)
-            && in_array((int) $tenant->id, (array) config('managed_website.commerce_shipping_tenant_ids', []), true)
-            && $connection?->isConnected() && filled($connection->access_token) && filled($connection->external_account_secret);
+            && in_array((int) $tenant->id, (array) config('managed_website.commerce_shipping_tenant_ids', []), true);
     }
 
     /** @param array<string,mixed> $destination @return array<int,WebsiteShippingRateQuote> */
@@ -42,10 +47,22 @@ class WebsiteCommerceShippingService
         app(WebsiteShippingReadinessService::class)->assertCartCanShip($cart);
         $plans = app(WebsiteShippingPlanService::class);
         $destination = $plans->address($destination);
-        $plan = $plans->build($cart, $destination);
+        $quotes = [];
+        foreach ($plans->candidates($cart, $destination) as $plan) {
+            $quotes = array_merge($quotes, $this->quotePlan($cart, $tenant, $destination, $plans, $plan));
+        }
+        usort($quotes, fn ($a, $b) => [$a->amount_cents, $a->delivery_days ?? PHP_INT_MAX, $a->id]
+            <=> [$b->amount_cents, $b->delivery_days ?? PHP_INT_MAX, $b->id]);
+        abort_if($quotes === [], 422, 'No approved domestic shipping rate is available. Check the address or contact the store for delivery help.');
+
+        return $quotes;
+    }
+
+    private function quotePlan(WebsiteCart $cart, Tenant $tenant, array $destination, WebsiteShippingPlanService $plans, array $plan): array
+    {
         $declaredMode = data_get($plan['connection']->metadata, 'native_shipping.mode');
         abort_unless($declaredMode === null || $declaredMode === $plan['context']['mode'], 423, 'The saved carrier account mode does not match the reviewed shipping policy.');
-        $response = $this->client($tenant)->post('/shipments', ['shipment' => [
+        $response = $this->client($plan['connection'])->post('/shipments', ['shipment' => [
             'from_address' => $plan['origin'],
             'to_address' => $destination,
             'parcel' => $plan['parcel'],
@@ -58,7 +75,7 @@ class WebsiteCommerceShippingService
         return DB::transaction(function () use ($cart, $tenant, $destination, $plans, $plan, $shipment): array {
             \App\Models\TenantSite::query()->forTenant($tenant)->whereKey($cart->tenant_site_id)->lockForUpdate()->firstOrFail();
             $cart = WebsiteCart::query()->forTenant($tenant)->lockForUpdate()->findOrFail($cart->id);
-            $current = $plans->build($cart, $destination);
+            $current = $plans->build($cart, $destination, $plan['context']['package_id']);
             abort_unless(hash_equals($plan['context']['fingerprint'], $current['context']['fingerprint']), 422, 'Your shipping details changed. Request shipping options again.');
             $quotes = [];
             foreach ((array) ($shipment['rates'] ?? []) as $rate) {
@@ -88,12 +105,14 @@ class WebsiteCommerceShippingService
                     'expires_at' => now()->addMinutes(20),
                 ]);
             }
-            abort_if($quotes === [], 422, 'No approved domestic shipping rate is available for this address.');
-            $connection = IntegrationConnection::query()->forTenant($tenant)->where('provider', 'easypost')->lockForUpdate()->findOrFail($plan['connection']->id);
-            $metadata = $connection->metadata ?? [];
-            $metadata['native_shipping']['verified_at'] = now()->toIso8601String();
-            $metadata['native_shipping']['verified_mode'] = $plan['context']['mode'];
-            $connection->update(['metadata' => $metadata]);
+
+            if ($quotes !== []) {
+                $connection = IntegrationConnection::query()->forTenant($tenant)->where('provider', 'easypost')->lockForUpdate()->findOrFail($plan['connection']->id);
+                $metadata = $connection->metadata ?? [];
+                $metadata['native_shipping']['verified_at'] = now()->toIso8601String();
+                $metadata['native_shipping']['verified_mode'] = $plan['context']['mode'];
+                $connection->update(['metadata' => $metadata]);
+            }
 
             return $quotes;
         });
@@ -128,9 +147,8 @@ class WebsiteCommerceShippingService
         return IntegrationConnection::query()->forTenant($tenant)->where('provider', 'easypost')->where('status', IntegrationConnection::STATUS_CONNECTED)->latest('id')->first();
     }
 
-    private function client(Tenant $tenant): PendingRequest
+    private function client(IntegrationConnection $connection): PendingRequest
     {
-        $connection = $this->connectionFor($tenant);
         $key = trim((string) $connection?->access_token);
         abort_unless($key !== '', 423, 'Connect a tenant-owned EasyPost account before using shipping.');
 

@@ -260,7 +260,7 @@ class WebsiteCommerceController extends Controller
             'shippingInstructions' => app(\App\Services\ManagedWebsite\WebsiteShippingInstructionsService::class)->forOrder($order),
             'canManageOrders' => $commerce->enabledFor($tenant), 'canServicePayments' => $nativePayments->isNotEmpty() || $walletPayment !== null,
             'canManageShipping' => app(WebsiteShippingAccessService::class)->canManage($tenant, $request->user()),
-            'shippingEnabled' => app(WebsiteCommerceShippingService::class)->enabledFor($tenant),
+            'shippingEnabled' => app(WebsiteCommerceShippingService::class)->rolloutEnabledFor($tenant),
         ]);
     }
 
@@ -431,13 +431,17 @@ class WebsiteCommerceController extends Controller
         $shippingEnabled = $shipping->enabledFor($tenant);
         $locations = WebsiteFulfillmentLocation::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->latest('is_default')->get();
         $packages = WebsiteShippingPackage::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->latest('is_default')->get();
+        $request->validate(['package' => ['nullable', 'integer', 'min:1'], 'location' => ['nullable', 'integer', 'min:1']]);
+        $editingPackage = $request->filled('package') ? $packages->firstWhere('id', (int) $request->query('package')) : null;
+        $editingLocation = $request->filled('location') ? $locations->firstWhere('id', (int) $request->query('location')) : null;
+        abort_if(($request->filled('package') && ! $editingPackage) || ($request->filled('location') && ! $editingLocation), 404);
 
         app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->assertEditor($site, $request->user());
         $variants = WebsiteProductVariant::query()->forTenant($tenant)->where('is_available', true)->whereHas('product', fn ($query) => $query->where('tenant_site_id', $site->id)->where('product_type', 'physical')->where('status', '!=', 'archived'))->with('product')->orderBy('website_product_id')->get();
         $canManageShipping = app(WebsiteShippingAccessService::class)->canManage($tenant, $request->user());
         $shippingHealth = $canManageShipping ? app(\App\Services\ManagedWebsite\WebsiteShippingHealthService::class)->forSite($site) : null;
 
-        return view('managed-website.commerce.shipping', compact('tenant', 'site', 'locations', 'packages', 'variants', 'shippingEnabled', 'canManageShipping', 'shippingHealth'));
+        return view('managed-website.commerce.shipping', compact('tenant', 'site', 'locations', 'packages', 'variants', 'shippingEnabled', 'canManageShipping', 'shippingHealth', 'editingPackage', 'editingLocation'));
     }
 
     public function saveFulfillmentLocation(Request $request): RedirectResponse
@@ -448,22 +452,30 @@ class WebsiteCommerceController extends Controller
         return back()->with('status', 'Pickup / ship-from location saved.');
     }
 
-    public function saveShippingPackage(Request $request, WebsiteCommerceShippingService $shipping): RedirectResponse
+    public function saveShippingPackage(Request $request): RedirectResponse
     {
         $tenant = $this->tenant($request);
-        abort_unless($shipping->enabledFor($tenant), 423, 'Native shipping is not enabled for this workspace.');
+        app(WebsiteShippingAccessService::class)->assertCanManage($tenant, $request->user());
         app(WebsiteShippingSetupService::class)->savePackage($this->site($tenant), $request->all(), $request->user());
 
         return back()->with('status', 'Package preset saved.');
     }
 
-    public function saveShippingPolicy(Request $request, WebsiteCommerceShippingService $shipping): RedirectResponse
+    public function saveShippingPolicy(Request $request): RedirectResponse
     {
         $tenant = $this->tenant($request);
-        abort_unless($shipping->enabledFor($tenant), 423, 'Native shipping is not enabled for this workspace.');
+        app(WebsiteShippingAccessService::class)->assertCanManage($tenant, $request->user());
         app(WebsiteShippingSetupService::class)->savePolicy($this->site($tenant), $request->all(), $request->user());
 
         return back()->with('status', 'Shipping services and mode saved.');
+    }
+
+    public function shippingPresetStatus(Request $request, string $kind, int $preset): RedirectResponse
+    {
+        $data = $request->validate(['active' => ['required', 'boolean']]);
+        app(WebsiteShippingSetupService::class)->setActive($this->site($this->tenant($request)), $kind, $preset, (bool) $data['active'], $request->user());
+
+        return back()->with('status', 'Shipping preset updated. Existing order and shipment evidence is retained.');
     }
 
     public function imports(Request $request, CommerceImportService $imports): View
@@ -591,7 +603,7 @@ class WebsiteCommerceController extends Controller
             'payment_provider' => ['nullable', 'in:stripe,shop_pay'],
             'name' => ['required', 'string', 'max:190'], 'email' => ['required', 'email:rfc,dns', 'max:190'], 'phone' => ['nullable', 'string', 'max:80'],
             'fulfillment_method' => ['required', 'in:ship,pickup,local_delivery'], 'shipping_rate_quote_id' => ['nullable', 'integer', 'required_if:fulfillment_method,ship'],
-            'shipping_address' => ['nullable', 'array', 'required_if:fulfillment_method,ship,local_delivery'], 'shipping_address.name' => ['nullable', 'string', 'max:190'], 'shipping_address.street1' => ['nullable', 'string', 'max:190'], 'shipping_address.street2' => ['nullable', 'string', 'max:190'], 'shipping_address.city' => ['nullable', 'string', 'max:120'], 'shipping_address.state' => ['nullable', 'string', 'size:2'], 'shipping_address.zip' => ['nullable', 'string', 'max:10'], 'shipping_address.country' => ['nullable', 'string', 'size:2'],
+            'shipping_address' => ['nullable', 'array', 'required_if:fulfillment_method,ship,local_delivery'], 'shipping_address.name' => ['nullable', 'string', 'max:190'], 'shipping_address.street1' => ['nullable', 'string', 'max:190'], 'shipping_address.street2' => ['nullable', 'string', 'max:190'], 'shipping_address.city' => ['nullable', 'string', 'max:120'], 'shipping_address.state' => ['nullable', 'string', 'size:2'], 'shipping_address.zip' => ['nullable', 'string', 'max:10'], 'shipping_address.country' => ['nullable', 'string', 'size:2'], 'shipping_address.residential' => ['sometimes', 'boolean'],
             'preferred_at' => ['nullable', 'string', 'max:80'], 'notes' => ['nullable', 'string', 'max:2000'],
         ]);
         $result = app(\App\Services\ManagedWebsite\WebsiteCheckoutService::class)->begin($cart, $data + ['first_name' => Str::before($data['name'], ' '), 'last_name' => Str::after($data['name'], ' ')], route('managed-website.store.success'), route('managed-website.store.cart'), $data['payment_provider'] ?? 'stripe');
@@ -666,7 +678,7 @@ class WebsiteCommerceController extends Controller
         [$tenant, $site] = $this->publicSite($request, $websites);
         $this->requireCommerce($tenant, $commerce);
         $cart = $commerce->cartFor($site, $request->session()->get($this->cartSessionKey($site)));
-        $data = $request->validate(['shipping_address' => ['required', 'array'], 'shipping_address.name' => ['required', 'string', 'max:190'], 'shipping_address.street1' => ['required', 'string', 'max:190'], 'shipping_address.street2' => ['nullable', 'string', 'max:190'], 'shipping_address.city' => ['required', 'string', 'max:120'], 'shipping_address.state' => ['required', 'string', 'size:2'], 'shipping_address.zip' => ['required', 'string', 'max:10'], 'shipping_address.country' => ['required', 'string', 'size:2']]);
+        $data = $request->validate(['shipping_address' => ['required', 'array'], 'shipping_address.name' => ['required', 'string', 'max:190'], 'shipping_address.street1' => ['required', 'string', 'max:190'], 'shipping_address.street2' => ['nullable', 'string', 'max:190'], 'shipping_address.city' => ['required', 'string', 'max:120'], 'shipping_address.state' => ['required', 'string', 'size:2'], 'shipping_address.zip' => ['required', 'string', 'max:10'], 'shipping_address.country' => ['required', 'string', 'size:2'], 'shipping_address.residential' => ['sometimes', 'boolean']]);
         $quotes = $shipping->quote($cart, $data['shipping_address']);
 
         return response()->json(['quotes' => collect($quotes)->map(fn (WebsiteShippingRateQuote $quote) => ['id' => $quote->id, 'carrier' => $quote->carrier, 'service' => $quote->service, 'amount_cents' => app(\App\Services\ManagedWebsite\WebsiteShippingPolicyService::class)->quoteCharge($quote), 'currency' => $quote->currency, 'delivery_days' => $quote->delivery_days, 'expires_at' => $quote->expires_at->toIso8601String(), 'mode' => data_get($quote->parcel, '_shipping_plan.mode')])->values()]);

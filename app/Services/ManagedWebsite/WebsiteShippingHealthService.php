@@ -28,7 +28,7 @@ class WebsiteShippingHealthService
         $mode = $policy['mode'] ?? '';
         $rows[] = ['label' => 'Carrier mode and services', 'ready' => in_array($mode, ['test', 'production'], true) && ! empty($policy['services'])
             && (! data_get($connection?->metadata, 'native_shipping.mode') || data_get($connection?->metadata, 'native_shipping.mode') === $mode),
-            'detail' => in_array($mode, ['test', 'production'], true) ? str($mode)->headline().' mode. The credential set, approved services, rates, and payments must agree.' : 'Review account mode and approved USPS services.'];
+            'detail' => in_array($mode, ['test', 'production'], true) ? str($mode)->headline().' mode. The credential set, approved services, rates, and payments must agree.' : 'Review account mode and approved carrier services.'];
         $originReady = false;
         $location = WebsiteFulfillmentLocation::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('active', true)->orderByDesc('is_default')->orderBy('id')->first();
         if ($location) {

@@ -135,6 +135,9 @@ jobs:
           node tests/e2e/team-browser-toolbar.browser.mjs
           node tests/e2e/team-assistant.browser.mjs
 
+      - name: Verify native shipping desktop and mobile recovery
+        run: node --test tests/e2e/website-shipping.test.mjs
+
       - name: Retain Teams browser failure evidence
         if: failure()
         uses: actions/upload-artifact@v4

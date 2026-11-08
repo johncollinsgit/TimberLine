@@ -4077,3 +4077,18 @@ the tenant-bound setup link. Selected Teams events and Asana notes are explicitl
 outside current AI context. No spending approval, credit purchase or provider
 activation is implied. See the Ask section in
 `docs/operations/teams-studio-foundation.md` for guards and focused acceptance.
+
+
+## Retail shipping completion candidate (2026-11-08)
+
+Native shipping setup now saves while rollout is paused, guides tenant readiness,
+maintains scoped reusable presets, supports approved USPS/UPS/FedEx services,
+and optionally compares up to three measured packages by postage. Paid orders
+retain the original account even before the first label. Shared checkout controls
+show transit estimates and recover expired rates. Native physical orders have
+a private, versioned manual freight quote/booking/invoice evidence workspace;
+it does not book trucks or imply authenticated tracking. The read-only
+`website:audit-shipping` command exports redacted readiness and cohort costs.
+No production gates, credentials or schema are changed. See
+`docs/operations/retail-shipping-finish.md` for source tests, commercial gaps,
+Carolina Barrel observations, deployment requirements and physical acceptance.
