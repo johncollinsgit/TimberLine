@@ -239,7 +239,8 @@ class WebsiteFreightProviderService
     {
         $plan = $this->locked($order, $actor, function (WebsiteOrder $locked, array $plan) use ($version): array {
             abort_unless(($plan['version'] ?? 0) === $version && data_get($plan, 'api_attempt.state') === 'booked', 409, 'Check the original freight booking before requesting cancellation.');
-            abort_if(! empty($plan['handoff']) || in_array(data_get($plan, 'api_attempt.provider_status'), ['in_transit', 'delivered'], true),
+            abort_if(! empty($plan['handoff']) || in_array(data_get($plan, 'api_attempt.provider_status'), ['in_transit', 'delivered'], true)
+                || in_array(data_get($plan, 'api_attempt.tracking.status'), ['in_transit', 'out_for_delivery', 'at_delivery', 'delivered'], true),
                 422, 'The freight has been handed off or is in transit. Review changes directly with the original provider.');
             $this->connection($locked, $plan['api_attempt']['connection_id'], $plan['api_attempt']['account_fingerprint']);
             $plan['api_attempt']['state'] = 'cancelling';

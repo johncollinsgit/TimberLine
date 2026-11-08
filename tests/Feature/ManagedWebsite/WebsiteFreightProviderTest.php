@@ -58,6 +58,7 @@ beforeEach(function (): void {
         'bol_number' => 'BOL-FIXTURE', 'pro_number' => null, 'documents' => [
             ['type' => 'BILL_OF_LADING', 'url' => '/v2/downloads/10/abcdef/bill_of_lading.pdf'],
             ['type' => 'PALLET_LABEL', 'url' => 'https://api.shipengine.com/v2/downloads/10/abcdef/pallet_label.pdf']]];
+    $this->trackingStatus = 'booked';
     $this->fakeProvider = function (?Closure $booking = null): void {
         Http::fake(function ($request) use ($booking) {
             if (str_ends_with($request->url(), '/freight/provider_accounts')) {
@@ -70,7 +71,7 @@ beforeEach(function (): void {
                 return $booking ? $booking($request) : Http::response($this->shipment);
             }
             if (str_ends_with($request->url(), '/tracking')) {
-                return Http::response(['freight_shipment_id' => 'se-98765432', 'freight_provider_account_id' => 'se-4821', 'tracking_status' => 'in_transit',
+                return Http::response(['freight_shipment_id' => 'se-98765432', 'freight_provider_account_id' => 'se-4821', 'tracking_status' => $this->trackingStatus,
                     'events' => [['occurred_at' => now()->toIso8601String(), 'status' => 'at_pickup', 'description' => 'Fixture carrier observation']]]);
             }
             if (str_contains($request->url(), '/downloads/')) {
@@ -132,7 +133,7 @@ test('booking saves the original attempt before a single carrier request and rep
     $this->provider->book($this->order, $input, $this->actor);
     expect(data_get(($this->plan)(), 'api_attempt.state'))->toBe('booked')
         ->and(data_get(($this->plan)(), 'booking.bol_reference'))->toBe('BOL-FIXTURE')
-        ->and(data_get(($this->plan)(), 'api_attempt.tracking.status'))->toBe('in_transit')
+        ->and(data_get(($this->plan)(), 'api_attempt.tracking.status'))->toBe('booked')
         ->and($this->order->fresh()->fulfillment_status)->toBe('unfulfilled')->and($this->order->shipments()->count())->toBe(0);
     $bookedPage = $this->actingAs($this->actor)->get(route('managed-website.orders.freight', [$this->order, 'tenant' => $this->tenant->id]))
         ->assertOk()->assertSeeText('Confirm physical carrier handoff')->assertSeeText('Download bill of lading PDF')->assertDontSee($this->key);
@@ -309,6 +310,16 @@ test('cancelled carrier freight and missing pickup evidence cannot be marked han
     expect(fn () => $this->provider->handoff($this->order, ['version' => ($this->plan)()['version'], 'confirmed' => true,
         'evidence_reference' => 'Fixture unverified pickup'], $this->actor))->toThrow(HttpException::class, 'active shipment');
     expect($this->order->fresh()->fulfillment_status)->toBe('unfulfilled')->and($this->order->fulfillments()->count())->toBe(0);
+});
+
+test('fresh authenticated transit evidence prevents cancellation even when stored shipment status lags', function (): void {
+    $this->trackingStatus = 'in_transit';
+    ($this->fakeProvider)();
+    $input = ($this->prepareBooking)();
+    $this->provider->book($this->order, $input, $this->actor);
+    expect(data_get(($this->plan)(), 'api_attempt.provider_status'))->toBe('booked');
+    expect(fn () => $this->provider->cancel($this->order, ($this->plan)()['version'], $this->actor))->toThrow(HttpException::class, 'in transit');
+    expect(Http::recorded(fn ($r) => $r->method() === 'DELETE'))->toHaveCount(0);
 });
 
 test('freight setup verifies provider accounts and never flashes a rejected API key', function (): void {
