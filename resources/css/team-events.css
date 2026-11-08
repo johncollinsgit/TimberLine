@@ -21,19 +21,19 @@
 .tops-calendar-guide summary{min-height:44px;padding:11px 0;font-weight:500;cursor:pointer}
 .tops-calendar-guide p{margin:0 0 12px;line-height:1.6}
 .tops-calendar-scroll-hint{margin:0 0 8px;color:#536b56}
-.tops-event-calendar-scroll{max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain;border:1px solid #cfdaca;border-radius:10px;background:#fbfdf8;scrollbar-color:#a6b69e #edf2e7;scrollbar-width:thin}
+.tops-event-calendar-scroll{max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain;border:1px solid #cfdaca;border-radius:16px;background:#fbfdf8;scrollbar-color:#a6b69e #edf2e7;scrollbar-width:thin;box-shadow:0 4px 18px #1b3d2a0a}
 .tops-event-calendar-scroll:focus-visible{outline:3px solid #315b4a;outline-offset:3px}
 .tops-calendar.tops-event-calendar{width:100%;min-width:calc(var(--calendar-columns)*232px);grid-template-columns:repeat(var(--calendar-columns),minmax(232px,1fr));border:0}
-.tops-calendar.tops-event-calendar.is-month{min-width:1176px;grid-template-columns:repeat(7,minmax(168px,1fr))}
-.tops-event-calendar .tops-weekday{padding:12px;font-size:14px;font-weight:500;color:#4b6452}
-.tops-event-calendar .tops-day{display:flex;flex-direction:column;gap:12px;min-width:0;min-height:310px;padding:16px;border-color:#d6e0d0;background:#fbfdf8}
+.tops-calendar.tops-event-calendar.is-month{min-width:840px;grid-template-columns:repeat(7,minmax(120px,1fr))}
+.tops-event-calendar .tops-weekday{padding:10px;font-size:14px;font-weight:600;color:#4b6452}
+.tops-event-calendar .tops-day{display:flex;flex-direction:column;gap:7px;min-width:0;min-height:160px;padding:10px;border-color:#d6e0d0;background:#fbfdf8}
 .tops-event-calendar .tops-day:last-child{border-right:0}
-.tops-event-calendar.is-month .tops-day{min-height:230px;padding:12px}
+.tops-event-calendar.is-month .tops-day{min-height:135px;padding:8px}
 .tops-event-calendar .tops-blank{background:#f2f6ed}
 .tops-calendar-date{display:block;min-height:24px;margin:0;color:#3f5948;font-size:14px;font-weight:600;line-height:24px;font-variant-numeric:tabular-nums}
-.teams-premium #team-operations .tops-event-calendar .tops-calendar-session{display:flex;flex:1;flex-direction:column;align-items:stretch;gap:8px;width:100%;min-height:244px;margin:0;padding:14px;text-align:left;overflow-wrap:break-word;color:#193f2e;border:1px solid #cbd7c7;border-left:4px solid var(--event-color);border-radius:8px;background:#e9efe4;background:color-mix(in srgb,var(--event-color) 15%,white);box-shadow:none;font:400 14px/1.5 Inter,ui-sans-serif,system-ui,sans-serif}
+.teams-premium #team-operations .tops-event-calendar .tops-calendar-session{display:flex;flex:0 0 auto;flex-direction:column;align-items:stretch;gap:4px;width:100%;min-height:44px;margin:0;padding:9px 10px;text-align:left;overflow-wrap:anywhere;color:#193f2e;border:1px solid #cbd7c7;border-left:4px solid var(--event-color);border-radius:10px;background:#e9efe4;background:color-mix(in srgb,var(--event-color) 15%,white);box-shadow:none;font:400 14px/1.35 Inter,ui-sans-serif,system-ui,sans-serif}
 .teams-premium #team-operations .tops-event-calendar .tops-calendar-session.is-setup{background:#f7faf4;background:color-mix(in srgb,var(--event-color) 6%,white)}
-.tops-calendar-session strong{display:block;margin:0;color:inherit;font-size:16px;font-weight:600;line-height:1.4}
+.tops-calendar-session strong{display:block;margin:0;color:inherit;font-size:14px;font-weight:600;line-height:1.3}
 .tops-calendar-phase{font-size:14px;font-weight:600;line-height:1.4;color:#3b5847}
 .tops-calendar-hours{font-variant-numeric:tabular-nums}
 .tops-calendar-session small,.tops-calendar-session-label,.tops-calendar-status{font-size:14px;font-weight:400;line-height:1.5;color:#476151}
@@ -51,7 +51,7 @@
 .tops-schedule-summary li{margin:12px 0;line-height:1.6;overflow-wrap:anywhere}
 .tops-schedule-summary a{text-decoration:underline;text-underline-offset:3px}
 .tops-schedule-summary ul{padding-left:20px}
-@media(max-width:600px){.tops-event-calendar-controls{grid-template-columns:minmax(0,1fr);gap:12px}.tops-calendar-views{grid-column:auto}.tops-event-calendar .tops-day{padding:14px}.tops-calendar.tops-event-calendar{min-width:calc(var(--calendar-columns)*250px);grid-template-columns:repeat(var(--calendar-columns),minmax(250px,1fr))}.tops-calendar.tops-event-calendar.is-month{min-width:1176px;grid-template-columns:repeat(7,minmax(168px,1fr))}.tops-event-calendar-scroll[data-calendar-mode="1"] .tops-event-calendar{min-width:0;grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){.tops-event-calendar-controls{grid-template-columns:minmax(0,1fr);gap:12px}.tops-calendar-views{grid-column:auto}.tops-event-calendar .tops-day{padding:10px}.tops-calendar.tops-event-calendar{min-width:calc(var(--calendar-columns)*220px);grid-template-columns:repeat(var(--calendar-columns),minmax(220px,1fr))}.tops-calendar.tops-event-calendar.is-month{min-width:840px;grid-template-columns:repeat(7,minmax(120px,1fr))}.tops-event-calendar-scroll[data-calendar-mode="1"] .tops-event-calendar{min-width:0;grid-template-columns:minmax(0,1fr)}}
 @media(max-width:359px){.tops-calendar-filters{grid-template-columns:minmax(0,1fr)}}
 .teams-premium #team-operations .tops-event-calendar-controls :is(button,input,select):focus-visible,.tops-calendar-guide summary:focus-visible,.tops-calendar-record-open:focus-visible{outline:3px solid #315b4a;outline-offset:3px}
 
@@ -60,5 +60,5 @@
 @media(max-width:1000px){.tops-event-calendar-controls{grid-template-columns:minmax(0,1fr)}}
 @media(forced-colors:active){.teams-premium #team-operations .tops-calendar-views button[aria-pressed=true]{outline:2px solid Highlight;outline-offset:-4px}.tops-calendar-person:before{background:CanvasText}}
 @media(min-width:1001px){.tops-calendar-views{width:100%;max-width:460px}}
-.teams-premium #team-operations .tops-event-calendar .tops-calendar-session.is-source-due{background:#f5f7f4;color:#45564a;border:1px dashed #84927e;border-left:3px dashed #84927e;box-shadow:none}
-.teams-premium #team-operations .tops-event-calendar .tops-calendar-session.is-source-due:hover{background:#edf1e9}
+.teams-premium #team-operations .tops-event-calendar .tops-calendar-session:is(.is-source-due,.is-range-anchor){background:#f5f7f4;color:#45564a;border:1px dashed #84927e;border-left:3px dashed #84927e;box-shadow:none}
+.teams-premium #team-operations .tops-event-calendar .tops-calendar-session:is(.is-source-due,.is-range-anchor):hover{background:#edf1e9}

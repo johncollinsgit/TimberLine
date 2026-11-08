@@ -53,3 +53,11 @@ Production's normal frontend build generates the manifest and hashed assets;
 schema, permission, provider, financial or activation change is required by the
 toolbar styling itself. Calendar retrieval behavior is separately covered by its
 server/window and authenticated browser tests.
+
+The event calendar uses compact rounded day cells and event cards while keeping
+44px interactive targets. A legacy range with no dated sessions is represented by
+one dashed, explicitly unconfirmed marker at the recorded range start. An Asana
+due date remains a separately labelled task anchor when it differs from that
+start; identical anchors are deduplicated. Neither marker paints intervening dates
+or confirms a selling, setup, travel or teardown day. Source coverage and
+continuations remain explicit.

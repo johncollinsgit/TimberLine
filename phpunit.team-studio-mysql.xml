@@ -12,6 +12,7 @@
             <file>tests/Feature/Team/TeamNativeScheduleReviewTest.php</file>
             <file>tests/Feature/Team/TeamEventTasksTest.php</file>
             <file>tests/Feature/Team/TeamEventScheduleTest.php</file>
+            <file>tests/Feature/Team/TeamEventNoteFieldsTest.php</file>
             <file>tests/Feature/Team/TeamEventCalendarWindowTest.php</file>
             <file>tests/Feature/Team/TeamEventDatedCalendarFinancialWeatherTest.php</file>
             <file>tests/Feature/Team/TeamAsanaCreationDatesTest.php</file>

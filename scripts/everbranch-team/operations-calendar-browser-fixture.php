@@ -31,6 +31,8 @@ if (getenv('TEAM_CALENDAR_WINDOW_FIXTURE') === '1') {
     }
     $make('Fictional reviewed outlier', ['_teams_enrichment' => ['calendar' => ['sessions' => [['id' => (string) Illuminate\Support\Str::uuid(), 'kind' => 'setup', 'date' => '2026-10-31'], ['id' => (string) Illuminate\Support\Str::uuid(), 'kind' => 'selling', 'date' => '2026-11-08']], 'schedule_complete' => true]], 'source_schedule' => ['due_on' => '2026-11-10']], '2022-02-01', '2022-02-02');
     $make('Fictional due anchor', ['source_schedule' => ['due_on' => '2026-11-09']], null, null);
+    $make('Fictional range and due separated', ['source_schedule' => ['due_on' => '2026-11-20']], '2026-11-06', '2026-11-08');
+    $make('Fictional range and due same day', ['source_schedule' => ['due_on' => '2026-11-06']], '2026-11-06', '2026-11-08');
     // A real scan-limited partial page: 30 + 30 + 20, followed by a full page.
     for ($i = 0; $i < 80; $i++) {
         $make('Partial batch current '.sprintf('%03d', $i), ['sessions' => [['id' => (string) Illuminate\Support\Str::uuid(), 'kind' => 'selling', 'date' => '2026-11-12']]], '2026-11-12', '2026-11-12');

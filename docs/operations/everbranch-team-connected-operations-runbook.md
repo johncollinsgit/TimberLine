@@ -39,3 +39,28 @@ Do not reuse Codex plugin credentials as application tokens. Tokens/settings/cur
 The isolated loopback fixture at port 8774 contains synthetic Events/Wholesale data and fake compose accounts, with outbound delivery disabled and HTTP fakes preventing external requests. It is separate from the previous port 8773 preview. Do not treat it as real source verification.
 
 Automated checks: `php -d memory_limit=1G vendor/bin/pest --configuration=phpunit.team.xml tests/Feature/Team tests/Feature/Wholesale tests/Feature/Tenancy/ModuleCatalogConfigConsistencyTest.php tests/Feature/Billing/TenantAiUsageInvoiceTest.php tests/Feature/FieldService/MobileVoiceDispatchTest.php --compact`; `npm run test:team-work-local`; `npm run build`; migration safety lint against the working tree. The MySQL recovery manifest/test is present, but a passing real MySQL run has not been claimed.
+
+### Source note fields: event details
+
+Source event notes expose exact labelled candidates for venue, venue address/address,
+booth number/booth #, booth size, setup time and show/event hours. Booth number and
+booth size are distinct fields; a combined venue-address line remains literal rather
+than guessing a split. Existing source events are reprojected when read, so the
+updated labels do not require a bulk import or source write. Candidates remain
+unreviewed until an authorized reviewer explicitly approves them; existing reviewed
+values are not replaced by a conflicting candidate.
+
+For a source event, the browser includes the returned `fields_revision` as
+`expected_fields_revision` with selected field indices. This binds approval to the
+candidate order displayed to the reviewer and makes an older browser page fail with
+an actionable refresh message rather than approving a different field. The server
+also checks the current record version, the reviewer's own live Asana access, source
+identity and modified time, the exact selected passage, and the connected source
+generation. A source change or unavailable source stops review; notes are not
+rewritten. Approval retains a versioned receipt and provenance. This is a check at
+review time, not an atomic transaction across the external provider and Teams.
+
+The current native app only displays source fields; it does not submit field
+approvals. The native review transport supports the same revision contract for
+clients that implement that interaction later. No production field corrections or
+new Asana write scopes are applied merely by deploying the parser.

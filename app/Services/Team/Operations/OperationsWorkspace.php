@@ -179,6 +179,10 @@ class OperationsWorkspace
     {
         $data = $record->data ?? [];
         if ($record->kind === 'event') {
+            if ($record->connection_id && isset($data['source_id'], $data['source_workspace']) && is_string($data['original_notes'] ?? null)) {
+                $data['fields'] = app(OperationsSync::class)->eventFields($data);
+                $data['fields_revision'] = app(OperationsSync::class)->eventFieldsRevision($data);
+            }
             $sourceRange = $data['event_schedule'] ?? [];
             $data['event_schedule'] = array_replace($sourceRange, app(EventSchedule::class)->calendar($data, $record->starts_on?->toDateString(), $record->ends_on?->toDateString()));
             if (isset($sourceRange['basis'])) {

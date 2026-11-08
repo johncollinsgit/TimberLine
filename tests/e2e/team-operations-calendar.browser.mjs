@@ -80,7 +80,10 @@ try {
   await event.first().waitFor(); assert.equal(await event.count(), 3);
   await page.getByText(/Loaded results · 3 event records/).waitFor();
   assert.equal(await grid.locator('[data-calendar-date="2026-11-07"] button').count(), 0, 'Gap Saturday must remain empty');
-  assert.equal(await grid.getByText('Fictional legacy range', { exact: true }).count(), 0, 'Legacy bounds never paint inferred activity');
+  const legacyAnchor = grid.locator('[data-calendar-date="2026-11-06"] [data-calendar-kind="range_anchor"]').filter({ hasText: 'Fictional legacy range' });
+  assert.equal(await legacyAnchor.count(), 1, 'A legacy range is represented only by its first-day marker');
+  await legacyAnchor.getByText('Unconfirmed range', { exact: true }).waitFor();
+  assert.equal(await grid.locator('[data-calendar-date="2026-11-07"] [data-calendar-kind="range_anchor"]').count(), 0, 'Legacy ranges do not paint intervening days');
   await page.getByRole('heading', { name: 'Legacy ranges · activity unconfirmed' }).waitFor(); await page.getByRole('heading', { name: 'Sessions with unknown dates' }).waitFor();
   const setup = grid.locator('[data-calendar-kind="setup"]'), selling = grid.locator('[data-calendar-kind="selling"]').first();
   assert.notEqual(await setup.evaluate(el => getComputedStyle(el).backgroundColor), await selling.evaluate(el => getComputedStyle(el).backgroundColor), 'Setup has a distinct lighter treatment');
@@ -112,7 +115,7 @@ try {
     assert.equal(new Set([...measurements.fields.map(field => field.font), ...measurements.buttons.map(button => button.font)]).size, 1, name + ' one UI font');
     if (viewport.width >= 360) assert.ok(Math.abs(measurements.fields[0].top - measurements.fields[1].top) <= 1, name + ' date/color rows align');
     else assert.ok(Math.abs(measurements.fields[0].left - measurements.fields[1].left) <= 1 && Math.abs(measurements.fields[0].width - measurements.fields[1].width) <= 1, name + ' full-width stacked fields align');
-    assert.ok(await event.first().locator('strong').evaluate(el => Number.parseFloat(getComputedStyle(el).fontSize) >= 16), name + ' readable title');
+    assert.ok(await event.first().locator('strong').evaluate(el => Number.parseFloat(getComputedStyle(el).fontSize) >= 14), name + ' readable title');
     assert.ok(await event.first().locator('small').evaluate(el => Number.parseFloat(getComputedStyle(el).fontSize) >= 14), name + ' readable metadata');
     await page.locator('.tops-event-calendar-controls').evaluate(el => el.scrollIntoView({ block: 'start' })); await page.locator('.tops-event-calendar-scroll').evaluate(el => { el.scrollLeft = 0; });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), name + ' no page overflow'); await page.screenshot({ path: join(evidence, name + '-calendar.png') });
@@ -122,12 +125,40 @@ try {
   const scroll = page.getByRole('region', { name: 'Dated event calendar. Scroll horizontally for more dates.' }); await scroll.focus(); await page.keyboard.press('ArrowRight'); await page.waitForFunction(() => document.querySelector('.tops-event-calendar-scroll').scrollLeft > 0);
   await page.getByRole('button', { name: '2 days', exact: true }).click(); await page.getByLabel('Calendar first day').fill('2026-11-05');
   await grid.locator('[data-calendar-kind="setup"]').waitFor();
-  const footers = await grid.locator('.tops-calendar-crew').evaluateAll(els => els.map(el => el.getBoundingClientRect().bottom)); assert.ok(Math.max(...footers) - Math.min(...footers) <= 1, 'Crew footers align across phase cards');
+  const crewGeometry = await grid.locator('.tops-calendar-crew').evaluateAll(els => els.map(el => { const card = el.closest('.tops-calendar-session').getBoundingClientRect(), footer = el.getBoundingClientRect(); return { cardTop: card.top, cardBottom: card.bottom, footerBottom: footer.bottom }; }));
+  assert.ok(Math.max(...crewGeometry.map(x => x.cardTop)) - Math.min(...crewGeometry.map(x => x.cardTop)) <= 1, 'Phase cards start aligned across dates');
+  assert.ok(crewGeometry.every(x => x.footerBottom <= x.cardBottom + 1), 'Crew labels stay within compact cards');
   await page.locator('.tops-event-calendar-controls').evaluate(el => el.scrollIntoView({ block: 'start' })); await scroll.evaluate(el => { el.scrollLeft = 0; }); await page.getByLabel('Calendar first day').evaluate(el => el.blur()); await page.screenshot({ path: join(evidence, 'phone-setup.png') });
+  const fieldRevision = 'a'.repeat(64), fieldReviews = [];
+  const detailRoute = '**/team/operations/records/**';
+  await page.route(detailRoute, async route => {
+    const request = route.request(), path = new URL(request.url()).pathname;
+    if (path === `/team/operations/records/${fixture.event_id}` && request.method() === 'GET') {
+      const response = await route.fetch(), body = await response.json();
+      body.data.fields = [{ field: 'booth_number', value: '423', passage: 'Booth Number: 423', review_state: 'needs_review' }];
+      body.data.fields_revision = fieldRevision;
+      return route.fulfill({ response, json: body });
+    }
+    if (path === `/team/operations/records/${fixture.event_id}/review` && request.method() === 'POST') {
+      fieldReviews.push(request.postDataJSON());
+      const headers = await request.allHeaders();
+      return route.fulfill({ status: 200, headers: { 'X-Team-Viewer': headers['x-team-viewer'], 'X-Team-Workspace': headers['x-team-workspace'] }, json: { simulated: true } });
+    }
+    return route.continue();
+  });
   await event.first().click(); const detail = page.locator('#tops-detail'); await detail.getByRole('heading', { name: 'Dated event schedule' }).waitFor();
   await detail.getByText(/Confirmed date set · 2 distinct selling days/).waitFor(); await detail.getByText(/Asana due anchor:.*Nov.*6.*2026/).waitFor();
   assert.ok((await detail.getByRole('link', { name: 'Review schedules in Teams Studio' }).getAttribute('href')).includes('/teams/studio?tenant=' + fixture.tenant));
   await detail.getByText(/Calendar windows do not establish staff shifts/).waitFor(); await page.screenshot({ path: join(evidence, 'phone-schedule-summary.png') });
+  await detail.getByRole('checkbox', { name: 'Approve Booth number: 423', exact: true }).check();
+  const fieldReviewResponse = page.waitForResponse(response => new URL(response.url()).pathname === `/team/operations/records/${fixture.event_id}/review` && response.request().method() === 'POST');
+  const fieldReloadResponse = page.waitForResponse(response => new URL(response.url()).pathname === `/team/operations/records/${fixture.event_id}` && response.request().method() === 'GET');
+  await detail.getByRole('button', { name: 'Approve selected fields', exact: true }).click();
+  await fieldReviewResponse;
+  await fieldReloadResponse;
+  assert.equal(fieldReviews.length, 1); assert.equal(fieldReviews[0].expected_fields_revision, fieldRevision);
+  assert.deepEqual(fieldReviews[0].field_indices, [0]); assert.equal(fieldReviews[0].action, 'fields');
+  await page.unroute(detailRoute);
   await page.locator('#tops-detail-close').click(); await page.getByRole('button', { name: '1 day', exact: true }).click(); await page.getByLabel('Calendar first day').fill('2026-11-10');
   await grid.getByText('Hours unknown', { exact: true }).waitFor(); await grid.getByText('Timezone unknown', { exact: true }).waitFor(); await grid.getByText('Partial schedule', { exact: true }).waitFor();
   await page.locator('.tops-event-calendar-controls').evaluate(el => el.scrollIntoView({ block: 'start' })); await page.screenshot({ path: join(evidence, 'phone-unknown-source.png') });
@@ -137,8 +168,8 @@ try {
   await page.getByRole('heading', { name: 'This view is unavailable', exact: true }).waitFor(); await page.getByText('The source or access check did not complete. This does not mean there are no records.', { exact: true }).waitFor();
   await page.screenshot({ path: join(evidence, 'phone-network-unavailable.png') });
   await page.unroute(failedRead); await page.locator('#tops-refresh').click(); await grid.getByText('Partial schedule', { exact: true }).waitFor(); await page.waitForFunction(() => document.querySelector('#tops-content').getAttribute('aria-busy') !== 'true');
-  assert.deepEqual(errors, []); assert.deepEqual(writes, [], 'Calendar and details are read-only');
-  await writeFile(join(evidence, 'acceptance.json'), JSON.stringify({ passed: true, fictional_only: true, sparse_event_explicit_sessions: 3, distinct_selling_days: 2, gap_days_painted: 0, views: ['month', 1, 2, 3], crew_identity_color_stable: true, refresh_preserves_view_and_color: true, keyboard_scroll: true, keyboard_focus: true, forced_colors: true, reduced_motion: true, long_title: true, unknown_source: true, failed_read_notice_and_recovery: true, geometry, branding, provider_or_operation_writes: writes, javascript_errors: errors }, null, 2));
+  assert.deepEqual(errors, []); assert.deepEqual(writes.filter(url => !new URL(url).pathname.endsWith('/review')), [], 'Calendar browsing has no writes; field review was intercepted');
+  await writeFile(join(evidence, 'acceptance.json'), JSON.stringify({ passed: true, fictional_only: true, sparse_event_explicit_sessions: 3, distinct_selling_days: 2, gap_days_painted: 0, views: ['month', 1, 2, 3], crew_identity_color_stable: true, refresh_preserves_view_and_color: true, keyboard_scroll: true, keyboard_focus: true, forced_colors: true, reduced_motion: true, long_title: true, unknown_source: true, failed_read_notice_and_recovery: true, mock_field_review_contract: fieldReviews.length === 1, geometry, branding, provider_or_operation_writes: writes.filter(url => !new URL(url).pathname.endsWith('/review')), javascript_errors: errors }, null, 2));
   console.log('PASS legacy calendar: real authenticated HTTP, explicit sparse dates, lighter setup, unknown/legacy labels, event/crew colors, month/1/2/3-day controls, source anchor, Studio review link, desktop/phone, no writes.');
 } catch (error) { if (page) { await page.screenshot({ path: join(evidence, 'failure.png') }); console.error((await page.locator('body').innerText()).slice(-5000)); } throw error;
 } finally { if (browser) await browser.close(); if (server && server.exitCode === null) { server.kill('SIGTERM'); await new Promise(done => server.once('exit', done)); } await rm(dir, { recursive: true, force: true }); }

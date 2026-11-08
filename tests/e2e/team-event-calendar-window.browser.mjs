@@ -51,8 +51,26 @@ try {
     await area.getByRole('button', { name: 'Load more events', exact: true }).click(); await area.getByRole('button', { name: 'Continue with next events', exact: true }).waitFor();
     await area.getByRole('button', { name: 'Continue with next events', exact: true }).click(); await grid.getByText('Current page event 091', { exact: true }).waitFor();
     assert.equal(await grid.getByText('Current page event 000', { exact: true }).count(), 0, 'Explicit next batch releases prior 90');
+    await search('Fictional legacy range');
+    const legacyAnchor = grid.locator('[data-calendar-date="2026-11-06"] [data-calendar-kind="range_anchor"]');
+    await legacyAnchor.waitFor();
+    await legacyAnchor.getByText('Unconfirmed range', { exact: true }).waitFor();
+    assert.equal(await grid.locator('[data-calendar-date="2026-11-07"] [data-calendar-kind="range_anchor"]').count(), 0, 'A range marker does not invent activity on intervening days');
+    const compact = await grid.evaluate(element => {
+      const day = element.querySelector('.tops-day[data-calendar-date]'), card = element.querySelector('[data-calendar-kind="range_anchor"]');
+      return { minimumDayHeight: parseFloat(getComputedStyle(day).minHeight), cardHeight: card.getBoundingClientRect().height, cardRadius: parseFloat(getComputedStyle(card).borderRadius), gridWidth: parseFloat(getComputedStyle(element).minWidth) };
+    });
+    assert.ok(compact.minimumDayHeight <= 150 && compact.gridWidth <= 840, 'Month calendar is compact');
+    assert.ok(compact.cardHeight >= 44 && compact.cardRadius >= 8, 'Event markers retain touch targets and rounded edges');
     await search('Fictional due anchor'); await grid.locator('[data-calendar-kind="source_due"]').waitFor();
     assert.equal(await grid.locator('[data-calendar-kind="source_due"]').count(), 1); await grid.getByText('Task date · not a confirmed event day').waitFor();
+    await search('Fictional range and due separated');
+    await grid.locator('[data-calendar-date="2026-11-06"] [data-calendar-kind="range_anchor"]').waitFor();
+    await grid.locator('[data-calendar-date="2026-11-20"] [data-calendar-kind="source_due"]').waitFor();
+    assert.equal(await grid.locator('[data-calendar-date="2026-11-07"] [data-calendar-kind="range_anchor"]').count(), 0, 'Range and due markers never invent intervening event days');
+    await search('Fictional range and due same day');
+    await grid.locator('[data-calendar-date="2026-11-06"] [data-calendar-kind="source_due"]').waitFor();
+    assert.equal(await grid.locator('[data-calendar-kind="range_anchor"]').count(), 0, 'A due anchor already marking the range start is not duplicated');
     await search('Fictional reviewed outlier'); await grid.locator('[data-calendar-kind="selling"]').waitFor();
     assert.equal(await grid.locator('[data-calendar-date="2026-11-10"] [data-calendar-kind="source_due"]').count(), 1, 'Due outside a reviewed schedule remains distinct');
     await selectMonth('2026-10'); await grid.locator('[data-calendar-date="2026-10-31"] [data-calendar-kind="setup"]').waitFor();
