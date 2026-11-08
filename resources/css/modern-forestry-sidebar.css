@@ -1,0 +1,29 @@
+/* Keep the complete company and destination names visible at larger type. */
+#app-sidebar[data-sidebar-workspace="modern-forestry"] .mf-sidebar-brand-wordmark,
+#app-sidebar[data-sidebar-workspace="modern-forestry"] .mf-nav-label,
+#app-sidebar[data-sidebar-workspace="modern-forestry"] .mf-admin-subnav-link > span {
+  min-width: 0;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+#app-sidebar[data-sidebar-workspace="modern-forestry"] .mf-nav-label {
+  font-size: calc(0.8rem + 2px);
+}
+
+#app-sidebar[data-sidebar-workspace="modern-forestry"] .mf-admin-subnav-link {
+  font-size: calc(0.76rem + 2px);
+}
+
+#app-sidebar[data-sidebar-workspace="modern-forestry"] :is(.mf-nav-item-copy, .mf-admin-group-main) {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+#app-sidebar[data-sidebar-workspace="modern-forestry"] :is([data-flux-sidebar-item], .mf-admin-group-summary, .mf-admin-subnav-link) {
+  min-height: 44px;
+  padding-block: 8px;
+}

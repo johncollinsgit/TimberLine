@@ -67,7 +67,11 @@ export function installSettings(root) {
   addEventListener('profile-updated', event => {
     if (typeof event.detail?.name !== 'string') return;
     notice.textContent = '';
-    document.querySelectorAll('[data-team-user-name]').forEach(node => { node.textContent = event.detail.name; });
+    document.querySelectorAll('[data-team-user-name]').forEach(node => {
+      node.replaceChildren(...String(event.detail.name).split(/(?=@)/).map(part => {
+        const span = document.createElement('span'); span.className = 'teams-user-name-part'; span.textContent = part; return span;
+      }));
+    });
     document.querySelectorAll('[data-team-user-avatar]').forEach(node => { node.textContent = event.detail.name.slice(0, 1); });
   });
   addEventListener('beforeunload', event => {

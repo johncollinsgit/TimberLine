@@ -61,8 +61,7 @@ export function installOperations(nativeRoot) {
   $('detail').addEventListener('close', () => { if (returnFocus?.isConnected) returnFocus.focus(); else $('heading').focus(); });
   function controls() {
     const url = new URL(location.href); url.searchParams.set('area', area.id); url.searchParams.set('area_view', view); history.replaceState(null, '', url);
-    $('heading').textContent = area.name; $('eyebrow').textContent = area.profile === 'events' ? 'EVENT OPERATIONS' : 'WHOLESALE RELATIONSHIPS';
-    $('subtitle').textContent = area.profile === 'events' ? 'Plan the next occurrence. Keep the details connected.' : 'A clear next step for every account.';
+    $('heading').textContent = area.name;
     $('tabs').replaceChildren(); $('groups').replaceChildren();
     const groups = Object.entries(area.groups || {}), currentGroup = groups.find(([, tabs]) => tabs.includes(view));
     for (const [name, tabs] of groups) { const visible = tabs.filter(v => admin || !['statistics', 'staffing', 'orders', 'automations', 'campaigns'].includes(v)); if (!visible.length) continue; const b = button(name, () => { view = visible[0]; page = 1; controls(); return load(); }); b.setAttribute('aria-current', currentGroup?.[0] === name ? 'step' : 'false'); $('groups').append(b); }

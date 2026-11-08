@@ -28,8 +28,8 @@ try {
   page.on('console', message => { if (message.type() === 'error' && /Content Security Policy|Refused to (?:load|execute|apply)|\bCSP\b/i.test(message.text())) errors.push(message.text()); });
   const branding = [];
   for (const surface of ['standalone', 'embedded']) {
-    for (const width of [320, 390, 1440]) {
-      await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
+    for (const width of [320, 390, 639, 640, 820, 1440, 3442]) {
+      await page.setViewportSize({ width, height: width >= 640 ? 1000 : 844 });
       const artworkResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/brand/everbranch-teams-trees-v1.webp' && response.status() === 200);
       const response = await page.goto(`${origin}/${surface === 'standalone' ? 'teams' : 'team'}?tenant=${fixture.tenant}`);
       await artworkResponse;
@@ -39,14 +39,23 @@ try {
       assert.equal(await brand.count(), 1, 'One compact product masthead');
       await brand.getByText('Everbranch Teams', { exact: true }).waitFor();
       const measured = await brand.evaluate(element => {
-        const art = element.querySelector('.eb-teams-tree-canopy'), lockup = element.querySelector('.eb-teams-product-lockup');
-        return { width: innerWidth, height: element.getBoundingClientRect().height, artHeight: art.getBoundingClientRect().height, artBottom: art.getBoundingClientRect().bottom, lockupTop: lockup.getBoundingClientRect().top, lockupColor: getComputedStyle(lockup).backgroundColor, font: getComputedStyle(lockup).fontFamily, decorative: art.getAttribute('aria-hidden'), artBackground: getComputedStyle(art).backgroundImage, pageWidth: document.documentElement.scrollWidth };
+        const art = element.querySelector('.eb-teams-tree-canopy'), lockup = element.querySelector('.eb-teams-product-lockup'), clusters = [...art.querySelectorAll('.eb-teams-tree-cluster')];
+        const bounds = element.getBoundingClientRect(), artBounds = art.getBoundingClientRect(), lockupBounds = lockup.getBoundingClientRect();
+        return { width: innerWidth, height: bounds.height, artHeight: artBounds.height, artTop: artBounds.top, artBottom: artBounds.bottom, artLeft: artBounds.left, artRight: artBounds.right, brandRight: bounds.right, lockupTop: lockupBounds.top, lockupRight: lockupBounds.right, lockupColor: getComputedStyle(lockup).backgroundColor, font: getComputedStyle(lockup).fontFamily, decorative: art.getAttribute('aria-hidden'), artBackground: getComputedStyle(art).backgroundImage, clusterBackground: getComputedStyle(clusters[0]).backgroundImage, clusterVariants: new Set(clusters.map(cluster => cluster.getAttribute('style'))).size, forestRight: clusters.at(-1).getBoundingClientRect().right, pageWidth: document.documentElement.scrollWidth };
       });
-      assert.ok(measured.height <= 100 && measured.artHeight === 40, 'Compact painted-tree canopy');
-      assert.ok(measured.lockupTop >= measured.artBottom, 'Artwork stays above product text and controls');
+      if (width < 640) {
+        assert.ok(measured.height <= 100 && measured.artHeight === 40, 'Phone retains compact painted-tree canopy');
+        assert.ok(measured.lockupTop >= measured.artBottom, 'Phone artwork stays above product text and controls');
+        assert.ok(measured.artBackground.includes('/brand/everbranch-teams-trees-v1.webp'), 'Phone retains approved local tree asset');
+      } else {
+        assert.ok(measured.height <= 65 && measured.artHeight === 64, 'Desktop masthead uses one compact row');
+        assert.ok(Math.abs(measured.lockupTop - measured.artTop) <= 1 && measured.artLeft >= measured.lockupRight - 1, 'Desktop forest sits beside the wordmark without overlapping it');
+        assert.ok(Math.abs(measured.artRight - measured.brandRight) <= 1 && measured.forestRight >= measured.artRight, 'Desktop forest fills through the right edge, including ultrawide screens');
+        assert.ok(measured.clusterVariants > 1, 'Desktop tree clusters vary in size, crop and direction');
+        assert.ok(measured.clusterBackground.includes('/brand/everbranch-teams-trees-v1.webp'), 'Desktop reuses approved local tree asset');
+      }
       assert.equal(measured.lockupColor, 'rgb(255, 255, 255)', 'Plain readable wordmark background');
       assert.equal(measured.decorative, 'true', 'CSS forest artwork is decorative');
-      assert.ok(measured.artBackground.includes('/brand/everbranch-teams-trees-v1.webp'), 'Approved local tree asset is used');
       assert.ok(measured.pageWidth <= width + 1, surface + width + ' no page overflow');
       if (width <= 600) await page.locator('#tw-view-tools > summary').click();
       await page.locator('#tw-workspace-label').filter({ hasText: 'Workspace:' }).waitFor();

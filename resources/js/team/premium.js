@@ -201,7 +201,7 @@ export function installPremium(root) {
     selectedIds = new Set([...selectedIds].filter(id => data.tasks.some(task => task.id === id))); selectionBar(ctx);
     if (['timeline', 'workload', 'dashboard'].includes(layout)) { renderPlanning(list, data.tasks, { node, layout, members: ctx.members, openTask: ctx.openTask }); return; }
     if (layout === 'board') {
-      if (!project) { empty(list, 'A place for every next step', 'Choose a project to see its section board.'); return; }
+      if (!project) { empty(list, 'Choose a project', 'Select a project to see its board.'); return; }
       for (const [id, name] of [['', 'Unsectioned'], ...Object.entries(project.sections)]) {
         const column = node('section', '', 'board-column'), tasks = data.tasks.filter(t => (t.memberships[project.id]?.section_id || '') === id), heading = node('h2', name); heading.append(node('span', String(tasks.length), 'teams-section-count')); column.append(heading);
         for (const task of tasks) column.append(row(task, ctx, layout));
@@ -219,7 +219,7 @@ export function installPremium(root) {
       const groups = project ? [['', 'Unsectioned'], ...Object.entries(project.sections)] : [['all', $('mode').value === 'home' ? 'Next up for you' : 'Tasks']];
       const sections = layout === 'calendar' ? [...new Set(data.tasks.map(t => t.due_on || t.due_at?.slice(0, 10) || 'No date'))].map(date => [date, date]) : groups;
       for (const [id, name] of sections) { const tasks = data.tasks.filter(t => layout === 'calendar' ? (t.due_on || t.due_at?.slice(0, 10) || 'No date') === id : !project || (t.memberships[project.id]?.section_id || '') === id); if (!tasks.length) continue; const section = node('details', '', 'teams-section'); section.open = true; const heading = node('summary', name, 'teams-section-heading'); heading.append(node('span', String(tasks.length), 'teams-section-count')); section.append(heading); tasks.forEach(task => section.append(row(task, ctx, layout))); list.append(section); }
-      if (!data.tasks.length) empty(list, 'A little room to breathe', 'No tasks match this view. Adjust your filters or create the next step.');
+      if (!data.tasks.length) empty(list, 'No tasks match this view', 'Change filters or create a task.');
     }
   }
   document.addEventListener('keydown', event => {
@@ -253,7 +253,6 @@ export function installPremium(root) {
       $('remove-view').disabled = !$('saved-views').value;
       $('calendar-style').hidden = ctx.layout !== 'calendar'; $('month-label').hidden = ctx.layout !== 'calendar'; $('calendar-format-label').hidden = ctx.layout !== 'calendar'; $('task-calendar-context').hidden = ctx.layout !== 'calendar';
       for (const button of $('home-counts').children) { const match = button.textContent.match(/^(.*): (\d+)$/); if (match) button.replaceChildren(node('span', match[1]), node('strong', match[2], 'teams-home-number')); }
-      $('home-title').textContent = 'Make room for your best work.';
       const nativeHidden = $('mode').value !== 'inbox' && ($('source-filter').value === 'asana' || !!asana?.selectedProject);
       $('save-view').disabled = nativeHidden;
       $('count').hidden = nativeHidden; $('list-heading').hidden = nativeHidden;

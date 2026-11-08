@@ -46,18 +46,18 @@
             <div class="teams-assistant-entry" data-team-assistant-entry>
                 <x-app-ai-assistant :tenant="$tenant" :page-finder="false" scope-notice="Teams event details and Asana notes are not included in this workspace context." />
                 <p role="status" data-team-assistant-status hidden></p>
-                <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link data-team-assistant-fallback hidden>Open Ask Everbranch</a>
+                <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-team-assistant-fallback hidden>Open Ask Everbranch</a>
                 <noscript><a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}">Open Ask Everbranch</a></noscript>
             </div>
             @elseif(app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, auth()->user()))
-            <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link>Ask Everbranch</a>
+            <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}">Ask Everbranch</a>
             @endif
             @if(config('team_work.premium_enabled'))
             <button type="button" class="teams-settings-entry" data-team-settings aria-haspopup="dialog">Settings</button>
             @else
             <a href="{{ route('profile.edit', ['tenant' => $tenant->slug]) }}">Account settings</a>
             @endif
-            <div class="teams-user">@if(config('team_work.premium_enabled'))<span class="teams-avatar" data-team-user-avatar aria-hidden="true">{{ mb_substr(auth()->user()->name, 0, 1) }}</span>@endif<span><span data-team-user-name>{{ auth()->user()->name }}</span><br>{{ $tenant->name }}</span></div>
+            <div class="teams-user">@if(config('team_work.premium_enabled'))<span class="teams-avatar" data-team-user-avatar aria-hidden="true">{{ mb_substr(auth()->user()->name, 0, 1) }}</span>@endif<span><span data-team-user-name>@foreach (explode('@', auth()->user()->name, 2) as $namePart)<span class="teams-user-name-part">{{ $loop->first ? $namePart : '@'.$namePart }}</span>@endforeach</span><br>{{ $tenant->name }}</span></div>
         </div>
     </aside>
     <main class="teams-content" id="teams-main" tabindex="-1">
