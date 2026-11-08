@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_08_190000_add_team_file_event_targets.php' => [
+        'test' => 'tests/Integration/TeamFileEventTargetsMySqlRecoveryTest.php',
+        'scenarios' => ['legacy task uploads survive partial target column creation, trailing index repair, retry and non-destructive rollback; explicit event targets retain their reserved non-task namespace'],
+    ],
     '2026_11_06_220000_create_customer_account_fences.php' => [
         'test' => 'tests/Integration/CustomerAccountFenceMySqlRecoveryTest.php',
         'scenarios' => ['durable tenant row survives missing primary key repair, retry and rollback'],
