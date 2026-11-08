@@ -63,3 +63,25 @@
 .teams-premium #team-operations .tops-event-calendar .tops-calendar-session:is(.is-source-due,.is-range-anchor){background:#f5f7f4;color:#45564a;border:1px dashed #84927e;border-left:3px dashed #84927e;box-shadow:none}
 .teams-premium #team-operations .tops-event-calendar .tops-calendar-session:is(.is-source-due,.is-range-anchor):hover{background:#edf1e9}
 .teams-premium #team-operations .tops-calendar-more{min-height:44px;margin:4px 0 12px;padding:9px 16px;border-radius:9px;font-size:14px;font-weight:600}
+
+/* The calendar also lives inside the main work tabs, with the shared controls above it. */
+.teams-premium #team-operations.tops-inline-calendar > :is(.tops-launcher,.tops-personal,.tops-fixture),
+.teams-premium #team-operations.tops-inline-calendar #tops-panel > :is(.tops-header,#tops-groups,#tops-tabs,.tops-tools) { display:none !important }
+.teams-premium #team-operations.tops-inline-calendar #tops-content { padding:0; overflow:visible }
+.teams-premium #team-operations.tops-inline-calendar #tops-notice:empty { display:none }
+.teams-premium #team-operations.tops-inline-calendar #tops-notice { padding:0 }
+.teams-premium #team-operations.tops-inline-calendar .tops-event-calendar-controls { margin-top:0 }
+
+/* Month view stays scannable: details remain in the accessible name and event dialog. */
+.teams-premium #team-operations .tops-event-calendar.is-month .tops-calendar-session {
+  display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:5px;
+  min-height:44px; padding:5px 7px; border-radius:7px; line-height:1.25;
+}
+.tops-event-calendar.is-month .tops-calendar-session strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px }
+.tops-event-calendar.is-month .tops-calendar-phase { overflow:hidden; max-width:7.5em; font-size:11px; text-overflow:ellipsis; white-space:nowrap }
+.tops-event-calendar.is-month .tops-calendar-session > :is(.tops-calendar-hours,small,.tops-calendar-session-label,.tops-calendar-status,.tops-calendar-crew) { display:none }
+.tops-event-calendar.is-month .tops-day { min-height:105px; gap:4px; padding:7px }
+.tops-event-calendar.is-month .tops-calendar-date { min-height:20px; line-height:20px }
+
+.tops-event-calendar.is-month .tops-calendar-session[data-calendar-needs-review=true] { grid-template-columns:auto minmax(0,1fr) auto }
+.tops-event-calendar.is-month .tops-calendar-session[data-calendar-needs-review=true]::after { content:'!'; font-weight:700; color:#7e4a14 }

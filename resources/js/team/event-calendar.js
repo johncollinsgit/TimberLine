@@ -81,6 +81,9 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
     const crew = people(item), chip = button('', () => open(item)); chip.className = 'tops-calendar-session is-' + session.kind;
     const color = colorMode === 'person' && crew.length ? stableColor(tenant + '|' + (crew[0].provider || '') + '|' + crew[0].id) : eventColor(item, tenant);
     chip.style.setProperty('--event-color', color); chip.dataset.calendarEvent = item.id; chip.dataset.calendarSession = session.id || ''; chip.dataset.calendarKind = session.kind;
+    const description = [item.title, title(session.kind), hours(session), calendar(item).timezone || 'Timezone unknown', session.label, !calendar(item).schedule_complete ? 'Partial schedule' : '', calendar(item).provenance?.source_changed_since_review ? 'Source changed; review needed' : '', ...(colorMode === 'person' ? (crew.length ? crew.map(personName) : ['No verified crew identity']) : [])].filter(Boolean).join(' · ');
+    chip.setAttribute('aria-label', description); chip.title = description;
+    if (calendar(item).provenance?.source_changed_since_review) chip.dataset.calendarNeedsReview = 'true';
     const timezone = calendar(item).timezone, zone = node('small', timezone ? timezone.split('/').at(-1).replaceAll('_', ' ') + ' · local' : 'Timezone unknown');
     if (timezone) { zone.title = timezone; zone.setAttribute('aria-label', 'Local timezone: ' + timezone); }
     chip.append(node('span', title(session.kind), 'tops-calendar-phase'), node('strong', item.title), node('span', hours(session), 'tops-calendar-hours'), zone);
@@ -118,11 +121,13 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
         for (const session of sessions(item)) if (validDate(session.date) && session.date === key) cell.append(card(item, session));
         if (validDate(dueOn(item)) && dueOn(item) === key && !sessions(item).some(session => session.date === key)) {
           const marker = button('', () => open(item)); marker.className = 'tops-calendar-session is-source-due'; marker.dataset.calendarEvent = item.id; marker.dataset.calendarKind = 'source_due';
+          marker.setAttribute('aria-label', item.title + ' · Asana due date · Task date, not a confirmed event day'); marker.title = marker.getAttribute('aria-label');
           marker.append(node('span', 'Asana due date', 'tops-calendar-phase'), node('strong', item.title), node('span', 'Task date · not a confirmed event day', 'tops-calendar-status')); cell.append(marker);
         }
         const [start, end] = legacyBounds(item);
         if (dueOn(item) !== start && !sessions(item).some(session => validDate(session.date)) && validDate(start) && start === key) {
           const marker = button('', () => open(item)); marker.className = 'tops-calendar-session is-range-anchor'; marker.dataset.calendarEvent = item.id; marker.dataset.calendarKind = 'range_anchor';
+          marker.setAttribute('aria-label', item.title + ' · Unconfirmed range · ' + when(start) + (validDate(end) && end !== start ? ' – ' + when(end) : '')); marker.title = marker.getAttribute('aria-label');
           marker.append(node('span', 'Unconfirmed range', 'tops-calendar-phase'), node('strong', item.title), node('span', when(start) + (validDate(end) && end !== start ? ' – ' + when(end) : ''), 'tops-calendar-status')); cell.append(marker);
         }
       }

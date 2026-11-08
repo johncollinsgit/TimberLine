@@ -117,9 +117,9 @@ try {
       return { minimumDayHeight: parseFloat(getComputedStyle(day).minHeight), cardHeight: card.getBoundingClientRect().height, cardRadius: parseFloat(getComputedStyle(card).borderRadius), gridWidth: parseFloat(getComputedStyle(element).minWidth) };
     });
     assert.ok(compact.minimumDayHeight <= 150 && compact.gridWidth <= 840, 'Month calendar is compact');
-    assert.ok(compact.cardHeight >= 44 && compact.cardRadius >= 8, 'Event markers retain touch targets and rounded edges');
+    assert.ok(compact.cardHeight >= 44 && compact.cardRadius >= 6, 'Event markers retain touch targets and rounded edges');
     await search('Fictional due anchor'); await grid.locator('[data-calendar-kind="source_due"]').waitFor();
-    assert.equal(await grid.locator('[data-calendar-kind="source_due"]').count(), 1); await grid.getByText('Task date · not a confirmed event day').waitFor();
+    assert.equal(await grid.locator('[data-calendar-kind="source_due"]').count(), 1); assert.match(await grid.locator('[data-calendar-kind="source_due"]').getAttribute('aria-label'), /Task date, not a confirmed event day/);
     await search('Fictional range and due separated');
     await grid.locator('[data-calendar-date="2026-11-06"] [data-calendar-kind="range_anchor"]').waitFor();
     await grid.locator('[data-calendar-date="2026-11-20"] [data-calendar-kind="source_due"]').waitFor();

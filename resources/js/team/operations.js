@@ -17,7 +17,9 @@ export function installOperations(nativeRoot) {
   let areas = [], members = [], area, view = 'overview', page = 1, serial = 0, returnFocus, draft, busy = false, identityLost = false, timer, searchTimer, editorSequence = 0, pageCursors = [null], statisticsYear = new Date().getFullYear();
   const drafts = new Map();
   const emailDrafts = new Map();
-  let calendarPages = null;
+  let calendarPages = null, areasReady, inlineEpoch = 0;
+  const originalPosition = document.createComment('Teams work area position');
+  root.before(originalPosition);
   const eventTasks = installEventTasks({ api, el, button, field, dialog, section, note, area: () => area, content: $('content'), navigate });
   async function api(path, options = {}) {
     if (identityLost && !options.verify) throw new Error('Verify the original account before continuing. Area drafts are retained in this page.');
@@ -60,7 +62,7 @@ export function installOperations(nativeRoot) {
   $('detail-close').onclick = closeDetail;
   $('detail').addEventListener('close', () => { if (returnFocus?.isConnected) returnFocus.focus(); else $('heading').focus(); });
   function controls() {
-    const url = new URL(location.href); url.searchParams.set('area', area.id); url.searchParams.set('area_view', view); history.replaceState(null, '', url);
+    if (!root.classList.contains('tops-inline-calendar')) { const url = new URL(location.href); url.searchParams.set('area', area.id); url.searchParams.set('area_view', view); history.replaceState(null, '', url); }
     $('heading').textContent = area.name;
     $('tabs').replaceChildren(); $('groups').replaceChildren();
     const groups = Object.entries(area.groups || {}), currentGroup = groups.find(([, tabs]) => tabs.includes(view));
@@ -74,15 +76,16 @@ export function installOperations(nativeRoot) {
     $('prev').hidden = $('next').hidden = true;
     $('search').closest('label').hidden = ['my_tasks', 'connections', 'statistics', 'communications', 'orders', 'prospects', 'followups', 'templates'].includes(view);
   }
-  async function openArea(item, initialView = 'overview') {
+  async function openArea(item, initialView = 'overview', inline = false) {
+    if (!inline && root.classList.contains('tops-inline-calendar')) restoreInline();
     if (window.TeamPremium?.context && !window.TeamPremium.context.ready()) return;
     if (area) keepDraft();
     eventTasks.reset();
     area = item; view = item.views.includes(initialView) ? initialView : 'overview'; page = 1; serial++;
-    root.classList.add('tops-active'); $('panel').hidden = false;
+    root.classList.toggle('tops-active', !inline); root.classList.toggle('tops-inline-calendar', inline); $('panel').hidden = false;
     document.querySelectorAll('#tops-areas button').forEach(b => b.setAttribute('aria-current', b.dataset.area === area.id ? 'page' : 'false'));
     controls(); $('heading').focus(); await load();
-    const memberArea = item.id; const result = await api('/areas/' + memberArea + '/members'); if (area.id === memberArea) members = result.items;
+    const memberArea = item.id; const result = await api('/areas/' + memberArea + '/members', { query: { area: memberArea } }); if (area?.id === memberArea) members = result.items;
   }
   function renderAreas() {
     $('areas').replaceChildren(); for (const item of areas) { const b = button(item.name, () => openArea(item)); b.dataset.area = item.id; $('areas').append(b); }
@@ -96,12 +99,28 @@ export function installOperations(nativeRoot) {
     entry.hidden = identityLost || !target || context?.layout !== 'calendar';
     entry.onclick = () => { if (!identityLost && window.TeamPremium?.context?.ready()) { $('search').value = ''; openArea(target, 'calendar').catch(report); } };
   }
-  function native() { keepDraft(); serial++; $('panel').hidden = true; root.classList.remove('tops-active'); const url = new URL(location.href); url.searchParams.delete('area'); url.searchParams.delete('area_view'); history.replaceState(null, '', url); }
+  function restoreInline() {
+    inlineEpoch++; serial++; calendarPages = null; $('content').replaceChildren();
+    if ($('detail').open) $('detail').close();
+    root.classList.remove('tops-inline-calendar'); originalPosition.after(root);
+  }
+  function native() { keepDraft(); if (root.classList.contains('tops-inline-calendar')) restoreInline(); serial++; $('panel').hidden = true; root.classList.remove('tops-active'); const url = new URL(location.href); url.searchParams.delete('area'); url.searchParams.delete('area_view'); history.replaceState(null, '', url); }
   $('menu').onclick = () => document.querySelector('[data-teams-menu]')?.click();
   $('native').onclick = () => { native(); document.querySelector('#tw-search')?.focus(); };
   document.querySelector('.teams-sidebar')?.addEventListener('click', event => { if (event.target.closest('[data-team-mode],#teams-create,#teams-project-list button,#teams-favorite-list button')) native(); });
   let personalTicket = 0;
   window.TeamOperations = {
+    mountEventCalendar: async (host, options = {}) => {
+      const ticket = ++inlineEpoch;
+      await areasReady;
+      if (ticket !== inlineEpoch || !host.isConnected || identityLost) return false;
+      const target = areas.find(item => item.id === options.areaId && item.profile === 'events') || areas.find(item => item.profile === 'events');
+      if (!target) return false;
+      root.classList.add('tops-inline-calendar'); host.append(root); $('search').value = String(options.query || '').trim();
+      await openArea(target, 'calendar', true);
+      return ticket === inlineEpoch && root.classList.contains('tops-inline-calendar');
+    },
+    unmountEventCalendar: () => { if (!root.classList.contains('tops-inline-calendar')) { inlineEpoch++; return; } restoreInline(); $('panel').hidden = true; },
     settingsAreas: () => identityLost ? [] : areas.map(item => ({ id: item.id, name: item.name })),
     openSettingsArea: async (areaId, settingsView) => {
       if (identityLost) throw new Error('Verify the original account before opening area settings.');
@@ -507,5 +526,5 @@ export function installOperations(nativeRoot) {
     load();
   }, 60000); } });
   document.dispatchEvent(new Event('visibilitychange'));
-  api('/areas').then(async data => { areas = data.items; renderAreas(); const url = new URL(location.href), eventApp = url.searchParams.get('app') === 'events', initial = areas.find(a => a.id === url.searchParams.get('area')) || (eventApp ? areas.find(a => a.profile === 'events') : null); if (initial) await openArea(initial, url.searchParams.get('area_view') || (eventApp ? 'my_tasks' : 'overview')); }).catch(report);
+  areasReady = api('/areas').then(async data => { areas = data.items; renderAreas(); const url = new URL(location.href), eventApp = url.searchParams.get('app') === 'events', initial = areas.find(a => a.id === url.searchParams.get('area')) || (eventApp ? areas.find(a => a.profile === 'events') : null); if (initial) await openArea(initial, url.searchParams.get('area_view') || (eventApp ? 'my_tasks' : 'overview')); }).catch(report);
 }
