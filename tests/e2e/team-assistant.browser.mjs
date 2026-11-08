@@ -14,16 +14,19 @@ let server;
 try {
   await run('php', ['vendor/bin/pest', '-c', 'phpunit.team.xml', 'tests/Feature/Team/TeamAskEntryTest.php', '--filter=approved Teams owner receives', '--compact'], { cwd: base, env: { ...process.env, TEAMS_ASK_BROWSER_HTML: join(dir, 'approved.html') }, maxBuffer: 2e6 });
   let html = await readFile(join(dir, 'approved.html'), 'utf8');
+  const settingsMarkup = await readFile(join(dir, 'approved.html.settings.html'), 'utf8');
   const renderedOrigin = new URL(html.match(/data-base-url="([^"]+)"/)[1]).origin;
   const manifest = JSON.parse(await readFile(join(base, 'public/build/manifest.json'), 'utf8'));
   const entry = manifest['resources/js/team/app.js'];
   // The guarded Blade fixture disables Vite and Livewire transport. Exercise the real compiled Teams entry.
-  html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
-  html = html.replace('</head>', (entry.css || []).map(path => `<link rel="stylesheet" href="/build/${path}">`).join('') + '</head>');
-  html = html.replace('</body>', `<script type="module" src="/build/${entry.file}"></script></body>`);
+  const prepare = markup => markup.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace('</head>', (entry.css || []).map(path => `<link rel="stylesheet" href="/build/${path}">`).join('') + '</head>')
+    .replace('</body>', `<script type="module" src="/build/${entry.file}"></script></body>`);
+  html = prepare(html);
+  const settingsHtml = prepare(settingsMarkup);
   server = createServer(async (request, response) => {
     const url = new URL(request.url, 'http://fixture.invalid');
-    if (url.pathname === '/teams') { response.setHeader('Content-Type', 'text/html'); response.end(html.replaceAll(renderedOrigin, origin)); return; }
+    if (url.pathname === '/teams') { response.setHeader('Content-Type', 'text/html'); response.end((url.searchParams.get('fixture') === 'settings' ? settingsHtml : html).replaceAll(renderedOrigin, origin)); return; }
     const file = resolve(base, 'public', url.pathname.slice(1));
     if (!file.startsWith(resolve(base, 'public') + '/')) { response.writeHead(404).end(); return; }
     try { const content = await readFile(file); response.setHeader('Content-Type', { '.js': 'text/javascript', '.css': 'text/css', '.webp': 'image/webp', '.svg': 'image/svg+xml' }[extname(file)] || 'application/octet-stream'); response.end(content); }
@@ -57,7 +60,8 @@ try {
             assert.equal(request.method(), 'GET', 'Teams boot must not mutate work or send AI');
             if (path === '/team/data') {
               const user = await page.locator('#team-work-app').getAttribute('data-user');
-              payload = { viewer: { id: user, name: 'Fictional Owner' }, tasks: [], projects: [], members: [], has_more: false, total: 0, can_create_task: false, can_create_project: false };
+              const workspace = await page.locator('#team-work-app').getAttribute('data-workspace-id');
+              payload = { workspace: { id: workspace, name: 'Fictional Team' }, viewer: { id: user, name: 'Fictional Owner' }, tasks: [], projects: [], members: [], has_more: false, total: 0, can_create_task: false, can_create_project: false };
             } else if (path === '/team/preferences') payload = { preferences: {}, views: [] };
             else if (path === '/team/inbox') payload = { items: [], unread: 0 };
             else if (path === '/team/areas') payload = { items: [], can_manage: false };
@@ -68,6 +72,11 @@ try {
         await page.goto(origin + '/teams');
         const ask = page.locator('[data-team-assistant-entry] .everbranch-assistant-launcher');
         await ask.waitFor({ state: 'attached' });
+        await page.waitForFunction(() => window.TeamPremium?.context?.ready());
+        const tenant = await page.locator('#team-work-app').getAttribute('data-tenant');
+        const fallbackUrl = new URL(await page.locator('[data-team-assistant-fallback]').getAttribute('href'), origin);
+        assert.equal(fallbackUrl.pathname, '/ai-branch', 'Loader-failure fallback must keep its AI destination after Teams boots');
+        assert.equal(fallbackUrl.searchParams.get('tenant'), tenant);
         assert.equal(requests.length, 0, 'Mounting only loads JavaScript, not AI context/provider');
         if (width < 801) await page.locator('[data-teams-menu]').click();
         assert.ok((await ask.boundingBox()).height >= 44);
@@ -97,8 +106,19 @@ try {
         await ask.click(); await dialog.getByRole('button', { name: 'Find a page', exact: true }).click();
         assert.equal(await page.evaluate(() => Boolean(window.fixturePageFinderOpened)), true);
         assert.equal(await dialog.isVisible(), false);
+        const beforeSettings = requests.length;
+        await page.goto(origin + '/teams?fixture=settings');
+        await page.waitForFunction(() => window.TeamPremium?.context?.ready());
+        const settings = page.getByRole('link', { name: 'Ask Everbranch', exact: true });
+        const settingsUrl = new URL(await settings.getAttribute('href'), origin);
+        assert.equal(settingsUrl.pathname, '/ai-branch', 'Unapproved AI setup link must keep its AI destination after Teams boots');
+        assert.equal(settingsUrl.searchParams.get('tenant'), tenant);
+        const backUrl = new URL(await page.getByRole('link', { name: 'Back to Everbranch', exact: true }).getAttribute('href'), origin);
+        assert.equal(backUrl.pathname, '/team', 'The real Teams surface switch retains its existing destination');
+        assert.equal(backUrl.searchParams.get('tenant'), tenant);
+        assert.equal(requests.length, beforeSettings, 'Setup-only page performs no assistant requests');
         assert.deepEqual(errors, []); assert.deepEqual(unexpected, []);
-        reports.push({ engine: name, width, passed: true, question_posts: 1, provider_calls: 0, dimensions });
+        reports.push({ engine: name, width, passed: true, question_posts: 1, provider_calls: 0, ai_fallback_preserved: true, ai_setup_preserved: true, task_surface_switch_preserved: true, dimensions });
         await page.close();
         } catch (error) {
           await page.screenshot({ path: join(output, `${name}-${width}-failure.png`), fullPage: true }).catch(() => {});

@@ -46,11 +46,11 @@
             <div class="teams-assistant-entry" data-team-assistant-entry>
                 <x-app-ai-assistant :tenant="$tenant" :page-finder="false" scope-notice="Teams event details and Asana notes are not included in this workspace context." />
                 <p role="status" data-team-assistant-status hidden></p>
-                <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link data-team-assistant-fallback hidden>Open Ask Everbranch</a>
+                <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-team-assistant-fallback hidden>Open Ask Everbranch</a>
                 <noscript><a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}">Open Ask Everbranch</a></noscript>
             </div>
             @elseif(app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, auth()->user()))
-            <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link>Ask Everbranch</a>
+            <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}">Ask Everbranch</a>
             @endif
             @if(config('team_work.premium_enabled'))
             <button type="button" class="teams-settings-entry" data-team-settings aria-haspopup="dialog">Settings</button>

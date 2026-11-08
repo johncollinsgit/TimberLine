@@ -215,6 +215,8 @@ Unapproved workspaces and non-premium Teams retain the guarded real setup link;
 a failed lazy import reveals the same tenant-bound fallback. No iframe is used.
 The Teams host disables the global page-finder control because its command palette
 is not loaded there; other assistant hosts retain their existing page finder.
+Ask setup/fallback anchors keep their tenant-bound AI destination after Teams boots;
+only the task surface-switch links use `data-team-surface-link`.
 
 The dialog explicitly excludes Teams event details and Asana notes from current
 workspace context. A future event provider needs actor-owned source authorization
