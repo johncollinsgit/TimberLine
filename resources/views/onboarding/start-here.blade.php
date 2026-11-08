@@ -51,9 +51,17 @@
 @endphp
 
 <x-layouts::app.sidebar title="Start Here">
-    <div class="mx-auto my-5 max-w-5xl px-4"><a class="inline-flex min-h-11 items-center rounded-lg bg-emerald-900 px-5 py-3 font-semibold text-white" href="{{ route('workspace-settings.setup', ['tenant' => $tenant->slug]) }}">Open your tailored setup guide →</a></div>
     <flux:main>
-        <div class="fb-workflow-shell">
+        <style>
+            .eb-start-here { grid-template-columns: minmax(0, 1fr); }
+            .eb-start-here > * { min-width: 0; }
+            .eb-start-here .eb-start-guide-action { min-width: 0; margin: 0; }
+            .eb-start-here .eb-start-guide-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; max-width: 100%; padding: 12px 20px; border-radius: 9px; color: #fff; background: #064e3b; font: 600 16px/1.5 var(--eb-font-ui, ui-sans-serif, system-ui, sans-serif); text-align: center; text-decoration: none; overflow-wrap: anywhere; }
+            .eb-start-here .eb-start-guide-link:focus-visible { outline: 3px solid var(--eb-accent, #214a36); outline-offset: 3px; }
+            @media (max-width: 639px) { .eb-start-here .eb-start-guide-link { width: 100%; } }
+        </style>
+        <div class="fb-workflow-shell eb-start-here" data-start-here>
+            <div class="eb-start-guide-action"><a class="eb-start-guide-link" href="{{ route('workspace-settings.setup', ['tenant' => $tenant->slug]) }}">Open your tailored setup guide →</a></div>
             @if($showGuidedFirstLogin)
                 <section class="mb-6 grid gap-6 xl:grid-cols-[minmax(0,_0.82fr)_minmax(0,_1.18fr)]" data-first-login-welcome="true">
                     <article class="overflow-hidden rounded-[32px] border border-zinc-200 bg-[radial-gradient(circle_at_top_left,_rgba(236,247,244,0.98),_rgba(255,255,255,1)_48%,_rgba(247,249,250,1))] p-6 shadow-[0_36px_80px_-54px_rgba(15,23,42,0.28)] md:p-8">

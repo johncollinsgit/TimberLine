@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\Auth\MobileAuthorizationClients;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -15,7 +16,7 @@ class EverbranchMobileAuthorizationController extends Controller
 {
     private const INTENT_SESSION_KEY = 'everbranch.mobile.authorization_intent';
 
-    public function __invoke(Request $request): RedirectResponse
+    public function __invoke(Request $request): RedirectResponse|Response
     {
         $validated = $request->validate([
             'client_id' => ['required', 'string', 'max:80'],
@@ -26,7 +27,20 @@ class EverbranchMobileAuthorizationController extends Controller
             'device_name' => ['nullable', 'string', 'max:160'],
             'auth_method' => ['required', 'in:google,email'],
         ]);
-        MobileAuthorizationClients::assertAllowed($validated['client_id'], $validated['redirect_uri']);
+        try {
+            MobileAuthorizationClients::assertAllowed($validated['client_id'], $validated['redirect_uri']);
+        } catch (ValidationException $error) {
+            // A known Teams client whose rollout is closed must not fall back
+            // through Laravel's browser validation redirect into a web tenant.
+            if (! $request->expectsJson()
+                && $validated['client_id'] === MobileAuthorizationClients::TEAMS_CLIENT
+                && $validated['redirect_uri'] === MobileAuthorizationClients::TEAMS_REDIRECT) {
+                return response()->view('team.mobile-unavailable', status: 503)
+                    ->header('Cache-Control', 'no-store, private');
+            }
+
+            throw $error;
+        }
 
         $canonicalUrl = route('mobile.everbranch.authorize', $validated, absolute: false);
         $fingerprint = hash('sha256', json_encode($validated, JSON_THROW_ON_ERROR));

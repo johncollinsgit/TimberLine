@@ -10,6 +10,9 @@ Review actual phone and desktop screenshots, including narrow widths, long text,
 keyboard focus and missing/error states. Geometry checks supplement visual review.
 Preserve recovery, unknown-data labels and authorization; presentation work cannot
 establish complete offline or supported-device acceptance.
+Keep Start Here actions inside the existing Flux main/workflow column; a sibling
+before main becomes a narrow shell-grid column on phones. See
+`docs/operations/start-here-responsive-layout.md` for the scoped fix and checks.
 
 Teams uses the exact product masthead “Everbranch Teams” with the existing
 Everbranch leaf and a self-hosted painted green-tree band. Keep the tenant/company
@@ -62,6 +65,12 @@ runbooks for exact coverage, MySQL races and remaining release work. No new
 ledger, migration, live message, policy publication or production activation.
 
 ## Teams Studio foundation (November 7; draft source candidate)
+
+Check `/api/mobile/v1/auth/teams-availability` before opening the native sign-in
+browser. Fail closed on missing/incompatible/disabled responses and keep network
+failures retryable. Availability cannot authorize a user or select a tenant.
+Keep exact OAuth callback/PKCE checks, cancellation and return-to-app behavior;
+never use an existing website session or remembered tenant as a native fallback.
 
 A paired React/Capacitor Teams candidate adds private event drafts, deterministic
 cost previews, immutable tenant policies/definitions, frozen budgets, reviewed

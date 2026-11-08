@@ -29,6 +29,9 @@ Teams presentation uses the Everbranch leaf and the exact “Everbranch Teams”
 product masthead with owner-requested painted green trees. The self-hosted WebP
 is decorative; company identity, navigation and existing authorization remain
 separate. Browser/device release acceptance remains governed by the runbooks.
+The Start Here setup guide now shares the main content column on phones, with a
+full-width action and contained cards. This is a scoped layout correction; tenant
+selection, setup forms and permissions are unchanged.
 
 ## Shared customer profiles and event value (November 7; source candidate)
 
@@ -44,6 +47,11 @@ runbooks for exact coverage, MySQL races and remaining release work. No new
 ledger, migration, live message, policy publication or production activation.
 
 ## Teams Studio foundation (November 7; draft source candidate)
+
+Native Teams now has a read-only availability contract and an explicit browser
+unavailable page. A disabled installation cannot silently fall through sign-in
+to the general website's remembered tenant. Existing rollout and membership
+guards remain authoritative; this source correction does not enable production.
 
 A paired React/Capacitor Teams candidate adds private event drafts, deterministic
 cost previews, immutable tenant policies/definitions, frozen budgets, reviewed

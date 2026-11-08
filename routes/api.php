@@ -31,6 +31,9 @@ Route::post('/integrations/level-foundations/transcriptions', [LevelFoundationsT
     ->name('integrations.level-foundations.transcriptions.store');
 
 Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
+    Route::get('/auth/teams-availability', \App\Http\Controllers\Mobile\TeamsMobileAvailabilityController::class)
+        ->middleware('throttle:30,1')
+        ->name('auth.teams-availability');
     Route::post('/auth/password', [EverbranchMobileAuthController::class, 'password'])
         ->middleware('throttle:5,1')
         ->name('auth.password');

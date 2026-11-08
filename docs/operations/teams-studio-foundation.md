@@ -19,6 +19,16 @@ merely because this increment has an API, a screen or passing focused tests.
 - The dedicated OAuth client is `everbranch-teams`, with exact callback
   `everbranchteams://auth/callback`, gated by existing native Teams availability.
   It does not acquire payment abilities or reuse customer/POS authentication.
+- `/api/mobile/v1/auth/teams-availability` is a public, rate-limited, no-store
+  installation check for that fixed client/callback. It reports the existing
+  Core Teams/operations/native gates and creates no session, code, token or
+  tenant selection. The native client checks it before opening the sign-in
+  browser; an old server, disabled rollout or network failure stays in the app
+  with an explanation. This check is advisory, never user/tenant authorization.
+  The browser authorization route also renders a phone-sized unavailable page
+  for a disabled exact Teams pair, preserving JSON validation errors and all
+  other client/callback guards. This prevents a failed native attempt from
+  redirecting into an unrelated remembered web workspace.
 - Tenant-owned `blueprint` and `cost_policy` definitions, private `event_draft`,
   frozen `event_budget` and reviewed `event_link` records reuse existing encrypted
   operations records, attempts and revisions. No migration is introduced.
