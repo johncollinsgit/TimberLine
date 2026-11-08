@@ -116,6 +116,9 @@ class ParallelReleaseTest(unittest.TestCase):
         self.assertIn('"quality" "ci (8.4)" "mysql migration recovery"', setup)
         self.assertIn('\\.github/(workflows/|actions/)', setup)
         self.assertIs(self.deploy['concurrency']['cancel-in-progress'], False)
+        enterprise = yaml.safe_load((ROOT / '.github/workflows/enterprise-runtime-ci.yml').read_text())
+        self.assertIs(enterprise['concurrency']['cancel-in-progress'], True)
+        self.assertIn('github.event.pull_request.number', enterprise['concurrency']['group'])
 
     def test_only_public_build_outputs_and_pinned_tools_are_shared(self):
         for job in self.jobs.values():

@@ -130,6 +130,9 @@ name: Enterprise isolated runtime
     - scripts/ci/enterprise-*
     - tests/ci/test_enterprise_ci_bundle.py
   workflow_dispatch: null
+concurrency:
+  group: enterprise-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
