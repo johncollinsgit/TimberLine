@@ -17,6 +17,70 @@ class OperationsAccess
 {
     private array $verifiedFiles = [];
 
+    /** Exists only while one authorized collection is assembled; never survives a request. */
+    private ?array $recordReadScope = null;
+
+    public function readCollection(Tenant $tenant, User $user, TeamArea $area, callable $read, bool $collectionAsana = false): mixed
+    {
+        $previous = $this->recordReadScope;
+        $verifiedArea = $this->area($tenant, $user, $area->id);
+        $actor = $this->actor($tenant, $user);
+        $this->recordReadScope = ['tenant' => $tenant->id, 'user' => $user->id, 'area' => $verifiedArea->id, 'actor' => $actor, 'native_state' => null, 'collection_asana' => $collectionAsana, 'asana_tasks' => [], 'asana_errors' => [], 'source_incomplete' => false, 'source_connections' => []];
+        try {
+            return $read();
+        } finally {
+            $this->recordReadScope = $previous;
+        }
+    }
+
+    private function verifyCollectionTask(OperationsProviders $providers, TeamProviderConnection $connection, string $taskId, string $project): void
+    {
+        $key = $connection->id.':'.$connection->generation.':'.$project;
+        $this->recordReadScope['source_connections'][$connection->id] = $connection->generation;
+        if (isset($this->recordReadScope['asana_errors'][$key])) {
+            throw $this->recordReadScope['asana_errors'][$key];
+        }
+        try {
+            $inventory = $this->recordReadScope['asana_tasks'][$key] ??= $providers->visibleAsanaTasks($connection, $project);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+            $this->recordReadScope['source_incomplete'] = true;
+            $this->recordReadScope['asana_errors'][$key] = $error;
+            throw $error;
+        }
+        if (isset($inventory['tasks'][$taskId])) {
+            return;
+        }
+        // A bounded inventory is an optimization, never a reason to hide an
+        // unresolved task. Large projects fall back to fresh exact-task access.
+        if (! $inventory['complete']) {
+            try {
+                $providers->verifyAsanaRecord($connection, $taskId, $project);
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+                if (! in_array($error->getStatusCode(), [403, 404], true)) {
+                    $this->recordReadScope['source_incomplete'] = true;
+                }
+                throw $error;
+            }
+
+            return;
+        }
+        abort(403); // Completed fresh inventory proves this retained task is unavailable.
+    }
+
+    public function collectionSourcesAvailable(): bool
+    {
+        if ($this->recordReadScope['source_incomplete'] ?? false) {
+            return false;
+        }
+        foreach ($this->recordReadScope['source_connections'] ?? [] as $id => $generation) {
+            if (! TeamProviderConnection::whereKey($id)->where('status', 'connected')->where('generation', $generation)->exists()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public function actor(Tenant $tenant, User $user): array
     {
         abort_unless(config('team_operations.enabled') && config('team_work.premium_enabled'), 404);
@@ -84,11 +148,17 @@ class OperationsAccess
     public function record(Tenant $tenant, User $user, TeamOperationRecord $record, bool $write = false): void
     {
         abort_unless((int) $record->tenant_id === (int) $tenant->id, 404);
-        $this->area($tenant, $user, $record->area_id, $write);
+        $scoped = ! $write && $this->recordReadScope !== null
+            && (int) $this->recordReadScope['tenant'] === (int) $tenant->id
+            && (int) $this->recordReadScope['user'] === (int) $user->id
+            && $this->recordReadScope['area'] === $record->area_id;
+        if (! $scoped) {
+            $this->area($tenant, $user, $record->area_id, $write);
+        }
         if ($record->status === 'withdrawn') {
             abort(404);
         }
-        $actor = $this->actor($tenant, $user);
+        $actor = $scoped ? $this->recordReadScope['actor'] : $this->actor($tenant, $user);
         if ($write && in_array($record->kind, ['email_template', 'rule', 'campaign'], true)) {
             $this->financial($tenant, $user);
         }
@@ -99,7 +169,8 @@ class OperationsAccess
             abort_unless($this->admin($actor) || (int) $record->assigned_user_id === (int) $user->id, 403);
         }
         if ($project = ($record->data ?? [])['native_project_id'] ?? null) {
-            abort_unless(app(WorkGraph::class)->can(app(TeamWorkRepository::class)->state($tenant->id), $actor, 'project', $project), 403);
+            $state = $scoped ? ($this->recordReadScope['native_state'] ??= app(TeamWorkRepository::class)->state($tenant->id)) : app(TeamWorkRepository::class)->state($tenant->id);
+            abort_unless(app(WorkGraph::class)->can($state, $actor, 'project', $project), 403);
         }
         if ($record->connection_id) {
             $connection = TeamProviderConnection::query()->where('tenant_id', $tenant->id)->findOrFail($record->connection_id);
@@ -116,7 +187,11 @@ class OperationsAccess
                 if (($record->data['source_type'] ?? 'task') === 'project') {
                     $providers->verifyAsanaProject($connection, $selectedProject);
                 } else {
-                    $providers->verifyAsanaRecord($connection, $record->data['source_id'] ?? '', $selectedProject);
+                    if ($scoped && $this->recordReadScope['collection_asana']) {
+                        $this->verifyCollectionTask($providers, $connection, (string) ($record->data['source_id'] ?? ''), $selectedProject);
+                    } else {
+                        $providers->verifyAsanaRecord($connection, $record->data['source_id'] ?? '', $selectedProject);
+                    }
                 }
             } else {
                 abort_unless($connection->status === 'connected', 403);

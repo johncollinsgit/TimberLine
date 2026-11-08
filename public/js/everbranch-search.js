@@ -141,10 +141,29 @@
     close.type = 'button'; close.setAttribute('aria-label', 'Close workspace search');
     head.append(heading, close);
     const filters = element('div', null, 'eb-search-filters'), selects = {};
+    const filterToggle = options.collapsibleFilters ? element('button', 'Filters', 'eb-search-filter-toggle') : null;
+    filters.id = uid + '-filters';
+    function setFiltersOpen(open) {
+      if (!filterToggle) return;
+      filters.hidden = !open; filterToggle.setAttribute('aria-expanded', String(open));
+    }
+    function updateFilterLabel() {
+      if (!filterToggle) return;
+      const count = Object.values(selects).filter(select => select.value).length;
+      filterToggle.textContent = count ? `Filters (${count})` : 'Filters';
+    }
+    if (filterToggle) {
+      filterToggle.type = 'button'; filterToggle.setAttribute('aria-controls', filters.id);
+      // Safari does not focus mouse-clicked buttons. Keep search focus while
+      // revealing filters so focusout cannot close the panel before the click.
+      filterToggle.onmousedown = event => event.preventDefault();
+      filterToggle.onclick = () => setFiltersOpen(filters.hidden);
+      head.insertBefore(filterToggle, close); setFiltersOpen(false);
+    }
     for (const [key, title, items] of [['type', 'All types', []], ['project', 'All projects / areas', []], ['person', 'Anyone', []], ['state', 'All work', [{ id: 'active', title: 'Active work' }, { id: 'closed', title: 'Completed / archived' }]]]) {
       const select = element('select'); select.setAttribute('aria-label', title); select.append(new Option(title, ''));
       for (const item of items) select.append(new Option(item.title, item.id));
-      select.onchange = () => run(); selects[key] = select; filters.append(select);
+      select.onchange = () => { updateFilterLabel(); run(); }; selects[key] = select; filters.append(select);
     }
     const status = element('p', '', 'eb-search-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     const list = element('div', null, 'eb-search-list'); list.id = uid + '-list'; list.setAttribute('role', 'listbox'); list.setAttribute('aria-label', 'Workspace search results');
@@ -158,10 +177,11 @@
       if (scope === next) return;
       serial++; controller?.abort(); closePanel(false); scope = next; input.value = ''; recent = []; rows = []; list.replaceChildren();
       Object.values(selects).forEach(select => { select.value = ''; });
+      updateFilterLabel(); setFiltersOpen(false);
       try { const stored = JSON.parse(sessionStorage.getItem(recentKey()) || '[]'); recent = Array.isArray(stored) ? stored.filter(id => typeof id === 'string').slice(0, 8) : []; } catch { /* Session storage is optional. */ }
     }
     function choose(index) { active = index; [...list.children].forEach((node, i) => node.setAttribute('aria-selected', String(i === active))); if (active >= 0 && list.children[active]) { input.setAttribute('aria-activedescendant', list.children[active].id); list.children[active].scrollIntoView({ block: 'nearest' }); } else input.removeAttribute('aria-activedescendant'); }
-    function closePanel(focus = true) { opened = false; panel.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); host.removeAttribute('role'); host.removeAttribute('aria-modal'); if (bodyOverflow !== undefined) { document.body.style.overflow = bodyOverflow; bodyOverflow = undefined; } serial++; controller?.abort(); clearTimeout(timer); if (focus) { input.onfocus = null; returnTarget()?.focus({ preventScroll: true }); input.onfocus = () => { if (!opened) show(); }; } }
+    function closePanel(focus = true) { opened = false; panel.hidden = true; setFiltersOpen(false); input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); host.removeAttribute('role'); host.removeAttribute('aria-modal'); if (bodyOverflow !== undefined) { document.body.style.overflow = bodyOverflow; bodyOverflow = undefined; } serial++; controller?.abort(); clearTimeout(timer); if (focus) { input.onfocus = null; returnTarget()?.focus({ preventScroll: true }); input.onfocus = () => { if (!opened) show(); }; } }
     function expand() {
       opened = true; panel.hidden = false; input.setAttribute('aria-expanded', 'true');
       if (global.matchMedia?.('(max-width: 650px)').matches) { host.setAttribute('role', 'dialog'); host.setAttribute('aria-modal', 'true'); host.setAttribute('aria-label', 'Search workspace'); if (bodyOverflow === undefined) bodyOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden'; }
@@ -187,6 +207,7 @@
         if (key === 'type' && value && ![...select.options].some(option => option.value === value)) select.append(new Option(previousLabel || labelFor(value), value));
         select.value = value; if (select.value !== value) select.value = '';
       }
+      updateFilterLabel();
     }
     function paint(result, append) {
       const previousActive = active;
@@ -229,7 +250,7 @@
       if (event.key === 'Escape' && opened) { event.preventDefault(); event.stopPropagation(); closePanel(); }
       if (event.target === input && ['ArrowDown', 'ArrowUp'].includes(event.key)) { event.preventDefault(); if (!opened) show(); else choose(Math.max(0, Math.min(rows.length - 1, active + (event.key === 'ArrowDown' ? 1 : -1)))); }
       if (event.key === 'Tab' && opened && global.matchMedia?.('(max-width: 650px)').matches) {
-        const controls = [input, close, ...Object.values(selects), ...(!more.hidden ? [more] : [])]; const index = controls.indexOf(document.activeElement);
+        const controls = [input, ...(filterToggle ? [filterToggle] : []), close, ...(!filters.hidden ? Object.values(selects) : []), ...(!more.hidden ? [more] : [])]; const index = controls.indexOf(document.activeElement);
         if (event.shiftKey && index === 0) { event.preventDefault(); controls.at(-1).focus(); } else if (!event.shiftKey && index === controls.length - 1) { event.preventDefault(); input.focus(); }
       }
     });

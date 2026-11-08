@@ -54,6 +54,11 @@ try {
       await page.setViewportSize({ width, height: 1000 });
       const geometry = await native.evaluateAll(nodes => nodes.map(node => { const b = node.getBoundingClientRect(); return { width: b.width, height: b.height, nested: node.querySelectorAll('button,input,select,a').length }; }));
       assert.ok(geometry.every(b => Math.abs(b.width - b.height) < 2 && b.width >= 220 && b.width <= 281 && b.height <= 281 && b.nested === 0));
+      assert.ok(await native.evaluateAll(nodes => nodes.every(card => {
+        const title = card.querySelector('.teams-task-card-title'), date = card.querySelector('.teams-task-card-date');
+        return title.getBoundingClientRect().top < date.getBoundingClientRect().top
+          && parseFloat(getComputedStyle(title).fontSize) > parseFloat(getComputedStyle(date.querySelector('strong') || date).fontSize);
+      })), 'The task name is above and more prominent than its date');
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
       if (width === 1440) assert.ok(await native.evaluateAll(nodes => new Set(nodes.map(node => Math.round(node.getBoundingClientRect().left))).size) >= 3, 'Desktop board has multiple compact columns');
       await page.screenshot({ path: join(evidence, `${engine}-native-board-${width}.png`), fullPage: true });

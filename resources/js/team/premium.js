@@ -214,8 +214,13 @@ export function installPremium(root) {
   }
   function eventCard(item, open) {
     const order = item.calendar_order ?? {};
-    return taskCard({ title: item.title, dueOn: order.date, dateLabel: ({ reviewed_session: 'Reviewed session', recorded_start: 'Recorded start', source_due: 'Asana due date' })[order.basis] ?? 'Recorded date', unknownLabel: 'Date unknown',
+    // Source titles often repeat a numeric date range. Keep the source intact in
+    // details, while letting the human event name lead its card.
+    const title = item.title.replace(/^\s*\d{1,2}[./]\d{1,2}[./]\d{2,4}\s*[-–—]\s*\d{1,2}[./]\d{1,2}[./]\d{2,4}\s+/, '').trim() || item.title;
+    const card = taskCard({ title, dueOn: order.date, dateLabel: ({ reviewed_session: 'Reviewed session', recorded_start: 'Recorded start', source_due: 'Asana due date' })[order.basis] ?? 'Recorded date', unknownLabel: 'Date unknown',
       note: order.basis === 'source_due' ? 'Task date · not a confirmed event day' : '', onOpen: () => { const owner = context; if (owner?.ready()) Promise.resolve(open()).catch(error => { if (context === owner) owner.notice(error.message); }); } });
+    card.title = item.title;
+    return card;
   }
   function renderNative(ctx) {
     const list = $('list'), data = ctx.data, layout = ctx.layout, project = ctx.projects.find(p => p.id === ctx.selectedProject);

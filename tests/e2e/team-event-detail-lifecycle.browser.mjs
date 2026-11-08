@@ -39,7 +39,8 @@ try {
       await page.locator(tab === 'List' ? '.teams-event-list' : tab === 'Calendar' ? '.tops-event-calendar' : '.teams-event-board').waitFor();
       await page.waitForLoadState('networkidle'); perTab[tab] = calls.slice(before).map(call => call.path.replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/g, ':id'));
     }
-    const titleA = await cards.nth(0).locator('.teams-task-card-title').innerText(), titleB = await cards.nth(1).locator('.teams-task-card-title').innerText();
+    const cardA = cards.filter({ hasText: 'Fictional seasonal makers and home goods weekend market' }), cardB = cards.filter({ hasText: 'Window event 30' });
+    const titleA = await cardA.locator('.teams-task-card-title').innerText(), titleB = await cardB.locator('.teams-task-card-title').innerText();
     let holdRead = null, holdApproval = null, holdWindow = null;
     await page.route('**/team/operations/records/*', async route => {
       if (route.request().method() !== 'GET') return route.continue();
@@ -51,12 +52,12 @@ try {
     });
     const deferred = (denied = false) => { let started, release, timer; const ready = new Promise((done, reject) => { timer = setTimeout(() => reject(new Error('Expected held request did not start')), 12000); started = () => { clearTimeout(timer); done(); }; }), promise = new Promise(done => { release = done; }); return { ready, started, promise, release, denied }; };
     const snapshot = async () => ({ title: await page.locator('#tops-detail-title').innerText(), body: await page.locator('#tops-detail-body').innerText(), status: await page.locator('#tw-status').innerText() });
-    const openB = async () => { await cards.nth(1).click(); await page.locator('#tops-detail-body table').first().waitFor(); assert.equal(await page.locator('#tops-detail-title').innerText(), titleB); };
+    const openB = async () => { await cardB.click(); await page.locator('#tops-detail-body table').first().waitFor(); assert.equal(await page.locator('#tops-detail-title').innerText(), titleB); };
     console.log(name + ': settled tab request counts captured');
     for (const denied of [false, true]) {
       console.log(name + ': checking retired detail ' + (denied ? 'denial' : 'success'));
       const pending = deferred(denied); holdRead = pending;
-      await cards.nth(0).click(); await pending.ready; await page.locator('#tops-detail-close').click(); await openB();
+      await cardA.click(); await pending.ready; await page.locator('#tops-detail-close').click(); await openB();
       const before = await snapshot(); pending.release(); await page.waitForLoadState('networkidle');
       assert.deepEqual(await snapshot(), before, `${name}: late ${denied ? 'denied' : 'successful'} A read cannot change B title, body or status`);
       await page.locator('#tops-detail-close').click();
@@ -69,7 +70,7 @@ try {
       await route.fulfill({ json: { id: fixture.event_id, version: 2 }, headers: { 'X-Team-Viewer': headers['x-team-viewer'], 'X-Team-Workspace': headers['x-team-workspace'] } }); // Fake acceptance; no DB/provider mutation.
     });
     console.log(name + ': checking retired approval');
-    await cards.nth(0).click(); await dialog.getByLabel('Approve Venue: Fictional review candidate').check();
+    await cardA.click(); await dialog.getByLabel('Approve Venue: Fictional review candidate').check();
     const pendingApproval = deferred(); holdApproval = pendingApproval;
     await dialog.getByRole('button', { name: 'Approve selected fields', exact: true }).click(); await pendingApproval.ready;
     await page.locator('#tops-detail-close').click(); await openB(); const beforeApproval = await snapshot(), countBefore = calls.filter(call => call.path === '/team/operations/records/' + fixture.event_id).length;

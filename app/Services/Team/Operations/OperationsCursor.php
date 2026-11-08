@@ -15,7 +15,7 @@ class OperationsCursor
     {
         $connections = TeamProviderConnection::where(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'area_id' => $area->id])->orderBy('id')->get(['id', 'generation', 'status'])->toArray();
 
-        return hash('sha256', json_encode([$tenant->id, $user->id, $area->id, $filters['kind'] ?? null, $filters['q'] ?? '', $filters['target_id'] ?? null, $filters['calendar_from'] ?? null, $filters['calendar_to'] ?? null, $connections], JSON_THROW_ON_ERROR));
+        return hash('sha256', json_encode([$tenant->id, $user->id, $area->id, $filters['kind'] ?? null, $filters['q'] ?? '', $filters['target_id'] ?? null, $filters['calendar_from'] ?? null, $filters['calendar_to'] ?? null, $filters['event_scope'] ?? null, $connections], JSON_THROW_ON_ERROR));
     }
 
     public function apply($query, string $scope, ?string $cursor): void

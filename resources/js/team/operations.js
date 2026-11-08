@@ -177,7 +177,8 @@ export function installOperations(nativeRoot) {
   $('prev').onclick = () => { if (page > 1) page--; load(); };
   $('next').onclick = () => { page++; load(); };
   $('search').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { page = 1; load(); }, 300); };
-  function query(kind) { return { kind, page, q: $('search').value.trim(), cursor: pageCursors[page - 1], ...(view === 'calendar' ? { ...eventCalendarWindow(root.dataset.tenant + '|' + area.id), calendar_recheck_sources: page > 1 ? 1 : 0 } : {}) }; }
+  function allEventSurface() { return view === 'calendar' && root.classList.contains('tops-inline-calendar'); }
+  function query(kind) { return { kind, page, q: $('search').value.trim(), cursor: pageCursors[page - 1], ...(view === 'calendar' ? { ...(allEventSurface() ? { event_scope: 'all' } : eventCalendarWindow(root.dataset.tenant + '|' + area.id)), calendar_recheck_sources: page > 1 ? 1 : 0 } : {}) }; }
   async function load(appendCalendar = false) {
     if (!area || $('panel').hidden) return;
     if (view === 'calendar' && !appendCalendar) { page = 1; calendarPages = null; $('content').replaceChildren(); $('scope').textContent = 'Checking selected dates…'; }
@@ -200,6 +201,28 @@ export function installOperations(nativeRoot) {
       }
       else result = await api('/operations/records', { query: query({ documents: 'document', staffing: 'staff', pipeline: 'opportunity', campaigns: 'campaign', automations: 'rule', calendar: 'event', events: 'event', accounts: 'account' }[view] || (area.profile === 'events' ? 'event' : 'account')) });
       if (ticket !== serial || current !== area.id) return;
+      if (allEventSurface()) {
+        // Transport batches are automatic. The board is one complete collection,
+        // independent of the displayed calendar month; never ask a user to page it.
+        const collected = new Map(), cursors = new Set(), notices = new Set();
+        let sourceIncomplete = false, partial = false, complete = true;
+        while (true) {
+          if (ticket !== serial || current !== area.id || identityLost) return;
+          if (result.collection_access_incomplete) throw new Error('Event source access could not be fully checked. Refresh to try again.');
+          sourceIncomplete ||= !!result.source_access_incomplete; partial ||= !!result.partial;
+          complete &&= (result.event_collection?.source_coverage_complete ?? result.freshness?.complete ?? !result.source_access_incomplete);
+          const notice = result.event_collection?.scan_limited ? result.freshness?.notice : result.notice || result.freshness?.notice;
+          if ((result.source_access_incomplete || result.partial || result.freshness?.complete === false) && notice) notices.add(notice);
+          for (const item of result.items || []) collected.set(item.id, item);
+          if (!result.has_more) break;
+          const cursor = result.next_cursor;
+          if (!cursor || cursors.has(cursor)) throw new Error('The event collection could not finish loading. Refresh to try again.');
+          cursors.add(cursor);
+          $('scope').textContent = 'Loading events · ' + collected.size;
+          result = await api('/operations/records', { query: { kind: 'event', event_scope: 'all', q: $('search').value.trim(), cursor, calendar_recheck_sources: 1 } });
+        }
+        result = { ...result, items: [...collected.values()], count: collected.size, has_more: false, next_cursor: null, event_scope: 'all', event_collection: { ...result.event_collection, local_scan_complete: true, scan_limited: false, source_coverage_complete: complete }, source_access_incomplete: sourceIncomplete, partial: partial || sourceIncomplete || !complete, complete, notice: [...notices].join(' ') || result.notice || result.freshness?.notice };
+      }
       $('content').replaceChildren(); $('notice').textContent = result.notice || result.freshness?.notice || '';
       pageCursors[page] = result.next_cursor;
       $('scope').textContent = result.count !== undefined ? result.count + ' visible records · page ' + page : result.total !== undefined ? result.total + ' accessible records · page ' + page : '';
@@ -218,15 +241,14 @@ export function installOperations(nativeRoot) {
         const items = [...new Map([...prior, ...result.items].map(item => [item.id, item])).values()];
         calendarPages = { key, items, pages: continuing ? calendarPages.pages + 1 : 1 };
         $('prev').hidden = $('next').hidden = true;
-        $('scope').textContent = items.length + ' loaded event records · ' + calendarPages.pages + ' checked pages';
-        renderCalendar(items, result);
-        let grid = $('content').querySelector('.tops-event-calendar-scroll');
+        $('scope').textContent = result.event_scope === 'all' ? items.length + ' accessible event records' : items.length + ' loaded event records · ' + calendarPages.pages + ' checked pages';
+        let grid;
         if (root.classList.contains('tops-inline-calendar') && inlineOptions?.layout !== 'calendar' && typeof inlineOptions?.renderCard === 'function') {
           const container = el('div', '', inlineOptions.layout === 'board' ? 'teams-event-board' : 'teams-event-list');
-          const window = result.calendar_window || {}, validDay = day => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day);
+          const validDay = day => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day);
           const order = item => {
             const schedule = item.data?.event_schedule || {}, evidence = schedule.session_evidence || [];
-            const days = (schedule.sessions || []).filter(session => validDay(session.date) && session.date >= window.from && session.date <= window.to && evidence.some(row => row.session_id === session.id && ['source_verified_at_review', 'staff_attested', 'staff_attested_external'].includes(row.status))).map(session => session.date).sort();
+            const days = (schedule.sessions || []).filter(session => validDay(session.date) && evidence.some(row => row.session_id === session.id && ['source_verified_at_review', 'staff_attested', 'staff_attested_external'].includes(row.status))).map(session => session.date).sort();
             if (days.length) return { date: days[0], basis: 'reviewed_session' };
             const start = item.starts_on, due = item.data?.source_schedule?.due_on || schedule.source_schedule?.due_on;
             if (validDay(start)) return { date: start, basis: item.source && start === due ? 'source_due' : 'recorded_start' };
@@ -234,13 +256,15 @@ export function installOperations(nativeRoot) {
           };
           const ordered = items.map(item => ({ item, sort: order(item) })).sort((a, b) => String(a.sort.date || '9999-99-99').localeCompare(String(b.sort.date || '9999-99-99')) || a.item.title.localeCompare(b.item.title) || String(a.item.id).localeCompare(String(b.item.id)));
           for (const { item, sort } of ordered) container.append(inlineOptions.renderCard({ ...item, calendar_order: sort }, () => details(item)));
-          if (!items.length) container.append(el('p', 'No matching events in this loaded date window.', 'tops-muted'));
-          grid.replaceWith(container); grid = container;
-          $('content').querySelectorAll(':scope > .tops-calendar-records').forEach(section => section.remove());
+          if (!items.length) container.append(el('p', 'No matching events.', 'tops-muted'));
+          $('content').append(container); grid = container;
+        } else {
+          renderCalendar(items, result);
+          grid = $('content').querySelector('.tops-event-calendar-scroll');
         }
         if (result.has_more && items.length < 90) grid.before(button('Load more events', () => { page++; return load(true); }, 'tops-calendar-more'));
         else if (result.has_more) { grid.before(el('p', items.length + ' events loaded. Continue replaces this batch; dates outside the loaded batch remain unchecked.', 'tops-muted'), button('Continue with next events', () => { calendarPages = null; page++; return load(true); }, 'tops-calendar-more')); }
-        if (result.source_access_incomplete) grid.before(el('p', 'Earlier loaded pages were cleared because a current source access check was unavailable.', 'tops-muted'));
+        if (result.source_access_incomplete) grid.before(el('p', result.event_scope === 'all' ? 'Some source records are unavailable. Only currently accessible events are shown.' : 'Earlier loaded pages were cleared because a current source access check was unavailable.', 'tops-muted'));
         if (appendCalendar && prior.length) grid.before(el('p', 'Includes previously loaded pages. Refresh rechecks current access and restarts this date window.', 'tops-muted'));
       }
       else if (view === 'pipeline') renderPipeline(result.items);
@@ -301,7 +325,7 @@ export function installOperations(nativeRoot) {
     const stages = [...new Set([...area.settings.stages, ...items.map(i => i.status)])];
     for (const stage of stages) { const lane = el('section', '', 'tops-lane'), matches = items.filter(i => i.status === stage); lane.append(el('h3', label(stage) + ' · ' + matches.length)); for (const item of matches) { const card = el('div', '', 'tops-pipeline-card'); card.append(button(item.title, () => details(item)), el('p', money(item.data.amount_cents))); lane.append(card); } board.append(lane); }
   }
-  function renderCalendar(items, coverage) { renderEventCalendar($('content'), items, coverage, root.dataset.tenant, item => details(item).catch(report), root.dataset.tenant + '|' + area.id, () => { page = 1; return load(); }); }
+  function renderCalendar(items, coverage) { renderEventCalendar($('content'), items, coverage, root.dataset.tenant, item => details(item).catch(report), root.dataset.tenant + '|' + area.id, coverage.event_scope === 'all' ? undefined : () => { page = 1; return load(); }); }
   function renderStats(data) {
     if (area.profile === 'events') {
       const filters = el('div', '', 'tops-form'); $('content').append(filters); const year = field(filters, '', 'Reporting year', data.year, 'number'); year.min = 2000; year.max = 2100; filters.append(button('Show this year', () => { if (!year.reportValidity() || !year.value) return; statisticsYear = Number(year.value); return load(); }));

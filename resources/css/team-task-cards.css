@@ -1,17 +1,17 @@
 /* Cards are actions, including read-only work; no controls are nested inside. */
 .teams-premium #team-work-app :is(.teams-task-card-grid,.teams-event-board){display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:16px;align-items:start}
-.teams-premium #team-work-app button.teams-task-card{display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;aspect-ratio:1;width:100%;max-width:280px;min-width:0;min-height:220px;padding:20px;gap:16px;border:1px solid #d3ddcf;border-radius:14px;background:#fff;color:#233d30;text-align:left;font:inherit;cursor:pointer;box-shadow:0 2px 6px #183e3208}
+.teams-premium #team-work-app button.teams-task-card{display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;aspect-ratio:1;width:100%;max-width:280px;min-width:0;min-height:220px;padding:16px;gap:8px;border:1px solid #d3ddcf;border-radius:14px;background:#fff;color:#233d30;text-align:left;font:inherit;cursor:pointer;box-shadow:0 2px 6px #183e3208}
 .teams-premium #team-work-app button.teams-task-card:hover{border-color:#74916c;background:#f7f9f3;box-shadow:0 5px 16px #183e3212}
 .teams-premium #team-work-app button.teams-task-card:focus-visible{outline:3px solid #74916c;outline-offset:3px}
-.teams-task-card-title{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font-size:17px;line-height:1.4;font-weight:650;overflow-wrap:anywhere}
-.teams-task-card-date{display:grid;gap:3px;font-size:14px;line-height:1.4;color:#486144}
-.teams-task-card-date>strong{font-size:30px;line-height:1.15;letter-spacing:-.035em;color:#244d3b}
-.teams-task-card-context{font-size:14px;line-height:1.4;color:#486144;overflow-wrap:anywhere}
+.teams-task-card-title{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font-size:22px;line-height:1.25;font-weight:650;letter-spacing:-.025em;overflow-wrap:anywhere}
+.teams-task-card-date{display:grid;gap:2px;font-size:12px;line-height:1.3;color:#486144;margin-top:auto}
+.teams-task-card-date>strong{font-size:17px;line-height:1.25;letter-spacing:0;color:#244d3b}
+.teams-task-card-context{font-size:12px;line-height:1.35;color:#486144;overflow-wrap:anywhere}
 .teams-task-card.is-complete .teams-task-card-title{text-decoration:line-through}
 .teams-task-card-grid>.teams-empty{grid-column:1/-1}
 .teams-premium #team-work-app .board-column>.teams-task-card{margin-block:10px}
 .teams-premium #team-work-app .teams-event-list button.teams-task-card{aspect-ratio:auto;max-width:none;min-height:88px;padding:12px 16px;display:grid;grid-template-columns:150px minmax(0,1fr);align-items:center;gap:12px}
-@media(max-width:480px){.teams-premium #team-work-app .teams-event-list button.teams-task-card{grid-template-columns:110px minmax(0,1fr);padding:16px}.teams-task-card-date>strong{font-size:28px}}
+@media(max-width:480px){.teams-premium #team-work-app .teams-event-list button.teams-task-card{grid-template-columns:110px minmax(0,1fr);padding:16px}}
 @media(forced-colors:active){.teams-premium #team-work-app button.teams-task-card{border:1px solid ButtonText}.teams-premium #team-work-app button.teams-task-card:focus-visible{outline:3px solid Highlight}}
 
-.teams-event-list .teams-task-card-date{grid-column:1;grid-row:1 / span 2}.teams-event-list .teams-task-card-date>strong{font-size:22px}.teams-event-list .teams-task-card-title{grid-column:2;grid-row:1}.teams-event-list .teams-task-card-context{grid-column:2;grid-row:2}
+.teams-event-list .teams-task-card-date{grid-column:1;grid-row:1 / span 2;margin-top:0}.teams-event-list .teams-task-card-date>strong{font-size:17px}.teams-event-list .teams-task-card-title{grid-column:2;grid-row:1;font-size:18px;letter-spacing:0}.teams-event-list .teams-task-card-context{grid-column:2;grid-row:2}
