@@ -9,6 +9,8 @@
         <label style="display:block;margin:10px 0">{{ $label }}<input @required($key !== 'street2') name="shipping_address[{{ $key }}]" autocomplete="{{ $autocomplete }}" @if($key === 'state') maxlength="2" @endif style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #b7c3b7;border-radius:5px"></label>
     @endforeach
     <label style="display:block;margin:10px 0">Address type<select name="shipping_address[residential]" style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #b7c3b7;border-radius:5px"><option value="1">Home / residential</option><option value="0">Business / commercial</option></select></label>
+    <label style="display:block;margin:10px 0">Delivery contact phone (needed for FedEx)<input type="tel" name="shipping_address[phone]" autocomplete="shipping tel" maxlength="40" style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #b7c3b7;border-radius:5px"></label>
+    <p style="font-size:13px">Include a US phone number to compare FedEx options. Carrier transit estimates start after handoff.</p>
     <input type="hidden" name="shipping_address[country]" value="US">
     <button type="button" data-find-rates class="store-button sn-btn sn-btn-light" style="width:100%;margin-top:12px">Find shipping options</button>
     <div data-shipping-rates role="status" aria-live="polite" style="margin-top:12px"></div>

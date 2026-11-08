@@ -47,7 +47,7 @@ class AuditWebsiteShipping extends Command
         $rows = [];
         foreach ($tenants as $tenant) {
             $sites = TenantSite::query()->forTenant($tenant)->get();
-            $accounts = IntegrationConnection::query()->forTenant($tenant)->whereIn('provider', ['easypost', 'shippo', 'shipstation', 'freightview', 'freightquote'])
+            $accounts = IntegrationConnection::query()->forTenant($tenant)->whereIn('provider', ['easypost', 'shippo', 'shipstation', 'freightview', 'freightquote', 'goship'])
                 ->orderBy('id')->get()->map(fn ($connection) => ['id' => $connection->id, 'provider' => $connection->provider,
                     'status' => $connection->status, 'credential_present' => filled($connection->access_token),
                     'webhook_secret_present' => filled($connection->external_account_secret),

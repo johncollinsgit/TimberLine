@@ -325,6 +325,9 @@ test('an expired quote gives an actionable error and preserves its evidence', fu
 });
 
 test('approved USPS UPS and FedEx services are priced in ascending order without exposing unsupported services', function (): void {
+    $origin = WebsiteFulfillmentLocation::query()->firstOrFail();
+    $origin->update(['address' => $origin->address + ['phone' => '5125550100']]);
+    $this->destination['phone'] = '5125550101';
     $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => ['USPS:GroundAdvantage', 'UPS:Ground', 'FedEx:GROUND_HOME_DELIVERY']], $this->actor);
     $this->carrierResponse = shippingPlanResponse([
         ['id' => 'rate_usps', 'carrier' => 'USPS', 'service' => 'GroundAdvantage', 'rate' => '9.25', 'currency' => 'USD'],
@@ -336,6 +339,10 @@ test('approved USPS UPS and FedEx services are priced in ascending order without
 });
 
 test('each approved parcel carrier completes payment label purchase reprint evidence and confirmed handoff', function (string $carrier, string $service): void {
+    $origin = WebsiteFulfillmentLocation::query()->firstOrFail();
+    $origin->update(['address' => $origin->address + ['phone' => '5125550100']]);
+    $this->destination['phone'] = '5125550101';
+    $this->buyer['shipping_address'] = $this->destination;
     $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => [$carrier.':'.$service]], $this->actor);
     $this->carrierResponse = shippingPlanResponse([['id' => 'rate_pilot', 'carrier' => $carrier, 'service' => $service, 'rate' => '5.25', 'currency' => 'USD']]);
     $quote = $this->shipping->quote($this->cart, $this->destination)[0];
@@ -352,6 +359,32 @@ test('each approved parcel carrier completes payment label purchase reprint evid
     expect($order->fresh()->fulfillment_status)->toBe('fulfilled');
     expect(collect(Http::recorded())->filter(fn ($pair) => str_ends_with($pair[0]->url(), '/buy')))->toHaveCount(1);
 })->with([['USPS', 'GroundAdvantage'], ['UPS', 'Ground'], ['FedEx', 'GROUND_HOME_DELIVERY']]);
+
+test('FedEx never offers a rate that lacks mandatory shipper or recipient contacts', function (): void {
+    $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => ['FedEx:GROUND_HOME_DELIVERY']], $this->actor);
+    expect(fn () => $this->shipping->quote($this->cart, $this->destination))->toThrow(ValidationException::class, 'store completes');
+    $origin = WebsiteFulfillmentLocation::query()->firstOrFail();
+    $this->setup->saveLocation($this->site, ['location_id' => $origin->id, 'name' => 'Warehouse', 'street1' => '1 Main St', 'city' => 'Austin', 'state' => 'TX', 'zip' => '78701', 'phone' => '+1 (512) 555-0100'], $this->actor);
+    expect($origin->fresh()->address['phone'])->toBe('5125550100');
+    expect(fn () => $this->shipping->quote($this->cart, $this->destination))->toThrow(ValidationException::class, '10-digit');
+    expect(fn () => $this->shipping->quote($this->cart, $this->destination + ['phone' => '5125550101 ext 12']))->toThrow(ValidationException::class, 'without an extension');
+    Http::assertNothingSent();
+    $this->destination['phone'] = '+1 (512) 555-0101';
+    $this->carrierResponse = shippingPlanResponse([['id' => 'rate_fedex', 'carrier' => 'FedEx', 'service' => 'GROUND_HOME_DELIVERY', 'rate' => '7.25', 'currency' => 'USD']]);
+    $quote = $this->shipping->quote($this->cart, $this->destination)[0];
+    Http::assertSent(fn ($request) => $request['shipment']['from_address']['phone'] === '5125550100' && $request['shipment']['to_address']['phone'] === '5125550101');
+    expect($quote->destination['phone'])->toBe('5125550101')
+        ->and($this->plans->selectedQuote($this->cart, $quote->id, $this->destination)->id)->toBe($quote->id);
+});
+
+test('missing FedEx contacts leave approved USPS options available instead of advertising unusable FedEx postage', function (): void {
+    $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => ['USPS:GroundAdvantage', 'FedEx:FEDEX_GROUND']], $this->actor);
+    $this->carrierResponse = shippingPlanResponse([
+        ['id' => 'rate_usps', 'carrier' => 'USPS', 'service' => 'GroundAdvantage', 'rate' => '5.25', 'currency' => 'USD'],
+        ['id' => 'rate_fedex', 'carrier' => 'FedEx', 'service' => 'FEDEX_GROUND', 'rate' => '4.25', 'currency' => 'USD'],
+    ]);
+    expect(collect($this->shipping->quote($this->cart, $this->destination))->pluck('carrier')->all())->toBe(['USPS']);
+});
 
 test('lowest cost comparison retains the exact measured package selected by the buyer', function (): void {
     $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => ['USPS:GroundAdvantage'], 'package_selection' => 'lowest_cost'], $this->actor);

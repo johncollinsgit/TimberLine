@@ -46,7 +46,7 @@ class WebsiteCommerceShippingService
         abort_unless($this->enabledFor($tenant), 423, 'Native shipping is not enabled for this website.');
         app(WebsiteShippingReadinessService::class)->assertCartCanShip($cart);
         $plans = app(WebsiteShippingPlanService::class);
-        $destination = $plans->address($destination);
+        $destination = $plans->rateAddress($destination);
         $quotes = [];
         foreach ($plans->candidates($cart, $destination) as $plan) {
             $quotes = array_merge($quotes, $this->quotePlan($cart, $tenant, $destination, $plans, $plan));

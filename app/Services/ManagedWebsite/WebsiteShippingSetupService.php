@@ -105,8 +105,8 @@ class WebsiteShippingSetupService
         app(WebsiteCatalogService::class)->assertEditor($site, $actor);
         $data = Validator::make($data, ['location_id' => ['nullable', 'integer', 'min:1'], 'name' => ['required', 'string', 'max:190'], 'street1' => ['required', 'string', 'max:190'],
             'street2' => ['nullable', 'string', 'max:190'], 'city' => ['required', 'string', 'max:120'], 'state' => ['required', 'string', 'size:2'],
-            'zip' => ['required', 'string', 'max:10'], 'is_default' => ['nullable', 'boolean']])->validate();
-        $address = app(WebsiteShippingPlanService::class)->address($data + ['country' => 'US'], 'origin');
+            'zip' => ['required', 'string', 'max:10'], 'phone' => ['nullable', 'string', 'max:40'], 'is_default' => ['nullable', 'boolean']])->validate();
+        $address = app(WebsiteShippingPlanService::class)->rateAddress($data + ['country' => 'US'], 'origin');
         DB::transaction(function () use ($site, $data, $address, $actor): void {
             $site = TenantSite::query()->forTenantId($site->tenant_id)->lockForUpdate()->findOrFail($site->id);
             if ((bool) ($data['is_default'] ?? false)) {

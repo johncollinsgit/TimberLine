@@ -24,7 +24,11 @@ USPS Ground Advantage/Priority/Express; UPS Ground/3 Day Select/2nd Day Air/Next
 Day Air; and FedEx Ground/Home Delivery/Express Saver/2Day/Standard Overnight/
 Priority Overnight. Existing tenants keep their saved services until they save
 new choices. Selecting a service does not connect or fund a carrier account.
-The tenant must finish eligible carrier linking, agreement acceptance and billing
+FedEx requires full shipper/recipient names of at least three characters and
+10-digit domestic contact numbers. New quote inputs normalize ordinary US phone
+formatting, without changing legacy paid-address fingerprints. Missing contacts
+exclude FedEx; approved USPS/UPS options remain available. The setup guide flags
+missing ship-from contacts. The tenant must finish eligible carrier linking, agreement acceptance and billing
 in the provider portal. No embedded platform/resale agreement is assumed.
 
 The optional `shipping.package_selection=lowest_cost` compares the first fitting
@@ -164,3 +168,5 @@ Official references checked November 8, 2026:
 - EasyPost FedEx: https://docs.easypost.com/carriers/fedex-byoca-guide
 - EasyPost refunds: https://docs.easypost.com/docs/shipments/shipping-refund
 - ShipStation freight: https://docs.shipstation.com/freight/quote-and-book
+
+- FedEx contact requirements: https://support.easypost.com/hc/en-us/articles/37602064294541-FedEx-SOAP-to-REST-Migration

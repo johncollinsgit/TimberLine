@@ -33,13 +33,14 @@ class WebsiteShippingHealthService
         $location = WebsiteFulfillmentLocation::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('active', true)->orderByDesc('is_default')->orderBy('id')->first();
         if ($location) {
             try {
-                app(WebsiteShippingPlanService::class)->address((array) $location->address);
-                $originReady = true;
+                $originAddress = app(WebsiteShippingPlanService::class)->rateAddress((array) $location->address);
+                $needsFedEx = collect($policy['services'] ?? [])->contains(fn ($service) => str_starts_with($service, 'FedEx:'));
+                $originReady = ! $needsFedEx || (preg_match('/^[0-9]{10}$/D', $originAddress['phone'] ?? '') && mb_strlen($originAddress['name']) >= 3);
             } catch (\Illuminate\Validation\ValidationException) {
                 $originReady = false;
             }
         }
-        $rows[] = ['label' => 'Pickup and ship-from origin', 'ready' => $originReady, 'detail' => $originReady ? 'A complete active US origin is saved.' : 'Add a complete active US origin.'];
+        $rows[] = ['label' => 'Pickup and ship-from origin', 'ready' => $originReady, 'detail' => $originReady ? 'A complete active US origin is saved.' : 'Add a complete active US origin. FedEx also needs a full ship-from contact name and a 10-digit phone number.'];
         $packages = WebsiteShippingPackage::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('active', true)->get();
         $reviewed = $packages->filter(fn ($package) => data_get($policy, 'packages.'.$package->id.'.max_items', 0) > 0)->count();
         $rows[] = ['label' => 'Reviewed packages', 'ready' => $reviewed > 0, 'detail' => $reviewed.' active reviewed package presets. Each cart must still pass its fit check.'];

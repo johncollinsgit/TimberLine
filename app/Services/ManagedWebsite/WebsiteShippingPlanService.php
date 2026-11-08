@@ -64,10 +64,27 @@ class WebsiteShippingPlanService
         return $this->fingerprint(array_map('strtolower', $address));
     }
 
+    /** Normalize contacts for new rates without changing legacy paid fingerprints. */
+    public function rateAddress(array $address, string $field = 'shipping_address'): array
+    {
+        $address = $this->address($address, $field);
+        if (filled($address['phone'] ?? null)) {
+            $phone = preg_replace('/\D/', '', $address['phone']);
+            if (strlen($phone) === 11 && str_starts_with($phone, '1')) {
+                $phone = substr($phone, 1);
+            }
+            if (strlen($phone) === 10) {
+                $address['phone'] = $phone;
+            }
+        }
+
+        return $address;
+    }
+
     /** @return array{parcel:array,context:array,origin:array,connection:IntegrationConnection} */
     public function build(WebsiteCart $cart, array $destination, ?int $packageId = null): array
     {
-        $destination = $this->address($destination);
+        $destination = $this->rateAddress($destination);
         abort_unless($cart->status === 'active', 422, 'This cart is no longer active.');
         $site = TenantSite::query()->forTenantId($cart->tenant_id)->findOrFail($cart->tenant_site_id);
         $connection = $this->connection($cart->tenant_id);
@@ -77,7 +94,18 @@ class WebsiteShippingPlanService
         $origin = WebsiteFulfillmentLocation::query()->forTenantId($cart->tenant_id)->where('tenant_site_id', $site->id)
             ->where('active', true)->orderByDesc('is_default')->orderBy('id')->first();
         abort_unless($origin, 423, 'Add an active US ship-from location before requesting rates.');
-        $originAddress = $this->address((array) $origin->address, 'origin');
+        $originAddress = $this->rateAddress((array) $origin->address, 'origin');
+        $services = array_values($policy['services']);
+        $fedexOriginReady = preg_match('/^[0-9]{10}$/D', $originAddress['phone'] ?? '') && mb_strlen($originAddress['name']) >= 3;
+        $fedexDestinationReady = preg_match('/^[0-9]{10}$/D', $destination['phone'] ?? '') && mb_strlen($destination['name']) >= 3;
+        if (! $fedexOriginReady || ! $fedexDestinationReady) {
+            $services = array_values(array_filter($services, fn ($service) => ! str_starts_with($service, 'FedEx:')));
+            if ($services === []) {
+                throw ValidationException::withMessages(['shipping_address.phone' => ! $fedexOriginReady
+                    ? 'Carrier shipping is unavailable until the store completes its delivery contact setup. Contact the store or choose another delivery option.'
+                    : 'Enter a full delivery contact name (at least 3 characters) and a 10-digit phone number, without an extension, to see FedEx shipping options.']);
+            }
+        }
         app(WebsiteShippingReadinessService::class)->assertCartCanShip($cart);
         $items = $cart->items->sortBy('website_product_variant_id')->values();
         $contents = [];
@@ -120,7 +148,7 @@ class WebsiteShippingPlanService
                 'destination_fingerprint' => $this->addressFingerprint($destination),
                 'package_id' => $package->id, 'packing_rule' => $rule, 'parcel' => $parcel,
                 'connection_id' => $connection->id, 'account_fingerprint' => $this->accountFingerprint($connection),
-                'mode' => $policy['mode'], 'services' => array_values($policy['services']), 'currency' => 'usd',
+                'mode' => $policy['mode'], 'services' => $services, 'currency' => 'usd',
                 'free_shipping_threshold_cents' => (int) data_get($site->publishedSiteVersion?->settings, 'free_shipping_threshold_cents', 0),
                 'customer_policy' => app(WebsiteShippingPolicyService::class)->forSite($site),
                 'package_selection' => $policy['package_selection'] ?? 'preferred',
@@ -211,6 +239,7 @@ class WebsiteShippingPlanService
 
     public function selectedQuote(WebsiteCart $cart, int $quoteId, array $destination): WebsiteShippingRateQuote
     {
+        $destination = $this->rateAddress($destination);
         $quote = WebsiteShippingRateQuote::query()->forTenantId($cart->tenant_id)->where('tenant_site_id', $cart->tenant_site_id)
             ->where('website_cart_id', $cart->id)->whereKey($quoteId)->firstOrFail();
         if (! $quote->expires_at || $quote->expires_at->lte(now())) {
