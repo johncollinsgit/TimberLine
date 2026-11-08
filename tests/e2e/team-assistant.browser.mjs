@@ -72,6 +72,7 @@ try {
         if (width < 801) await page.locator('[data-teams-menu]').click();
         assert.ok((await ask.boundingBox()).height >= 44);
         await ask.click(); const dialog = page.getByRole('dialog', { name: 'Ask Everbranch', exact: true });
+        assert.equal(await dialog.getByRole('button', { name: 'Find a page', exact: true }).count(), 0, 'Standalone Teams has no global page-finder command palette');
         await dialog.getByText('Teams event details and Asana notes are not included', { exact: false }).waitFor();
         await dialog.getByRole('textbox', { name: 'Question', exact: true }).fill('Help me review my permitted workspace.');
         await page.waitForFunction(() => !document.querySelector('.everbranch-assistant-panel form button.assistant-primary')?.disabled, null, { timeout: 5000 }).catch(async error => {
@@ -88,6 +89,14 @@ try {
         await page.screenshot({ path: join(output, `${name}-${width}.png`) });
         await dialog.getByRole('button', { name: 'Close assistant', exact: true }).click();
         assert.equal(await page.getByRole('dialog', { name: 'Ask Everbranch', exact: true }).isVisible(), false);
+        // Exercise the shared widget's default for other hosts: its existing event still fires.
+        await page.evaluate(() => {
+          document.querySelector('[data-team-assistant-entry] [data-ai-assistant]').dataset.pageFinderEnabled = 'true';
+          document.addEventListener('app-command-palette:open', () => { window.fixturePageFinderOpened = true; }, { once: true });
+        });
+        await ask.click(); await dialog.getByRole('button', { name: 'Find a page', exact: true }).click();
+        assert.equal(await page.evaluate(() => Boolean(window.fixturePageFinderOpened)), true);
+        assert.equal(await dialog.isVisible(), false);
         assert.deepEqual(errors, []); assert.deepEqual(unexpected, []);
         reports.push({ engine: name, width, passed: true, question_posts: 1, provider_calls: 0, dimensions });
         await page.close();

@@ -213,6 +213,8 @@ assistant session; only an explicit question dispatches AI. Existing owner/admin
 verification, entitlement, model, cap and prepaid-credit checks remain unchanged.
 Unapproved workspaces and non-premium Teams retain the guarded real setup link;
 a failed lazy import reveals the same tenant-bound fallback. No iframe is used.
+The Teams host disables the global page-finder control because its command palette
+is not loaded there; other assistant hosts retain their existing page finder.
 
 The dialog explicitly excludes Teams event details and Asana notes from current
 workspace context. A future event provider needs actor-owned source authorization

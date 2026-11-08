@@ -1,2 +1,2 @@
-@props(['tenant', 'scopeNotice' => null])
-<div data-ai-assistant data-base-url="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-workspace="{{ $tenant->name }}" data-scope-notice="{{ $scopeNotice }}" data-origin="{{ json_encode(app(\App\Services\AiBranch\AiWorkspaceContext::class)->enabled($tenant) ? app(\App\Services\AiBranch\AiWorkspacePage::class)->descriptor(request()) : []) }}"></div>
+@props(['tenant', 'scopeNotice' => null, 'pageFinder' => true])
+<div data-ai-assistant data-base-url="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-workspace="{{ $tenant->name }}" data-scope-notice="{{ $scopeNotice }}" data-page-finder-enabled="{{ $pageFinder ? 'true' : 'false' }}" data-origin="{{ json_encode(app(\App\Services\AiBranch\AiWorkspaceContext::class)->enabled($tenant) ? app(\App\Services\AiBranch\AiWorkspacePage::class)->descriptor(request()) : []) }}"></div>

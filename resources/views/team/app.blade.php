@@ -44,7 +44,7 @@
             <a href="{{ route('team.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link>Back to Everbranch</a>
             @if(config('team_work.premium_enabled') && app(\App\Services\AiBranch\AiAssistantAccess::class)->allows($tenant, auth()->user()))
             <div class="teams-assistant-entry" data-team-assistant-entry>
-                <x-app-ai-assistant :tenant="$tenant" scope-notice="Teams event details and Asana notes are not included in this workspace context." />
+                <x-app-ai-assistant :tenant="$tenant" :page-finder="false" scope-notice="Teams event details and Asana notes are not included in this workspace context." />
                 <p role="status" data-team-assistant-status hidden></p>
                 <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link data-team-assistant-fallback hidden>Open Ask Everbranch</a>
                 <noscript><a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}">Open Ask Everbranch</a></noscript>

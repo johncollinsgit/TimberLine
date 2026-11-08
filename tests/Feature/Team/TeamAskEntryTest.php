@@ -41,6 +41,7 @@ test('approved Teams owner receives the existing in-place assistant host with ex
     $account = AiBranchAccount::create(['tenant_id' => $tenant->id, 'enabled' => true, 'budget_cents' => 1000]);
     $response = $this->actingAs($owner)->get(route('team.app', ['tenant' => $tenant->slug]))->assertOk()
         ->assertSee('data-team-assistant-entry', false)->assertSee('data-ai-assistant', false)
+        ->assertSee('data-page-finder-enabled="false"', false)
         ->assertSee('data-base-url="'.route('ai-branch.index', ['tenant' => $tenant->slug]).'"', false)
         ->assertSee('data-scope-notice="Teams event details and Asana notes are not included in this workspace context."', false);
     if ($path = getenv('TEAMS_ASK_BROWSER_HTML')) {
@@ -51,6 +52,8 @@ test('approved Teams owner receives the existing in-place assistant host with ex
         chmod($path, 0600);
     }
     expect(AiBranchConversation::count())->toBe(0)->and($account->fresh()->budget_cents)->toBe(1000);
+    $this->blade('<x-app-ai-assistant :tenant="$tenant" />', ['tenant' => $tenant])
+        ->assertSee('data-page-finder-enabled="true"', false);
     $account->update(['enabled' => false]);
     $this->get(route('team.app', ['tenant' => $tenant->slug]))->assertOk()->assertDontSee('data-ai-assistant', false)
         ->assertSee('href="'.route('ai-branch.index', ['tenant' => $tenant->slug]).'" data-team-surface-link>Ask Everbranch', false);
