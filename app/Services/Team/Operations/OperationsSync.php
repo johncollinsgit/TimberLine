@@ -293,14 +293,22 @@ class OperationsSync
     {
         $fields = $this->extract($data['original_notes'] ?? '');
         $approved = [];
-        foreach (is_array($data['fields'] ?? null) ? $data['fields'] : [] as $previous) {
-            if (! is_array($previous)) {
+        $sourceVersion = $data['source_version'] ?? null;
+        $reviewed = is_array($data['reviewed_fields'] ?? null) ? $data['reviewed_fields'] : [];
+        // Sync rebuilds candidate fields from source notes. Only an exact,
+        // current, audited review can restore an approval to that projection.
+        foreach (is_array($data['_teams_enrichment']['field_reviews'] ?? null) ? $data['_teams_enrichment']['field_reviews'] : [] as $previous) {
+            if (! is_array($previous) || ($previous['review_state'] ?? null) !== 'approved'
+                || ! is_string($sourceVersion) || $sourceVersion === '' || ($previous['source_version'] ?? null) !== $sourceVersion
+                || ! isset($previous['field'], $previous['value'], $previous['passage'], $previous['reviewed_by'], $previous['reviewed_at'])
+                || ! is_string($previous['field']) || ! is_string($previous['value']) || ! is_string($previous['passage'])
+                || (! is_int($previous['reviewed_by']) && (! is_string($previous['reviewed_by']) || ! ctype_digit($previous['reviewed_by']))) || (int) $previous['reviewed_by'] < 1
+                || ! is_string($previous['reviewed_at']) || $previous['reviewed_at'] === ''
+                || ! array_key_exists($previous['field'], $reviewed) || $reviewed[$previous['field']] !== $previous['value']) {
                 continue;
             }
-            if (($previous['review_state'] ?? null) === 'approved' && isset($previous['field'], $previous['value'], $previous['passage'])) {
-                $key = hash('sha256', json_encode([$previous['field'], $previous['value'], $previous['passage']], JSON_THROW_ON_ERROR));
-                $approved[$key] = array_intersect_key($previous, array_flip(['review_state', 'reviewed_by', 'reviewed_at', 'source_version']));
-            }
+            $key = hash('sha256', json_encode([$previous['field'], $previous['value'], $previous['passage']], JSON_THROW_ON_ERROR));
+            $approved[$key] = array_intersect_key($previous, array_flip(['review_state', 'reviewed_by', 'reviewed_at', 'source_version']));
         }
         foreach ($fields as &$field) {
             $key = hash('sha256', json_encode([$field['field'], $field['value'], $field['passage']], JSON_THROW_ON_ERROR));

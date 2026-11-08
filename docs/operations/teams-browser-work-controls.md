@@ -90,3 +90,9 @@ performance limit, not a claim of complete production latency coverage. Obsolete
 area-load continuations skip their members read; in-flight source reads remain
 subject to existing authorization and response-generation checks. No broad cache
 or source-access relaxation is included.
+
+Same-area event search selections preserve the mounted main view, URL, month,
+selected tab and collapsed Controls. Closing details returns focus to the main
+tab; cross-area selections retain authorized area navigation. Unchanged source
+syncs may restore note-candidate approval labels only from matching source
+version, exact passage/value and complete existing approved review evidence.

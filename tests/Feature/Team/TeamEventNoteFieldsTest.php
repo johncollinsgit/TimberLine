@@ -137,7 +137,7 @@ test('an area viewer with their own connected source cannot approve fields', fun
 
 test('previously approved values and reviewer evidence remain unchanged', function () {
     $prior = ['field' => 'booth_number', 'value' => '423', 'passage' => 'Booth Number: 423', 'review_state' => 'approved', 'reviewed_by' => 98, 'reviewed_at' => '2026-10-01T00:00:00Z', 'source_version' => '2026-11-06T05:00:48.901Z'];
-    [$tenant, $owner, $area, $connection, $task, $event] = noteFieldFixture(['fields' => [$prior], 'reviewed_fields' => ['booth_number' => '423']]);
+    [$tenant, $owner, $area, $connection, $task, $event] = noteFieldFixture(['fields' => [$prior], 'reviewed_fields' => ['booth_number' => '423'], '_teams_enrichment' => ['field_reviews' => [$prior]]]);
     Http::fake(fn () => Http::response(['data' => $task]));
     $this->actingAs($owner)->postJson(noteFieldUrl($tenant, $event), noteFieldInput($event, [0, 1]))->assertOk();
     $data = $event->fresh()->data;
@@ -200,4 +200,56 @@ test('malformed stored notes or reviewed fields fail closed without altering the
     $event->update(['data' => $data]);
     $this->postJson(noteFieldUrl($tenant, $event), $input)->assertConflict();
     expect($event->fresh()->version)->toBe(1)->and($event->fresh()->data['reviewed_fields'])->toBe('unexpected');
+});
+
+test('same-source sync restores only exact audited approvals without rewriting the source', function () {
+    [$tenant, $owner, $area, $connection, $task, $event] = noteFieldFixture();
+    Http::fake(fn () => Http::response(['data' => $task]));
+    $this->actingAs($owner)->postJson(noteFieldUrl($tenant, $event), noteFieldInput($event, [0, 1, 2, 3]))->assertOk();
+    $audited = $event->fresh()->data['_teams_enrichment']['field_reviews'];
+    $newData = ['_generation' => $connection->generation, 'source_id' => '400', 'source_project' => '200', 'source_workspace' => '100',
+        'source_version' => $task['modified_at'], 'original_notes' => $task['notes'], 'fields' => app(OperationsSync::class)->extract($task['notes'])];
+    $refreshed = app(OperationsSync::class)->upsert($connection, 'event', '400', 'Fictional event', 'source', $newData, '2026-11-06', '2026-11-06');
+    expect(array_column($refreshed->data['fields'], 'review_state'))->toBe(['needs_review', 'needs_review', 'needs_review', 'needs_review']);
+    $projected = app(OperationsSync::class)->eventFields($refreshed->data);
+    expect(array_column($projected, 'review_state'))->toBe(['approved', 'approved', 'approved', 'approved'])
+        ->and(array_column($projected, 'reviewed_by'))->toBe(array_column($audited, 'reviewed_by'))
+        ->and(array_column($projected, 'reviewed_at'))->toBe(array_column($audited, 'reviewed_at'))
+        ->and($refreshed->data['reviewed_fields']['booth_number'])->toBe('423')
+        ->and($refreshed->data['_teams_enrichment']['field_reviews'])->toBe($audited)
+        ->and($refreshed->data['original_notes'])->toBe($task['notes']);
+    Http::assertNotSent(fn ($request) => $request->method() !== 'GET');
+});
+
+test('changed source and conflicting or incomplete review evidence never regain approval', function () {
+    [$tenant, $owner, $area, $connection, $task, $event] = noteFieldFixture();
+    Http::fake(fn () => Http::response(['data' => $task]));
+    $this->actingAs($owner)->postJson(noteFieldUrl($tenant, $event), noteFieldInput($event, [1]))->assertOk();
+    $data = $event->fresh()->data;
+    $sync = app(OperationsSync::class);
+    $booth = fn (array $projection) => collect($projection)->firstWhere('field', 'booth_number');
+    expect($booth($sync->eventFields($data))['review_state'])->toBe('approved');
+    $conflict = $data;
+    $conflict['reviewed_fields']['booth_number'] = '999';
+    expect($booth($sync->eventFields($conflict))['review_state'])->toBe('needs_review');
+    $missing = $data;
+    unset($missing['_teams_enrichment']['field_reviews'][0]['reviewed_at']);
+    expect($booth($sync->eventFields($missing))['review_state'])->toBe('needs_review');
+    $passage = $data;
+    $passage['_teams_enrichment']['field_reviews'][0]['passage'] = 'Booth #: 423';
+    expect($booth($sync->eventFields($passage))['review_state'])->toBe('needs_review');
+    $unaudited = $data;
+    unset($unaudited['_teams_enrichment']['field_reviews']);
+    expect($booth($sync->eventFields($unaudited))['review_state'])->toBe('needs_review');
+    $changedVersion = $data;
+    $changedVersion['source_version'] = '2026-11-07T00:00:00Z';
+    expect($booth($sync->eventFields($changedVersion))['review_state'])->toBe('needs_review');
+    $newData = ['source_id' => '400', 'source_project' => '200', 'source_workspace' => '100',
+        'source_version' => '2026-11-07T00:00:00Z', 'original_notes' => $task['notes'], 'fields' => $sync->extract($task['notes'])];
+    $refreshed = $sync->upsert($connection, 'event', '400', 'Fictional event', 'source', $newData, '2026-11-06', '2026-11-06');
+    expect($booth($sync->eventFields($refreshed->data))['review_state'])->toBe('needs_review')
+        ->and($refreshed->data['reviewed_fields'])->toBe([])
+        ->and($refreshed->data['_teams_enrichment']['stale_reviewed_fields']['booth_number'])->toBe('423')
+        ->and($refreshed->data['_teams_enrichment']['field_reviews'])->toBe($data['_teams_enrichment']['field_reviews']);
+    Http::assertNotSent(fn ($request) => $request->method() !== 'GET');
 });

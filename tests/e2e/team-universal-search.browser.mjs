@@ -23,8 +23,8 @@ try {
     await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
     const csrf = (await (await context.request.get(origin + '/login')).text()).match(/<meta name="csrf-token" content="([^"]+)"/)?.[1]; assert.ok(csrf);
     assert.ok((await context.request.post(origin + '/login', { form: { email: 'owner@fixture.invalid', password: 'Fictional-local-only-2026!', _token: csrf }, headers: { Accept: 'application/json' } })).ok());
-    page = await context.newPage(); page.setDefaultTimeout(12000); const errors = [], writes = [];
-    page.on('pageerror', error => errors.push(error.message)); page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/team/') && !['GET', 'HEAD'].includes(request.method())) writes.push(request.url()); });
+    page = await context.newPage(); page.setDefaultTimeout(12000); await page.clock.setFixedTime(new Date('2026-11-07T12:00:00Z')); const errors = [], writes = [], navigationReads = [];
+    page.on('pageerror', error => errors.push(error.message)); page.on('request', request => { const url = new URL(request.url()); if (url.pathname.startsWith('/team/') && !['GET', 'HEAD'].includes(request.method())) writes.push(request.url()); if (url.pathname === '/team/operations/records' || /^\/team\/areas\/[^/]+\/members$/.test(url.pathname)) navigationReads.push(request.url()); });
     for (const width of [320, 390, 1440]) {
       await page.setViewportSize({ width, height: 900 }); await page.goto(`${origin}/teams?tenant=${fixture.tenant}`);
       await page.waitForFunction(() => window.TeamSearchBridge?.available());
@@ -44,14 +44,47 @@ try {
       await dialog.getByRole('button', { name: 'Stay here' }).focus(); await page.screenshot({ path: join(evidence, `${name}-${width}-chooser.png`) });
       await dialog.getByRole('button', { name: 'Stay here' }).click();
       if (width === 390) {
-        await input.fill('seasonal'); await result.waitFor();
-        const revalidated = page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/team/search/all' && url.searchParams.get('ref') === 'operation:' + fixture.event_id && response.ok(); });
-        const opened = page.waitForResponse(response => new URL(response.url()).pathname === '/team/operations/records/' + fixture.event_id && response.ok());
-        await result.click(); await revalidated; const admitted = await (await opened).json();
-        assert.equal(admitted.record?.id || admitted.id, fixture.event_id, 'Selection opens its actual authorized event after revalidation');
-        await page.locator('#tops-detail').getByRole('heading', { name: 'Fictional seasonal makers and home goods weekend market', exact: true }).waitFor();
-        await page.locator('#tops-detail[open]').getByText('Copper lantern setup', { exact: true }).waitFor();
-        await page.keyboard.press('Escape');
+        for (const layout of ['board', 'list', 'calendar']) {
+          if (await page.locator('#tw-filter-toggle').getAttribute('aria-expanded') === 'true') await page.locator('#tw-filter-toggle').click();
+          await page.locator(`[data-team-layout="${layout}"]`).click();
+          await page.locator('#tw-list ' + ({ board: '.teams-event-board', list: '.teams-event-list', calendar: '.tops-event-calendar' }[layout])).waitFor();
+          await page.locator('#tops-content:not([aria-busy])').waitFor();
+          const month = page.locator('#tw-list input[aria-label="Calendar month"]');
+          if (layout === 'calendar') {
+            const changed = page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/team/operations/records' && url.searchParams.get('calendar_from') === '2031-03-01' && response.ok(); });
+            await month.fill('2031-03'); await month.blur(); await changed; await page.locator('#tops-content:not([aria-busy])').waitFor();
+          }
+          const before = { url: page.url(), month: await month.inputValue(), reads: navigationReads.length };
+          await input.fill('seasonal'); await result.waitFor();
+          const revalidated = page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/team/search/all' && url.searchParams.get('ref') === 'operation:' + fixture.event_id && response.ok(); });
+          const opened = page.waitForResponse(response => new URL(response.url()).pathname === '/team/operations/records/' + fixture.event_id && response.ok());
+          await result.click(); await revalidated; const admitted = await (await opened).json();
+          assert.equal(admitted.record?.id || admitted.id, fixture.event_id, 'Selection opens its actual authorized event after revalidation');
+          await page.locator('#tops-detail').getByRole('heading', { name: 'Fictional seasonal makers and home goods weekend market', exact: true }).waitFor();
+          await page.locator('#tops-detail[open]').getByText('Copper lantern setup', { exact: true }).waitFor();
+          await page.locator('#tops-detail-close').click();
+          assert.equal(page.url(), before.url, `${layout}: search details does not navigate to an area overview`);
+          assert.equal(navigationReads.length, before.reads, `${layout}: same-area selection only reads the authorized record`);
+          assert.ok(await page.locator('#tw-list #team-operations.tops-inline-calendar').isVisible(), `${layout}: inline event surface remains mounted`);
+          assert.equal(await page.locator(`[data-team-layout="${layout}"]`).getAttribute('aria-selected'), 'true', `${layout}: selected tab remains unchanged`);
+          assert.equal(await month.inputValue(), before.month, `${layout}: selected date window remains unchanged`);
+          assert.ok(await page.locator('.teams-work-toolbar').isVisible(), `${layout}: main toolbar remains visible`);
+          assert.ok(await page.locator('#tw-controls-panel').isHidden(), `${layout}: Controls remain collapsed`);
+          await page.locator('[data-team-universal-search] .eb-search-panel').waitFor({ state: 'hidden' });
+          assert.ok(await page.locator(`[data-team-layout="${layout}"]`).evaluate(node => node === document.activeElement), `${layout}: focus returns to the selected main view`);
+          if (layout === 'calendar') await page.screenshot({ path: join(evidence, `${name}-390-calendar-after-search.png`) });
+          checks.push(`${name} ${layout}: search→details→close retains inline URL, toolbar, collapsed Controls, selected tab/month and focus`);
+          await input.press('Escape');
+        }
+        await input.fill('aspen');
+        const otherResult = page.locator('[data-team-universal-search] .eb-search-option').filter({ hasText: 'Fictional Aspen regional market' }); await otherResult.waitFor();
+        const otherOpened = page.waitForResponse(response => new URL(response.url()).pathname === '/team/operations/records/' + fixture.other_event_id && response.ok());
+        await otherResult.click(); await otherOpened;
+        await page.locator('#tops-detail').getByRole('heading', { name: 'Fictional Aspen regional market', exact: true }).waitFor();
+        assert.equal(new URL(page.url()).searchParams.get('area'), fixture.other_area_id, 'Cross-area selection keeps the existing authorized area navigation');
+        assert.ok(await page.locator('#team-operations').evaluate(node => !node.classList.contains('tops-inline-calendar')), 'Cross-area selection is not falsely kept in the original inline area');
+        await page.locator('#tops-detail-close').click();
+        checks.push(`${name}: cross-area search opens its authorized area and record`);
       }
       checks.push(`${name} ${width}: real saved event search, single entry, keyboard/focus, responsive search, long-name chooser`);
     }
