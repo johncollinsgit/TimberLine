@@ -5,6 +5,7 @@
 @import './public-story-film.css';
 @import './everbranch-workspace.css';
 @import './marketing-desk.css';
+@import './modern-forestry-sidebar.css';
 
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';

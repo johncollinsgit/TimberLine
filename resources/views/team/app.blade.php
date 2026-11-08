@@ -57,7 +57,7 @@
             @else
             <a href="{{ route('profile.edit', ['tenant' => $tenant->slug]) }}">Account settings</a>
             @endif
-            <div class="teams-user">@if(config('team_work.premium_enabled'))<span class="teams-avatar" data-team-user-avatar aria-hidden="true">{{ mb_substr(auth()->user()->name, 0, 1) }}</span>@endif<span><span data-team-user-name>{{ auth()->user()->name }}</span><br>{{ $tenant->name }}</span></div>
+            <div class="teams-user">@if(config('team_work.premium_enabled'))<span class="teams-avatar" data-team-user-avatar aria-hidden="true">{{ mb_substr(auth()->user()->name, 0, 1) }}</span>@endif<span><span data-team-user-name>@foreach (explode('@', auth()->user()->name, 2) as $namePart)<span class="teams-user-name-part">{{ $loop->first ? $namePart : '@'.$namePart }}</span>@endforeach</span><br>{{ $tenant->name }}</span></div>
         </div>
     </aside>
     <main class="teams-content" id="teams-main" tabindex="-1">

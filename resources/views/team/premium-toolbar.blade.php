@@ -9,7 +9,7 @@
         <button id="tw-status-resume" type="button" hidden>Resume status draft</button><button id="tw-templates">Templates</button><button id="tw-new-project">New project</button><button id="tw-new-task" class="primary">+ Create task</button>
     </div>
 </header>
-<section id="tw-home" class="card" aria-label="Personal work overview" hidden><p class="teams-home-kicker">A little clarity. A lot of possibility.</p><h2 id="tw-home-title">Make room for your best work.</h2><div id="tw-home-counts" class="actions"></div><p id="tw-home-context" class="muted"></p></section>
+<section id="tw-home" class="card" aria-label="Personal work overview" hidden><div id="tw-home-counts" class="actions"></div><p id="tw-home-context" class="muted"></p></section>
 <section class="teams-work-toolbar" aria-label="Work controls">
 <div class="teams-work-viewbar">
     <div class="teams-tabs" role="tablist" aria-label="Work layout"><button type="button" data-team-layout="list" role="tab" aria-selected="true">List</button><button type="button" data-team-layout="board" role="tab" aria-selected="false">Board</button><button type="button" data-team-layout="calendar" role="tab" aria-selected="false">Calendar</button></div>
@@ -40,4 +40,4 @@
 @if(config('team_work.asana_enabled'))<p id="tw-asana-notice" class="teams-work-source-notice muted" role="status"></p>@endif
 </section>
 <div id="tw-status" role="status" aria-live="polite"></div>
-<dialog id="tw-view-dialog" aria-labelledby="tw-view-heading"><form id="tw-view-form"><h2 id="tw-view-heading">Keep a useful perspective</h2><p class="muted">Save the current Teams project, layout, completion, date filter and sort for your account.</p><label>View name<input id="tw-view-name" required maxlength="80"></label><div class="actions"><button class="primary">Save view</button><button id="tw-view-close" type="button">Cancel</button></div></form></dialog>
+<dialog id="tw-view-dialog" aria-labelledby="tw-view-heading"><form id="tw-view-form"><h2 id="tw-view-heading">Save view</h2><p class="muted">Save the current Teams project, layout, completion, date filter and sort for your account.</p><label>View name<input id="tw-view-name" required maxlength="80"></label><div class="actions"><button class="primary">Save view</button><button id="tw-view-close" type="button">Cancel</button></div></form></dialog>
