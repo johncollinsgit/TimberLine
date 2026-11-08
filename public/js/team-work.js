@@ -3,6 +3,7 @@
   const root = document.getElementById('team-work-app'); if (!root) return;
   const premium = root.dataset.premium === '1' ? window.TeamPremium : null;
   const $ = id => document.getElementById('tw-' + id);
+  if (premium) $('layout').value = 'board';
   let projects = [], members = [], selected = null, editingProject = null, parentId = null, page = 1, generation = 0;
   let createTaskId, createTaskKey, createProjectId, createProjectKey;
   let detailGeneration = 0, projectSearchPage = 1;
@@ -173,15 +174,15 @@
   $('project-result-prev').onclick = () => { if (projectSearchPage > 1) { projectSearchPage--; load(); } };
   $('project-result-next').onclick = () => { projectSearchPage++; load(); };
   async function load() {
-    const current = ++generation; clearProjectResults();
+    const current = ++generation; premium?.beforeLoad?.(); clearProjectResults();
     try {
       const endpoint = url(root.dataset.dataUrl); endpoint.searchParams.set('q', $('search').value); endpoint.searchParams.set('mine', ['mine', 'home'].includes($('mode').value) ? '1' : '0'); endpoint.searchParams.set('page', page); endpoint.searchParams.set('project_page', projectSearchPage);
       endpoint.searchParams.set('completion', $('mode').value === 'home' ? 'incomplete' : $('completion').value);
       endpoint.searchParams.set('date_filter', $('date-filter').value);
       endpoint.searchParams.set('timezone', Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
-      if ($('sort').value) endpoint.searchParams.set('sort', $('sort').value);
+      if ($('sort').value || premium) endpoint.searchParams.set('sort', $('sort').value || 'due');
       if ($('priority-filter').value) endpoint.searchParams.set('priority', $('priority-filter').value);
-      const layout = ['inbox', 'home'].includes($('mode').value) ? 'list' : $('layout').value;
+      const layout = $('mode').value === 'inbox' ? 'list' : $('layout').value;
       $('month-label').hidden = layout !== 'calendar';
       if (layout === 'calendar') endpoint.searchParams.set('month', $('month').value);
       if ($('project-filter').value) endpoint.searchParams.set('project_id', $('project-filter').value);
@@ -853,7 +854,7 @@
   for (const button of document.querySelectorAll('[data-team-mode]')) button.onclick = () => {
     if (!coreNavigationReady() || !workspaceReady()) return;
     premium?.navigate();
-    $('mode').value = button.dataset.teamMode; $('project-filter').value = ''; $('search').value = ''; $('date-filter').value = 'all'; $('priority-filter').value = ''; $('completion').value = premium ? 'incomplete' : 'all'; $('layout').value = 'list';
+    $('mode').value = button.dataset.teamMode; $('project-filter').value = ''; $('search').value = ''; $('date-filter').value = 'all'; $('priority-filter').value = ''; $('completion').value = premium ? 'incomplete' : 'all'; $('layout').value = premium && button.dataset.teamMode === 'home' ? 'board' : 'list';
     page = 1; projectSearchPage = 1; clearDetail(); load();
   };
   const appCreate = document.getElementById('teams-create'); if (appCreate) appCreate.onclick = () => { if (workspaceReady()) createTask(); };

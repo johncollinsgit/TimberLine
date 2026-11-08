@@ -1,0 +1,15 @@
+/* Cards are actions, including read-only work; no controls are nested inside. */
+.teams-premium #team-work-app .teams-task-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:16px;align-items:start}
+.teams-premium #team-work-app button.teams-task-card{display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;aspect-ratio:1;width:100%;min-width:0;min-height:220px;padding:20px;gap:16px;border:1px solid #d3ddcf;border-radius:14px;background:#fff;color:#233d30;text-align:left;font:inherit;cursor:pointer;box-shadow:0 2px 6px #183e3208}
+.teams-premium #team-work-app button.teams-task-card:hover{border-color:#74916c;background:#f7f9f3;box-shadow:0 5px 16px #183e3212}
+.teams-premium #team-work-app button.teams-task-card:focus-visible{outline:3px solid #74916c;outline-offset:3px}
+.teams-task-card-title{font-size:17px;line-height:1.4;font-weight:650;overflow-wrap:anywhere}
+.teams-task-card-date{display:grid;gap:3px;font-size:14px;line-height:1.4;color:#486144}
+.teams-task-card-date>strong{font-size:30px;line-height:1.15;letter-spacing:-.035em;color:#244d3b}
+.teams-task-card-context{font-size:14px;line-height:1.4;color:#486144;overflow-wrap:anywhere}
+.teams-task-card.is-complete .teams-task-card-title{text-decoration:line-through}
+.teams-task-card-grid>.teams-empty{grid-column:1/-1}
+.teams-premium #team-work-app .board-column>.teams-task-card{margin-block:10px}
+.teams-premium #team-work-app .teams-event-list button.teams-task-card{aspect-ratio:auto;min-height:100px;display:grid;grid-template-columns:150px minmax(0,1fr);align-items:center;gap:12px}
+@media(max-width:480px){.teams-premium #team-work-app .teams-event-list button.teams-task-card{grid-template-columns:110px minmax(0,1fr);padding:16px}.teams-task-card-date>strong{font-size:28px}}
+@media(forced-colors:active){.teams-premium #team-work-app button.teams-task-card{border:1px solid ButtonText}.teams-premium #team-work-app button.teams-task-card:focus-visible{outline:3px solid Highlight}}
