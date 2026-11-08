@@ -69,15 +69,16 @@ The five new shared harness groups have separate two-engine entries rather than
 adding their approximately 17 minutes of observed local serial work to the existing
 proposal lane. This preserves all thirteen existing entries and adds ten fresh
 runners. It costs additional setup, artifact transfers and browser installations;
-with twelve matrix jobs at a time, queue waves may also affect elapsed time.
+with six matrix jobs at a time, queue waves may also affect elapsed time.
 Measure the complete exact-head run before claiming a speed improvement. Local
 measurements are not an Ubuntu or production-release ETA.
 
 Never parallelize fixed-port harnesses in one checkout: independent SQLite names
 or ports alone do not isolate file caches, sessions, quarantine storage or login
 rate limits. Each matrix entry runs its applicable harnesses sequentially.
-`fail-fast: false` collects every result; concurrency is bounded to twelve matrix
-entries. Original per-step time bounds remain, and both browser engines install
+`fail-fast: false` collects every result; concurrency is bounded to six matrix
+entries so the main PHP/browser/MySQL release checks retain runner capacity.
+Superseded revisions of the same PR cancel automatically. Original per-step time bounds remain, and both browser engines install
 using the existing verified official Ubuntu mirror procedure.
 
 For a failed check, inspect that exact job and retry failed jobs on the **same
