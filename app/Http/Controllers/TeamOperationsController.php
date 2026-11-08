@@ -140,7 +140,7 @@ class TeamOperationsController extends Controller
     public function records(Request $r)
     {
         $a = $this->area($r);
-        $input = $r->validate(['kind' => 'nullable|in:'.implode(',', OperationsWorkspace::KINDS), 'q' => 'nullable|string|max:200', 'page' => 'nullable|integer|min:1|max:10000', 'cursor' => 'nullable|string|max:8192', 'target_id' => 'nullable|uuid']);
+        $input = $r->validate(['kind' => 'nullable|in:'.implode(',', OperationsWorkspace::KINDS), 'q' => 'nullable|string|max:200', 'page' => 'nullable|integer|min:1|max:10000', 'cursor' => 'nullable|string|max:8192', 'target_id' => 'nullable|uuid', 'calendar_from' => 'nullable|date_format:Y-m-d', 'calendar_to' => 'nullable|date_format:Y-m-d', 'calendar_recheck_sources' => 'sometimes|boolean']);
 
         return $this->json($this->workspace->records($this->tenant($r), $r->user(), $a, $input));
     }

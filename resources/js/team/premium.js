@@ -19,6 +19,40 @@ export function installPremium(root) {
   const node = (tag, text = '', className = '') => { const item = document.createElement(tag); item.textContent = text; item.className = className; return item; };
   const api = { get context() { return context; }, node, icon, get favorites() { return favorites; } };
   const asana = root.dataset.asanaEnabled === '1' ? installAsana(root, api) : null;
+  const secondaryTools = $('view-tools'), compactTools = matchMedia('(max-width: 600px)');
+  const compactContext = node('div', '', 'teams-compact-context'), compactActions = node('div', '', 'teams-compact-actions');
+  secondaryTools.querySelector('summary').after(compactContext, compactActions);
+  const breadcrumb = root.querySelector('.teams-breadcrumb');
+  const contextParts = [...breadcrumb.children].filter(item => !item.matches('[data-teams-menu]'));
+  const embeddedEntry = root.querySelector('.teams-work-heading > .team-app-entry');
+  if (embeddedEntry) contextParts.push(embeddedEntry);
+  const secondaryActions = [$('templates'), $('new-project')], originalPositions = new Map();
+  const areaLauncher = root.querySelector('.tops-launcher'), areaLabel = areaLauncher?.querySelector(':scope > span');
+  const areaPicker = node('details', '', 'teams-compact-areas'), areaSummary = node('summary', 'Work areas'), areaOptions = node('div', '', 'teams-compact-area-options');
+  areaPicker.append(areaSummary, areaOptions);
+  const areaParts = areaLauncher ? [document.getElementById('tops-areas'), document.getElementById('tops-setup')] : [];
+  for (const item of [...contextParts, ...secondaryActions, ...areaParts]) {
+    const anchor = document.createComment('Original Teams control position'); item.before(anchor); originalPositions.set(item, anchor);
+  }
+  const createLabel = $('new-task').textContent;
+  $('new-task').setAttribute('aria-label', 'Create task');
+  function compactWorkControls() {
+    const compact = compactTools.matches;
+    secondaryTools.open = !compact;
+    compactContext.hidden = compactActions.hidden = !compact;
+    secondaryTools.querySelector('summary').textContent = 'Workspace & tools';
+    for (const item of contextParts) compact ? compactContext.append(item) : originalPositions.get(item).after(item);
+    for (const item of secondaryActions) compact ? compactActions.append(item) : originalPositions.get(item).after(item);
+    $('new-task').textContent = compact ? '+ Create' : createLabel;
+    if (areaLauncher) {
+      if (areaLabel) areaLabel.hidden = compact;
+      if (compact) { areaPicker.open = false; areaLauncher.append(areaPicker); for (const item of areaParts) areaOptions.append(item); }
+      else { for (const item of areaParts) originalPositions.get(item).after(item); areaPicker.remove(); }
+    }
+  }
+  compactWorkControls();
+  compactTools.addEventListener('change', compactWorkControls);
+  areaPicker.addEventListener('click', event => { if (event.target.closest('#tops-areas button')) areaPicker.open = false; });
   if (root.dataset.surface === 'embedded') {
     const topbar = document.querySelector('[data-app-shell-topbar]');
     const updateInset = () => root.style.setProperty('--teams-host-offset', Math.max(0, topbar?.getBoundingClientRect().bottom || 0) + 'px');
@@ -217,7 +251,7 @@ export function installPremium(root) {
       $('filter-toggle').title = activeFilters.map(id => $(id).selectedOptions[0]?.textContent).join(' · ');
       $('clear-filters').disabled = !activeFilters.length && !$('search').value;
       $('remove-view').disabled = !$('saved-views').value;
-      $('calendar-style').hidden = ctx.layout !== 'calendar'; $('month-label').hidden = ctx.layout !== 'calendar';
+      $('calendar-style').hidden = ctx.layout !== 'calendar'; $('month-label').hidden = ctx.layout !== 'calendar'; $('calendar-format-label').hidden = ctx.layout !== 'calendar'; $('task-calendar-context').hidden = ctx.layout !== 'calendar';
       for (const button of $('home-counts').children) { const match = button.textContent.match(/^(.*): (\d+)$/); if (match) button.replaceChildren(node('span', match[1]), node('strong', match[2], 'teams-home-number')); }
       $('home-title').textContent = 'Make room for your best work.';
       const nativeHidden = $('mode').value !== 'inbox' && ($('source-filter').value === 'asana' || !!asana?.selectedProject);

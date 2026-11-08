@@ -96,33 +96,55 @@ class OperationsWorkspace
             $query->where('title', 'like', '%'.addcslashes($filters['q'], '%_\\').'%');
         }
         $cursorService = app(OperationsCursor::class);
+        $calendarQuery = app(EventCalendarWindow::class);
+        $window = $calendarQuery->fromFilters($filters);
         $scope = $cursorService->scope($tenant, $user, $area, $filters);
-        $cursorService->apply($query, $scope, $filters['cursor'] ?? null);
+        $firstPhase = $window ? $cursorService->phase($scope, $filters['cursor'] ?? null) : 0;
+        $records = function () use ($query, $window, $calendarQuery, $cursorService, $scope, $filters, $firstPhase) {
+            for ($phase = $firstPhase; $phase <= ($window ? 1 : 0); $phase++) {
+                $candidates = clone $query;
+                if ($window) {
+                    $calendarQuery->phase($candidates, $window, $phase);
+                }
+                if ($phase === $firstPhase) {
+                    $cursorService->apply($candidates, $scope, $filters['cursor'] ?? null);
+                }
+                foreach ($candidates->cursor() as $record) {
+                    yield [$record, $phase];
+                }
+            }
+        };
         // Permission precedes pagination. Counts describe this visible page; source
         // checks stay bounded and private source titles remain inside encrypted cursors.
         $items = [];
         $unavailable = false;
+        $sourceAccessIncomplete = $window && ! empty($filters['calendar_recheck_sources']) && ! $calendarQuery->sourcesAvailable($tenant, $user, $area);
         $canEdit = $this->access->mayWrite($tenant, $user, $area->id);
         $admin = $this->access->admin($this->access->actor($tenant, $user));
         $scanned = 0;
         $started = microtime(true);
         $resume = null;
+        $resumePhase = 0;
         $more = false;
+        $scanLimited = false;
         $failedConnections = [];
-        foreach ($query->cursor() as $record) {
-            if ($scanned >= 200 || microtime(true) - $started > 8) {
+        foreach ($records() as [$record, $phase]) {
+            if ($scanned >= 200 || ($scanned > 0 && microtime(true) - $started > 8)) {
                 $more = true;
                 $unavailable = true;
+                $scanLimited = true;
                 break;
             }
             $scanned++;
-            if (! empty($filters['target_id']) && ($record->data['target_id'] ?? null) !== $filters['target_id']) {
+            if (($window && ! $calendarQuery->matches($record, $window)) || (! empty($filters['target_id']) && ($record->data['target_id'] ?? null) !== $filters['target_id'])) {
                 $resume = $record;
+                $resumePhase = $phase;
 
                 continue;
             }
             if ($record->connection_id && isset($failedConnections[$record->connection_id])) {
                 $resume = $record;
+                $resumePhase = $phase;
 
                 continue;
             }
@@ -137,16 +159,20 @@ class OperationsWorkspace
                 if (! in_array($e->getStatusCode(), [403, 404, 409, 429, 502, 503])) {
                     throw $e;
                 } $unavailable = true;
+                $sourceAccessIncomplete = true;
                 if ($record->connection_id && in_array($e->getStatusCode(), [429, 502, 503], true)) {
                     $failedConnections[$record->connection_id] = true;
                 }
             }
             $resume = $record;
+            $resumePhase = $phase;
         }
         $page = (int) ($filters['page'] ?? 1);
         $health = app(OperationsHealth::class)->area($area, $user->id);
 
-        return ['items' => $items, 'count' => count($items), 'page' => $page, 'has_more' => $more, 'next_cursor' => $more && $resume ? $cursorService->encode($scope, $resume) : null, 'complete' => ! $unavailable && ! $more && $health['complete'], 'freshness' => $health, 'notice' => $unavailable ? 'Some source records could not be verified and are hidden. Results are partial; continue checking or refresh the source.' : $health['notice']];
+        return ['items' => $items, 'count' => count($items), 'page' => $page, 'has_more' => $more, 'next_cursor' => $more && $resume ? $cursorService->encode($scope, $resume, $resumePhase) : null, 'complete' => ! $window && ! $unavailable && ! $more && $health['complete'], 'freshness' => $health, 'source_access_incomplete' => $sourceAccessIncomplete,
+            'calendar_window' => $window ? [...$window, 'local_scan_complete' => ! $more, 'scan_limited' => $scanLimited, 'unknown_dates_remain_unknown' => true] : null,
+            'notice' => $scanLimited ? 'Calendar checking is partial. Continue to check more retained records for dates outside their original source bounds.' : ($unavailable ? 'Some source records could not be verified and are hidden. Results are partial; continue checking or refresh the source.' : $health['notice'])];
     }
 
     public function view(TeamOperationRecord $record, bool $canEdit = true, bool $canFinance = false): array

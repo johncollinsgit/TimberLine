@@ -1,4 +1,5 @@
 import '../../css/team-premium.css';
+import '../../css/team-work-toolbar.css';
 import { installPremium } from './premium.js';
 import { installOperations } from './operations.js';
 import { installSettings } from './settings.js';
