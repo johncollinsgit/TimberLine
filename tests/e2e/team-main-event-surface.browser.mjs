@@ -33,13 +33,14 @@ try {
     const openEvent = async () => { await page.locator('#tw-list').getByText(target, { exact: true }).first().click(); const detail = page.locator('#tops-detail'); await detail.getByRole('heading', { name: target }).waitFor(); await detail.getByRole('heading', { name: 'Dated event schedule' }).waitFor(); await detail.locator('#tops-detail-close').click(); };
     await tabs.filter({ hasText: 'Board' }).click(); await page.locator('#tw-list .teams-event-board').waitFor();
     assert.equal(await page.getByText('Loading events for the selected dates…', { exact: true }).count(), 0, 'Loading placeholder clears after the surface mounts');
-    await openEvent();
+    await openEvent(); await page.screenshot({ path: join(evidence, `main-board-${name}.png`) });
     assert.ok(reads.some(url => url.searchParams.get('calendar_from') === '2026-11-01' && url.searchParams.get('calendar_to') === '2026-11-30'), 'Board reads the bounded current month');
     assert.equal(await page.getByText('Historical padding 000', { exact: true }).count(), 0, 'Old event pages do not precede this month');
     await tabs.filter({ hasText: 'List' }).click(); const list = page.locator('#tw-list .teams-event-list'); await list.waitFor(); await openEvent();
     await page.getByRole('button', { name: 'Load more events', exact: true }).click(); await list.getByText('Window event 30', { exact: true }).waitFor();
     const positions = await list.locator(':scope > *').evaluateAll(rows => rows.map(row => row.textContent));
     assert.ok(positions.findIndex(text => text.includes('Window event 30')) < positions.findIndex(text => text.includes(target)), 'Later page reviewed Nov 4 is re-sorted before Nov 5');
+    await page.screenshot({ path: join(evidence, `main-list-${name}.png`) });
     await tabs.filter({ hasText: 'Calendar' }).click(); const grid = page.locator('#tw-list .tops-event-calendar'); await grid.waitFor();
     await grid.locator(`[data-calendar-event="${fixture.event_id}"]`).first().waitFor(); await openEvent();
     assert.equal(await grid.locator('[data-calendar-date="2026-11-07"] [data-calendar-event="' + fixture.event_id + '"]').count(), 0, 'A gap day stays empty');
