@@ -34,6 +34,11 @@ expected dependencies. Missing, failed, cancelled, skipped, or malformed results
 fail closed. Matrix fail-fast is disabled so other lanes retain useful evidence;
 no validation lane uses continue-on-error.
 
+Superseded revisions cancel within the same PR's validation group. Enterprise
+browser checks retain all scenarios but use at most six runners, leaving capacity
+for the main PHP, browser and MySQL jobs instead of filling the shared runner pool.
+Production deployment remains serialized and is never cancelled by a newer push.
+
 The coverage fixture `tests/Fixtures/ci/required-release-checks.json` records the
 pre-split validation commands and safety environment flags. Contract tests ensure
 these remain present, check all shard indexes and group admission, and exercise

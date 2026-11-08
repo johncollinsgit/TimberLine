@@ -119,6 +119,8 @@ class ParallelReleaseTest(unittest.TestCase):
         enterprise = yaml.safe_load((ROOT / '.github/workflows/enterprise-runtime-ci.yml').read_text())
         self.assertIs(enterprise['concurrency']['cancel-in-progress'], True)
         self.assertIn('github.event.pull_request.number', enterprise['concurrency']['group'])
+        self.assertEqual(enterprise['jobs']['browser']['strategy']['max-parallel'], 6)
+        self.assertTrue(self.workflow['concurrency']['group'].startswith('release-validation-'))
 
     def test_only_public_build_outputs_and_pinned_tools_are_shared(self):
         for job in self.jobs.values():

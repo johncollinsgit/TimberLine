@@ -25,7 +25,7 @@ name: tests
         default: all
         required: false
 concurrency:
-  group: tests-${{ github.event.pull_request.number || github.ref }}
+  group: release-validation-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 permissions:
   contents: read
