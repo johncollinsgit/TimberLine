@@ -31,6 +31,9 @@ Route::post('/integrations/level-foundations/transcriptions', [LevelFoundationsT
     ->name('integrations.level-foundations.transcriptions.store');
 
 Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
+    Route::get('/auth/teams-availability', \App\Http\Controllers\Mobile\TeamsMobileAvailabilityController::class)
+        ->middleware('throttle:30,1')
+        ->name('auth.teams-availability');
     Route::post('/auth/password', [EverbranchMobileAuthController::class, 'password'])
         ->middleware('throttle:5,1')
         ->name('auth.password');
@@ -52,6 +55,8 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
             ->name('auth.sessions.revoke');
 
         Route::get('/workspaces', [EverbranchMobileController::class, 'workspaces'])->middleware('abilities:mobile:read')->name('workspaces');
+        Route::get('/teams/workspaces', \App\Http\Controllers\Mobile\TeamsMobileWorkspacesController::class)
+            ->middleware([\App\Http\Middleware\EnsureTeamWorkMobileEnabled::class, 'abilities:mobile:read'])->name('teams.workspaces');
         Route::get('/account/preferences', [EverbranchMobileController::class, 'preferences'])->middleware('abilities:mobile:read')->name('account.preferences');
         Route::patch('/account/preferences', [EverbranchMobileController::class, 'updatePreferences'])->middleware('abilities:mobile:write')->name('account.preferences.update');
         Route::post('/account/push-device', [EverbranchMobileController::class, 'registerPushDevice'])->middleware('abilities:mobile:write')->name('account.push-device.register');

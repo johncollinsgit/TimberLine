@@ -8,6 +8,7 @@ use App\Services\Team\Operations\OperationsWorkspace;
 use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
+use App\Support\Auth\MobileAuthorizationClients;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,7 @@ use Illuminate\Support\Facades\Schema;
 
 class LaunchTeamWorkspace extends Command
 {
-    protected $signature = 'team:launch {tenant=modern-forestry} {--apply} {--force-production} {--authorization=} {--activate-config} {--verify}';
+    protected $signature = 'team:launch {tenant=modern-forestry} {--apply} {--force-production} {--authorization=} {--activate-config} {--enable-mobile : Include the Teams native client in the approved rollout} {--verify}';
 
     protected $description = 'Preview or apply an audited Teams rollout for an existing tenant; no provider writes or subscription changes.';
 
@@ -35,12 +36,20 @@ class LaunchTeamWorkspace extends Command
         if ($this->option('verify')) {
             app(\App\Services\Team\TeamWorkAccess::class)->context($owner, $tenant);
             abort_unless(config('team_work.premium_enabled') && config('team_operations.enabled') && \App\Models\TeamArea::where('tenant_id', $tenant->id)->whereIn('profile', ['events', 'wholesale'])->count() >= 2, 409, 'Teams rollout is not active.');
-            $this->line(json_encode(['status' => 'active', 'tenant_id' => $tenant->id, 'provider_writes' => false]));
+            if ($this->option('enable-mobile')) {
+                MobileAuthorizationClients::assertAllowed('everbranch-teams', 'everbranchteams://auth/callback');
+            }
+            $this->line(json_encode(['status' => 'active', 'tenant_id' => $tenant->id, 'mobile_verified' => (bool) $this->option('enable-mobile'), 'provider_writes' => false]));
 
             return self::SUCCESS;
         }
         if (! $this->option('apply')) {
             return self::SUCCESS;
+        }
+        if ($this->option('enable-mobile') && ! $this->option('activate-config')) {
+            $this->error('Mobile activation requires protected configuration activation.');
+
+            return self::FAILURE;
         }
         $authorization = (string) $this->option('authorization');
         if (! preg_match('/^[a-zA-Z0-9_-]{8,160}$/D', $authorization) || (app()->environment('production') && ! $this->option('force-production'))) {
@@ -77,7 +86,7 @@ class LaunchTeamWorkspace extends Command
             foreach (['events' => 'Events', 'wholesale' => 'Wholesale'] as $profile => $name) {
                 $areas[$profile] = $workspace->createArea($tenant, $owner, ['name' => $name, 'profile' => $profile])->id;
             }
-            app(LandlordOperatorActionAuditService::class)->record(tenantId: $tenant->id, actorUserId: null, actionType: 'teams_workspace_launch', targetType: 'tenant', targetId: $tenant->id, confirmation: ['authorization' => $authorization], result: ['areas' => $areas, 'provider_writes' => false, 'subscription_changes' => false]);
+            app(LandlordOperatorActionAuditService::class)->record(tenantId: $tenant->id, actorUserId: null, actionType: 'teams_workspace_launch', targetType: 'tenant', targetId: $tenant->id, confirmation: ['authorization' => $authorization], result: ['areas' => $areas, 'mobile_requested' => (bool) $this->option('enable-mobile'), 'provider_writes' => false, 'subscription_changes' => false]);
 
             return $areas;
         });
@@ -92,12 +101,15 @@ class LaunchTeamWorkspace extends Command
     private function activateConfiguration(string $tenantId, string $authorization): void
     {
         abort_unless(app()->environment('production') && $this->option('force-production'), 409, 'Runtime configuration activation is production maintenance only.');
-        $path = realpath(base_path('.env'));
+        $path = realpath(app()->environmentFilePath());
         abort_unless($path && is_writable($path), 409, 'The shared environment is unavailable.');
         $original = file_get_contents($path);
         abort_unless(is_string($original) && str_contains($original, 'APP_KEY='), 409);
         $ids = array_values(array_unique([...array_map('strval', config('team_work.tenant_allowlist', [])), $tenantId]));
         $values = ['TEAM_WORK_ENABLED' => 'true', 'TEAM_WORK_PREMIUM_ENABLED' => 'true', 'TEAM_WORK_ASANA_ENABLED' => 'true', 'TEAM_WORK_TENANT_ALLOWLIST' => implode(',', $ids), 'TEAM_OPERATIONS_ENABLED' => 'true'];
+        if ($this->option('enable-mobile')) {
+            $values['TEAM_WORK_MOBILE_ENABLED'] = 'true';
+        }
         $updated = $original;
         foreach ($values as $key => $value) {
             $pattern = '/^'.preg_quote($key, '/').'=[^\r\n]*/m';

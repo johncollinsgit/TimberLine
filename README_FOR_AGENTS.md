@@ -1,3 +1,19 @@
+## Dedicated Teams app release (November 7; source candidate)
+
+Read `docs/operations/everbranch-team-connected-operations-runbook.md` before
+activation. The installed Teams app uses the exact `everbranch-teams` client and
+`everbranchteams://auth/callback`, public availability preflight, native bearer
+transport and a dedicated Teams-only workspace list. Do not redirect a failed
+native sign-in into a general tenant web page or select a company without current
+Teams access. The general Field mobile workspace list remains unchanged.
+
+Native and browser event interfaces share Studio, versioned budgets, reviewed
+sessions and source-aware intelligence. Operations records are not additional
+financial revenue; source memberships are not separate events. Maintain the
+2026 Asana authority guard and retain missing/partial coverage labels. Complete
+the protected GitHub/Forge release and audited mobile activation before claiming
+phone access. Verify actual sign-in and Macon using iPhone Mirroring.
+
 ## Tenant rewards, event attribution and physical counts (November 6; source candidate)
 
 Pay can recommend an already authorized event register from the signed-in user's

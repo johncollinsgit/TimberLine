@@ -125,6 +125,11 @@ jobs:
         timeout-minutes: 45
         run: npx playwright install --with-deps chromium webkit
 
+      - name: Verify authenticated Teams Studio and sparse event calendars
+        run: |
+          node tests/e2e/team-studio-live.browser.mjs
+          node tests/e2e/team-operations-calendar.browser.mjs
+
       - name: Verify Trajectory mobile household navigation
         run: npm run test:trajectory:mobile
 
