@@ -1,3 +1,13 @@
+# Permanent delivery workflow
+
+- Read `README_FOR_AGENTS.md` before making changes. It is the current delivery
+  contract: scoped local checks, a focused PR, all protected CI checks, normal
+  Forge deployment, then exact-SHA `/ready` verification. Do not choose a different
+  deployment route or repeat a full local suite for every small change.
+- `tests/ci/test_parallel_release.py` checks the parallel gates, retained safety
+  coverage and short agent entry guide. Keep this workflow in force across chats;
+  feature-specific owner directions below still apply to their affected domains.
+
 ## Pay rewards and event attribution (owner direction, 2026-11-06)
 
 - Use the shared tenant rewards ledger and tenant-owned program identity/rules.
@@ -123,9 +133,14 @@ Checking label. Server quote/payment verification and mutation locks remain.
 
 ## Required Orientation and Release Safety (2026-07-21)
 
-- Read `SYSTEM_SNAPSHOT.md`, then `README_FOR_AGENTS.md`, before broad work.
-  Update those documents and the relevant runbook/changelog when your change
-  alters current system structure or operating practice.
+- Read the concise `README_FOR_AGENTS.md` for scope, local verification and
+  protected delivery. For scoped work, inspect the affected files and relevant
+  runbook/reference sections; do not audit the entire codebase or read every
+  historical note. Use the relevant `SYSTEM_SNAPSHOT.md` sections for broad or
+  shared work. Keep all applicable domain safety contracts below and in the
+  preserved `docs/agents/operating-reference.md`. Update the relevant runbook
+  when behavior changes; update the system map only for meaningful structure
+  or operating-practice changes.
 - Production is `app.theeverbranch.com` on Forge server `129.212.138.111`.
   `/up` is liveness; `/ready` is the deploy readiness endpoint and exposes the
   active release ID only after Laravel, database, cache, and required config

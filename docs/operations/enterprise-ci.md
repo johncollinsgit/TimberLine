@@ -77,7 +77,8 @@ Never parallelize fixed-port harnesses in one checkout: independent SQLite names
 or ports alone do not isolate file caches, sessions, quarantine storage or login
 rate limits. Each matrix entry runs its applicable harnesses sequentially.
 `fail-fast: false` collects every result; concurrency is bounded to twelve matrix
-entries. Original per-step time bounds remain, and both browser engines install
+entries.
+Superseded revisions of the same PR cancel automatically. Original per-step time bounds remain, and both browser engines install
 using the existing verified official Ubuntu mirror procedure.
 
 For a failed check, inspect that exact job and retry failed jobs on the **same

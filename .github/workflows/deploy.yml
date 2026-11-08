@@ -99,7 +99,7 @@ jobs:
           if [ "$verification_mode" = "verified_pr_tree" ]; then
             if [ -n "$PUSH_BEFORE" ] && ! printf '%s' "$PUSH_BEFORE" | grep -q '^0\{40\}$'; then
               if changed_files="$(gh api --paginate "repos/${REPOSITORY}/compare/${PUSH_BEFORE}...${RELEASE_SHA}" --jq '.files[].filename' 2>/dev/null)"; then
-                if ! printf '%s\n' "$changed_files" | grep -Eq '^(database/(migrations|schema)/|scripts/ci/(lint-migrations|rehearse-migrations|verify-mysql-schema-baseline|legacy-migration)|tests/Integration/(PosShopifyDiscountMySqlRecoveryTest\.php|PosBirthdayAnnualHoldMySqlRecoveryTest\.php|PosCandleCashMySqlRecoveryTest\.php|CommerceRuleSetMySqlRecoveryTest\.php|StockMySql(Recovery|Concurrency)Test\.php|MarketingDesk(MySqlRecovery|Concurrency)Test\.php|WorkflowStudioMySqlMigrationRecoveryTest\.php|HighLevelFleetMySqlMigrationRecoveryTest\.php|TenantMailMySqlMigrationRecoveryTest\.php|FleetOperationsMySqlMigrationRecoveryTest\.php|SoccerMySqlMigrationRecoveryTest\.php|ReviewedSchemaDriftRecoveryTest\.php|migration-recovery-manifest\.php)|app/Services/Inventory/Stock[^/]*\.php$|app/Services/Marketing/Desk/|app/Services/Billing/TenantAiUsageService\.php$|tests/Support/MarketingDeskAiConcurrencyWorker\.php|app/Services/Operations/(MySqlSchemaFingerprint|ReviewedMySqlSchemaCompatibility)\.php$|resources/schema/reviewed-mysql-compatibility\.json$|tests/(Support/ObservedSchemaDriftFixture\.php$|Fixtures/SchemaDrift/|Unit/Infrastructure/(ReviewedMySqlSchemaCompatibility|ObservedSchemaDriftFixture)Test\.php$)|composer\.(json|lock)$|config/database\.php$)'; then
+                if ! printf '%s\n' "$changed_files" | grep -Eq '^(\.github/(workflows/|actions/)|scripts/ci/require-job-results\.py$|database/(migrations|schema)/|scripts/ci/(lint-migrations|rehearse-migrations|verify-mysql-schema-baseline|legacy-migration)|tests/Integration/(PosShopifyDiscountMySqlRecoveryTest\.php|PosBirthdayAnnualHoldMySqlRecoveryTest\.php|PosCandleCashMySqlRecoveryTest\.php|CommerceRuleSetMySqlRecoveryTest\.php|StockMySql(Recovery|Concurrency)Test\.php|MarketingDesk(MySqlRecovery|Concurrency)Test\.php|WorkflowStudioMySqlMigrationRecoveryTest\.php|HighLevelFleetMySqlMigrationRecoveryTest\.php|TenantMailMySqlMigrationRecoveryTest\.php|FleetOperationsMySqlMigrationRecoveryTest\.php|SoccerMySqlMigrationRecoveryTest\.php|ReviewedSchemaDriftRecoveryTest\.php|migration-recovery-manifest\.php)|app/Services/Inventory/Stock[^/]*\.php$|app/Services/Marketing/Desk/|app/Services/Billing/TenantAiUsageService\.php$|tests/Support/MarketingDeskAiConcurrencyWorker\.php|app/Services/Operations/(MySqlSchemaFingerprint|ReviewedMySqlSchemaCompatibility)\.php$|resources/schema/reviewed-mysql-compatibility\.json$|tests/(Support/ObservedSchemaDriftFixture\.php$|Fixtures/SchemaDrift/|Unit/Infrastructure/(ReviewedMySqlSchemaCompatibility|ObservedSchemaDriftFixture)Test\.php$)|composer\.(json|lock)$|config/database\.php$)'; then
                   run_migration_safety=false
                 fi
               fi
@@ -113,100 +113,12 @@ jobs:
 
   test_and_build:
     name: Test And Build Gate
-    runs-on: ubuntu-24.04
     needs: setup
     if: needs.setup.outputs.run_full_gate == 'true'
-    environment: Testing
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.4"
-          tools: composer:v2
-          coverage: none
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Locate Composer cache
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Composer downloads
-        uses: actions/cache@v5
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-php-8.4-composer-
-
-      - name: Verify test prerequisites (fail loudly)
-        run: |
-          set -euo pipefail
-
-          if [ ! -f phpunit.xml ] || [ ! -d tests ]; then
-            echo "::error::Deploy gate cannot run: missing phpunit.xml or tests/ directory."
-            exit 1
-          fi
-
-          if grep -q '"livewire/flux"' composer.json && { [ -z "${{ secrets.FLUX_USERNAME }}" ] || [ -z "${{ secrets.FLUX_LICENSE_KEY }}" ]; }; then
-            echo "::error::Deploy gate cannot run: FLUX_USERNAME and FLUX_LICENSE_KEY secrets are required to install dependencies. Set them on the Testing environment."
-            exit 1
-          fi
-
-      - name: Configure Flux composer auth
-        env:
-          FLUX_USERNAME: ${{ secrets.FLUX_USERNAME }}
-          FLUX_LICENSE_KEY: ${{ secrets.FLUX_LICENSE_KEY }}
-        run: composer config http-basic.composer.fluxui.dev "$FLUX_USERNAME" "$FLUX_LICENSE_KEY"
-
-      - name: Install PHP dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader
-
-      - name: Install Node dependencies
-        run: npm ci
-
-      - name: Prepare app key for CI
-        run: |
-          cp .env.example .env
-          php artisan key:generate
-
-      - name: Build frontend assets
-        run: npm run build
-
-      - name: Install browsers for Fleet embedding checks
-        run: npx playwright install --with-deps chromium webkit
-
-      - name: Verify Fleet embedding and allowance in Chromium and WebKit
-        run: npm run test:highlevel-fleet
-
-      - name: Verify native parcel and freight workflows with fictional providers
-        run: |
-          npm run test:shipping
-          npm run test:freight
-
-      - name: Verify workspace branch settings in Chromium and WebKit
-        run: |
-          BRANCH_SETTINGS_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Everbranch/BranchSettingsTest.php
-          GUIDED_SETTINGS_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Onboarding/WorkspaceSettingsTest.php
-          npx playwright test -c playwright.branches.config.ts
-
-      - name: Verify Marketplace management in Chromium and WebKit
-        run: |
-          MARKETPLACE_CONSOLE_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Marketplace/MarketManagementTest.php
-          npx playwright test -c playwright.marketplace.config.ts
-
-      - name: Verify public offer and accessibility in Chromium and WebKit
-        run: npx playwright test -c playwright.public.config.ts --grep-invert 'stable public'
-
-      - name: Run tests in parallel
-        run: php -d memory_limit=1G ./vendor/bin/pest --parallel --compact
+    uses: ./.github/workflows/tests.yml
+    with:
+      mysql_mode: skip
+    secrets: inherit
 
   migration_safety:
     name: Migration Safety Gate
