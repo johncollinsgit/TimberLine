@@ -56,7 +56,12 @@ try{
   page.on('pageerror',error=>errors.push(error.message));
   page.on('request',request=>{if(request.method()==='POST'&&(request.url().includes('/workspace/')||request.url().includes('/ai/'))){const body=request.postDataJSON();posts.push({action:new URL(request.url()).pathname.split('/').at(-1),keys:Object.keys(body)});if(request.url().endsWith('/workspace/projection'))item.authority={body,csrf:request.headers()['x-csrf-token']};}});
   await page.goto(`${origin}/enterprise-owner/service-proposals/${seed.token}`);
-  await page.getByLabel('Proposal password').fill(seed.password);await page.getByRole('button',{name:'Open proposal',exact:true}).click();
+  await page.getByLabel('Proposal password').fill(seed.password);
+  // Confirm the unlock response and rendered session before replacing this navigation.
+  const unlocked=page.waitForResponse(response=>response.request().method()==='POST'&&new URL(response.url()).pathname===`/enterprise-owner/service-proposals/${seed.token}/unlock`);
+  await page.getByRole('button',{name:'Open proposal',exact:true}).click();
+  const unlockResponse=await unlocked;assert.equal(unlockResponse.status(),302);await unlockResponse.finished();
+  await page.getByLabel('Proposal password').waitFor({state:'hidden'});
   await page.goto(`${origin}/enterprise-owner/service-proposals/${seed.token}/campus/ask`);
   await page.locator('#proposal-ai-question').waitFor({state:'visible'});
   await page.waitForFunction(()=>!document.getElementById('proposal-ai-submit')?.disabled);

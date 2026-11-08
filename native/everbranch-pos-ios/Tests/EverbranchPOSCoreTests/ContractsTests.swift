@@ -85,3 +85,25 @@ final class ContractsTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(PendingSale.self, from: JSONEncoder().encode(pending)).collectionAttempted, true)
     }
 }
+
+extension ContractsTests {
+    func testEventProfitProjectionPreservesUnknownAmountsAndPartialHistory() throws {
+        let json = #"""
+        {"event_id":123,"teams_event_id":"event-uuid","event_name":"Fictional show",
+         "sales":{"net_sales_minor":null,"sales_tax_minor":null,"sale_count":2,"coverage":"Pay only","as_of":"2026-11-07T12:00:00Z","review_items":["Refund allocation unknown"],"operators":[{"user_id":"17","sale_count":2}],"locations":[{"name":"Original venue"}]},
+         "profitability":{"estimated_cost_minor":null,"estimated_profit_minor":null,"estimated_margin_percent":null,"break_even_sales_minor":6251,"break_even_progress_percent":null,"percent_remaining_to_break_even":null,"sales_remaining_to_break_even_minor":null,"review_items":[],"basis":"Frozen cost policy"},
+         "budget":{"policy_version":3,"frozen_at":"2026-11-06T12:00:00Z"},"travel":{"planned_millimiles":200000,"reported_actual_millimiles":100000,"unknown_legs":1},
+         "annual_history":[{"year":2026,"net_sales_cents":null,"total_expense_cents":5000,"profit_cents":null,"margin_percent":null,"partial":true,"complete":false,"review_items":[]}],"review_items":[],"basis":"Recorded comparisons remain separate"}
+        """#
+        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let report = try decoder.decode(EventStats.self, from: Data(json.utf8))
+        XCTAssertNil(report.sales.netSalesMinor)
+        XCTAssertNil(report.profitability?.estimatedProfitMinor)
+        XCTAssertNil(report.profitability?.breakEvenProgressPercent)
+        XCTAssertEqual(report.profitability?.breakEvenSalesMinor, 6251)
+        XCTAssertEqual(report.budget?.policyVersion, 3)
+        XCTAssertEqual(report.sales.operators.first?.userId, "17")
+        XCTAssertTrue(report.annualHistory[0].partial)
+        XCTAssertNil(report.annualHistory[0].profitCents)
+    }
+}

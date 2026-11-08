@@ -261,6 +261,7 @@ extension CustomerEnrollmentFlowTests {
         let old = (tax.value as? String) ?? ""; tax.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count) + "2.00")
         let reason = app.textViews["Records reviewed / reason"].exists ? app.textViews["Records reviewed / reason"] : app.textFields["Records reviewed / reason"]
         reason.tap(); reason.typeText("Checked Square receipt")
+        if app.buttons["Done editing"].exists { app.buttons["Done editing"].tap() }
         app.swipeUp()
         let submit = app.buttons["Submit owner review"]; XCTAssertFalse(submit.isEnabled)
         let confirmation = app.switches["I verified this cumulative item and tax allocation"]

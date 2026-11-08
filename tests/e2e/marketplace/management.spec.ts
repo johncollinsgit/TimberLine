@@ -28,7 +28,11 @@ async function fixture(page: Page, role = 'preview', tab = 'overview', simulated
     return {errors,writes};
 }
 async function openNav(page: Page) { if (await page.getByRole('button',{name:'Navigation',exact:true}).isVisible()) await page.getByRole('button',{name:'Navigation',exact:true}).click(); }
-async function noOverflow(page: Page) { expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true); }
+async function noOverflow(page: Page) {
+    await expect(async () => {
+        expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+    }).toPass({ timeout: 5000, intervals: [50,100,250] });
+}
 
 for (const width of [390,1024,1440]) {
     test('preview navigation and useful rows at '+width+'px',async({page},info)=>{
@@ -95,7 +99,7 @@ for (const width of [390,1024,1440]) {
         await page.goto('/maker/1#orders');await expect(page.locator('#orders')).toBeVisible();await expect(page.locator('#products')).toBeHidden();
         await page.locator('#orders .mm-record>summary').click();await expect(page.getByText('Please wait before fulfillment.',{exact:false})).toBeVisible();
         await expect(page.getByRole('button',{name:'Confirm shipped'})).toHaveCount(0);
-        await page.goto('/maker/1#business-details');await expect(page.getByLabel('Legal business name')).toHaveValue('Private Supplier LLC');
+        await page.goto('/maker/1#business-details');await expect(page.getByLabel('Legal business name')).toBeVisible();await expect(page.getByLabel('Legal business name')).toHaveValue('Private Supplier LLC');
         await noOverflow(page);await page.screenshot({path:'storage/framework/testing/marketplace-console/maker-'+width+'-'+info.project.name+'.png',fullPage:true});
         expect(errors).toEqual([]);expect(writes).toEqual([]);
     });

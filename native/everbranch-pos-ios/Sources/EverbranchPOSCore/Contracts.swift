@@ -36,6 +36,9 @@ public struct Register: Decodable, Identifiable, Sendable {
     public let canCreateCustomers: Bool?
     public let guestCheckout: Bool?
     public let customAmountEnabled: Bool?
+    public let canViewEventStats: Bool?
+    public let canSearchEventCustomers: Bool?
+    public let customerRecommendationsAvailable: Bool?
     public let canManageInventory: Bool?
     public let canManageCheckoutRules: Bool?
 }
@@ -194,5 +197,56 @@ public enum POSMoney {
     }
     public static func display(_ amount: Int) -> String {
         String(format: "$%d.%02d", amount / 100, amount % 100)
+    }
+}
+
+/// Read-only projection from original Pay receipts and the saved Teams budget.
+public struct EventStats: Decodable, Sendable {
+    public struct Sales: Decodable, Sendable {
+        public struct Operator: Decodable, Sendable { public let userId: String; public let saleCount: Int; public let name: String? }
+        public struct Location: Decodable, Sendable { public let name: String }
+        public let netSalesMinor: Int?; public let salesTaxMinor: Int?; public let saleCount: Int
+        public let coverage: String; public let reviewItems: [String]; public let asOf: String
+        public let operators: [Operator]; public let locations: [Location]
+    }
+    public struct Profitability: Decodable, Sendable {
+        public struct CostLine: Decodable, Sendable { public let label: String; public let category: String; public let amountMinor: Int?; public let costStatus: String? }
+        public let costLines: [CostLine]?
+        public let estimatedCostMinor: Int?; public let estimatedProfitMinor: Int?; public let estimatedMarginPercent: Double?
+        public let breakEvenSalesMinor: Int?; public let breakEvenProgressPercent: Double?; public let percentRemainingToBreakEven: Double?; public let salesRemainingToBreakEvenMinor: Int?
+        public let reviewItems: [String]; public let basis: String
+    }
+    public struct Budget: Decodable, Sendable { public let policyVersion: Int; public let frozenAt: String }
+    public struct Travel: Decodable, Sendable { public let plannedMillimiles: Int; public let reportedActualMillimiles: Int; public let unknownLegs: Int }
+    public struct Year: Decodable, Sendable {
+        public let year: Int; public let netSalesCents: Int?; public let totalExpenseCents: Int?; public let profitCents: Int?; public let marginPercent: Double?
+        public let partial: Bool; public let complete: Bool; public let reviewItems: [String]
+        public let costs: [String: Int?]?
+    }
+    public let eventId: Int; public let teamsEventId: String; public let eventName: String
+    public let sales: Sales; public let profitability: Profitability?; public let budget: Budget?; public let travel: Travel
+    public let annualHistory: [Year]; public let reviewItems: [String]; public let basis: String
+}
+
+
+public struct CustomerRecommendations: Decodable, Sendable {
+    public struct Item: Decodable, Sendable {
+        public struct Score: Decodable, Sendable { public let purchaseCount: Int; public let units: Int }
+        public let itemId: String; public let revision: String; public let rank: Int; public let recommended: Bool; public let score: Score
+    }
+    public struct Coverage: Decodable, Sendable {
+        public let hasMorePurchases: Bool; public let observedEligiblePurchaseCount: Int; public let preferenceVersion: String?
+    }
+    public let customerId: Int; public let tenantId: Int; public let registerId: String
+    public let items: [Item]; public let orderedItemIds: [String]; public let coverage: Coverage; public let basis: String
+
+    public func matches(customer: Int, tenant: Int, register: String, catalog: [CatalogItem]) -> Bool {
+        guard customerId == customer, tenantId == tenant, registerId == register, items.count == catalog.count, orderedItemIds.count == catalog.count,
+              Set(orderedItemIds).count == catalog.count, Set(items.map(\.itemId)).count == items.count,
+              Set(orderedItemIds) == Set(catalog.map(\.itemId)), Set(items.map(\.rank)) == Set(items.indices.map { $0 + 1 }) else { return false }
+        let revisions = Dictionary(uniqueKeysWithValues: catalog.map { ($0.itemId, $0.revision) })
+        let ranks = Dictionary(uniqueKeysWithValues: orderedItemIds.enumerated().map { ($0.element, $0.offset + 1) })
+        return items.allSatisfy { revisions[$0.itemId] == $0.revision && ranks[$0.itemId] == $0.rank
+            && $0.score.purchaseCount >= 0 && $0.score.units >= 0 && (!$0.recommended || ($0.score.purchaseCount > 0 && $0.score.units > 0)) }
     }
 }

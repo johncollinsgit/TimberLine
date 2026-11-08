@@ -242,7 +242,7 @@ test('dashboard recognizes confirmed native Website sales as a separate channel'
         ->assertSee(route('sales-channels.index'));
 });
 
-test('dashboard hides marketing only actions and customer metrics for ops managers', function () {
+test('dashboard hides marketing-only metrics while linking tenant managers to Core customers', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Ops Dashboard Tenant',
         'slug' => 'ops-dashboard-tenant',
@@ -279,7 +279,7 @@ test('dashboard hides marketing only actions and customer metrics for ops manage
         ->assertOk()
         ->assertSeeText('Open operational queue')
         ->assertDontSeeText('Reachable customers')
-        ->assertDontSeeText('Open customers')
+        ->assertSeeText('Open customers')
         ->assertDontSeeText('Open Modules');
 });
 

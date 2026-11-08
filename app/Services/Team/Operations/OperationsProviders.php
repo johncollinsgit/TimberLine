@@ -21,9 +21,17 @@ class OperationsProviders
         $config = $provider === 'asana' ? 'team_work.asana' : 'team_operations.google';
         abort_unless(config($config.'.client_id') && config($config.'.client_secret'), 503, 'This provider needs administrator OAuth configuration.');
         $scopes = $provider === 'asana' ? \App\Services\Team\AsanaReadProvider::SCOPES.($send ? ' tasks:write' : '') : 'openid email '.($provider === 'gmail' ? 'https://www.googleapis.com/auth/gmail.readonly'.($send ? ' https://www.googleapis.com/auth/gmail.send' : '') : 'https://www.googleapis.com/auth/spreadsheets'.($send ? '' : '.readonly').' https://www.googleapis.com/auth/drive.metadata.readonly');
+        $operations = [];
+        if ($provider === 'asana' && $send) {
+            $extra = $request->validate(['asana_operations' => 'sometimes|array|max:1', 'asana_operations.*' => 'in:comments']);
+            $operations = $extra['asana_operations'] ?? [];
+            if (in_array('comments', $operations, true)) {
+                $scopes .= ' stories:write';
+            }
+        }
         $state = Str::random(64);
         $verifier = Str::random(96);
-        Cache::put('team-ops-oauth:'.hash('sha256', $state), ['tenant' => $tenant->id, 'user' => $request->user()->id, 'area' => $area->id, 'provider' => $provider, 'scopes' => $scopes, 'send' => $send, 'session' => hash('sha256', $request->session()->getId()), 'verifier' => $verifier], now()->addMinutes(10));
+        Cache::put('team-ops-oauth:'.hash('sha256', $state), ['tenant' => $tenant->id, 'user' => $request->user()->id, 'area' => $area->id, 'provider' => $provider, 'scopes' => $scopes, 'send' => $send, 'operations' => $operations, 'session' => hash('sha256', $request->session()->getId()), 'verifier' => $verifier], now()->addMinutes(10));
 
         return ($provider === 'asana' ? 'https://app.asana.com/-/oauth_authorize' : 'https://accounts.google.com/o/oauth2/v2/auth').'?'.http_build_query(['client_id' => config($config.'.client_id'), 'redirect_uri' => route('team.operations.callback', ['provider' => $provider]), 'response_type' => 'code', 'scope' => $scopes, 'state' => $state, 'access_type' => 'offline', 'prompt' => 'consent', 'code_challenge_method' => 'S256', 'code_challenge' => rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=')]);
     }
@@ -69,9 +77,10 @@ class OperationsProviders
             'asana' => 'tasks:write', 'gmail' => 'https://www.googleapis.com/auth/gmail.send', default => 'https://www.googleapis.com/auth/spreadsheets'
         };
         $state['send'] = $state['send'] && in_array($sendScope, $granted, true);
+        abort_if(in_array('comments', $state['operations'] ?? [], true) && ! in_array('stories:write', $granted, true), 403, 'Comment posting consent was not granted.');
         $state['scopes'] = implode(' ', $granted);
         $connection = TeamProviderConnection::query()->firstOrNew(['tenant_id' => $tenant->id, 'user_id' => $request->user()->id, 'area_id' => $area->id, 'provider' => $provider, 'account_key' => hash('sha256', $account)]);
-        $connection->fill(['id' => $connection->id ?: (string) Str::uuid(), 'account_name' => $identity['email'] ?? $identity['name'] ?? 'Connected account', 'generation' => ($connection->generation ?? 0) + 1, 'status' => 'connected', 'credentials' => ['access_token' => $token['access_token'], 'refresh_token' => $token['refresh_token']], 'settings' => ['scopes' => $state['scopes'], 'send_authorized' => $state['send'], 'source' => $area->settings['preset'] ?? []], 'sync_state' => ['complete' => false, 'status' => 'selection_required'], 'expires_at' => now()->addSeconds((int) ($token['expires_in'] ?? 3600)), 'last_success_at' => null]);
+        $connection->fill(['id' => $connection->id ?: (string) Str::uuid(), 'account_name' => $identity['email'] ?? $identity['name'] ?? 'Connected account', 'generation' => ($connection->generation ?? 0) + 1, 'status' => 'connected', 'credentials' => ['access_token' => $token['access_token'], 'refresh_token' => $token['refresh_token']], 'settings' => ['scopes' => $state['scopes'], 'enabled_operations' => $state['operations'] ?? [], 'send_authorized' => $state['send'], 'source' => $area->settings['preset'] ?? []], 'sync_state' => ['complete' => false, 'status' => 'selection_required'], 'expires_at' => now()->addSeconds((int) ($token['expires_in'] ?? 3600)), 'last_success_at' => null]);
         $connection->settings = [...$connection->settings, 'external_user_id' => $account];
         $connection->save();
         $request->session()->flash('team_operations.connected_area', $area->id);
@@ -136,22 +145,14 @@ class OperationsProviders
         if (strtoupper($method) === 'GET') {
             return $this->request($c, $method, $url, $parameters);
         }
-        // Serialize provider mutations against disconnects and source changes. Never
-        // let a database retry replay an external write after an uncertain response.
-        $result = DB::transaction(function () use ($c, $method, $url, $parameters) {
+        // Admit the current connection before transport. The caller's durable
+        // operation claim serializes writes; no database retry may replay them.
+        DB::transaction(function () use ($c) {
             $current = TeamProviderConnection::whereKey($c->id)->lockForUpdate()->firstOrFail();
             abort_unless($current->generation === $c->generation && $current->status === 'connected', 409);
-            try {
-                return ['data' => $this->request($c, $method, $url, $parameters)];
-            } catch (HttpException $e) {
-                return ['error' => $e];
-            }
         }, 1);
-        if (isset($result['error'])) {
-            throw $result['error'];
-        }
 
-        return $result['data'];
+        return $this->request($c, $method, $url, $parameters);
     }
 
     private function request(TeamProviderConnection $c, string $method, string $url, array $parameters): array
@@ -193,7 +194,7 @@ class OperationsProviders
     public function verifyAsanaRecord(TeamProviderConnection $c, string $id, string $project): array
     {
         abort_unless(ctype_digit($id) && in_array($project, $this->selectedProjects($c), true), 403);
-        $task = $this->asana($c, 'tasks/'.$id, ['opt_fields' => 'gid,name,notes,modified_at,workspace.gid,memberships.project.gid'])['data'] ?? [];
+        $task = $this->asana($c, 'tasks/'.$id, ['opt_fields' => 'gid,name,notes,modified_at,workspace.gid,memberships.project.gid,start_on,due_on,start_at,due_at,assignee.gid,assignee.name'])['data'] ?? [];
         abort_unless((string) ($task['gid'] ?? '') === $id && (string) ($task['workspace']['gid'] ?? '') === (string) ($c->settings['source']['asana_workspace'] ?? '') && collect($task['memberships'] ?? [])->contains(fn ($m) => (string) ($m['project']['gid'] ?? '') === $project), 403);
 
         return $task;
@@ -246,7 +247,7 @@ class OperationsProviders
                 abort_unless($resource === 'records' && isset($projects[$index]), 422, 'Select a project first.');
                 $projectId = $projects[$index];
                 $project = $this->verifyAsanaProject($c, $projectId);
-                $data = $this->asana($c, 'projects/'.$projectId.'/tasks', ['limit' => 100, 'offset' => $taskOffset, 'opt_fields' => 'gid,name,notes,modified_at,completed,due_on,start_on,assignee.gid,memberships.project.gid,memberships.section.name']);
+                $data = $this->asana($c, 'projects/'.$projectId.'/tasks', ['limit' => 100, 'offset' => $taskOffset, 'opt_fields' => 'gid,name,notes,modified_at,completed,due_on,start_on,due_at,start_at,assignee.gid,assignee.name,memberships.project.gid,memberships.section.name']);
                 $extra['project'] = $project;
                 $extra['project_id'] = $projectId;
             }

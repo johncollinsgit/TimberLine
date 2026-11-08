@@ -9,12 +9,14 @@ export default defineConfig(() => ({
     laravel({
       input: [
         'resources/css/app.css',
+        'resources/css/public-retail.css',
         'resources/css/marketplace.css',
         'resources/css/subscriptions-pilot-customer.css',
         'resources/js/marketplace-wallet.js',
         'resources/js/website-shop-pay.js',
         'resources/js/marketplace-management.js',
         'resources/js/app.js',
+        'resources/js/public-retail-entry.js',
         'resources/js/stockists/locator.js',
         'resources/js/stockists/admin.js',
         'resources/js/wholesale-label-admin.js',

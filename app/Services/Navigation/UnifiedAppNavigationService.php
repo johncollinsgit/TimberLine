@@ -7,6 +7,7 @@ use App\Models\ShopifyImportRun;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FieldService\FieldServiceAccessService;
+use App\Services\Marketing\CustomerProfileAccess;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use App\Services\Tenancy\TenantBrandProfileService;
 use App\Services\Tenancy\TenantExperienceProfileService;
@@ -77,7 +78,7 @@ class UnifiedAppNavigationService
         $fleetTrackingEnabled = $this->moduleStateEnabled($moduleStates['fleet_tracking'] ?? null);
         $classSchedulingEnabled = $this->moduleStateEnabled($moduleStates['class_scheduling'] ?? null);
         $plantInventoryEnabled = $this->moduleStateEnabled($moduleStates['plant_inventory'] ?? null);
-        $customersEnabled = $this->moduleStateEnabled($moduleStates['customers'] ?? null);
+        $canAccessCustomers = app(CustomerProfileAccess::class)->allows($user, $tenant);
         $messagingRelevant = $this->moduleStateRelevant($moduleStates['messaging'] ?? null);
         $emailEnabled = $this->moduleStateEnabled($moduleStates['email'] ?? null);
         $workflowAutomationsEnabled = $this->moduleStateEnabled($moduleStates['workflow_automations'] ?? null);
@@ -96,6 +97,10 @@ class UnifiedAppNavigationService
 
         $items = [];
         $items[] = ['key' => 'home', 'icon' => 'home', 'href' => $homeHref, 'label' => 'Home', 'current' => request()->routeIs('dashboard')];
+        if ($canAccessCustomers && Route::has('customers.directory')) {
+            $items[] = ['key' => 'customers', 'icon' => 'users', 'href' => route('customers.directory', ['tenant' => $tenant->slug]),
+                'label' => 'Customers', 'current' => $request->routeIs('customers.*')];
+        }
 
         if ($tenant && $user && config('team_work.enabled')) {
             try {
@@ -234,16 +239,6 @@ class UnifiedAppNavigationService
                 ];
             }
 
-            if ($customersEnabled && Route::has('marketing.customers')) {
-                $workItems[] = [
-                    'key' => 'customers',
-                    'icon' => 'users',
-                    'href' => route('marketing.customers'),
-                    'label' => 'Customers',
-                    'current' => request()->routeIs('marketing.customers*'),
-                ];
-            }
-
             if ($user && config('trajectory.enabled') && app(\App\Services\Trajectory\FinanceAccess::class)->spaces($user)->isNotEmpty()) {
                 $workItems[] = ['key' => 'trajectory', 'icon' => 'chart-bar', 'href' => route('trajectory.index'), 'label' => 'Trajectory', 'current' => request()->routeIs('trajectory.*')];
             }
@@ -364,7 +359,7 @@ class UnifiedAppNavigationService
             'marketing_sub_groups' => $marketingSubGroups,
             'birthday_sub_groups' => $birthdaySubGroups,
             'wiki_sections' => $this->wikiSections($tenant),
-            'quick_actions' => $this->quickActions($profile, $canAccessOps, $canAccessMarketing, $tenantId, $fieldServiceEnabled),
+            'quick_actions' => $this->quickActions($profile, $canAccessOps, $canAccessMarketing, $tenantId, $fieldServiceEnabled, $canAccessCustomers, $tenant?->slug),
             'ops_attention' => $canAccessOps ? $this->opsAttention($tenantId) : ['unresolved_exceptions' => 0, 'latest_run' => null],
             'current_console' => $this->currentConsolePayload($tenant, $profile),
             'console_switches' => $this->consoleSwitches($user, $tenant, false),
@@ -391,12 +386,16 @@ class UnifiedAppNavigationService
                 $add('website', 'Website', 'managed-website.index', 'globe-alt');
                 $add('website-products', 'Products', 'managed-website.products.index', 'shopping-bag');
                 $add('website-collections', 'Collections', 'managed-website.collections.index', 'squares-2x2');
-                $add('website-customers', 'Customers', 'managed-website.customers.index', 'users');
+                $add('website-customers', 'Website shoppers', 'managed-website.customers.index', 'users');
                 $add('website-orders', 'Orders', 'managed-website.orders.index', 'clipboard-document-list');
                 $add('website-leads', 'Inquiries', 'managed-website.leads.index', 'inbox');
                 $add('sales-channels', 'Sales channels', 'sales-channels.index', 'chart-bar');
             }
             $add('user-agreements', 'User Agreements', 'agreements.index', 'document-check');
+        }
+        if (app(CustomerProfileAccess::class)->allows($user, $tenant) && Route::has('customers.directory')) {
+            $items[] = ['key' => 'customers', 'label' => 'Customers', 'icon' => 'users',
+                'href' => route('customers.directory', ['tenant' => $tenant->slug]), 'current' => $request->routeIs('customers.*')];
         }
         if (app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, $user)) {
             $items[] = ['key' => 'ai-branch', 'icon' => 'sparkles', 'href' => app(\App\Services\AiBranch\AiWorkspacePage::class)->launcherUrl($request, $tenant), 'label' => 'AI Branch', 'current' => $request->routeIs('ai-branch.*')];
@@ -906,7 +905,7 @@ class UnifiedAppNavigationService
             ->map(function (array $section, string $key): array {
                 return [
                     'key' => $key,
-                    'label' => (string) $section['label'],
+                    'label' => $key === 'customers' ? 'Customer marketing' : (string) $section['label'],
                     'href' => route($section['route']),
                     'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'].'.*'),
                 ];
@@ -1032,7 +1031,7 @@ class UnifiedAppNavigationService
     /**
      * @return array<int,array<string,string>>
      */
-    protected function quickActions(array $profile, bool $canAccessOps, bool $canAccessMarketing, ?int $tenantId, bool $fieldServiceEnabled = false): array
+    protected function quickActions(array $profile, bool $canAccessOps, bool $canAccessMarketing, ?int $tenantId, bool $fieldServiceEnabled = false, bool $canAccessCustomers = false, ?string $tenantSlug = null): array
     {
         $actions = [
             [
@@ -1055,12 +1054,14 @@ class UnifiedAppNavigationService
             ];
         }
 
-        if ($canAccessMarketing) {
+        if ($canAccessCustomers && $tenantSlug && Route::has('customers.directory')) {
             $actions[] = [
                 'label' => 'Find customer',
                 'description' => 'Open the unified customer workspace.',
-                'href' => route('marketing.customers'),
+                'href' => route('customers.directory', ['tenant' => $tenantSlug]),
             ];
+        }
+        if ($canAccessMarketing) {
             if ($tenantId !== null) {
                 $actions[] = [
                     'label' => 'Browse features',

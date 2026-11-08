@@ -4,9 +4,23 @@ import CryptoKit
 struct PrintingQuote: Decodable, Identifiable { let id: Int; let number: String; let amountMinor: Int }
 struct PrintingQuoteList: Decodable { let quotes: [PrintingQuote] }
 struct POSCustomer: Decodable, Identifiable { let id: Int; let name: String; let email: String?; let phone: String? }
-struct POSCustomerList: Decodable { let customers: [POSCustomer]; let hasMore: Bool }
+struct POSCustomerList: Decodable {
+    struct Context: Decodable {
+        struct Relation: Decodable { let captured: Bool?; let purchased: Bool? }
+        let relations: [String: Relation]; let reviewItems: [String]; let basis: String
+    }
+    let customers: [POSCustomer]; let hasMore: Bool; let eventContext: Context?
+}
+struct POSCustomerEvents: Decodable {
+    struct Event: Decodable, Identifiable { let id: Int; let name: String; let startsOn: String? }
+    let events: [Event]
+}
 struct POSCustomerResponse: Decodable { let customer: POSCustomer }
-struct PendingCustomerCreation: Codable { let workspace: String; let register: String; let requestID: String }
+struct PendingCustomerCreation: Codable {
+    let workspace: String; let register: String; let requestID: String
+    var sessionFingerprint: String? = nil
+    var origin: String? = nil
+}
 struct RefundResponse: Decodable { let refundId: String; let state: String; let sale: Sale }
 struct ReceiptEmailStatus: Decodable {
     let state: String
@@ -119,9 +133,19 @@ private struct RestorableQuote: Decodable {
 }
 
 @MainActor final class POSViewModel: ObservableObject {
-    let api = POSAPI()
+    let api: POSAPI
+    let lookupOnly: Bool
+    private var lookupGeneration = 0
+    private var lookupSession: String?
+    private var lookupBase: String?
+    private var lookupOrigin: URL?
+    @Published private(set) var lookupCaptureNotice: String?
+    private var lookupCaptureJournalReady = false
+    var canRecordCustomerChoices: Bool { !lookupOnly || lookupCaptureJournalReady }
+    private var customerJournalKey: String { lookupOnly ? "lookup-pending-customer" : "pending-customer" }
+    private var enrollmentJournalKey: String { lookupOnly ? "lookup-pending-enrollment" : "pending-enrollment" }
     let signIn = POSSignIn()
-    let collector = SquareCollector()
+    lazy var collector = SquareCollector()
     @Published var signedIn = false
     @Published var workspaces: [Workspace] = []
     @Published var registers: [Register] = []
@@ -165,8 +189,8 @@ private struct RestorableQuote: Decodable {
         quantities[previous.itemID] = max(0, (quantities[previous.itemID] ?? 0) - previous.quantity + quantity)
         checkoutDiscounts.removeAll { $0.itemId == id && ($0.quantity ?? quantity) > quantity }
     }
-    @Published var selectedWorkspace: Workspace?
-    @Published var selectedRegister: Register?
+    @Published var selectedWorkspace: Workspace? { didSet { if oldValue?.id != selectedWorkspace?.id { customerEvents = []; customerEventID = ""; clearCustomerRecommendations() } } }
+    @Published var selectedRegister: Register? { didSet { if oldValue?.id != selectedRegister?.id || oldValue?.customerRecommendationsAvailable != selectedRegister?.customerRecommendationsAvailable { customerEvents = []; customerEventID = ""; clearCustomerRecommendations() } } }
     @Published var registerLoaded = false
     @Published var sale: Sale?
     @Published var receipt: POSReceipt?
@@ -228,8 +252,9 @@ private struct RestorableQuote: Decodable {
     private func acceptRewardProof(_ proof: String, base: String, expected: Int?) async throws {
         var body: [String: Any] = ["proof": proof]
         if let expected { body["expected_customer_id"] = expected }
+        let token = api.token; let generation = lookupGeneration
         let value: POSRewardPreview = try await api.request(base + "/reward-codes/preview", method: "POST", body: body)
-        guard self.base == base, expected == nil || expected == value.customer.id else { throw POSError.recoveryRequired }
+        guard currentLookup(base, token, generation), self.base == base, expected == nil || expected == value.customer.id else { throw POSError.recoveryRequired }
         selectedCustomer = value.customer; rewardPreview = value; rewardProof = proof
         rewardUseAmount = String(format: "%d.%02d", value.availableMinor / 100, value.availableMinor % 100)
         rewardSelectedMinor = 0; refreshCustomerCommerce()
@@ -261,7 +286,7 @@ private struct RestorableQuote: Decodable {
         }
     }
     func verifyCurrentMembership(reference: String, active: Bool) {
-        guard let base, let customer = selectedCustomer, !busy, pending == nil || canEditBasket else { return }
+        guard !lookupOnly, let base, let customer = selectedCustomer, !busy, pending == nil || canEditBasket else { return }
         perform {
             struct Result: Decodable { let recorded: Bool }
             let _: Result = try await self.api.request(base + "/customers/\(customer.id)/membership-review", method: "POST", body: ["confirmed": true, "active": active, "reference": reference])
@@ -285,9 +310,32 @@ private struct RestorableQuote: Decodable {
     private var associationCustomerID: Int?
     private var initialBasket: [RegisterBasketLine]
     @Published var basketIssue: String?
-    @Published var customerQuery = ""
+    @Published var customerQuery = "" { didSet { if oldValue != customerQuery { invalidateCustomerSearch() } } }
+    @Published var customerEventID = "" { didSet { if oldValue != customerEventID { invalidateCustomerSearch() } } }
+    @Published var customerEvents: [POSCustomerEvents.Event] = []
+    @Published var customerSearchContext: POSCustomerList.Context?
+    @Published var customerHasMore = false
+    @Published var customerPage = 1
+    private var customerSearchGeneration = 0
+    private func invalidateCustomerSearch() {
+        customerSearchGeneration += 1; customers = []; customerHasMore = false; customerSearchContext = nil; customerPage = 1
+    }
+    func loadCustomerEvents() async {
+        customerEvents = []; customerEventID = ""
+        guard selectedRegister?.canSearchEventCustomers == true, let base else { return }
+        let token = api.token
+        do {
+            let value: POSCustomerEvents = try await api.request(base + "/customers/events")
+            guard !Task.isCancelled, self.base == base, api.token == token else { return }
+            customerEvents = value.events
+        } catch {
+            guard !Task.isCancelled, self.base == base, api.token == token else { return }
+            if lookupOnly, (error as? POSError) == .signInRequired { expireCustomerLookup(); return }
+            message = "Event filters are unavailable. You can still search all customers."
+        }
+    }
     @Published var customers: [POSCustomer] = []
-    @Published var selectedCustomer: POSCustomer? { didSet { if oldValue?.id != selectedCustomer?.id { clearRewardSelection() } } }
+    @Published var selectedCustomer: POSCustomer? { didSet { if oldValue?.id != selectedCustomer?.id { clearRewardSelection(); clearCustomerRecommendations() } } }
     @Published var customerEnrollmentSettings: CustomerEnrollmentSettings?
     @Published var customerEnrollmentNotice: String?
     @Published var pendingEnrollment: PendingCustomerEnrollment?
@@ -295,6 +343,41 @@ private struct RestorableQuote: Decodable {
     @Published var customerCommerceLoading = false
     @Published var customerCommerceError: String?
     private var customerCommerceTask: Task<Void, Never>?
+    @Published var customerRecommendations: CustomerRecommendations?
+    @Published var customerRecommendationsLoading = false
+    @Published var customerRecommendationsNotice: String?
+    private var recommendationGeneration = 0
+    var recommendationContextKey: String {
+        let catalog = items.map { item -> String in
+            let quantity = item.availableQuantity.map { String($0) } ?? "?"
+            return item.id + ":" + item.revision + ":" + quantity
+        }.joined(separator: "|")
+        let allowed = selectedRegister?.customerRecommendationsAvailable == true
+        return [enrollmentSessionFingerprint ?? "", base ?? "", String(selectedCustomer?.id ?? 0), String(pending == nil), String(allowed), catalog].joined(separator: "::")
+    }
+    private func clearCustomerRecommendations() {
+        recommendationGeneration += 1; customerRecommendations = nil; customerRecommendationsNotice = nil; customerRecommendationsLoading = false
+    }
+    func refreshCustomerRecommendations() async {
+        clearCustomerRecommendations()
+        guard pending == nil, selectedRegister?.customerRecommendationsAvailable == true, let base,
+              let customer = selectedCustomer, let workspace = selectedWorkspace, let register = selectedRegister, !items.isEmpty else { return }
+        let context = recommendationContextKey; let generation = recommendationGeneration; let token = api.token
+        customerRecommendationsLoading = true
+        do {
+            let value: CustomerRecommendations = try await api.request(base + "/customers/\(customer.id)/recommendations")
+            guard !Task.isCancelled, recommendationGeneration == generation, recommendationContextKey == context, api.token == token, selectedRegister?.customerRecommendationsAvailable == true else { return }
+            guard value.matches(customer: customer.id, tenant: workspace.id, register: register.id, catalog: items) else {
+                customerRecommendationsNotice = "Customer or catalog changed. Refresh products and select the customer again."
+                customerRecommendationsLoading = false; return
+            }
+            customerRecommendations = value; customerRecommendationsLoading = false
+            customerRecommendationsNotice = value.coverage.observedEligiblePurchaseCount == 0 ? "No comparable linked purchases in the current history window." : "Ordered by this customer's recorded online and in-person purchases. Older or unconnected purchases may be missing."
+        } catch {
+            guard !Task.isCancelled, recommendationGeneration == generation, recommendationContextKey == context, api.token == token, selectedRegister?.customerRecommendationsAvailable == true else { return }
+            customerRecommendationsLoading = false; customerRecommendationsNotice = "Customer recommendations are unavailable. The catalog is still available."
+        }
+    }
     @Published var customerFirstName = ""
     @Published var customerLastName = ""
     @Published var customerPhone = ""
@@ -303,8 +386,12 @@ private struct RestorableQuote: Decodable {
     @Published var customerEmail = ""
     @Published var invoiceID = ""
     @Published var refundAmount = ""
-    init(basket: [RegisterBasketLine] = []) {
-        initialBasket = basket
+    init(basket: [RegisterBasketLine] = [], lookupOnly: Bool = false) {
+        self.lookupOnly = lookupOnly
+        self.api = POSAPI(loadSession: !lookupOnly)
+        initialBasket = lookupOnly ? [] : basket
+        // A browse model must never restore or reset payment, capture or SDK state.
+        if lookupOnly { api.token = nil; return }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-ui-tests") {
             if ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-reset") {
@@ -325,13 +412,123 @@ private struct RestorableQuote: Decodable {
         if let value = SecureStore.read("pending-sale") { pending = try? JSONDecoder().decode(PendingSale.self, from: value) }
         if let value = SecureStore.read("payments-for-review") { savedPaymentReviews = (try? JSONDecoder().decode([SavedPaymentReview].self, from: value)) ?? [] }
     }
+    @discardableResult func prepareCustomerLookup(from source: POSViewModel) -> Bool {
+        guard lookupOnly, !source.lookupOnly, !source.busy, !source.collector.hasInFlightPayment,
+              source.signedIn, let token = source.api.token, !token.isEmpty, let workspace = source.selectedWorkspace,
+              let register = source.selectedRegister, let currentBase = source.base, api.origin == source.api.origin,
+              currentBase == "api/mobile/v1/workspaces/\(workspace.slug)/pos/registers/\(register.id)" else { return false }
+        closeCustomerLookup()
+        lookupSession = token; lookupBase = currentBase; lookupOrigin = source.api.origin
+        api.token = token; signedIn = true; selectedWorkspace = workspace; selectedRegister = register; registerLoaded = true
+        customerEnrollmentSettings = source.customerEnrollmentSettings
+        do {
+            let capture = try SecureStore.readChecked(customerJournalKey)
+            let enrollment = try SecureStore.readChecked(enrollmentJournalKey)
+            pendingCustomer = try capture.map { try JSONDecoder().decode(PendingCustomerCreation.self, from: $0) }
+            pendingEnrollment = try enrollment.map { try JSONDecoder().decode(PendingCustomerEnrollment.self, from: $0) }
+            lookupCaptureJournalReady = true
+        } catch {
+            lookupCaptureJournalReady = false
+            lookupCaptureNotice = "Saved customer requests could not be read. Search remains available; capture and enrollment are paused until recovery can be checked."
+        }
+        if let pendingCustomer, !lookupCaptureMatches(pendingCustomer) {
+            message = lookupCaptureCanRecover(pendingCustomer)
+                ? "An earlier customer capture is retained. Check its original request before starting another capture."
+                : "An earlier customer capture is retained for its original sign-in and register. Recover it there before starting another capture."
+        }
+        return true
+    }
+    func closeCustomerLookup() {
+        guard lookupOnly else { return }
+        lookupGeneration += 1; customerCommerceTask?.cancel(); invalidateCustomerSearch(); clearCustomerRecommendations()
+        api.token = nil; signedIn = false; registerLoaded = false; selectedWorkspace = nil; selectedRegister = nil
+        selectedCustomer = nil; customerCommerce = nil; customerCommerceError = nil; customerCommerceLoading = false
+        customerEnrollmentSettings = nil; pendingCustomer = nil; pendingEnrollment = nil
+        customerFirstName = ""; customerLastName = ""; customerEmail = ""; customerPhone = ""; customerQuery = ""
+        lookupSession = nil; lookupBase = nil; lookupOrigin = nil; lookupCaptureJournalReady = false; lookupCaptureNotice = nil; busy = false; message = nil
+    }
+    @discardableResult func shopForCustomer(from lookup: POSViewModel) -> Bool {
+        guard !lookupOnly, lookup.lookupOnly, pending == nil, !busy, !lookup.busy, !collector.hasInFlightPayment,
+              signedIn, lookup.signedIn, let token = api.token, !token.isEmpty,
+              token == lookup.api.token, token == lookup.lookupSession, api.origin == lookup.lookupOrigin,
+              selectedWorkspace?.id == lookup.selectedWorkspace?.id, selectedRegister?.id == lookup.selectedRegister?.id,
+              base != nil, base == lookup.base, base == lookup.lookupBase, let customer = lookup.selectedCustomer else { return false }
+        selectedCustomer = customer
+        return true
+    }
+    private func expireCustomerLookup() {
+        guard lookupOnly else { return }
+        closeCustomerLookup()
+        message = "Customer lookup sign-in expired. Close this view and sign in again from Account. Your shopping basket and saved payments are unchanged."
+    }
+    private func currentLookup(_ context: String, _ token: String?, _ generation: Int) -> Bool {
+        !lookupOnly || (lookupGeneration == generation && signedIn && base == context && lookupBase == context && api.token == token && lookupSession == token)
+    }
+    private func lookupCaptureMatches(_ capture: PendingCustomerCreation) -> Bool {
+        capture.workspace == selectedWorkspace?.slug && capture.register == selectedRegister?.id
+            && (!lookupOnly || ((capture.origin == nil || capture.origin == api.origin.absoluteString)
+                && capture.sessionFingerprint != nil && capture.sessionFingerprint == enrollmentSessionFingerprint))
+    }
+    private func lookupCaptureCanRecover(_ capture: PendingCustomerCreation) -> Bool {
+        guard lookupOnly else { return lookupCaptureMatches(capture) }
+        // The request endpoint authenticates tenant/register/actor/device. A renewed
+        // session may only read the original UUID; it must never replay its POST.
+        return capture.workspace == selectedWorkspace?.slug && capture.register == selectedRegister?.id
+            && (capture.origin == api.origin.absoluteString || (capture.origin == nil && lookupCaptureMatches(capture)))
+    }
+    var customerCaptureRecoveryLabel: String {
+        if lookupOnly, let pendingCustomer, !lookupCaptureMatches(pendingCustomer), lookupCaptureCanRecover(pendingCustomer) {
+            return "Check original capture"
+        }
+        return "Recover customer request"
+    }
+    #if DEBUG
+    func loadLookupIsolationFixture() {
+        guard !lookupOnly, ProcessInfo.processInfo.arguments.contains("--pos-lookup-isolation-ui-tests") else { return }
+        selectedCustomer = POSCustomer(id: 1, name: "Ada Buyer", email: "ada@example.test", phone: "+12025550123")
+        rewardProof = "everbranch-reward:v1:" + String(repeating: "a", count: 42) + "A"; rewardSelectedMinor = 300; rewardUseAmount = "3.00"
+        rewardPreview = POSRewardPreview(customer: selectedCustomer!, label: "Candle Cash", balanceMinor: 850, maxMinor: 500, availableMinor: 500, expiresAt: "2099-01-01T00:00:00Z")
+        let capture = PendingCustomerCreation(workspace: "fixture", register: "fixture", requestID: "11111111-1111-4111-8111-111111111111")
+        let enrollment = PendingCustomerEnrollment(workspace: "fixture", register: "fixture", customerID: 1, requestID: "22222222-2222-4222-8222-222222222222", sessionFingerprint: enrollmentSessionFingerprint ?? "", choice: CustomerEnrollmentChoice(version: "fixture", month: nil, day: nil, emailOptIn: false, smsOptIn: false))
+        try? SecureStore.write("pending-customer", try? JSONEncoder().encode(capture))
+        try? SecureStore.write("pending-enrollment", try? JSONEncoder().encode(enrollment))
+        try? SecureStore.write("session", Data("fictional-test-session".utf8))
+        if ProcessInfo.processInfo.arguments.contains("--pos-lookup-reset-ui-tests") {
+            try? SecureStore.write("lookup-pending-customer", nil); try? SecureStore.write("lookup-pending-enrollment", nil)
+        }
+        if ProcessInfo.processInfo.arguments.contains("--pos-lookup-invalid-journal-ui-tests") { try? SecureStore.write("lookup-pending-customer", Data("unreadable-fixture-record".utf8)) }
+        if ProcessInfo.processInfo.arguments.contains("--pos-lookup-renew-capture-ui-tests") {
+            let captureWorkspace = ProcessInfo.processInfo.arguments.contains("--pos-lookup-capture-foreign-workspace-ui-tests") ? "other-workspace" : "fixture"
+            let captureRegister = ProcessInfo.processInfo.arguments.contains("--pos-lookup-capture-foreign-register-ui-tests") ? "other-register" : "fixture"
+            let captureOrigin = ProcessInfo.processInfo.arguments.contains("--pos-lookup-capture-foreign-origin-ui-tests") ? "https://other.example.test" : api.origin.absoluteString
+            let legacy = ProcessInfo.processInfo.arguments.contains("--pos-lookup-capture-legacy-ui-tests")
+            let retained = PendingCustomerCreation(workspace: captureWorkspace, register: captureRegister, requestID: "33333333-3333-4333-8333-333333333333",
+                sessionFingerprint: "expired-fictional-session", origin: legacy ? nil : captureOrigin)
+            try? SecureStore.write("lookup-pending-customer", try? JSONEncoder().encode(retained))
+        }
+    }
+    var lookupIsolationSummary: String {
+        let capture = SecureStore.read("pending-customer").flatMap { try? JSONDecoder().decode(PendingCustomerCreation.self, from: $0) }
+        let enrollment = SecureStore.read("pending-enrollment").flatMap { try? JSONDecoder().decode(PendingCustomerEnrollment.self, from: $0) }
+        return "customer=\(selectedCustomer?.id ?? 0);units=\(quantities.values.reduce(0, +));rewards=\(rewardSelectedMinor);proof=\(rewardProof == nil ? "absent" : "present");session=\(api.token == nil || SecureStore.read("session") == nil ? "absent" : "present");capture=\(capture?.requestID == "11111111-1111-4111-8111-111111111111" ? "original" : "changed");enrollment=\(enrollment?.requestID == "22222222-2222-4222-8222-222222222222" ? "original" : "changed")"
+    }
+    #endif
     func perform(_ action: @escaping () async throws -> Void) {
         guard !busy else { return }
         busy = true; message = nil
+        let generation = lookupGeneration
         Task {
-            defer { busy = false; paymentPhase = "" }
-            do { try await action() }
+            defer { if !lookupOnly || lookupGeneration == generation { busy = false; paymentPhase = "" } }
+            do {
+                guard !lookupOnly || (lookupGeneration == generation && signedIn && api.token != nil) else { return }
+                try await action()
+            }
             catch POSError.signInRequired {
+                if lookupOnly {
+                    guard lookupGeneration == generation else { return }
+                    expireCustomerLookup()
+                    return
+                }
                 try? SecureStore.write("session", nil)
                 api.token = nil; signedIn = false; tapReady = false; registerLoaded = false
                 selectedWorkspace = nil; selectedRegister = nil; selectedCustomer = nil; customers = []
@@ -342,11 +539,12 @@ private struct RestorableQuote: Decodable {
                 await collector.signOut()
                 message = "Sign in again to continue. Any unfinished payment is saved for recovery."
             }
-            catch let POSError.unavailable(text) { message = text }
-            catch { message = pending == nil ? "Couldn’t finish that step. Check your connection and try again." : "The operation is not confirmed. Keep this sale and check its status before trying another payment." }
+            catch let POSError.unavailable(text) { if !lookupOnly || lookupGeneration == generation { message = text } }
+            catch { guard !lookupOnly || lookupGeneration == generation else { return }; message = pending == nil ? "Couldn’t finish that step. Check your connection and try again." : "The operation is not confirmed. Keep this sale and check its status before trying another payment." }
         }
     }
     func savePending() throws {
+        guard !lookupOnly else { throw POSError.recoveryRequired }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") && !ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-ui-tests") { return }
         #endif
@@ -360,12 +558,15 @@ private struct RestorableQuote: Decodable {
         return "api/mobile/v1/workspaces/\(workspace)/pos/registers/\(register)"
     }
     func login() {
+        guard !lookupOnly else { return }
         perform { try await self.signIn.signIn(api: self.api); self.signedIn = true; try await self.loadWorkspaces() }
     }
     func loginWithGoogle() {
+        guard !lookupOnly else { return }
         perform { try await self.signIn.signIn(api: self.api, method: .google); self.signedIn = true; try await self.loadWorkspaces() }
     }
     func loadWorkspaces() async throws {
+        guard !lookupOnly else { throw POSError.recoveryRequired }
         let response: WorkspaceList = try await api.request("api/mobile/v1/workspaces")
         workspaces = response.workspaces
         // Restore identifiers only after checking current membership and device assignments.
@@ -392,6 +593,7 @@ private struct RestorableQuote: Decodable {
         selectedCustomer = nil; customers = []; customerQuery = ""; invoiceID = ""
     }
     private func loadRegister(_ register: Register) async throws {
+        guard !lookupOnly else { throw POSError.recoveryRequired }
         if selectedRegister?.id != register.id {
             registerLoaded = false; tapReady = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; bundleComponents = [:]; bundleLines = []; invoiceID = ""
         }
@@ -512,7 +714,7 @@ private struct RestorableQuote: Decodable {
         perform { await self.initializeTapToPay() }
     }
     private func initializeTapToPay() async {
-        guard let base, !setupInProgress, appIsActive, !collector.hasInFlightPayment, pending?.refundRequestID == nil,
+        guard !lookupOnly, let base, !setupInProgress, appIsActive, !collector.hasInFlightPayment, pending?.refundRequestID == nil,
               pending == nil || (pending?.workspace == selectedWorkspace?.slug && pending?.register == selectedRegister?.id),
               pending == nil || (pending?.collectionRequested == false && pending?.sdkStarted == false && sale?.state == "quoted") else { return }
         setupInProgress = true
@@ -534,25 +736,32 @@ private struct RestorableQuote: Decodable {
             message = "Tap to Pay needs attention. Open Account to complete the required step."
         }
     }
-    func searchCustomers() {
-        guard let base, customerQuery.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 else { return }
+    func searchCustomers(page: Int = 1) {
+        guard !busy, let base, !customerEventID.isEmpty || customerQuery.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 else { return }
+        let query = customerQuery; let event = customerEventID; let token = api.token
+        customerSearchGeneration += 1
+        let generation = customerSearchGeneration
         perform {
-            let result: POSCustomerList = try await self.api.request(base + "/customers", query: ["query": self.customerQuery])
-            self.customers = result.customers
-            if result.customers.isEmpty { self.message = "No matching customer. You can create a new record below." }
+            var params = ["query": query, "page": String(page)]
+            if !event.isEmpty { params["event_id"] = event }
+            let result: POSCustomerList = try await self.api.request(base + "/customers", query: params)
+            guard self.base == base, self.api.token == token, self.customerSearchGeneration == generation else { return }
+            self.customers = result.customers; self.customerHasMore = result.hasMore
+            self.customerPage = page; self.customerSearchContext = result.eventContext
+            if result.customers.isEmpty { self.message = "No matching customer in this context." }
         }
     }
     func refreshCustomerCommerce() {
         customerCommerceTask?.cancel()
         customerCommerce = nil; customerCommerceError = nil; customerCommerceLoading = false
         guard let base, let customer = selectedCustomer else { return }
-        let customerID = customer.id
+        let customerID = customer.id; let token = api.token; let generation = lookupGeneration
         customerCommerceLoading = true
         customerCommerceTask = Task { [weak self] in
             guard let self else { return }
             do {
                 let response: POSCustomerCommerceResponse = try await self.api.request(base + "/customers/\(customerID)/commerce")
-                guard !Task.isCancelled, self.base == base, self.selectedCustomer?.id == customerID else { return }
+                guard !Task.isCancelled, self.base == base, self.selectedCustomer?.id == customerID, self.api.token == token, self.currentLookup(base, token, generation) else { return }
                 guard response.customer.id == customerID, response.commerce.customerId == customerID else {
                     self.customerCommerceError = "Customer history needs review."
                     self.customerCommerceLoading = false; return
@@ -560,7 +769,8 @@ private struct RestorableQuote: Decodable {
                 self.customerCommerce = response.commerce
                 self.customerCommerceLoading = false
             } catch {
-                guard !Task.isCancelled, self.base == base, self.selectedCustomer?.id == customerID else { return }
+                guard !Task.isCancelled, self.base == base, self.selectedCustomer?.id == customerID, self.api.token == token, self.currentLookup(base, token, generation) else { return }
+                if self.lookupOnly, (error as? POSError) == .signInRequired { self.expireCustomerLookup(); return }
                 self.customerCommerceError = "Could not load customer history. You can try again."
                 self.customerCommerceLoading = false
             }
@@ -572,12 +782,12 @@ private struct RestorableQuote: Decodable {
     }
     private func savePendingEnrollment() throws {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") { return }
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") && !ProcessInfo.processInfo.arguments.contains("--pos-lookup-isolation-ui-tests") { return }
         #endif
-        try SecureStore.write("pending-enrollment", try pendingEnrollment.map { try JSONEncoder().encode($0) })
+        try SecureStore.write(enrollmentJournalKey, try pendingEnrollment.map { try JSONEncoder().encode($0) })
     }
     func saveCustomerEnrollment(_ choice: CustomerEnrollmentChoice) {
-        guard !busy, let workspace = selectedWorkspace, let register = selectedRegister, let customer = selectedCustomer,
+        guard canRecordCustomerChoices, !busy, let workspace = selectedWorkspace, let register = selectedRegister, let customer = selectedCustomer,
               let fingerprint = enrollmentSessionFingerprint, pendingEnrollment == nil else { return }
         pendingEnrollment = PendingCustomerEnrollment(workspace: workspace.slug, register: register.id, customerID: customer.id,
             requestID: UUID().uuidString.lowercased(), sessionFingerprint: fingerprint, choice: choice)
@@ -585,7 +795,10 @@ private struct RestorableQuote: Decodable {
         retryCustomerEnrollment()
     }
     func stopRetryingCustomerEnrollment() {
-        guard !busy, let original = pendingEnrollment else { return }
+        guard canRecordCustomerChoices, !busy, let original = pendingEnrollment else { return }
+        if lookupOnly && (original.sessionFingerprint != enrollmentSessionFingerprint || original.workspace != selectedWorkspace?.slug || original.register != selectedRegister?.id || original.customerID != selectedCustomer?.id) {
+            customerEnrollmentNotice = "Return to the original customer and sign-in before changing this retained request."; return
+        }
         pendingEnrollment = nil
         do { try savePendingEnrollment(); customerEnrollmentNotice = "The earlier choices may already be saved. Check the customer record before submitting again." }
         catch { pendingEnrollment = original; customerEnrollmentNotice = "Could not clear the saved request." }
@@ -596,16 +809,19 @@ private struct RestorableQuote: Decodable {
               pending.sessionFingerprint == enrollmentSessionFingerprint else {
             customerEnrollmentNotice = "Return to the original customer and register with the same sign-in to retry these choices."; return
         }
+        let token = api.token; let generation = lookupGeneration
         perform {
             do {
                 struct Result: Decodable { let customerId: Int }
                 var body = pending.choice.body; body["request_id"] = pending.requestID
                 let result: Result = try await self.api.request(base + "/customers/\(pending.customerID)/enrollment", method: "POST", body: body)
+                guard self.currentLookup(base, token, generation) else { return }
                 guard result.customerId == pending.customerID else { throw POSError.recoveryRequired }
                 self.pendingEnrollment = nil
                 do { try self.savePendingEnrollment() } catch { self.pendingEnrollment = pending; throw error }
                 self.customerEnrollmentNotice = "Customer choices saved."
             } catch POSError.enrollmentRejected(let code) {
+                guard self.currentLookup(base, token, generation) else { return }
                 let rejected = ["invalid_request", "invalid_birthday", "enrollment_choice_required", "birthday_enrollment_unavailable",
                     "email_enrollment_unavailable", "sms_enrollment_unavailable", "customer_consent_review_required",
                     "birthday_change_requires_review", "enrollment_settings_changed"]
@@ -617,45 +833,71 @@ private struct RestorableQuote: Decodable {
                 case "birthday_change_requires_review": self.customerEnrollmentNotice = "A different birthday is already saved; ask an administrator to review it."
                 case "enrollment_settings_changed":
                     self.customerEnrollmentNotice = "The wording changed. Review the current options before saving again."
-                    self.customerEnrollmentSettings = try? await self.api.request(base + "/customer-enrollment")
+                    let refreshed: CustomerEnrollmentSettings? = try? await self.api.request(base + "/customer-enrollment")
+                    if self.currentLookup(base, token, generation) { self.customerEnrollmentSettings = refreshed }
                 default: self.customerEnrollmentNotice = "Check the customer details and choices before trying again."
                 }
             } catch POSError.signInRequired { throw POSError.signInRequired }
-            catch { self.customerEnrollmentNotice = "Choices were not confirmed. Retry the saved choices; payment is unaffected." }
+            catch { guard self.currentLookup(base, token, generation) else { return }; self.customerEnrollmentNotice = "Choices were not confirmed. Retry the saved choices; payment is unaffected." }
         }
     }
     func createCustomer() {
+        guard canRecordCustomerChoices else { message = lookupCaptureNotice; return }
         guard let base, let workspace = selectedWorkspace, let register = selectedRegister,
               !customerFirstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        if lookupOnly, pendingCustomer != nil {
+            message = "Check the saved original customer request before starting another capture."; return
+        }
+        let token = api.token; let generation = lookupGeneration
         perform {
-            if let pending = self.pendingCustomer, pending.workspace != workspace.slug || pending.register != register.id {
+            if let pending = self.pendingCustomer, !self.lookupCaptureMatches(pending) {
                 throw POSError.unavailable("Recover the earlier customer request at its original register before creating another record.")
             }
             if self.pendingCustomer == nil {
-                self.pendingCustomer = PendingCustomerCreation(workspace: workspace.slug, register: register.id, requestID: UUID().uuidString.lowercased())
-                try SecureStore.write("pending-customer", try JSONEncoder().encode(self.pendingCustomer!))
+                let pending = PendingCustomerCreation(workspace: workspace.slug, register: register.id, requestID: UUID().uuidString.lowercased(),
+                    sessionFingerprint: self.lookupOnly ? self.enrollmentSessionFingerprint : nil, origin: self.lookupOnly ? self.api.origin.absoluteString : nil)
+                try SecureStore.write(self.customerJournalKey, try JSONEncoder().encode(pending))
+                self.pendingCustomer = pending
             }
             var body: [String: Any] = ["request_id": self.pendingCustomer!.requestID, "first_name": self.customerFirstName]
             if !self.customerLastName.isEmpty { body["last_name"] = self.customerLastName }
             if !self.customerEmail.isEmpty { body["email"] = self.customerEmail }
             if !self.customerPhone.isEmpty { body["phone"] = self.customerPhone }
-            let result: POSCustomerResponse = try await self.api.request(base + "/customers", method: "POST", body: body)
+            let requestID = self.pendingCustomer!.requestID
+            let result: POSCustomerResponse
+            do { result = try await self.api.request(base + "/customers", method: "POST", body: body) }
+            catch let error as CustomerCaptureServerError {
+                guard self.currentLookup(base, token, generation) else { return }
+                if self.lookupOnly, error.provesNoCreation, let pending = self.pendingCustomer,
+                   pending.requestID == requestID, self.lookupCaptureMatches(pending) {
+                    // Only delete this lookup journal after the server proves this
+                    // POST created nothing. Unknown requests keep their original ID.
+                    try SecureStore.write(self.customerJournalKey, nil)
+                    self.pendingCustomer = nil
+                }
+                throw POSError.unavailable(error.message)
+            }
+            guard self.currentLookup(base, token, generation) else { return }
             self.selectedCustomer = result.customer
-            try SecureStore.write("pending-customer", nil); self.pendingCustomer = nil
+            try SecureStore.write(self.customerJournalKey, nil); self.pendingCustomer = nil
             self.customerFirstName = ""; self.customerLastName = ""; self.customerEmail = ""; self.customerPhone = ""
         }
     }
     func recoverCustomer() {
-        guard let base, let pending = pendingCustomer, pending.workspace == selectedWorkspace?.slug,
-              pending.register == selectedRegister?.id else { return }
+        guard let base, let pending = pendingCustomer, lookupCaptureCanRecover(pending) else {
+            message = "Recover the earlier customer request at its original register with the same sign-in."; return
+        }
+        let token = api.token; let generation = lookupGeneration
         perform {
             let result: POSCustomerResponse = try await self.api.request(base + "/customer-requests/" + pending.requestID)
+            guard self.currentLookup(base, token, generation), self.pendingCustomer?.requestID == pending.requestID,
+                  self.lookupCaptureCanRecover(pending) else { return }
             self.selectedCustomer = result.customer
-            try SecureStore.write("pending-customer", nil); self.pendingCustomer = nil
+            try SecureStore.write(self.customerJournalKey, nil); self.pendingCustomer = nil
         }
     }
     func quote() {
-        guard pending == nil, basketIssue == nil, let workspace = selectedWorkspace, let register = selectedRegister, let base,
+        guard !lookupOnly, pending == nil, basketIssue == nil, let workspace = selectedWorkspace, let register = selectedRegister, let base,
               register.guestCheckout == true || selectedCustomer != nil else { return }
         perform { try await self.createQuote(workspace: workspace.slug, register: register.id, base: base); self.editingBasket = false }
     }
@@ -935,6 +1177,7 @@ private struct RestorableQuote: Decodable {
         }
     }
     func recover(hint: String? = nil) async throws {
+        guard !lookupOnly else { throw POSError.recoveryRequired }
         guard let base, let pending else { return }
         var result: Sale
         if let id = pending.saleID {
@@ -1201,6 +1444,7 @@ private struct RestorableQuote: Decodable {
         rewardMemberAtPurchase = false; rewardPriorOrders = ""; rewardReviewReason = ""; rewardReviewRequestID = nil
     }
     func logout() {
+        if lookupOnly { closeCustomerLookup(); return }
         manuallySelectedRegister = nil
         perform {
             await self.collector.signOut(); try SecureStore.write("session", nil)

@@ -1,5 +1,5 @@
 // Cache only this public explanation. Never cache authenticated pages or API responses.
-const CACHE = 'teams-public-offline-v1';
+const CACHE = 'teams-public-offline-v2';
 const OFFLINE = '/teams/offline';
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.add(OFFLINE))));
 self.addEventListener('activate', event => event.waitUntil(Promise.all([

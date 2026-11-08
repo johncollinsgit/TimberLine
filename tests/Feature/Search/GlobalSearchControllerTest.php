@@ -103,7 +103,7 @@ test('global search returns navigation and action suggestions for empty queries'
     expect($results->pluck('type')->all())->toContain('navigation', 'action');
 });
 
-test('global search fails closed for non marketing users on marketing entities while preserving scoped ops results', function () {
+test('global search gives tenant managers Core customers while keeping marketing entities private', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Ops Search Tenant',
         'slug' => 'ops-search-tenant',
@@ -142,6 +142,6 @@ test('global search fails closed for non marketing users on marketing entities w
 
     $results = collect($response->json('results'));
 
-    expect($results->pluck('type')->all())->toContain('order')
-        ->and($results->pluck('type')->all())->not->toContain('customer', 'module');
+    expect($results->pluck('type')->all())->toContain('order', 'customer')
+        ->and($results->pluck('type')->all())->not->toContain('module', 'import');
 });

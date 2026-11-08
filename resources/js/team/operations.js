@@ -1,6 +1,7 @@
 import '../../css/team-operations.css';
 import '../../css/team-events.css';
 import { installEventTasks } from './event-tasks';
+import { renderEventCalendar, renderScheduleSummary } from './event-calendar';
 
 // Business workspaces share the Teams shell and services. Private drafts stay in memory.
 export function installOperations(nativeRoot) {
@@ -164,7 +165,7 @@ export function installOperations(nativeRoot) {
       else if (view === 'automations') renderAutomations(result.items);
       else if (view === 'campaigns') { note('Campaign plans retain wording for review. Automated external sequences are not enabled in this candidate. Individual email updates are prepared from an account using its current permissions.'); renderRecords(result.items); }
       else if (view === 'statistics') renderStats(result);
-      else if (view === 'calendar') renderCalendar(result.items);
+      else if (view === 'calendar') renderCalendar(result.items, result);
       else if (view === 'pipeline') renderPipeline(result.items);
       else if (view === 'communications') renderAttempts(result.items);
       else if (area.profile === 'wholesale' && view === 'orders') renderCommerce(result.items);
@@ -223,16 +224,7 @@ export function installOperations(nativeRoot) {
     const stages = [...new Set([...area.settings.stages, ...items.map(i => i.status)])];
     for (const stage of stages) { const lane = el('section', '', 'tops-lane'), matches = items.filter(i => i.status === stage); lane.append(el('h3', label(stage) + ' · ' + matches.length)); for (const item of matches) { const card = el('div', '', 'tops-pipeline-card'); card.append(button(item.title, () => details(item)), el('p', money(item.data.amount_cents))); lane.append(card); } board.append(lane); }
   }
-  function renderCalendar(items) {
-    const today = new Date(), input = el('input'); input.type = 'month'; input.value = today.toISOString().slice(0, 7); input.setAttribute('aria-label', 'Calendar month'); $('content').append(input);
-    note('Calendar shows records from this page. Page through the list to inspect more events. Dates use each source’s date-only values.');
-    const grid = el('div', '', 'tops-calendar'); $('content').append(grid);
-    function paint() { grid.replaceChildren(); const [year, month] = input.value.split('-').map(Number); if (!year || !month) return; const first = new Date(Date.UTC(year, month - 1, 1)), days = new Date(Date.UTC(year, month, 0)).getUTCDate();
-      for (const day of ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']) grid.append(el('strong', day, 'tops-weekday'));
-      for (let i = 0; i < first.getUTCDay(); i++) grid.append(el('div', '', 'tops-day tops-blank'));
-      for (let i = 1; i <= days; i++) { const key = input.value + '-' + String(i).padStart(2, '0'), day = el('section', '', 'tops-day'); day.append(el('span', String(i))); for (const item of items.filter(r => r.starts_on && r.starts_on <= key && (r.ends_on || r.starts_on) >= key)) day.append(button(item.title, () => details(item))); grid.append(day); }
-    } input.onchange = paint; paint(); const unscheduled = items.filter(i => !i.starts_on); if (unscheduled.length) renderRecords(unscheduled, section('Unscheduled events'));
-  }
+  function renderCalendar(items, coverage) { renderEventCalendar($('content'), items, coverage, root.dataset.tenant, item => details(item).catch(report), root.dataset.tenant + '|' + area.id); }
   function renderStats(data) {
     if (area.profile === 'events') {
       const filters = el('div', '', 'tops-form'); $('content').append(filters); const year = field(filters, '', 'Reporting year', data.year, 'number'); year.min = 2000; year.max = 2100; filters.append(button('Show this year', () => { if (!year.reportValidity() || !year.value) return; statisticsYear = Number(year.value); return load(); }));
@@ -264,8 +256,9 @@ export function installOperations(nativeRoot) {
     const record = await api('/operations/records/' + item.id); if (captured !== area.id || !$('detail').open) return;
     body.replaceChildren(); note(label(record.status) + ' · ' + (record.source ? 'Connected source · read only' : 'Teams draft') + ' · Version ' + record.version, body);
     if (record.data.source_url) { const a = el('a', 'Open in Asana'); a.href = record.data.source_url; a.target = '_blank'; a.rel = 'noopener noreferrer'; if (a.href.startsWith('https://app.asana.com/')) body.append(a); }
-    const data = Object.entries(record.data).filter(([key, value]) => !key.startsWith('_') && !['source_url', 'fields', 'original_notes', 'source_values', 'costs'].includes(key) && value !== null && typeof value !== 'object');
+    const data = Object.entries(record.data).filter(([key, value]) => !key.startsWith('_') && !['source_url', 'fields', 'original_notes', 'source_values', 'costs', 'schedule_complete', 'calendar_color'].includes(key) && value !== null && typeof value !== 'object');
     table(['Property', 'Value'], [['Starts', date(record.starts_on)], ['Ends', date(record.ends_on)], ...data.map(([key, value]) => [label(key), String(value)])], body);
+    if (record.kind === 'event') renderScheduleSummary(body, record, root.dataset.tenant);
     if (record.data.original_notes) { const notes = section('Original source notes', body); notes.append(el('p', record.data.original_notes, 'tops-notes')); }
     if (record.assignments) { const assignments = section('Recorded assignments and compensation', body); note(record.identity_notice, assignments); table(['Event', 'Date', 'Hours', 'Payroll', 'Pay week', 'Sheet source'], record.assignments.map(a => [a.title, date(a.starts_on), a.hours ?? 'Unknown', money(a.payroll_cents), a.pay_week ?? '—', a.source_tab + ' · row ' + a.source_row]), assignments); }
     if (record.data.fields?.length) { const fields = section('Structured note candidates', body); note('Review each candidate against its source passage. Approval adds a Teams field; the original notes remain unchanged.', fields); const choices = [];
@@ -434,9 +427,30 @@ export function installOperations(nativeRoot) {
     const connection = field(form, 'connection_id', 'Sender / source account', connections[0].id, 'text', connections.map(c => ({ id: c.id, name: c.account_name })));
     if (kind === 'asana.create') {
       note('Review current dates, contacts, instructions and target project. An uncertain outcome is held for reconciliation.', body);
-      body.append(el('p', record.title + ' · ' + date(record.starts_on) + '–' + date(record.ends_on), 'tops-notes'));
-      let request = crypto.randomUUID(); form.append(button('Prepare reviewed creation', async () => { const result = await api('/communications', { method: 'POST', body: { request_id: request, kind, record_id: record.id, expected_record_version: record.version, connection_id: connection.value, reviewed: true } }); const preview = section('Prepared creation', body); note(result.notice, preview); preview.append(button('Create this reviewed event in Asana', async () => { const sent = await api('/communications/' + result.id + '/dispatch', { method: 'POST', body: { reviewed: true } }); note('Outcome: ' + label(sent.status), preview); })); }));
-      form.oninput = () => { request = crypto.randomUUID(); }; return;
+      body.append(el('p', record.title + ' · Occurrence bounds ' + date(record.starts_on) + '–' + date(record.ends_on), 'tops-notes'));
+      const suggested = String(record.data?.event_schedule?.selling_dates?.[0] ?? record.event_schedule?.selling_dates?.[0] ?? record.starts_on ?? '').slice(0, 10);
+      const anchor = field(form, 'asana_due_on', 'Asana date anchor', suggested, 'date');
+      note('This is one Asana task date. Setup, selling and teardown dates stay separate in the reviewed notes; a date range never fills gap days. Clear the anchor to leave the task undated.', form);
+      let request = crypto.randomUUID(), revision = 0;
+      const dispatchButtons = [];
+      form.append(button('Prepare reviewed creation', async () => {
+        const ticket = revision;
+        const result = await api('/communications', { method: 'POST', body: { request_id: request, kind, record_id: record.id, expected_record_version: record.version, connection_id: connection.value, asana_due_on: anchor.value || null, reviewed: true } });
+        if (ticket !== revision || !body.isConnected || currentArea !== area.id) return;
+        const preview = section('Prepared creation', body); note(result.notice, preview);
+        note('Asana date anchor: ' + (result.preview.asana_payload?.due_on || 'None'), preview);
+        preview.append(el('pre', result.preview.asana_payload?.notes || '', 'tops-notes'));
+        const dispatch = button('Create this reviewed event in Asana', async () => {
+          if (ticket !== revision || !body.isConnected || currentArea !== area.id) return;
+          dispatch.disabled = true;
+          const sent = await api('/communications/' + result.id + '/dispatch', { method: 'POST', body: { reviewed: true } });
+          if (!body.isConnected || currentArea !== area.id) return;
+          note('Outcome: ' + label(sent.status), preview);
+          if (sent.result?.notice) note(sent.result.notice, preview);
+        });
+        dispatchButtons.push(dispatch); preview.append(dispatch);
+      }));
+      form.oninput = () => { revision++; request = crypto.randomUUID(); dispatchButtons.forEach(button => { button.disabled = true; }); }; return;
     }
     const catalog = await api('/communications/templates'); if (!body.isConnected || currentArea !== area.id) return;
     const draftKey = currentArea + ':' + record.id, retained = emailDrafts.get(draftKey);
@@ -460,7 +474,7 @@ export function installOperations(nativeRoot) {
       preview.append(button('Prepare this reviewed email', async () => { if (ticket !== revision) return; const prepared = await api('/communications', { method: 'POST', body: { ...content(), request_id: request, kind, expected_record_version: result.record_version, connection_id: sender, formatted: true, reviewed: true } }); if (ticket !== revision || !body.isConnected) return; const action = section('Prepared email', preview); note(prepared.notice, action); action.append(button('Send this reviewed email', async () => { const sent = await api('/communications/' + prepared.id + '/dispatch', { method: 'POST', body: { reviewed: true } }); if (sent.status === 'accepted') { emailDrafts.delete(draftKey); updateDraftNotice(); } note('Outcome: ' + label(sent.status) + '. Provider acceptance is recorded separately from delivery.', action); })); }, 'primary'));
     }, 'primary'));
   }
-  function renderAttempts(items) { note('Your prepared and submitted actions. Unknown outcomes require reconciliation; retrying does not send a second copy.'); if (!items.length) empty('No communication attempts yet', 'Prepare an update from an event or account.'); else table(['Action', 'State', 'Created', 'Review'], items.map(a => [label(a.kind), label(a.status), new Date(a.created_at).toLocaleString(), ['unknown', 'executing'].includes(a.status) ? button('Reconcile outcome', async () => { const result = await api('/communications/' + a.id + '/reconcile', { method: 'POST' }); await load(); if (result.notice) $('notice').textContent = result.notice; }) : '—'])); }
+  function renderAttempts(items) { note('Your prepared and submitted actions. Unknown outcomes require reconciliation; retrying does not send a second copy.'); if (!items.length) empty('No communication attempts yet', 'Prepare an update from an event or account.'); else table(['Action', 'State', 'Created', 'Review'], items.map(a => [label(a.kind), label(a.status), new Date(a.created_at).toLocaleString(), ['unknown', 'executing'].includes(a.status) || a.adoption_recovery_available ? button(a.adoption_recovery_available ? 'Finish original event link' : 'Reconcile outcome', async () => { const result = await api('/communications/' + a.id + '/reconcile', { method: 'POST' }); await load(); if (result.notice || result.result?.notice) $('notice').textContent = result.notice || result.result.notice; }) : '—'])); }
   addEventListener('beforeunload', event => { if (draft?.dirty || drafts.size || emailDrafts.size) { event.preventDefault(); event.returnValue = ''; } });
   document.addEventListener('visibilitychange', () => { clearInterval(timer); if (!document.hidden) timer = setInterval(() => { if (!$('panel').hidden && !draft?.dirty && !$('detail').open && !$('editor').open) load(); }, 60000); });
   document.dispatchEvent(new Event('visibilitychange'));

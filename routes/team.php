@@ -13,9 +13,21 @@ Route::get('/team/asana/callback', [\App\Http\Controllers\TeamAsanaController::c
 Route::get('/team/integrations/{provider}/callback', [\App\Http\Controllers\TeamOperationsController::class, 'callback'])->whereIn('provider', ['asana', 'gmail', 'sheets'])->middleware(['auth', 'verified', 'throttle:20,1'])->name('team.operations.callback');
 
 Route::middleware(['auth', 'verified', 'tenant.access', \App\Http\Middleware\EnsureTeamWorkViewer::class, 'throttle:120,1'])->group(function (): void {
+    Route::get('/teams/studio', \App\Http\Controllers\TeamStudioAppController::class)->name('team.studio.app');
     Route::get('/teams', [TeamWorkController::class, 'app'])->name('team.app');
     Route::get('/teams/app', [TeamWorkController::class, 'app'])->name('team.installed');
     Route::prefix('team')->name('team.')->group(function (): void {
+        Route::get('/customers/events', \App\Http\Controllers\TeamCustomerLookupController::class)->defaults('action', 'events')->name('customers.events');
+        Route::get('/customers/{profile}', \App\Http\Controllers\TeamCustomerLookupController::class)->whereNumber('profile')->defaults('action', 'detail')->name('customers.detail');
+        Route::get('/customers', \App\Http\Controllers\TeamCustomerLookupController::class)->name('customers.search');
+        Route::get('/events/{event}/customer-value', \App\Http\Controllers\TeamCustomerEventValueController::class)->whereUuid('event')->name('events.customer-value');
+        Route::get('/events/{id}/profitability', \App\Http\Controllers\TeamEventProfitabilityController::class)->whereUuid('id')->name('events.profitability');
+        Route::get('/events/{id}/intelligence', \App\Http\Controllers\TeamEventIntelligenceController::class)->whereUuid('id')->name('events.intelligence');
+        Route::get('/studio/preset', \App\Http\Controllers\TeamStudioController::class)->defaults('action', 'preset')->name('studio.preset');
+        Route::get('/studio', \App\Http\Controllers\TeamStudioController::class)->name('studio');
+        foreach (['definition', 'draft', 'preview', 'create', 'budget', 'mapping', 'commerce'] as $action) {
+            Route::post('/studio/'.$action, \App\Http\Controllers\TeamStudioController::class)->defaults('action', $action)->name('studio.'.$action);
+        }
         Route::get('/events/my-tasks', \App\Http\Controllers\TeamEventTasksController::class)->name('events.my-tasks');
         Route::get('/events/asana/tasks/{id}/{kind?}', \App\Http\Controllers\TeamEventTasksController::class)->where('id', '[0-9]+')->where('kind', 'task|stories|subtasks|attachments')->defaults('action', 'detail')->name('events.task');
         Route::post('/events/asana/changes', \App\Http\Controllers\TeamEventTasksController::class)->defaults('action', 'prepare')->name('events.changes');

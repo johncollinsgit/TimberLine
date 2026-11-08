@@ -1,3 +1,85 @@
+## Retail, Square sources and dated events (November 7; source candidate)
+
+Owner quality direction: every new surface must feel like one professionally
+finished product. Use existing brand tokens and clean sans-serif type, aligned
+responsive grids, consistent control heights of at least 44px and readable phone
+text. Do not shrink multi-day calendars to fit; use deliberate, labelled scrolling.
+Keep primary dates, amounts and customer/product names prominent; put opaque
+source identifiers and exact audit timestamps in accessible secondary details.
+Review actual phone and desktop screenshots, including narrow widths, long text,
+keyboard focus and missing/error states. Geometry checks supplement visual review.
+Preserve recovery, unknown-data labels and authorization; presentation work cannot
+establish complete offline or supported-device acceptance.
+Keep Start Here actions inside the existing Flux main/workflow column; a sibling
+before main becomes a narrow shell-grid column on phones. See
+`docs/operations/start-here-responsive-layout.md` for the scoped fix and checks.
+
+Teams uses the exact product masthead “Everbranch Teams” with the existing
+Everbranch leaf and a self-hosted painted green-tree band. Keep the tenant/company
+context separate. Artwork is decorative, with readable text and usable controls
+when images fail or forced colors are enabled. Do not alter app identifiers,
+signing or tenant/source identities for a branding change.
+Teams-specific favicons, touch icons and separate any/maskable manifest assets
+are served from `/teams-workspace/brand/icons/`. Preserve tenant-bound manifest
+IDs/start URLs and the workspace/studio surface; never substitute a generic
+installation manifest or change Field/Pay icons. Offline fallback remains only
+a public reconnect explanation, with no authenticated response caching.
+
+The public retail overview at `/platform/retail` connects keeping Square or a
+phased move with customer profiles, tenant rewards/birthdays/app setup, Teams
+employee time, company event pay/costs and event profit. Preserve its approved
+responsive photos, fictional graph labels, scoped asset entry and availability
+language. Catalog, payment and outreach gates remain unchanged; see
+`docs/operations/everbranch-retail-offer.md`.
+
+Core Customers' Square connection is tenant owner/admin only and independent of
+Pay/global Marketing roles. Reuse existing encrypted source settings, original
+merchant/environment ownership, caches, import checkpoints and identity reviews.
+Contact/card similarities are review candidates, never identity authorization or
+marketing permission. History refresh must not invoke reward earning/redemption,
+wallet linking or checkout. Keep card references private to authorized operators
+and out of shopper/QR/AI-draft payloads. No live import or provider grant follows
+from a successful source test. Read `docs/operations/square-customer-source.md`
+for connection, renewal, source-only import and identity-review contracts.
+
+Read `docs/operations/teams-event-schedule.md` before changing event dates.
+Explicit local sessions include setup/selling/teardown/travel and preserve gaps;
+Asana due/start fields are separate source anchors. Source evidence is reviewed
+against fresh notes/comments and exact versions. Never turn source bounds into
+invented selling days, sales or paid staff shifts. Retain frozen budgets/policies;
+editing an occurrence requires a new version and a consistent reviewed calendar.
+Preserve original Asana create commands and confirmed GIDs during recovery.
+Modern Forestry remains Asana-authoritative throughout 2026.
+
+## Shared customer profiles and event value (November 7; source candidate)
+
+Core Customers, Website accounts, Teams and Pay reuse canonical identities and
+original purchases for behavior, declared preferences, event value and current
+POS recommendations. Core search does not require global Marketing roles;
+personal draft preparation/review still requires verified tenant ownership or
+admin membership and current capabilities. Existing campaign senders retain
+authority; both new profile dispatch gates remain closed. Frozen content,
+current preferences, original handoffs and customer identity drift are checked
+before use. Read `docs/operations/shared-customer-profiles.md` and its linked
+runbooks for exact coverage, MySQL races and remaining release work. No new
+ledger, migration, live message, policy publication or production activation.
+
+## Teams Studio foundation (November 7; draft source candidate)
+
+Check `/api/mobile/v1/auth/teams-availability` before opening the native sign-in
+browser. Fail closed on missing/incompatible/disabled responses and keep network
+failures retryable. Availability cannot authorize a user or select a tenant.
+Keep exact OAuth callback/PKCE checks, cancellation and return-to-app behavior;
+never use an existing website session or remembered tenant as a native fallback.
+
+A paired React/Capacitor Teams candidate adds private event drafts, deterministic
+cost previews, immutable tenant policies/definitions, frozen budgets, reviewed
+comparison mappings, occurrence weather and source-note/comment safeguards on
+existing Teams services. It remains a partial implementation of the approved full
+643-clause scope. Native availability/cutover are not activated; no production or
+source data was changed. Read `docs/operations/teams-studio-foundation.md` for exact
+interfaces, evidence and substantial remaining work before rollout.
+
 ## Tenant rewards, event attribution and physical counts (November 6; source candidate)
 
 Pay can recommend an already authorized event register from the signed-in user's
@@ -11,8 +93,10 @@ membership reporting. Original subscription dates are required for join metrics.
 A newly reviewed POS binding can require counted stock per pool while older pools
 retain their untracked policy. Owners can adjust available products through the
 product menu. Read `docs/operations/pay-tenant-rewards-and-events.md` for current
-source coverage and remaining release work. Policy publication, QR redemption,
-phone installation and physical acceptance remain incomplete.
+source coverage and remaining release work. QR/saved-contact redemption, guarded
+policy publication and zero-tender wallet/stock completion are implemented in
+source; phone installation, live policy activation and physical acceptance remain
+outstanding.
 
 ## Contractor management in the public campus demo (November 5)
 
@@ -4052,3 +4136,12 @@ stock evidence, no Square charge, and one-time rewards restoration. Short-lived
 owner membership review changes only redemption limits, never join statistics.
 The independent birthday lane retains its existing rollout and acceptance gates.
 Signed development artifacts do not establish distribution or physical acceptance.
+
+### Teams / Pay event intelligence candidate
+
+Read `docs/operations/teams-studio-foundation.md` before editing the Profit Panel,
+company cost templates or customer event lookup. Reuse `EventCommerceReport`,
+original paid receipt evidence and the shared canonical customer service. Never
+recompute a frozen budget from today's company policy, infer event identity by
+name/date, or label a captured contact as a confirmed purchaser. New Pay event
+controls stay default-off pending protected release and acceptance.

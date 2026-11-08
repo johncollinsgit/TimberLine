@@ -58,7 +58,7 @@ class GlobalSearchCoordinator
         $results = collect($this->providers)
             ->reject(fn (GlobalSearchProvider $provider): bool => $navigationOnly && $provider instanceof ActionsSearchProvider)
             ->filter(fn (GlobalSearchProvider $provider): bool => ! $soccer || $provider instanceof NavigationSearchProvider)
-            ->filter(fn (GlobalSearchProvider $provider): bool => ! $websiteSales || $provider instanceof NavigationSearchProvider || $provider instanceof ActionsSearchProvider || $provider instanceof ModulesSearchProvider)
+            ->filter(fn (GlobalSearchProvider $provider): bool => ! $websiteSales || $provider instanceof CustomersSearchProvider || $provider instanceof NavigationSearchProvider || $provider instanceof ActionsSearchProvider || $provider instanceof ModulesSearchProvider)
             ->flatMap(function (GlobalSearchProvider $provider) use ($normalized, $context): array {
                 try {
                     return $provider->search($normalized, $context);

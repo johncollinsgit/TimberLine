@@ -17,12 +17,39 @@ class OperationsEnrichment
         $access = app(OperationsAccess::class);
         $access->record($tenant, $user, $record);
         $access->area($tenant, $user, $record->area_id, true);
-        if ($input['action'] !== 'fields') {
+        if (! in_array($input['action'], ['fields', 'schedule'], true)) {
             $access->financial($tenant, $user);
         }
+        if ($input['action'] === 'schedule') {
+            abort_unless($record->kind === 'event', 422);
+            $input['schedule'] = app(EventSchedule::class)->validate($input['schedule']);
+        }
         $hash = hash('sha256', json_encode([$record->id, $input], JSON_THROW_ON_ERROR));
+        $prior = TeamOperationAttempt::where(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'request_id' => $input['request_id']])->first();
+        if ($prior) {
+            abort_unless($prior->kind === 'record.enrich' && hash_equals($prior->input_hash, $hash), 409);
 
-        return DB::transaction(function () use ($tenant, $user, $record, $input, $hash) {
+            return $record->fresh();
+        }
+        $sessionEvidence = [];
+        if ($input['action'] === 'schedule') {
+            $source = ! empty($input['schedule']['evidence_selections']) ? app(EventTasks::class)->calendarEvidence($tenant, $user, $record, $input['schedule']['evidence_selections']) : null;
+            foreach ($input['schedule']['sessions'] ?? [] as $session) {
+                $evidence = ['session_id' => $session['id'], 'status' => 'unconfirmed', 'reviewed_by' => (string) $user->id, 'reviewed_at' => now()->toIso8601String()];
+                $selection = collect($input['schedule']['evidence_selections'] ?? [])->firstWhere('session_id', $session['id']);
+                $attestation = collect($input['schedule']['attestations'] ?? [])->firstWhere('session_id', $session['id']);
+                if ($selection) {
+                    $candidate = collect($source['candidates'])->firstWhere('id', $selection['evidence_id']);
+                    abort_unless($candidate && $candidate['kind'] === $session['kind'] && in_array($session['date'], $candidate['dates'], true) && ! $source['issues'], 409, 'The selected source passage changed or does not verify this session kind and date. Refresh the source or record a staff attestation.');
+                    $evidence = array_replace($evidence, array_intersect_key($candidate, array_flip(['task_gid', 'source_version', 'source_modified_at', 'field', 'section', 'passage', 'source_story_id', 'year_context', 'year_evidence', 'range_context'])), ['status' => 'source_verified_at_review', 'verified_fields' => ['kind', 'date'], 'hours_verified' => false, 'evidence_id' => $candidate['id'], 'url' => $source['source_url']]);
+                } elseif ($attestation) {
+                    $evidence = array_replace($evidence, ['status' => 'staff_attested', 'passage' => $attestation['passage'], 'url' => $attestation['url'] ?? null]);
+                }
+                $sessionEvidence[] = $evidence;
+            }
+        }
+
+        return DB::transaction(function () use ($tenant, $user, $record, $input, $hash, $sessionEvidence) {
             DB::table('team_work_locks')->insertOrIgnore(['tenant_id' => $tenant->id]);
             DB::table('team_work_locks')->where('tenant_id', $tenant->id)->lockForUpdate()->first();
             $receipt = TeamOperationAttempt::where(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'request_id' => $input['request_id']])->first();
@@ -34,7 +61,9 @@ class OperationsEnrichment
             $record = TeamOperationRecord::whereKey($record->id)->lockForUpdate()->firstOrFail();
             abort_unless($record->version === $input['expected_version'], 409, 'The record changed. Review current source evidence first.');
             $data = $record->data;
-            if ($input['action'] === 'fields') {
+            if ($input['action'] === 'schedule') {
+                $data['_teams_enrichment']['calendar'] = $input['schedule'] + ['session_evidence' => $sessionEvidence, 'reviewed_by' => (string) $user->id, 'reviewed_at' => now()->toIso8601String(), 'source_version' => $data['source_version'] ?? null];
+            } elseif ($input['action'] === 'fields') {
                 $allowed = ['application_status', 'acceptance_status', 'fee', 'staff', 'address', 'setup_time', 'event_hours', 'email', 'phone', 'booth', 'attendance', 'instructions', 'contact', 'last_order_on', 'last_contact_on', 'shipping', 'custom_labels', 'custom_scents', 'website'];
                 foreach ($input['field_indices'] as $index) {
                     $candidate = $data['fields'][$index] ?? null;

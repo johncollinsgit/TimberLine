@@ -23,6 +23,16 @@ class PlatformProductPagesController extends Controller
         return response()->view('platform.promo', $experienceService->promoPayload());
     }
 
+    public function retail(TenantModuleCatalogService $catalogService): Response
+    {
+        $catalog = $catalogService->publicCatalogPayload();
+
+        return response()->view('platform.retail', [
+            'retailBranches' => collect($catalog['modules'])->whereIn('key', ['customers', 'rewards', 'birthdays', 'managed_website', 'reviews', 'messaging', 'sms'])->values()->all(),
+            'hasTeamsOffer' => collect($catalog['premium_products'])->contains('name', 'Teams'),
+        ]);
+    }
+
     public function industryDemo(?string $discipline = 'retail'): Response
     {
         $disciplines = [

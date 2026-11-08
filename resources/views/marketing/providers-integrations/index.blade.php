@@ -17,7 +17,7 @@
             title="Connections"
             description="Native workflow automations, Square sync, legacy importer workflows, and event source mapping administration for marketing attribution."
             hint-title="How this page works"
-            hint-text="All imports and syncs are additive. Identity merges still follow exact email/phone rules, and ambiguous matches are routed to Identity Review."
+            hint-text="Imports retain original source IDs. Ambiguous Square customer associations require an explicit review in Core Customers."
         />
 
         <div class="flex justify-end">
@@ -534,7 +534,7 @@
                 </div>
 
                 <x-admin.help-hint title="Square sync behavior">
-                    Syncs are idempotent and safe to rerun. Event attribution is derived from mapped tax/source values after order sync.
+                    Refreshes retain original source IDs and checkpoints. Contact and card similarities are staged for review; a Square location is not automatically an event.
                 </x-admin.help-hint>
 
                 <div class="grid gap-3 sm:grid-cols-3">
@@ -552,35 +552,8 @@
                     </div>
                 </div>
 
-                <form method="POST" action="{{ route('marketing.providers-integrations.sync-square') }}" class="grid gap-3 sm:grid-cols-2">
-                    @csrf
-                    <div>
-                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Sync Type</label>
-                        <select name="sync_type" class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">
-                            <option value="customers">Customers</option>
-                            <option value="orders">Orders</option>
-                            <option value="payments">Payments</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Limit</label>
-                        <input type="number" name="limit" value="" min="1" class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950" placeholder="Leave blank for full sync" />
-                        <div class="mt-1 text-[11px] text-zinc-500">Blank now means exhaustion mode with checkpoint-safe runs.</div>
-                    </div>
-                    <div>
-                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Since (optional)</label>
-                        <input type="datetime-local" name="since" class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950" />
-                    </div>
-                    <label class="flex items-center gap-2 pt-6 text-sm text-zinc-700">
-                        <input type="checkbox" name="dry_run" value="1" class="rounded border-zinc-300 bg-zinc-50" />
-                        Dry run
-                    </label>
-                    <div class="sm:col-span-2">
-                        <button type="submit" class="inline-flex rounded-full border border-zinc-300 bg-emerald-100 px-4 py-2 text-sm font-semibold text-zinc-950">
-                            Run Square Sync
-                        </button>
-                    </div>
-                </form>
+                <a href="{{ route('customers.square.index', ['tenant' => $squareSourceTenantSlug ?? null]) }}" class="inline-flex rounded-full border border-zinc-300 bg-emerald-100 px-4 py-2 text-sm font-semibold text-zinc-950">Manage Square source connection and refresh</a>
+                <p class="text-sm text-zinc-600">Tenant owners and administrators can preview, resume and review source associations in Core Customers. Historical source refresh does not consume rewards or grant marketing permission.</p>
             </article>
 
             <article class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6 space-y-4">

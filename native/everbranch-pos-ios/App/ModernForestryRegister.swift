@@ -6,8 +6,7 @@ struct EverbranchRegisterView: View {
     @State private var basket = false
     @State private var account = false
     @State private var customerLookup = false
-    @State private var previousCustomer: POSCustomer?
-    @State private var lookupRegister: String?
+    @StateObject private var lookupModel = POSViewModel(lookupOnly: true)
     @State private var showRecovery = true
     private var fixture: Bool {
         #if DEBUG
@@ -24,20 +23,25 @@ struct EverbranchRegisterView: View {
                 POSView(screen: .checkout, model: model)
             }
             else if fixture || (model.signedIn && model.registerLoaded) {
-                NativeRegister(model: model, onBasket: { showRecovery = false; basket = true }, onAccount: { account = true }, onCustomers: { lookupRegister = model.base; previousCustomer = model.selectedCustomer; model.selectedCustomer = nil; customerLookup = true })
+                NativeRegister(model: model, onBasket: { showRecovery = false; basket = true }, onAccount: { account = true }, onCustomers: { if lookupModel.prepareCustomerLookup(from: model) { customerLookup = true } }, allowRecommendations: !customerLookup)
             } else { POSView(screen: .setup, model: model) }
         }
         .background(PayTheme.paper)
         .sheet(isPresented: $basket, onDismiss: {
             if model.sale?.canLeave == true && model.pending?.refundRequestID == nil { model.nextSale() }
         }) { POSView(onClose: { basket = false }, screen: .checkout, model: model) }
-        .sheet(isPresented: $customerLookup, onDismiss: { if model.base == lookupRegister { model.selectedCustomer = previousCustomer }; previousCustomer = nil; lookupRegister = nil; model.refreshCustomerCommerce() }) {
-            POSView(onClose: { customerLookup = false }, screen: .customers, model: model)
+        .sheet(isPresented: $customerLookup, onDismiss: { lookupModel.closeCustomerLookup() }) {
+            POSView(onClose: { customerLookup = false }, onShopForCustomer: model.pending == nil ? {
+                guard model.shopForCustomer(from: lookupModel) else { lookupModel.message = "Return to the same signed-in register without an active payment before shopping for this customer."; return }
+                customerLookup = false
+            } : nil, screen: .customers, model: lookupModel)
         }
         .sheet(isPresented: $account) { POSView(onClose: { account = false }, onOpenRegister: { account = false }, screen: .setup, model: model) }
         .onChange(of: model.completedSaleGeneration) { _, _ in basket = false; showRecovery = false }
         .onChange(of: model.editingBasket) { _, editing in if editing { showRecovery = false; basket = true } }
-        .onChange(of: model.signedIn) { _, value in if !value { previousCustomer = nil; lookupRegister = nil; customerLookup = false; account = false; basket = false } }
+        .onChange(of: model.signedIn) { _, value in if !value { lookupModel.closeCustomerLookup(); customerLookup = false; account = false; basket = false } }
+        .onChange(of: model.base) { _, _ in if customerLookup { lookupModel.closeCustomerLookup(); customerLookup = false } }
+        .onChange(of: model.api.token) { _, _ in if customerLookup { lookupModel.closeCustomerLookup(); customerLookup = false } }
         .modifier(ReadinessRefreshObserver(model: model, account: $account, basket: $basket))
         #if DEBUG
         .onAppear { if ProcessInfo.processInfo.arguments.contains("--pos-completed-sheet-ui-tests") { showRecovery = false } }
@@ -77,6 +81,7 @@ private struct NativeRegister: View {
     let onBasket: () -> Void
     let onAccount: () -> Void
     let onCustomers: () -> Void
+    let allowRecommendations: Bool
     @State private var tab: RegisterTab = .products
     @State private var search = ""
     @State private var favorites = Set<String>()
@@ -86,12 +91,21 @@ private struct NativeRegister: View {
     @State private var stockCounts: [String: String] = [:]
     @State private var savedPayments = false
     @State private var recentSales = false
+    @State private var eventStats = false
     @FocusState private var searchFocused: Bool
     private var favoriteKey: String { "register-favorites:\(model.selectedWorkspace?.id ?? 0):\(model.selectedRegister?.id ?? "fixture")" }
     private var groups: [ProductGroup] {
-        Dictionary(grouping: model.items, by: { $0.productKey ?? $0.id }).map { ProductGroup(id: $0.key, items: $0.value.sorted { $0.unitAmountMinor < $1.unitAmountMinor }) }
+        let ranks = Dictionary(uniqueKeysWithValues: (model.customerRecommendations?.items ?? []).filter(\.recommended).map { ($0.itemId, $0.rank) })
+        return Dictionary(grouping: model.items, by: { $0.productKey ?? $0.id }).map { ProductGroup(id: $0.key, items: $0.value.sorted { $0.unitAmountMinor < $1.unitAmountMinor }) }
             .filter { (tab != .favorites || favorites.contains($0.id)) && (search.isEmpty || $0.items.contains { ($0.title + " " + ($0.variantLabel ?? "") + " " + ($0.sku ?? "")).localizedCaseInsensitiveContains(search) }) }
-            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+            .sorted { first, second in
+                if !ranks.isEmpty {
+                    let a = first.items.compactMap { ranks[$0.id] }.min() ?? Int.max
+                    let b = second.items.compactMap { ranks[$0.id] }.min() ?? Int.max
+                    if a != b { return a < b }
+                }
+                return first.title.localizedStandardCompare(second.title) == .orderedAscending
+            }
     }
     private var count: Int { model.quantities.values.reduce(0, +) + (model.customAmountMinor > 0 ? 1 : 0) }
     private var subtotal: Int { model.items.reduce(model.customAmountMinor) { $0 + $1.unitAmountMinor * (model.quantities[$1.id] ?? 0) } }
@@ -119,6 +133,21 @@ private struct NativeRegister: View {
                         .ignoresSafeArea(.container, edges: .top)
                 }
             Picker("Register", selection: $tab) { ForEach(RegisterTab.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).padding(.horizontal, 20)
+            if let customer = model.selectedCustomer {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack { Text("Shopping for \(customer.name)").font(.subheadline.weight(.semibold)); Spacer(); Button("Clear") { model.selectedCustomer = nil }.frame(minWidth: 44, minHeight: 44).disabled(model.pending != nil || model.busy) }
+                    if model.customerRecommendationsLoading { ProgressView("Finding frequently purchased scents…").font(.caption) }
+                    if let notice = model.customerRecommendationsNotice { Text(notice).font(.caption).foregroundStyle(PayTheme.muted) }
+                }.padding(.horizontal, 20)
+            }
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--pos-lookup-isolation-ui-tests") {
+                Text(model.lookupIsolationSummary).font(.caption2).accessibilityIdentifier("shopping-fixture-state")
+            }
+            #endif
+            if model.selectedRegister?.canViewEventStats == true {
+                Button("Profit Panel") { eventStats = true }.frame(minHeight: 44).disabled(model.busy || model.collector.hasActivePayment)
+            }
             if model.pending != nil { Button("Payment saved · Open status", action: onBasket).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
             else if !model.visibleSavedPayments.isEmpty { Button("Payments for review (\(model.visibleSavedPayments.count))") { savedPayments = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
             if model.pending == nil && !model.visibleRecentSales.isEmpty { Button("Recent sales") { recentSales = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
@@ -155,6 +184,7 @@ private struct NativeRegister: View {
         }
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { searchFocused = false } } }
         .sheet(item: $options) { group in optionsSheet(group) }
+        .sheet(isPresented: $eventStats) { EventProfitabilitySheet(model: model) }
         .sheet(item: $bundle) { item in BundleOptions(item: item, model: model, onPending: onBasket) }
         .sheet(isPresented: $savedPayments) {
             NavigationStack {
@@ -187,11 +217,15 @@ private struct NativeRegister: View {
             if ProcessInfo.processInfo.arguments.contains("--pos-catalog-ui-tests") && model.items.isEmpty { model.loadCatalogFixture() }
             #endif
         }
+        .task(id: model.recommendationContextKey + ":" + String(allowRecommendations)) { if allowRecommendations { await model.refreshCustomerRecommendations() } }
         .onChange(of: favoriteKey) { _, _ in favorites = Set(UserDefaults.standard.stringArray(forKey: favoriteKey) ?? []) }
         .onChange(of: model.stockCountGeneration) { _, _ in options = nil; stockCounts = [:] }
         .buttonStyle(.plain).preferredColorScheme(.light)
     }
 
+    private func recommendation(_ group: ProductGroup) -> CustomerRecommendations.Item? {
+        model.customerRecommendations?.items.filter { item in item.recommended && group.items.contains { $0.id == item.itemId } }.min { $0.rank < $1.rank }
+    }
     private func product(_ group: ProductGroup) -> some View {
         ZStack(alignment: .topTrailing) {
             Button { select(group) } label: {
@@ -200,6 +234,7 @@ private struct NativeRegister: View {
                         HStack(spacing: 12) {
                             productPhoto(group).frame(width: 54, height: 54).clipped().clipShape(RoundedRectangle(cornerRadius: 12))
                             VStack(alignment: .leading, spacing: 6) {
+                                if let item = recommendation(group) { Text("Bought on \(item.score.purchaseCount) occasions").font(.caption2).foregroundStyle(PayTheme.muted) }
                                 Text(group.title).font(.system(.body, design: .serif).weight(.semibold)).lineLimit(2)
                                 HStack(spacing: 8) {
                                     Text(productPrice(group)).font(.caption.weight(.semibold)).monospacedDigit()
@@ -212,12 +247,14 @@ private struct NativeRegister: View {
                         VStack(alignment: .leading, spacing: 10) {
                             productPhoto(group).frame(maxWidth: .infinity).frame(height: 142).clipped().clipShape(RoundedRectangle(cornerRadius: 20))
                             Text(group.title).font(.system(.title3, design: .serif)).lineLimit(2).frame(minHeight: 48, alignment: .top)
+                            if let item = recommendation(group) { Text("Bought on \(item.score.purchaseCount) occasions · \(item.score.units) units").font(.caption).foregroundStyle(PayTheme.muted) }
                             Text(productPrice(group)).font(.headline).monospacedDigit()
                             Text(productAction(group)).font(.caption.weight(.semibold)).padding(.horizontal, 12).padding(.vertical, 10).background(PayTheme.paper, in: Capsule())
                         }
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(12).background(PayTheme.cream, in: RoundedRectangle(cornerRadius: 28)).overlay(RoundedRectangle(cornerRadius: 28).stroke(PayTheme.line, lineWidth: 1)).contentShape(RoundedRectangle(cornerRadius: 28))
             }.disabled(model.pending == nil && !group.available && model.selectedRegister?.canManageInventory != true).accessibilityLabel(group.items.count == 1 ? "Add \(group.title) to basket" : "Choose \(group.title) options")
+                .accessibilityValue(recommendation(group).map { "Bought on \($0.score.purchaseCount) occasions, \($0.score.units) units" } ?? (group.available ? "" : "Unavailable"))
             Button {
                 if favorites.contains(group.id) { favorites.remove(group.id) } else { favorites.insert(group.id) }
                 UserDefaults.standard.set(Array(favorites), forKey: favoriteKey)
@@ -319,9 +356,10 @@ extension POSViewModel {
         rows.append(["item_id": String(repeating: "e", count: 32), "product_key": "fixture-trio", "title": "Fictional trio", "variant_label": "Mix & match", "unit_amount_minor": 1800, "kind": "bundle", "revision": String(repeating: "f", count: 64), "available_quantity": untracked ? NSNull() : 6, "availability": "available", "bundle_quantity": 3, "bundle_items": [rows[0], rows[2]]])
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
         items = (try? decoder.decode(CatalogList.self, from: JSONSerialization.data(withJSONObject: ["items": rows])))?.items ?? []
-        selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": [], "custom_amount_enabled": true, "guest_checkout": true, "rewards_redemption_available": ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests"), "can_manage_inventory": ProcessInfo.processInfo.arguments.contains("--pos-stock-count-ui-tests"), "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests")]))
+        selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": [], "custom_amount_enabled": true, "guest_checkout": true, "rewards_redemption_available": ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests"), "customer_recommendations_available": ProcessInfo.processInfo.arguments.contains("--pos-customer-recommendations-ui-tests"), "can_manage_inventory": ProcessInfo.processInfo.arguments.contains("--pos-stock-count-ui-tests"), "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests")]))
         if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") {
             signedIn = true; registerLoaded = true; tapReady = true
+            api.token = "fictional-test-session"
             if ProcessInfo.processInfo.arguments.contains("--pos-enrollment-ui-tests") {
                 api.token = "fictional-test-session"
                 customerEnrollmentSettings = try? decoder.decode(CustomerEnrollmentSettings.self, from: JSONSerialization.data(withJSONObject: [
@@ -331,6 +369,7 @@ extension POSViewModel {
             selectedWorkspace = try? decoder.decode(Workspace.self, from: Data(#"{"id":1,"name":"Fictional","slug":"fixture"}"#.utf8))
             quantities = [String(repeating: "c", count: 32): 1]
             POSCheckoutFixtureProtocol.setCatalog(try! JSONSerialization.data(withJSONObject: ["items": rows]))
+            loadLookupIsolationFixture()
         }
         if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") {
             POSCheckoutFixtureProtocol.setReadinessEnabled(false)
@@ -420,5 +459,93 @@ struct BundleOptions: View {
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
                 .onAppear { if let existing { choices = existing.components; bundles = existing.quantity } }
         }.preferredColorScheme(.light)
+    }
+}
+
+/// Read-only event intelligence. A changed account/register discards the response.
+private struct EventProfitabilitySheet: View {
+    @ObservedObject var model: POSViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var report: EventStats?
+    @State private var message: String?
+    @State private var loading = false
+    @State private var revision = 0
+    private var scope: String { (model.api.token ?? "") + "|" + (model.base ?? "") }
+    var body: some View {
+        NavigationStack {
+            List {
+                if loading { ProgressView("Loading event statistics…") }
+                if let message { Text(message) }
+                if let report {
+                    Section(report.eventName) {
+                        value("Net Pay sales before tax", report.sales.netSalesMinor)
+                        value("Net sales tax", report.sales.salesTaxMinor)
+                        value("Estimated event costs", report.profitability?.estimatedCostMinor)
+                        value("Estimated profit", report.profitability?.estimatedProfitMinor)
+                        if let margin = report.profitability?.estimatedMarginPercent { LabeledContent("Estimated margin", value: "\(margin.formatted())%") }
+                        value("Break-even sales target", report.profitability?.breakEvenSalesMinor)
+                        value("Sales remaining", report.profitability?.salesRemainingToBreakEvenMinor)
+                        if let progress = report.profitability?.breakEvenProgressPercent { LabeledContent("Progress to break even", value: "\(progress.formatted())%") }
+                        if let remaining = report.profitability?.percentRemainingToBreakEven { LabeledContent("Percentage remaining", value: "\(remaining.formatted())%") }
+                        if let budget = report.budget { Text("Saved cost policy v\(budget.policyVersion) · \(budget.frozenAt)").font(.caption) }
+                    }
+                    if let lines = report.profitability?.costLines {
+                        Section("Saved event cost breakdown") {
+                            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                                VStack(alignment: .leading) {
+                                    value(line.label, line.amountMinor)
+                                    Text(line.category.replacingOccurrences(of: "_", with: " ") + (line.costStatus.map { " · " + $0.replacingOccurrences(of: "_", with: " ") } ?? "")).font(.caption)
+                                }
+                            }
+                        }
+                    }
+                    Section("Location, team and travel") {
+                        LabeledContent("Confirmed receipts", value: String(report.sales.saleCount))
+                        ForEach(Array(report.sales.locations.enumerated()), id: \.offset) { _, location in Text(location.name) }
+                        ForEach(Array(report.sales.operators.enumerated()), id: \.offset) { _, member in Text("\(member.name ?? "Team member " + member.userId): \(member.saleCount) sales") }
+                        LabeledContent("Planned vehicle miles", value: (Double(report.travel.plannedMillimiles) / 1000).formatted())
+                        LabeledContent("Reported vehicle miles", value: (Double(report.travel.reportedActualMillimiles) / 1000).formatted())
+                        if report.travel.unknownLegs > 0 { Text("\(report.travel.unknownLegs) trip legs have unknown distance.") }
+                    }
+                    ForEach(report.annualHistory, id: \.year) { year in
+                        Section("\(String(year.year)) · \(year.partial ? "Partial year" : year.complete ? "Reconciled recorded figures" : "Review required")") {
+                            value("Recorded net sales", year.netSalesCents)
+                            value("Recorded expense", year.totalExpenseCents)
+                            value("Recorded profit", year.profitCents)
+                            if let margin = year.marginPercent { LabeledContent("Recorded margin", value: "\(margin.formatted())%") }
+                            ForEach((year.costs ?? [:]).keys.sorted(), id: \.self) { category in value(category.replacingOccurrences(of: "_", with: " "), year.costs?[category] ?? nil) }
+                            ForEach(year.reviewItems, id: \.self) { Text($0).font(.caption) }
+                        }
+                    }
+                    Section("Coverage and assumptions") {
+                        Text(report.basis); Text(report.sales.coverage)
+                        if let basis = report.profitability?.basis { Text(basis) }
+                        ForEach(Array((report.reviewItems + report.sales.reviewItems + (report.profitability?.reviewItems ?? [])).enumerated()), id: \.offset) { _, issue in Text(issue).font(.caption) }
+                        Text("As of \(report.sales.asOf)").font(.caption)
+                    }
+                }
+                Button("Refresh statistics") { revision += 1 }.disabled(loading)
+            }
+            .navigationTitle("Profit Panel")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
+            .task(id: scope + ":" + String(revision)) { await load() }
+            .onChange(of: scope) { _, _ in report = nil; message = nil }
+        }.preferredColorScheme(.light)
+    }
+    private func value(_ label: String, _ cents: Int?) -> some View { LabeledContent(label, value: cents.map { POSMoney.display($0) } ?? "Unknown") }
+    private func load() async {
+        report = nil; message = nil; loading = false
+        guard model.selectedRegister?.canViewEventStats == true, let base = model.base else { return }
+        let expected = scope
+        loading = true
+        do {
+            let value: EventStats = try await model.api.request(base + "/event-stats")
+            guard !Task.isCancelled, scope == expected else { return }
+            report = value; loading = false
+        } catch {
+            guard !Task.isCancelled, scope == expected else { return }
+            message = "Event statistics are unavailable. Check the reviewed event link and saved cost budget in Teams, then refresh."
+            loading = false
+        }
     }
 }

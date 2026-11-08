@@ -62,12 +62,13 @@ final class PosCustomerPurchases
                 }
                 $refunds = $this->confirmedRefunds($sale);
                 $result['purchases'][] = ['id' => 'pos_sale:'.$id, 'source' => 'pos_sale', 'source_id' => $id,
+                    'catalog_source' => $sale->commerce_source, 'catalog_namespace' => $sale->commerce_source === StockPosCommerce::VERSION ? 'stock' : 'pos:'.$this->store->runtime(),
                     'number' => 'Everbranch Pay · EB-'.strtoupper(substr($id, 0, 12)), 'channel' => 'in_person',
                     'status' => ($payment['rewards_returned_minor'] ?? 0) > 0 || ($sale->amount_minor > 0 && $refunds >= $sale->amount_minor) ? 'refunded' : ($refunds > 0 ? 'partially_refunded' : 'paid'),
                     'confirmed' => true, 'amount_minor' => (int) $sale->amount_minor, 'refunded_minor' => $refunds,
                     'location' => ['name' => $snapshot['location_name'], 'register' => $snapshot['register_name'],
                         'address' => $snapshot['configuration']['shopify']['tax_address'] ?? null],
-                    'items' => array_map(fn ($line) => array_intersect_key($line, array_flip(['title', 'quantity', 'components'])), $snapshot['terms']['display']),
+                    'items' => array_map(fn ($line) => array_intersect_key($line, array_flip(['item_id', 'line_id', 'sku', 'title', 'quantity', 'components'])), $snapshot['terms']['display']),
                     'currency' => 'USD', 'currency_scale' => 2, 'occurred_at' => \Carbon\CarbonImmutable::parse($sale->created_at)->toIso8601String()];
                 if (($payment['source'] ?? '') !== 'everbranch_rewards_only') {
                     $result['square_payments'][] = $payment['provider_id'];

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services\Marketing;
 
 use App\Models\CustomerExternalProfile;
-use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Services\Pos\PosException;
 use App\Services\Pos\PosVerifiedCustomerAccount;
@@ -17,12 +16,25 @@ final class CustomerAccountFence
 {
     public function lock(int $tenant): void
     {
-        if ($tenant < 1 || DB::transactionLevel() < 1 || ! Schema::hasTable('customer_account_fences')) {
+        if ($tenant < 1 || DB::transactionLevel() < 1) {
             throw new PosException('customer_account_fence_unavailable', 503);
         }
         if (DB::connection()->getDriverName() === 'mysql') {
-            DB::statement('INSERT INTO customer_account_fences (tenant_id) VALUES (?) ON DUPLICATE KEY UPDATE tenant_id = VALUES(tenant_id)', [$tenant]);
+            // Acquire the mutex before any consistent SELECT. A schema probe
+            // creates a REPEATABLE READ view that can predate the lock wait and
+            // hide committed consent changes or another channel's delivery.
+            try {
+                DB::statement('INSERT INTO customer_account_fences (tenant_id) VALUES (?) ON DUPLICATE KEY UPDATE tenant_id = VALUES(tenant_id)', [$tenant]);
+            } catch (\Illuminate\Database\QueryException $error) {
+                if ((int) ($error->errorInfo[1] ?? 0) === 1146) {
+                    throw new PosException('customer_account_fence_unavailable', 503);
+                }
+                throw $error;
+            }
         } else {
+            if (! Schema::hasTable('customer_account_fences')) {
+                throw new PosException('customer_account_fence_unavailable', 503);
+            }
             DB::table('customer_account_fences')->insertOrIgnore(['tenant_id' => $tenant]);
         }
         DB::table('customer_account_fences')->where('tenant_id', $tenant)->lockForUpdate()->firstOrFail();
@@ -100,13 +112,13 @@ final class CustomerAccountFence
             ->when($store !== '', fn ($query) => $query->where('source_id', $store.':'.$digits), fn ($query) => $query->where('source_id', 'like', '%:'.$digits))
             ->lockForUpdate()->get();
         foreach ($claims as $claim) {
-            $profile = MarketingProfile::query()->forTenantId($tenant)->whereKey($claim->marketing_profile_id)->first();
+            $profile = app(CanonicalMarketingProfileResolver::class)->lockedById($tenant, (int) $claim->marketing_profile_id);
             $meta = $claim->source_meta ?? [];
             $claimStore = $meta['shopify_store_key'] ?? null;
             $gid = 'gid://shopify/Customer/'.$digits;
             $accounts = app(PosVerifiedCustomerAccount::class);
             // Invalid/revoked attestations cannot authorize money; they do not become authority by import.
-            if (! $profile || $profile->merged_at || $profile->archived_at || ! is_string($claimStore)
+            if (! $profile || (int) $profile->id !== (int) $claim->marketing_profile_id || $profile->merged_at || $profile->archived_at || ! is_string($claimStore)
                 || ($meta['verified_profile_id'] ?? null) !== (int) $profile->id || ($meta['shopify_customer_gid'] ?? null) !== $gid
                 || ! is_string($meta['signature'] ?? null)
                 || ! hash_equals($accounts->signature($tenant, (int) $profile->id, $claimStore, $gid), $meta['signature'])) {

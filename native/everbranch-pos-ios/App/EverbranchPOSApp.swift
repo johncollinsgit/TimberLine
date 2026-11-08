@@ -87,6 +87,7 @@ struct POSView: View {
     var onClose: (() -> Void)? = nil
     var onOpenRegister: (() -> Void)? = nil
     var onAccount: (() -> Void)? = nil
+    var onShopForCustomer: (() -> Void)? = nil
     var screen: POSScreen
     @ObservedObject var model: POSViewModel
     @State private var choosingRegister = false
@@ -105,7 +106,8 @@ struct POSView: View {
     @State private var contactOnly = false
     @State private var automaticQuoteRequested = false
     @State private var confirmUncollected = false
-    @FocusState private var inputFocused: Bool
+    private enum InputField: Hashable { case workspace, customerQuery, firstName, lastName, email, phone, priorOrders, reviewReason, refundAmount }
+    @FocusState private var inputFocused: InputField?
 
     private var isSetup: Bool { screen == .setup }
     private var setupAllowed: Bool {
@@ -135,13 +137,15 @@ struct POSView: View {
                             .background(PayTheme.cream, in: RoundedRectangle(cornerRadius: 14))
                             .accessibilityIdentifier("status-message")
                     }
-                    if !model.signedIn { signIn }
+                    if model.lookupOnly && !model.signedIn {
+                        Text("Close customer lookup and sign in again from Account. Shopping and payment recovery remain in the register.").font(.subheadline)
+                    } else if !model.signedIn { signIn }
                     else if screen == .customers { customer }
                     else if model.pending != nil && !isSetup { recovery }
                     else if choosingRegister || model.selectedRegister == nil { registerPicker }
                     else if isSetup { setup }
                     else { checkout }
-                    if isSetup || !model.signedIn { accountDetails }
+                    if !model.lookupOnly && (isSetup || !model.signedIn) { accountDetails }
                 }.padding(20)
             }.disabled(model.busy)
             .scrollDismissesKeyboard(.interactively)
@@ -157,7 +161,7 @@ struct POSView: View {
                         Button {
                             if screen == .checkout && model.sale?.canLeave == true && model.pending?.refundRequestID == nil { model.nextSale() }
                             else { onClose() }
-                        } label: { Text("Close").lineLimit(1).fixedSize() }.frame(minWidth: 64, minHeight: 44).disabled(model.collector.hasActivePayment || model.busy)
+                        } label: { Text("Close").lineLimit(1).fixedSize() }.frame(minWidth: 64, minHeight: 44).disabled((!model.lookupOnly && model.collector.hasActivePayment) || model.busy)
                     }
                 }
                 if screen != .customers && model.selectedRegister != nil && !model.collector.hasActivePayment {
@@ -169,7 +173,7 @@ struct POSView: View {
                     ToolbarItem(placement: .primaryAction) { Button(action: onAccount) { Text("Account").lineLimit(1).fixedSize() }.frame(minHeight: 44) }
                 }
                 ToolbarItemGroup(placement: .keyboard) {
-                    Spacer(); Button("Done") { inputFocused = false }
+                    Spacer(); Button("Done") { inputFocused = nil }
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { if screen != .customers { footer } }
@@ -181,7 +185,7 @@ struct POSView: View {
                         .accessibilityIdentifier("payment-busy").allowsHitTesting(false)
                 }
             }
-            .interactiveDismissDisabled(model.collector.hasActivePayment || model.busy)
+            .interactiveDismissDisabled((!model.lookupOnly && model.collector.hasActivePayment) || model.busy)
             .confirmationDialog("No card was presented?", isPresented: $confirmUncollected, titleVisibility: .visible) {
                 Button("Save for review and return to register") { model.leaveUncollectedForReview() }
                 Button("Keep this payment open", role: .cancel) {}
@@ -295,9 +299,9 @@ struct POSView: View {
                         Text("This account has no active business memberships. Ask your business owner for an invitation, or sign out to use another account.")
                             .font(.subheadline).foregroundStyle(PayTheme.muted)
                     }
-                    TextField("Find your business", text: $workspaceQuery).payInput().focused($inputFocused)
+                    TextField("Find your business", text: $workspaceQuery).payInput().focused($inputFocused, equals: .workspace)
                     ForEach(model.workspaces.filter { workspaceQuery.isEmpty || $0.name.localizedCaseInsensitiveContains(workspaceQuery) }) { workspace in
-                    Button { inputFocused = false; choosingBusiness = false; model.choose(workspace) } label: {
+                    Button { inputFocused = nil; choosingBusiness = false; model.choose(workspace) } label: {
                         HStack {
                             Text(workspace.name).multilineTextAlignment(.leading)
                             Spacer()
@@ -391,7 +395,7 @@ struct POSView: View {
                         if let open = onOpenRegister ?? onClose { Button("Open register", action: open).frame(minHeight: 44).disabled(!model.registerLoaded) }
                     }
                 } else {
-                    Button("Review total", action: { inputFocused = false; model.quote() })
+                    Button("Review total", action: { inputFocused = nil; model.quote() })
                         .buttonStyle(PayButtonStyle()).disabled(!quoteAllowed)
                     Text("Final prices, availability and tax are checked before payment.").font(.caption).foregroundStyle(PayTheme.muted)
                 }
@@ -449,6 +453,12 @@ struct POSView: View {
         }.padding(.vertical, 6)
     }
 
+    private func customerProfileURL(_ id: Int) -> URL? {
+        guard let workspace = model.selectedWorkspace else { return nil }
+        var url = URLComponents(url: model.api.origin.appendingPathComponent("workspace/customers/\(id)"), resolvingAgainstBaseURL: false)
+        url?.queryItems = [URLQueryItem(name: "tenant", value: workspace.slug)]
+        return url?.url
+    }
     private var customer: some View {
         PayCard(title: "Customer", icon: "person.crop.circle") {
             if let customer = model.selectedCustomer {
@@ -463,38 +473,59 @@ struct POSView: View {
                     Button("Try history again", action: model.refreshCustomerCommerce).frame(minHeight: 44)
                 }
                 if let settings = model.customerEnrollmentSettings, settings.birthdayEnabled || settings.emailEnabled || settings.smsEnabled || model.pendingEnrollment != nil {
-                    CustomerEnrollmentPanel(model: model, customer: customer, settings: settings).id(customer.id)
+                    CustomerEnrollmentPanel(model: model, customer: customer, settings: settings).id(customer.id).disabled(!model.canRecordCustomerChoices)
                 }
+                if let url = customerProfileURL(customer.id) { Link("Open shared profile & personalized messages", destination: url).frame(minHeight: 44) }
+                if screen == .customers, model.pending == nil, let shop = onShopForCustomer { Button("Shop for this customer", action: shop).buttonStyle(PayButtonStyle()).disabled(model.busy) }
                 Button("Choose another customer") { model.selectedCustomer = nil }.frame(minHeight: 44)
             } else {
+                if model.selectedRegister?.canSearchEventCustomers == true {
+                    Picker("Event context", selection: $model.customerEventID) {
+                        Text("All events and channels").tag("")
+                        ForEach(model.customerEvents) { event in Text(event.name + (event.startsOn.map { " · " + $0 } ?? "")).tag(String(event.id)) }
+                    }.task(id: model.base) { await model.loadCustomerEvents() }
+                }
                 TextField("Name, email or phone", text: $model.customerQuery).payInput().textInputAutocapitalization(.never)
-                    .focused($inputFocused).submitLabel(.search).onSubmit { model.searchCustomers() }
-                Button("Find customer", action: { inputFocused = false; model.searchCustomers() })
+                    .focused($inputFocused, equals: .customerQuery).submitLabel(.search).onSubmit { model.searchCustomers() }
+                Button("Find customer", action: { inputFocused = nil; model.searchCustomers() })
                     .buttonStyle(PayButtonStyle(primary: false))
-                    .disabled(model.customerQuery.trimmingCharacters(in: .whitespacesAndNewlines).count < 2)
+                    .disabled(model.customerEventID.isEmpty && model.customerQuery.trimmingCharacters(in: .whitespacesAndNewlines).count < 2)
                 ForEach(model.customers) { customer in
-                    Button { inputFocused = false; model.selectedCustomer = customer } label: {
+                    Button { inputFocused = nil; model.selectedCustomer = customer } label: {
                         HStack {
-                            VStack(alignment: .leading, spacing: 5) { Text(customer.name); if let email = customer.email { Text(email).font(.caption).foregroundStyle(PayTheme.muted) } }
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(customer.name)
+                                if let email = customer.email { Text(email).font(.caption).foregroundStyle(PayTheme.muted) }
+                                if let phone = customer.phone { Text(phone).font(.caption).foregroundStyle(PayTheme.muted) }
+                                if model.customerSearchContext?.relations[String(customer.id)]?.captured == true { Text("Contact captured at event").font(.caption) }
+                                if model.customerSearchContext?.relations[String(customer.id)]?.purchased == true { Text("Confirmed linked event purchase").font(.caption) }
+                            }
                             Spacer(); Image(systemName: "plus.circle")
                         }.frame(maxWidth: .infinity, minHeight: 52).contentShape(Rectangle())
                     }
                 }
+                if model.customerPage > 1 { Button("Previous customers") { model.searchCustomers(page: model.customerPage - 1) } }
+                if model.customerHasMore { Button("Next customers") { model.searchCustomers(page: model.customerPage + 1) } }
+                if let context = model.customerSearchContext {
+                    Text(context.basis).font(.caption).foregroundStyle(PayTheme.muted)
+                    ForEach(context.reviewItems, id: \.self) { Text($0).font(.caption).foregroundStyle(PayTheme.muted) }
+                }
                 if model.customerEnrollmentSettings?.canCreateCustomers == true || model.selectedRegister?.canCreateCustomers == true {
                     DisclosureGroup("Create a new customer", isExpanded: $creatingCustomer) {
                         VStack(spacing: 12) {
-                            TextField("First name", text: $model.customerFirstName).payInput().textContentType(.givenName).focused($inputFocused)
-                            TextField("Last name", text: $model.customerLastName).payInput().textContentType(.familyName).focused($inputFocused)
-                            TextField("Email (optional)", text: $model.customerEmail).payInput().keyboardType(.emailAddress).textInputAutocapitalization(.never).focused($inputFocused)
-                            TextField("Phone (optional)", text: $model.customerPhone).payInput().keyboardType(.phonePad).focused($inputFocused)
+                            TextField("First name", text: $model.customerFirstName).payInput().textContentType(.givenName).focused($inputFocused, equals: .firstName)
+                            TextField("Last name", text: $model.customerLastName).payInput().textContentType(.familyName).focused($inputFocused, equals: .lastName)
+                            TextField("Email (optional)", text: $model.customerEmail).payInput().keyboardType(.emailAddress).textInputAutocapitalization(.never).focused($inputFocused, equals: .email)
+                            TextField("Phone (optional)", text: $model.customerPhone).payInput().keyboardType(.phonePad).focused($inputFocused, equals: .phone)
                             Text("Creates a purchase record without marketing signup. Their online account must be connected separately.").font(.caption).foregroundStyle(PayTheme.muted)
-                            Button("Create and select customer", action: { inputFocused = false; model.createCustomer() })
-                                .buttonStyle(PayButtonStyle()).disabled(model.customerFirstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            Button("Create and select customer", action: { inputFocused = nil; model.createCustomer() })
+                                .buttonStyle(PayButtonStyle()).disabled(!model.canRecordCustomerChoices || (model.lookupOnly && model.pendingCustomer != nil) || model.customerFirstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         }.padding(.top, 12)
                     }.padding(.vertical, 6)
                 }
-                if model.pendingCustomer != nil { Button("Recover customer request", action: model.recoverCustomer).frame(minHeight: 44) }
+                if model.pendingCustomer != nil { Button(model.customerCaptureRecoveryLabel, action: model.recoverCustomer).frame(minHeight: 44) }
             }
+            if let notice = model.lookupCaptureNotice { Text(notice).font(.caption).foregroundStyle(PayTheme.muted) }
             if model.selectedRegister?.rewardsRedemptionAvailable == true && (screen != .customers || model.pending == nil) {
                 RewardCheckoutPanel(model: model, lookupOnly: screen == .customers)
             }
@@ -579,8 +610,8 @@ struct POSView: View {
                             VStack(spacing: 12) {
                                 Text("Confirm eligibility at the original purchase time from records. Payment and refunds remain complete.").font(.caption)
                                 Toggle("Member when purchased", isOn: $model.rewardMemberAtPurchase)
-                                TextField("Confirmed purchases before this sale", text: $model.rewardPriorOrders).payInput().keyboardType(.numberPad).focused($inputFocused)
-                                TextField("Records reviewed / reason", text: $model.rewardReviewReason).payInput().focused($inputFocused)
+                                TextField("Confirmed purchases before this sale", text: $model.rewardPriorOrders).payInput().keyboardType(.numberPad).focused($inputFocused, equals: .priorOrders)
+                                TextField("Records reviewed / reason", text: $model.rewardReviewReason).payInput().focused($inputFocused, equals: .reviewReason)
                                 Button("Confirm eligibility", action: model.reviewReceiptRewards).buttonStyle(PayButtonStyle(primary: false)).disabled(model.busy || Int(model.rewardPriorOrders) == nil || model.rewardReviewReason.count < 5)
                             }.padding(.top, 12)
                         }
@@ -618,7 +649,7 @@ struct POSView: View {
                         if receipt.amountMinor == 0 {
                             Button("Return redeemed rewards", action: model.returnRewardsOnly).buttonStyle(PayButtonStyle(primary: false)).disabled((receipt.rewardsReturnedMinor ?? 0) > 0)
                         } else {
-                        TextField("Refund amount", text: $model.refundAmount).payInput().keyboardType(.decimalPad).focused($inputFocused)
+                        TextField("Refund amount", text: $model.refundAmount).payInput().keyboardType(.decimalPad).focused($inputFocused, equals: .refundAmount)
                         Button(model.pending?.refundRequestID == nil ? "Request refund" : "Check original refund", action: model.refund).buttonStyle(PayButtonStyle(primary: false))
                         }
                         Text("Refunds do not restock merchandise automatically.").font(.caption).foregroundStyle(PayTheme.muted)

@@ -1,3 +1,66 @@
+## Retail, Square sources and dated events (November 7; source candidate)
+
+The public retail overview at `/platform/retail` connects keeping Square or a
+phased move with customer profiles, tenant rewards/birthdays/app setup, Teams
+employee time, company event pay/costs and event profit. Approved responsive
+photos and explicitly fictional graphs use a scoped retail-only Vite entry.
+Catalog visibility and existing rollout/payment/outreach gates are unchanged.
+See `docs/operations/everbranch-retail-offer.md`.
+
+Core Customers provides a tenant owner/admin Square connection and refresh lane,
+independent of Pay and global Marketing roles. It reuses existing source caches,
+identity reviews, encrypted settings and import runs. Original merchant and
+environment ownership is fenced across source and Pay connections. Importing
+history does not earn/redeem rewards, link wallets or prove marketing consent;
+contact/card similarities require review. No provider grant or live import was
+created during source work. See `docs/operations/square-customer-source.md` for
+the original-merchant, renewal and historical-import boundaries.
+
+Teams events retain explicit local setup, selling, teardown and travel dates,
+including gaps. Asana due dates remain separate source anchors. Setup evidence
+and fresh source versions govern reviewed calendar dates; they do not establish
+paid staff hours. Frozen budgets retain their original policy/input snapshot;
+new revisions must reconcile reviewed selling days. Source-create retries retain
+one original command and confirmed source identity. Read
+`docs/operations/teams-event-schedule.md`. Macon private evidence and physical
+phone acceptance remain separate from these source changes.
+
+Teams presentation uses the Everbranch leaf and the exact “Everbranch Teams”
+product masthead with owner-requested painted green trees. The self-hosted WebP
+is decorative; company identity, navigation and existing authorization remain
+separate. Browser/device release acceptance remains governed by the runbooks.
+The Start Here setup guide now shares the main content column on phones, with a
+full-width action and contained cards. This is a scoped layout correction; tenant
+selection, setup forms and permissions are unchanged.
+
+## Shared customer profiles and event value (November 7; source candidate)
+
+Core Customers, Website accounts, Teams and Pay reuse canonical identities and
+original purchases for behavior, declared preferences, event value and current
+POS recommendations. Core search does not require global Marketing roles;
+personal draft preparation/review still requires verified tenant ownership or
+admin membership and current capabilities. Existing campaign senders retain
+authority; both new profile dispatch gates remain closed. Frozen content,
+current preferences, original handoffs and customer identity drift are checked
+before use. Read `docs/operations/shared-customer-profiles.md` and its linked
+runbooks for exact coverage, MySQL races and remaining release work. No new
+ledger, migration, live message, policy publication or production activation.
+
+## Teams Studio foundation (November 7; draft source candidate)
+
+Native Teams now has a read-only availability contract and an explicit browser
+unavailable page. A disabled installation cannot silently fall through sign-in
+to the general website's remembered tenant. Existing rollout and membership
+guards remain authoritative; this source correction does not enable production.
+
+A paired React/Capacitor Teams candidate adds private event drafts, deterministic
+cost previews, immutable tenant policies/definitions, frozen budgets, reviewed
+comparison mappings, occurrence weather and source-note/comment safeguards on
+existing Teams services. It remains a partial implementation of the approved full
+643-clause scope. Native availability/cutover are not activated; no production or
+source data was changed. Read `docs/operations/teams-studio-foundation.md` for exact
+interfaces, evidence and substantial remaining work before rollout.
+
 ## Tenant rewards, event attribution and physical counts (November 6; source candidate)
 
 Pay can recommend an already authorized event register from the signed-in user's
@@ -4732,3 +4795,14 @@ unchanged server snapshot. Ask Everbranch reuses existing provider/approval/caps
 and explicit versioned budget review. No provider activation, financial action,
 public billing or production readiness follows from these source changes. See
 `docs/operations/trajectory-runbook.md` for scope, privacy and validation.
+
+## Teams / Pay Profit Panel candidate (2026-11-07)
+
+The Teams Studio source candidate adds tenant-owned cost types, frozen budget
+revisions, a shared read-only event profitability projection and name/phone/event
+customer lookup in Teams and native Pay. Original stock/receipt/rewards/customer
+services retain authority. Pay controls require default-off
+`POS_EVENT_STATS_ENABLED`; no migration, policy publication or live activation is
+included. Coverage limits and release gaps are in
+`docs/operations/teams-studio-foundation.md`. The full Teams parity backlog remains
+open; this candidate is not a completion or deployment claim.

@@ -1,0 +1,89 @@
+name: Teams Studio contracts
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teams-studio-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mysql:
+    name: Teams tenant and event concurrency
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: Testing
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: codex_teams_ci
+          MYSQL_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --password=root"
+          --health-interval=5s --health-timeout=5s --health-retries=12
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: codex_teams_ci
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      TEAM_WORK_DISPOSABLE_MYSQL: '1'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer:v2
+          coverage: none
+      - name: Configure Flux Composer auth
+        env:
+          FLUX_USERNAME: ${{ secrets.FLUX_USERNAME }}
+          FLUX_LICENSE_KEY: ${{ secrets.FLUX_LICENSE_KEY }}
+        run: composer config http-basic.composer.fluxui.dev "$FLUX_USERNAME" "$FLUX_LICENSE_KEY"
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+      - name: Prepare test environment
+        run: cp .env.example .env
+      - name: Verify Core Square source OAuth and credential renewal without provider transport
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          DB_URL: ''
+          DATABASE_URL: ''
+          TEAM_WORK_DISPOSABLE_MYSQL: '0'
+          POS_LIVE_DISPOSABLE_MYSQL: '0'
+        run: php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.team.xml tests/Integration/CustomerSquareOAuthTest.php --compact
+      - name: Verify policies, tenant isolation and native authorization on MySQL
+        run: php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.team-studio-mysql.xml --compact
+      - name: Verify interrupted event creation and competing commands
+        run: php scripts/everbranch-team/studio-mysql-concurrency.php
+      - name: Verify shared customer profiles, preferences and outreach on MySQL
+        run: php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml --compact
+      - name: Verify Core and Pay merchant ownership and source renewal contention
+        env:
+          POS_LIVE_DISPOSABLE_MYSQL: '1'
+        run: |
+          php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml tests/Integration/CustomerSquareOwnershipMySqlTest.php --compact
+          php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml tests/Integration/SquareHistoricalSourceAdmissionMySqlTest.php --compact
+      - name: Verify cross-channel caps and legacy unsubscribe races
+        run: php scripts/everbranch-team/customer-outreach-mysql-concurrency.php
+      - name: Verify customer fence recovery and existing rewards concurrency
+        env:
+          POS_LIVE_DISPOSABLE_MYSQL: '1'
+        run: |
+          php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml tests/PosLive/OwnedStockCheckoutTest.php --filter='serializes actual policy publication|serializes a conflicting identity import|completes a fully redeemed basket once' --compact
+          php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml tests/Integration/CustomerAccountFenceAdmissionMySqlTest.php --compact
+          php -d memory_limit=768M vendor/bin/pest --configuration=phpunit.customer-profile-mysql.xml tests/Integration/TeamAsanaCreationAdmissionMySqlTest.php --compact

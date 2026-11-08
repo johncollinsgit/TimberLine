@@ -24,6 +24,7 @@ class MarketingSyncSquarePayments extends Command
         $tenantId = $this->tenantIdOption();
         if ($tenantId === null) {
             $this->error('Missing required --tenant-id. Square payment sync is tenant-scoped in MT-2D.');
+
             return self::FAILURE;
         }
 
@@ -43,6 +44,7 @@ class MarketingSyncSquarePayments extends Command
             'limit' => $this->optionalInt($this->option('limit')),
             'since' => $this->parseSince((string) $this->option('since')),
             'cursor' => $cursor,
+            'resume_run_id' => $resumeRunId,
             'checkpoint_every' => max(1, (int) ($this->optionalInt($this->option('checkpoint-every')) ?? 100)),
             'dry_run' => (bool) $this->option('dry-run'),
             'tenant_id' => $tenantId,
@@ -62,23 +64,24 @@ class MarketingSyncSquarePayments extends Command
             return CarbonImmutable::parse($value);
         } catch (\Throwable $e) {
             $this->warn("Invalid --since value '{$value}', ignoring.");
+
             return null;
         }
     }
 
     /**
-     * @param array<string,mixed> $result
+     * @param  array<string,mixed>  $result
      */
     protected function renderResult(array $result): int
     {
         $summary = is_array($result['summary'] ?? null) ? $result['summary'] : [];
-        $this->line('status=' . (string) ($result['status'] ?? 'unknown'));
-        $this->line('run_id=' . (string) ($result['run_id'] ?? 'n/a'));
+        $this->line('status='.(string) ($result['status'] ?? 'unknown'));
+        $this->line('run_id='.(string) ($result['run_id'] ?? 'n/a'));
         if (isset($result['reason'])) {
-            $this->line('reason=' . (string) $result['reason']);
+            $this->line('reason='.(string) $result['reason']);
         }
         foreach (['processed', 'created', 'updated', 'profiles_created', 'profiles_updated', 'links_created', 'links_reused', 'reviews_created', 'records_skipped', 'errors'] as $key) {
-            $this->line($key . '=' . (int) ($summary[$key] ?? 0));
+            $this->line($key.'='.(int) ($summary[$key] ?? 0));
         }
 
         return self::SUCCESS;
@@ -97,6 +100,7 @@ class MarketingSyncSquarePayments extends Command
         }
 
         $cursor = data_get($run->summary, 'checkpoint.cursor');
+
         return is_string($cursor) && trim($cursor) !== '' ? trim($cursor) : null;
     }
 
