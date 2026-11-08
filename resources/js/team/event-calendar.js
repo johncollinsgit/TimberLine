@@ -9,6 +9,7 @@ const title = value => String(value || '').replace(/^./, letter => letter.toUppe
 const calendar = item => item.data?.event_schedule || {};
 const sessions = item => (Array.isArray(calendar(item).sessions) ? calendar(item).sessions : []).filter(session => session && phases.has(session.kind));
 const dueOn = item => item.data?.source_schedule?.due_on ?? calendar(item).source_schedule?.due_on;
+const legacyBounds = item => [calendar(item).legacy_starts_on || item.starts_on, calendar(item).legacy_ends_on || item.ends_on];
 
 export function eventCalendarWindow(scope) {
   const today = new Date(), localToday = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
@@ -67,7 +68,7 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
   periods.append(button('Previous period', () => shift(-1)), button('Next period', () => shift(1))); controls.append(modes, filters, periods); host.append(controls);
   host.append(node('p', 'Loaded results · ' + items.length + ' event records' + (coverage.has_more ? ' · more pages remain' : '') + (coverage.partial || coverage.complete === false ? ' · source coverage partial or unconfirmed' : ''), 'tops-calendar-scope'));
   if (coverage.calendar_window) host.append(node('p', when(coverage.calendar_window.from) + ' → ' + when(coverage.calendar_window.to) + (coverage.calendar_window.scan_limited ? ' · Load more events to continue checking retained dates.' : ' · Unspecified dates remain unknown.'), 'tops-calendar-scope'));
-  const guide = node('details', '', 'tops-calendar-guide'); guide.append(node('summary', 'Calendar scope & source notes'), node('p', 'Explicit sessions show reviewed activity; gap days stay empty. Setup is lighter. A dashed Asana due date is a task anchor, not a confirmed selling or setup day. Other pages and unavailable source feeds are not included.'), node('p', 'Crew colors identify recorded event assignments, not shifts or attendance at each session. Event times use the displayed local timezone.')); host.append(guide);
+  const guide = node('details', '', 'tops-calendar-guide'); guide.append(node('summary', 'Calendar scope & source notes'), node('p', 'Explicit sessions show reviewed activity; gap days stay empty. Setup is lighter. Dashed task dates and range-start markers identify unconfirmed dates; they do not establish event activity. Other pages and unavailable source feeds are not included.'), node('p', 'Crew colors identify recorded event assignments, not shifts or attendance at each session. Event times use the displayed local timezone.')); host.append(guide);
   const hint = node('p', 'Swipe or scroll across the dates →', 'tops-calendar-scroll-hint'); host.append(hint);
   const scroll = node('div', '', 'tops-event-calendar-scroll'), grid = node('div', '', 'tops-calendar tops-event-calendar'); scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Dated event calendar. Scroll horizontally for more dates.'); scroll.append(grid); host.append(scroll);
   function shift(direction) {
@@ -119,6 +120,11 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
           const marker = button('', () => open(item)); marker.className = 'tops-calendar-session is-source-due'; marker.dataset.calendarEvent = item.id; marker.dataset.calendarKind = 'source_due';
           marker.append(node('span', 'Asana due date', 'tops-calendar-phase'), node('strong', item.title), node('span', 'Task date · not a confirmed event day', 'tops-calendar-status')); cell.append(marker);
         }
+        const [start, end] = legacyBounds(item);
+        if (dueOn(item) !== start && !sessions(item).some(session => validDate(session.date)) && validDate(start) && start === key) {
+          const marker = button('', () => open(item)); marker.className = 'tops-calendar-session is-range-anchor'; marker.dataset.calendarEvent = item.id; marker.dataset.calendarKind = 'range_anchor';
+          marker.append(node('span', 'Unconfirmed range', 'tops-calendar-phase'), node('strong', item.title), node('span', when(start) + (validDate(end) && end !== start ? ' – ' + when(end) : ''), 'tops-calendar-status')); cell.append(marker);
+        }
       }
       if (cell.childElementCount === 1 && mode !== 'month') cell.append(node('p', 'No dated sessions on this page', 'tops-calendar-empty'));
       grid.append(cell);
@@ -128,7 +134,7 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
   const pending = items.flatMap(item => sessions(item).filter(session => !validDate(session.date)).map(session => ({ item, session })));
   const recordRow = (item, text) => { const row = node('div', '', 'tops-calendar-record-row'), action = button(item.title, () => open(item)); action.className = 'tops-calendar-record-open'; row.append(action, node('span', text)); return row; };
   if (pending.length) { const section = node('section', '', 'tops-section tops-calendar-records'); section.append(node('h3', 'Sessions with unknown dates')); for (const { item, session } of pending) section.append(recordRow(item, title(session.kind) + ' · date unknown')); host.append(section); }
-  const bounds = item => [calendar(item).legacy_starts_on || item.starts_on, calendar(item).legacy_ends_on || item.ends_on];
+  const bounds = legacyBounds;
   const legacy = items.filter(item => !sessions(item).some(session => validDate(session.date)) && bounds(item).some(validDate));
   if (legacy.length) { const section = node('section', '', 'tops-section tops-calendar-legacy tops-calendar-records'); section.append(node('h3', 'Legacy ranges · activity unconfirmed'), node('p', 'Stored bounds only. Activity on the dates between them is unconfirmed.', 'tops-calendar-record-note')); for (const item of legacy) section.append(recordRow(item, when(bounds(item)[0]) + ' → ' + when(bounds(item)[1]))); host.append(section); }
   const undated = items.filter(item => !sessions(item).length && !bounds(item).some(validDate));

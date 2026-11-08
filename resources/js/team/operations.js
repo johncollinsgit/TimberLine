@@ -186,10 +186,11 @@ export function installOperations(nativeRoot) {
         $('prev').hidden = $('next').hidden = true;
         $('scope').textContent = items.length + ' loaded event records · ' + calendarPages.pages + ' checked pages';
         renderCalendar(items, result);
-        if (result.has_more && items.length < 90) $('content').append(button('Load more events', () => { page++; return load(true); }));
-        else if (result.has_more) { note(items.length + ' events loaded. Continue replaces this batch; dates outside the loaded batch remain unchecked.'); $('content').append(button('Continue with next events', () => { calendarPages = null; page++; return load(true); })); }
-        if (result.source_access_incomplete) note('Earlier loaded pages were cleared because a current source access check was unavailable.');
-        if (appendCalendar && prior.length) note('Includes previously loaded pages. Refresh rechecks current access and restarts this date window.');
+        const grid = $('content').querySelector('.tops-event-calendar-scroll');
+        if (result.has_more && items.length < 90) grid.before(button('Load more events', () => { page++; return load(true); }, 'tops-calendar-more'));
+        else if (result.has_more) { grid.before(el('p', items.length + ' events loaded. Continue replaces this batch; dates outside the loaded batch remain unchecked.', 'tops-muted'), button('Continue with next events', () => { calendarPages = null; page++; return load(true); }, 'tops-calendar-more')); }
+        if (result.source_access_incomplete) grid.before(el('p', 'Earlier loaded pages were cleared because a current source access check was unavailable.', 'tops-muted'));
+        if (appendCalendar && prior.length) grid.before(el('p', 'Includes previously loaded pages. Refresh rechecks current access and restarts this date window.', 'tops-muted'));
       }
       else if (view === 'pipeline') renderPipeline(result.items);
       else if (view === 'communications') renderAttempts(result.items);
@@ -288,7 +289,7 @@ export function installOperations(nativeRoot) {
     if (record.assignments) { const assignments = section('Recorded assignments and compensation', body); note(record.identity_notice, assignments); table(['Event', 'Date', 'Hours', 'Payroll', 'Pay week', 'Sheet source'], record.assignments.map(a => [a.title, date(a.starts_on), a.hours ?? 'Unknown', money(a.payroll_cents), a.pay_week ?? '—', a.source_tab + ' · row ' + a.source_row]), assignments); }
     if (record.data.fields?.length) { const fields = section('Structured note candidates', body); note('Review each candidate against its source passage. Approval adds a Teams field; the original notes remain unchanged.', fields); const choices = [];
       table(['Approve', 'Field', 'Candidate', 'Source passage', 'Review'], record.data.fields.map((f, index) => { const input = el('input'); input.type = 'checkbox'; input.setAttribute('aria-label', 'Approve ' + label(f.field) + ': ' + f.value); input.disabled = !area.capabilities?.write || f.review_state === 'approved'; choices.push({ index, input }); return [input, label(f.field), f.value, f.passage, label(f.review_state)]; }), fields);
-      if (area.capabilities?.write) fields.append(button('Approve selected fields', async () => { const selected = choices.filter(c => c.input.checked).map(c => c.index); if (!selected.length) throw new Error('Choose the fields you have reviewed.'); await api('/operations/records/' + record.id + '/review', { method: 'POST', body: { request_id: crypto.randomUUID(), expected_version: record.version, reviewed: true, action: 'fields', field_indices: selected } }); await details(record); }));
+      if (area.capabilities?.write) fields.append(button('Approve selected fields', async () => { const selected = choices.filter(c => c.input.checked).map(c => c.index); if (!selected.length) throw new Error('Choose the fields you have reviewed.'); await api('/operations/records/' + record.id + '/review', { method: 'POST', body: { request_id: crypto.randomUUID(), expected_version: record.version, reviewed: true, action: 'fields', field_indices: selected, ...(record.data.fields_revision ? { expected_fields_revision: record.data.fields_revision } : {}) } }); await details(record); }));
     }
     if (record.capabilities.edit) body.append(button('Edit ' + label(record.kind).toLowerCase(), () => { closeDetail(); edit(record); }, 'primary'));
     if (record.kind === 'event') body.append(button('Weather at this event', async () => { const result = await api('/events/' + record.id + '/weather'); const weather = section('Weather', body); note(result.notice || result.status || result.source || 'Weather result', weather); if (result.daily) table(['Date', 'High', 'Low', 'Precipitation'], result.daily.time.map((d, i) => [date(d), result.daily.temperature_2m_max?.[i], result.daily.temperature_2m_min?.[i], result.daily.precipitation_sum?.[i]]), weather); }));
@@ -501,7 +502,11 @@ export function installOperations(nativeRoot) {
   }
   function renderAttempts(items) { note('Your prepared and submitted actions. Unknown outcomes require reconciliation; retrying does not send a second copy.'); if (!items.length) empty('No communication attempts yet', 'Prepare an update from an event or account.'); else table(['Action', 'State', 'Created', 'Review'], items.map(a => [label(a.kind), label(a.status), new Date(a.created_at).toLocaleString(), ['unknown', 'executing'].includes(a.status) || a.adoption_recovery_available ? button(a.adoption_recovery_available ? 'Finish original event link' : 'Reconcile outcome', async () => { const result = await api('/communications/' + a.id + '/reconcile', { method: 'POST' }); await load(); if (result.notice || result.result?.notice) $('notice').textContent = result.notice || result.result.notice; }) : '—'])); }
   addEventListener('beforeunload', event => { if (draft?.dirty || drafts.size || emailDrafts.size) { event.preventDefault(); event.returnValue = ''; } });
-  document.addEventListener('visibilitychange', () => { clearInterval(timer); if (document.hidden && view === 'calendar') { serial++; calendarPages = null; $('content').replaceChildren(); } else if (!document.hidden) { if (view === 'calendar' && !$('panel').hidden) load(); timer = setInterval(() => { if (!$('panel').hidden && !draft?.dirty && !$('detail').open && !$('editor').open) load(); }, 60000); } });
+  document.addEventListener('visibilitychange', () => { clearInterval(timer); if (document.hidden && view === 'calendar') { serial++; calendarPages = null; $('content').replaceChildren(); } else if (!document.hidden) { if (view === 'calendar' && !$('panel').hidden) load(); timer = setInterval(() => {
+    if ($('panel').hidden || draft?.dirty || $('detail').open || $('editor').open) return;
+    if (view === 'calendar' && (page > 1 || (calendarPages?.pages ?? 0) > 1 || $('content').getAttribute('aria-busy') === 'true')) return;
+    load();
+  }, 60000); } });
   document.dispatchEvent(new Event('visibilitychange'));
   api('/areas').then(async data => { areas = data.items; renderAreas(); const url = new URL(location.href), eventApp = url.searchParams.get('app') === 'events', initial = areas.find(a => a.id === url.searchParams.get('area')) || (eventApp ? areas.find(a => a.profile === 'events') : null); if (initial) await openArea(initial, url.searchParams.get('area_view') || (eventApp ? 'my_tasks' : 'overview')); }).catch(report);
 }

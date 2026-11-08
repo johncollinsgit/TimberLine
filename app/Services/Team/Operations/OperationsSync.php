@@ -277,7 +277,7 @@ class OperationsSync
 
     public function extract(string $notes): array
     {
-        $map = ['date' => 'event_date', 'venue' => 'venue', 'hotel' => 'hotel', 'parking' => 'parking', 'tear down' => 'loadout_time', 'teardown' => 'loadout_time', 'pick up' => 'pickup', 'pickup' => 'pickup', 'return' => 'return_instructions', 'booth number' => 'booth_number', 'total cost' => 'venue_fee_unconfirmed', 'tax' => 'tax_source_note', 'applied' => 'application_status', 'accepted' => 'acceptance_status', 'cost' => 'fee', 'worker' => 'staff', 'address' => 'address', 'set up time' => 'setup_time', 'event hours' => 'event_hours', 'email' => 'email', 'phone' => 'phone', 'booth size' => 'booth', 'attendance' => 'attendance', 'special directions' => 'instructions', 'contact' => 'contact', 'last order date' => 'last_order_on', 'last contact date' => 'last_contact_on', 'shipping address' => 'shipping', 'store address' => 'address', 'custom labels' => 'custom_labels', 'custom scents' => 'custom_scents', 'website' => 'website'];
+        $map = ['date' => 'event_date', 'venue' => 'venue', 'venue address' => 'address', 'hotel' => 'hotel', 'parking' => 'parking', 'tear down' => 'loadout_time', 'teardown' => 'loadout_time', 'pick up' => 'pickup', 'pickup' => 'pickup', 'return' => 'return_instructions', 'booth number' => 'booth_number', 'booth #' => 'booth_number', 'total cost' => 'venue_fee_unconfirmed', 'tax' => 'tax_source_note', 'applied' => 'application_status', 'accepted' => 'acceptance_status', 'cost' => 'fee', 'worker' => 'staff', 'address' => 'address', 'set up time' => 'setup_time', 'set-up time' => 'setup_time', 'setup time' => 'setup_time', 'event hours' => 'event_hours', 'show hours' => 'event_hours', 'email' => 'email', 'phone' => 'phone', 'booth size' => 'booth_size', 'attendance' => 'attendance', 'special directions' => 'instructions', 'contact' => 'contact', 'last order date' => 'last_order_on', 'last contact date' => 'last_contact_on', 'shipping address' => 'shipping', 'store address' => 'address', 'custom labels' => 'custom_labels', 'custom scents' => 'custom_scents', 'website' => 'website'];
         $fields = [];
         foreach (preg_split('/\R/u', $notes) as $line) {
             if (preg_match('/^\s*([^:]{2,35}):\s*(.+)$/u', $line, $match) && isset($map[mb_strtolower(trim($match[1]))])) {
@@ -286,6 +286,39 @@ class OperationsSync
         }
 
         return $fields;
+    }
+
+    /** Reproject old Asana event notes without changing stored reviews or the source. */
+    public function eventFields(array $data): array
+    {
+        $fields = $this->extract($data['original_notes'] ?? '');
+        $approved = [];
+        foreach (is_array($data['fields'] ?? null) ? $data['fields'] : [] as $previous) {
+            if (! is_array($previous)) {
+                continue;
+            }
+            if (($previous['review_state'] ?? null) === 'approved' && isset($previous['field'], $previous['value'], $previous['passage'])) {
+                $key = hash('sha256', json_encode([$previous['field'], $previous['value'], $previous['passage']], JSON_THROW_ON_ERROR));
+                $approved[$key] = array_intersect_key($previous, array_flip(['review_state', 'reviewed_by', 'reviewed_at', 'source_version']));
+            }
+        }
+        foreach ($fields as &$field) {
+            $key = hash('sha256', json_encode([$field['field'], $field['value'], $field['passage']], JSON_THROW_ON_ERROR));
+            if (isset($approved[$key])) {
+                $field = array_replace($field, $approved[$key]);
+            }
+        }
+        unset($field);
+
+        return $fields;
+    }
+
+    /** Binds an approval to the ordered candidates the reviewer actually saw. */
+    public function eventFieldsRevision(array $data): string
+    {
+        $fields = array_map(fn ($field) => array_intersect_key($field, array_flip(['field', 'value', 'passage'])), $this->eventFields($data));
+
+        return hash('sha256', json_encode([$data['source_id'] ?? null, $data['source_version'] ?? null, $fields], JSON_THROW_ON_ERROR));
     }
 
     private function mail(TeamProviderConnection $c, string $id): array

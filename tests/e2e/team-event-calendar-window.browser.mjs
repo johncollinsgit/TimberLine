@@ -22,6 +22,16 @@ try {
   const checks = [];
   for (const [engine, engineName] of [[chromium, 'Chromium'], [webkit, 'WebKit']]) {
     browser = await engine.launch(); const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+    await context.addInitScript(() => {
+      const active = new Map(), set = window.setInterval.bind(window), clear = window.clearInterval.bind(window);
+      window.setInterval = (fn, delay, ...args) => { const id = set(fn, delay, ...args); if (delay === 60000 && typeof fn === 'function') active.set(id, fn); return id; };
+      window.clearInterval = id => { active.delete(id); return clear(id); };
+      window.__fireOperationsTimer = () => {
+        const timers = [...active.values()].filter(fn => ['panel', 'detail', 'editor'].every(text => String(fn).includes(text)));
+        if (timers.length !== 1) throw new Error(`Expected one active operations refresh timer, found ${timers.length}`);
+        timers[0]();
+      };
+    });
     await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
     const csrf = (await (await context.request.get(origin + '/login')).text()).match(/<meta name="csrf-token" content="([^"]+)"/)?.[1]; assert.ok(csrf);
     assert.ok((await context.request.post(origin + '/login', { form: { email: 'owner@fixture.invalid', password: 'Fictional-local-only-2026!', _token: csrf }, headers: { Accept: 'application/json' } })).ok());
@@ -43,16 +53,80 @@ try {
     await month().fill('2026-11'); await grid.locator(`[data-calendar-event="${fixture.event_id}"]`).first().waitFor();
     assert.equal(await grid.locator('[data-calendar-date="2026-11-07"] button').count(), 0, 'Sparse gap is not filled');
     assert.ok(reads.some(url => url.searchParams.get('calendar_from') === '2026-11-01' && url.searchParams.get('calendar_to') === '2026-11-30'), 'Month requests server-side window');
-    await search('Current page event');
+    let releaseFirstPage, firstPageStarted;
+    const firstPageGate = new Promise(resolve => { releaseFirstPage = resolve; });
+    const firstPagePending = new Promise(resolve => { firstPageStarted = resolve; });
+    let firstPageDelayed = false;
+    const delayFirstPage = async route => {
+      const url = new URL(route.request().url());
+      if (!firstPageDelayed && !url.searchParams.has('cursor') && url.searchParams.get('q') === 'Current page event') { firstPageDelayed = true; firstPageStarted(); await firstPageGate; }
+      await route.continue();
+    };
+    await page.route('**/team/operations/records?**', delayFirstPage);
+    await area.getByLabel('Search this area').fill('Current page event'); await firstPagePending;
+    const firstPageReads = reads.length;
+    try {
+      await page.evaluate(async () => { window.__fireOperationsTimer(); await new Promise(resolve => setTimeout(resolve, 0)); });
+      assert.equal(reads.length, firstPageReads, 'Automatic refresh does not supersede an in-flight first page');
+    } finally { releaseFirstPage(); }
+    await grid.getByText('Current page event 000', { exact: true }).waitFor(); await settled();
+    await page.unroute('**/team/operations/records?**', delayFirstPage);
     await grid.getByText('Current page event 000', { exact: true }).waitFor();
-    await area.getByRole('button', { name: 'Load more events', exact: true }).click(); await grid.getByText('Current page event 030', { exact: true }).waitFor();
+    const more = area.getByRole('button', { name: 'Load more events', exact: true });
+    const moreBox = await more.boundingBox(), gridBox = await grid.boundingBox();
+    assert.ok(moreBox.height >= 44 && moreBox.y + moreBox.height <= gridBox.y + 1, 'One compact Load more control is above the calendar grid');
+    assert.equal(await more.count(), 1, 'The continuation control is not duplicated');
+    const idleRefresh = page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/team/operations/records' && url.searchParams.get('q') === 'Current page event' && !url.searchParams.has('cursor'); });
+    await page.evaluate(() => window.__fireOperationsTimer()); await idleRefresh; await settled();
+    await grid.getByText('Current page event 000', { exact: true }).waitFor();
+    let releaseContinuation, continuationStarted;
+    const continuationGate = new Promise(resolve => { releaseContinuation = resolve; });
+    const continuationPending = new Promise(resolve => { continuationStarted = resolve; });
+    let delayed = false;
+    const delayContinuation = async route => {
+      const url = new URL(route.request().url());
+      if (!delayed && url.searchParams.has('cursor') && url.searchParams.get('q') === 'Current page event') { delayed = true; continuationStarted(); await continuationGate; }
+      await route.continue();
+    };
+    await page.route('**/team/operations/records?**', delayContinuation);
+    await area.getByRole('button', { name: 'Load more events', exact: true }).click(); await continuationPending;
+    const pendingReads = reads.length;
+    try {
+      await page.evaluate(async () => { window.__fireOperationsTimer(); await new Promise(resolve => setTimeout(resolve, 0)); });
+      assert.equal(reads.length, pendingReads, 'Automatic refresh does not supersede an in-flight continuation');
+    } finally { releaseContinuation(); }
+    await grid.getByText('Current page event 030', { exact: true }).waitFor();
+    await page.unroute('**/team/operations/records?**', delayContinuation);
     assert.ok(reads.some(url => url.searchParams.get('calendar_recheck_sources') === '1'), 'Continuation asks for current source-project access');
     assert.equal(await grid.getByText('Current page event 000', { exact: true }).count(), 1, 'First page remains visible once');
+    const loadedReads = reads.length;
+    await page.evaluate(async () => { window.__fireOperationsTimer(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    assert.equal(reads.length, loadedReads, 'Automatic refresh does not discard accumulated calendar pages');
+    assert.equal(await grid.getByText('Current page event 000', { exact: true }).count(), 1);
+    assert.equal(await grid.getByText('Current page event 030', { exact: true }).count(), 1);
     await area.getByRole('button', { name: 'Load more events', exact: true }).click(); await area.getByRole('button', { name: 'Continue with next events', exact: true }).waitFor();
     await area.getByRole('button', { name: 'Continue with next events', exact: true }).click(); await grid.getByText('Current page event 091', { exact: true }).waitFor();
     assert.equal(await grid.getByText('Current page event 000', { exact: true }).count(), 0, 'Explicit next batch releases prior 90');
+    await search('Fictional legacy range');
+    const legacyAnchor = grid.locator('[data-calendar-date="2026-11-06"] [data-calendar-kind="range_anchor"]');
+    await legacyAnchor.waitFor();
+    await legacyAnchor.getByText('Unconfirmed range', { exact: true }).waitFor();
+    assert.equal(await grid.locator('[data-calendar-date="2026-11-07"] [data-calendar-kind="range_anchor"]').count(), 0, 'A range marker does not invent activity on intervening days');
+    const compact = await grid.evaluate(element => {
+      const day = element.querySelector('.tops-day[data-calendar-date]'), card = element.querySelector('[data-calendar-kind="range_anchor"]');
+      return { minimumDayHeight: parseFloat(getComputedStyle(day).minHeight), cardHeight: card.getBoundingClientRect().height, cardRadius: parseFloat(getComputedStyle(card).borderRadius), gridWidth: parseFloat(getComputedStyle(element).minWidth) };
+    });
+    assert.ok(compact.minimumDayHeight <= 150 && compact.gridWidth <= 840, 'Month calendar is compact');
+    assert.ok(compact.cardHeight >= 44 && compact.cardRadius >= 8, 'Event markers retain touch targets and rounded edges');
     await search('Fictional due anchor'); await grid.locator('[data-calendar-kind="source_due"]').waitFor();
     assert.equal(await grid.locator('[data-calendar-kind="source_due"]').count(), 1); await grid.getByText('Task date · not a confirmed event day').waitFor();
+    await search('Fictional range and due separated');
+    await grid.locator('[data-calendar-date="2026-11-06"] [data-calendar-kind="range_anchor"]').waitFor();
+    await grid.locator('[data-calendar-date="2026-11-20"] [data-calendar-kind="source_due"]').waitFor();
+    assert.equal(await grid.locator('[data-calendar-date="2026-11-07"] [data-calendar-kind="range_anchor"]').count(), 0, 'Range and due markers never invent intervening event days');
+    await search('Fictional range and due same day');
+    await grid.locator('[data-calendar-date="2026-11-06"] [data-calendar-kind="source_due"]').waitFor();
+    assert.equal(await grid.locator('[data-calendar-kind="range_anchor"]').count(), 0, 'A due anchor already marking the range start is not duplicated');
     await search('Fictional reviewed outlier'); await grid.locator('[data-calendar-kind="selling"]').waitFor();
     assert.equal(await grid.locator('[data-calendar-date="2026-11-10"] [data-calendar-kind="source_due"]').count(), 1, 'Due outside a reviewed schedule remains distinct');
     await selectMonth('2026-10'); await grid.locator('[data-calendar-date="2026-10-31"] [data-calendar-kind="setup"]').waitFor();
@@ -88,7 +162,7 @@ try {
     await dueMarker.screenshot({ path: join(evidence, `${engineName.toLowerCase()}-due-marker.png`) });
     await area.getByLabel('Search this area').blur();
     await page.screenshot({ path: join(evidence, `${engineName.toLowerCase()}-390.png`), fullPage: true });
-    checks.push({ browser: engineName, monthScoped: true, currentAfterHistoricalPage: true, explicitPaginationAndCap: true, partialPageCrossingThresholdPreservesRows: true, sparseAndCrossMonth: true, dueAnchorDistinctAndDeduplicated: true, accessFailureClears: true, noWrites: true });
+    checks.push({ browser: engineName, monthScoped: true, currentAfterHistoricalPage: true, explicitPaginationAndCap: true, partialPageCrossingThresholdPreservesRows: true, singlePageAutoRefresh: true, firstPageInFlightPreserved: true, continuationInFlightPreserved: true, accumulatedPagesPreserved: true, continuationAboveGrid: true, sparseAndCrossMonth: true, dueAnchorDistinctAndDeduplicated: true, accessFailureClears: true, noWrites: true });
     await browser.close(); browser = null;
   }
   console.log(JSON.stringify({ checks }, null, 2));
