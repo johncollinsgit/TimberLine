@@ -8,6 +8,7 @@ Route::middleware(['auth', 'verified', 'tenant.access'])->prefix('workspace/cust
     Route::get('/', [SquareCustomerConnectionController::class, 'index'])->name('index');
     Route::post('/', [SquareCustomerConnectionController::class, 'refresh'])->middleware('throttle:6,1')->name('refresh');
     Route::post('/reviews/{review}', [SquareCustomerConnectionController::class, 'review'])->whereNumber('review')->name('review');
+    Route::get('/profiles/{profile}/history', [SquareCustomerConnectionController::class, 'history'])->whereNumber('profile')->middleware('throttle:60,1')->name('history');
     Route::post('/connect', [SquareCustomerOAuthController::class, 'start'])->middleware('throttle:6,1')->name('connect');
     Route::post('/disconnect', [SquareCustomerOAuthController::class, 'disconnect'])->middleware('throttle:6,1')->name('disconnect');
 });

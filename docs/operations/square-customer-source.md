@@ -180,3 +180,38 @@ On November 7, 2026 an authorized bounded production read proved that the existi
 ## Validation and release
 
 Focused SQLite coverage lives in `SquareCustomerSourceReviewTest`, `SquareCustomerRefreshTest`, updated `SquareSyncAndIdentityIntegrationTest` and `MarketingProfileSyncPipelineTest`. It includes owner-with-global-member access, tenant/namespace isolation, stale generation and membership/capability changes, review/run replay, exact contact unsubscribe, revoked/unknown legacy permission proof, protected card stripping, historical reward exclusion, failed-page retry, original item escaping and private HTML. OAuth/merchant ownership have separate integration and real-MySQL coverage. Protected release must verify the existing provider-terms runbook, revocation/retention duties and connection callback/scopes; source tests do not activate a provider or establish legal approval.
+
+## Private cached purchase-history pages
+
+Core customer profiles now offer **More cached orders** and **More cached payments**
+after the first 50 eligible source rows. The same authorized owner/admin can open
+`/workspace/customers/square/profiles/{profile}/history?tenant=SLUG&kind=square_order`
+(or `square_payment`) as HTML or JSON. Every request rechecks active verified
+tenant membership, Customers capability and the Soccer-workspace exclusion.
+No Pay or global Marketing role is required.
+
+The encrypted continuation binds the tenant, canonical customer and aliases,
+record kind and original source associations. It expires after 30 minutes;
+changed identities or namespaces require restarting rather than reusing a page
+under another customer. New cache rows are outside the original page boundary.
+Rows sort by immutable local cache ID, newest first, so refreshing an older row
+does not move it between pages. Recorded purchase dates remain separate from
+cache order and freshness. This is a current cache view, not a frozen export.
+
+Pages scan at most 50 rows plus one lookahead. Conflicting customer claims remain
+withheld; their scanned rows still advance the cursor, including a completely
+withheld page. Coverage shows the actual displayed/scanned counts and the bounded
+cache count. Missing rows, deleted cache records and incomplete provider imports
+cannot establish complete lifetime history. Restart includes later imports.
+
+Original item labels, quantities, money, location IDs and refund observations keep
+their existing meanings. Continuation payloads omit card references and consent
+settings. These are private cached reads, not provider fetches, identity reviews,
+new imports, customer-account links, marketing permission or rewards operations.
+The existing bounded shared shopper/Teams/Pay snapshot is unchanged.
+
+`SquareCustomerHistoryTest` covers multi-page order/payment traversal, refreshed
+rows, new imports, withheld pages, expired/forged/cross-kind/cross-tenant cursors,
+alias/namespace drift, membership/capability refusal, escaped original labels and
+private JSON/HTML. It uses fictional source rows and prevents provider transport;
+it is also registered in the existing guarded customer-profile MySQL cohort.

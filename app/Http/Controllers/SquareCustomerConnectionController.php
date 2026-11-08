@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Marketing\SquareConnectionContext;
 use App\Services\Marketing\SquareCustomerIdentityService;
+use App\Services\Marketing\SquareCustomerSource;
 use App\Services\Marketing\SquareMarketingSyncService;
 use App\Services\Marketing\TenantCustomerLookup;
 use Illuminate\Http\Client\RequestException;
@@ -20,6 +21,34 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 /** Core connection controls reuse the established Square sync, identity reviews and import audits. */
 class SquareCustomerConnectionController extends Controller
 {
+    public function history(Request $request, SquareCustomerIdentityService $identities, SquareCustomerSource $sources)
+    {
+        [$tenant] = $this->access($request, $identities);
+        $input = $request->validate(['kind' => 'required|in:square_order,square_payment', 'cursor' => 'nullable|string|max:8192']);
+        $profile = app(\App\Services\Marketing\CanonicalMarketingProfileResolver::class)->byId($tenant->id, (int) $request->route('profile'));
+        abort_unless($profile && $profile->archived_at === null, 404);
+        $restart = route('customers.square.history', ['tenant' => $tenant->slug, 'profile' => $profile->id, 'kind' => $input['kind']]);
+        $error = null;
+        $result = null;
+        $status = 200;
+        try {
+            $result = $sources->historyPage($profile, $tenant->id, $input['kind'], $input['cursor'] ?? null);
+        } catch (HttpException $exception) {
+            if (! in_array($exception->getStatusCode(), [409, 422], true)) {
+                throw $exception;
+            }
+            $error = $exception->getMessage();
+            $status = $exception->getStatusCode();
+        }
+        if ($request->expectsJson()) {
+            return response()->json($result ?? ['message' => $error, 'restart_url' => $restart], $status)->header('Cache-Control', 'private, no-store');
+        }
+
+        return response()->view('customers.square-history', ['tenant' => $tenant, 'profile' => $profile,
+            'squareSource' => $result, 'historyError' => $error, 'restartUrl' => $restart, 'historyKind' => $input['kind']], $status)
+            ->header('Cache-Control', 'private, no-store');
+    }
+
     public function index(Request $request, SquareConnectionContext $connections, SquareCustomerIdentityService $identities)
     {
         [$tenant, $actor] = $this->access($request, $identities);

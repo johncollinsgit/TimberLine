@@ -7,6 +7,7 @@ use App\Models\MarketingConsentEvent;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\SquareCustomer;
+use Illuminate\Support\Facades\Crypt;
 
 /** Provider observations are distinct from a verified marketing permission or wallet identity. */
 class SquareCustomerSource
@@ -151,6 +152,21 @@ class SquareCustomerSource
     /** Private owner/admin projection. Never include card references in shopper, QR or AI draft payloads. */
     public function forStaff(MarketingProfile $profile, int $tenantId): array
     {
+        return $this->staffProjection($profile, $tenantId);
+    }
+
+    /** Cached reads only. The caller must freshly authorize tenant owner/admin access. */
+    public function historyPage(MarketingProfile $profile, int $tenantId, string $kind, ?string $cursor = null): array
+    {
+        abort_unless(in_array($kind, ['square_order', 'square_payment'], true), 422);
+        $projection = $this->staffProjection($profile, $tenantId, ['kind' => $kind, 'cursor' => $cursor]);
+
+        return ['customer_id' => $projection['customer_id'], 'history' => $projection['history'],
+            'issues' => $projection['issues'], 'historical_import_earns_rewards' => false];
+    }
+
+    private function staffProjection(MarketingProfile $profile, int $tenantId, ?array $historyPage = null): array
+    {
         $resolver = app(CanonicalMarketingProfileResolver::class);
         $canonical = $resolver->byId($tenantId, $profile->id);
         abort_unless($canonical, 404);
@@ -181,7 +197,7 @@ class SquareCustomerSource
                 $issues[] = 'square_sms_unsubscribe_contact_changed_review_required';
             }
             $cards = [];
-            foreach (CustomerExternalProfile::query()->where('tenant_id', $tenantId)->where('provider', 'square')->where('integration', 'square_customer')->where('external_customer_id', $link->source_id)->get() as $external) {
+            foreach ($historyPage === null ? CustomerExternalProfile::query()->where('tenant_id', $tenantId)->where('provider', 'square')->where('integration', 'square_customer')->where('external_customer_id', $link->source_id)->get() : [] as $external) {
                 $binding = data_get($external->raw_metafields, 'square.source_binding', []);
                 if (empty($sourceBinding['merchant_id']) || empty($sourceBinding['environment']) || $sourceBinding['merchant_id'] !== ($binding['merchant_id'] ?? null) || $sourceBinding['environment'] !== ($binding['environment'] ?? null)) {
                     $issues[] = 'square_card_merchant_review_required';
@@ -198,17 +214,31 @@ class SquareCustomerSource
                 'cards' => $cards, 'card_identity_or_payment_authority' => false];
         }
 
-        return ['customer_id' => $canonical->id, 'sources' => $sources, 'legacy_consent_review' => $this->legacyConsentRisk($canonical, $ids),
-            'history' => $this->history($tenantId, $ids, $sources, $issues), 'issues' => array_values(array_unique($issues)), 'historical_import_earns_rewards' => false];
+        return ['customer_id' => $canonical->id, 'sources' => $sources, 'legacy_consent_review' => $historyPage === null ? $this->legacyConsentRisk($canonical, $ids) : [],
+            'history' => $this->history($tenantId, $ids, $sources, $issues, $historyPage), 'issues' => array_values(array_unique($issues)), 'historical_import_earns_rewards' => false];
     }
 
-    private function history(int $tenantId, array $profileIds, array $sources, array &$issues): array
+    private function history(int $tenantId, array $profileIds, array $sources, array &$issues, ?array $page = null): array
     {
         $orders = [];
         $payments = [];
         $coverage = [];
         foreach (['square_order' => [\App\Models\SquareOrder::class, 'square_order_id'], 'square_payment' => [\App\Models\SquarePayment::class, 'square_payment_id']] as $type => [$model, $column]) {
-            $linked = MarketingProfileLink::query()->where('tenant_id', $tenantId)->whereIn('marketing_profile_id', $profileIds)->where('source_type', $type)->pluck('source_id');
+            if ($page && $page['kind'] !== $type) {
+                continue;
+            }
+            $links = MarketingProfileLink::query()->where('tenant_id', $tenantId)->whereIn('marketing_profile_id', $profileIds)->whereIn('source_type', ['square_customer', $type])->orderBy('id')->get();
+            $linked = $links->where('source_type', $type)->pluck('source_id');
+            $scopeIds = $profileIds;
+            sort($scopeIds, SORT_NUMERIC);
+            $scopeSources = array_map(fn ($source) => [$source['square_customer_id'],
+                $source['source_binding']['merchant_id'] ?? null, $source['source_binding']['environment'] ?? null,
+                $source['source_binding']['connection_id'] ?? null, $source['source_binding']['connection_generation'] ?? null], $sources);
+            sort($scopeSources);
+            $scope = hash('sha256', json_encode([$tenantId, $profileIds[0], $scopeIds, $type, $scopeSources,
+                $links->map(fn ($link) => [(int) $link->id, (int) $link->marketing_profile_id, $link->source_type, $link->source_id,
+                    $link->source_meta['merchant_id'] ?? null, $link->source_meta['environment'] ?? null])->values()->all()], JSON_THROW_ON_ERROR));
+            $continuation = $this->historyCursor($page['cursor'] ?? null, $tenantId, $profileIds[0], $type, $scope);
             $query = $model::query()->where('tenant_id', $tenantId)->where(function ($query) use ($column, $linked, $sources) {
                 $query->whereIn($column, $linked);
                 foreach ($sources as $source) {
@@ -220,9 +250,23 @@ class SquareCustomerSource
                         ->where('raw_payload->_source_binding->merchant_id', $binding['merchant_id'])->where('raw_payload->_source_binding->environment', $binding['environment']));
                 }
             });
+            $ceiling = $continuation['ceiling'] ?? (int) (clone $query)->max('id');
+            $query->where('id', '<=', $ceiling);
             $count = (clone $query)->count();
-            $coverage[$type] = ['cached_count' => $count, 'limit' => 50, 'has_more' => $count > 50, 'provider_complete' => false];
-            foreach ($query->latest('synced_at')->latest('id')->limit(50)->get() as $row) {
+            if ($continuation) {
+                $query->where('id', '<', $continuation['before']);
+            }
+            // Immutable local IDs keep a refresh of an older source from moving it between pages.
+            $rows = $query->orderByDesc('id')->limit(51)->get();
+            $visibleRows = $rows->take(50);
+            $hasMore = $rows->count() > 50;
+            $expires = $continuation['expires'] ?? now()->addMinutes(30)->timestamp;
+            $coverage[$type] = ['cached_count' => $count, 'limit' => 50, 'has_more' => $hasMore, 'provider_complete' => false,
+                'page' => ($continuation['page'] ?? 0) + 1, 'scanned_count' => $visibleRows->count(), 'order' => 'cached_id_desc',
+                'next_cursor' => $hasMore ? Crypt::encryptString(json_encode(['version' => 1, 'tenant' => $tenantId, 'profile' => $profileIds[0],
+                    'kind' => $type, 'scope' => $scope, 'ceiling' => $ceiling, 'before' => (int) $visibleRows->last()->id,
+                    'page' => ($continuation['page'] ?? 0) + 1, 'expires' => $expires], JSON_THROW_ON_ERROR)) : null];
+            foreach ($visibleRows as $row) {
                 $claims = MarketingProfileLink::query()->where('tenant_id', $tenantId)->where('source_type', $type)->where('source_id', $row->$column)->get();
                 if ($claims->contains(fn ($claim) => app(CanonicalMarketingProfileResolver::class)->byId($tenantId, (int) $claim->marketing_profile_id)?->id !== $profileIds[0])) {
                     $issues[] = 'square_purchase_identity_review_required';
@@ -250,8 +294,29 @@ class SquareCustomerSource
                 }
             }
             $coverage[$type]['displayed_count'] = count($type === 'square_order' ? $orders : $payments);
+            $coverage[$type]['withheld_count'] = $visibleRows->count() - $coverage[$type]['displayed_count'];
         }
 
         return ['orders' => $orders, 'payments' => $payments, 'coverage' => $coverage, 'basis' => 'recorded_original_square_sources', 'historical_rewards_earned' => 0];
+    }
+
+    private function historyCursor(?string $cursor, int $tenant, int $profile, string $kind, string $scope): ?array
+    {
+        if ($cursor === null) {
+            return null;
+        }
+        try {
+            $value = json_decode(Crypt::decryptString($cursor), true, flags: JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            abort(422, 'This history page is invalid. Restart the cached history.');
+        }
+        abort_unless(is_array($value) && ($value['version'] ?? null) === 1
+            && ($value['tenant'] ?? null) === $tenant && ($value['profile'] ?? null) === $profile && ($value['kind'] ?? null) === $kind
+            && is_string($value['scope'] ?? null) && hash_equals($scope, $value['scope']), 409, 'The customer or source association changed. Restart the cached history.');
+        abort_unless(is_int($value['expires'] ?? null) && $value['expires'] > now()->timestamp, 409, 'This history page expired. Restart the cached history.');
+        abort_unless(is_int($value['ceiling'] ?? null) && is_int($value['before'] ?? null) && $value['before'] > 0 && $value['before'] <= $value['ceiling']
+            && is_int($value['page'] ?? null) && $value['page'] > 0 && $value['page'] < 100000, 422, 'This history page is invalid. Restart the cached history.');
+
+        return $value;
     }
 }

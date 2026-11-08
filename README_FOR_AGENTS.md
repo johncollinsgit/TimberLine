@@ -42,6 +42,12 @@ and out of shopper/QR/AI-draft payloads. No live import or provider grant follow
 from a successful source test. Read `docs/operations/square-customer-source.md`
 for connection, renewal, source-only import and identity-review contracts.
 
+Private Square history pages reuse that owner/admin authority and existing caches.
+Keep their encrypted cursors bound to tenant, canonical aliases, source namespace
+and a stable cache boundary. A refresh must not reorder older rows between pages;
+conflicting identities stay withheld and their scanned rows still advance paging.
+These pages do not extend the bounded shared shopper/Teams/Pay history snapshot.
+
 Read `docs/operations/teams-event-schedule.md` before changing event dates.
 Explicit local sessions include setup/selling/teardown/travel and preserve gaps;
 Asana due/start fields are separate source anchors. Source evidence is reviewed

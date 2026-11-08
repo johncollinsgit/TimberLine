@@ -16,6 +16,11 @@ contact/card similarities require review. No provider grant or live import was
 created during source work. See `docs/operations/square-customer-source.md` for
 the original-merchant, renewal and historical-import boundaries.
 
+The private Square profile panel can continue through cached orders and payments
+in 50-row pages. Opaque expiring cursors bind tenant, canonical customer and
+source associations; every page rechecks owner/admin access. This extends cached
+history navigation only, without provider retrieval or lifetime-coverage claims.
+
 Teams events retain explicit local setup, selling, teardown and travel dates,
 including gaps. Asana due dates remain separate source anchors. Setup evidence
 and fresh source versions govern reviewed calendar dates; they do not establish

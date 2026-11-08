@@ -41,13 +41,15 @@
     };
 @endphp
 <section class="eb-square-history" aria-label="Private Square source history">
-    <h2>Original Square customer and purchase sources</h2>
+    <h2>{{ empty($squareHistoryOnly) ? 'Original Square customer and purchase sources' : 'Original Square purchase history' }}</h2>
     <a class="eb-square-link" href="{{ route('customers.square.index', ['tenant' => $tenant->slug]) }}">Square connection, refresh and identity review</a>
     <p>Recorded source history is bounded by imported coverage. A recorded location is not an event. Historical imports do not earn or consume rewards.</p>
-    @foreach($squareSource['legacy_consent_review'] as $channel => $consent)
+    <p>Newest cached records first. Original purchase dates are shown separately; new imports appear when you restart the history.</p>
+    @foreach($squareSource['legacy_consent_review'] ?? [] as $channel => $consent)
         @if($consent['review_required'])<p class="eb-square-notice" role="status">{{ ucfirst($channel) }} permission needs review: older Square imports inferred permission without affirmative proof. Current permission has not been automatically changed.</p>@endif
     @endforeach
     @foreach($squareSource['issues'] as $issue)<p class="eb-square-notice" role="status">{{ str_replace('_', ' ', $issue) }}</p>@endforeach
+    @if(empty($squareHistoryOnly))
     @forelse($squareSource['sources'] as $source)
         <article class="eb-square-record">
             <p class="eb-square-record-title"><strong>Square customer</strong><span class="eb-square-status">Linked source</span></p>
@@ -67,6 +69,8 @@
             </details>
         </article>
     @empty<p>No reviewed Square customer source is associated with this customer.</p>@endforelse
+    @endif
+    @if(isset($squareSource['history']['coverage']['square_order']))
     <h3>Recorded original orders</h3>
     @forelse($squareSource['history']['orders'] as $order)
         <article class="eb-square-record">
@@ -87,6 +91,8 @@
             </details>
         </article>
     @empty<p>No original order sources are loaded for this association.</p>@endforelse
+    @endif
+    @if(isset($squareSource['history']['coverage']['square_payment']))
     <h3>Recorded original payments</h3>
     @foreach($squareSource['history']['payments'] as $payment)
         <article class="eb-square-record">
@@ -103,5 +109,11 @@
             </details>
         </article>
     @endforeach
-    @foreach($squareSource['history']['coverage'] as $kind => $coverage)<p class="eb-square-coverage">{{ str_replace('_', ' ', $kind) }}: {{ $coverage['displayed_count'] }} of {{ $coverage['cached_count'] }} cached records shown. Provider history completeness is unknown.</p>@endforeach
+    @endif
+    @foreach($squareSource['history']['coverage'] as $kind => $coverage)
+        <p class="eb-square-coverage">{{ $kind === 'square_order' ? 'Orders' : 'Payments' }} · page {{ $coverage['page'] ?? 1 }}: {{ $coverage['displayed_count'] }} of {{ $coverage['cached_count'] }} cached records shown on this page. Provider history completeness is unknown.@if($coverage['withheld_count'] ?? 0) {{ $coverage['withheld_count'] }} scanned {{ ($coverage['withheld_count'] ?? 0) === 1 ? 'record needs' : 'records need' }} identity review.@endif</p>
+        @if(($coverage['next_cursor'] ?? null) && isset($profile))
+            <a class="eb-square-link" href="{{ route('customers.square.history', ['tenant' => $tenant->slug, 'profile' => $profile->id, 'kind' => $kind, 'cursor' => $coverage['next_cursor']]) }}">More cached {{ $kind === 'square_order' ? 'orders' : 'payments' }}</a>
+        @endif
+    @endforeach
 </section>
