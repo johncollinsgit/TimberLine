@@ -144,11 +144,27 @@ extension CustomerCommerceFlowTests {
 extension CustomerCommerceFlowTests {
     private func assertRejectedCaptureAllowsDifferentCustomer(field: String, rejectedValue: String, expectedMessage: String) {
         let app = launchLookupIsolation(["--pos-lookup-rejected-capture-ui-tests"])
+        let lookupQuery = app.textFields["Name, email or phone"]
+        func creationFirstName() -> XCUIElement? {
+            let firstName = app.textFields["First name"]
+            let create = app.buttons["Create a new customer"]
+            let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                lookupQuery.exists && ((firstName.exists && firstName.isHittable) || (create.exists && create.isHittable))
+            }, object: nil)
+            guard XCTWaiter.wait(for: [ready], timeout: 5) == .completed else {
+                XCTFail("Customer lookup must finish presenting before opening creation."); return nil
+            }
+            // A reopened disclosure can already be expanded; never toggle it closed.
+            if !firstName.exists { create.tap() }
+            guard firstName.waitForExistence(timeout: 5) else {
+                XCTFail("Customer creation must expose its first-name field."); return nil
+            }
+            return firstName
+        }
         let original = app.staticTexts["shopping-fixture-state"].label
         app.buttons["Customers"].tap()
-        app.buttons["Create a new customer"].tap()
-        let first = app.textFields["First name"]
-        XCTAssertTrue(first.waitForExistence(timeout: 5)); first.tap(); first.typeText("Fictional")
+        guard let first = creationFirstName() else { return }
+        first.tap(); first.typeText("Fictional")
         // Email sits under the keyboard toolbar at this scroll position. Finish
         // the first field before selecting the contact field, as a user can.
         let done = app.buttons["Done"]
@@ -159,17 +175,19 @@ extension CustomerCommerceFlowTests {
         XCTAssertTrue(app.staticTexts[expectedMessage].waitForExistence(timeout: 8))
         XCTAssertFalse(app.buttons["Recover customer request"].exists)
         app.buttons["Close"].tap()
+        // The catalog fixture also exists underneath an open sheet.
+        XCTAssertTrue(lookupQuery.waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
         app.buttons["Customers"].tap()
-        app.buttons["Create a new customer"].tap()
-        let replacement = app.textFields["First name"]
-        XCTAssertTrue(replacement.waitForExistence(timeout: 5)); replacement.tap(); replacement.typeText("Fictional")
+        guard let replacement = creationFirstName() else { return }
+        replacement.tap(); replacement.typeText("Fictional")
         app.buttons["Create and select customer"].tap()
         // The fixture rejects reuse of the rejected UUID or contact details.
         XCTAssertTrue(app.staticTexts["Fictional Captured"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.buttons["Recover customer request"].exists)
         app.buttons["Close"].tap()
+        XCTAssertTrue(lookupQuery.waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["shopping-fixture-state"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["shopping-fixture-state"].label, original)
     }
