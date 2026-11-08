@@ -97,7 +97,7 @@ class EventCalendarWindow
         }
     }
 
-    public function matches(TeamOperationRecord $record, array $window): bool
+    public function matches(TeamOperationRecord $record, array $window, bool $includeUndated = true): bool
     {
         $data = $record->data ?? [];
         $calendar = app(EventSchedule::class)->calendar($data, $record->starts_on?->toDateString(), $record->ends_on?->toDateString());
@@ -117,8 +117,9 @@ class EventCalendarWindow
             return ($start ?? $end) <= $window['to'] && $end >= $window['from'];
         }
 
-        // Entirely undated records stay in a separate unknown-date list, never a grid cell.
-        return ! $this->validDate($due);
+        // Legacy windows may retain a separate unknown-date list. Compact dated
+        // windows omit it because an undated record cannot be classified as upcoming.
+        return $includeUndated && ! $this->validDate($due);
     }
 
     private function validDate(mixed $date): bool

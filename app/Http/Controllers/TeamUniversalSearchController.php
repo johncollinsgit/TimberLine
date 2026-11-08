@@ -6,6 +6,7 @@ use App\Http\Middleware\EnsureModuleAccess;
 use App\Http\Middleware\EnsureUserRole;
 use App\Models\Tenant;
 use App\Services\Search\GlobalSearchCoordinator;
+use App\Services\Team\Search\EventSearchOrder;
 use App\Services\Team\Search\SearchDocuments;
 use App\Services\Team\Search\SearchIndex;
 use App\Services\Team\Search\SearchMatcher;
@@ -24,8 +25,13 @@ class TeamUniversalSearchController extends Controller
         $actor = app(TeamWorkAccess::class)->context($request->user(), $tenant);
         $input = $request->validate(['q' => 'nullable|string|max:500', 'type' => 'nullable|string|max:32', 'project' => 'nullable|string|max:120',
             'person' => 'nullable|string|max:120', 'state' => 'nullable|in:active,closed', 'cursor' => 'nullable|string|max:10000',
-            'limit' => 'nullable|integer|min:1|max:25', 'recent' => 'nullable|array|max:8', 'recent.*' => 'string|max:160', 'ref' => 'nullable|string|max:160']);
-        $scope = hash('sha256', json_encode([$tenant->id, $actor['user_id'], array_diff_key($input, array_flip(['cursor', 'limit', 'ref']))]));
+            'limit' => 'nullable|integer|min:1|max:25', 'recent' => 'nullable|array|max:8', 'recent.*' => 'string|max:160', 'ref' => 'nullable|string|max:160',
+            'stage' => 'nullable|in:teams,apps']);
+        $stage = $input['stage'] ?? null;
+        abort_if($stage && ! empty($input['ref']), 422, 'Open search results using their current reference.');
+        abort_if($stage === 'teams' && ! empty($input['cursor']), 422, 'Start this search again.');
+        $rankingContext = app(EventSearchOrder::class)->context($tenant);
+        $scope = hash('sha256', json_encode([$tenant->id, $actor['user_id'], $rankingContext, array_diff_key($input, array_flip(['cursor', 'limit', 'ref', 'stage']))]));
         $cursor = ['seen' => [], 'team' => null, 'done' => false];
         if (! empty($input['cursor'])) {
             try {
@@ -35,10 +41,13 @@ class TeamUniversalSearchController extends Controller
                 abort(422, 'Start this search again.');
             }
         }
+        abort_if($stage === 'apps' && (empty($input['cursor']) || empty($cursor['deferred_apps'])), 422, 'Start this search again.');
         $appRows = [];
         // Project/person/state filters describe Teams work, not other applications.
         $needsApps = empty($input['ref']) || str_starts_with($input['ref'], 'app:');
-        if ($needsApps && empty($input['project']) && empty($input['person']) && empty($input['state']) && ! str_starts_with(trim($input['q'] ?? ''), '>')) {
+        $appsEligible = $needsApps && empty($input['project']) && empty($input['person']) && empty($input['state']) && ! str_starts_with(trim($input['q'] ?? ''), '>');
+        $deferredApps = $stage === 'teams' && $appsEligible;
+        if ($appsEligible && ! $deferredApps) {
             $payload = $apps->search(mb_substr($input['q'] ?? '', 0, 120), ['tenant_id' => $tenant->id, 'user' => $request->user(), 'request' => $request, 'surface' => 'teams', 'limit' => 20]);
             foreach ($payload['results'] as $row) {
                 if ($url = $this->destination($request, $tenant, $row['url'] ?? null)) {
@@ -56,13 +65,19 @@ class TeamUniversalSearchController extends Controller
         }
         $pendingApps = array_diff_key($appRows, array_flip($cursor['seen']));
         $limit = (int) ($input['limit'] ?? 8);
-        $teamInput = array_diff_key($input, ['cursor' => true]);
+        $teamInput = array_diff_key($input, ['cursor' => true, 'stage' => true]);
         $teamInput['recent'] = array_values(array_filter($input['recent'] ?? [], fn ($id) => ! str_starts_with($id, 'app:')));
-        $teamInput['limit'] = $pendingApps ? max(1, (int) ceil($limit / 2)) : $limit;
+        $teamInput['limit'] = $pendingApps || $deferredApps ? max(1, (int) ceil($limit / 2)) : $limit;
         $teamInput['cursor'] = $cursor['team'];
         $teamRequest = $request->duplicate($teamInput);
-        $team = $cursor['done'] && empty($input['ref']) ? ['items' => [], 'next_cursor' => null, 'facets' => []]
-            : $teams->workspace($teamRequest, $index, $documents, $matcher)->getData(true);
+        if ($stage === 'apps') {
+            // Teams results have already been admitted and returned. Keep their
+            // exact continuation while app results use their own current gates.
+            $team = ['items' => [], 'next_cursor' => $cursor['team'], 'facets' => []];
+        } else {
+            $team = $cursor['done'] && empty($input['ref']) ? ['items' => [], 'next_cursor' => null, 'facets' => []]
+                : $teams->workspace($teamRequest, $index, $documents, $matcher)->getData(true);
+        }
         if (! empty($input['ref'])) {
             return response()->json($team)->header('Cache-Control', 'private, no-store');
         }
@@ -72,9 +87,9 @@ class TeamUniversalSearchController extends Controller
             $items[] = $row;
             $cursor['seen'][] = $id;
         }
-        $cursor = [...$cursor, 'scope' => $scope, 'team' => $team['next_cursor'], 'done' => ! $team['next_cursor']];
+        $cursor = [...$cursor, 'scope' => $scope, 'team' => $team['next_cursor'], 'done' => ! $team['next_cursor'], 'deferred_apps' => $deferredApps];
         $cursor['coverage'] = $team['coverage'] ?? $cursor['coverage'] ?? ['complete' => true, 'basis' => 'saved_workspace'];
-        $more = $team['next_cursor'] || count($pendingApps) > count($appPage);
+        $more = $team['next_cursor'] || count($pendingApps) > count($appPage) || $deferredApps;
         $facets = $team['facets'];
         $types = collect($facets['type'] ?? [])->keyBy('id');
         foreach ($appRows as $row) {
@@ -83,7 +98,7 @@ class TeamUniversalSearchController extends Controller
         $facets['type'] = $types->values()->all();
 
         return response()->json(['items' => $items, 'next_cursor' => $more ? Crypt::encryptString(json_encode($cursor)) : null, 'facets' => $facets,
-            'coverage' => $cursor['coverage'], 'app_limit' => 20])
+            'coverage' => $cursor['coverage'], 'app_limit' => 20, 'deferred_apps' => $deferredApps])
             ->header('Cache-Control', 'private, no-store');
     }
 

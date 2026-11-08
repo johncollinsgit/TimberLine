@@ -39,7 +39,7 @@ try {
       await page.locator(tab === 'List' ? '.teams-event-list' : tab === 'Calendar' ? '.tops-event-calendar' : '.teams-event-board').waitFor();
       await page.waitForLoadState('networkidle'); perTab[tab] = calls.slice(before).map(call => call.path.replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/g, ':id'));
     }
-    const cardA = cards.filter({ hasText: 'Fictional seasonal makers and home goods weekend market' }), cardB = cards.filter({ hasText: 'Window event 30' });
+    const cardA = cards.filter({ hasText: 'Fictional seasonal makers and home goods weekend market' }), cardB = cards.filter({ hasText: 'Window event 00' });
     const titleA = await cardA.locator('.teams-task-card-title').innerText(), titleB = await cardB.locator('.teams-task-card-title').innerText();
     let holdRead = null, holdApproval = null, holdWindow = null;
     await page.route('**/team/operations/records/*', async route => {

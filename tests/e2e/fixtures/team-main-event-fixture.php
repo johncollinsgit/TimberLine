@@ -6,6 +6,7 @@ require __DIR__.'/../../../scripts/everbranch-team/operations-calendar-browser-f
 $fixture = json_decode(ob_get_clean(), true, 64, JSON_THROW_ON_ERROR);
 $tenant = App\Models\Tenant::findOrFail($fixture['tenant_id']);
 $area = App\Models\TeamArea::findOrFail($fixture['area_id']);
+$area->update(['settings' => [...$area->settings, 'timezone' => 'America/New_York']]);
 for ($i = 0; $i < 35; $i++) {
     $sessionId = (string) Illuminate\Support\Str::uuid();
     $day = $i < 30 ? '2026-11-20' : '2026-11-04';
@@ -25,15 +26,25 @@ App\Models\TeamOperationRecord::create([
     'status' => 'accepted', 'visibility' => 'area', 'starts_on' => null, 'ends_on' => null,
     'data' => ['source_schedule' => ['due_on' => '2026-11-09']],
 ]);
-// More than one transport batch, including events outside the current month.
+// More than one transport batch inside the upcoming window.
 for ($i = 0; $i < 205; $i++) {
     App\Models\TeamOperationRecord::create([
         'id' => (string) Illuminate\Support\Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $area->id,
-        'source_key' => hash('sha256', 'all-events-'.$i), 'kind' => 'event', 'title' => sprintf('Future event %03d', $i),
-        'status' => 'accepted', 'visibility' => 'area', 'starts_on' => '2027-01-10', 'ends_on' => '2027-01-10',
-        'data' => ['sessions' => [['id' => (string) Illuminate\Support\Str::uuid(), 'kind' => 'selling', 'date' => '2027-01-10']]],
+        'source_key' => hash('sha256', 'all-events-'.$i), 'kind' => 'event', 'title' => sprintf('Upcoming event %03d', $i),
+        'status' => 'accepted', 'visibility' => 'area', 'starts_on' => '2026-11-25', 'ends_on' => '2026-11-25',
+        'data' => ['sessions' => [['id' => (string) Illuminate\Support\Str::uuid(), 'kind' => 'selling', 'date' => '2026-11-25']]],
     ]);
 }
+foreach ([['Historical archive market', '2022-02-10'], ['Future January market', '2027-01-10'], ['Future December market', '2026-12-10']] as [$title, $day]) {
+    App\Models\TeamOperationRecord::create([
+        'id' => (string) Illuminate\Support\Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $area->id,
+        'source_key' => hash('sha256', $title), 'kind' => 'event', 'title' => $title,
+        'status' => 'accepted', 'visibility' => 'area', 'starts_on' => $day, 'ends_on' => $day,
+        'data' => ['sessions' => [['id' => (string) Illuminate\Support\Str::uuid(), 'kind' => 'selling', 'date' => $day]]],
+    ]);
+}
+$fixture['upcoming_event_count'] = 239;
+$fixture['november_event_count'] = 244;
 $fixture['event_count'] = App\Models\TeamOperationRecord::where('area_id', $area->id)->where('kind', 'event')->count();
 [$other, $otherOwner] = teamWorkspace();
 $other->update(['slug' => 'fictional-no-events']);

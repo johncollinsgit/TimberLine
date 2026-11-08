@@ -68,9 +68,9 @@ try {
           await page.locator('#tops-content:not([aria-busy])').waitFor();
           const month = page.locator('#tw-list input[aria-label="Calendar month"]');
           if (layout === 'calendar') {
-            const reads = navigationReads.length; await month.fill('2031-03'); await month.blur();
+            const changed = page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/team/operations/records' && url.searchParams.get('calendar_from') === '2031-03-01' && url.searchParams.get('event_scope') === 'window' && response.ok(); });
+            await month.fill('2031-03'); await month.blur(); await changed; await page.locator('#tops-content:not([aria-busy])').waitFor();
             await page.locator('[data-calendar-date="2031-03-01"]').waitFor();
-            assert.equal(navigationReads.length, reads, 'Changing calendar month paints the loaded collection without a new records request');
           }
           const before = { url: page.url(), month: layout === 'calendar' ? await month.inputValue() : null, reads: navigationReads.length };
           await input.fill('seasonal'); await result.waitFor();
@@ -94,6 +94,93 @@ try {
           checks.push(`${name} ${layout}: search→details→close retains inline URL, toolbar, collapsed Controls, selected tab/month and focus`);
           await input.press('Escape');
         }
+        // Real Teams results stay interactive while only the slower app phase is held.
+        const deferred = label => { let started, release, finish; const ready = new Promise((done, reject) => { const timer = setTimeout(() => reject(new Error('Expected deferred app search did not start: ' + label)), 12000); started = () => { clearTimeout(timer); done(); }; }), gate = new Promise(done => { release = done; }), finished = new Promise(done => { finish = done; }); ready.catch(() => {}); return { ready, started, gate, release, finished, finish, mode: 'merge' }; };
+        const fakeApp = (id, title) => ({ id: 'app:fictional-' + id, type: 'request', title, context: 'Fictional app search', source: 'Everbranch', target: { kind: 'app', url: `/settings?tenant=${fixture.tenant_id}` } });
+        const workspaceTitle = 'Fictional Evergreen Events and Seasonal Makers Collective Teams';
+        let heldApps = null, paginateApps = false, initialTeamTitles = [];
+        const stagedApps = async route => {
+          const url = new URL(route.request().url());
+          if (url.searchParams.get('q') !== 'seasonal' || url.searchParams.has('ref')) return route.continue();
+          const pending = url.searchParams.get('stage') === 'apps' ? heldApps : null;
+          if (!pending && !(paginateApps && url.searchParams.has('cursor') && !url.searchParams.has('stage'))) return route.continue();
+          if (pending) { heldApps = null; pending.started(); await pending.gate; }
+          try {
+            const response = await route.fetch(), body = await response.json();
+            if (['fail', 'expired'].includes(pending?.mode)) return await route.fulfill({ response, status: pending.mode === 'expired' ? 422 : 503, json: { message: pending.mode === 'expired' ? 'Fictional expired search cursor.' : 'Fictional app search outage.' } });
+            const app = pending?.mode === 'stale' ? fakeApp('stale', 'Fictional stale app result') : fakeApp(pending ? 'first' : 'next', pending ? 'Fictional first app result' : 'Fictional next app result');
+            if (pending) {
+              assert.equal(url.searchParams.get('limit'), '4', 'App phase fills the remaining first-page slots');
+              return await route.fulfill({ response, json: { ...body, items: [app], next_cursor: url.searchParams.get('cursor'), facets: { ...body.facets, type: [{ id: 'request', title: 'Request' }] } } });
+            }
+            paginateApps = false;
+            assert.equal(body.items.length, 1, 'The retained cursor admits only the known workspace navigation result');
+            assert.equal(body.items[0].title, workspaceTitle); assert.equal(body.items[0].type, 'navigation');
+            assert.equal(body.items[0].target.kind, 'app');
+            const destination = new URL(body.items[0].target.url, origin);
+            assert.equal(destination.pathname, '/teams'); assert.equal(destination.searchParams.get('tenant'), fixture.tenant_id);
+            assert.ok(body.items.every(item => !initialTeamTitles.includes(item.title)), 'The retained server cursor does not repeat an initial Team result');
+            await route.fulfill({ response, json: { ...body, items: [...body.items, app], next_cursor: null } });
+          } catch (error) { if (!/closed|disposed|canceled|cancelled|intercepted|Invalid InterceptionId/i.test(error.message)) throw error; } finally { pending?.finish(); }
+        };
+        await page.route('**/team/search/all?**', stagedApps);
+        const options = page.locator('[data-team-universal-search] .eb-search-option');
+        const stagedStatus = page.locator('[data-team-universal-search] .eb-search-status');
+        console.log(name + ': progressive early open'); let pending = deferred('early open'); heldApps = pending;
+        await input.fill('seasonal'); await pending.ready; await result.waitFor();
+        assert.equal(await options.count(), 4, 'Four real Team rows appear before the app response');
+        assert.match(await stagedStatus.innerText(), /Searching other apps/);
+        const earlyOpen = page.waitForResponse(response => new URL(response.url()).pathname === '/team/operations/records/' + fixture.event_id && response.ok());
+        await result.click(); await earlyOpen;
+        await page.locator('#tops-detail[open]').getByText('Copper lantern setup', { exact: true }).waitFor();
+        pending.release(); await pending.finished; await page.locator('#tops-detail-close').click();
+        assert.ok(await page.locator('[data-team-universal-search] .eb-search-panel').isHidden(), 'Opening a Team result retires the unfinished app search');
+        checks.push(`${name}: Team result opens before delayed app response`);
+
+        console.log(name + ': progressive merge'); pending = deferred('merge'); heldApps = pending;
+        await input.fill('seasonal'); await pending.ready; await result.waitFor(); initialTeamTitles = await options.locator('strong').allTextContents(); await input.press('ArrowDown');
+        const selectedTitle = await page.locator('[data-team-universal-search] .eb-search-option[aria-selected="true"] strong').innerText();
+        const initialCoverage = await page.locator('.teams-search-coverage').innerText();
+        pending.release(); await options.filter({ hasText: 'Fictional first app result' }).waitFor();
+        assert.equal(await options.count(), 5, 'App phase merges once with the four initial Team rows');
+        assert.equal(await page.locator('[data-team-universal-search] .eb-search-option[aria-selected="true"] strong').innerText(), selectedTitle, 'Final merge preserves the selected row identity');
+        assert.ok(await input.evaluate(node => node === document.activeElement), 'Final merge preserves keyboard focus');
+        assert.equal(await page.locator('.teams-search-coverage').innerText(), initialCoverage, 'Initial source coverage survives the app phase');
+        paginateApps = true; await page.getByRole('button', { name: 'View all results', exact: true }).click();
+        await options.filter({ hasText: 'Fictional next app result' }).waitFor();
+        const titles = await options.locator('strong').allTextContents(); assert.equal(titles.length, new Set(titles).size, 'Pagination never duplicates initial Team or App rows');
+        assert.equal(titles.length, 7, 'The four initial Teams, known workspace and two intercepted app rows appear exactly once');
+        assert.deepEqual(titles.slice().sort(), [...initialTeamTitles, workspaceTitle, 'Fictional first app result', 'Fictional next app result'].sort());
+        assert.ok(await input.evaluate(node => node === document.activeElement), 'Completing pagination returns focus from the disappearing continuation button to search');
+        checks.push(`${name}: staged merge preserves selection/focus/coverage and paginates without duplicates`);
+
+        console.log(name + ': progressive stale query'); pending = deferred('stale query'); pending.mode = 'stale'; heldApps = pending;
+        await input.fill('seasonal'); await pending.ready; await result.waitFor();
+        await input.fill('aspen'); await options.filter({ hasText: 'Fictional Aspen regional market' }).waitFor();
+        pending.release(); await pending.finished;
+        await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+        assert.equal(await options.filter({ hasText: 'Fictional stale app result' }).count(), 0, 'Late app response from the retired query is ignored');
+        assert.equal(await result.count(), 0, 'Retired Team rows are not restored by a late app response');
+        checks.push(`${name}: stale app phase cannot overwrite a newer query`);
+
+        console.log(name + ': progressive outage'); pending = deferred('outage'); pending.mode = 'fail'; heldApps = pending;
+        await input.fill('seasonal'); await pending.ready; await result.waitFor(); pending.release();
+        await stagedStatus.filter({ hasText: 'Other apps could not load.' }).waitFor();
+        assert.equal(await options.count(), 4, 'App failure keeps the already authorized Team rows');
+        const retry = page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/team/search/all' && url.searchParams.get('q') === 'seasonal' && url.searchParams.has('cursor') && !url.searchParams.has('stage'); });
+        await page.getByRole('button', { name: 'View all results', exact: true }).click(); await retry;
+        await options.filter({ hasText: workspaceTitle }).waitFor(); assert.equal(await options.count(), 5, 'Retry adds only the known workspace result to the four retained Teams');
+        assert.deepEqual((await options.locator('strong').allTextContents()).sort(), [...initialTeamTitles, workspaceTitle].sort());
+        assert.doesNotMatch(await stagedStatus.innerText(), /Other apps could not load/);
+        checks.push(`${name}: failed app phase keeps Team rows and retries its original cursor`);
+        console.log(name + ': progressive expired cursor'); pending = deferred('expired cursor'); pending.mode = 'expired'; heldApps = pending;
+        await input.fill('seasonal'); await pending.ready; await result.waitFor(); pending.release();
+        await stagedStatus.filter({ hasText: 'Search again to refresh these results.' }).waitFor();
+        assert.equal(await options.count(), 4, 'Expired app cursor keeps the already admitted Team rows');
+        assert.ok(await page.locator('[data-team-universal-search] .eb-search-more').isHidden(), 'An expired cursor cannot enter a continuation retry loop');
+        checks.push(`${name}: expired app cursor preserves Teams and asks for a fresh search`);
+        await page.unroute('**/team/search/all?**', stagedApps);
+
         await input.fill('aspen');
         const otherResult = page.locator('[data-team-universal-search] .eb-search-option').filter({ hasText: 'Fictional Aspen regional market' }); await otherResult.waitFor();
         const otherOpened = page.waitForResponse(response => new URL(response.url()).pathname === '/team/operations/records/' + fixture.other_event_id && response.ok());
@@ -109,5 +196,5 @@ try {
     assert.deepEqual(errors, []); assert.deepEqual(writes, []); await context.close(); await browser.close(); browser = null;
   }
   await writeFile(join(evidence, 'results.json'), JSON.stringify({ checks, provider_calls: 0, business_writes: 0 }, null, 2)); console.log(JSON.stringify({ passed: checks.length, checks, evidence }));
-} catch (error) { if (page) await page.screenshot({ path: join(evidence, 'failure.png') }).catch(() => {}); throw error; }
+} catch (error) { if (page) console.log(JSON.stringify(await page.evaluate(() => ({query:document.querySelector('#teams-universal-query')?.value,focus:document.activeElement?.id,status:document.querySelector('.eb-search-status')?.textContent,panelHidden:document.querySelector('.eb-search-panel')?.hidden,dialogOpen:document.querySelector('#tops-detail')?.open})),null,2)); if (page) await page.screenshot({ path: join(evidence, 'failure.png') }).catch(() => {}); throw error; }
 finally { await browser?.close(); server?.kill('SIGTERM'); await rm(dir, { recursive: true, force: true }); }

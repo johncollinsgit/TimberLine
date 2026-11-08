@@ -53,28 +53,15 @@ class UnifiedDashboardService
      */
     public function forRequest(Request $request, ?User $user = null, ?string $rangeKey = null, ?string $metricKey = null): array
     {
-        $user ??= $request->user();
-        $attributeTenant = $request->attributes->get('current_tenant');
-        $tenant = $attributeTenant instanceof Tenant
-            ? $attributeTenant
-            : ($user ? $this->tenantContextResolver->resolveForRequest($request, $user) : null);
-        $tenantId = $tenant ? (int) $tenant->id : null;
-        $profile = $this->experienceProfileService->forTenant($tenantId, $user, $tenant);
+        [$user, $tenant, $tenantId, $profile] = $this->workspaceForRequest($request, $user);
         if (($profile['workspace_focus'] ?? null) === 'soccer' && $tenant && $user && app(\App\Services\Soccer\SoccerAccess::class)->enabled($tenant)) {
             return $this->soccerDashboard($request, $tenant, $user, $profile, $rangeKey);
         }
         if (($profile['workspace_focus'] ?? null) === 'website_sales' && $tenant && $user) {
             return $this->websiteSalesDashboard($request, $tenant, $user, $profile, $rangeKey);
         }
-        $canAccessMarketing = $user?->canAccessMarketing() ?? false;
-        $canAccessOps = ($user?->isAdmin() ?? false)
-            || ($user?->isManager() ?? false)
-            || ($user instanceof User && $tenant instanceof Tenant && $this->fieldServiceAccess->canManageJobs($user, $tenant));
-        $catalog = ($tenantId !== null && $canAccessMarketing)
-            ? $this->moduleCatalogService->tenantStorePayload($tenantId, 'marketing')
-            : ['sections' => []];
+        [$canAccessMarketing, $canAccessOps, $catalog, $clientFacingFieldService] = $this->actionInputs($tenant, $user);
         $range = $this->dateRanges->resolve($rangeKey ?? $request->query('range'));
-        $clientFacingFieldService = $this->clientFacingFieldServiceEnabled($tenant);
         $tradeMetrics = $clientFacingFieldService ? $this->tradeMetrics($tenant, $profile, $range) : null;
         $ownerReport = $this->ownerReport($tenant, $user, $range['key']);
         $summaryCards = $ownerReport
@@ -127,12 +114,80 @@ class UnifiedDashboardService
         ];
     }
 
-    protected function soccerDashboard(Request $request, Tenant $tenant, User $user, array $profile, ?string $rangeKey): array
+    /** Return the same permitted actions without calculating dashboard reports or sales metrics. */
+    public function nextActionsForRequest(Request $request, ?User $user = null): array
+    {
+        [$user, $tenant, $tenantId, $profile] = $this->workspaceForRequest($request, $user);
+        if (($profile['workspace_focus'] ?? null) === 'soccer' && $tenant && $user && app(\App\Services\Soccer\SoccerAccess::class)->enabled($tenant)) {
+            $this->soccerMembership($tenant, $user);
+
+            return [];
+        }
+        if (($profile['workspace_focus'] ?? null) === 'website_sales' && $tenant && $user) {
+            $checklists = app(\App\Services\ClientProjects\ProjectChecklistService::class);
+            $checklists->assertMembership($user, $tenant);
+            $hasTasks = $checklists->projects($tenant)->flatMap->tickets->flatMap->tasks->isNotEmpty();
+
+            return $this->websiteSalesActions($tenant, $hasTasks, $this->moduleAccess->canAccess((int) $tenant->id, 'managed_website'));
+        }
+        [$canAccessMarketing, $canAccessOps, $catalog, $clientFacingFieldService] = $this->actionInputs($tenant, $user);
+
+        return $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $clientFacingFieldService);
+    }
+
+    private function workspaceForRequest(Request $request, ?User $user): array
+    {
+        $user ??= $request->user();
+        $attributeTenant = $request->attributes->get('current_tenant');
+        $tenant = $attributeTenant instanceof Tenant
+            ? $attributeTenant
+            : ($user ? $this->tenantContextResolver->resolveForRequest($request, $user) : null);
+        $tenantId = $tenant ? (int) $tenant->id : null;
+        $profile = $this->experienceProfileService->forTenant($tenantId, $user, $tenant);
+
+        return [$user, $tenant, $tenantId, $profile];
+    }
+
+    private function actionInputs(?Tenant $tenant, ?User $user): array
+    {
+        $tenantId = $tenant ? (int) $tenant->id : null;
+        $canAccessMarketing = $user?->canAccessMarketing() ?? false;
+        $canAccessOps = ($user?->isAdmin() ?? false)
+            || ($user?->isManager() ?? false)
+            || ($user instanceof User && $tenant instanceof Tenant && $this->fieldServiceAccess->canManageJobs($user, $tenant));
+        $catalog = ($tenantId !== null && $canAccessMarketing)
+            ? $this->moduleCatalogService->tenantStorePayload($tenantId, 'marketing')
+            : ['sections' => []];
+
+        return [$canAccessMarketing, $canAccessOps, $catalog, $this->clientFacingFieldServiceEnabled($tenant)];
+    }
+
+    private function soccerMembership(Tenant $tenant, User $user): array
     {
         $access = app(\App\Services\Soccer\SoccerAccess::class);
         $admin = $access->admin($tenant, $user);
         $coach = $access->coach($tenant, $user);
         abort_unless($admin || $coach, 403);
+
+        return [$admin, $coach];
+    }
+
+    private function websiteSalesActions(Tenant $tenant, bool $hasTasks, bool $websiteEnabled): array
+    {
+        $actions = [];
+        if ($hasTasks) {
+            $actions[] = ['label' => 'Continue the launch checklist', 'description' => 'Review what you and Evergrove need to do next.', 'href' => route('client.projects.checklist', ['tenant' => $tenant->slug])];
+        }
+        if ($websiteEnabled) {
+            $actions[] = ['label' => 'Review the website', 'description' => 'Review your pages, photos, and launch setup.', 'href' => route('managed-website.index', ['tenant' => $tenant->slug])];
+        }
+
+        return $actions;
+    }
+
+    protected function soccerDashboard(Request $request, Tenant $tenant, User $user, array $profile, ?string $rangeKey): array
+    {
+        [$admin, $coach] = $this->soccerMembership($tenant, $user);
         $store = app(\App\Services\Soccer\SoccerStore::class);
         $season = $store->query('seasons', $tenant->id)->where('season_key', 'spring-2027')->first();
         $rows = $season ? $store->query('registrations', $tenant->id)->where('season_id', $season->id)->when(! $admin, fn ($q) => $q->whereIn('team_key', json_decode($coach->team_keys, true)))->get() : collect();
@@ -159,11 +214,10 @@ class UnifiedDashboardService
         $site = $websiteEnabled ? \App\Models\TenantSite::query()->forTenantId($tenant->id)->first() : null;
         $url = fn (string $route): string => route($route, ['tenant' => $tenant->slug]);
         $cards = [];
-        $actions = [];
+        $actions = $this->websiteSalesActions($tenant, $tasks->isNotEmpty(), $websiteEnabled);
         if ($tasks->isNotEmpty()) {
             $cards[] = ['label' => 'Launch checklist', 'value' => $tasks->where('status', 'done')->count().' / '.$tasks->count(),
                 'detail' => 'Completed launch tasks', 'href' => $url('client.projects.checklist')];
-            $actions[] = ['label' => 'Continue the launch checklist', 'description' => 'Review what you and Evergrove need to do next.', 'href' => $url('client.projects.checklist')];
         }
         if ($websiteEnabled) {
             foreach ([
@@ -178,7 +232,6 @@ class UnifiedDashboardService
                 $cards[] = ['label' => $label, 'value' => (string) $query->count(),
                     'detail' => 'Website '.strtolower($label), 'href' => $url($route)];
             }
-            $actions[] = ['label' => 'Review the website', 'description' => 'Review your pages, photos, and launch setup.', 'href' => $url('managed-website.index')];
         }
 
         return [

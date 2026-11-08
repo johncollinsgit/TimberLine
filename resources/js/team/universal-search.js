@@ -18,16 +18,31 @@ export function installUniversalSearch(root) {
   const palette = globalThis.EverbranchSearch.palette({
     host, scope, id: 'teams-universal', collapsibleFilters: true, available: () => !!bridge()?.available(),
     beforeOpen: () => document.body.classList.remove('teams-menu-open'),
-    async search({ q, filters, cursor, limit, recent, signal }) {
+    async search({ q, filters, cursor, limit, recent, signal, onProgress }) {
       query = q;
-      const url = endpoint({ q, ...filters, cursor, limit });
-      recent.forEach(id => url.searchParams.append('recent[]', id));
-      const result = await bridge().request(url, { signal, cache: 'no-store' });
+      const request = async params => {
+        const url = endpoint({ q, ...filters, ...params });
+        recent.forEach(id => url.searchParams.append('recent[]', id));
+        return bridge().request(url, { signal, cache: 'no-store' });
+      };
+      const result = await request({ cursor, limit, ...(!cursor ? { stage: 'teams' } : {}) });
       if (!signal.aborted) {
         coverage.textContent = result.coverage?.notice || '';
         coverage.hidden = !coverage.textContent;
       }
-      return result;
+      if (cursor || !result.deferred_apps || signal.aborted) return result;
+      if (onProgress?.(result) === false) return result;
+      try {
+        const apps = await request({ stage: 'apps', cursor: result.next_cursor, limit: Math.max(1, limit - result.items.length) });
+        if (signal.aborted) return result;
+        const types = new Map([...(result.facets?.type || []), ...(apps.facets?.type || [])].map(type => [type.id, type]));
+        return { ...result, items: [...new Map([...(result.items || []), ...(apps.items || [])].map(item => [item.id, item])).values()], next_cursor: apps.next_cursor,
+          facets: { ...result.facets, type: [...types.values()] }, coverage: result.coverage, deferred_apps: false };
+      } catch (error) {
+        if (signal.aborted || error.name === 'AbortError') throw error;
+        if (error.status === 422) return { ...result, next_cursor: null, partial_notice: 'Search again to refresh these results.' };
+        return { ...result, partial_notice: 'Other apps could not load. Use View all results to retry.' };
+      }
     },
     async open(item, current) {
       if (!current() || !bridge()?.available()) return false;
@@ -56,7 +71,7 @@ export function installUniversalSearch(root) {
         dialog.addEventListener('close', () => { dialog.remove(); palette.input.focus(); }, { once: true }); dialog.showModal();
         return true;
       }
-      return bridge().open(item.target, current);
+      return bridge().open(item.target, current, { fromSearch: true });
     },
   });
   palette.input.placeholder = 'Search everything you can access';

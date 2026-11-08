@@ -9,6 +9,20 @@ use Illuminate\Support\Facades\DB;
 /** References only: SearchDocuments remains the authority for every displayed field. */
 class CanonicalSearchCandidates
 {
+    /** Supplement older indexes when a query explicitly names an occurrence year. */
+    public function eventReferences(Tenant $tenant, ?array &$coverage): \Generator
+    {
+        $limit = max(1, min(10000, (int) config('team_work.search_canonical_limit', 2500)));
+        $seen = 0;
+        foreach (TeamOperationRecord::where('tenant_id', $tenant->id)->where('kind', 'event')->orderBy('id')->cursor() as $row) {
+            if ($seen++ >= $limit) {
+                $coverage = ['basis' => 'saved_workspace', 'complete' => false, 'notice' => 'Saved event date search reached its coverage limit. More historical work may exist; continue in its area.'];
+                break;
+            }
+            yield (object) ['kind' => 'operation', 'entity_id' => $row->id, 'record' => $row];
+        }
+    }
+
     public function references(Tenant $tenant, array $state, ?array &$coverage): \Generator
     {
         $limit = max(1, min(10000, (int) config('team_work.search_canonical_limit', 2500)));

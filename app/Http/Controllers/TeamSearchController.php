@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\TeamArea;
 use App\Models\Tenant;
 use App\Services\Team\Operations\OperationsAccess;
+use App\Services\Team\Search\EventSearchOrder;
 use App\Services\Team\Search\SearchDocuments;
 use App\Services\Team\Search\SearchIndex;
 use App\Services\Team\Search\SearchMatcher;
@@ -44,10 +45,13 @@ class TeamSearchController extends Controller
         $input = $request->validate(['q' => 'nullable|string|max:500', 'type' => 'nullable|string|max:32', 'project' => 'nullable|string|max:120',
             'person' => 'nullable|string|max:120', 'state' => 'nullable|in:active,closed', 'cursor' => 'nullable|string|max:4096',
             'limit' => 'nullable|integer|min:1|max:25', 'recent' => 'nullable|array|max:8', 'recent.*' => 'string|max:160', 'ref' => 'nullable|string|max:160']);
+        $eventOrder = app(EventSearchOrder::class);
+        $eventContext = $eventOrder->context($tenant);
+        $eventInclusive = empty($input['type']) || $input['type'] === 'event';
         $started = microtime(true);
         $query = $matcher->parse($input['q'] ?? '');
         $limit = (int) ($input['limit'] ?? 8);
-        $scope = hash('sha256', json_encode([$tenant->id, $actor['user_id'], $input['q'] ?? '', $input['type'] ?? '', $input['project'] ?? '', $input['person'] ?? '', $input['state'] ?? '', $input['recent'] ?? []]));
+        $scope = hash('sha256', json_encode([$tenant->id, $actor['user_id'], $input['q'] ?? '', $input['type'] ?? '', $input['project'] ?? '', $input['person'] ?? '', $input['state'] ?? '', $input['recent'] ?? [], $eventContext]));
         $after = null;
         if (! empty($input['cursor'])) {
             try {
@@ -65,14 +69,14 @@ class TeamSearchController extends Controller
             $item = $documents->resolve($tenant, $request->user(), $actor, $state, $kind, $id);
             abort_unless($item, 404);
 
-            $display = $this->display($item, '', $matcher);
+            $display = $this->display($eventOrder->decorate($item, $eventContext), '', $matcher);
             if (in_array($item['type'], ['message', 'update'], true)) {
                 $display['detail'] = $item['body'];
             }
 
             return response()->json(['item' => $display])->header('Cache-Control', 'private, no-store');
         }
-        $commands = $this->commands($tenant, $request, $actor, $state);
+        $commands = $this->commands($tenant, $request, $actor, $state, $matcher, $query);
         $items = [];
         $scores = [];
         $coverage = null;
@@ -86,7 +90,7 @@ class TeamSearchController extends Controller
                 }
             } else {
                 $fast = [];
-                foreach ($canonical ? [] : $index->fastCandidates($tenant->id, $input['q'] ?? '')->cursor() as $candidate) {
+                foreach ($canonical || $eventInclusive ? [] : $index->fastCandidates($tenant->id, $input['q'] ?? '')->cursor() as $candidate) {
                     $indexedRank = [(int) $candidate->bucket, 0, (int) $candidate->sort_closed, -(int) $candidate->sort_updated, $candidate->kind.':'.$candidate->entity_id];
                     if ($after && ($indexedRank <=> $after) <= 0) {
                         continue;
@@ -113,10 +117,25 @@ class TeamSearchController extends Controller
                     ? app(\App\Services\Team\Search\CanonicalSearchCandidates::class)->references($tenant, $state, $coverage)
                     : ($completeTopPage ? [] : $index->candidates($tenant->id, $input['q'] ?? '')->select(['id', 'kind', 'entity_id'])->orderBy('id')->cursor());
                 foreach ($candidates as $candidate) {
+                    if (! app(\App\Services\Team\Search\CanonicalEventPrefilter::class)->mightMatch($candidate, $matcher, $query)) {
+                        continue;
+                    }
                     $item = $documents->resolve($tenant, $request->user(), $actor, $state, $candidate->kind, $candidate->entity_id, $candidate);
                     if ($item && ($score = $matcher->score($item, $query)) !== null) {
                         $items[$item['id']] = $item;
                         $scores[$item['id']] = $score;
+                    }
+                }
+                if (! $canonical && $eventInclusive && preg_match('/(?<!\d)(?:19|20)\d{2}(?!\d)/', $input['q'] ?? '')) {
+                    foreach (app(\App\Services\Team\Search\CanonicalSearchCandidates::class)->eventReferences($tenant, $coverage) as $candidate) {
+                        if (! app(\App\Services\Team\Search\CanonicalEventPrefilter::class)->mightMatch($candidate, $matcher, $query)) {
+                            continue;
+                        }
+                        $item = $documents->resolve($tenant, $request->user(), $actor, $state, $candidate->kind, $candidate->entity_id, $candidate);
+                        if ($item && ($score = $matcher->score($item, $query)) !== null) {
+                            $items[$item['id']] = $item;
+                            $scores[$item['id']] = $score;
+                        }
                     }
                 }
                 // Directory membership and names are always current, including new joins and renames.
@@ -162,13 +181,15 @@ class TeamSearchController extends Controller
         foreach (['task', 'project', 'update', 'file', 'person', 'command'] as $type) {
             $facets['type'][$type] = ['id' => $type, 'title' => ucfirst($type)];
         }
-        $items = array_values(array_filter($items, fn ($item) => $this->matchesFilters($item, $input)));
+        $items = array_map(fn ($item) => $eventOrder->decorate($item, $eventContext), array_values(array_filter($items, fn ($item) => $this->matchesFilters($item, $input))));
         $ranks = [];
         foreach ($items as $item) {
             $ranks[$item['id']] = $scores[$item['id']] ?? $matcher->score($item, $query);
             if ($query['text'] === '' && ! $query['commandsOnly']) {
                 $recentPosition = array_search($item['id'], $input['recent'] ?? [], true);
                 $ranks[$item['id']] = [$item['type'] === 'command' ? 1 : 0, $recentPosition === false ? 99 : $recentPosition, 0, 0, $item['id']];
+            } elseif ($eventInclusive) {
+                $ranks[$item['id']] = $eventOrder->rank($ranks[$item['id']], $item, $input['q'] ?? '');
             }
         }
         usort($items, fn ($a, $b) => $ranks[$a['id']] <=> $ranks[$b['id']]);
@@ -204,7 +225,7 @@ class TeamSearchController extends Controller
             && (($input['state'] ?? '') !== 'closed' || ! empty($item['completed']) || ! empty($item['archived']));
     }
 
-    private function commands(Tenant $tenant, Request $request, array $actor, array $state): array
+    private function commands(Tenant $tenant, Request $request, array $actor, array $state, SearchMatcher $matcher, array $query): array
     {
         $make = fn ($id, $title, $target) => ['id' => 'command:'.$id, 'type' => 'command', 'title' => $title, 'body' => '', 'source' => 'Everbranch', 'target' => $target];
         $catalog = json_decode(file_get_contents(resource_path('data/team-search-commands.json')), true, flags: JSON_THROW_ON_ERROR);
@@ -222,6 +243,12 @@ class TeamSearchController extends Controller
         }
         if (config('team_operations.enabled') && config('team_work.premium_enabled')) {
             foreach (TeamArea::where('tenant_id', $tenant->id)->get() as $area) {
+                $open = $make('area-'.$area->id, 'Go to '.$area->name, ['kind' => 'area', 'area' => $area->id]);
+                $create = $make('create-operation-'.$area->id, $catalog['create-operation']['title'].' in '.$area->name, ['kind' => $catalog['create-operation']['kind'], 'area' => $area->id]);
+                // Text is only a candidate filter; matched commands still pass current policy.
+                if ($matcher->score($open, $query) === null && $matcher->score($create, $query) === null) {
+                    continue;
+                }
                 try {
                     app(OperationsAccess::class)->area($tenant, $request->user(), $area->id);
                     $items[] = $make('area-'.$area->id, 'Go to '.$area->name, ['kind' => 'area', 'area' => $area->id]);

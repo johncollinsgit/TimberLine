@@ -1,7 +1,7 @@
 import '../../css/team-operations.css';
 import '../../css/team-events.css';
 import { installEventTasks } from './event-tasks';
-import { eventCalendarWindow, renderEventCalendar, renderScheduleSummary } from './event-calendar';
+import { eventCalendarWindow, eventToday, setEventCalendarTimezone, renderEventCalendar, renderScheduleSummary } from './event-calendar';
 
 // Business workspaces share the Teams shell and services. Private drafts stay in memory.
 export function installOperations(nativeRoot) {
@@ -17,6 +17,7 @@ export function installOperations(nativeRoot) {
   let areas = [], members = [], area, view = 'overview', page = 1, serial = 0, returnFocus, draft, busy = false, identityLost = false, timer, searchTimer, editorSequence = 0, pageCursors = [null], statisticsYear = new Date().getFullYear();
   const drafts = new Map();
   const emailDrafts = new Map();
+  const eventListWindows = new Map(); // Date choices only; no retained record or permission cache.
   let calendarPages = null, areasReady, inlineEpoch = 0, inlineOptions = null, detailSequence = 0;
   const originalPosition = document.createComment('Teams work area position');
   root.before(originalPosition);
@@ -60,7 +61,14 @@ export function installOperations(nativeRoot) {
   function dialog(title) { detailSequence++; if (!$('detail').open) returnFocus = document.activeElement; $('detail-title').textContent = title; const body = el('div'); $('detail-body').replaceChildren(body); if (!$('detail').open) $('detail').showModal(); return body; }
   function closeDetail() { $('detail').close(); returnFocus?.focus(); }
   $('detail-close').onclick = closeDetail;
-  $('detail').addEventListener('close', () => { if (!$('detail').open) detailSequence++; if (returnFocus?.isConnected) returnFocus.focus(); else $('heading').focus(); });
+  $('detail').addEventListener('close', () => {
+    if ($('detail').open) return;
+    detailSequence++;
+    // A queued native close event must not steal focus from a new user action.
+    const focused = document.activeElement;
+    if (focused && focused !== document.body && !$('detail').contains(focused)) return;
+    if (returnFocus?.isConnected) returnFocus.focus(); else $('heading').focus();
+  });
   function controls() {
     if (!root.classList.contains('tops-inline-calendar')) { const url = new URL(location.href); url.searchParams.set('area', area.id); url.searchParams.set('area_view', view); history.replaceState(null, '', url); }
     $('heading').textContent = area.name;
@@ -81,7 +89,7 @@ export function installOperations(nativeRoot) {
     if (window.TeamPremium?.context && !window.TeamPremium.context.ready()) return;
     if (area) keepDraft();
     eventTasks.reset();
-    area = item; view = item.views.includes(initialView) ? initialView : 'overview'; page = 1; serial++;
+    area = item; setEventCalendarTimezone(root.dataset.tenant + '|' + area.id, area.timezone); view = item.views.includes(initialView) ? initialView : 'overview'; page = 1; serial++;
     root.classList.toggle('tops-active', !inline); root.classList.toggle('tops-inline-calendar', inline); $('panel').hidden = false;
     document.querySelectorAll('#tops-areas button').forEach(b => b.setAttribute('aria-current', b.dataset.area === area.id ? 'page' : 'false'));
     controls(); $('heading').focus(); const loading = load(), requestSerial = serial; await loading;
@@ -101,7 +109,7 @@ export function installOperations(nativeRoot) {
     entry.onclick = () => { if (!identityLost && window.TeamPremium?.context?.ready()) { $('search').value = ''; openArea(target, 'calendar').catch(report); } };
   }
   function restoreInline() {
-    inlineEpoch++; serial++; calendarPages = null; inlineOptions = null; document.getElementById('tops-inline-options')?.remove(); $('content').replaceChildren();
+    inlineEpoch++; serial++; calendarPages = null; inlineOptions = null; document.getElementById('tops-inline-options')?.remove(); document.getElementById('tops-event-window-options')?.remove(); $('content').replaceChildren();
     if ($('detail').open) $('detail').close();
     root.classList.remove('tops-inline-calendar'); originalPosition.after(root);
   }
@@ -120,6 +128,7 @@ export function installOperations(nativeRoot) {
       root.classList.add('tops-inline-calendar'); host.replaceChildren(root); $('search').value = String(options.query || '').trim();
       inlineOptions = { layout: ['list', 'board', 'calendar'].includes(options.layout) ? options.layout : 'calendar', renderCard: options.renderCard };
       if (inlineOptions.layout !== 'calendar') document.getElementById('tops-inline-options')?.remove();
+      else document.getElementById('tops-event-window-options')?.remove();
       await openArea(target, 'calendar', true);
       return ticket === inlineEpoch && root.classList.contains('tops-inline-calendar');
     },
@@ -134,7 +143,7 @@ export function installOperations(nativeRoot) {
     },
     area: async areaId => { const target = areas.find(a => a.id === areaId); if (!target) throw new Error('This area is no longer accessible.'); await openArea(target); },
     create: async areaId => { const target = areas.find(a => a.id === areaId); if (!target) throw new Error('This area is no longer accessible.'); await openArea(target); edit(); },
-    open: async (areaId, recordId) => {
+    open: async (areaId, recordId, options = {}) => {
       await areasReady;
       if (identityLost) throw new Error('Verify the original account before opening work details.');
       const target = areas.find(a => a.id === areaId);
@@ -142,9 +151,12 @@ export function installOperations(nativeRoot) {
       if (window.TeamPremium?.context && !window.TeamPremium.context.ready()) return;
       const sameInlineEvents = target.profile === 'events' && area?.id === target.id && !$('panel').hidden
         && root.classList.contains('tops-inline-calendar') && !!root.closest('#tw-list');
-      const returnTo = sameInlineEvents && document.activeElement?.closest('[data-team-universal-search]')
+      const returnTo = sameInlineEvents && (options.fromSearch || document.activeElement?.closest('[data-team-universal-search]'))
         ? document.querySelector('[data-team-layout][aria-selected="true"]') : null;
       if (!sameInlineEvents) await openArea(target);
+      // Native dialogs restore the element focused before showModal. Move to
+      // the owning view first so closing never briefly reopens workspace search.
+      if (options.fromSearch && returnTo) returnTo.focus({ preventScroll: true });
       await details({ id: recordId, title: 'Work details' }, returnTo);
     },
     renderPersonal: async (context, workPage = 1) => {
@@ -177,12 +189,41 @@ export function installOperations(nativeRoot) {
   $('prev').onclick = () => { if (page > 1) page--; load(); };
   $('next').onclick = () => { page++; load(); };
   $('search').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { page = 1; load(); }, 300); };
-  function allEventSurface() { return view === 'calendar' && root.classList.contains('tops-inline-calendar'); }
-  function query(kind) { return { kind, page, q: $('search').value.trim(), cursor: pageCursors[page - 1], ...(view === 'calendar' ? { ...(allEventSurface() ? { event_scope: 'all' } : eventCalendarWindow(root.dataset.tenant + '|' + area.id)), calendar_recheck_sources: page > 1 ? 1 : 0 } : {}) }; }
+  function inlineEventSurface() { return view === 'calendar' && root.classList.contains('tops-inline-calendar'); }
+  function eventWindowScope() { return root.dataset.tenant + '|' + root.dataset.user + '|' + area.id; }
+  function upcomingWindow() {
+    const today = eventToday(area.timezone);
+    const end = new Date(today + 'T12:00:00Z'); end.setUTCDate(end.getUTCDate() + 29);
+    return { calendar_from: today, calendar_to: end.toISOString().slice(0, 10) };
+  }
+  function selectedEventWindow() {
+    if (inlineOptions?.layout !== 'calendar') return eventListWindows.get(eventWindowScope()) || upcomingWindow();
+    const selected = eventCalendarWindow(root.dataset.tenant + '|' + area.id), [year, month] = selected.calendar_from.slice(0, 7).split('-').map(Number);
+    // Keep the next month ready without loading history or rendering it early.
+    return { calendar_from: `${year}-${String(month).padStart(2, '0')}-01`, calendar_to: new Date(Date.UTC(year, month + 1, 0, 12)).toISOString().slice(0, 10) };
+  }
+  function eventWindowOptions(window) {
+    document.getElementById('tops-event-window-options')?.remove();
+    const settings = el('section', '', 'tops-inline-calendar-options'); settings.id = 'tops-event-window-options'; settings.append(el('h3', 'Event dates'));
+    const form = el('form', '', 'tops-form');
+    const from = field(form, 'calendar_from', 'Events from', window.calendar_from, 'date'), through = field(form, 'calendar_to', 'Events through', window.calendar_to, 'date'); from.required = through.required = true;
+    const apply = el('button', 'Apply dates'); apply.type = 'submit';
+    const upcoming = button('Upcoming 30 days', () => { eventListWindows.delete(eventWindowScope()); return load(); });
+    form.append(apply, upcoming); form.onsubmit = event => {
+      event.preventDefault(); through.setCustomValidity('');
+      const span = (Date.parse(through.value + 'T12:00:00Z') - Date.parse(from.value + 'T12:00:00Z')) / 86400000;
+      if (span < 0 || span > 61) through.setCustomValidity('Choose an end date within 62 days of the starting date.');
+      if (!form.reportValidity()) return;
+      eventListWindows.set(eventWindowScope(), { calendar_from: from.value, calendar_to: through.value }); load().catch(report);
+    };
+    settings.append(form); document.getElementById('tw-controls-panel')?.append(settings);
+  }
+  function query(kind) { return { kind, page, q: $('search').value.trim(), cursor: pageCursors[page - 1], ...(view === 'calendar' ? { ...(inlineEventSurface() ? { event_scope: 'window', ...selectedEventWindow() } : eventCalendarWindow(root.dataset.tenant + '|' + area.id)), calendar_recheck_sources: page > 1 ? 1 : 0 } : {}) }; }
+
   async function load(appendCalendar = false) {
     if (!area || $('panel').hidden) return;
     if (view === 'calendar' && !appendCalendar) { page = 1; calendarPages = null; $('content').replaceChildren(); $('scope').textContent = 'Checking selected dates…'; }
-    const ticket = ++serial, current = area.id; $('notice').textContent = 'Loading ' + label(view).toLowerCase() + '…';
+    const ticket = ++serial, current = area.id, collectionWindow = inlineEventSurface() ? selectedEventWindow() : null; $('notice').textContent = 'Loading ' + label(view).toLowerCase() + '…';
     if (page === 1) pageCursors = [null];
     $('content').setAttribute('aria-busy', 'true');
     $('content').inert = true;
@@ -201,9 +242,9 @@ export function installOperations(nativeRoot) {
       }
       else result = await api('/operations/records', { query: query({ documents: 'document', staffing: 'staff', pipeline: 'opportunity', campaigns: 'campaign', automations: 'rule', calendar: 'event', events: 'event', accounts: 'account' }[view] || (area.profile === 'events' ? 'event' : 'account')) });
       if (ticket !== serial || current !== area.id) return;
-      if (allEventSurface()) {
-        // Transport batches are automatic. The board is one complete collection,
-        // independent of the displayed calendar month; never ask a user to page it.
+      if (inlineEventSurface()) {
+        // Transport batches are automatic within the selected date window. Older
+        // records stay in search and explicit date controls, not the default board.
         const collected = new Map(), cursors = new Set(), notices = new Set();
         let sourceIncomplete = false, partial = false, complete = true;
         while (true) {
@@ -219,9 +260,9 @@ export function installOperations(nativeRoot) {
           if (!cursor || cursors.has(cursor)) throw new Error('The event collection could not finish loading. Refresh to try again.');
           cursors.add(cursor);
           $('scope').textContent = 'Loading events · ' + collected.size;
-          result = await api('/operations/records', { query: { kind: 'event', event_scope: 'all', q: $('search').value.trim(), cursor, calendar_recheck_sources: 1 } });
+          result = await api('/operations/records', { query: { kind: 'event', event_scope: 'window', ...collectionWindow, q: $('search').value.trim(), cursor, calendar_recheck_sources: 1 } });
         }
-        result = { ...result, items: [...collected.values()], count: collected.size, has_more: false, next_cursor: null, event_scope: 'all', event_collection: { ...result.event_collection, local_scan_complete: true, scan_limited: false, source_coverage_complete: complete }, source_access_incomplete: sourceIncomplete, partial: partial || sourceIncomplete || !complete, complete, notice: [...notices].join(' ') || result.notice || result.freshness?.notice };
+        result = { ...result, items: [...collected.values()], count: collected.size, has_more: false, next_cursor: null, event_scope: 'window', requested_window: collectionWindow, event_collection: { ...result.event_collection, local_scan_complete: true, scan_limited: false, source_coverage_complete: complete }, source_access_incomplete: sourceIncomplete, partial: partial || sourceIncomplete || !complete, complete, notice: [...notices].join(' ') || result.notice || result.freshness?.notice };
       }
       $('content').replaceChildren(); $('notice').textContent = result.notice || result.freshness?.notice || '';
       pageCursors[page] = result.next_cursor;
@@ -241,7 +282,7 @@ export function installOperations(nativeRoot) {
         const items = [...new Map([...prior, ...result.items].map(item => [item.id, item])).values()];
         calendarPages = { key, items, pages: continuing ? calendarPages.pages + 1 : 1 };
         $('prev').hidden = $('next').hidden = true;
-        $('scope').textContent = result.event_scope === 'all' ? items.length + ' accessible event records' : items.length + ' loaded event records · ' + calendarPages.pages + ' checked pages';
+        $('scope').textContent = result.event_scope === 'window' ? items.length + ' accessible event records' : items.length + ' loaded event records · ' + calendarPages.pages + ' checked pages';
         let grid;
         if (root.classList.contains('tops-inline-calendar') && inlineOptions?.layout !== 'calendar' && typeof inlineOptions?.renderCard === 'function') {
           const container = el('div', '', inlineOptions.layout === 'board' ? 'teams-event-board' : 'teams-event-list');
@@ -257,14 +298,17 @@ export function installOperations(nativeRoot) {
           const ordered = items.map(item => ({ item, sort: order(item) })).sort((a, b) => String(a.sort.date || '9999-99-99').localeCompare(String(b.sort.date || '9999-99-99')) || a.item.title.localeCompare(b.item.title) || String(a.item.id).localeCompare(String(b.item.id)));
           for (const { item, sort } of ordered) container.append(inlineOptions.renderCard({ ...item, calendar_order: sort }, () => details(item)));
           if (!items.length) container.append(el('p', 'No matching events.', 'tops-muted'));
-          $('content').append(container); grid = container;
+          const window = result.requested_window;
+          const heading = eventListWindows.has(eventWindowScope()) ? 'Events' : 'Upcoming · next 30 days';
+          $('content').append(el('p', heading + ' · ' + date(window.calendar_from) + ' – ' + date(window.calendar_to), 'tops-muted tops-window-summary'), container); grid = container;
+          eventWindowOptions(window);
         } else {
           renderCalendar(items, result);
           grid = $('content').querySelector('.tops-event-calendar-scroll');
         }
         if (result.has_more && items.length < 90) grid.before(button('Load more events', () => { page++; return load(true); }, 'tops-calendar-more'));
         else if (result.has_more) { grid.before(el('p', items.length + ' events loaded. Continue replaces this batch; dates outside the loaded batch remain unchecked.', 'tops-muted'), button('Continue with next events', () => { calendarPages = null; page++; return load(true); }, 'tops-calendar-more')); }
-        if (result.source_access_incomplete) grid.before(el('p', result.event_scope === 'all' ? 'Some source records are unavailable. Only currently accessible events are shown.' : 'Earlier loaded pages were cleared because a current source access check was unavailable.', 'tops-muted'));
+        if (result.source_access_incomplete) grid.before(el('p', result.event_scope === 'window' ? 'Some source records are unavailable. Only currently accessible events are shown.' : 'Earlier loaded pages were cleared because a current source access check was unavailable.', 'tops-muted'));
         if (appendCalendar && prior.length) grid.before(el('p', 'Includes previously loaded pages. Refresh rechecks current access and restarts this date window.', 'tops-muted'));
       }
       else if (view === 'pipeline') renderPipeline(result.items);
@@ -325,7 +369,14 @@ export function installOperations(nativeRoot) {
     const stages = [...new Set([...area.settings.stages, ...items.map(i => i.status)])];
     for (const stage of stages) { const lane = el('section', '', 'tops-lane'), matches = items.filter(i => i.status === stage); lane.append(el('h3', label(stage) + ' · ' + matches.length)); for (const item of matches) { const card = el('div', '', 'tops-pipeline-card'); card.append(button(item.title, () => details(item)), el('p', money(item.data.amount_cents))); lane.append(card); } board.append(lane); }
   }
-  function renderCalendar(items, coverage) { renderEventCalendar($('content'), items, coverage, root.dataset.tenant, item => details(item).catch(report), root.dataset.tenant + '|' + area.id, coverage.event_scope === 'all' ? undefined : () => { page = 1; return load(); }); }
+  function renderCalendar(items, coverage) {
+    renderEventCalendar($('content'), items, coverage, root.dataset.tenant, item => details(item).catch(report), root.dataset.tenant + '|' + area.id, () => {
+      const selected = eventCalendarWindow(root.dataset.tenant + '|' + area.id), loaded = coverage.requested_window;
+      if (coverage.event_scope === 'window' && loaded && selected.calendar_from >= loaded.calendar_from && selected.calendar_to <= loaded.calendar_to) return;
+      if (window.TeamPremium?.context && !window.TeamPremium.context.ready()) return;
+      page = 1; return load();
+    });
+  }
   function renderStats(data) {
     if (area.profile === 'events') {
       const filters = el('div', '', 'tops-form'); $('content').append(filters); const year = field(filters, '', 'Reporting year', data.year, 'number'); year.min = 2000; year.max = 2100; filters.append(button('Show this year', () => { if (!year.reportValidity() || !year.value) return; statisticsYear = Number(year.value); return load(); }));

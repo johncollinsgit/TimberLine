@@ -862,7 +862,7 @@
     available: () => !workspaceNavigating && !coreAccessBlocked && !!members.length,
     request,
     readyToNavigate: () => coreNavigationReady() && workspaceReady(),
-    async open(target, current = () => true) {
+    async open(target, current = () => true, options = {}) {
       if (!coreNavigationReady() || !workspaceReady()) return false;
       if (target.kind === 'task') { await openTask(target.id); if (!current()) return false; if (target.file) { document.getElementById('teams-tab-files')?.click(); [...$('files').children].find(row => row.dataset.fileId === target.file)?.scrollIntoView({ block: 'nearest' }); } return true; }
       if (target.kind === 'project') { enterProject(target.id); await load(); await openOverview(target.id); return true; }
@@ -874,7 +874,7 @@
       if (target.kind === 'create-task') { createTask(); return true; }
       if (target.kind === 'create-project') { editProject(); return true; }
       if (target.kind === 'area' && window.TeamOperations) { await window.TeamOperations.area(target.area); return true; }
-      if (target.kind === 'operation' && window.TeamOperations) { await window.TeamOperations.open(target.area, target.id); return true; }
+      if (target.kind === 'operation' && window.TeamOperations) { await window.TeamOperations.open(target.area, target.id, options); return true; }
       if (target.kind === 'create-operation' && window.TeamOperations) { await window.TeamOperations.create(target.area); return true; }
       throw new Error('This workspace tool is not ready. Try again after it finishes loading.');
     },
