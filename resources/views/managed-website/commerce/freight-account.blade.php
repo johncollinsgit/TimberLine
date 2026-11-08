@@ -1,6 +1,6 @@
 <section class="rounded-2xl border bg-white p-6">
     <h2 class="text-xl font-bold">Freight account</h2>
-    <p class="mt-2 text-sm text-zinc-600">Use your own ShipStation v2 API account with an active freight provider connection and funded billing. Connect the carrier or broker and accept its agreements in ShipStation first. An API subscription alone does not establish freight service.</p>
+    <p class="mt-2 text-sm text-zinc-600">Use your own production ShipStation v2 API account with an active freight provider connection and funded billing. Connect the carrier or broker and accept its agreements in ShipStation first. An API subscription alone does not establish freight service. Sandbox keys cannot be used for real order freight.</p>
     <p class="mt-3 text-sm font-semibold">{{ $freightConnection?->isConnected() ? 'Account verified: '.$freightConnection->external_account_label.' · '.data_get($freightConnection->metadata, 'native_freight.provider_account_id') : 'An active freight provider account is needed for API quotes.' }}</p>
     <p class="mt-2 text-sm">{{ $bookingEnabled ? 'Booking rollout enabled. A paid order, current quote and explicit cost approval are still required.' : 'API booking is paused. You can complete setup, compare quotes, and recover existing bookings.' }}</p>
     <details class="mt-4"><summary class="cursor-pointer font-semibold">{{ $freightConnection ? 'Review or replace the account' : 'Connect a freight account' }}</summary>

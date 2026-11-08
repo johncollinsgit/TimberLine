@@ -356,6 +356,15 @@ test('provider credential errors never flash credentials into tenant sessions', 
     expect(session()->getOldInput('api_key'))->toBeNull()->and($this->provider->current($this->order)->id)->toBe($this->connection->id);
 });
 
+test('sandbox credentials cannot create real-order freight or fulfillment evidence', function (): void {
+    expect(fn () => $this->provider->connect($this->order, ['api_key' => 'TEST_fictional_shipstation_key_12345',
+        'label' => 'Sandbox fixture', 'billing_confirmed' => true], $this->actor))->toThrow(ValidationException::class, 'production ShipStation');
+    $this->connection->update(['access_token' => 'TEST_fictional_shipstation_key_12345']);
+    expect(fn () => $this->provider->quote($this->order, 1, $this->actor))->toThrow(HttpException::class);
+    expect(data_get(($this->plan)(), 'api_attempt'))->toBeNull()->and($this->order->fulfillments()->count())->toBe(0);
+    Http::assertNothingSent();
+});
+
 test('limited-access residential pickups keep both pricing requirements', function (): void {
     ($this->fakeProvider)();
     $this->freight->save($this->order, array_replace($this->spec, ['version' => 1, 'pickup_location_type' => 'limited_access', 'pickup_residential' => true]), $this->actor);

@@ -45,6 +45,9 @@ class WebsiteFreightProviderService
         if (blank($key)) {
             throw ValidationException::withMessages(['freight' => 'Enter the tenant-owned ShipStation v2 API key.']);
         }
+        if (str_starts_with(strtoupper($key), 'TEST_')) {
+            throw ValidationException::withMessages(['freight' => 'Use a production ShipStation v2 key for real order freight. Sandbox keys cannot book or fulfill paid orders in this workspace.']);
+        }
         $accounts = $this->client->accounts($key);
         $selected = $data['provider_account_id'] ?? (count($accounts) === 1 ? $accounts[0]['id'] : null);
         $account = collect($accounts)->firstWhere('id', $selected);
@@ -297,7 +300,8 @@ class WebsiteFreightProviderService
     {
         $connection = IntegrationConnection::query()->forTenantId($order->tenant_id)->where('provider', 'shipstation_freight')
             ->where('metadata->native_freight->site_id', $order->tenant_site_id)->findOrFail($id);
-        abort_unless($connection->isConnected() && filled($connection->access_token) && $this->client->validId($this->client->accountId($connection))
+        abort_unless($connection->isConnected() && filled($connection->access_token) && ! str_starts_with(strtoupper($connection->access_token), 'TEST_')
+            && $this->client->validId($this->client->accountId($connection))
             && ($fingerprint === null || hash_equals($fingerprint, $this->fingerprint($connection))), 423, 'Restore the original freight account and credentials to recover this operation. A newer connection cannot replace it.');
 
         return $connection;

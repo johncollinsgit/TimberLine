@@ -18,6 +18,9 @@ in private operations records.
    remains pending with setup guidance. Secrets are encrypted, hidden and never
    flashed into form/session errors. Every saved credential set is a new record;
    previous credentials remain available for original-account recovery.
+   This adapter accepts production keys only. ShipStation API sandbox keys use
+   the documented `TEST_` prefix and are rejected before sending order data;
+   sandbox results must never become real-order booking or fulfillment evidence.
 4. Save reviewed identical, non-hazardous US pallets, contacts, company/household
    names, phones, pickup date, freight class/NMFC and accessorials. The form stores
    total packed weight; the adapter divides by pallet count because the provider
@@ -115,6 +118,7 @@ they are not booked accounting expenses or evidence of cash settlement.
 - [Booking API schema](https://docs.shipstation.com/apis/openapi/freight/book_freight_shipment)
 - [Handling-unit semantics](https://docs.shipstation.com/freight/overview)
 - [Retrieval, tracking, documents and cancellation](https://docs.shipstation.com/freight/manage-shipments)
+- [Production and sandbox credential boundaries](https://docs.shipstation.com/authentication)
 
 The overview describes fixed inch/pound units, while the quote API schema declares
 explicit required unit fields. Requests include the explicit fields. The booking
