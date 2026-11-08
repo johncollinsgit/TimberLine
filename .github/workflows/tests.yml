@@ -1,229 +1,378 @@
 name: tests
-
-on:
+'on':
   pull_request:
     branches:
-      - develop
-      - main
-      - master
-      - workos
-      - codex/everbranch-enterprise-intake
-      - codex/enterprise-collaboration-ask
-      - codex/enterprise-workflow-briefing
-      - codex/enterprise-reviewer-operations
-      - codex/enterprise-client-provisioning
-      - codex/enterprise-prefixed-integrations
-      - codex/enterprise-painpoint-demo
-      - codex/enterprise-executive-visibility
-      - codex/enterprise-voice-finale
-      - 'codex/evergrove-payments-iphone-*'
-  workflow_dispatch:
-
+    - develop
+    - main
+    - master
+    - workos
+    - codex/everbranch-enterprise-intake
+    - codex/enterprise-collaboration-ask
+    - codex/enterprise-workflow-briefing
+    - codex/enterprise-reviewer-operations
+    - codex/enterprise-client-provisioning
+    - codex/enterprise-prefixed-integrations
+    - codex/enterprise-painpoint-demo
+    - codex/enterprise-executive-visibility
+    - codex/enterprise-voice-finale
+    - codex/evergrove-payments-iphone-*
+  workflow_dispatch: null
+  workflow_call:
+    inputs:
+      mysql_mode:
+        description: Only deploy.yml may use skip when its separate production migration gate is authoritative.
+        type: string
+        default: all
+        required: false
 concurrency:
   group: tests-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
 permissions:
   contents: read
-
 jobs:
+  build:
+    name: Build and shared contracts
+    runs-on: ubuntu-24.04
+    environment: Testing
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Check release workflow contracts
+      run: |-
+        python3 -m pip install --disable-pip-version-check PyYAML==6.0.3
+        python3 -m unittest discover -s tests/ci -p "test_parallel_release.py" -v
+    - name: Use official Ubuntu package mirrors
+      timeout-minutes: 2
+      shell: bash
+      run: |
+        python3 scripts/ci/test_ubuntu_official_mirrors.py
+        sudo python3 scripts/ci/ubuntu-official-mirrors.py
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.4'
+        tools: composer:v2
+        coverage: none
+    - name: Setup Node
+      uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+        cache: npm
+    - name: Locate Composer cache
+      id: composer-cache
+      run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+    - name: Cache Composer downloads
+      uses: actions/cache@v5
+      with:
+        path: ${{ steps.composer-cache.outputs.dir }}
+        key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php-8.4-composer-
+    - name: Configure Flux Composer auth
+      env:
+        FLUX_USERNAME: ${{ secrets.FLUX_USERNAME }}
+        FLUX_LICENSE_KEY: ${{ secrets.FLUX_LICENSE_KEY }}
+      run: composer config http-basic.composer.fluxui.dev "$FLUX_USERNAME" "$FLUX_LICENSE_KEY"
+    - name: Verify test prerequisites
+      env:
+        FLUX_USERNAME: ${{ secrets.FLUX_USERNAME }}
+        FLUX_LICENSE_KEY: ${{ secrets.FLUX_LICENSE_KEY }}
+      run: |-
+        set -euo pipefail
+        if [ ! -f phpunit.xml ] || [ ! -d tests ]; then
+          echo "::error::Release gate cannot run without phpunit.xml and tests/."
+          exit 1
+        fi
+        if grep -q '"livewire/flux"' composer.json && { [ -z "$FLUX_USERNAME" ] || [ -z "$FLUX_LICENSE_KEY" ]; }; then
+          echo "::error::Testing environment Flux credentials are required."
+          exit 1
+        fi
+    - name: Install PHP dependencies
+      run: composer install --no-interaction --prefer-dist --optimize-autoloader
+    - name: Install Node dependencies
+      run: npm ci
+    - name: Verify Team preservation and work contracts with synthetic data
+      run: |
+        npm run test:team-work-local
+        node --test tests/e2e/team-assistant-loader.test.mjs
+    - name: Verify Teams scanner protocol and operator script contracts
+      run: |
+        python3 tests/Unit/Operations/test_teams_clamav_health.py
+        bash -n scripts/ops/install-teams-clamav.sh
+    - name: Build pinned custom-label vector tracer
+      run: |
+        rustup target add x86_64-unknown-linux-musl
+        CARGO_BUILD_TARGET=x86_64-unknown-linux-musl CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld scripts/labels/install-vtracer.sh "$RUNNER_TEMP/label-tools"
+        (cd "$RUNNER_TEMP/label-tools" && sha256sum vtracer-0.6.5 > vtracer-0.6.5.sha256)
+        echo "WHOLESALE_LABEL_VTRACER=$RUNNER_TEMP/label-tools/vtracer-0.6.5" >> "$GITHUB_ENV"
+    - name: Retain pinned Linux label tracer
+      uses: actions/upload-artifact@v4
+      with:
+        name: wholesale-label-tracer-linux
+        path: |
+          ${{ runner.temp }}/label-tools/vtracer-0.6.5
+          ${{ runner.temp }}/label-tools/vtracer-0.6.5.sha256
+        if-no-files-found: error
+        retention-days: 7
+    - name: Prepare application key
+      run: |
+        cp .env.example .env
+        php artisan key:generate
+    - name: Build frontend assets
+      run: npm run build
+    - name: Validate subscription protocols against captured original-app schema
+      run: node scripts/ci/validate-subscription-shopify-api.mjs
+    - name: Retain this run's frontend build
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-build-${{ github.run_id }}-${{ github.run_attempt }}
+        path: public/build
+        if-no-files-found: error
+        retention-days: 3
+  php:
+    name: PHP 8.4 shard ${{ matrix.shard }}/6
+    needs: build
+    runs-on: ubuntu-24.04
+    environment: Testing
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.4'
+        tools: composer:v2
+        coverage: none
+    - name: Locate Composer cache
+      id: composer-cache
+      run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+    - name: Cache Composer downloads
+      uses: actions/cache@v5
+      with:
+        path: ${{ steps.composer-cache.outputs.dir }}
+        key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php-8.4-composer-
+    - name: Configure Flux Composer auth
+      env:
+        FLUX_USERNAME: ${{ secrets.FLUX_USERNAME }}
+        FLUX_LICENSE_KEY: ${{ secrets.FLUX_LICENSE_KEY }}
+      run: composer config http-basic.composer.fluxui.dev "$FLUX_USERNAME" "$FLUX_LICENSE_KEY"
+    - name: Install PHP dependencies
+      run: composer install --no-interaction --prefer-dist --optimize-autoloader
+    - name: Prepare application key
+      run: |
+        cp .env.example .env
+        php artisan key:generate
+    - name: Restore this run's frontend build
+      uses: actions/download-artifact@v4
+      with:
+        name: release-build-${{ github.run_id }}-${{ github.run_attempt }}
+        path: public/build
+    - name: Use official Ubuntu package mirrors
+      timeout-minutes: 2
+      shell: bash
+      run: |
+        python3 scripts/ci/test_ubuntu_official_mirrors.py
+        sudo python3 scripts/ci/ubuntu-official-mirrors.py
+    - name: Prepare safe PDF conversion
+      run: |
+        if ! command -v gs >/dev/null; then
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ghostscript
+        fi
+        echo "WHOLESALE_LABEL_GS=$(command -v gs)" >> "$GITHUB_ENV"
+    - name: Restore pinned Linux label tracer
+      uses: actions/download-artifact@v4
+      with:
+        name: wholesale-label-tracer-linux
+        path: ${{ runner.temp }}/label-tools
+    - name: Verify pinned label tracer
+      run: |-
+        cd "$RUNNER_TEMP/label-tools"
+        sha256sum --check vtracer-0.6.5.sha256
+        chmod +x vtracer-0.6.5
+        echo "WHOLESALE_LABEL_VTRACER=$RUNNER_TEMP/label-tools/vtracer-0.6.5" >> "$GITHUB_ENV"
+    - name: Run PHP test shard in parallel
+      run: php -d memory_limit=1G ./vendor/bin/pest --parallel --compact --shard=${{ matrix.shard }}/6
+  browser:
+    name: Browser checks (${{ matrix.group }})
+    needs: build
+    runs-on: ubuntu-24.04
+    environment: Testing
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+        - teams
+        - commerce
+        - workspace
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.4'
+        tools: composer:v2
+        coverage: none
+    - name: Locate Composer cache
+      id: composer-cache
+      run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+    - name: Cache Composer downloads
+      uses: actions/cache@v5
+      with:
+        path: ${{ steps.composer-cache.outputs.dir }}
+        key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php-8.4-composer-
+    - name: Configure Flux Composer auth
+      env:
+        FLUX_USERNAME: ${{ secrets.FLUX_USERNAME }}
+        FLUX_LICENSE_KEY: ${{ secrets.FLUX_LICENSE_KEY }}
+      run: composer config http-basic.composer.fluxui.dev "$FLUX_USERNAME" "$FLUX_LICENSE_KEY"
+    - name: Install PHP dependencies
+      run: composer install --no-interaction --prefer-dist --optimize-autoloader
+    - name: Prepare application key
+      run: |
+        cp .env.example .env
+        php artisan key:generate
+    - name: Setup Node
+      uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+        cache: npm
+    - name: Install Node dependencies
+      run: npm ci
+    - name: Restore this run's frontend build
+      uses: actions/download-artifact@v4
+      with:
+        name: release-build-${{ github.run_id }}-${{ github.run_attempt }}
+        path: public/build
+    - name: Use official Ubuntu package mirrors
+      timeout-minutes: 2
+      shell: bash
+      run: |
+        python3 scripts/ci/test_ubuntu_official_mirrors.py
+        sudo python3 scripts/ci/ubuntu-official-mirrors.py
+    - name: Install browsers for Fleet embedding checks
+      timeout-minutes: 45
+      run: npx playwright install --with-deps chromium webkit
+    - name: Verify authenticated Teams Studio and sparse event calendars
+      run: |
+        node tests/e2e/team-studio-live.browser.mjs
+        node tests/e2e/team-operations-calendar.browser.mjs
+        node tests/e2e/team-event-calendar-window.browser.mjs
+        node tests/e2e/team-browser-toolbar.browser.mjs
+        node tests/e2e/team-main-event-surface.browser.mjs
+        node tests/e2e/team-event-detail-lifecycle.browser.mjs
+        node tests/e2e/team-event-updates.browser.mjs
+        node tests/e2e/team-setup.browser.mjs
+        node tests/e2e/team-task-cards.browser.mjs
+        node tests/e2e/team-universal-search.browser.mjs
+        node tests/e2e/team-assistant.browser.mjs
+      if: matrix.group == 'teams'
+    - name: Verify Birthday Club desktop and mobile states
+      run: node tests/e2e/birthday-club-browser.mjs
+      if: matrix.group == 'commerce'
+    - name: Verify wholesale cart and private-label buyer workflows
+      run: |
+        node tests/e2e/wholesale-quantity-browser.mjs
+        node tests/e2e/wholesale-labels-browser.mjs
+        node tests/e2e/wholesale-reorder-browser.mjs
+        node tests/e2e/wholesale-cart-refresh-browser.mjs
+        node tests/e2e/wholesale-label-admin-browser.mjs
+        node tests/e2e/wholesale-decision-controls.mjs
+        node tests/e2e/wholesale-outreach-copy.mjs
+        node --test scripts/labels/batch-import.test.mjs
+        npx tsc --noEmit -p extensions/wholesale-order-notes/tsconfig.json
+      if: matrix.group == 'commerce'
+    - name: Verify wholesale checkout validation Function
+      run: |
+        npm ci --prefix extensions/wholesale-checkout-access
+        npm exec --yes --package=@shopify/cli@5.0.0 -- npm --prefix extensions/wholesale-checkout-access test -- --run
+      if: matrix.group == 'commerce'
+    - name: Verify retained bundle validation Function
+      run: |
+        npm ci --prefix extensions/everbranch-bundle-scent-validation
+        npm exec --yes --package=@shopify/cli@5.0.0 -- npm --prefix extensions/everbranch-bundle-scent-validation test -- --run
+      if: matrix.group == 'commerce'
+    - name: Verify email photo selection with fictional files
+      run: |
+        npx tsc --noEmit --jsx react-jsx --module ESNext --moduleResolution Bundler --target ES2022 --lib ES2022,DOM --esModuleInterop --skipLibCheck resources/js/shopify/wholesale-messaging.tsx
+        node tests/e2e/email-photo-selector.mjs
+      if: matrix.group == 'commerce'
+    - name: Verify native shipping desktop and mobile recovery
+      run: node --test tests/e2e/website-shipping.test.mjs
+      if: matrix.group == 'workspace'
+    - name: Verify Trajectory mobile household navigation
+      run: npm run test:trajectory:mobile
+      if: matrix.group == 'workspace'
+    - name: Verify Fleet embedding and allowance in Chromium and WebKit
+      run: npm run test:highlevel-fleet
+      if: matrix.group == 'workspace'
+    - name: Verify native parcel and freight workflows with fictional providers
+      run: |
+        npm run test:shipping
+        npm run test:freight
+      if: matrix.group == 'workspace'
+    - name: Verify conversational voice, memory and stop controls with fictional fixtures
+      run: node tests/browser/ai-voice-conversation.smoke.mjs
+      if: matrix.group == 'workspace'
+    - name: Verify workspace branch settings in Chromium and WebKit
+      run: |
+        BRANCH_SETTINGS_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Everbranch/BranchSettingsTest.php
+        GUIDED_SETTINGS_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Onboarding/WorkspaceSettingsTest.php
+        npx playwright test -c playwright.branches.config.ts
+      if: matrix.group == 'workspace'
+    - name: Verify Marketplace management in Chromium and WebKit
+      run: |
+        MARKETPLACE_CONSOLE_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Marketplace/MarketManagementTest.php
+        npx playwright test -c playwright.marketplace.config.ts
+      if: matrix.group == 'workspace'
+    - name: Verify public offer and accessibility in Chromium and WebKit
+      run: npx playwright test -c playwright.public.config.ts --grep-invert 'stable public'
+      if: matrix.group == 'workspace'
+    - name: Retain browser failure evidence
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: browser-failure-${{ matrix.group }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: test-results/
+        if-no-files-found: ignore
+        retention-days: 3
   ci:
     name: ci (8.4)
     runs-on: ubuntu-24.04
-    environment: Testing
-
+    needs:
+    - build
+    - php
+    - browser
+    if: always()
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Use official Ubuntu package mirrors
-        timeout-minutes: 2
-        shell: bash
-        run: |
-          python3 scripts/ci/test_ubuntu_official_mirrors.py
-          sudo python3 scripts/ci/ubuntu-official-mirrors.py
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          tools: composer:v2
-          coverage: none
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: npm
-
-      - name: Locate Composer cache
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Composer downloads
-        uses: actions/cache@v5
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-php-8.4-composer-
-
-      - name: Configure Flux Composer auth
-        env:
-          FLUX_USERNAME: ${{ secrets.FLUX_USERNAME }}
-          FLUX_LICENSE_KEY: ${{ secrets.FLUX_LICENSE_KEY }}
-        run: composer config http-basic.composer.fluxui.dev "$FLUX_USERNAME" "$FLUX_LICENSE_KEY"
-
-      - name: Install PHP dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader
-
-      - name: Install Node dependencies
-        run: npm ci
-
-      - name: Verify Team preservation and work contracts with synthetic data
-        run: |
-          npm run test:team-work-local
-          node --test tests/e2e/team-assistant-loader.test.mjs
-
-      - name: Verify Teams scanner protocol and operator script contracts
-        run: |
-          python3 tests/Unit/Operations/test_teams_clamav_health.py
-          bash -n scripts/ops/install-teams-clamav.sh
-
-      - name: Prepare safe PDF conversion
-        run: |
-          if ! command -v gs >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends ghostscript
-          fi
-          echo "WHOLESALE_LABEL_GS=$(command -v gs)" >> "$GITHUB_ENV"
-
-      - name: Build pinned custom-label vector tracer
-        run: |
-          rustup target add x86_64-unknown-linux-musl
-          CARGO_BUILD_TARGET=x86_64-unknown-linux-musl CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld scripts/labels/install-vtracer.sh "$RUNNER_TEMP/label-tools"
-          sha256sum "$RUNNER_TEMP/label-tools/vtracer-0.6.5" > "$RUNNER_TEMP/label-tools/vtracer-0.6.5.sha256"
-          echo "WHOLESALE_LABEL_VTRACER=$RUNNER_TEMP/label-tools/vtracer-0.6.5" >> "$GITHUB_ENV"
-
-      - name: Retain pinned Linux label tracer
-        uses: actions/upload-artifact@v4
-        with:
-          name: wholesale-label-tracer-linux
-          path: |
-            ${{ runner.temp }}/label-tools/vtracer-0.6.5
-            ${{ runner.temp }}/label-tools/vtracer-0.6.5.sha256
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Prepare application key
-        run: |
-          cp .env.example .env
-          php artisan key:generate
-
-      - name: Build frontend assets
-        run: npm run build
-
-      - name: Validate subscription protocols against captured original-app schema
-        run: node scripts/ci/validate-subscription-shopify-api.mjs
-
-      - name: Install browsers for Fleet embedding checks
-        timeout-minutes: 45
-        run: npx playwright install --with-deps chromium webkit
-
-      - name: Verify authenticated Teams Studio and sparse event calendars
-        run: |
-          node tests/e2e/team-studio-live.browser.mjs
-          node tests/e2e/team-operations-calendar.browser.mjs
-          node tests/e2e/team-event-calendar-window.browser.mjs
-          node tests/e2e/team-browser-toolbar.browser.mjs
-          node tests/e2e/team-main-event-surface.browser.mjs
-          node tests/e2e/team-event-detail-lifecycle.browser.mjs
-          node tests/e2e/team-event-updates.browser.mjs
-          node tests/e2e/team-setup.browser.mjs
-          node tests/e2e/team-task-cards.browser.mjs
-          node tests/e2e/team-universal-search.browser.mjs
-          node tests/e2e/team-assistant.browser.mjs
-
-      - name: Verify native shipping desktop and mobile recovery
-        run: node --test tests/e2e/website-shipping.test.mjs
-
-      - name: Retain Teams browser failure evidence
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: teams-browser-failure-${{ github.run_id }}-${{ github.run_attempt }}
-          path: test-results/team-*/
-          if-no-files-found: ignore
-          retention-days: 3
-
-      - name: Verify Trajectory mobile household navigation
-        run: npm run test:trajectory:mobile
-
-      - name: Verify Birthday Club desktop and mobile states
-        run: node tests/e2e/birthday-club-browser.mjs
-
-      - name: Verify wholesale cart and private-label buyer workflows
-        run: |
-          node tests/e2e/wholesale-quantity-browser.mjs
-          node tests/e2e/wholesale-labels-browser.mjs
-          node tests/e2e/wholesale-reorder-browser.mjs
-          node tests/e2e/wholesale-cart-refresh-browser.mjs
-          node tests/e2e/wholesale-label-admin-browser.mjs
-          node tests/e2e/wholesale-decision-controls.mjs
-          node tests/e2e/wholesale-outreach-copy.mjs
-          node --test scripts/labels/batch-import.test.mjs
-          npx tsc --noEmit -p extensions/wholesale-order-notes/tsconfig.json
-
-      - name: Verify wholesale checkout validation Function
-        run: |
-          npm ci --prefix extensions/wholesale-checkout-access
-          npm exec --yes --package=@shopify/cli@5.0.0 -- npm --prefix extensions/wholesale-checkout-access test -- --run
-
-      - name: Verify retained bundle validation Function
-        run: |
-          npm ci --prefix extensions/everbranch-bundle-scent-validation
-          npm exec --yes --package=@shopify/cli@5.0.0 -- npm --prefix extensions/everbranch-bundle-scent-validation test -- --run
-
-      - name: Verify Fleet embedding and allowance in Chromium and WebKit
-        run: npm run test:highlevel-fleet
-
-      - name: Verify native parcel and freight workflows with fictional providers
-        run: |
-          npm run test:shipping
-          npm run test:freight
-
-      - name: Verify email photo selection with fictional files
-        run: |
-          npx tsc --noEmit --jsx react-jsx --module ESNext --moduleResolution Bundler --target ES2022 --lib ES2022,DOM --esModuleInterop --skipLibCheck resources/js/shopify/wholesale-messaging.tsx
-          node tests/e2e/email-photo-selector.mjs
-
-      - name: Verify conversational voice, memory and stop controls with fictional fixtures
-        run: node tests/browser/ai-voice-conversation.smoke.mjs
-
-      - name: Verify workspace branch settings in Chromium and WebKit
-        run: |
-          BRANCH_SETTINGS_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Everbranch/BranchSettingsTest.php
-          GUIDED_SETTINGS_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Onboarding/WorkspaceSettingsTest.php
-          npx playwright test -c playwright.branches.config.ts
-
-      - name: Verify Marketplace management in Chromium and WebKit
-        run: |
-          MARKETPLACE_CONSOLE_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Marketplace/MarketManagementTest.php
-          npx playwright test -c playwright.marketplace.config.ts
-
-      - name: Verify public offer and accessibility in Chromium and WebKit
-        # Public browser checks share the already installed Fleet browsers.
-        # Platform-specific screenshot baselines are verified locally.
-        # No live form submission or Lighthouse evidence upload occurs here.
-        run: npx playwright test -c playwright.public.config.ts --grep-invert 'stable public'
-
-      - name: Run PHP tests in parallel
-        run: php -d memory_limit=1G ./vendor/bin/pest --parallel --compact
-
-  mysql-migration:
-    name: mysql migration recovery
+    - uses: actions/checkout@v6
+    - name: Require every validation job to succeed
+      env:
+        JOB_RESULTS: ${{ toJSON(needs) }}
+      run: python3 scripts/ci/require-job-results.py build php browser
+  mysql:
+    name: MySQL 8.4 (${{ matrix.group }})
     runs-on: ubuntu-latest
     environment: Testing
     services:
@@ -233,12 +382,8 @@ jobs:
           MYSQL_DATABASE: everbranch_ci
           MYSQL_ROOT_PASSWORD: root
         ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping --host=127.0.0.1 --password=root"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=12
+        - 3306:3306
+        options: --health-cmd="mysqladmin ping --host=127.0.0.1 --password=root" --health-interval=5s --health-timeout=5s --health-retries=12
     env:
       DB_CONNECTION: mysql
       DB_HOST: 127.0.0.1
@@ -246,169 +391,194 @@ jobs:
       DB_DATABASE: everbranch_ci
       DB_USERNAME: root
       DB_PASSWORD: root
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          tools: composer:v2
-          coverage: none
-
-      - name: Locate Composer cache
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Composer downloads
-        uses: actions/cache@v5
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-php-8.4-composer-
-
-      - name: Configure Flux Composer auth
-        env:
-          FLUX_USERNAME: ${{ secrets.FLUX_USERNAME }}
-          FLUX_LICENSE_KEY: ${{ secrets.FLUX_LICENSE_KEY }}
-        run: composer config http-basic.composer.fluxui.dev "$FLUX_USERNAME" "$FLUX_LICENSE_KEY"
-
-      - name: Install PHP dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader
-
-      - name: Prepare application key
-        run: |
-          cp .env.example .env
-          php artisan key:generate
-
-      - name: Resolve migration rehearsal baseline
-        id: migration-base
-        env:
-          PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          base_sha="$PULL_REQUEST_BASE"
-          if [ -z "$base_sha" ]; then
-            base_sha="$(git rev-parse HEAD^)"
-          fi
-          echo "sha=$base_sha" >> "$GITHUB_OUTPUT"
-
-      - name: Lint changed migrations
-        run: php scripts/ci/lint-migrations.php --base="${{ steps.migration-base.outputs.sha }}"
-
-      - name: Verify clean and partial migration paths
-        env:
-          TEAM_WORK_DISPOSABLE_MYSQL: '1'
-          SES_PLATFORM_DISPOSABLE_MYSQL: '1'
-          WHOLESALE_LABELS_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Integration/WholesaleLabelsMySqlRecoveryTest.php tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php tests/Integration/TeamFileEventTargetsMySqlRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php tests/Integration/ServiceProposalMySqlRecoveryTest.php tests/Integration/FieldMaterialReviewMySqlRecoveryTest.php --compact
-
-      - name: Verify native Teams search migration recovery
-        env:
-          TEAM_WORK_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Integration/TeamSearchMySqlRecoveryTest.php --compact
-
-      - name: Verify stockist locator migration recovery
-        env:
-          STOCKIST_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Integration/StockistLocatorMySqlRecoveryTest.php --compact
-
-      - name: Recover native Shop Pay Wallet migrations
-        env:
-          WEBSITE_WALLET_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Integration/WebsiteShopPayMySqlRecoveryTest.php --compact
-
-      - name: Verify subscription pilot evidence partial-DDL recovery
-        env:
-          POS_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Integration/BirthdayClubMySqlRecoveryTest.php tests/Integration/PosBirthdayAnnualHoldMySqlRecoveryTest.php tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php tests/Integration/SubscriptionBillingLedgerMySqlRecoveryTest.php tests/Integration/SubscriptionMemberVotesMySqlRecoveryTest.php --compact
-
-      - name: Verify POS simulation partial-DDL recovery
-        env:
-          POS_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Integration/PointOfSaleMySqlRecoveryTest.php --compact
-
-      - name: Verify payment journal and quote recovery and concurrency
-        env:
-          PAYMENTS_CORE_DISPOSABLE_MYSQL: '1'
-          APP_ENV: testing
-          APP_KEY: 'base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI='
-          CACHE_STORE: array
-          SESSION_DRIVER: array
-          MAIL_MAILER: array
-          LOG_CHANNEL: 'null'
-        run: |
-          php ./vendor/bin/pest tests/Integration/PaymentsCoreMySqlRecoveryTest.php tests/Integration/PaymentsCoreQuotesMySqlRecoveryTest.php tests/Integration/PaymentsCoreMySqlConcurrencyTest.php --compact
-          php tests/PaymentsCore/security-mysql-integrity.php
-
-      - name: Verify live POS merchant, stock, Shopify and refund boundaries
-        env:
-          POS_LIVE_DISPOSABLE_MYSQL: '1'
-          COMMERCE_RULES_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/PosLive tests/Integration/PosLiveMySqlRecoveryTest.php tests/Integration/PosLiveMySqlConcurrencyTest.php tests/Integration/CommerceRuleSetMySqlRecoveryTest.php tests/Integration/PosCandleCashMySqlRecoveryTest.php tests/Integration/CustomerAccountFenceMySqlRecoveryTest.php tests/Integration/PosShopifyDiscountMySqlRecoveryTest.php --compact
-
-      - name: Verify finished goods inventory recovery and concurrency
-        env:
-          STOCK_DISPOSABLE_MYSQL: '1'
-          POS_LIVE_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Stock tests/Integration/StockMySqlRecoveryTest.php tests/Integration/StockMySqlConcurrencyTest.php --compact
-
-      - name: Rehearse prior production schema upgrade
-        run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"
-
-      - name: Build a baseline candidate when one is missing
-        if: ${{ !hashFiles('database/schema/mysql-schema.sql') || !hashFiles('database/schema/mysql-schema.sha256') }}
-        run: scripts/ci/refresh-mysql-schema-baseline.sh
-
-      - name: Verify committed MySQL schema baseline
-        run: scripts/ci/verify-mysql-schema-baseline.sh
-
-      - name: Verify original subscription provider dispatch concurrency
-        run: php ./vendor/bin/pest tests/Integration/SubscriptionBraintreeDispatchConcurrencyTest.php tests/Integration/SubscriptionShopifyAdoptionConcurrencyTest.php tests/Integration/SubscriptionShopifyBillingConcurrencyTest.php tests/Integration/SubscriptionShopifyUpdateDurabilityTest.php tests/Integration/SubscriptionShopifyTaxPreflightTest.php --compact
-
-      - name: Verify subscription provider workflows with durable commits
-        run: php ./vendor/bin/pest tests/Integration/SubscriptionRuntime --compact
-
-      - name: Verify subscription member actions and amendment concurrency
-        run: php ./vendor/bin/pest tests/Integration/SubscriptionMemberVotingConcurrencyTest.php tests/Integration/SubscriptionMembershipReviewConcurrencyTest.php tests/Integration/SubscriptionBillingAmendmentConcurrencyTest.php tests/Integration/SubscriptionCustomerDeliveryConcurrencyTest.php --compact
-
-      - name: Verify POS register and shared-stock concurrency
-        env:
-          POS_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Integration/PointOfSaleConcurrencyTest.php --compact
-
-      - name: Verify platform SES durable claims and shared account concurrency
-        env:
-          SES_PLATFORM_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Integration/PlatformMailConcurrencyTest.php --compact
-
-      - name: Verify tenant marketing AI budget concurrency
-        run: php ./vendor/bin/pest tests/Integration/MarketingDeskConcurrencyTest.php --compact
-
-      - name: Verify platform email outbox queues and delivery evidence
-        run: php ./vendor/bin/pest tests/Integration/PlatformSesOutboxTest.php tests/Integration/SesSimulatorFixtureTest.php tests/Integration/PlatformSesSimulatorAuditTest.php --compact
-
-      - name: Verify SES durable claims and account attempt concurrency
-        run: php ./vendor/bin/pest tests/Integration/SesSendConcurrencyTest.php --compact
-
-      - name: Verify AI chat, briefing replay and approval concurrency on MySQL
-        run: php ./vendor/bin/pest tests/Integration/AiBranchMySqlConcurrencyTest.php --compact
-
-      - name: Upload MySQL schema baseline candidate
-        if: always() && hashFiles('database/schema/mysql-schema.sql') && hashFiles('database/schema/mysql-schema.sha256')
-        uses: actions/upload-artifact@v4
-        with:
-          name: mysql-schema-baseline-${{ github.run_id }}
-          path: database/schema/
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Require the reviewed baseline in source control
-        run: |
-          set -euo pipefail
-          git ls-files --error-unmatch database/schema/mysql-schema.sql database/schema/mysql-schema.sha256 >/dev/null
+    - name: Checkout code
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.4'
+        tools: composer:v2
+        coverage: none
+    - name: Locate Composer cache
+      id: composer-cache
+      run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+    - name: Cache Composer downloads
+      uses: actions/cache@v5
+      with:
+        path: ${{ steps.composer-cache.outputs.dir }}
+        key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php-8.4-composer-
+    - name: Configure Flux Composer auth
+      env:
+        FLUX_USERNAME: ${{ secrets.FLUX_USERNAME }}
+        FLUX_LICENSE_KEY: ${{ secrets.FLUX_LICENSE_KEY }}
+      run: composer config http-basic.composer.fluxui.dev "$FLUX_USERNAME" "$FLUX_LICENSE_KEY"
+    - name: Install PHP dependencies
+      run: composer install --no-interaction --prefer-dist --optimize-autoloader
+    - name: Prepare application key
+      run: |
+        cp .env.example .env
+        php artisan key:generate
+    - name: Resolve migration rehearsal baseline
+      id: migration-base
+      env:
+        PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
+      run: |
+        set -euo pipefail
+        base_sha="$PULL_REQUEST_BASE"
+        if [ -z "$base_sha" ]; then
+          base_sha="$(git rev-parse HEAD^)"
+        fi
+        echo "sha=$base_sha" >> "$GITHUB_OUTPUT"
+      if: matrix.group == 'schema'
+    - name: Lint changed migrations
+      run: php scripts/ci/lint-migrations.php --base="${{ steps.migration-base.outputs.sha }}"
+      if: matrix.group == 'schema'
+    - name: Verify clean and partial migration paths
+      env:
+        TEAM_WORK_DISPOSABLE_MYSQL: '1'
+        SES_PLATFORM_DISPOSABLE_MYSQL: '1'
+        WHOLESALE_LABELS_DISPOSABLE_MYSQL: '1'
+      run: php ./vendor/bin/pest tests/Integration/WholesaleLabelsMySqlRecoveryTest.php tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php
+        tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php
+        tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php
+        tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php
+        tests/Integration/TeamFileEventTargetsMySqlRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php
+        tests/Integration/ServiceProposalMySqlRecoveryTest.php tests/Integration/FieldMaterialReviewMySqlRecoveryTest.php --compact
+      if: matrix.group == 'schema'
+    - name: Verify native Teams search migration recovery
+      env:
+        TEAM_WORK_DISPOSABLE_MYSQL: '1'
+      run: php ./vendor/bin/pest tests/Integration/TeamSearchMySqlRecoveryTest.php --compact
+      if: matrix.group == 'schema'
+    - name: Verify stockist locator migration recovery
+      env:
+        STOCKIST_DISPOSABLE_MYSQL: '1'
+      run: php ./vendor/bin/pest tests/Integration/StockistLocatorMySqlRecoveryTest.php --compact
+      if: matrix.group == 'schema'
+    - name: Recover native Shop Pay Wallet migrations
+      env:
+        WEBSITE_WALLET_DISPOSABLE_MYSQL: '1'
+      run: php ./vendor/bin/pest tests/Integration/WebsiteShopPayMySqlRecoveryTest.php --compact
+      if: matrix.group == 'schema'
+    - name: Verify subscription pilot evidence partial-DDL recovery
+      env:
+        POS_DISPOSABLE_MYSQL: '1'
+      run: php ./vendor/bin/pest tests/Integration/BirthdayClubMySqlRecoveryTest.php tests/Integration/PosBirthdayAnnualHoldMySqlRecoveryTest.php
+        tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php tests/Integration/SubscriptionBillingLedgerMySqlRecoveryTest.php
+        tests/Integration/SubscriptionMemberVotesMySqlRecoveryTest.php --compact
+      if: matrix.group == 'schema'
+    - name: Verify POS simulation partial-DDL recovery
+      env:
+        POS_DISPOSABLE_MYSQL: '1'
+      run: php ./vendor/bin/pest tests/Integration/PointOfSaleMySqlRecoveryTest.php --compact
+      if: matrix.group == 'schema'
+    - name: Verify payment journal and quote recovery and concurrency
+      env:
+        PAYMENTS_CORE_DISPOSABLE_MYSQL: '1'
+        APP_ENV: testing
+        APP_KEY: base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=
+        CACHE_STORE: array
+        SESSION_DRIVER: array
+        MAIL_MAILER: array
+        LOG_CHANNEL: 'null'
+      run: |
+        php ./vendor/bin/pest tests/Integration/PaymentsCoreMySqlRecoveryTest.php tests/Integration/PaymentsCoreQuotesMySqlRecoveryTest.php tests/Integration/PaymentsCoreMySqlConcurrencyTest.php --compact
+        php tests/PaymentsCore/security-mysql-integrity.php
+      if: matrix.group == 'schema'
+    - name: Verify live POS merchant, stock, Shopify and refund boundaries
+      env:
+        POS_LIVE_DISPOSABLE_MYSQL: '1'
+        COMMERCE_RULES_DISPOSABLE_MYSQL: '1'
+      run: php ./vendor/bin/pest tests/PosLive tests/Integration/PosLiveMySqlRecoveryTest.php tests/Integration/PosLiveMySqlConcurrencyTest.php
+        tests/Integration/CommerceRuleSetMySqlRecoveryTest.php tests/Integration/PosCandleCashMySqlRecoveryTest.php tests/Integration/CustomerAccountFenceMySqlRecoveryTest.php
+        tests/Integration/PosShopifyDiscountMySqlRecoveryTest.php --compact
+      if: matrix.group == 'schema'
+    - name: Verify finished goods inventory recovery and concurrency
+      env:
+        STOCK_DISPOSABLE_MYSQL: '1'
+        POS_LIVE_DISPOSABLE_MYSQL: '1'
+      run: php ./vendor/bin/pest tests/Stock tests/Integration/StockMySqlRecoveryTest.php tests/Integration/StockMySqlConcurrencyTest.php --compact
+      if: matrix.group == 'schema'
+    - name: Rehearse prior production schema upgrade
+      run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"
+      if: matrix.group == 'schema'
+    - name: Build a baseline candidate when one is missing
+      run: scripts/ci/refresh-mysql-schema-baseline.sh
+      if: matrix.group == 'schema' && (!hashFiles('database/schema/mysql-schema.sql') || !hashFiles('database/schema/mysql-schema.sha256'))
+    - name: Verify committed MySQL schema baseline
+      run: scripts/ci/verify-mysql-schema-baseline.sh
+      if: matrix.group == 'schema'
+    - name: Upload MySQL schema baseline candidate
+      uses: actions/upload-artifact@v4
+      with:
+        name: mysql-schema-baseline-${{ github.run_id }}
+        path: database/schema/
+        if-no-files-found: error
+        retention-days: 7
+      if: matrix.group == 'schema' && (always() && hashFiles('database/schema/mysql-schema.sql') && hashFiles('database/schema/mysql-schema.sha256'))
+    - name: Require the reviewed baseline in source control
+      run: |
+        set -euo pipefail
+        git ls-files --error-unmatch database/schema/mysql-schema.sql database/schema/mysql-schema.sha256 >/dev/null
+      if: matrix.group == 'schema'
+    - name: Verify subscription provider workflows with durable commits
+      run: php ./vendor/bin/pest tests/Integration/SubscriptionRuntime --compact
+      if: matrix.group == 'subscriptions'
+    - name: Verify platform email outbox queues and delivery evidence
+      run: php ./vendor/bin/pest tests/Integration/PlatformSesOutboxTest.php tests/Integration/SesSimulatorFixtureTest.php tests/Integration/PlatformSesSimulatorAuditTest.php
+        --compact
+      if: matrix.group == 'mail'
+    - name: Verify original subscription provider dispatch concurrency
+      run: php ./vendor/bin/pest tests/Integration/SubscriptionBraintreeDispatchConcurrencyTest.php tests/Integration/SubscriptionShopifyAdoptionConcurrencyTest.php
+        tests/Integration/SubscriptionShopifyBillingConcurrencyTest.php tests/Integration/SubscriptionShopifyUpdateDurabilityTest.php tests/Integration/SubscriptionShopifyTaxPreflightTest.php
+        --compact
+      if: matrix.group == 'concurrency'
+    - name: Verify subscription member actions and amendment concurrency
+      run: php ./vendor/bin/pest tests/Integration/SubscriptionMemberVotingConcurrencyTest.php tests/Integration/SubscriptionMembershipReviewConcurrencyTest.php
+        tests/Integration/SubscriptionBillingAmendmentConcurrencyTest.php tests/Integration/SubscriptionCustomerDeliveryConcurrencyTest.php --compact
+      if: matrix.group == 'concurrency'
+    - name: Verify POS register and shared-stock concurrency
+      env:
+        POS_DISPOSABLE_MYSQL: '1'
+      run: php ./vendor/bin/pest tests/Integration/PointOfSaleConcurrencyTest.php --compact
+      if: matrix.group == 'concurrency'
+    - name: Verify platform SES durable claims and shared account concurrency
+      env:
+        SES_PLATFORM_DISPOSABLE_MYSQL: '1'
+      run: php ./vendor/bin/pest tests/Integration/PlatformMailConcurrencyTest.php --compact
+      if: matrix.group == 'concurrency'
+    - name: Verify tenant marketing AI budget concurrency
+      run: php ./vendor/bin/pest tests/Integration/MarketingDeskConcurrencyTest.php --compact
+      if: matrix.group == 'concurrency'
+    - name: Verify SES durable claims and account attempt concurrency
+      run: php ./vendor/bin/pest tests/Integration/SesSendConcurrencyTest.php --compact
+      if: matrix.group == 'concurrency'
+    - name: Verify AI chat, briefing replay and approval concurrency on MySQL
+      run: php ./vendor/bin/pest tests/Integration/AiBranchMySqlConcurrencyTest.php --compact
+      if: matrix.group == 'concurrency'
+    if: inputs.mysql_mode != 'skip'
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+        - schema
+        - subscriptions
+        - mail
+        - concurrency
+  mysql-migration:
+    name: mysql migration recovery
+    runs-on: ubuntu-24.04
+    needs:
+    - mysql
+    if: always() && inputs.mysql_mode != 'skip'
+    steps:
+    - uses: actions/checkout@v6
+    - name: Require every validation job to succeed
+      env:
+        JOB_RESULTS: ${{ toJSON(needs) }}
+      run: python3 scripts/ci/require-job-results.py mysql

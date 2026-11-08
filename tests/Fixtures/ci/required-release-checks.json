@@ -1,0 +1,322 @@
+[
+  {
+    "name": "Use official Ubuntu package mirrors",
+    "run": "python3 scripts/ci/test_ubuntu_official_mirrors.py\nsudo python3 scripts/ci/ubuntu-official-mirrors.py\n",
+    "env": {}
+  },
+  {
+    "name": "Locate Composer cache",
+    "run": "echo \"dir=$(composer config cache-files-dir)\" >> \"$GITHUB_OUTPUT\"",
+    "env": {}
+  },
+  {
+    "name": "Configure Flux Composer auth",
+    "run": "composer config http-basic.composer.fluxui.dev \"$FLUX_USERNAME\" \"$FLUX_LICENSE_KEY\"",
+    "env": {
+      "FLUX_USERNAME": "${{ secrets.FLUX_USERNAME }}",
+      "FLUX_LICENSE_KEY": "${{ secrets.FLUX_LICENSE_KEY }}"
+    }
+  },
+  {
+    "name": "Install PHP dependencies",
+    "run": "composer install --no-interaction --prefer-dist --optimize-autoloader",
+    "env": {}
+  },
+  {
+    "name": "Install Node dependencies",
+    "run": "npm ci",
+    "env": {}
+  },
+  {
+    "name": "Verify Team preservation and work contracts with synthetic data",
+    "run": "npm run test:team-work-local\nnode --test tests/e2e/team-assistant-loader.test.mjs\n",
+    "env": {}
+  },
+  {
+    "name": "Verify Teams scanner protocol and operator script contracts",
+    "run": "python3 tests/Unit/Operations/test_teams_clamav_health.py\nbash -n scripts/ops/install-teams-clamav.sh\n",
+    "env": {}
+  },
+  {
+    "name": "Prepare safe PDF conversion",
+    "run": "if ! command -v gs >/dev/null; then\n  sudo apt-get update\n  sudo apt-get install -y --no-install-recommends ghostscript\nfi\necho \"WHOLESALE_LABEL_GS=$(command -v gs)\" >> \"$GITHUB_ENV\"\n",
+    "env": {}
+  },
+  {
+    "name": "Build pinned custom-label vector tracer",
+    "run": "rustup target add x86_64-unknown-linux-musl\nCARGO_BUILD_TARGET=x86_64-unknown-linux-musl CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld scripts/labels/install-vtracer.sh \"$RUNNER_TEMP/label-tools\"\nsha256sum \"$RUNNER_TEMP/label-tools/vtracer-0.6.5\" > \"$RUNNER_TEMP/label-tools/vtracer-0.6.5.sha256\"\necho \"WHOLESALE_LABEL_VTRACER=$RUNNER_TEMP/label-tools/vtracer-0.6.5\" >> \"$GITHUB_ENV\"\n",
+    "env": {}
+  },
+  {
+    "name": "Prepare application key",
+    "run": "cp .env.example .env\nphp artisan key:generate\n",
+    "env": {}
+  },
+  {
+    "name": "Build frontend assets",
+    "run": "npm run build",
+    "env": {}
+  },
+  {
+    "name": "Validate subscription protocols against captured original-app schema",
+    "run": "node scripts/ci/validate-subscription-shopify-api.mjs",
+    "env": {}
+  },
+  {
+    "name": "Install browsers for Fleet embedding checks",
+    "run": "npx playwright install --with-deps chromium webkit",
+    "env": {}
+  },
+  {
+    "name": "Verify authenticated Teams Studio and sparse event calendars",
+    "run": "node tests/e2e/team-studio-live.browser.mjs\nnode tests/e2e/team-operations-calendar.browser.mjs\nnode tests/e2e/team-event-calendar-window.browser.mjs\nnode tests/e2e/team-browser-toolbar.browser.mjs\nnode tests/e2e/team-main-event-surface.browser.mjs\nnode tests/e2e/team-event-detail-lifecycle.browser.mjs\nnode tests/e2e/team-event-updates.browser.mjs\nnode tests/e2e/team-setup.browser.mjs\nnode tests/e2e/team-task-cards.browser.mjs\nnode tests/e2e/team-universal-search.browser.mjs\nnode tests/e2e/team-assistant.browser.mjs\n",
+    "env": {}
+  },
+  {
+    "name": "Verify native shipping desktop and mobile recovery",
+    "run": "node --test tests/e2e/website-shipping.test.mjs",
+    "env": {}
+  },
+  {
+    "name": "Verify Trajectory mobile household navigation",
+    "run": "npm run test:trajectory:mobile",
+    "env": {}
+  },
+  {
+    "name": "Verify Birthday Club desktop and mobile states",
+    "run": "node tests/e2e/birthday-club-browser.mjs",
+    "env": {}
+  },
+  {
+    "name": "Verify wholesale cart and private-label buyer workflows",
+    "run": "node tests/e2e/wholesale-quantity-browser.mjs\nnode tests/e2e/wholesale-labels-browser.mjs\nnode tests/e2e/wholesale-reorder-browser.mjs\nnode tests/e2e/wholesale-cart-refresh-browser.mjs\nnode tests/e2e/wholesale-label-admin-browser.mjs\nnode tests/e2e/wholesale-decision-controls.mjs\nnode tests/e2e/wholesale-outreach-copy.mjs\nnode --test scripts/labels/batch-import.test.mjs\nnpx tsc --noEmit -p extensions/wholesale-order-notes/tsconfig.json\n",
+    "env": {}
+  },
+  {
+    "name": "Verify wholesale checkout validation Function",
+    "run": "npm ci --prefix extensions/wholesale-checkout-access\nnpm exec --yes --package=@shopify/cli@5.0.0 -- npm --prefix extensions/wholesale-checkout-access test -- --run\n",
+    "env": {}
+  },
+  {
+    "name": "Verify retained bundle validation Function",
+    "run": "npm ci --prefix extensions/everbranch-bundle-scent-validation\nnpm exec --yes --package=@shopify/cli@5.0.0 -- npm --prefix extensions/everbranch-bundle-scent-validation test -- --run\n",
+    "env": {}
+  },
+  {
+    "name": "Verify Fleet embedding and allowance in Chromium and WebKit",
+    "run": "npm run test:highlevel-fleet",
+    "env": {}
+  },
+  {
+    "name": "Verify native parcel and freight workflows with fictional providers",
+    "run": "npm run test:shipping\nnpm run test:freight\n",
+    "env": {}
+  },
+  {
+    "name": "Verify email photo selection with fictional files",
+    "run": "npx tsc --noEmit --jsx react-jsx --module ESNext --moduleResolution Bundler --target ES2022 --lib ES2022,DOM --esModuleInterop --skipLibCheck resources/js/shopify/wholesale-messaging.tsx\nnode tests/e2e/email-photo-selector.mjs\n",
+    "env": {}
+  },
+  {
+    "name": "Verify conversational voice, memory and stop controls with fictional fixtures",
+    "run": "node tests/browser/ai-voice-conversation.smoke.mjs",
+    "env": {}
+  },
+  {
+    "name": "Verify workspace branch settings in Chromium and WebKit",
+    "run": "BRANCH_SETTINGS_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Everbranch/BranchSettingsTest.php\nGUIDED_SETTINGS_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Onboarding/WorkspaceSettingsTest.php\nnpx playwright test -c playwright.branches.config.ts\n",
+    "env": {}
+  },
+  {
+    "name": "Verify Marketplace management in Chromium and WebKit",
+    "run": "MARKETPLACE_CONSOLE_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Marketplace/MarketManagementTest.php\nnpx playwright test -c playwright.marketplace.config.ts\n",
+    "env": {}
+  },
+  {
+    "name": "Verify public offer and accessibility in Chromium and WebKit",
+    "run": "npx playwright test -c playwright.public.config.ts --grep-invert 'stable public'",
+    "env": {}
+  },
+  {
+    "name": "Run PHP tests in parallel",
+    "run": "php -d memory_limit=1G ./vendor/bin/pest --parallel --compact",
+    "env": {}
+  },
+  {
+    "name": "Locate Composer cache",
+    "run": "echo \"dir=$(composer config cache-files-dir)\" >> \"$GITHUB_OUTPUT\"",
+    "env": {}
+  },
+  {
+    "name": "Configure Flux Composer auth",
+    "run": "composer config http-basic.composer.fluxui.dev \"$FLUX_USERNAME\" \"$FLUX_LICENSE_KEY\"",
+    "env": {
+      "FLUX_USERNAME": "${{ secrets.FLUX_USERNAME }}",
+      "FLUX_LICENSE_KEY": "${{ secrets.FLUX_LICENSE_KEY }}"
+    }
+  },
+  {
+    "name": "Install PHP dependencies",
+    "run": "composer install --no-interaction --prefer-dist --optimize-autoloader",
+    "env": {}
+  },
+  {
+    "name": "Prepare application key",
+    "run": "cp .env.example .env\nphp artisan key:generate\n",
+    "env": {}
+  },
+  {
+    "name": "Resolve migration rehearsal baseline",
+    "run": "set -euo pipefail\nbase_sha=\"$PULL_REQUEST_BASE\"\nif [ -z \"$base_sha\" ]; then\n  base_sha=\"$(git rev-parse HEAD^)\"\nfi\necho \"sha=$base_sha\" >> \"$GITHUB_OUTPUT\"\n",
+    "env": {
+      "PULL_REQUEST_BASE": "${{ github.event.pull_request.base.sha }}"
+    }
+  },
+  {
+    "name": "Lint changed migrations",
+    "run": "php scripts/ci/lint-migrations.php --base=\"${{ steps.migration-base.outputs.sha }}\"",
+    "env": {}
+  },
+  {
+    "name": "Verify clean and partial migration paths",
+    "run": "php ./vendor/bin/pest tests/Integration/WholesaleLabelsMySqlRecoveryTest.php tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php tests/Integration/TeamFileEventTargetsMySqlRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php tests/Integration/ServiceProposalMySqlRecoveryTest.php tests/Integration/FieldMaterialReviewMySqlRecoveryTest.php --compact",
+    "env": {
+      "TEAM_WORK_DISPOSABLE_MYSQL": "1",
+      "SES_PLATFORM_DISPOSABLE_MYSQL": "1",
+      "WHOLESALE_LABELS_DISPOSABLE_MYSQL": "1"
+    }
+  },
+  {
+    "name": "Verify native Teams search migration recovery",
+    "run": "php ./vendor/bin/pest tests/Integration/TeamSearchMySqlRecoveryTest.php --compact",
+    "env": {
+      "TEAM_WORK_DISPOSABLE_MYSQL": "1"
+    }
+  },
+  {
+    "name": "Verify stockist locator migration recovery",
+    "run": "php ./vendor/bin/pest tests/Integration/StockistLocatorMySqlRecoveryTest.php --compact",
+    "env": {
+      "STOCKIST_DISPOSABLE_MYSQL": "1"
+    }
+  },
+  {
+    "name": "Recover native Shop Pay Wallet migrations",
+    "run": "php ./vendor/bin/pest tests/Integration/WebsiteShopPayMySqlRecoveryTest.php --compact",
+    "env": {
+      "WEBSITE_WALLET_DISPOSABLE_MYSQL": "1"
+    }
+  },
+  {
+    "name": "Verify subscription pilot evidence partial-DDL recovery",
+    "run": "php ./vendor/bin/pest tests/Integration/BirthdayClubMySqlRecoveryTest.php tests/Integration/PosBirthdayAnnualHoldMySqlRecoveryTest.php tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php tests/Integration/SubscriptionBillingLedgerMySqlRecoveryTest.php tests/Integration/SubscriptionMemberVotesMySqlRecoveryTest.php --compact",
+    "env": {
+      "POS_DISPOSABLE_MYSQL": "1"
+    }
+  },
+  {
+    "name": "Verify POS simulation partial-DDL recovery",
+    "run": "php ./vendor/bin/pest tests/Integration/PointOfSaleMySqlRecoveryTest.php --compact",
+    "env": {
+      "POS_DISPOSABLE_MYSQL": "1"
+    }
+  },
+  {
+    "name": "Verify payment journal and quote recovery and concurrency",
+    "run": "php ./vendor/bin/pest tests/Integration/PaymentsCoreMySqlRecoveryTest.php tests/Integration/PaymentsCoreQuotesMySqlRecoveryTest.php tests/Integration/PaymentsCoreMySqlConcurrencyTest.php --compact\nphp tests/PaymentsCore/security-mysql-integrity.php\n",
+    "env": {
+      "PAYMENTS_CORE_DISPOSABLE_MYSQL": "1",
+      "APP_ENV": "testing",
+      "APP_KEY": "base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=",
+      "CACHE_STORE": "array",
+      "SESSION_DRIVER": "array",
+      "MAIL_MAILER": "array",
+      "LOG_CHANNEL": "null"
+    }
+  },
+  {
+    "name": "Verify live POS merchant, stock, Shopify and refund boundaries",
+    "run": "php ./vendor/bin/pest tests/PosLive tests/Integration/PosLiveMySqlRecoveryTest.php tests/Integration/PosLiveMySqlConcurrencyTest.php tests/Integration/CommerceRuleSetMySqlRecoveryTest.php tests/Integration/PosCandleCashMySqlRecoveryTest.php tests/Integration/CustomerAccountFenceMySqlRecoveryTest.php tests/Integration/PosShopifyDiscountMySqlRecoveryTest.php --compact",
+    "env": {
+      "POS_LIVE_DISPOSABLE_MYSQL": "1",
+      "COMMERCE_RULES_DISPOSABLE_MYSQL": "1"
+    }
+  },
+  {
+    "name": "Verify finished goods inventory recovery and concurrency",
+    "run": "php ./vendor/bin/pest tests/Stock tests/Integration/StockMySqlRecoveryTest.php tests/Integration/StockMySqlConcurrencyTest.php --compact",
+    "env": {
+      "STOCK_DISPOSABLE_MYSQL": "1",
+      "POS_LIVE_DISPOSABLE_MYSQL": "1"
+    }
+  },
+  {
+    "name": "Rehearse prior production schema upgrade",
+    "run": "scripts/ci/rehearse-migrations.sh \"${{ steps.migration-base.outputs.sha }}\"",
+    "env": {}
+  },
+  {
+    "name": "Build a baseline candidate when one is missing",
+    "run": "scripts/ci/refresh-mysql-schema-baseline.sh",
+    "env": {}
+  },
+  {
+    "name": "Verify committed MySQL schema baseline",
+    "run": "scripts/ci/verify-mysql-schema-baseline.sh",
+    "env": {}
+  },
+  {
+    "name": "Verify original subscription provider dispatch concurrency",
+    "run": "php ./vendor/bin/pest tests/Integration/SubscriptionBraintreeDispatchConcurrencyTest.php tests/Integration/SubscriptionShopifyAdoptionConcurrencyTest.php tests/Integration/SubscriptionShopifyBillingConcurrencyTest.php tests/Integration/SubscriptionShopifyUpdateDurabilityTest.php tests/Integration/SubscriptionShopifyTaxPreflightTest.php --compact",
+    "env": {}
+  },
+  {
+    "name": "Verify subscription provider workflows with durable commits",
+    "run": "php ./vendor/bin/pest tests/Integration/SubscriptionRuntime --compact",
+    "env": {}
+  },
+  {
+    "name": "Verify subscription member actions and amendment concurrency",
+    "run": "php ./vendor/bin/pest tests/Integration/SubscriptionMemberVotingConcurrencyTest.php tests/Integration/SubscriptionMembershipReviewConcurrencyTest.php tests/Integration/SubscriptionBillingAmendmentConcurrencyTest.php tests/Integration/SubscriptionCustomerDeliveryConcurrencyTest.php --compact",
+    "env": {}
+  },
+  {
+    "name": "Verify POS register and shared-stock concurrency",
+    "run": "php ./vendor/bin/pest tests/Integration/PointOfSaleConcurrencyTest.php --compact",
+    "env": {
+      "POS_DISPOSABLE_MYSQL": "1"
+    }
+  },
+  {
+    "name": "Verify platform SES durable claims and shared account concurrency",
+    "run": "php ./vendor/bin/pest tests/Integration/PlatformMailConcurrencyTest.php --compact",
+    "env": {
+      "SES_PLATFORM_DISPOSABLE_MYSQL": "1"
+    }
+  },
+  {
+    "name": "Verify tenant marketing AI budget concurrency",
+    "run": "php ./vendor/bin/pest tests/Integration/MarketingDeskConcurrencyTest.php --compact",
+    "env": {}
+  },
+  {
+    "name": "Verify platform email outbox queues and delivery evidence",
+    "run": "php ./vendor/bin/pest tests/Integration/PlatformSesOutboxTest.php tests/Integration/SesSimulatorFixtureTest.php tests/Integration/PlatformSesSimulatorAuditTest.php --compact",
+    "env": {}
+  },
+  {
+    "name": "Verify SES durable claims and account attempt concurrency",
+    "run": "php ./vendor/bin/pest tests/Integration/SesSendConcurrencyTest.php --compact",
+    "env": {}
+  },
+  {
+    "name": "Verify AI chat, briefing replay and approval concurrency on MySQL",
+    "run": "php ./vendor/bin/pest tests/Integration/AiBranchMySqlConcurrencyTest.php --compact",
+    "env": {}
+  },
+  {
+    "name": "Require the reviewed baseline in source control",
+    "run": "set -euo pipefail\ngit ls-files --error-unmatch database/schema/mysql-schema.sql database/schema/mysql-schema.sha256 >/dev/null\n",
+    "env": {}
+  }
+]

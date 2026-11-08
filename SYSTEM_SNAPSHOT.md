@@ -1,3 +1,13 @@
+## Parallel release validation (November 8; candidate)
+
+Protected PR checks retain their names and full coverage while running six PHP
+shards, three browser groups and four isolated MySQL groups. Aggregate checks
+require every prerequisite to succeed; schema and CI changes retain production
+migration rehearsal and exact-SHA Forge readiness. Routine local verification
+is scoped to the change. `README_FOR_AGENTS.md` is the concise entry point;
+detailed domain contracts are preserved in `docs/agents/operating-reference.md`.
+See `docs/operations/parallel-release-validation.md` for coverage and operation.
+
 ## Event detail workspace and company setup (November 8)
 
 Event details use a wider card layout and sticky update composer, with protected
