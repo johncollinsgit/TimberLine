@@ -134,7 +134,19 @@ export function installOperations(nativeRoot) {
     },
     area: async areaId => { const target = areas.find(a => a.id === areaId); if (!target) throw new Error('This area is no longer accessible.'); await openArea(target); },
     create: async areaId => { const target = areas.find(a => a.id === areaId); if (!target) throw new Error('This area is no longer accessible.'); await openArea(target); edit(); },
-    open: async (areaId, recordId) => { const target = areas.find(a => a.id === areaId); if (!target) throw new Error('This area is no longer accessible.'); await openArea(target); await details({ id: recordId, title: 'Work details' }); },
+    open: async (areaId, recordId) => {
+      await areasReady;
+      if (identityLost) throw new Error('Verify the original account before opening work details.');
+      const target = areas.find(a => a.id === areaId);
+      if (!target) throw new Error('This area is no longer accessible.');
+      if (window.TeamPremium?.context && !window.TeamPremium.context.ready()) return;
+      const sameInlineEvents = target.profile === 'events' && area?.id === target.id && !$('panel').hidden
+        && root.classList.contains('tops-inline-calendar') && !!root.closest('#tw-list');
+      const returnTo = sameInlineEvents && document.activeElement?.closest('[data-team-universal-search]')
+        ? document.querySelector('[data-team-layout][aria-selected="true"]') : null;
+      if (!sameInlineEvents) await openArea(target);
+      await details({ id: recordId, title: 'Work details' }, returnTo);
+    },
     renderPersonal: async (context, workPage = 1) => {
       calendarEntry(context);
       const node = $('personal'), mode = document.getElementById('tw-mode').value, q = document.getElementById('tw-search').value.trim(), ticket = ++personalTicket;
@@ -316,8 +328,9 @@ export function installOperations(nativeRoot) {
       if (admin && view === 'prospects') for (const action of ['qualify', 'request_research', 'mark_do_not_contact', 'convert']) body.append(button(label(action), async () => { await api('/wholesale/prospect', { method: 'POST', body: { id: item.id, action } }); closeDetail(); await load(); }));
     }), label(item.status), [item.city, item.state, item.due_at ? date(item.due_at) : '', item.amount !== undefined ? '$' + item.amount : ''].filter(Boolean).join(' · ')]));
   }
-  async function details(item) {
+  async function details(item, returnTo = null) {
     const captured = area.id, body = dialog(item.title), sequence = detailSequence; note('Checking current access…', body);
+    if (returnTo?.isConnected) returnFocus = returnTo;
     const current = () => sequence === detailSequence && captured === area?.id && !identityLost && $('detail').open && body.isConnected && $('detail-body').firstElementChild === body;
     let record;
     try { record = await api('/operations/records/' + item.id); } catch (error) { if (current()) throw error; return; }
