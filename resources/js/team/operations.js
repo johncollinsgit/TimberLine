@@ -318,6 +318,7 @@ export function installOperations(nativeRoot) {
   async function details(item) {
     const captured = area.id, body = dialog(item.title); note('Checking current access…', body);
     const record = await api('/operations/records/' + item.id); if (captured !== area.id || !$('detail').open) return;
+    $('detail-title').textContent = record.title;
     body.replaceChildren(); note(label(record.status) + ' · ' + (record.source ? 'Connected source · read only' : 'Teams draft') + ' · Version ' + record.version, body);
     if (record.data.source_url) { const a = el('a', 'Open in Asana'); a.href = record.data.source_url; a.target = '_blank'; a.rel = 'noopener noreferrer'; if (a.href.startsWith('https://app.asana.com/')) body.append(a); }
     const data = Object.entries(record.data).filter(([key, value]) => !key.startsWith('_') && !['source_url', 'fields', 'original_notes', 'source_values', 'costs', 'schedule_complete', 'calendar_color'].includes(key) && value !== null && typeof value !== 'object');

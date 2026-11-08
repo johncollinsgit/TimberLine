@@ -64,6 +64,9 @@ try {
     assert.equal(await page.locator('#tw-controls-panel .tops-event-calendar-controls').isVisible(), false, 'Calendar view options stay inside Controls');
     assert.equal(await page.locator('#tw-list .tops-inline-calendar-nav').count(), 1); await page.screenshot({ path: join(evidence, `main-calendar-${name}.png`) });
     await page.locator('#tw-filter-toggle').click(); assert.equal(await page.locator('#tw-controls-panel .tops-event-calendar-controls').isVisible(), true); await page.locator('#tw-filter-toggle').click();
+    await page.evaluate(({ areaId, recordId }) => window.TeamOperations.open(areaId, recordId), { areaId: fixture.area_id, recordId: fixture.event_id });
+    await page.locator('#tops-detail').getByRole('heading', { name: target }).waitFor();
+    await page.locator('#tops-detail-close').click();
     assert.deepEqual(errors, []);
     await context.close();
     const otherContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
