@@ -17,7 +17,7 @@ export function installOperations(nativeRoot) {
   let areas = [], members = [], area, view = 'overview', page = 1, serial = 0, returnFocus, draft, busy = false, identityLost = false, timer, searchTimer, editorSequence = 0, pageCursors = [null], statisticsYear = new Date().getFullYear();
   const drafts = new Map();
   const emailDrafts = new Map();
-  let calendarPages = null, areasReady, inlineEpoch = 0;
+  let calendarPages = null, areasReady, inlineEpoch = 0, inlineOptions = null;
   const originalPosition = document.createComment('Teams work area position');
   root.before(originalPosition);
   const eventTasks = installEventTasks({ api, el, button, field, dialog, section, note, area: () => area, content: $('content'), navigate });
@@ -100,7 +100,7 @@ export function installOperations(nativeRoot) {
     entry.onclick = () => { if (!identityLost && window.TeamPremium?.context?.ready()) { $('search').value = ''; openArea(target, 'calendar').catch(report); } };
   }
   function restoreInline() {
-    inlineEpoch++; serial++; calendarPages = null; $('content').replaceChildren();
+    inlineEpoch++; serial++; calendarPages = null; inlineOptions = null; document.getElementById('tops-inline-options')?.remove(); $('content').replaceChildren();
     if ($('detail').open) $('detail').close();
     root.classList.remove('tops-inline-calendar'); originalPosition.after(root);
   }
@@ -110,16 +110,19 @@ export function installOperations(nativeRoot) {
   document.querySelector('.teams-sidebar')?.addEventListener('click', event => { if (event.target.closest('[data-team-mode],#teams-create,#teams-project-list button,#teams-favorite-list button')) native(); });
   let personalTicket = 0;
   window.TeamOperations = {
-    mountEventCalendar: async (host, options = {}) => {
+    mountEventSurface: async (host, options = {}) => {
       const ticket = ++inlineEpoch;
       await areasReady;
       if (ticket !== inlineEpoch || !host.isConnected || identityLost) return false;
       const target = areas.find(item => item.id === options.areaId && item.profile === 'events') || areas.find(item => item.profile === 'events');
       if (!target) return false;
       root.classList.add('tops-inline-calendar'); host.append(root); $('search').value = String(options.query || '').trim();
-      await openArea(target, 'calendar', true);
+      inlineOptions = { layout: ['list', 'board', 'calendar'].includes(options.layout) ? options.layout : 'calendar', renderCard: options.renderCard };
+      if (inlineOptions.layout !== 'calendar') document.getElementById('tops-inline-options')?.remove();
+      await openArea(target, inlineOptions.layout === 'calendar' ? 'calendar' : 'events', true);
       return ticket === inlineEpoch && root.classList.contains('tops-inline-calendar');
     },
+    mountEventCalendar: (...args) => window.TeamOperations.mountEventSurface(...args),
     unmountEventCalendar: () => { if (!root.classList.contains('tops-inline-calendar')) { inlineEpoch++; return; } restoreInline(); $('panel').hidden = true; },
     settingsAreas: () => identityLost ? [] : areas.map(item => ({ id: item.id, name: item.name })),
     openSettingsArea: async (areaId, settingsView) => {
@@ -225,6 +228,11 @@ export function installOperations(nativeRoot) {
   }
   function renderRecords(items, parent = $('content')) {
     if (!items?.length) { empty('Ready for connected work', 'Create a draft or choose a source in Connections. Unavailable source work is never represented as an empty complete import.', parent); return; }
+    if (root.classList.contains('tops-inline-calendar') && view === 'events' && typeof inlineOptions?.renderCard === 'function') {
+      const container = el('div', '', inlineOptions.layout === 'board' ? 'teams-event-board' : 'teams-event-list');
+      for (const item of items) container.append(inlineOptions.renderCard(item, () => details(item)));
+      parent.append(container); return;
+    }
     table(['Name', 'Status', 'Date', 'Source'], items.map(item => [button(item.title, () => details(item), 'tops-record-title'), el('span', label(item.status), 'tops-badge'), item.starts_on ? date(item.starts_on) : '—', item.source ? 'Connected · read only' : 'Teams']), parent);
   }
   function navigate(tab) { view = tab; page = 1; controls(); return load(); }

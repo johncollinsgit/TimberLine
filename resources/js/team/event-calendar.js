@@ -75,9 +75,11 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
     const previousButton = button('‹', () => shift(-1)); previousButton.setAttribute('aria-label', 'Previous period');
     const todayButton = button('Today', () => { anchor = localToday; month.value = anchor.slice(0, 7); day.value = anchor; changeWindow(); });
     const nextButton = button('›', () => shift(1)); nextButton.setAttribute('aria-label', 'Next period');
-    const settings = node('details', '', 'tops-inline-calendar-options'); settings.append(node('summary', 'View options'));
-    dateField.remove(); compact.append(previousButton, todayButton, nextButton, month, day, settings);
+    document.getElementById('tops-inline-options')?.remove();
+    const settings = node('section', '', 'tops-inline-calendar-options'); settings.id = 'tops-inline-options'; settings.append(node('h3', 'Event calendar'));
+    dateField.remove(); periods.remove(); compact.append(previousButton, todayButton, nextButton, month, day);
     settings.append(controls, ...host.querySelectorAll(':scope > .tops-calendar-scope'), guide);
+    document.getElementById('tw-controls-panel')?.append(settings);
     host.prepend(compact);
   }
   const scroll = node('div', '', 'tops-event-calendar-scroll'), grid = node('div', '', 'tops-calendar tops-event-calendar'); scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Dated event calendar. Scroll horizontally for more dates.'); scroll.append(grid); host.append(scroll);
