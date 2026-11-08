@@ -87,6 +87,11 @@ jobs:
           npm run test:team-work-local
           node --test tests/e2e/team-assistant-loader.test.mjs
 
+      - name: Verify Teams scanner protocol and operator script contracts
+        run: |
+          python3 tests/Unit/Operations/test_teams_clamav_health.py
+          bash -n scripts/ops/install-teams-clamav.sh
+
       - name: Prepare safe PDF conversion
         run: |
           if ! command -v gs >/dev/null; then
@@ -135,6 +140,8 @@ jobs:
           node tests/e2e/team-browser-toolbar.browser.mjs
           node tests/e2e/team-main-event-surface.browser.mjs
           node tests/e2e/team-event-detail-lifecycle.browser.mjs
+          node tests/e2e/team-event-updates.browser.mjs
+          node tests/e2e/team-setup.browser.mjs
           node tests/e2e/team-task-cards.browser.mjs
           node tests/e2e/team-universal-search.browser.mjs
           node tests/e2e/team-assistant.browser.mjs
@@ -299,7 +306,7 @@ jobs:
           TEAM_WORK_DISPOSABLE_MYSQL: '1'
           SES_PLATFORM_DISPOSABLE_MYSQL: '1'
           WHOLESALE_LABELS_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Integration/WholesaleLabelsMySqlRecoveryTest.php tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php tests/Integration/ServiceProposalMySqlRecoveryTest.php tests/Integration/FieldMaterialReviewMySqlRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/WholesaleLabelsMySqlRecoveryTest.php tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php tests/Integration/TeamFileEventTargetsMySqlRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php tests/Integration/ServiceProposalMySqlRecoveryTest.php tests/Integration/FieldMaterialReviewMySqlRecoveryTest.php --compact
 
       - name: Verify native Teams search migration recovery
         env:

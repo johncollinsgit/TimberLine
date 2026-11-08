@@ -31,6 +31,30 @@ final class EnterpriseMySqlMigrationRecoveryTest extends TestCase
             throw new \RuntimeException('Refusing recovery outside the isolated Enterprise MySQL fixture.');
         }
         $this->assertSame(0, $this->app->make(Kernel::class)->call('migrate', ['--force' => true]));
+        // Model a pre-upgrade task upload, then a committed first-column DDL step.
+        Schema::table('team_file_uploads', fn (Blueprint $table) => $table->dropIndex('team_file_event_idx'));
+        Schema::table('team_file_uploads', fn (Blueprint $table) => $table->dropColumn('event_id'));
+        Schema::table('team_file_uploads', fn (Blueprint $table) => $table->dropColumn('target_type'));
+        $uploadId = '10000000-0000-4000-8000-000000000010';
+        $upload = ['id' => $uploadId, 'tenant_id' => 9901, 'task_id' => '10000000-0000-4000-8000-000000000011',
+            'uploader_user_id' => 9901, 'client_key' => '10000000-0000-4000-8000-000000000012',
+            'filename' => 'synthetic-retained.txt', 'mime_type' => 'text/plain', 'expected_size' => 18,
+            'sha256' => hash('sha256', 'Synthetic retained'), 'status' => 'quarantined', 'created_at' => now(), 'updated_at' => now()];
+        DB::table('team_file_uploads')->insert($upload);
+        Schema::table('team_file_uploads', fn (Blueprint $table) => $table->string('target_type', 16)->default('task'));
+        $targets = require database_path('migrations/2026_11_08_000800_add_enterprise_file_targets.php');
+        $targets->up();
+        $targets->up();
+        $targets->down();
+        $this->assertSame('task', DB::table('team_file_uploads')->where('id', $uploadId)->value('target_type'));
+        $this->assertNull(DB::table('team_file_uploads')->where('id', $uploadId)->value('event_id'));
+        $this->assertSame($upload['sha256'], DB::table('team_file_uploads')->where('id', $uploadId)->value('sha256'));
+        $this->assertSame($upload['task_id'], DB::table('team_file_uploads')->where('id', $uploadId)->value('task_id'));
+        $this->assertTrue(Schema::hasIndex('team_file_uploads', 'team_file_event_idx'));
+        Schema::table('team_file_uploads', fn (Blueprint $table) => $table->dropIndex('team_file_event_idx'));
+        $targets->up();
+        $this->assertTrue(Schema::hasIndex('team_file_uploads', 'team_file_event_idx'));
+        $this->assertSame(1, DB::table('team_file_uploads')->count());
         DB::table('tenants')->insert(['id' => 9901, 'name' => 'Synthetic durable tenant', 'slug' => 'synthetic-durable']);
         DB::table('users')->insert(['id' => 9901, 'name' => 'Synthetic durable member', 'email' => 'mysql-recovery@example.invalid', 'password' => 'synthetic-fixture-only']);
         DB::table('team_work_locks')->insert(['tenant_id' => 9901]);

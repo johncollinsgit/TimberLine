@@ -10687,9 +10687,12 @@ CREATE TABLE `team_file_uploads` (
   `storage_key` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime NOT NULL,
   `updated_at` datetime NOT NULL,
+  `target_type` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'task',
+  `event_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `team_file_client_unique` (`tenant_id`,`uploader_user_id`,`client_key`),
-  KEY `team_file_task_idx` (`tenant_id`,`task_id`,`status`)
+  KEY `team_file_task_idx` (`tenant_id`,`task_id`,`status`),
+  KEY `team_file_event_idx` (`tenant_id`,`target_type`,`event_id`,`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `team_inbox_items`;
@@ -14593,3 +14596,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (332,'2026_11_03_10
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (333,'2026_11_03_100100_create_website_shop_pay_attempts_table',49);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (334,'2026_11_05_140000_create_stockist_locator_tables',50);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (335,'2026_11_06_220000_create_customer_account_fences',51);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (336,'2026_11_08_190000_add_team_file_event_targets',52);

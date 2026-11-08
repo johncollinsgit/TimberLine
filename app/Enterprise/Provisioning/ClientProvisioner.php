@@ -45,7 +45,7 @@ final class ClientProvisioner
             }
         }
         $sources = [];
-        foreach ([...glob(__DIR__.'/*.php'), ...glob(database_path('migrations/*.php')), base_path('apps/enterprise/database/shared-schema-v1.php'), resource_path('data/enterprise/lees-mcrae-locations.json')] as $path) {
+        foreach ([...glob(__DIR__.'/*.php'), ...glob(database_path('migrations/*.php')), ...glob(base_path('apps/enterprise/database/shared-schema-v*.php')), resource_path('data/enterprise/lees-mcrae-locations.json')] as $path) {
             $sources[str_replace(base_path().DIRECTORY_SEPARATOR, '', $path)] = hash('sha256', str_replace("\r\n", "\n", file_get_contents($path)));
         }
         $plan = ['manifest_hash' => $manifestHash, 'binding_hash' => $bindingHash,

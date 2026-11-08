@@ -93,7 +93,7 @@ class OperationsEnrichment
                     abort_unless($connection && $connection->generation === $fieldEvidence['generation'] && ($data['source_version'] ?? null) === $fieldEvidence['source_version'] && app(OperationsSync::class)->eventFields($data) === $fieldEvidence['fields'], 409, 'The source or selection changed. Refresh and review the current notes.');
                     $data['fields'] = $fieldEvidence['fields'];
                 }
-                $allowed = ['application_status', 'acceptance_status', 'fee', 'staff', 'venue', 'address', 'setup_time', 'event_hours', 'email', 'phone', 'booth', 'booth_number', 'booth_size', 'attendance', 'instructions', 'contact', 'last_order_on', 'last_contact_on', 'shipping', 'custom_labels', 'custom_scents', 'website'];
+                $allowed = ['application_status', 'acceptance_status', 'fee', 'staff', 'venue', 'address', 'hotel', 'hotel_address', 'coordinator', 'coordinator_phone', 'coordinator_email', 'setup_time', 'event_hours', 'email', 'phone', 'booth', 'booth_number', 'booth_size', 'attendance', 'instructions', 'contact', 'last_order_on', 'last_contact_on', 'shipping', 'custom_labels', 'custom_scents', 'website'];
                 foreach ($input['field_indices'] as $index) {
                     $candidate = $data['fields'][$index] ?? null;
                     abort_unless($candidate && in_array($candidate['field'], $allowed, true), 422);

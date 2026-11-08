@@ -1,3 +1,26 @@
+## Event detail workspace and company setup (November 8)
+
+Event details use a wider card layout and sticky update composer, with protected
+photo/file uploads, clickable contacts/maps, permitted sales comparisons and
+reviewed travel estimates. Source IDs and hashes stay out of the tenant detail
+presentation. Native companies can initialize Teams and create events without
+Asana; existing Modern Forestry source authority is preserved.
+
+Owner/admin setup reuses encrypted tenant drafts, versioned area settings,
+Studio cost-policy drafts and durable operation receipts. Company travel defaults
+are snapshotted by explicit event reviews; later default changes do not alter
+saved event estimates or frozen budgets. Current source edits retire stale ETAs.
+Updates preserve exact retry identities and distinguish provably unsent drafts
+from claimed/unknown source posts. Files have explicit event/task targets and
+retain current-access, integrity and scanning gates.
+
+Require protected release and live event-photo acceptance before rollout sign-off.
+The November 8 host scanner and actual Laravel client checks passed; see the
+scanner runbook. Actual isolated MySQL 8.4.11 validation passed 225 tests /
+1,835 assertions plus ten real concurrency scenarios. See
+`docs/operations/teams-event-details-and-setup.md` for architecture, limits and
+evidence; local protocol tests do not establish a live scanner or Asana post.
+
 ## Stable idle event refresh (November 8; candidate)
 
 Visible event views retain their current contents without fading during the

@@ -9,6 +9,7 @@ use App\Models\TenantModuleEntitlement;
 use App\Models\User;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -61,14 +62,18 @@ final class EnterpriseSchemaTest extends TestCase
             $this->assertTrue(Schema::hasTable('service_proposal_'.$kind));
             $this->assertSame(0, DB::table('service_proposal_'.$kind)->count());
         }
-        $this->assertCount(7, DB::table('migrations')->get());
+        $this->assertCount(8, DB::table('migrations')->get());
+        $this->assertTrue(Schema::hasColumn('team_file_uploads', 'target_type'));
+        $this->assertTrue(Schema::hasColumn('team_file_uploads', 'event_id'));
+        $this->assertTrue(Schema::hasIndex('team_file_uploads', 'team_file_event_idx'));
         $this->assertTrue(Schema::hasColumn('team_operation_records', 'voice_expires_at'));
         foreach (['tor_voice_expiry', 'tor_voice_sessions', 'tor_voice_previews'] as $index) {
             $this->assertTrue(Schema::hasIndex('team_operation_records', $index));
         }
         $this->install();
-        $this->assertCount(7, DB::table('migrations')->get());
+        $this->assertCount(8, DB::table('migrations')->get());
         $this->assertCount(7, EnterpriseSchema::sharedVersionOne());
+        $this->assertCount(1, EnterpriseSchema::sharedVersionTwo());
     }
 
     public function test_schema_replay_does_not_backfill_memberships_profiles_or_entitlements(): void
@@ -86,6 +91,34 @@ final class EnterpriseSchemaTest extends TestCase
         $this->assertSame(0, DB::table('tenant_module_entitlements')->count());
         $tenant->users()->attach($user->id, ['role' => 'member']);
         $this->assertFalse((bool) DB::table('tenant_user')->value('membership_active'));
+    }
+
+    public function test_additive_file_targets_recover_partial_upgrade_and_preserve_legacy_task_identity(): void
+    {
+        $this->install();
+        Schema::table('team_file_uploads', fn (Blueprint $table) => $table->dropIndex('team_file_event_idx'));
+        Schema::table('team_file_uploads', fn (Blueprint $table) => $table->dropColumn('event_id'));
+        $id = (string) Str::uuid();
+        $taskId = (string) Str::uuid();
+        $hash = hash('sha256', 'Synthetic private upload');
+        DB::table('team_file_uploads')->insert(['id' => $id, 'tenant_id' => 1, 'task_id' => $taskId,
+            'uploader_user_id' => 1, 'client_key' => (string) Str::uuid(), 'filename' => 'synthetic.txt',
+            'mime_type' => 'text/plain', 'expected_size' => 24, 'sha256' => $hash, 'status' => 'quarantined',
+            'created_at' => now(), 'updated_at' => now()]);
+        $migration = require $this->app->databasePath('migrations/2026_11_08_000800_add_enterprise_file_targets.php');
+        $migration->up();
+        $migration->up();
+        $migration->down();
+        $row = DB::table('team_file_uploads')->where('id', $id)->first();
+        $this->assertSame('task', $row->target_type);
+        $this->assertNull($row->event_id);
+        $this->assertSame($taskId, $row->task_id);
+        $this->assertSame($hash, $row->sha256);
+        $this->assertSame('quarantined', $row->status);
+        $this->assertTrue(Schema::hasIndex('team_file_uploads', 'team_file_event_idx'));
+        foreach (['users', 'tenants', 'tenant_user', 'tenant_module_entitlements', 'team_operation_records'] as $table) {
+            $this->assertSame(0, DB::table($table)->count());
+        }
     }
 
     public function test_actual_enterprise_boot_and_minimal_schema_support_the_persistent_request_lifecycle(): void

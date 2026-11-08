@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_08_190000_add_team_file_event_targets.php' => [
+        'test' => 'tests/Integration/TeamFileEventTargetsMySqlRecoveryTest.php',
+        'scenarios' => ['legacy task uploads survive partial target column creation, trailing index repair, retry and non-destructive rollback; explicit event targets retain their reserved non-task namespace'],
+    ],
     '2026_11_06_220000_create_customer_account_fences.php' => [
         'test' => 'tests/Integration/CustomerAccountFenceMySqlRecoveryTest.php',
         'scenarios' => ['durable tenant row survives missing primary key repair, retry and rollback'],
@@ -134,6 +138,10 @@ return [
     '2026_10_21_000300_create_enterprise_shared_work_schema.php' => [
         'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
         'scenarios' => ['pinned shared schema repairs missing operation/file tables and project/record indexes while retaining native work evidence'],
+    ],
+    '2026_11_08_000800_add_enterprise_file_targets.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['checksum-pinned typed file target upgrade repairs partial columns and missing named index; legacy task default and original upload evidence survive replay and non-destructive code rollback'],
     ],
     '2026_10_22_150000_create_service_proposal_tables.php' => [
         'test' => 'tests/Integration/ServiceProposalMySqlRecoveryTest.php',

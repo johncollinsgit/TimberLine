@@ -17,7 +17,7 @@
     $('status').textContent = message;
     for (const dialog of root.querySelectorAll('dialog[open]')) {
       let notice = dialog.querySelector('.dialog-status');
-      if (!notice) { notice = document.createElement('p'); notice.className = 'dialog-status'; notice.setAttribute('role', 'status'); dialog.prepend(notice); }
+      if (!notice) { notice = document.createElement('p'); notice.className = 'dialog-status'; notice.setAttribute('role', 'status'); const host = dialog.classList.contains('event-detail-dialog') ? dialog.querySelector('#tops-detail-body')?.firstElementChild : null; (host || dialog).prepend(notice); }
       notice.textContent = message;
     }
   };
@@ -206,7 +206,7 @@
       $('count').textContent = data.tasks.length + ' of ' + data.total + ' matching tasks on page ' + page; $('prev').hidden = page <= 1; $('next').hidden = !data.has_more;
       $('list').replaceChildren();
       $('list').classList.toggle('board', layout === 'board');
-      if (premium?.render({ data, layout, page, projects, members, selectedProject: projectFilter, openTask, mutate, createTask, load, clearDetail, notice: status,
+      if (premium?.render({ data, layout, page, projects, members, selectedProject: projectFilter, openTask, mutate, createTask: createContextItem, load, clearDetail, notice: status,
         ready: () => coreNavigationReady() && workspaceReady(), command,
         canRefreshAsana: () => !coreAccessBlocked && !coreDirty() && !pendingMutations && !workspaceNavigating,
         inlineUpdate: async (task, changes) => { if (!coreNavigationReady() || !workspaceReady()) return false; await openTask(task.id); if (selected?.id !== task.id || !selected.can_edit) return false; for (const [field, value] of Object.entries(changes)) $(({ assignee_id: 'assignee', due_on: 'due' })[field]).value = value || ''; return saveCore('edit', { kind: 'task.update', id: task.id, expected_version: selected.version, changes }); },
@@ -387,7 +387,8 @@
     options($('create-project'), projects.filter(p => p.can_add_task), parent ? 'Inherit parent access' : 'Private personal capture'); $('create-project').value = $('project-filter').value;
     options($('create-assignee'), members); sections($('create-project'), $('create-section')); $('create-due').value = due; createInitial = JSON.stringify(createValues()); $('task-dialog').showModal();
   }
-  $('new-task').onclick = () => createTask(); $('subtask').onclick = () => selected && createTask(selected.id);
+  function createContextItem(parent = null, due = '') { if (!parent && !due && window.TeamOperations?.isEventSurface?.()) { if (coreNavigationReady() && workspaceReady()) window.TeamOperations.createFromMain(); return; } createTask(parent, due); }
+  $('new-task').onclick = () => createContextItem(); $('subtask').onclick = () => selected && createTask(selected.id);
   $('create-project').onchange = () => sections($('create-project'), $('create-section'));
   $('create-form').onsubmit = async e => {
     e.preventDefault(); const project = $('create-project').value;
@@ -857,7 +858,7 @@
     $('mode').value = button.dataset.teamMode; $('project-filter').value = ''; $('search').value = ''; $('date-filter').value = 'all'; $('priority-filter').value = ''; $('completion').value = premium ? 'incomplete' : 'all'; $('layout').value = premium && button.dataset.teamMode === 'home' ? 'board' : 'list';
     page = 1; projectSearchPage = 1; clearDetail(); load();
   };
-  const appCreate = document.getElementById('teams-create'); if (appCreate) appCreate.onclick = () => { if (workspaceReady()) createTask(); };
+  const appCreate = document.getElementById('teams-create'); if (appCreate) appCreate.onclick = () => { if (workspaceReady()) createContextItem(); };
   window.TeamSearchBridge = {
     available: () => !workspaceNavigating && !coreAccessBlocked && !!members.length,
     request,
