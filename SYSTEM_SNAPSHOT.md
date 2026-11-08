@@ -4754,3 +4754,12 @@ unchanged server snapshot. Ask Everbranch reuses existing provider/approval/caps
 and explicit versioned budget review. No provider activation, financial action,
 public billing or production readiness follows from these source changes. See
 `docs/operations/trajectory-runbook.md` for scope, privacy and validation.
+
+## Teams Ask Everbranch entry candidate (2026-11-08 UTC)
+
+The standalone premium Teams sidebar can mount the existing approved workspace
+assistant in place through its own lazy loader. Existing AI access, spending and
+prepaid-credit authorities remain; setup-only users retain the guarded real link.
+Teams event/Asana note context is explicitly excluded pending a separately
+authorized source adapter. Fake-provider source/browser tests do not establish
+production AI access, funding or physical-device acceptance.

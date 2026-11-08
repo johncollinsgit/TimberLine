@@ -4,6 +4,10 @@ import { installPremium } from './premium.js';
 import { installOperations } from './operations.js';
 import { installSettings } from './settings.js';
 import { installTeamsApp } from './install-app.js';
+import { installTeamsAssistant } from './assistant.js';
+import '../../css/team-assistant.css';
+
+void installTeamsAssistant(document.querySelector('[data-team-standalone]'));
 
 const root = document.getElementById('team-work-app');
 if (root) {

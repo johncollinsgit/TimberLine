@@ -83,7 +83,9 @@ jobs:
         run: npm ci
 
       - name: Verify Team preservation and work contracts with synthetic data
-        run: npm run test:team-work-local
+        run: |
+          npm run test:team-work-local
+          node --test tests/e2e/team-assistant-loader.test.mjs
 
       - name: Prepare safe PDF conversion
         run: |
@@ -131,6 +133,7 @@ jobs:
           node tests/e2e/team-operations-calendar.browser.mjs
           node tests/e2e/team-event-calendar-window.browser.mjs
           node tests/e2e/team-browser-toolbar.browser.mjs
+          node tests/e2e/team-assistant.browser.mjs
 
       - name: Retain Teams browser failure evidence
         if: failure()
