@@ -85,3 +85,15 @@
 
 .tops-event-calendar.is-month .tops-calendar-session[data-calendar-needs-review=true] { grid-template-columns:auto minmax(0,1fr) auto }
 .tops-event-calendar.is-month .tops-calendar-session[data-calendar-needs-review=true]::after { content:'!'; font-weight:700; color:#7e4a14 }
+.teams-premium #team-operations.tops-inline-calendar .tops-inline-calendar-nav { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin:0 0 14px }
+.teams-premium #team-operations.tops-inline-calendar .tops-inline-calendar-nav > button { min-width:44px; min-height:44px; margin:0; padding:6px 12px; border:1px solid #d7e0d4; border-radius:7px; background:#fff; font-size:14px }
+.teams-premium #team-operations.tops-inline-calendar .tops-inline-calendar-nav > button:first-child,
+.teams-premium #team-operations.tops-inline-calendar .tops-inline-calendar-nav > button:nth-child(3) { font-size:22px; line-height:1 }
+.teams-premium #team-operations.tops-inline-calendar .tops-inline-calendar-nav > input { width:auto; min-width:155px; height:44px; margin:0; border-color:#d7e0d4; border-radius:7px; font-size:14px }
+.teams-premium #team-operations.tops-inline-calendar .tops-inline-calendar-nav > input[hidden] { display:none !important }
+.tops-inline-calendar-options { position:relative; margin-left:auto }
+.tops-inline-calendar-options > summary { display:flex; align-items:center; min-height:44px; padding:8px 12px; border:1px solid #d7e0d4; border-radius:7px; background:#fff; cursor:pointer; font-size:14px }
+.tops-inline-calendar-options[open] { flex-basis:100%; margin:0 }
+.tops-inline-calendar-options[open] > summary { width:max-content }
+.tops-inline-calendar-options .tops-calendar-filters { grid-template-columns:minmax(0,220px) }
+.teams-premium #team-operations.tops-inline-calendar .tops-calendar-scroll-hint { display:none }

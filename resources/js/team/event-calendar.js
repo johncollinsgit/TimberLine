@@ -70,6 +70,16 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
   if (coverage.calendar_window) host.append(node('p', when(coverage.calendar_window.from) + ' → ' + when(coverage.calendar_window.to) + (coverage.calendar_window.scan_limited ? ' · Load more events to continue checking retained dates.' : ' · Unspecified dates remain unknown.'), 'tops-calendar-scope'));
   const guide = node('details', '', 'tops-calendar-guide'); guide.append(node('summary', 'Calendar scope & source notes'), node('p', 'Explicit sessions show reviewed activity; gap days stay empty. Setup is lighter. Dashed task dates and range-start markers identify unconfirmed dates; they do not establish event activity. Other pages and unavailable source feeds are not included.'), node('p', 'Crew colors identify recorded event assignments, not shifts or attendance at each session. Event times use the displayed local timezone.')); host.append(guide);
   const hint = node('p', 'Swipe or scroll across the dates →', 'tops-calendar-scroll-hint'); host.append(hint);
+  if (host.closest('#team-operations')?.classList.contains('tops-inline-calendar')) {
+    const compact = node('nav', '', 'tops-inline-calendar-nav'); compact.setAttribute('aria-label', 'Event calendar navigation');
+    const previousButton = button('‹', () => shift(-1)); previousButton.setAttribute('aria-label', 'Previous period');
+    const todayButton = button('Today', () => { anchor = localToday; month.value = anchor.slice(0, 7); day.value = anchor; changeWindow(); });
+    const nextButton = button('›', () => shift(1)); nextButton.setAttribute('aria-label', 'Next period');
+    const settings = node('details', '', 'tops-inline-calendar-options'); settings.append(node('summary', 'View options'));
+    dateField.remove(); compact.append(previousButton, todayButton, nextButton, month, day, settings);
+    settings.append(controls, ...host.querySelectorAll(':scope > .tops-calendar-scope'), guide);
+    host.prepend(compact);
+  }
   const scroll = node('div', '', 'tops-event-calendar-scroll'), grid = node('div', '', 'tops-calendar tops-event-calendar'); scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Dated event calendar. Scroll horizontally for more dates.'); scroll.append(grid); host.append(scroll);
   function shift(direction) {
     const value = new Date(anchor + 'T12:00:00Z');
