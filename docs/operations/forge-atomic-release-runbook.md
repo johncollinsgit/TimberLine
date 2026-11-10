@@ -38,6 +38,13 @@ out detached. Build and migration commands run only after that check. It checks
 HEAD and tracked source again before migration and activation. `RELEASE_ID` is
 the actual full Git HEAD, never a webhook label.
 
+Preserve the installed server-owned Enterprise preparation hook at
+`$FORGE_SITE_ROOT/shared/enterprise-owner/ops/prepare-release.sh`. It runs after
+migrations and must succeed before activation. Missing/failed preparation stops
+the release; a source check also follows it. Keep that shared hook maintained
+through its existing Enterprise operations process rather than replacing it
+with an unreviewed branch helper.
+
 Forge's `forge_deploy_commit` parameter is a display label and **does not pin
 source**. See [Forge's deployment parameter documentation](https://laravel.com/forge/docs/sites/deployments#using-query-parameters).
 The separate custom pin and inactive-checkout verification are both required.

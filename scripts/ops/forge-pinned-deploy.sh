@@ -53,6 +53,9 @@ $FORGE_PHP artisan config:cache
 $FORGE_PHP artisan view:cache
 verify_approved_source
 $FORGE_PHP artisan migrate --force
+# Preserve the installed production Enterprise preparation contract. This trusted
+# server-owned hook must succeed before the candidate can become active.
+bash "$site_root/shared/enterprise-owner/ops/prepare-release.sh"
 verify_approved_source
 
 $ACTIVATE_RELEASE()

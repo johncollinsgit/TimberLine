@@ -33,6 +33,9 @@ class ForgePinningTest(unittest.TestCase):
         self.active = self.site / 'current'
         self.git(self.root, 'clone', '--quiet', str(self.origin), str(self.active))
         self.events = self.root / 'events.txt'
+        self.prepare = self.site / 'shared/enterprise-owner/ops/prepare-release.sh'
+        self.prepare.parent.mkdir(parents=True)
+        self.prepare.write_text('echo enterprise-prepare >> "$TEST_EVENT_LOG"\n')
         self.bin = self.root / 'bin'
         self.bin.mkdir()
         for name in ['composer', 'npm', 'php']:
@@ -84,7 +87,14 @@ class ForgePinningTest(unittest.TestCase):
         self.assertEqual(self.git(self.site / 'releases/candidate', 'rev-parse', 'HEAD').strip(), self.approved)
         events = self.events_text()
         self.assertLess(events.index('php:artisan migrate --force'), events.index('activate'))
+        self.assertLess(events.index('enterprise-prepare'), events.index('activate'))
         self.assertTrue(events.endswith('activate\nqueues\n'))
+
+    def test_enterprise_preparation_failure_never_activates(self):
+        self.prepare.write_text('exit 17\n')
+        result = self.run_deploy()
+        self.assertEqual(result.returncode, 17, result.stderr)
+        self.assertNotIn('activate', self.events_text())
 
     def test_missing_malformed_and_unreachable_shas_never_build_migrate_or_activate(self):
         for sha in ['', 'main', 'a'*39, 'a'*40+';echo unsafe', '0'*40]:
