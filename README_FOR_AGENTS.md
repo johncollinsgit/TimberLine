@@ -71,6 +71,12 @@ validation tier from the exact diff. Do not manually bypass or force a tier.
 6. Verify `/ready` reports the exact merged SHA and perform the relevant live smoke
    check. Never claim a change is live just because it was pushed or merged.
 
+The installed Forge script must match `scripts/ops/forge-pinned-deploy.sh`.
+GitHub supplies the approved SHA through `release_sha`; Forge's displayed commit
+label alone does not pin its clone. Keep checkout/build/migrations inside the
+inactive release, verify actual HEAD before activation, and preserve the active
+release on any failure. See `docs/operations/forge-atomic-release-runbook.md`.
+
 Keep production deployment serialized. Avoid overlapping publication from other
 chats. Inspect current PR/run state when necessary; do not repeatedly rediscover
 the whole release history or poll unchanged Actions runs continuously. Check at

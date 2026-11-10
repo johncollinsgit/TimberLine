@@ -25,23 +25,24 @@ enabled, so using it avoids an unnecessary domain cutover.
 
 ## Forge deployment script
 
-```bash
-$CREATE_RELEASE()
-cd "$FORGE_RELEASE_DIRECTORY"
+Install the complete contents of `scripts/ops/forge-pinned-deploy.sh` into this
+site's Forge Deploy Script editor. Keep a private copy of the previous script
+before saving. The reviewed script is inline in Forge: do not source a helper
+from a freshly cloned, not-yet-pinned branch head.
 
-export RELEASE_ID="${FORGE_DEPLOY_COMMIT:-$(git rev-parse --short HEAD)}"
+GitHub sends the approved full SHA as `release_sha`, which Forge exposes as
+`FORGE_VAR_RELEASE_SHA`. The script rejects missing/malformed pins, creates an
+inactive release, verifies its physical path is under this site's `releases/`
+and is not the active `current` target, fetches the exact commit and checks it
+out detached. Build and migration commands run only after that check. It checks
+HEAD and tracked source again before migration and activation. `RELEASE_ID` is
+the actual full Git HEAD, never a webhook label.
 
-$FORGE_COMPOSER install --no-dev --no-interaction --prefer-dist --optimize-autoloader
-npm ci --no-audit --no-fund
-npm run build
-
-php artisan config:cache
-php artisan view:cache
-php artisan migrate --force
-
-$ACTIVATE_RELEASE()
-$RESTART_QUEUES()
-```
+Forge's `forge_deploy_commit` parameter is a display label and **does not pin
+source**. See [Forge's deployment parameter documentation](https://laravel.com/forge/docs/sites/deployments#using-query-parameters).
+The separate custom pin and inactive-checkout verification are both required.
+The test `tests/ci/test_forge_pinning.py` exercises branch advancement, invalid
+pins, wrong/active paths and source mutation with disposable Git repositories.
 
 Keep the release macros in this order. Do not run `git reset`, `git clean`,
 `optimize:clear`, `route:cache`, or remove `public/build` from the active
@@ -69,10 +70,13 @@ The handoff is complete.
    safety cannot be skipped by the emergency dispatch; it lints changed
    migrations, runs the partial-state recovery suite, and rehearses the schema
    upgrade from the prior released commit.
-2. After the required gate succeeds, it POSTs to the protected GitHub production secret
-   `FORGE_DEPLOY_HOOK_URL`. Never commit or print that URL. The workflow then
-   polls `/ready` every three seconds for the exact GitHub commit for up to two
-   minutes. A hook
+2. After the required gate succeeds, it checks that this is still the current
+   `main` SHA. Superseded runs explicitly report that no deployment was requested;
+   the newer candidate must pass its own protected workflow. Admitted runs POST
+   the exact approved SHA to the protected production `FORGE_DEPLOY_HOOK_URL`.
+   Never commit or print that URL. The workflow then polls `/ready` every ten
+   seconds for up to twenty minutes, requiring JSON status `ok` and the exact
+   SHA. A hook
    acknowledgment alone is not deployment evidence; the workflow fails if the
    active release identifier remains stale.
    If optional Forge observer credentials are configured, a failed verification
@@ -83,6 +87,22 @@ The handoff is complete.
    fully automatic run activated Forge release `73789933` for commit
    `c272464230f4c83366f8d57a635ac4c38876c5c8` on 2026-07-21; `/ready` returned
    HTTP 200 with that commit as its active release ID.
+
+### Pinning rollout and maintenance
+
+Install the reviewed script before the first run of the updated hook workflow.
+The old workflow does not supply the mandatory custom pin, so its ordinary
+Deploy button/hook must not be used during that short configuration transition.
+Saving the script does not deploy. Let the reviewed PR's protected workflow send
+the first pinned request; verify its build log names the approved SHA and `/ready`
+returns that same SHA. Keep push-to-deploy disabled. Use GitHub's normal manual
+dispatch (tests enabled) for redeploys; an unpinned Forge Deploy Now is rejected.
+
+Retain Forge's atomic-release macros, shared storage and release retention.
+Never fix a failed pin by resetting an active checkout or overriding RELEASE_ID.
+Investigate the original attempt, then release a currently approved candidate.
+After Forge upgrades or deploy-script edits, run the pinning contract test and
+verify the installed script still matches the reviewed repository version.
 4. The legacy SSH job is retired to an explicitly approved, audited emergency
    recovery path. It is not a routine deployment mechanism.
 
