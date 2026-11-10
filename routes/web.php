@@ -937,6 +937,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/commerce/imports', [WebsiteCommerceController::class, 'imports'])->name('commerce.imports');
             Route::post('/commerce/imports/dry-run', [WebsiteCommerceController::class, 'createImportDryRun'])->name('commerce.imports.dry-run');
             Route::get('/commerce/shipping', [WebsiteCommerceController::class, 'shippingSettings'])->name('commerce.shipping');
+            Route::get('/commerce/freight', [\App\Http\Controllers\WebsiteFreightSetupController::class, 'show'])->name('commerce.freight');
+            Route::post('/commerce/freight', [\App\Http\Controllers\WebsiteFreightSetupController::class, 'store'])->middleware('throttle:10,1')->name('commerce.freight.store');
             Route::post('/commerce/shipping/connection', [\App\Http\Controllers\WebsiteCarrierSetupController::class, 'store'])->name('commerce.shipping.connection.store');
             Route::get('/commerce/printing', [\App\Http\Controllers\WebsiteLabelController::class, 'settings'])->name('printing.settings');
             Route::post('/commerce/printing/profiles', [\App\Http\Controllers\WebsiteLabelController::class, 'saveProfile'])->name('printing.profiles.save');

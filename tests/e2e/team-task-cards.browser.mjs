@@ -52,15 +52,38 @@ try {
     assert.deepEqual(dates, [...dates].sort(), 'Native board uses recorded date chronology');
     for (const width of [320, 390, 1440]) {
       await page.setViewportSize({ width, height: 1000 });
-      const geometry = await native.evaluateAll(nodes => nodes.map(node => { const b = node.getBoundingClientRect(); return { width: b.width, height: b.height, nested: node.querySelectorAll('button,input,select,a').length }; }));
-      assert.ok(geometry.every(b => Math.abs(b.width - b.height) < 2 && b.width >= 220 && b.width <= 281 && b.height <= 281 && b.nested === 0));
-      assert.ok(await native.evaluateAll(nodes => nodes.every(card => {
+      // Resize/media-query work can finish after setViewportSize resolves. Wait
+      // for the same layout contract below; a persistent defect still times out.
+      await page.waitForFunction(() => {
+        const cards = [...document.querySelectorAll('#tw-list .teams-task-card')];
+        return cards.length === 6 && cards.every(card => {
+          const bounds = card.getBoundingClientRect();
+          const title = card.querySelector('.teams-task-card-title'), date = card.querySelector('.teams-task-card-date');
+          return Math.abs(bounds.width - bounds.height) < 2 && bounds.width >= 220 && bounds.width <= 281 && bounds.height <= 281
+            && card.querySelectorAll('button,input,select,a').length === 0
+            && title.getBoundingClientRect().top < date.getBoundingClientRect().top
+            && parseFloat(getComputedStyle(title).fontSize) > parseFloat(getComputedStyle(date.querySelector('strong') || date).fontSize);
+        });
+      }).catch(async error => {
+        await page.screenshot({ path: join(evidence, `${engine}-native-board-${width}-failure.png`), fullPage: true });
+        console.error(JSON.stringify({ engine, width, cards: await page.evaluate(() => [...document.querySelectorAll('#tw-list .teams-task-card')].map(node => ({ title: node.textContent, width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height }))) }));
+        throw error;
+      });
+      // evaluateAll selects nodes before a second browser call evaluates them.
+      // A pending filter refresh may replace those nodes between calls. Select
+      // and measure the current DOM in one turn, keeping every original check.
+      const geometry = await page.evaluate(() => [...document.querySelectorAll('#tw-list .teams-task-card')].map(card => {
+        const bounds = card.getBoundingClientRect();
         const title = card.querySelector('.teams-task-card-title'), date = card.querySelector('.teams-task-card-date');
-        return title.getBoundingClientRect().top < date.getBoundingClientRect().top
-          && parseFloat(getComputedStyle(title).fontSize) > parseFloat(getComputedStyle(date.querySelector('strong') || date).fontSize);
-      })), 'The task name is above and more prominent than its date');
+        return { width: bounds.width, height: bounds.height, left: bounds.left, nested: card.querySelectorAll('button,input,select,a').length,
+          titleTop: title.getBoundingClientRect().top, dateTop: date.getBoundingClientRect().top,
+          titleFont: parseFloat(getComputedStyle(title).fontSize), dateFont: parseFloat(getComputedStyle(date.querySelector('strong') || date).fontSize) };
+      }));
+      assert.equal(geometry.length, 6);
+      assert.ok(geometry.every(b => Math.abs(b.width - b.height) < 2 && b.width >= 220 && b.width <= 281 && b.height <= 281 && b.nested === 0), JSON.stringify({ engine, width, geometry }));
+      assert.ok(geometry.every(card => card.titleTop < card.dateTop && card.titleFont > card.dateFont), 'The task name is above and more prominent than its date: ' + JSON.stringify({ engine, width, geometry }));
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
-      if (width === 1440) assert.ok(await native.evaluateAll(nodes => new Set(nodes.map(node => Math.round(node.getBoundingClientRect().left))).size) >= 3, 'Desktop board has multiple compact columns');
+      if (width === 1440) assert.ok(new Set(geometry.map(node => Math.round(node.left))).size >= 3, 'Desktop board has multiple compact columns');
       await page.screenshot({ path: join(evidence, `${engine}-native-board-${width}.png`), fullPage: true });
     }
     await native.filter({ hasText: 'Fictional early task' }).click();

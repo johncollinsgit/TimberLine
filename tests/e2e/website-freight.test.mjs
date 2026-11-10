@@ -9,6 +9,52 @@ import {chromium} from 'playwright';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const fixtures = path.join(root, 'storage/framework/testing/freight');
 
+test('pre-order freight setup is usable on desktop and mobile without purchasing', async () => {
+    execFileSync('php', ['vendor/bin/pest', 'tests/Feature/ManagedWebsite/WebsiteFreightSetupTest.php', '--compact'], {
+        cwd: root, env: {...process.env, FREIGHT_SETUP_FIXTURES: '1'}, stdio: 'pipe', timeout: 120000,
+    });
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, 'public/build/manifest.json'), 'utf8'));
+    const css = Object.entries(manifest).filter(([key]) => key.endsWith('.css') && key.includes('app'))
+        .map(([, value]) => fs.readFileSync(path.join(root, 'public/build', value.file), 'utf8')).join('\n');
+    const browser = await chromium.launch({headless: true, ...(process.platform === 'win32' ? {channel: 'msedge'} : {})});
+    try {
+        for (const width of [1440, 390]) {
+            const page = await browser.newPage({viewport: {width, height: 1000}});
+            let saved;
+            const html = fs.readFileSync(path.join(fixtures, 'setup.html'), 'utf8').replace('</head>', `<style>${css}</style></head>`);
+            await page.route('**/*', route => {
+                if (route.request().url() === 'https://freight.test/setup') return route.fulfill({contentType: 'text/html', body: html});
+                if (route.request().method() === 'POST' && new URL(route.request().url()).pathname.endsWith('/commerce/freight')) {
+                    saved = new URLSearchParams(route.request().postData());
+                    return route.fulfill({contentType: 'text/html', body: '<p>Fictional account check only</p>'});
+                }
+                return route.abort();
+            });
+            await page.goto('https://freight.test/setup');
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `setup at ${width}px overflows`);
+            await page.getByRole('heading', {name: 'Set up pallet freight'}).waitFor();
+            await page.getByText('Awaiting launch approval', {exact: false}).waitFor();
+            await page.locator('summary').filter({hasText: 'Connect a freight account'}).click();
+            const form = page.locator('form').filter({has: page.getByRole('button', {name: 'Verify and save freight account'})});
+            await form.locator('[name="label"]').fill('Fictional freight account');
+            await form.locator('[name="api_key"]').fill('fictional_freight_setup_key_12345');
+            assert.equal(await form.evaluate(element => element.checkValidity()), false);
+            await form.locator('[name="billing_confirmed"]').check();
+            if (process.env.FREIGHT_SCREENSHOT_DIR) {
+                fs.mkdirSync(process.env.FREIGHT_SCREENSHOT_DIR, {recursive: true});
+                await page.screenshot({path: path.join(process.env.FREIGHT_SCREENSHOT_DIR, `ltl-setup-${width}.png`)});
+            }
+            await form.getByRole('button', {name: 'Verify and save freight account'}).click();
+            await page.getByText('Fictional account check only').waitFor();
+            assert.equal(saved.get('billing_confirmed'), '1');
+            assert.equal(saved.get('label'), 'Fictional freight account');
+            await page.close();
+        }
+    } finally {
+        await browser.close();
+    }
+});
+
 test('desktop and mobile freight operators review an exact cost and cannot rebook unknown attempts', async () => {
     // Real Blade views with fictional database/provider fixtures only.
     execFileSync('php', ['vendor/bin/pest', 'tests/Feature/ManagedWebsite/WebsiteFreightProviderTest.php', '--compact'], {

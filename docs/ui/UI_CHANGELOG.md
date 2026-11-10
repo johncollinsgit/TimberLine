@@ -1,3 +1,11 @@
+## 2026-11-10 — Freight setup before the first order
+
+Pickup and shipping links to a store-scoped freight setup screen with saved
+account progress, direct origin/order links, specific broker/account requirements
+and routine tracking/invoice guidance. The shared protected account form remains
+available inside orders. Setup does not enable booking or purchase freight.
+Desktop/mobile fixtures exercise the real Blade screen with all traffic intercepted.
+
 ## 2026-11-05 — Concise campus presentation and Contractors
 
 Removed decorative page introductions and promotional copy throughout the public
