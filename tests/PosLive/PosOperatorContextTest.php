@@ -58,6 +58,17 @@ it('does not choose an unreviewed address, another tenant event or a stale saved
     expect($context->resolve($this->actor, [])['recommended_register_id'])->toBeNull();
 });
 
+it('stops recommending a current assigned event when its reviewed tax approval expires', function (): void {
+    $settings = $this->pos->decrypt($this->register->configuration);
+    $settings['tax_valid_until'] = '2026-11-07T15:00:00Z';
+    $this->register->configuration = $this->pos->encrypt($settings);
+    $context = app(PosOperatorContext::class);
+    expect($context->resolve($this->actor, [$this->register])['recommended_register_id'])->toBe($this->register->id);
+    $this->travelTo(\Carbon\Carbon::parse('2026-11-07T15:00:00Z'));
+    $result = $context->resolve($this->actor, [$this->register]);
+    expect($result['recommended_register_id'])->toBeNull()->and($result['assignments'][0]['tax_ready'])->toBeFalse();
+});
+
 it('uses the operators own Events Asana connection with current project and workspace access', function (): void {
     config(['team_work.enabled' => true, 'team_work.premium_enabled' => true, 'team_operations.enabled' => true]);
     $tenant = $this->tenant;
