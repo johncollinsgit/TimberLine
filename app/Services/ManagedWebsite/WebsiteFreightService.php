@@ -21,13 +21,18 @@ class WebsiteFreightService
     {
         $order->assertNotPosSimulation();
         $site = TenantSite::query()->forTenantId($order->tenant_id)->findOrFail($order->tenant_site_id);
-        app(WebsiteCatalogService::class)->assertEditor($site, $actor);
-        app(WebsiteShippingAccessService::class)->assertCanManage($site->tenant, $actor);
-        abort_unless(app(TenantFinancialAccess::class)->allows($actor, $site->tenant), 403);
+        $this->authorizeSite($site, $actor);
         abort_unless(in_array($order->source, ['native', 'staff_quote', 'staff_draft_invoice'], true)
             && $order->lines()->where('product_type', 'physical')->exists(), 422, 'Freight planning requires a native Website order with physical items. Connected Shopify and legacy orders retain their own fulfillment workflow.');
 
         return $site;
+    }
+
+    public function authorizeSite(TenantSite $site, User $actor): void
+    {
+        app(WebsiteCatalogService::class)->assertEditor($site, $actor);
+        app(WebsiteShippingAccessService::class)->assertCanManage($site->tenant, $actor);
+        abort_unless(app(TenantFinancialAccess::class)->allows($actor, $site->tenant), 403);
     }
 
     public function save(WebsiteOrder $order, array $input, User $actor): void

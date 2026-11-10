@@ -10,6 +10,7 @@
             @php($editingRule = $editingPackage ? data_get($policy, 'packages.'.$editingPackage->id, []) : [])
             @include('managed-website.commerce.shipping-guide')
             @include('managed-website.commerce.shipping-health')
+            @if($canManageShipping && app(\App\Services\Tenancy\TenantFinancialAccess::class)->allows(auth()->user(), $tenant))<a class="block rounded-xl border bg-white p-5 font-semibold text-emerald-800 underline" href="{{ route('managed-website.commerce.freight') }}">Set up pallet freight · account, quotes and booking →</a>@endif
             @if($canManageShipping)<section class="rounded-2xl border bg-white p-6">
                 <h2 id="shipping-policy" class="text-lg font-bold">Carrier services and destinations</h2><p class="mt-2 text-sm text-zinc-600">Choose services available on this store’s EasyPost account. USPS, UPS, and FedEx share the same label and tracking workflow. Connect eligible carriers and funding in EasyPost first. Test rates do not prove negotiated production prices.</p>
                 <form method="POST" action="{{ route('managed-website.commerce.shipping.policy.store') }}" class="mt-4 space-y-4">@csrf

@@ -137,9 +137,12 @@ class WebsiteShipStationFreightService
     public function assertResponse(Response $response): void
     {
         if (! $response->successful()) {
-            throw ValidationException::withMessages(['freight' => in_array($response->status(), [401, 403], true)
-                ? 'The freight account could not be authorized. Review the original API key and provider connection.'
-                : 'The provider could not complete this request. Review the freight details and account in ShipStation. No automatic retry was sent.']);
+            throw ValidationException::withMessages(['freight' => match ($response->status()) {
+                401, 403 => 'The freight account could not be authorized. Review the original API key and provider connection.',
+                402 => 'ShipStation has not enabled this API request for the account. The account owner must review plan access and billing in ShipStation. No automatic retry was sent.',
+                429 => 'ShipStation is temporarily limiting requests. Wait before checking the original operation again. Do not create another booking.',
+                default => 'The provider could not complete this request. Review the freight details and account in ShipStation. No automatic retry was sent.',
+            }]);
         }
     }
 

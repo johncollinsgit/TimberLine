@@ -1,3 +1,11 @@
+## Freight setup before orders (November 10; source candidate)
+
+`/website/commerce/freight` provides saved tenant/site freight account setup
+before an order exists. It reuses the original encrypted credential sets and
+financial/shipping/editor authorization; setup only reads provider accounts and
+never enables booking. See `docs/operations/website-freight-setup.md` for account
+requirements, launch evidence and maintenance responsibilities.
+
 ## Parallel and presentation release validation (November 8)
 
 Protected PR checks retain their names. Unknown/behavioral changes run six PHP

@@ -22,8 +22,13 @@ class WebsiteFreightProviderService
 
     public function current(WebsiteOrder $order): ?IntegrationConnection
     {
-        return IntegrationConnection::query()->forTenantId($order->tenant_id)->where('provider', 'shipstation_freight')
-            ->where('metadata->native_freight->site_id', $order->tenant_site_id)->latest('id')->first();
+        return $this->currentForSite(TenantSite::query()->forTenantId($order->tenant_id)->findOrFail($order->tenant_site_id));
+    }
+
+    public function currentForSite(TenantSite $site): ?IntegrationConnection
+    {
+        return IntegrationConnection::query()->forTenantId($site->tenant_id)->where('provider', 'shipstation_freight')
+            ->where('metadata->native_freight->site_id', $site->id)->latest('id')->first();
     }
 
     public function bookingEnabled(WebsiteOrder $order): bool
@@ -34,13 +39,18 @@ class WebsiteFreightProviderService
 
     public function connect(WebsiteOrder $order, array $input, User $actor): void
     {
-        $this->freight->authorize($order, $actor);
+        $this->connectSite($this->freight->authorize($order, $actor), $input, $actor);
+    }
+
+    public function connectSite(TenantSite $site, array $input, User $actor): void
+    {
+        $this->freight->authorizeSite($site, $actor);
         $data = Validator::make($input, ['api_key' => ['nullable', 'string', 'min:16', 'max:255', 'regex:/^[A-Za-z0-9_-]+$/D'],
             'label' => ['required', 'string', 'max:190'], 'provider_account_id' => ['nullable', 'regex:/^se-[0-9]{1,30}$/D'],
             'billing_confirmed' => ['required', 'accepted']])->validate();
         $key = $data['api_key'] ?? null;
         if (blank($key)) {
-            $key = $this->current($order)?->access_token;
+            $key = $this->currentForSite($site)?->access_token;
         }
         if (blank($key)) {
             throw ValidationException::withMessages(['freight' => 'Enter the tenant-owned ShipStation v2 API key.']);
@@ -52,17 +62,17 @@ class WebsiteFreightProviderService
         $selected = $data['provider_account_id'] ?? (count($accounts) === 1 ? $accounts[0]['id'] : null);
         $account = collect($accounts)->firstWhere('id', $selected);
         abort_unless(blank($selected) || $account, 422, 'Select an active freight provider account returned for this API key.');
-        DB::transaction(function () use ($order, $actor, $data, $key, $accounts, $account): void {
-            TenantSite::query()->forTenantId($order->tenant_id)->lockForUpdate()->findOrFail($order->tenant_site_id);
-            $this->freight->authorize($order, $actor);
+        DB::transaction(function () use ($site, $actor, $data, $key, $accounts, $account): void {
+            $site = TenantSite::query()->forTenantId($site->tenant_id)->lockForUpdate()->findOrFail($site->id);
+            $this->freight->authorizeSite($site, $actor);
             // New immutable credential sets preserve all earlier quote/booking accounts.
-            $connection = IntegrationConnection::query()->create(['tenant_id' => $order->tenant_id, 'provider' => 'shipstation_freight',
+            $connection = IntegrationConnection::query()->create(['tenant_id' => $site->tenant_id, 'provider' => 'shipstation_freight',
                 'external_account_id' => 'native:'.Str::uuid(), 'external_account_label' => $data['label'],
                 'access_token' => $key, 'status' => $account ? IntegrationConnection::STATUS_CONNECTED : IntegrationConnection::STATUS_PENDING,
                 'connected_by_user_id' => $actor->id, 'connected_at' => now(),
-                'metadata' => ['native_freight' => ['site_id' => $order->tenant_site_id, 'version' => 1, 'mode' => 'production',
+                'metadata' => ['native_freight' => ['site_id' => $site->id, 'version' => 1, 'mode' => 'production',
                     'provider_account_id' => $account['id'] ?? null, 'accounts' => $accounts, 'billing_confirmed_by' => $actor->id, 'verified_at' => now()->toIso8601String()]]]);
-            app(ManagedWebsiteService::class)->recordEvent(TenantSite::query()->forTenantId($order->tenant_id)->findOrFail($order->tenant_site_id),
+            app(ManagedWebsiteService::class)->recordEvent($site,
                 null, $actor, 'freight.account_verified', ['connection_id' => $connection->id, 'ready' => $connection->isConnected()]);
         });
     }
