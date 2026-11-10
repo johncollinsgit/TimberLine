@@ -38,6 +38,17 @@ out detached. Build and migration commands run only after that check. It checks
 HEAD and tracked source again before migration and activation. `RELEASE_ID` is
 the actual full Git HEAD, never a webhook label.
 
+Forge links shared storage before the script runs. Only tracked `.gitignore`
+placeholders below `storage/` and `bootstrap/cache/` are excluded from working-tree
+cleanliness checks; linked runtime storage can make those placeholders appear
+deleted. Application files still fail closed on any tracked mutation. Before
+checkout, compare the cloned and approved commits across both runtime paths and
+reject changes there, so checkout cannot write through a shared-directory link.
+Keep stdout/stderr diagnostics and the failing-line marker enabled. Tests include
+prepared placeholders, a real Linux storage symlink, preserved shared contents,
+and rejected application/runtime-path changes. A failed candidate never justifies
+editing the active checkout or bypassing exact-release readiness.
+
 Preserve the installed server-owned Enterprise preparation hook at
 `$FORGE_SITE_ROOT/shared/enterprise-owner/ops/prepare-release.sh`. It runs after
 migrations and must succeed before activation. Missing/failed preparation stops
