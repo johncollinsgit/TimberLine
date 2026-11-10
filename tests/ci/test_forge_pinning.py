@@ -22,6 +22,9 @@ class ForgePinningTest(unittest.TestCase):
         self.git(self.origin, 'config', 'user.email', 'fixture@example.test')
         self.git(self.origin, 'config', 'user.name', 'Release fixture')
         (self.origin / 'source.txt').write_text('approved source\n')
+        for directory in ['storage/app', 'bootstrap/cache']:
+            (self.origin / directory).mkdir(parents=True)
+            (self.origin / directory / '.gitignore').write_text('*\n!.gitignore\n')
         self.git(self.origin, 'add', '.')
         self.git(self.origin, 'commit', '-m', 'Approved A')
         self.approved = self.git(self.origin, 'rev-parse', 'HEAD').strip()
@@ -95,6 +98,42 @@ class ForgePinningTest(unittest.TestCase):
         result = self.run_deploy()
         self.assertEqual(result.returncode, 17, result.stderr)
         self.assertNotIn('activate', self.events_text())
+        self.assertIn('Pinned deployment stopped at script line', result.stdout)
+
+    def test_forge_prepared_placeholders_do_not_block_source_pinning(self):
+        clone = 'git clone --quiet "$TEST_ORIGIN" "$FORGE_RELEASE_DIRECTORY"'
+        self.script.write_text(self.script.read_text().replace(clone, clone+'\nrm "$FORGE_RELEASE_DIRECTORY/storage/app/.gitignore" "$FORGE_RELEASE_DIRECTORY/bootstrap/cache/.gitignore"'))
+        result = self.run_deploy()
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertIn('activate', self.events_text())
+
+    def test_real_shared_storage_link_is_preserved_while_application_source_is_pinned(self):
+        if os.name == 'nt':
+            self.skipTest('Real Unix shared-directory symlinks are exercised in protected Linux CI.')
+        clone = 'git clone --quiet "$TEST_ORIGIN" "$FORGE_RELEASE_DIRECTORY"'
+        self.script.write_text(self.script.read_text().replace(clone, clone+'\nmv "$FORGE_RELEASE_DIRECTORY/storage" "$FORGE_SITE_ROOT/shared/storage"\nln -s "$FORGE_SITE_ROOT/shared/storage" "$FORGE_RELEASE_DIRECTORY/storage"'))
+        result = self.run_deploy()
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertTrue((self.site / 'releases/candidate/storage').is_symlink())
+        self.assertEqual((self.site / 'shared/storage/app/.gitignore').read_text(), '*\n!.gitignore\n')
+        self.assertEqual(self.git(self.site / 'releases/candidate', 'rev-parse', 'HEAD').strip(), self.approved)
+
+    def test_checkout_cannot_modify_shared_runtime_paths_between_commits(self):
+        (self.origin / 'storage/app/.gitignore').write_text('different runtime metadata\n')
+        self.git(self.origin, 'add', '-f', 'storage/app/.gitignore')
+        self.git(self.origin, 'commit', '-m', 'Changed shared metadata')
+        result = self.run_deploy()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('changes runtime paths', result.stdout)
+        self.assertEqual(self.events_text(), '')
+
+    def test_application_mutation_before_checkout_is_still_rejected(self):
+        clone = 'git clone --quiet "$TEST_ORIGIN" "$FORGE_RELEASE_DIRECTORY"'
+        self.script.write_text(self.script.read_text().replace(clone, clone+'\necho tampered > "$FORGE_RELEASE_DIRECTORY/source.txt"'))
+        result = self.run_deploy()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('modified before pinning', result.stdout)
+        self.assertEqual(self.events_text(), '')
 
     def test_missing_malformed_and_unreachable_shas_never_build_migrate_or_activate(self):
         for sha in ['', 'main', 'a'*39, 'a'*40+';echo unsafe', '0'*40]:
@@ -109,7 +148,7 @@ class ForgePinningTest(unittest.TestCase):
     def test_outside_release_directory_is_rejected_before_checkout(self):
         result = self.run_deploy(FORGE_RELEASE_DIRECTORY=(self.site / 'other').as_posix())
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('fresh Forge release', result.stderr)
+        self.assertIn('fresh Forge release', result.stdout)
         self.assertEqual(self.events_text(), '')
 
     def test_build_source_mutation_stops_before_migrations_and_activation(self):
@@ -135,7 +174,7 @@ class ForgePinningTest(unittest.TestCase):
         self.script.write_text(self.script.read_text().replace('git clone --quiet "$TEST_ORIGIN" "$FORGE_RELEASE_DIRECTORY"', ':'))
         result = self.run_deploy()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('active release', result.stderr)
+        self.assertIn('active release', result.stdout)
         self.assertEqual(self.events_text(), '')
 
 

@@ -3,12 +3,16 @@
 # Forge expands the three release macros before running it. No active checkout
 # is mutated: only the newly-created, inactive release may switch commits.
 set -euo pipefail
+# Forge's UI must retain failures from stderr as well as ordinary build output.
+exec 2>&1
+trap 'printf "Pinned deployment stopped at script line %s. The previous release remains active unless activation already completed.\n" "$LINENO"' ERR
 
 readonly approved_sha="${FORGE_VAR_RELEASE_SHA:-}"
 if [[ ! "$approved_sha" =~ ^[0-9a-f]{40}$ ]]; then
     echo 'Missing approved release SHA. Deploy through the protected GitHub workflow.' >&2
     exit 1
 fi
+echo "Preparing approved release $approved_sha."
 
 $CREATE_RELEASE()
 cd "$FORGE_RELEASE_DIRECTORY"
@@ -27,15 +31,24 @@ fi
 
 # A branch can advance after CI passed or after Forge started cloning. Fetch
 # the immutable approved object and detach only this inactive candidate at it.
-git diff --quiet HEAD --
+# Forge has already linked shared storage. Its tracked .gitignore placeholders
+# can therefore appear deleted; they are runtime metadata, not executable source.
+readonly runtime_metadata=(':(exclude)storage/**/.gitignore' ':(exclude)bootstrap/cache/.gitignore')
+git diff --quiet HEAD -- . "${runtime_metadata[@]}" || {
+    echo 'Tracked application source was modified before pinning.'; exit 1;
+}
 git fetch --quiet --no-tags origin "$approved_sha"
+# Never let checkout follow shared runtime links to update their tracked files.
+git diff --quiet HEAD "$approved_sha" -- storage bootstrap/cache || {
+    echo 'The selected commit changes runtime paths. Review shared-path preparation before deployment.'; exit 1;
+}
 git checkout --quiet --detach "$approved_sha"
 
 verify_approved_source() {
     [[ "$(git rev-parse HEAD)" == "$approved_sha" ]] || {
         echo 'Release commit changed after admission.' >&2; return 1;
     }
-    git diff --quiet "$approved_sha" -- || {
+    git diff --quiet "$approved_sha" -- . "${runtime_metadata[@]}" || {
         echo 'Tracked release source changed after admission.' >&2; return 1;
     }
 }
