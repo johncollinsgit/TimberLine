@@ -52,6 +52,23 @@ try {
     assert.deepEqual(dates, [...dates].sort(), 'Native board uses recorded date chronology');
     for (const width of [320, 390, 1440]) {
       await page.setViewportSize({ width, height: 1000 });
+      // Resize/media-query work can finish after setViewportSize resolves. Wait
+      // for the same layout contract below; a persistent defect still times out.
+      await page.waitForFunction(() => {
+        const cards = [...document.querySelectorAll('#tw-list .teams-task-card')];
+        return cards.length === 6 && cards.every(card => {
+          const bounds = card.getBoundingClientRect();
+          const title = card.querySelector('.teams-task-card-title'), date = card.querySelector('.teams-task-card-date');
+          return Math.abs(bounds.width - bounds.height) < 2 && bounds.width >= 220 && bounds.width <= 281 && bounds.height <= 281
+            && card.querySelectorAll('button,input,select,a').length === 0
+            && title.getBoundingClientRect().top < date.getBoundingClientRect().top
+            && parseFloat(getComputedStyle(title).fontSize) > parseFloat(getComputedStyle(date.querySelector('strong') || date).fontSize);
+        });
+      }).catch(async error => {
+        await page.screenshot({ path: join(evidence, `${engine}-native-board-${width}-failure.png`), fullPage: true });
+        console.error(JSON.stringify({ engine, width, cards: await native.evaluateAll(nodes => nodes.map(node => ({ title: node.textContent, width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height }))) }));
+        throw error;
+      });
       const geometry = await native.evaluateAll(nodes => nodes.map(node => { const b = node.getBoundingClientRect(); return { width: b.width, height: b.height, nested: node.querySelectorAll('button,input,select,a').length }; }));
       assert.ok(geometry.every(b => Math.abs(b.width - b.height) < 2 && b.width >= 220 && b.width <= 281 && b.height <= 281 && b.nested === 0));
       assert.ok(await native.evaluateAll(nodes => nodes.every(card => {
