@@ -320,13 +320,37 @@ jobs:
         run: php scripts/ci/verify-forge-observer-config.php
 
       - name: Trigger Forge atomic release
+        id: forge
         env:
           FORGE_DEPLOY_HOOK_URL: ${{ secrets.FORGE_DEPLOY_HOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EXPECTED_RELEASE: ${{ github.sha }}
+          RELEASE_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 30 --request POST "$FORGE_DEPLOY_HOOK_URL"
+          test "$RELEASE_REF" = refs/heads/main
+          main_sha="$(gh api "repos/${REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]]
+          if [ "$main_sha" != "$EXPECTED_RELEASE" ]; then
+            echo 'admitted=false' >> "$GITHUB_OUTPUT"
+            echo "Superseded release $EXPECTED_RELEASE; current main is $main_sha. No Forge request sent."
+            echo "### Superseded release: $EXPECTED_RELEASE" >> "$GITHUB_STEP_SUMMARY"
+            echo "No deployment was requested. The protected workflow for $main_sha must verify its own exact release." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # forge_deploy_commit is a display label only. The separately named
+          # release_sha becomes FORGE_VAR_RELEASE_SHA in the installed pinned
+          # script, which checks out and verifies that exact immutable source.
+          curl --fail --silent --show-error --max-time 30 --get --request POST \
+            --data-urlencode "forge_deploy_branch=main" \
+            --data-urlencode "forge_deploy_commit=$EXPECTED_RELEASE" \
+            --data-urlencode "release_sha=$EXPECTED_RELEASE" \
+            "$FORGE_DEPLOY_HOOK_URL"
+          echo 'admitted=true' >> "$GITHUB_OUTPUT"
 
       - name: Verify the activated Forge release
+        if: steps.forge.outputs.admitted == 'true'
         timeout-minutes: 20
         env:
           EXPECTED_RELEASE: ${{ github.sha }}
@@ -339,7 +363,7 @@ jobs:
           for attempt in $(seq 1 90); do
             response="$(curl --fail --silent --show-error --max-time 15 "$READY_URL" || true)"
 
-            if printf '%s' "$response" | grep --fixed-strings --quiet "\"release\":\"$EXPECTED_RELEASE\""; then
+            if printf '%s' "$response" | jq -e --arg sha "$EXPECTED_RELEASE" '.status == "ok" and .release == $sha' >/dev/null 2>&1; then
               echo "Forge activated $EXPECTED_RELEASE on attempt $attempt."
               exit 0
             fi

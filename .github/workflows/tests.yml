@@ -94,6 +94,7 @@ jobs:
       run: |-
         python3 -m pip install --disable-pip-version-check PyYAML==6.0.3 tinycss2==1.4.0
         python3 -m unittest discover -s tests/ci -p "test_parallel_release.py" -v
+        python3 -m unittest discover -s tests/ci -p "test_forge_pinning.py" -v
         python3 -m unittest discover -s tests/ci -p "test_presentation_policy.py" -v
     - name: Use official Ubuntu package mirrors
       timeout-minutes: 2

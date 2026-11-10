@@ -92,7 +92,13 @@ replace the scoped workflow. Do not remove checks merely to reduce runtime.
 
 ## Production
 
-The release verification plan and serialized Forge activation are unchanged.
+The release verification plan and serialized Forge activation retain their gates.
+The hook now supplies an immutable custom release pin to the installed
+`scripts/ops/forge-pinned-deploy.sh` script. That script checks out only the
+approved SHA inside an inactive release and checks source integrity before
+migration/activation. A stale workflow does not send a hook; a branch advancing
+after admission cannot change the source built. Forge's commit-history label is
+not source authority. See `forge-atomic-release-runbook.md` for installation.
 Successful `quality`, `ci (8.4)`, and `mysql migration recovery` checks can be
 reused only when the final merged tree matches the tested PR tree exactly.
 Direct pushes and unverifiable releases run the parallel test/build pipeline

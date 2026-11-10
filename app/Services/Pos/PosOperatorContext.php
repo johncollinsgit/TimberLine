@@ -54,7 +54,7 @@ final class PosOperatorContext
                     $address = ['address1' => $metadata['address'] ?? '', 'city' => $metadata['city'] ?? '',
                         'provinceCode' => $metadata['state'] ?? '', 'countryCode' => 'US', 'zip' => $metadata['postal_code'] ?? ''];
                     $taxReady = Contract::hash([$address]) === Contract::hash([$settings['shopify']['tax_address'] ?? null])
-                        && strtotime($settings['tax_valid_until'] ?? '') > time();
+                        && strtotime($settings['tax_valid_until'] ?? '') > now()->getTimestamp();
                     $matches[$register->id] = ['register_id' => $register->id, 'event_id' => (int) $link->event_id,
                         'name' => $metadata['name'], 'source' => $link->provider, 'source_id' => $link->external_id,
                         'address' => $address, 'start_on' => $metadata['start_on'], 'end_on' => $metadata['end_on'],

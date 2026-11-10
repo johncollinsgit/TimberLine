@@ -1,3 +1,12 @@
+## Immutable release pinning (November 10; source candidate)
+
+The protected production workflow rejects superseded candidates and passes an
+explicit approved SHA to the installed Forge script. Only the inactive candidate
+checkout may switch to that commit; build/migration/activation require verified
+HEAD and unchanged tracked source. Readiness is derived from actual Git HEAD.
+The Forge deployment-history label is not a source pin. Installation and live
+exact-SHA acceptance are required; see `docs/operations/forge-atomic-release-runbook.md`.
+
 ## Parallel and presentation release validation (November 8)
 
 Protected PR checks retain their names. Unknown/behavioral changes run six PHP
