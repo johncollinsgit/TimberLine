@@ -1,9 +1,9 @@
 ## 2026-11-11 — Workspace controls sizing
 
-Let the landlord overflow trigger size to its label instead of forcing it into
-an icon-sized square. Workspace controls stays on one line beside Edit workspace,
-and the existing action row can wrap the two controls onto separate rows when needed.
-The shared overflow menu behavior and permissions remain unchanged.
+Use a compact outlined Edit workspace action with a matching, quieter More options
+disclosure. Both labels fit on one line with consistent typography and 44px targets;
+the row can wrap at narrow widths. Management actions open in a small anchored menu.
+Existing action handlers and tenant permissions remain unchanged.
 
 ## 2026-11-10 — Freight setup before the first order
 
