@@ -92,6 +92,15 @@ replace the scoped workflow. Do not remove checks merely to reduce runtime.
 
 ## Production
 
+Package preparation on disposable build/PHP/browser runners uses two APT retries
+and 20-second HTTP/HTTPS timeouts. APT updates fail on incomplete indexes rather
+than silently accepting stale metadata. Fixed-host DNS and HTTPS probes log only
+status codes, with bounded waits and no environment or response dumps. The PHP
+Ghostscript step has a 12-minute limit; browser installation retains its existing
+45-minute limit. These controls do not change package sources, TLS/signature
+verification, test commands, matrices, or required checks. If fresh runners repeat
+a DNS failure, inspect the probe results before choosing another retry or mirror.
+
 The release verification plan and serialized Forge activation retain their gates.
 The hook now supplies an immutable custom release pin to the installed
 `scripts/ops/forge-pinned-deploy.sh` script. That script checks out only the
