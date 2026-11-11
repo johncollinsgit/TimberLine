@@ -1,3 +1,12 @@
+## Shared property workspace (November 11; source candidate, disabled)
+
+The tenant-owned `/rentals` application uses encrypted property aggregates,
+serialized/versioned commands and immutable request receipts for owner weeks,
+maintenance, journals, dues evidence and private teams/files. Global availability,
+an explicit tenant allowlist and canonical module entitlement all default off.
+Hi-Lo public cutover remains held; the separate demo is fictional/browser-local.
+See `docs/operations/hi-lo-rentals-workspace.md` for boundaries and acceptance.
+
 ## Freight setup before orders (November 10; source candidate)
 
 `/website/commerce/freight` provides saved tenant/site freight account setup

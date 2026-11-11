@@ -8489,6 +8489,38 @@ CREATE TABLE `readiness_checklist_items` (
   KEY `readiness_checklist_items_sort_order_index` (`sort_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `rental_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `rental_events` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `property_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `actor_id` bigint unsigned NOT NULL,
+  `request_key` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `version` bigint unsigned NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `revent_request` (`tenant_id`,`property_id`,`actor_id`,`request_key`),
+  UNIQUE KEY `revent_version` (`property_id`,`version`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `rental_properties`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `rental_properties` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `version` bigint unsigned NOT NULL DEFAULT '0',
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `rprop_tenant` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `retail_plan_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -10687,8 +10719,8 @@ CREATE TABLE `team_file_uploads` (
   `storage_key` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime NOT NULL,
   `updated_at` datetime NOT NULL,
-  `target_type` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'task',
-  `event_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `target_type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'task',
+  `event_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `team_file_client_unique` (`tenant_id`,`uploader_user_id`,`client_key`),
   KEY `team_file_task_idx` (`tenant_id`,`task_id`,`status`),
@@ -14597,3 +14629,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (333,'2026_11_03_10
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (334,'2026_11_05_140000_create_stockist_locator_tables',50);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (335,'2026_11_06_220000_create_customer_account_fences',51);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (336,'2026_11_08_190000_add_team_file_event_targets',52);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (337,'2026_11_11_190000_create_rental_workspaces',53);
