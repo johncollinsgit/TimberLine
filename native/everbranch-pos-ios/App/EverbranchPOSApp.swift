@@ -21,7 +21,7 @@ struct PayButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 52)
             .foregroundStyle(primary ? PayTheme.cream : PayTheme.ink)
-            .background(primary ? PayTheme.ink : PayTheme.paper, in: Capsule())
+            .background(primary ? PayTheme.ink : PayTheme.paper, in: Capsule()).contentShape(Capsule())
             .opacity(enabled ? (configuration.isPressed ? 0.75 : 1) : 0.4)
     }
 }
@@ -552,14 +552,14 @@ struct POSView: View {
                         }.buttonStyle(PayButtonStyle(primary: false))
                     }
                     if sale.canLeave && model.pending?.refundRequestID == nil { Button("Next sale", action: model.nextSale).buttonStyle(PayButtonStyle()) }
-                } else { Text(model.pending?.collectionRequested == true ? "Recover this sale before starting another payment." : "Preparing total…").font(.subheadline) }
+                } else { Text(model.savedCheckoutMissing ? "Saved checkout unavailable" : model.pending?.collectionRequested == true ? "Recover this sale before starting another payment." : "Preparing total…").font(.subheadline) }
                 if model.pending?.collectionRequested == true || (model.sale == nil && !model.busy) || model.sale?.collectionReady == false {
                     Button(model.pending?.collectionRequested == true ? "Check payment status" : "Check basket") { model.perform { try await model.recover() } }.buttonStyle(PayButtonStyle(primary: false))
                 }
                 if model.sale?.state == "unknown" && model.pending?.refundRequestID == nil {
                     Button("Leave for review") { confirmUncollected = true }.buttonStyle(PayButtonStyle(primary: false))
                 }
-                if model.pending?.collectionRequested == false { Button("Cancel this sale", role: .destructive, action: model.discard).frame(minHeight: 44) }
+                if model.canDiscardPending { Button(model.savedCheckoutMissing ? "Return to products" : "Cancel this sale", role: model.savedCheckoutMissing ? nil : .destructive, action: model.discard).frame(minHeight: 44) }
             }
             if let receipt = model.receipt {
                 PayCard(title: "Receipt", icon: "receipt") {
