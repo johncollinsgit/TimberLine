@@ -13,6 +13,8 @@ APT_OPTIONS = ('Acquire::Retries "2";\n'
 HOSTS = ('archive.ubuntu.com', 'security.ubuntu.com', 'packages.microsoft.com')
 CLOUD_HOST = 'azure.archive.ubuntu.com'
 CLOUD_URI = 'https://' + CLOUD_HOST + '/ubuntu/'
+KERNEL_HOST = 'mirrors.edge.kernel.org'
+KERNEL_URI = 'https://' + KERNEL_HOST + '/ubuntu/'
 
 
 def configure(root=Path('/etc/apt/apt.conf.d')):
@@ -50,27 +52,34 @@ def run_probes(probes, run, emit):
     return results
 
 
-def use_verified_cloud_fallback(diagnostics, root=Path('/etc/apt'), run=subprocess.run, emit=print):
+def use_verified_mirror_fallback(diagnostics, root=Path('/etc/apt'), run=subprocess.run, emit=print):
     # Stay on the normal endpoints unless BOTH were actually probed and failed.
     if not all(diagnostics.get('https ' + host) is False for host in HOSTS[:2]):
         return False
-    probes = [('dns ' + CLOUD_HOST, ['getent', 'ahosts', CLOUD_HOST], 10),
-              ('https ' + CLOUD_HOST, ['curl', '--fail', '--silent', '--show-error',
-                                      '--proto', '=https', '--connect-timeout', '5',
-                                      '--max-time', '15', '--output', '/dev/null',
-                                      CLOUD_URI + 'dists/noble/InRelease'], 16)]
-    if not all(run_probes(probes, run, emit).values()):
+    selected_uri = None
+    for host, uri in ((CLOUD_HOST, CLOUD_URI), (KERNEL_HOST, KERNEL_URI)):
+        probes = [('dns ' + host, ['getent', 'ahosts', host], 10),
+                  ('https ' + host, ['curl', '--fail', '--silent', '--show-error',
+                                    '--proto', '=https', '--connect-timeout', '5',
+                                    '--max-time', '15', '--output', '/dev/null',
+                                    uri + 'dists/noble/InRelease'], 16)]
+        if all(run_probes(probes, run, emit).values()):
+            selected_uri = uri
+            break
+    if selected_uri is None:
         return False
     # Reuse the source allowlist and restart/symlink checks before any rewrite.
     spec = importlib.util.spec_from_file_location('official_mirrors', Path(__file__).with_name('ubuntu-official-mirrors.py'))
     policy = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(policy)
-    policy.configure(root, allow_verified_cloud=True)
+    policy.configure(root, allow_verified_fallback=True)
     source = root / 'sources.list.d/ubuntu.sources'
     before = source.read_bytes()
-    uris = policy.source_uris(before, allow_verified_cloud=True)
+    uris = policy.source_uris(before, allow_verified_fallback=True)
     current = None
     rewritten = []
+    endpoints = policy.OFFICIAL | {CLOUD_URI, KERNEL_URI}
+    endpoint_pattern = r'(?<!\S)(?:' + '|'.join(re.escape(uri) for uri in sorted(endpoints, key=len, reverse=True)) + r')(?=\s|$)'
     for line in before.decode('utf-8').splitlines(keepends=True):
         if not line.strip():
             current = None
@@ -78,13 +87,13 @@ def use_verified_cloud_fallback(diagnostics, root=Path('/etc/apt'), run=subproce
             if not line[:1].isspace():
                 current = line.split(':', 1)[0].lower()
             if current == 'uris':
-                line = re.sub(r'(?<!\S)https://(?:archive|security)\.ubuntu\.com/ubuntu/?(?=\s|$)', CLOUD_URI, line)
+                line = re.sub(endpoint_pattern, selected_uri, line)
         rewritten.append(line)
     if policy.INDIRECT in uris:
         mirrors = root / 'apt-mirrors.txt'
-        mirrors.write_bytes((CLOUD_URI + ' priority:0\n').encode() + mirrors.read_bytes())
+        mirrors.write_bytes((selected_uri + ' priority:0\n').encode() + mirrors.read_bytes())
     source.write_bytes(''.join(rewritten).encode('utf-8'))
-    emit('Using reachable official Azure Ubuntu mirror on this disposable runner; APT signature and TLS verification remain required.')
+    emit('Using verified Ubuntu mirror ' + selected_uri + ' on this disposable runner; APT signature and TLS verification remain required.')
     return True
 
 
@@ -96,4 +105,4 @@ if __name__ == '__main__':
         configure()
     diagnostics = diagnose()
     if not args.diagnose_only:
-        use_verified_cloud_fallback(diagnostics)
+        use_verified_mirror_fallback(diagnostics)

@@ -12,12 +12,12 @@ spec.loader.exec_module(mirrors)
 
 
 class OfficialMirrorsTest(unittest.TestCase):
-    def test_direct_cloud_uri_requires_the_explicit_verified_fallback_path(self):
-        source = b'URIs: https://azure.archive.ubuntu.com/ubuntu/\n'
-        with self.assertRaises(ValueError):
-            mirrors.source_uris(source)
-        self.assertEqual(mirrors.source_uris(source, allow_verified_cloud=True),
-                         ['https://azure.archive.ubuntu.com/ubuntu/'])
+    def test_fallback_uris_require_the_explicit_verified_path(self):
+        for uri in ('https://azure.archive.ubuntu.com/ubuntu/', 'https://mirrors.edge.kernel.org/ubuntu/'):
+            source = ('URIs: ' + uri + '\n').encode()
+            with self.subTest(uri=uri), self.assertRaises(ValueError):
+                mirrors.source_uris(source)
+            self.assertEqual(mirrors.source_uris(source, allow_verified_fallback=True), [uri])
 
     def fixture(self, source, mirror_bytes=None):
         temp = tempfile.TemporaryDirectory()
