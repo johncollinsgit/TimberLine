@@ -1,3 +1,12 @@
+## 2026-11-11 — Native shared-property workspace candidate
+
+The Hi-Lo reference layout now has a tenant-scoped native implementation: quiet
+sidebar, coastal overview, owner-week calendar and detail panels for stays,
+maintenance, journals and private team discussions. Administration starts with
+empty property data and explicit household/account links, weeks and dues records.
+Real membership replaces demo persona switching. Release remains independently
+disabled; Hi-Lo public cutover is held. See the [runbook](../operations/hi-lo-rentals-workspace.md).
+
 ## 2026-11-11 — Workspace controls sizing
 
 Use a compact outlined Edit workspace action with a matching, quieter More options

@@ -97,6 +97,18 @@ class UnifiedAppNavigationService
         $items = [];
         $items[] = ['key' => 'home', 'icon' => 'home', 'href' => $homeHref, 'label' => 'Home', 'current' => request()->routeIs('dashboard')];
 
+        if ($tenant && $user && config('rentals.enabled')) {
+            try {
+                app(\App\Services\Rentals\RentalAccess::class)->context($tenant, $user);
+                $items[] = ['key' => 'property-rentals', 'icon' => 'home', 'href' => route('rentals.index', ['tenant' => $tenant->slug]),
+                    'label' => 'Property workspace', 'standalone_app' => true, 'current' => $request->routeIs('rentals.*')];
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+                if (! in_array($exception->getStatusCode(), [403, 404], true)) {
+                    throw $exception;
+                }
+            }
+        }
+
         if ($tenant && $user && config('team_work.enabled')) {
             try {
                 app(\App\Services\Team\TeamWorkAccess::class)->context($user, $tenant);

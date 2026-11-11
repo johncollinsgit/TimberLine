@@ -1,0 +1,16 @@
+{
+  "notice": "Illustrative regional, seasonal and interior photography. None is represented as Villa 2409. Existing regional photos are from Unsplash; the calendar seasonal accents use licensed Pexels stock with per-file provenance below.",
+  "license": "https://unsplash.com/license",
+  "property_reference": "https://www.hhiresortvillas.com/",
+  "assets": [
+    {
+      "file": "coastal-dunes.jpg",
+      "credit": "Justin Fisher / Unsplash",
+      "page": "https://unsplash.com/photos/a-sandy-beach-with-grass-growing-out-of-the-sand-4VACHanWb_8",
+      "image": "https://images.unsplash.com/photo-1690970525629-29c540b7e7d6?auto=format&fit=crop&w=1600&q=85",
+      "location": "Hilton Head Island, SC",
+      "orientation": "landscape",
+      "recommended_use": "Hero or stay overview"
+    }
+  ]
+}
