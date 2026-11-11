@@ -90,7 +90,7 @@ def normalize_source(content):
     return ''.join(result).encode('utf-8')
 
 
-def source_uris(content):
+def source_uris(content, allow_verified_cloud=False):
     """Read folded fields (including inline Signed-By keys) without rewriting them."""
     fields, current = [], None
     for line in content.decode('utf-8').splitlines():
@@ -109,19 +109,22 @@ def source_uris(content):
             fields.append([match[1].lower(), match[2]])
             current = len(fields) - 1
     uris = [uri for name, value in fields if name == 'uris' for uri in value.split()]
-    if not uris or any(uri not in OFFICIAL | {INDIRECT} for uri in uris):
+    allowed = OFFICIAL | {INDIRECT}
+    if allow_verified_cloud:
+        allowed |= {'https://azure.archive.ubuntu.com/ubuntu/'}
+    if not uris or any(uri not in allowed for uri in uris):
         raise ValueError('Unsupported Ubuntu source URIs: ' + repr(uris))
     return uris
 
 
-def configure(root=Path('/etc/apt')):
+def configure(root=Path('/etc/apt'), allow_verified_cloud=False):
     sources = root / 'sources.list.d/ubuntu.sources'
     mirrors = root / 'apt-mirrors.txt'
     if sources.is_symlink() or not sources.is_file():
         raise ValueError('Unsupported Ubuntu APT source file.')
     before_sources = sources.read_bytes()
     after_sources = normalize_source(before_sources)
-    uris = source_uris(after_sources)
+    uris = source_uris(after_sources, allow_verified_cloud=allow_verified_cloud)
     # Validate every input before changing either file.
     if INDIRECT in uris:
         if mirrors.is_symlink() or not mirrors.is_file():

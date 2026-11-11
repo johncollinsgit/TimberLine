@@ -97,9 +97,14 @@ and 20-second HTTP/HTTPS timeouts. APT updates fail on incomplete indexes rather
 than silently accepting stale metadata. Fixed-host DNS and HTTPS probes log only
 status codes, with bounded waits and no environment or response dumps. The PHP
 Ghostscript step has a 12-minute limit; browser installation retains its existing
-45-minute limit. These controls do not change package sources, TLS/signature
-verification, test commands, matrices, or required checks. If fresh runners repeat
-a DNS failure, inspect the probe results before choosing another retry or mirror.
+45-minute limit. If both canonical Ubuntu HTTPS probes fail, the runner checks
+DNS and HTTPS for the known official `azure.archive.ubuntu.com` mirror. Only if
+both checks succeed does it select that HTTPS mirror for its Ubuntu URI fields
+and mirror list, preserving suites, components, signing keys and unrelated fields.
+Unknown source layouts fail closed. This fallback applies only to the disposable
+runner; TLS/signature verification, test commands, matrices and required checks
+remain intact. Failed fallback probes leave the normal sources in place and the
+required package install still fails closed.
 
 The release verification plan and serialized Forge activation retain their gates.
 The hook now supplies an immutable custom release pin to the installed
