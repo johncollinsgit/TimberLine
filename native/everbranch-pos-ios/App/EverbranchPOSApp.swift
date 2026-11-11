@@ -21,7 +21,7 @@ struct PayButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 52)
             .foregroundStyle(primary ? PayTheme.cream : PayTheme.ink)
-            .background(primary ? PayTheme.ink : PayTheme.paper, in: Capsule())
+            .background(primary ? PayTheme.ink : PayTheme.paper, in: Capsule()).contentShape(Capsule())
             .opacity(enabled ? (configuration.isPressed ? 0.75 : 1) : 0.4)
     }
 }

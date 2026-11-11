@@ -38,6 +38,10 @@ struct RewardCodeScanner: View {
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { enteredCode = ""; dismiss() } } }
                 .task {
                     guard Self.redemptionLifecycleVerified else { return }
+                    #if DEBUG
+                    // The intercepted checkout fixture exercises manual proof exchange, never a physical camera.
+                    if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") { return }
+                    #endif
                     let status = AVCaptureDevice.authorizationStatus(for: .video)
                     if status == .authorized { cameraReady = true }
                     else if status == .notDetermined { cameraReady = await AVCaptureDevice.requestAccess(for: .video) }

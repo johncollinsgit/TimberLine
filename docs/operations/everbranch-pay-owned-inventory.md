@@ -312,3 +312,8 @@ record, a network failure or an empty provider response. Fictional intercepted
 UI tests cover a new product checkout after recovery, retained payment attempts,
 unconfirmed discard and ordinary uncharged cancellation. Exact signed-device
 installation and physical product-tap acceptance remain separate release steps.
+
+The intercepted checkout fixture exercises manual reward-proof exchange without
+requesting a physical camera permission. Shared Pay capsule controls include their
+full visible touch area. Native CI retains the complete register/customer suites;
+manual proof, wallet attestation and receipt delivery remain required coverage.
