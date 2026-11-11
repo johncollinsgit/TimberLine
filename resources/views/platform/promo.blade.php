@@ -13,9 +13,14 @@
 <html lang="en">
 <head>
     @include('partials.head', [
-        'title' => $productName.' | One place to run your business',
-        'description' => 'Everbranch brings customers, work, follow-ups, and the next right action into one calm operating system for small businesses.',
+        'title' => $productName.' | A development partner who gets to know your business.',
+        'exact_title' => true,
+        'description' => 'Custom software, websites and automation built around your people, your needs and the way you work.',
+        'brand_assets' => array_replace($brandAssets, ['og_image' => 'brand/everbranch-share-watercolor-v1.png']),
     ])
+    <meta property="og:image:width" content="1734">
+    <meta property="og:image:height" content="907">
+    <meta property="og:image:alt" content="Everbranch. A development partner who gets to know your business. Watercolor trees and mountains.">
 </head>
 <body class="fb-public-body eb-studio-body" data-premium-motion="public">
     <a class="eb-skip-link" href="#main-content">Skip to main content</a>

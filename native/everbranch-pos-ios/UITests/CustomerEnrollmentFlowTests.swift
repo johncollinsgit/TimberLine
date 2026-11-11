@@ -169,7 +169,7 @@ extension CustomerEnrollmentFlowTests {
         let app = XCUIApplication(); openRefundRewardsReview(app, retry: true)
         fillAndSubmitRefundReview(app)
         XCTAssertTrue(app.buttons["Retry exact review"].waitForExistence(timeout: 5))
-        app.buttons["Done"].tap()
+        app.navigationBars["Refunded rewards"].buttons["Done"].tap()
         let open = app.buttons["Review refunded rewards"]
         XCTAssertTrue(open.waitForExistence(timeout: 5)); open.tap()
         XCTAssertTrue(app.staticTexts["Saved unconfirmed review"].waitForExistence(timeout: 5))
@@ -238,7 +238,7 @@ extension CustomerEnrollmentFlowTests {
         let message = app.staticTexts["refund-review-message"]
         XCTAssertTrue(message.waitForExistence(timeout: 5))
         XCTAssertEqual(message.label, "The server reports changed or conflicting evidence. This saved request remains unconfirmed; check status and ask an administrator to review it.")
-        app.buttons["Done"].tap()
+        app.navigationBars["Refunded rewards"].buttons["Done"].tap()
         app.buttons["Review refunded rewards"].tap()
         XCTAssertTrue(app.staticTexts["Saved unconfirmed review"].waitForExistence(timeout: 5))
     }
