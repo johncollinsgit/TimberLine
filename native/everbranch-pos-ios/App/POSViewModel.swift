@@ -284,6 +284,7 @@ private struct RestorableQuote: Decodable {
     private var associationRequestID: String?
     private var associationCustomerID: Int?
     private var initialBasket: [RegisterBasketLine]
+    @Published var savedCheckoutMissing = false
     @Published var basketIssue: String?
     @Published var customerQuery = ""
     @Published var customers: [POSCustomer] = []
@@ -341,6 +342,12 @@ private struct RestorableQuote: Decodable {
                 clearReceiptInputs()
                 await collector.signOut()
                 message = "Sign in again to continue. Any unfinished payment is saved for recovery."
+            }
+            catch POSError.savedCheckoutUnavailable {
+                savedCheckoutMissing = true
+                message = pending?.collectionRequested == true || pending?.sdkStarted == true || pending?.collectionAttempted == true
+                    ? "This saved payment couldn't be found. Its details are retained. Check Sales or ask a manager to verify the original payment before charging again."
+                    : "Your saved basket is no longer available. Return to products to start a new basket."
             }
             catch let POSError.unavailable(text) { message = text }
             catch { message = pending == nil ? "Couldn’t finish that step. Check your connection and try again." : "The operation is not confirmed. Keep this sale and check its status before trying another payment." }
@@ -937,19 +944,40 @@ private struct RestorableQuote: Decodable {
     func recover(hint: String? = nil) async throws {
         guard let base, let pending else { return }
         var result: Sale
-        if let id = pending.saleID {
-            if pending.collectionRequested, let known = sale, known.saleId == id, !["quoted", "cancelled"].contains(known.state) {
-                result = try await api.request(base + "/sales/\(id)/reconcile", method: "POST", body: hint.map { ["payment_id": $0] } ?? [:])
-            } else {
-                result = try await api.request(base + "/sales/\(id)")
-                if pending.collectionRequested && result.state != "quoted" && result.state != "cancelled" {
+        do {
+            if let id = pending.saleID {
+                if pending.collectionRequested, let known = sale, known.saleId == id, !["quoted", "cancelled"].contains(known.state) {
                     result = try await api.request(base + "/sales/\(id)/reconcile", method: "POST", body: hint.map { ["payment_id": $0] } ?? [:])
+                } else {
+                    result = try await api.request(base + "/sales/\(id)")
+                    if pending.collectionRequested && result.state != "quoted" && result.state != "cancelled" {
+                        result = try await api.request(base + "/sales/\(id)/reconcile", method: "POST", body: hint.map { ["payment_id": $0] } ?? [:])
+                    }
                 }
-            }
-        } else { result = try await api.request(base + "/requests/\(pending.requestID)") }
+            } else { result = try await api.request(base + "/requests/\(pending.requestID)") }
+        } catch POSError.savedCheckoutUnavailable {
+            guard !pending.collectionRequested, !pending.sdkStarted, pending.collectionAttempted != true,
+                  pending.refundRequestID == nil, !collector.hasInFlightPayment else { throw POSError.savedCheckoutUnavailable }
+            let session = api.token
+            struct Discarded: Decodable { let discarded: Bool }
+            let checked: Discarded = try await api.request(base + "/requests/\(pending.requestID)/discard", method: "POST", body: [:])
+            guard checked.discarded, self.base == base, api.token == session,
+                  self.pending == pending else { throw POSError.recoveryRequired }
+            self.pending = nil
+            do { try savePending() } catch { self.pending = pending; throw error }
+            sale = nil; receipt = nil; savedCheckoutMissing = false
+            selectedCustomer = nil; customers = []; customerQuery = ""
+            quantities = [:]; bundleComponents = [:]; bundleLines = []; initialBasket = []; basketIssue = nil
+            customAmountMinor = 0; customDescription = "Custom amount"; invoiceID = ""
+            associationRequestID = nil; associationCustomerID = nil; clearReceiptInputs()
+            clearRewardSelection(); clearOfferDraft(); completedSaleGeneration += 1
+            message = "An old uncharged basket was cleared. You can choose products for a new sale."
+            return
+        }
         restoreQuoteDraft(result, pending: pending)
         if pending.collectionRequested { self.pending?.collectionAttempted = true }
         if result.state == "quoted" && !result.recoveryRequired { self.pending?.collectionRequested = false }
+        savedCheckoutMissing = false
         sale = result; self.pending?.saleID = result.saleId; try savePending()
         if result.receiptAvailable {
             receipt = try await api.request(base + "/sales/\(result.saleId)/receipt")
@@ -986,13 +1014,17 @@ private struct RestorableQuote: Decodable {
             try await self.recover()
         }
     }
+    var canDiscardPending: Bool {
+        guard let pending else { return false }
+        return !pending.collectionRequested && !pending.sdkStarted && pending.collectionAttempted != true && pending.refundRequestID == nil && !collector.hasInFlightPayment
+    }
     func discard() {
-        guard let base, let pending, !pending.collectionRequested else { return }
+        guard let base, let pending, canDiscardPending else { return }
         perform {
             struct Result: Decodable { let discarded: Bool }
             let result: Result = try await self.api.request(base + "/requests/\(pending.requestID)/discard", method: "POST", body: [:])
             guard result.discarded else { throw POSError.recoveryRequired }
-            self.pending = nil; try self.savePending(); self.sale = nil; self.receipt = nil
+            self.pending = nil; try self.savePending(); self.sale = nil; self.receipt = nil; self.savedCheckoutMissing = false
             self.selectedCustomer = nil; self.customers = []; self.customerQuery = ""; self.customerName = ""; self.customerEmail = ""
             self.quantities = [:]; self.bundleComponents = [:]; self.bundleLines = []; self.initialBasket = []; self.basketIssue = nil; self.invoiceID = ""
             self.customAmountMinor = 0; self.customDescription = "Custom amount"

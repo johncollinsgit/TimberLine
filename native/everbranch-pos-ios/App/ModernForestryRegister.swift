@@ -337,6 +337,11 @@ extension POSViewModel {
             selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": ["old_setup"], "setup_blockers": ["old_setup"], "guest_checkout": true]))
             tapReady = false
         }
+        if ProcessInfo.processInfo.arguments.contains("--pos-missing-quote-ui-tests") {
+            var saved = PendingSale(workspace: "fixture", register: "fixture")
+            if ProcessInfo.processInfo.arguments.contains("--pos-missing-quote-attempted-tests") { saved.collectionAttempted = true; saved.collectionRequested = true }
+            pending = saved
+        }
         if ProcessInfo.processInfo.arguments.contains("--pos-saved-payments-ui-tests") {
             var first = PendingSale(workspace: "fixture", register: "fixture"); first.saleID = "fixture-review-1"
             var second = PendingSale(workspace: "fixture", register: "fixture"); second.saleID = "fixture-review-2"
