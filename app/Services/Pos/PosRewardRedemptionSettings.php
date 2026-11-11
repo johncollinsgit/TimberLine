@@ -74,7 +74,27 @@ final class PosRewardRedemptionSettings
             throw new PosException('in_person_rewards_register_review_required', 503);
         }
 
-        return $policy;
+        $cap = $config['pos_candle_cash_register_cap'] ?? null;
+        if ($cap !== null && (! is_array($cap) || ! is_int($cap['max_minor'] ?? null) || $cap['max_minor'] < 1
+            || ! is_int($cap['reviewed_by'] ?? null) || $cap['reviewed_by'] < 1 || ! is_string($cap['reviewed_at'] ?? null)
+            || strtotime($cap['reviewed_at']) === false || ($cap['policy_version'] ?? null) !== $policy['version'])) {
+            throw new PosException('in_person_rewards_register_review_required', 503);
+        }
+
+        return [...$policy, 'register_max_minor' => $cap['max_minor'] ?? null];
+    }
+
+    /** A register can lower the published tenant allowance, never increase it. */
+    public function forRegisterProfile(array $scope, MarketingProfile $profile): array
+    {
+        abort_unless((int) $profile->tenant_id === (int) $scope['tenant_id'], 404);
+        $register = $this->forRegister($scope);
+        $effective = $this->forProfile($profile);
+        if (! hash_equals($register['version'], $effective['version'])) {
+            throw new PosException('in_person_rewards_register_review_required', 503);
+        }
+
+        return [...$effective, 'max_minor' => min($effective['max_minor'], $register['register_max_minor'] ?? $effective['max_minor'])];
     }
 
     public function availableForTenant(int $tenant): bool

@@ -407,6 +407,9 @@ jobs:
         node tests/e2e/team-universal-search.browser.mjs
         node tests/e2e/team-assistant.browser.mjs
       if: matrix.group == 'teams'
+    - name: Verify connected event Sales and Customers
+      run: node tests/e2e/team-event-commerce.browser.mjs
+      if: matrix.group == 'teams'
     - name: Verify Birthday Club desktop and mobile states
       run: node tests/e2e/birthday-club-browser.mjs
       if: matrix.group == 'commerce'

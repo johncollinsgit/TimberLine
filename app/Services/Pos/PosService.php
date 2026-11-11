@@ -43,6 +43,9 @@ final class PosService
             $rows[] = ['id' => $register->id, 'name' => $register->name, 'location' => $register->location_name,
                 'rewards_redemption_available' => app(PosRewardRedemptionSettings::class)->availableForRegister($scope),
                 'catalog_source' => $register->catalog_source, 'environment' => $scope['connection']->environment,
+                'can_view_event_stats' => config('pos_live.event_stats_enabled') === true && in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
+                'cash_available' => app(PosCashSale::class)->available($scope),
+                'staff_rewards_available' => app(PosStaffRewardAuthorization::class)->enabled($scope),
                 'can_create_customers' => in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
                 'can_manage_checkout_rules' => ! config('enterprise.runtime') && in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
                 'can_manage_inventory' => app(StockPosCommerce::class)->enabled($register) && in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
@@ -58,7 +61,11 @@ final class PosService
 
     public function catalog(string $register): array
     {
-        return ['items' => $this->catalog->listing($this->access->register($register, 'catalog'))];
+        $scope = $this->access->register($register, 'catalog');
+        $items = $this->catalog->listing($scope);
+
+        return ['items' => $items, ...(app(StockPosCommerce::class)->enabled($scope['register'])
+            ? app(PosInventoryCounts::class)->context($scope, $items) : [])];
     }
 
     public function approvedQuotes(string $register): array
@@ -131,6 +138,10 @@ final class PosService
             throw new PosException('tax_review_expired', 503);
         }
         $stockCore = app(StockPosCommerce::class)->enabled($scope['register']);
+        $tender = $input['tender'] ?? 'card';
+        if (! in_array($tender, ['card', 'cash'], true) || ($tender === 'cash' && ! app(PosCashSale::class)->available($scope))) {
+            throw new PosException('cash_checkout_unavailable', 503);
+        }
         if ($stockCore) {
             app(PosTaxLocations::class)->assertCurrentReview($scope);
         }
@@ -166,15 +177,15 @@ final class PosService
             $redemptionPolicy = app(PosRewardRedemptionSettings::class)->forRegister($scope);
             // Receipt disclosures use original reviewed terms, including when no rewards were used.
             $rewards = array_replace($rewards, ['redemption' => 'in_person_and_online',
-                'in_person_max_minor' => $redemptionPolicy['max_minor'],
-                'in_person_member_max_minor' => $redemptionPolicy['member_max_minor']]);
+                'in_person_max_minor' => min($redemptionPolicy['max_minor'], $redemptionPolicy['register_max_minor'] ?? $redemptionPolicy['max_minor']),
+                'in_person_member_max_minor' => isset($redemptionPolicy['member_max_minor']) ? min($redemptionPolicy['member_max_minor'], $redemptionPolicy['register_max_minor'] ?? $redemptionPolicy['member_max_minor']) : null]);
         }
         $scope['customer'] = $customer;
         $terms = $this->catalog->terms($scope, $input);
         $id = bin2hex(random_bytes(16));
         $rewardOnly = $redemption !== null && ($terms['total_minor'] ?? null) === 0;
         $sale = new SaleSnapshot($id, 'usd', $terms['lines'], $rewardOnly);
-        $snapshot = ['binding' => $binding->snapshot(), 'connection_id' => $scope['connection']->id,
+        $snapshot = [...($tender === 'cash' && ! $rewardOnly ? ['tender' => 'cash'] : []), 'binding' => $binding->snapshot(), 'connection_id' => $scope['connection']->id,
             'development_acceptance_id' => app(PosDevelopmentAcceptance::class)->session($scope['register'], $scope['connection'], $scope)['id'] ?? null,
             'build' => $scope['build'], 'device_id' => $scope['device_id'], 'input_hash' => $hash, 'terms' => $terms, 'customer' => $customer ?? ($input['customer'] ?? null), 'customer_rewards' => $rewards,
             'register_name' => $scope['register']->name, 'location_name' => $scope['register']->location_name,
@@ -225,6 +236,9 @@ final class PosService
             $sale = $this->sale($scope, $id);
             $snapshot = $this->snapshot($sale);
             $binding = MerchantBinding::restore($snapshot['binding']);
+            if (($snapshot['tender'] ?? 'card') === 'cash') {
+                throw new PosException('cash_confirmation_required', 409);
+            }
             if ($sale->state === 'succeeded' && ($snapshot['reward_only'] ?? false)) {
                 return $this->projection($sale);
             }
@@ -538,6 +552,11 @@ final class PosService
 
     public function refund(string $register, string $id, array $input): array
     {
+        $cashScope = $this->access->register($register, 'refund');
+        $cashSale = $this->sale($cashScope, $id);
+        if (($this->snapshot($cashSale)['tender'] ?? 'card') === 'cash') {
+            return app(PosCashSale::class)->refund($register, $id, $input);
+        }
         $scope = $this->access->register($register, 'refund');
         $sale = $this->sale($scope, $id);
         $snapshot = $this->snapshot($sale);
@@ -589,6 +608,7 @@ final class PosService
             'subtotal_minor' => $snapshot['terms']['subtotal_minor'] ?? null, 'discount_minor' => $snapshot['terms']['discount_minor'] ?? 0, 'tax_minor' => $snapshot['terms']['tax_minor'] ?? null,
             'rewards_redeemed_minor' => $snapshot['terms']['pos_candle_cash']['amount_minor'] ?? 0,
             'applied_offers' => $snapshot['terms']['applied_offers'] ?? [],
+            'cash_received_minor' => $operation['received_minor'] ?? null, 'change_minor' => $operation['change_minor'] ?? null,
             'payment_reference' => $operation['provider_id'], 'payment_source' => $operation['source'] ?? 'square',
             'rewards_returned_minor' => $operation['rewards_returned_minor'] ?? 0, 'customer' => $snapshot['customer'],
             'payment_details' => app(PosReceiptDetails::class)->forSale($sale) ?: null,
@@ -601,7 +621,7 @@ final class PosService
                     : ($this->store->rows('outbox', $scope['tenant_id'])->where('sale_id', $id)->where('effect_key', 'like', 'customer_%')->whereNotIn('state', ['completed', 'review'])->exists() ? 'pending' : 'processed'))),
             'refunds' => $refunds->map(fn ($r) => ['id' => $r->id, 'state' => $r->state, 'amount_minor' => (int) $r->amount_minor])->all(),
             'refunded_minor' => max((int) $refunds->where('state', 'succeeded')->sum('amount_minor'), app(PosCustomerPurchases::class)->confirmedRefunds($sale)),
-            'settlement_status' => ($original['reward_only'] ?? false) ? 'no_external_payment' : 'provider_reconciliation_required'];
+            'settlement_status' => (($original['reward_only'] ?? false) || ($original['tender'] ?? 'card') === 'cash') ? 'no_external_payment' : 'provider_reconciliation_required'];
     }
 
     public function sale(array $scope, string $id): object
@@ -649,9 +669,10 @@ final class PosService
     private function projection(object $sale): array
     {
         $snapshot = app(PosReceiptCustomers::class)->decorate($sale, $this->snapshot($sale));
+        $scope = $this->access->register($sale->register_id);
 
         return ['customer' => isset($snapshot['customer']['id']) ? $snapshot['customer'] : null,
-            'sale_id' => $sale->id, 'request_id' => $sale->request_id, 'state' => $sale->state,
+            'sale_id' => $sale->id, 'request_id' => $sale->request_id, 'state' => $sale->state, 'tender' => $snapshot['tender'] ?? 'card',
             'rewards_redeemed_minor' => $snapshot['terms']['pos_candle_cash']['amount_minor'] ?? 0,
             'sdk_attempt_id' => $sale->sdk_attempt_id,
             'parked_for_review' => $sale->state === 'unknown' && $this->store->rows('events', (int) $sale->tenant_id)->where('sale_id', $sale->id)->where('code', 'payment_parked_for_review')->exists(),
@@ -662,9 +683,10 @@ final class PosService
             'subtotal_minor' => $snapshot['terms']['subtotal_minor'] ?? null, 'discount_minor' => $snapshot['terms']['discount_minor'] ?? 0, 'tax_minor' => $snapshot['terms']['tax_minor'] ?? null,
             'applied_offers' => $snapshot['terms']['applied_offers'] ?? [], 'checkout_rules_version' => $snapshot['terms']['checkout_rules_version'] ?? null,
             'canonical_confirmation' => $sale->state === 'succeeded',
-            'collection_ready' => $this->readiness->blockers($this->access->register($sale->register_id)['register'], $this->access->register($sale->register_id)['connection'], (int) $sale->amount_minor) === []
-                && ($snapshot['terms']['source'] !== StockPosCommerce::VERSION || app(StockPosCommerce::class)->collectionReady($sale, $snapshot)),
-            'manager_refunds_allowed' => $this->access->register($sale->register_id)['can_refund'],
+            'collection_ready' => ($snapshot['tender'] ?? 'card') === 'cash' ? app(PosCashSale::class)->collectionReady($scope, $sale, $snapshot)
+                : ($this->readiness->blockers($scope['register'], $scope['connection'], (int) $sale->amount_minor, $scope) === []
+                    && ($snapshot['terms']['source'] !== StockPosCommerce::VERSION || app(StockPosCommerce::class)->collectionReady($sale, $snapshot))),
+            'manager_refunds_allowed' => $scope['can_refund'],
             'receipt_available' => $sale->state === 'succeeded' && ($sale->stock_state === 'committed' || $snapshot['terms']['source'] === StockPosCommerce::VERSION),
             'recovery_required' => $sale->descriptor_issued_at !== null && ! in_array($sale->state, ['succeeded', 'failed', 'cancelled'], true)];
     }

@@ -9,8 +9,7 @@ class MarketingSegmentEvaluator
 {
     public function __construct(
         protected MarketingProfileAnalyticsService $analyticsService
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{matched:bool,reasons:array<int,string>,metrics:array<string,mixed>}
@@ -30,9 +29,9 @@ class MarketingSegmentEvaluator
     }
 
     /**
-     * @param array<string,mixed> $group
-     * @param array<string,mixed> $metrics
-     * @param array<int,string> $reasons
+     * @param  array<string,mixed>  $group
+     * @param  array<string,mixed>  $metrics
+     * @param  array<int,string>  $reasons
      */
     protected function evaluateGroup(array $group, array $metrics, array &$reasons): bool
     {
@@ -64,12 +63,12 @@ class MarketingSegmentEvaluator
 
         return $logic === 'or'
             ? in_array(true, $results, true)
-            : !in_array(false, $results, true);
+            : ! in_array(false, $results, true);
     }
 
     /**
-     * @param array<string,mixed> $condition
-     * @param array<string,mixed> $metrics
+     * @param  array<string,mixed>  $condition
+     * @param  array<string,mixed>  $metrics
      * @return array{matched:bool,reason:?string}
      */
     protected function evaluateCondition(array $condition, array $metrics): array
@@ -81,19 +80,23 @@ class MarketingSegmentEvaluator
             return ['matched' => false, 'reason' => null];
         }
 
+        if ($field === 'near_event_zip') {
+            $postal = is_array($value) ? ($value['postal_code'] ?? null) : null;
+            $radius = is_array($value) ? ($value['radius_miles'] ?? 50) : null;
+            $distance = app(CustomerLocationDistance::class)->miles($metrics['location_point'] ?? null, app(CustomerLocationDistance::class)->point($postal));
+            $matched = $operator === 'within' && is_numeric($radius) && $radius > 0 && $radius <= 500 && $distance !== null && $distance <= $radius;
+
+            return ['matched' => $matched, 'reason' => $matched ? 'Approximately '.round($distance, 1).' miles from ZIP '.$postal.' (Census ZCTA)' : null];
+        }
         $actual = $this->metricValue($field, $metrics);
-        $matched = $this->match($actual, $operator, $value);
+        $matched = $actual === null && in_array($operator, ['gt', 'gte', 'lt', 'lte'], true) ? false : $this->match($actual, $operator, $value);
 
         return [
             'matched' => $matched,
-            'reason' => $matched ? "{$field} {$operator} " . $this->displayValue($value) : null,
+            'reason' => $matched ? "{$field} {$operator} ".$this->displayValue($value) : null,
         ];
     }
 
-    /**
-     * @param mixed $actual
-     * @param mixed $expected
-     */
     protected function match(mixed $actual, string $operator, mixed $expected): bool
     {
         return match ($operator) {
@@ -103,6 +106,7 @@ class MarketingSegmentEvaluator
             'lte' => $this->toNumber($actual) <= $this->toNumber($expected),
             'neq' => $actual != $expected,
             'contains' => $this->contains($actual, $expected),
+            'contains_exact' => is_array($actual) && in_array((string) $expected, array_map('strval', $actual), true),
             'in' => is_array($expected) ? in_array($actual, $expected, true) : false,
             'eq', '=' => $this->equals($actual, $expected),
             default => $this->equals($actual, $expected),
@@ -112,9 +116,9 @@ class MarketingSegmentEvaluator
     protected function metricValue(string $field, array $metrics): mixed
     {
         return match ($field) {
-            'total_spent' => $metrics['total_spent'] ?? 0,
-            'total_orders' => $metrics['total_orders'] ?? 0,
-            'days_since_last_order' => $metrics['days_since_last_order'] ?? PHP_INT_MAX,
+            'total_spent' => $metrics['total_spent'] ?? null,
+            'total_orders' => $metrics['total_orders'] ?? null,
+            'days_since_last_order' => $metrics['days_since_last_order'] ?? null,
             'source_channel' => $metrics['source_channels'] ?? [],
             'has_email_consent' => $metrics['has_email_consent'] ?? false,
             'has_sms_consent' => $metrics['has_sms_consent'] ?? false,
@@ -162,6 +166,7 @@ class MarketingSegmentEvaluator
                     return true;
                 }
             }
+
             return false;
         }
 
@@ -171,7 +176,7 @@ class MarketingSegmentEvaluator
     protected function displayValue(mixed $value): string
     {
         if (is_array($value)) {
-            return '[' . implode(',', array_map(fn ($v) => (string) $v, $value)) . ']';
+            return '['.implode(',', array_map(fn ($v) => (string) $v, $value)).']';
         }
         if (is_bool($value)) {
             return $value ? 'true' : 'false';

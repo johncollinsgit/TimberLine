@@ -3,7 +3,7 @@
     <header class="md-header"><div><span class="md-eyebrow">{{ $tenant->name }} / Marketing</span><h1>Marketing desk</h1><p>Your content, conversations, and next good idea. All in one place.</p></div>@unless($staff)<div class="md-header-actions"><span class="md-badge {{ $budget['active'] && !$budget['exhausted'] ? 'md-badge-live' : '' }}">{{ $budget['active'] ? ($budget['exhausted'] ? 'AI cap reached' : 'Bud is ready') : 'Bud setup needed' }}</span><a class="eb-primary-button" href="{{ route('marketing.desk.index', ['view'=>'chat']) }}">Plan with Bud ↗</a></div>@endunless</header>
     @if($errors->any())<div class="md-alert" role="alert"><strong>Check these details</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
     <nav class="md-tabs" aria-label="Marketing desk">
-        @foreach(($staff ? ['inbox'=>'Inbox'] : ['today'=>'Today', 'chat'=>'Bud', 'calendar'=>'Calendar', 'insights'=>'Best posts', 'inbox'=>'Inbox', 'recipes'=>'Workflows', 'knowledge'=>'Brand knowledge', 'settings'=>'Settings']) as $key=>$label)
+        @foreach(($staff ? ['inbox'=>'Inbox'] : ['today'=>'Today', 'chat'=>'Bud', 'calendar'=>'Calendar', 'insights'=>'Best posts', 'inbox'=>'Inbox', 'audiences'=>'Customers & audiences', 'recipes'=>'Workflows', 'knowledge'=>'Brand knowledge', 'settings'=>'Settings']) as $key=>$label)
             <a href="{{ route('marketing.desk.index', ['view'=>$key]) }}" @if($view===$key)aria-current="page"@endif>{{ $label }}</a>
         @endforeach
     </nav>
@@ -11,7 +11,10 @@
     @if($budget['warning'] || $budget['exhausted'])<p class="md-alert" role="status">{{ $budget['exhausted'] ? 'AI needs activation or has reached its cap. Manual tools remain available.' : 'AI has reached 80% of the workspace cap.' }}</p>@endif
     @endunless
 
-    @if($view==='today')
+    @if($view==='audiences')
+        @include('marketing.desk.customer-workspace')
+    @elseif($view==='today')
+        @include('marketing.desk.customer-workspace')
         @include('marketing.desk.welcome')
         <div class="md-summary">
             @foreach([['Replies to review',$threads->count(),'inbox'],['Draft posts',$posts->where('status','draft')->count(),'calendar'],['Scheduled posts',$posts->where('status','scheduled')->count(),'calendar']] as [$label,$count,$destination])

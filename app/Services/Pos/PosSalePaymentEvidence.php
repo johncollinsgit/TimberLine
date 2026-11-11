@@ -13,6 +13,10 @@ final class PosSalePaymentEvidence
 
     public function read(object $sale, array $snapshot): ?array
     {
+        if (($snapshot['tender'] ?? 'card') === 'cash' && ! ($snapshot['reward_only'] ?? false)) {
+            return app(PosCashSale::class)->evidence($sale, $snapshot);
+        }
+
         return ($snapshot['reward_only'] ?? false) ? $this->rewardsOnly->evidence($sale, $snapshot)
             : ($sale->attempt_id ? $this->journal->get((int) $sale->tenant_id, $sale->attempt_id) : null);
     }

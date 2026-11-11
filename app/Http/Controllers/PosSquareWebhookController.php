@@ -16,8 +16,13 @@ final class PosSquareWebhookController extends Controller
         abort_unless(is_string($key) && $key !== '' && is_string($url) && str_starts_with($url, 'https://') && strlen($raw) <= 262144, 403);
         $expected = base64_encode(hash_hmac('sha256', $url.$raw, $key, true));
         abort_unless(hash_equals($expected, (string) $request->header('x-square-hmacsha256-signature')), 403);
-        $event = json_decode($raw, true, 64, JSON_THROW_ON_ERROR);
+        try {
+            $event = json_decode($raw, true, 64, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            abort(422, 'Invalid Square event.');
+        }
         abort_unless(is_string($event['event_id'] ?? null) && is_string($event['merchant_id'] ?? null), 422);
+        app(\App\Services\Pos\PosSquareSourceIngress::class)->accept($event);
         $payment = data_get($event, 'data.object.payment');
         $refund = data_get($event, 'data.object.refund');
         if (is_array($payment) && is_string($payment['reference_id'] ?? null)) {

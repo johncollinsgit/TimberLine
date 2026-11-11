@@ -32,6 +32,23 @@ disclosure. Both labels fit on one line with consistent typography and 44px targ
 the row can wrap at narrow widths. Management actions open in a small anchored menu.
 Existing action handlers and tenant permissions remain unchanged.
 
+## 2026-11-11 — Connected event sales and compact Pay register
+
+Keep the mountain branding in an 86-point header with directly accessible Sales,
+Customers and Account controls and 44-point targets. Product/scent/cart actions
+stay local; optional lookup does not delay guest checkout. Completion offers
+customer confirmation, Text, Email and Done. Server-backed register receipts make
+later attribution and receipt delivery recoverable across sessions. The stock
+wizard supports camera/photo OCR, Ask Everbranch drafts and manually editable,
+reviewed rows with retained uncertain submissions.
+
+Teams adds linked event Sales/Customers views with current totals, source freshness,
+readable receipt details and a contextual customer drilldown. Core Customers and
+the newer Marketing desk share identities and expose original source reconciliation,
+saved groups/rules and exact dynamic event audiences. Audience previews show reasons,
+channel eligibility and missing locations; they do not send messages. Original
+tenant branding, permissions, rewards and provider boundaries remain authoritative.
+
 ## 2026-11-10 — Freight setup before the first order
 
 Pickup and shipping links to a store-scoped freight setup screen with saved

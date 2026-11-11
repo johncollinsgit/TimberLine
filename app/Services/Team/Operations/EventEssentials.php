@@ -73,6 +73,9 @@ class EventEssentials
             'coordinator' => ['name' => $fields['coordinator'] ?? $fields['contact'] ?? $fields['organizer'] ?? null, 'email' => $email, 'phone' => $phone, 'email_url' => $email ? 'mailto:'.$email : null, 'phone_url' => $phoneUrl],
             'source_reconciled' => $sourceCurrent, 'notice' => $sourceCurrent ? null : 'Event details have changed. Refresh connected data before reviewing travel.',
             'field_status' => $sourceCurrent ? $presentation['status'] : array_fill_keys(array_keys($presentation['status']), 'needs_review'), 'has_note_fields' => in_array('notes', $presentation['status'], true),
+            'can_prepare_audiences' => app(\App\Services\Marketing\CustomerCommerceLinkService::class)->canLink($user, $tenant->id),
+            'can_lookup_customers' => $this->access->mayWrite($tenant, $user, $area->id) && app(\App\Services\Tenancy\TenantModuleAccessResolver::class)->canAccess($tenant->id, 'customers'),
+            'commerce_event_id' => app(EventCommerceReport::class)->commerceId($event),
             'sales' => $sales, 'travel' => $this->travel->calculate($home, $address, $schedule, $data['_teams_enrichment']['travel'] ?? [], $data['source_version'] ?? null, $sourceCurrent)];
     }
 

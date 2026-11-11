@@ -10,6 +10,9 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
 }
 
+struct StockCountRejected: Error { let code: String }
+struct CustomerCreationRejected: Error { let code: String }
+
 @MainActor final class POSAPI {
     let origin: URL
     var token: String?
@@ -37,24 +40,32 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
         if !query.isEmpty { components.queryItems = query.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) } }
         guard let url = components.url else { throw POSError.invalidOrigin }
         var request = URLRequest(url: url)
+        let requestSession = token
         request.httpMethod = method; request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(SecureStore.deviceID, forHTTPHeaderField: "X-Pos-Device")
         request.setValue(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown", forHTTPHeaderField: "X-Pos-Build")
-        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        if let requestSession { request.setValue("Bearer \(requestSession)", forHTTPHeaderField: "Authorization") }
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
         let (data, response) = try await session.data(for: request)
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") && ProcessInfo.processInfo.arguments.contains("--pos-refund-review-session-change-tests") && path.hasSuffix("/refund-rewards-review/status") {
             token = "fixture-changed-session"
         }
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") && ProcessInfo.processInfo.arguments.contains("--pos-connected-sales-session-change-tests") && path.hasSuffix("/sales") {
+            token = "fixture-changed-session"
+        }
         #endif
+        guard token == requestSession else { throw POSError.unavailable("Your sign-in changed. Reopen this view before continuing.") }
         guard let http = response as? HTTPURLResponse else { throw POSError.unavailable("No server response.") }
         if http.statusCode == 401 { throw POSError.signInRequired }
         guard (200...299).contains(http.statusCode) else {
             let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let code = (value?["error"] as? [String: Any])?["code"] as? String ?? "request_\(http.statusCode)"
+            if method == "POST" && path.hasSuffix("/customers") && (http.statusCode == 422 || code == "select_existing_customer") {
+                throw CustomerCreationRejected(code: code)
+            }
             if method == "POST" && path.hasSuffix("/refund-rewards-review") && (400...499).contains(http.statusCode) {
                 throw RefundReviewServerError(status: http.statusCode, code: code)
             }
@@ -64,13 +75,24 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
             if http.statusCode == 404 && ["quote_not_found", "sale_unavailable"].contains(code) && method == "GET" && (path.contains("/requests/") || path.contains("/sales/")) {
                 throw POSError.savedCheckoutUnavailable
             }
-            let messages = ["select_existing_customer": "This contact already has a customer record. Find and select it instead.",
+            if method == "POST" && path.hasSuffix("/stock-counts/batch") && ["stock_count_changed_by_activity", "count_below_reserved_stock", "count_product_unavailable", "stock_bundle_components_review_required", "count_context_changed", "count_context_required"].contains(code) && (400...499).contains(http.statusCode) {
+                throw StockCountRejected(code: code)
+            }
+            let messages = ["cash_full_refund_required": "Record a full cash return for this receipt. Partial cash returns need a manager review.", "cash_already_refunded": "This cash sale has already been returned.", "customer_contact_required": "Add a phone number or email address. A name is optional.",
+                "cash_received_insufficient": "Cash received must cover the total. Check the amount received.",
+                "cash_checkout_unavailable": "Review this register's cash, tax, catalog and stock setup in Account before recording cash.",
+                "customer_contact_confirmation_required": "Confirm the saved phone or email with this customer before using rewards.",
+                "staff_reward_confirmation_unavailable": "Staff rewards confirmation is not available at this register.",
+                "count_photo_too_many_rows": "Use a closer photo with fewer rows, or enter the counts manually.",
+                "count_draft_needs_manual_entry": "Ask Everbranch couldn't confidently read that sheet. You can edit the text, retry, or enter rows manually.","select_existing_customer": "This contact already has a customer record. Find and select it instead.",
                 "customer_request_conflict": "The original customer request has different details. Recover that request before continuing.",
                 "customer_admin_required": "An owner or administrator can create a customer. Select an existing customer or ask your manager.",
                 "customer_selection_required": "Select the customer before reviewing this sale.",
                 "stock_availability_update_pending": "Availability is updating. Check this basket again before charging.",
                 "stock_unavailable": "One of these products is no longer available. Review the basket.",
                 "stock_count_changed_by_activity": "Stock changed while you were counting. Refresh Products and check the remaining physical units again.",
+                "count_context_changed": "The register's stock location or catalog changed. Refresh Products and review the physical count again.",
+                "count_context_required": "Reload the current stock setup before saving physical counts.",
                 "catalog_changed": "A product or price changed. Return to Products and review the basket.",
                 "checkout_settings_changed": "The register settings changed. Review a new total before charging.",
                 "checkout_rules_busy": "Checkout rules are being updated. Please try again in a moment.",
@@ -81,7 +103,7 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
                 "customer_rewards_historical_review": "The purchase is linked. A manager needs to review its rewards eligibility.",
                 "collection_not_ready": "This register still needs its payment readiness review.",
                 "inventory_collection_off": "This register is being prepared for its inventory acceptance test."]
-            throw POSError.unavailable(messages[code] ?? code.replacingOccurrences(of: "_", with: " "))
+            throw POSError.unavailable(messages[code] ?? "This step couldn’t be completed. Try again, or open Account to check the register setup.")
         }
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(T.self, from: data)
@@ -125,6 +147,10 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
         guard let url = request.url else { return }
         do {
             let data: Data
+            if let connected = try ConnectedEventFixture.response(request, catalog: Self.catalog()) {
+                client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: connected); client?.urlProtocolDidFinishLoading(self); return
+            }
             if ProcessInfo.processInfo.arguments.contains("--pos-missing-quote-ui-tests") && request.httpMethod == "GET" && url.path.contains("/requests/") {
                 client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
                 client?.urlProtocol(self, didLoad: Data(#"{"error":{"code":"quote_not_found"}}"#.utf8))
@@ -286,7 +312,7 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
             else if url.path == "/api/mobile/v1/workspaces/fixture/pos/registers" {
                 let blocked = ProcessInfo.processInfo.arguments.contains("--pos-readiness-delayed-ui-tests") && !Self.isReadinessEnabled()
                 let blockers = blocked ? ["old_setup"] : []
-                data = try JSONSerialization.data(withJSONObject: ["runtime_id": "fixture", "registers": [["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": blockers, "setup_blockers": blockers, "guest_checkout": true, "rewards_redemption_available": ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests"), "can_manage_inventory": ProcessInfo.processInfo.arguments.contains("--pos-stock-count-ui-tests"), "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests")]]])
+                data = try JSONSerialization.data(withJSONObject: ["runtime_id": "fixture", "registers": [["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": blockers, "setup_blockers": blockers, "guest_checkout": true, "rewards_redemption_available": ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests"), "can_manage_inventory": ProcessInfo.processInfo.arguments.contains("--pos-stock-count-ui-tests"), "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests"), "cash_available": ProcessInfo.processInfo.arguments.contains("--pos-connected-ui-tests"), "staff_rewards_available": ProcessInfo.processInfo.arguments.contains("--pos-connected-ui-tests"), "can_view_event_stats": ProcessInfo.processInfo.arguments.contains("--pos-connected-ui-tests")]]])
             }
             else if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") && url.path.hasSuffix("/authorize-device") {
                 data = Data(#"{"application_id":"fixture","access_token":"fixture","location_id":"fixture","merchant_id":"fixture","environment":"sandbox","can_link_apple_account":false}"#.utf8)
@@ -341,6 +367,10 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
             } else { throw URLError(.unsupportedURL) }
             client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data); client?.urlProtocolDidFinishLoading(self)
+        } catch let rejected as ConnectedFixtureHTTPError {
+            client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: rejected.status, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: (try? JSONSerialization.data(withJSONObject: ["error": ["code": rejected.code]])) ?? Data())
+            client?.urlProtocolDidFinishLoading(self)
         } catch { client?.urlProtocol(self, didFailWithError: error) }
     }
     override func stopLoading() {}

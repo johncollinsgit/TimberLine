@@ -450,6 +450,7 @@ struct RewardCheckoutPanel: View {
     @State private var membershipReference = ""
     @State private var membershipConfirmed = false
     @State private var scanning = false
+    @State private var staffConfirmed = false
     @State private var contactChannel = "phone"
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -457,10 +458,15 @@ struct RewardCheckoutPanel: View {
                 Text("\(preview.label) balance: \(POSMoney.display(preview.balanceMinor))")
                 Text("Up to \(POSMoney.display(preview.maxMinor)) per in-person purchase, limited to the available balance and eligible merchandise.").font(.caption)
                 if !lookupOnly {
-                    Text("Would the customer like to use their \(preview.label)?")
-                    TextField("Rewards to use", text: $model.rewardUseAmount).keyboardType(.decimalPad).payInput()
-                    Button("Use \(preview.label)", action: model.useScannedRewards).buttonStyle(PayButtonStyle(primary: false))
-                        .disabled(!model.canApplyScannedRewards || preview.availableMinor < 1 || ((try? POSMoney.minor(model.rewardUseAmount)).map { $0 > preview.availableMinor } ?? true))
+                    if (model.sale?.rewardsRedeemedMinor ?? 0) > 0 && !model.canApplyScannedRewards && !model.busy {
+                        Text("\(preview.label) applied: \(POSMoney.display(model.sale?.rewardsRedeemedMinor ?? 0))").font(.headline)
+                        Text("To choose a different amount, remove the applied rewards and confirm again.").font(.caption)
+                    } else {
+                        Text("Would the customer like to use their \(preview.label)?")
+                        TextField("Rewards to use", text: $model.rewardUseAmount).keyboardType(.decimalPad).payInput()
+                        Button("Use \(preview.label)", action: model.useScannedRewards).buttonStyle(PayButtonStyle(primary: false))
+                            .disabled(!model.canApplyScannedRewards || preview.availableMinor < 1 || ((try? POSMoney.minor(model.rewardUseAmount)).map { $0 > preview.availableMinor } ?? true))
+                    }
                     Button("Do not use rewards", action: model.removeScannedRewards).disabled(model.busy)
                 }
             }
@@ -473,6 +479,18 @@ struct RewardCheckoutPanel: View {
                         Button("Confirm current membership") { model.verifyCurrentMembership(reference: membershipReference, active: true); membershipConfirmed = false }
                             .disabled(model.busy || !membershipConfirmed || membershipReference.trimmingCharacters(in: .whitespacesAndNewlines).count < 10)
                         Button("Remove manual verification") { model.verifyCurrentMembership(reference: "Owner revoked current membership review", active: false) }.disabled(model.busy)
+                    }
+                }
+                if !lookupOnly, model.selectedRegister?.staffRewardsAvailable == true, model.rewardPreview == nil, let customer = model.selectedCustomer {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Use saved customer rewards").font(.headline)
+                        Picker("Confirm contact", selection: $contactChannel) {
+                            if let phone = customer.phone { Text(phone).tag("phone") }
+                            if let email = customer.email { Text(email).tag("email") }
+                        }.onAppear { contactChannel = customer.phone != nil ? "phone" : "email" }
+                        Toggle("Customer confirmed this contact and wants to use rewards", isOn: $staffConfirmed)
+                        Button("Look up \(model.customerCommerce?.rewards.label ?? "rewards")") { model.confirmStaffRewards(channel: contactChannel); staffConfirmed = false }
+                            .buttonStyle(PayButtonStyle()).disabled(!staffConfirmed || model.busy)
                     }
                 }
                 Button("Scan customer rewards QR") { scanning = true }.buttonStyle(PayButtonStyle(primary: false)).disabled(model.busy)

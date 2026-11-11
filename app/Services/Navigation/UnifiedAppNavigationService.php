@@ -246,13 +246,13 @@ class UnifiedAppNavigationService
                 ];
             }
 
-            if ($customersEnabled && Route::has('marketing.customers')) {
+            if ($customersEnabled && Route::has('customers.directory')) {
                 $workItems[] = [
                     'key' => 'customers',
                     'icon' => 'users',
-                    'href' => route('marketing.customers'),
+                    'href' => route('customers.directory'),
                     'label' => 'Customers',
-                    'current' => request()->routeIs('marketing.customers*'),
+                    'current' => request()->routeIs('customers.directory', 'customers.profile', 'customers.square.*'),
                 ];
             }
 

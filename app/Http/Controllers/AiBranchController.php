@@ -74,8 +74,7 @@ class AiBranchController extends Controller
             'tenant' => $tenant, 'tier' => $tier, 'account' => $account,
             'enhanced' => $enhanced, 'snapshot' => $snapshot, 'workspace' => $workspace, 'origin' => $origin, 'contextNotice' => $contextNotice,
             'usage' => $this->chat->usage($tenant), 'conversation' => $conversation,
-            'conversations' => AiBranchConversation::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)
-                ->where('expires_at', '>', now())->latest('id')->limit(30)->get(),
+            'conversations' => $this->chat->ordinaryConversations($tenant, $request->user())->latest('id')->limit(30)->get(),
             'memories' => AiBranchMemory::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->where('expires_at', '>', now())->get(),
             'actions' => AiBranchAction::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->where('kind', 'internal_job_note')->where('status', 'pending')->where('expires_at', '>', now())->latest()->limit(20)->get()->filter(function ($action) use ($tenant, $request): bool {
                 try {

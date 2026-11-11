@@ -3,3 +3,7 @@
 .event-note-review{margin-top:14px}.event-note-review[open]{padding-top:8px}.event-note-review label{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.5;margin:12px 0;color:#4d614e}.event-note-review input{flex-shrink:0;margin-top:3px}
 
 .event-detail-dialog .dialog-status{padding:10px 14px;margin:0 0 16px;background:#fff6e3;color:#785f2e;border:1px solid #ead9ae;border-radius:10px;font-size:13px;line-height:1.5}
+
+.event-commerce-tabs{display:flex;flex-wrap:wrap;gap:.65rem;margin-bottom:1rem}.event-commerce button,.event-commerce a,.event-commerce summary{min-height:44px;padding:.65rem .9rem}.event-commerce button,.event-commerce a{border:1px solid var(--team-border,#d8ddd7);border-radius:.75rem;background:transparent;text-align:left;font:inherit;cursor:pointer}.event-commerce-tabs [aria-current=page]{background:#143f32;color:#fff}.event-commerce .event-sale{padding:.65rem 0;border-bottom:1px solid #d8ddd7}.event-commerce details>summary{cursor:pointer;font-weight:600}.event-customer-search input{box-sizing:border-box;width:100%;min-height:48px;border:1px solid #bdc8bf;border-radius:.75rem;padding:.7rem 1rem;font:inherit}.event-commerce button span{display:block}.event-commerce .event-facts{margin-bottom:1rem}
+.event-customer-results{margin-top:14px}.event-customer-list{display:grid;gap:10px}.event-customer-list>button{width:100%;font-weight:600}.event-customer-list>button span{font-weight:400;margin-top:5px;overflow-wrap:anywhere}
+.event-commerce a{display:inline-flex;align-items:center}

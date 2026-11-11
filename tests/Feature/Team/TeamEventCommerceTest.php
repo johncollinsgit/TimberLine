@@ -162,3 +162,85 @@ test('Teams customer history needs the current tenant area role and never starts
     $this->actingAs($foreignOwner)->getJson($url)->assertForbidden();
     expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(0);
 });
+
+test('the shared event sales endpoint retains original receipt details and current financial tenant access', function () {
+    $sale = eventReceipt($this);
+    $event = commerceOccurrence($this, ['_teams_enrichment' => ['commerce_event' => ['id' => 123]]]);
+    $url = '/team/events/'.$event->id.'/confirmed-sales?tenant='.$this->tenant->slug.'&area='.$this->area->id;
+    $response = $this->actingAs($this->owner)->getJson($url)->assertOk()->assertJsonPath('sales.0.id', $sale->id)->assertJsonPath('report.sales.sale_count', 1)->assertJsonPath('has_more', false);
+    expect($response->headers->get('Cache-Control'))->toContain('private', 'no-store');
+    $member = teamMember($this->tenant, 'member');
+    $this->actingAs($member)->getJson($url)->assertForbidden();
+    [$other, $owner] = teamWorkspace();
+    $this->actingAs($owner)->getJson($url)->assertForbidden();
+    expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(1);
+});
+
+test('the warm event index keeps late confirmation, new backdated sales and post-sale attribution current', function () {
+    $pending = eventReceipt($this, 'quoted');
+    eventReceipt($this, pool: str_repeat('b', 32));
+    $read = fn () => app(PosEventSales::class)->read($this->tenant->id, 123, 'UTC');
+    expect($read()['sale_count'])->toBe(0);
+    $this->store->rows('sales', $this->tenant->id)->where('id', $pending->id)->update(['state' => 'succeeded']);
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    expect($read()['sale_count'])->toBe(1);
+    $reads = collect(DB::getQueryLog())->pluck('query')->map(fn ($sql) => str_replace('`', '"', $sql))
+        ->filter(fn ($sql) => str_contains($sql, 'from "pos_live_sales"') && ! str_contains($sql, 'count(*)'));
+    expect($reads->isNotEmpty())->toBeTrue()->and($reads->every(fn ($sql) => str_contains($sql, '"id" in')))->toBeTrue();
+    DB::disableQueryLog();
+    $buyer = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Late buyer']);
+    $this->stock->rows('receipt_associations', $this->tenant->id)->insert(['tenant_id' => $this->tenant->id, 'runtime_id' => 'event_fixture', 'sale_id' => $pending->id,
+        'customer_profile_id' => $buyer->id, 'actor_id' => $this->owner->id, 'request_hash' => str_repeat('a', 64), 'input_hash' => str_repeat('b', 64), 'contact' => $this->store->encrypt([])]);
+    expect($read()['customer_counts']['attributed_orders'])->toBe(1);
+    $old = eventReceipt($this);
+    $this->store->rows('sales', $this->tenant->id)->where('id', $old->id)->update(['created_at' => '2025-01-01 00:00:00']);
+    expect($read()['sale_count'])->toBe(2)->and($read()['collected_total_minor'])->toBe(2140);
+    expect(app(PosEventSales::class)->read($this->tenant->id + 1, 123, 'UTC')['sale_count'])->toBe(0);
+    Http::assertNothingSent();
+});
+
+test('an older event remains complete beyond another events ten thousand quote window', function () {
+    $old = eventReceipt($this);
+    $padding = eventReceipt($this, 'quoted', pool: str_repeat('b', 32));
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($padding);
+    $template = (array) $padding;
+    $batch = [];
+    for ($i = 0; $i < 10001; $i++) {
+        $id = substr(hash('sha256', 'retained-other-event-'.$i), 0, 32);
+        $snapshot['sale']['sale_id'] = $id;
+        $batch[] = array_replace($template, ['id' => $id, 'request_id' => (string) Str::uuid(), 'payment_request_id' => (string) Str::uuid(),
+            'sdk_attempt_id' => (string) Str::uuid(), 'snapshot' => $this->store->encrypt($snapshot), 'snapshot_hash' => Contract::hash($snapshot), 'created_at' => '2026-11-08 01:00:00']);
+        if (count($batch) === 100) {
+            $this->store->rows('sales', $this->tenant->id)->insert($batch);
+            $batch = [];
+        }
+    }
+    if ($batch) {
+        $this->store->rows('sales', $this->tenant->id)->insert($batch);
+    }
+    $report = app(PosEventSales::class)->read($this->tenant->id, 123, 'UTC', true);
+    expect($report['complete'])->toBeTrue()->and($report['receipt_ids'])->toBe([$old->id])->and($report['net_sales_minor'])->toBe(1000);
+});
+
+test('canonical attribution counts collapse aliases while a broken association leaves verified sales visible', function () {
+    $customer = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Canonical buyer']);
+    $alias = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'merged_into_profile_id' => $customer->id]);
+    eventReceipt($this, customer: $customer->id);
+    eventReceipt($this, customer: $alias->id);
+    $read = fn () => app(PosEventSales::class)->read($this->tenant->id, 123, 'UTC');
+    expect($read()['customer_counts']['unique_buyers'])->toBe(1)->and($read()['customer_counts']['attributed_orders'])->toBe(2);
+    [$other] = teamWorkspace();
+    $foreign = MarketingProfile::create(['tenant_id' => $other->id, 'email' => 'foreign-private@example.invalid']);
+    $guest = eventReceipt($this);
+    $this->stock->rows('receipt_associations', $this->tenant->id)->insert(['tenant_id' => $this->tenant->id, 'runtime_id' => 'event_fixture', 'sale_id' => $guest->id,
+        'customer_profile_id' => $foreign->id, 'actor_id' => $this->owner->id, 'request_hash' => str_repeat('c', 64), 'input_hash' => str_repeat('d', 64), 'contact' => $this->store->encrypt([])]);
+    $report = $read();
+    expect($report['complete'])->toBeTrue()->and($report['net_sales_minor'])->toBe(3000)->and($report['customer_counts']['complete'])->toBeFalse()
+        ->and($report['customer_counts']['unattributed_orders'])->toBe(1)->and($report['customer_review_items'])->not->toBeEmpty();
+    $event = commerceOccurrence($this, ['_teams_enrichment' => ['commerce_event' => ['id' => 123]]]);
+    $response = $this->actingAs($this->owner)->getJson('/team/events/'.$event->id.'/confirmed-sales?tenant='.$this->tenant->slug.'&area='.$this->area->id)
+        ->assertOk()->assertDontSee('foreign-private@example.invalid');
+    $row = collect($response->json('sales'))->firstWhere('id', $guest->id);
+    expect($row['customer'])->toBeNull()->and($row['customer_review_required'])->toBeTrue();
+});

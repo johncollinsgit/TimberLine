@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\AiBranchAction;
-use App\Models\AiBranchConversation;
 use App\Models\AiBranchMemory;
 use App\Models\Tenant;
 use App\Services\AiBranch\AiAssistantAccess;
@@ -89,8 +88,7 @@ class AiAssistantController extends Controller
             'version' => 1, 'workspace' => ['id' => $tenant->id, 'name' => $tenant->name],
             'context' => $context->enabled($tenant) ? $context->capture($tenant, $user, $origin) : null,
             'conversation' => $conversation ? ['id' => $conversation->id, 'messages' => $messages, 'pending' => $conversation->pending_uuid !== null] : null,
-            'conversations' => AiBranchConversation::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)
-                ->where('expires_at', '>', now())->latest('id')->limit(30)->get(['id', 'created_at', 'expires_at']),
+            'conversations' => $chat->ordinaryConversations($tenant, $user)->latest('id')->limit(30)->get(['id', 'created_at', 'expires_at']),
             'memories' => AiBranchMemory::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)
                 ->where('expires_at', '>', now())->get(['id', 'body', 'expires_at']),
             'actions' => $actions, 'usage' => $chat->usage($tenant),

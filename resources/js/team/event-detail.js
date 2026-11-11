@@ -1,3 +1,4 @@
+import { installEventCommerce } from './event-commerce';
 import '../../css/team-event-detail.css';
 
 const node = (tag, text = '', cls = '') => { const item = document.createElement(tag); item.textContent = text; item.className = cls; return item; };
@@ -27,12 +28,13 @@ export function installEventDetail(body, { record, api, tenant, scope, current, 
   const updates = node('section', '', 'event-detail-updates');
   const notes = node('details', '', 'event-panel event-detail-notes'); notes.append(node('summary', 'Event notes'), node('p', plain(record.data?.original_notes) || plain(record.data?.notes) || 'No event notes yet.', 'event-detail-note-text'));
   main.append(updates, notes); columns.append(main, aside); body.append(summary, columns);
+  const commerce = installEventCommerce(main, { record, api, tenant, current: () => active && current() });
   const status = node('p', '', 'event-detail-status'); status.setAttribute('role', 'status'); body.prepend(status);
   body.addEventListener('event:detail-error', event => { if (valid()) status.textContent = event.detail?.message || 'This action could not be completed.'; });
 
   function draw(data) {
     if (!valid()) return;
-    payload = data;
+    payload = data; commerce.update(data);
     const dates = data.dates || {}, location = data.location || {}, hotel = data.hotel || {}, sales = data.sales || {};
     const team = node('div', '', 'event-people');
     for (const person of data.team_members || []) { const name = plain(person.name); if (!name) continue; const row = node('span', '', 'event-person'); const avatar = node('span', initials(name), 'event-avatar'); avatar.setAttribute('aria-hidden', 'true'); row.append(avatar, document.createTextNode(name)); team.append(row); }
@@ -101,5 +103,5 @@ export function installEventDetail(body, { record, api, tenant, scope, current, 
   draw({ dates: { starts_on: record.starts_on, ends_on: record.ends_on }, location: { venue: record.data?.venue, address: record.data?.address }, team_members: record.data?.source_assignee_name ? [{ name: record.data.source_assignee_name }] : [], sales: { can_view: false } });
   status.textContent = 'Loading sales and travel details…';
   const load = async () => { try { const result = await api('/events/' + record.id + '/essentials'); if (valid()) { draw(result); status.textContent = result.notice || ''; } } catch (error) { if (valid()) { status.textContent = error.message || 'Some event details could not be loaded.'; status.append(action('Try again', load)); } } };
-  return { updatesHost: updates, ready: load(), dispose: () => { active = false; } };
+  return { updatesHost: updates, ready: load(), dispose: () => { active = false; commerce.dispose(); } };
 }

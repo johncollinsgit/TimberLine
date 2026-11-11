@@ -41,12 +41,22 @@ class CustomerCommerceSnapshotService
 
     public function forProfile(MarketingProfile $profile, int $tenantId, int $limit = 50): array
     {
+        return $this->snapshot($profile, $tenantId, max(1, min(100, $limit)));
+    }
+
+    /** Reporting rebuilds a broader explicitly linked window without downloading a customer directory. */
+    public function forReportingProfile(MarketingProfile $profile, int $tenantId): array
+    {
+        return $this->snapshot($profile, $tenantId, 5000);
+    }
+
+    private function snapshot(MarketingProfile $profile, int $tenantId, int $limit): array
+    {
         $canonical = $this->identities->byId($tenantId, (int) $profile->id);
         if (! $canonical || $tenantId <= 0) {
             throw (new ModelNotFoundException)->setModel(MarketingProfile::class, [$profile->id]);
         }
 
-        $limit = max(1, min(100, $limit));
         $ids = $this->aliasIds($canonical, $tenantId);
         $links = MarketingProfileLink::query()->forTenantId($tenantId)
             ->whereIn('marketing_profile_id', $ids)->get();
@@ -106,13 +116,15 @@ class CustomerCommerceSnapshotService
                 if (in_array($order->square_order_id, $native['square_orders'], true)) {
                     continue;
                 }
-                $confirmed = strtoupper((string) $order->state) === 'COMPLETED' && $order->closed_at !== null;
                 $tenders = $payments->get($order->square_order_id, collect());
+                $confirmed = app(SquarePurchaseEvidence::class)->confirmedOrder($order, $tenders);
                 if ($tenders->contains(fn ($payment) => in_array($payment->square_payment_id, $conflictingPayments, true))) {
                     continue;
                 }
-                $refunds = $tenders->map(fn ($payment) => $this->integer(data_get($payment->raw_payload, 'refunded_money.amount')));
-                $refunded = $refunds->isNotEmpty() && ! $refunds->containsStrict(null) ? $refunds->sum() : null;
+                $refunded = app(SquarePurchaseEvidence::class)->recordedRefunds($order, $tenders);
+                if (! $confirmed) {
+                    $issues[] = 'square_order_payment_evidence_incomplete';
+                }
                 $inPerson = $tenders->isNotEmpty() && $tenders->every(fn ($payment) => in_array(
                     strtoupper((string) data_get($payment->raw_payload, 'card_details.entry_method', '')),
                     ['CONTACTLESS', 'CHIP', 'SWIPED', 'MAGSTRIPE'], true));

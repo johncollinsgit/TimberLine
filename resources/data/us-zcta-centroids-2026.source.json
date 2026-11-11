@@ -1,0 +1,8 @@
+{
+  "source": "U.S. Census Bureau 2026 Gazetteer ZCTA national file",
+  "url": "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2026_Gazetteer/2026_Gaz_zcta_national.zip",
+  "archive_sha256": "f1e9046b91f6e60686a99343cb2752834c02b0764939403b331c78c017e2c54c",
+  "row_count": 33791,
+  "license": "U.S. federal public-domain geographic reference data",
+  "limitations": "ZCTA internal points approximate ZIP locations. Not individual addresses or a guarantee of delivery coverage."
+}

@@ -137,6 +137,18 @@ imports, customer outreach, Pay collection or rewards policy changes.
 
 ## Tenant rewards, event attribution and physical counts (November 6; source candidate)
 
+The November 11 connected event extension adds cash/internal receipts, audited
+staff confirmation for existing rewards, a photo/manual physical-count wizard,
+server-backed receipt attribution, and shared confirmed event Sales/Customers views.
+Canonical customer reporting and exact dynamic event/series/product/scent/location
+audiences connect the newer Marketing desk to original retained sources. Original
+Pay/Square IDs deduplicate revenue; absent source/refund/customer evidence remains
+visible. Source-only Square reads and an independently enabled authenticated
+webhook queue preserve journals and require explicit tenant enrollment. See
+`docs/operations/connected-event-sales.md` for rollout, reconciliation, indexed
+reporting and physical acceptance. This source description does not assert live
+phone/count/payment acceptance or enable campaign sending.
+
 Pay can recommend an already authorized event register from the signed-in user's
 current Asana Events or native Teams assignment. Shared customer history includes
 recorded locations and products. Tenant policy supports optional percentage

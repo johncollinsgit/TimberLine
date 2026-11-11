@@ -15,8 +15,9 @@ uses(Tests\Support\PosLiveTestCase::class);
 
 beforeEach(function (): void {
     Http::preventStrayRequests();
-    $this->tenant = Tenant::create(['name' => 'Fictional POS shop', 'slug' => 'pos-fixture-'.Str::lower(Str::random(8)), 'status' => 'active']);
-    $this->actor = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    $fixtureId = (string) Str::uuid();
+    $this->tenant = Tenant::create(['name' => 'Fictional POS shop', 'slug' => 'pos-fixture-'.$fixtureId, 'status' => 'active']);
+    $this->actor = User::factory()->create(['email' => 'pos-live-'.$fixtureId.'@example.invalid', 'is_active' => true, 'email_verified_at' => now()]);
     $this->actor->tenants()->attach($this->tenant, ['role' => 'admin', 'membership_active' => true]);
     TenantModuleEntitlement::create(['tenant_id' => $this->tenant->id, 'module_key' => 'pos',
         'availability_status' => 'available', 'enabled_status' => 'enabled', 'billing_status' => 'add_on_comped',

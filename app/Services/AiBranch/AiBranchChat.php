@@ -8,6 +8,7 @@ use App\Models\AiBranchMemory;
 use App\Models\Tenant;
 use App\Models\TenantAiUsageEvent;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -15,6 +16,8 @@ use Throwable;
 
 class AiBranchChat
 {
+    public const INVENTORY_DRAFT_PURPOSE = 'inventory_count_draft';
+
     public function __construct(private AiBranchAccess $access, private AiBranchContext $context, private AiBranchProvider $provider) {}
 
     public function conversation(Tenant $tenant, User $user, int $id): AiBranchConversation
@@ -32,15 +35,55 @@ class AiBranchChat
 
     public function start(Tenant $tenant, User $user): AiBranchConversation
     {
+        return $this->startScoped($tenant, $user, false);
+    }
+
+    /** A separate purpose prevents ordinary workspace chat/history from being reused for count drafts. */
+    public function startInventoryDraft(Tenant $tenant, User $user): AiBranchConversation
+    {
+        return $this->startScoped($tenant, $user, true);
+    }
+
+    private function inventoryScope(Tenant $tenant, User $user): string
+    {
+        return hash('sha256', json_encode([self::INVENTORY_DRAFT_PURPOSE, 1, $tenant->id, $user->id], JSON_THROW_ON_ERROR));
+    }
+
+    private function inventoryConversation(Tenant $tenant, User $user, int $id): AiBranchConversation
+    {
+        $this->access->authorize($tenant, $user);
+        $conversation = AiBranchConversation::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)
+            ->where('expires_at', '>', now())->whereKey($id)->firstOrFail();
+        abort_unless(hash_equals($conversation->context_hash, $this->inventoryScope($tenant, $user)), 409, 'Start a separate physical inventory draft.');
+
+        return $conversation;
+    }
+
+    public function ordinaryConversations(Tenant $tenant, User $user): Builder
+    {
+        $this->access->authorize($tenant, $user, false);
+
+        return $this->activeConversations($tenant, $user, false);
+    }
+
+    private function activeConversations(Tenant $tenant, User $user, bool $inventory): Builder
+    {
+        return AiBranchConversation::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)
+            ->where('expires_at', '>', now())->where('context_hash', $inventory ? '=' : '!=', $this->inventoryScope($tenant, $user));
+    }
+
+    private function startScoped(Tenant $tenant, User $user, bool $inventory): AiBranchConversation
+    {
         $this->access->authorize($tenant, $user);
 
-        return DB::transaction(function () use ($tenant, $user): AiBranchConversation {
+        return DB::transaction(function () use ($tenant, $user, $inventory): AiBranchConversation {
             AiBranchAccount::query()->where('tenant_id', $tenant->id)->lockForUpdate()->firstOrFail();
-            abort_if(AiBranchConversation::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)->where('expires_at', '>', now())->count() >= 30, 422, 'Delete an old chat before starting another.');
+            abort_if($this->activeConversations($tenant, $user, $inventory)->count() >= 30, 422,
+                $inventory ? 'Photo draft limit reached. Enter counts manually or wait for earlier drafts to expire.' : 'Delete an old chat before starting another.');
 
             return AiBranchConversation::query()->create([
                 'tenant_id' => $tenant->id, 'user_id' => $user->id, 'messages' => [],
-                'context_hash' => $this->context->scopeHash($tenant, $user),
+                'context_hash' => $inventory ? $this->inventoryScope($tenant, $user) : $this->context->scopeHash($tenant, $user),
                 'expires_at' => now()->addDays((int) config('ai_branch.history_days')),
             ]);
         }, 3);
@@ -57,6 +100,12 @@ class AiBranchChat
     public function ask(Tenant $tenant, User $user, int $conversationId, string $question, string $uuid, array $origin = []): array
     {
         return $this->run($tenant, $user, $conversationId, $question, $uuid, $origin, 'chat');
+    }
+
+    /** Current bounded operator count text/catalog only; no workspace, memory, page or prior-history enrichment. */
+    public function inventoryDraft(Tenant $tenant, User $user, int $conversationId, string $question, string $uuid): array
+    {
+        return $this->run($tenant, $user, $conversationId, $question, $uuid, [], self::INVENTORY_DRAFT_PURPOSE);
     }
 
     public function briefing(Tenant $tenant, User $user, string $uuid, array $origin = []): array
@@ -80,45 +129,54 @@ class AiBranchChat
     {
         $started = microtime(true);
         $tier = $this->access->authorize($tenant, $user);
-        $enhanced = app(AiWorkspaceContext::class)->enabled($tenant);
+        $inventory = $purpose === self::INVENTORY_DRAFT_PURPOSE;
+        $enhanced = ! $inventory && app(AiWorkspaceContext::class)->enabled($tenant);
         abort_unless(Str::isUuid($uuid) && trim($question) !== '' && mb_strlen($question) <= 3000, 422);
         abort_if(! $enhanced && $origin !== [], 422, 'Page context is unavailable.');
         $origin = $enhanced ? app(AiWorkspacePage::class)->normalize($origin) : [];
         $settings = $this->provider->settings($tenant);
-        $fingerprint = hash('sha256', json_encode($enhanced
-            ? [$user->id, $conversationId, $question, $purpose, $origin]
-            : [$user->id, $conversationId, $question], JSON_THROW_ON_ERROR));
+        $fingerprint = hash('sha256', json_encode($inventory ? [$user->id, $conversationId, $question, $purpose]
+            : ($enhanced ? [$user->id, $conversationId, $question, $purpose, $origin]
+                : [$user->id, $conversationId, $question]), JSON_THROW_ON_ERROR));
         try {
-            $reservation = DB::transaction(function () use ($tenant, $user, $conversationId, $question, $uuid, $fingerprint, $settings, $origin, $purpose, $enhanced): array {
+            $reservation = DB::transaction(function () use ($tenant, $user, $conversationId, $question, $uuid, $fingerprint, $settings, $origin, $purpose, $enhanced, $inventory): array {
                 $account = AiBranchAccount::query()->where('tenant_id', $tenant->id)->lockForUpdate()->firstOrFail();
                 $tier = $this->access->authorize($tenant, $user);
                 $existing = TenantAiUsageEvent::query()->where('tenant_id', $tenant->id)->where('client_uuid', $uuid)->first();
                 if ($existing) {
                     abort_unless((int) $existing->user_id === (int) $user->id && hash_equals((string) data_get($existing->metadata, 'request_hash'), $fingerprint), 409, 'This request identifier is already in use.');
-                    $conversation = $this->conversation($tenant, $user, (int) data_get($existing->metadata, 'conversation_id'));
+                    $conversation = $inventory ? $this->inventoryConversation($tenant, $user, (int) data_get($existing->metadata, 'conversation_id'))
+                        : $this->conversation($tenant, $user, (int) data_get($existing->metadata, 'conversation_id'));
                     $message = collect($conversation->messages)->first(fn ($m) => ($m['uuid'] ?? '') === $uuid && $m['role'] === 'assistant');
                     abort_unless($existing->status === 'settled' && $message, 409, 'This request is pending or requires usage review.');
 
                     return ['replay' => $message];
                 }
                 // New briefing conversation and usage reservation commit together.
-                $conversation = $conversationId === null ? $this->start($tenant, $user) : $this->conversation($tenant, $user, $conversationId);
+                $conversation = $conversationId === null ? $this->start($tenant, $user)
+                    : ($inventory ? $this->inventoryConversation($tenant, $user, $conversationId) : $this->conversation($tenant, $user, $conversationId));
                 $conversation = AiBranchConversation::query()->whereKey($conversation->id)->lockForUpdate()->firstOrFail();
                 abort_if($conversation->pending_uuid !== null, 409, 'This chat already has a pending request.');
                 $messages = (array) $conversation->messages;
                 abort_if(count($messages) >= 40, 422, 'Start a new chat to keep context manageable.');
-                $snapshot = $enhanced ? app(AiWorkspaceContext::class)->capture($tenant, $user, $origin, $purpose) : null;
-                $sources = $snapshot['sources'] ?? $this->context->sources($tenant, $user);
-                $memories = AiBranchMemory::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)->where('expires_at', '>', now())->orderBy('id')->limit(10)->get()->pluck('body')->all();
-                $input = [['role' => 'user', 'content' => json_encode([
-                    ...($snapshot ? ['untrusted_workspace_context' => $snapshot] : ['untrusted_workspace_evidence' => $sources]),
-                    'untrusted_personal_memory' => $memories,
-                ], JSON_THROW_ON_ERROR)]];
-                foreach ($messages as $message) {
-                    $input[] = ['role' => $message['role'], 'content' => $message['text']];
+                $snapshot = null;
+                $sources = [];
+                $input = [];
+                if (! $inventory) {
+                    $snapshot = $enhanced ? app(AiWorkspaceContext::class)->capture($tenant, $user, $origin, $purpose) : null;
+                    $sources = $snapshot['sources'] ?? $this->context->sources($tenant, $user);
+                    $memories = AiBranchMemory::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)->where('expires_at', '>', now())->orderBy('id')->limit(10)->get()->pluck('body')->all();
+                    $input = [['role' => 'user', 'content' => json_encode([
+                        ...($snapshot ? ['untrusted_workspace_context' => $snapshot] : ['untrusted_workspace_evidence' => $sources]),
+                        'untrusted_personal_memory' => $memories,
+                    ], JSON_THROW_ON_ERROR)]];
+                    foreach ($messages as $message) {
+                        $input[] = ['role' => $message['role'], 'content' => $message['text']];
+                    }
                 }
                 $input[] = ['role' => 'user', 'content' => $question];
-                abort_if(strlen(json_encode($input, JSON_THROW_ON_ERROR)) + strlen(AiBranchProvider::INSTRUCTIONS) + 2048 > $settings['max_input'], 422, 'Start a new chat or shorten the question and memory.');
+                $instructions = $inventory ? AiBranchProvider::INVENTORY_DRAFT_INSTRUCTIONS : AiBranchProvider::INSTRUCTIONS;
+                abort_if(strlen(json_encode($input, JSON_THROW_ON_ERROR)) + strlen($instructions) + 2048 > $settings['max_input'], 422, 'Start a new chat or shorten the question and memory.');
                 $usage = $this->usage($tenant);
                 $reservedMicros = $this->provider->cost($settings['max_input'], $settings['max_output'], $settings);
                 app(\App\Services\FieldService\FieldCrewAssistant::class)->assertMonthlyBudget($tenant, $reservedMicros);
@@ -133,7 +191,7 @@ class AiBranchChat
                 $counts = array_map(fn ($entry) => $entry['returned'], $snapshot['coverage'] ?? []);
                 $event = TenantAiUsageEvent::query()->create([
                     'tenant_id' => $tenant->id, 'user_id' => $user->id, 'client_uuid' => $uuid, 'feature' => 'ai_branch_chat',
-                    'context' => 'workspace', 'model' => $settings['model'], 'status' => 'reserved', 'duration_seconds' => 0,
+                    'context' => $inventory ? self::INVENTORY_DRAFT_PURPOSE : 'workspace', 'model' => $settings['model'], 'status' => 'reserved', 'duration_seconds' => 0,
                     'provider_cost_micros' => $reservedMicros, 'buyer_charge_micros' => $reservedBuyer, 'occurred_at' => now('UTC'),
                     'metadata' => ['request_hash' => $fingerprint, 'conversation_id' => $conversation->id, 'settings' => $settings,
                         'billing_scope' => $multiplier ? 'ai_prepaid' : (isset($settings['fictional_scope']) ? (($settings['fictional_provider'] ?? '') === 'openai' ? 'fictional_capped_provider' : 'fictional_no_charge') : 'included_subscription'), 'purpose' => $purpose, 'context_version' => $snapshot['version'] ?? 1, 'adapter_counts' => $counts],
@@ -192,7 +250,7 @@ class AiBranchChat
             return $message;
         }, 3);
         try {
-            $this->conversation($tenant, $user, $conversationId);
+            $inventory ? $this->inventoryConversation($tenant, $user, $conversationId) : $this->conversation($tenant, $user, $conversationId);
         } catch (Throwable $exception) {
             if ($enhanced) {
                 $this->metric($tenant, $user, $uuid, $purpose, 'access_changed', $started, $reservation['counts']);

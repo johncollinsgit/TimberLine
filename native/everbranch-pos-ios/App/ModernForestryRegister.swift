@@ -86,6 +86,8 @@ private struct NativeRegister: View {
     @State private var stockCounts: [String: String] = [:]
     @State private var savedPayments = false
     @State private var recentSales = false
+    @State private var serverSales = false
+    @State private var stockWizard = false
     @FocusState private var searchFocused: Bool
     private var favoriteKey: String { "register-favorites:\(model.selectedWorkspace?.id ?? 0):\(model.selectedRegister?.id ?? "fixture")" }
     private var groups: [ProductGroup] {
@@ -98,31 +100,42 @@ private struct NativeRegister: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            HStack {
+            HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Label("EVERBRANCH PAY", systemImage: "leaf.fill").font(.caption.weight(.semibold)).tracking(1.5)
-                    Text(model.selectedWorkspace?.name ?? "Register").font(.system(.title2, design: .serif)).lineLimit(1)
+                    Label("EVERBRANCH PAY", systemImage: "leaf.fill").font(.caption2.weight(.semibold)).tracking(1)
+                    Text(model.selectedWorkspace?.name ?? "Register").font(.system(.title3, design: .serif)).lineLimit(1).minimumScaleFactor(0.85)
                 }
-                Spacer()
-                VStack(spacing: 8) {
-                    Button("Customers", action: onCustomers).font(.subheadline.weight(.semibold)).padding(.horizontal, 14).frame(minHeight: 44)
-                        .foregroundStyle(PayTheme.ink).background(PayTheme.cream, in: Capsule()).disabled(model.busy || model.collector.hasActivePayment)
-                Button(action: onAccount) { Text("Account").font(.subheadline.weight(.semibold)).padding(14).frame(minHeight: 48).foregroundStyle(PayTheme.ink).background(PayTheme.cream, in: Capsule()).contentShape(Capsule()) }.accessibilityLabel("Account & Tap to Pay")
+                Spacer(minLength: 0)
+                HStack(spacing: 6) {
+                    headerAction("Sales", image: "receipt") { serverSales = true }
+                        .disabled(model.collector.hasInFlightPayment || model.base == nil)
+                    headerAction("Customers", image: "person.2") { onCustomers() }
+                        .disabled(model.busy || model.collector.hasActivePayment)
+                    headerAction("Account", image: "gearshape") { onAccount() }.accessibilityLabel("Account & Tap to Pay")
                 }
-            }.padding(.horizontal, 20).frame(height: 168).foregroundStyle(PayTheme.cream)
+            }.padding(.horizontal, 16).frame(height: 86).foregroundStyle(PayTheme.cream)
                 .background {
                     Image("RegisterMountainHero")
                         .resizable().scaledToFill()
                         .overlay(LinearGradient(colors: [.clear, .black.opacity(0.38)], startPoint: .top, endPoint: .bottom))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(maxWidth: .infinity).frame(height: 86)
                         .clipped()
-                        .ignoresSafeArea(.container, edges: .top)
                 }
             Picker("Register", selection: $tab) { ForEach(RegisterTab.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented).padding(.horizontal, 20)
             if model.pending != nil { Button("Payment saved · Open status", action: onBasket).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
             else if !model.visibleSavedPayments.isEmpty { Button("Payments for review (\(model.visibleSavedPayments.count))") { savedPayments = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
+            if model.selectedRegister?.canManageInventory == true {
+                Button("Count stock · photo or manual") { stockWizard = true }.frame(maxWidth: .infinity, minHeight: 48)
+                    .disabled(model.busy || model.pending != nil || model.collector.hasInFlightPayment)
+            }
             if model.pending == nil && !model.visibleRecentSales.isEmpty { Button("Recent sales") { recentSales = true }.font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48).background(PayTheme.cream, in: Capsule()).padding(.horizontal, 20) }
-            if let message = model.message { Text(message).font(.footnote).foregroundStyle(PayTheme.muted).padding(.horizontal, 20) }
+            if let message = model.message {
+                HStack(spacing: 8) {
+                    Text(message).font(.footnote).foregroundStyle(PayTheme.muted)
+                    Spacer(minLength: 0)
+                    Button { model.message = nil } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel("Dismiss notice")
+                }.padding(.horizontal, 20)
+            }
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") {
                 Text("Readiness setups \(model.simulatedReadinessSetups)").accessibilityIdentifier("readiness-setup-count")
@@ -172,6 +185,12 @@ private struct NativeRegister: View {
                 }.navigationTitle("Payments for review").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { savedPayments = false } } }
             }.preferredColorScheme(.light)
         }
+        .sheet(isPresented: $stockWizard, onDismiss: { model.refreshProducts() }) {
+            if let base = model.base { InventoryCountWizard(api: model.api, base: base, catalog: model.items) }
+        }
+        .sheet(isPresented: $serverSales) {
+            if let base = model.base { SalesWorkspaceView(api: model.api, base: base, canViewSummary: model.selectedRegister?.canViewEventStats == true) }
+        }
         .sheet(isPresented: $recentSales) {
             NavigationStack {
                 List(model.visibleRecentSales) { saved in
@@ -190,6 +209,14 @@ private struct NativeRegister: View {
         .onChange(of: favoriteKey) { _, _ in favorites = Set(UserDefaults.standard.stringArray(forKey: favoriteKey) ?? []) }
         .onChange(of: model.stockCountGeneration) { _, _ in options = nil; stockCounts = [:] }
         .buttonStyle(.plain).preferredColorScheme(.light)
+    }
+
+    private func headerAction(_ title: String, image: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) { Image(systemName: image).font(.system(size: 15, weight: .semibold)); Text(title).font(.caption2.weight(.semibold)).lineLimit(1) }
+                .padding(.horizontal, 6).frame(minWidth: 44, minHeight: 44).fixedSize(horizontal: true, vertical: false)
+                .foregroundStyle(PayTheme.ink).background(PayTheme.cream, in: RoundedRectangle(cornerRadius: 12)).contentShape(Rectangle())
+        }.accessibilityLabel(title)
     }
 
     private func product(_ group: ProductGroup) -> some View {
@@ -309,6 +336,7 @@ private struct NativeRegister: View {
 #if DEBUG
 extension POSViewModel {
     func loadCatalogFixture() {
+        if ProcessInfo.processInfo.arguments.contains("--pos-connected-ui-tests") { ConnectedEventFixture.reset(); api.token = "fictional-connected-session" }
         var rows: [[String: Any]] = [
             ["item_id": String(repeating: "a", count: 32), "product_key": "fixture-laurel", "title": "Laurel & Fig", "variant_label": "Wax Melt", "unit_amount_minor": 700],
             ["item_id": String(repeating: "b", count: 32), "product_key": "fixture-laurel", "title": "Laurel & Fig", "variant_label": "8oz Candle", "unit_amount_minor": 2000],
@@ -319,9 +347,10 @@ extension POSViewModel {
         rows.append(["item_id": String(repeating: "e", count: 32), "product_key": "fixture-trio", "title": "Fictional trio", "variant_label": "Mix & match", "unit_amount_minor": 1800, "kind": "bundle", "revision": String(repeating: "f", count: 64), "available_quantity": untracked ? NSNull() : 6, "availability": "available", "bundle_quantity": 3, "bundle_items": [rows[0], rows[2]]])
         let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
         items = (try? decoder.decode(CatalogList.self, from: JSONSerialization.data(withJSONObject: ["items": rows])))?.items ?? []
-        selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": [], "custom_amount_enabled": true, "guest_checkout": true, "rewards_redemption_available": ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests"), "can_manage_inventory": ProcessInfo.processInfo.arguments.contains("--pos-stock-count-ui-tests"), "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests")]))
+        selectedRegister = try? decoder.decode(Register.self, from: JSONSerialization.data(withJSONObject: ["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": [], "custom_amount_enabled": true, "guest_checkout": true, "rewards_redemption_available": ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests"), "can_manage_inventory": ProcessInfo.processInfo.arguments.contains("--pos-stock-count-ui-tests"), "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests"), "cash_available": ProcessInfo.processInfo.arguments.contains("--pos-connected-ui-tests"), "staff_rewards_available": ProcessInfo.processInfo.arguments.contains("--pos-connected-ui-tests"), "can_view_event_stats": ProcessInfo.processInfo.arguments.contains("--pos-connected-ui-tests")]))
         if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") {
             signedIn = true; registerLoaded = true; tapReady = true
+            if api.token == nil { api.token = "fictional-test-session" }
             if ProcessInfo.processInfo.arguments.contains("--pos-enrollment-ui-tests") {
                 api.token = "fictional-test-session"
                 customerEnrollmentSettings = try? decoder.decode(CustomerEnrollmentSettings.self, from: JSONSerialization.data(withJSONObject: [

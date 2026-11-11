@@ -25,6 +25,9 @@ public enum POSAuthorization {
     }
 }
 public struct Register: Decodable, Identifiable, Sendable {
+    public let canViewEventStats: Bool?
+    public let cashAvailable: Bool?
+    public let staffRewardsAvailable: Bool?
     public let rewardsRedemptionAvailable: Bool?
     public let id: String
     public let name: String
@@ -77,7 +80,11 @@ public struct CatalogItem: Decodable, Identifiable, Sendable {
     public let bundleQuantity: Int?
     public let bundleItems: [CatalogItem]?
 }
-public struct CatalogList: Decodable, Sendable { public let items: [CatalogItem] }
+public struct CatalogList: Decodable, Sendable {
+    public let items: [CatalogItem]
+    public let inventoryPoolId: String?
+    public let inventoryContextVersion: String?
+}
 public struct SaleCustomer: Decodable, Sendable { public let id: Int; public let name: String }
 public struct SaleComponent: Decodable, Sendable { public let title: String; public let quantity: Int }
 public struct SaleLine: Decodable, Sendable {
@@ -89,6 +96,7 @@ public struct SaleLine: Decodable, Sendable {
     public let components: [SaleComponent]?
 }
 public struct Sale: Decodable, Sendable {
+    public let tender: String?
     public let rewardsRedeemedMinor: Int?
     public let customer: SaleCustomer?
     public let collectionReady: Bool?
@@ -161,8 +169,14 @@ public struct PendingSale: Codable, Equatable, Sendable {
     public var sdkStarted = false
     public var refundRequestID: String?
     public var refundAmountMinor: Int?
+    public var cashReceivedMinor: Int?
     public init(workspace: String, register: String, requestID: String = UUID().uuidString.lowercased()) {
         self.workspace = workspace; self.register = register; self.requestID = requestID
+    }
+    public mutating func beginCash(receivedMinor: Int) throws {
+        guard receivedMinor > 0, receivedMinor <= 100_000_000, !sdkStarted,
+              cashReceivedMinor == nil ? (!collectionRequested && collectionAttempted != true) : cashReceivedMinor == receivedMinor else { throw POSError.recoveryRequired }
+        cashReceivedMinor = receivedMinor; collectionRequested = true; collectionAttempted = true
     }
 }
 

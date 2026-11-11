@@ -4,11 +4,30 @@ namespace App\Services\Marketing;
 
 use App\Models\MarketingProfile;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class CanonicalMarketingProfileResolver
 {
     public function canonical(?MarketingProfile $profile, int $tenantId): ?MarketingProfile
+    {
+        return $this->resolve($profile, $tenantId, false);
+    }
+
+    /** Current rows for fenced admission/mapping decisions inside an existing transaction. */
+    public function lockedById(int $tenantId, int $profileId): ?MarketingProfile
+    {
+        if (DB::transactionLevel() < 1) {
+            throw new \LogicException('A current customer identity requires an active transaction.');
+        }
+        if ($profileId <= 0) {
+            return null;
+        }
+
+        return $this->resolve(MarketingProfile::query()->where('tenant_id', $tenantId)->whereKey($profileId)->lockForUpdate()->first(), $tenantId, true);
+    }
+
+    private function resolve(?MarketingProfile $profile, int $tenantId, bool $locked): ?MarketingProfile
     {
         $seen = [];
 
@@ -25,6 +44,7 @@ class CanonicalMarketingProfileResolver
 
             $profile = MarketingProfile::query()
                 ->where('tenant_id', $tenantId)
+                ->when($locked, fn ($query) => $query->lockForUpdate())
                 ->find($nextId);
         }
 

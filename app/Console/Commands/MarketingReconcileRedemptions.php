@@ -73,7 +73,7 @@ class MarketingReconcileRedemptions extends Command
                 ->when($since, fn ($query) => $query->where('updated_at', '>=', $since))
                 ->orderByDesc('updated_at')
                 ->limit($limit)
-                ->get(['id', 'square_order_id', 'square_customer_id', 'source_name', 'raw_tax_names', 'raw_payload'])
+                ->get(['id', 'tenant_id', 'square_order_id', 'square_customer_id', 'source_name', 'raw_tax_names', 'raw_payload'])
                 ->each(function (SquareOrder $order) use (&$summary, $service, $dryRun, $tenantId): void {
                     $summary['orders_scanned']++;
                     $this->mergeSummary($summary, $service->reconcileSquareOrder($order, [
@@ -83,18 +83,18 @@ class MarketingReconcileRedemptions extends Command
                 });
         }
 
-        $this->line('tenant_id=' . $tenantId);
-        $this->line('mode=' . ($dryRun ? 'dry-run' : 'live'));
+        $this->line('tenant_id='.$tenantId);
+        $this->line('mode='.($dryRun ? 'dry-run' : 'live'));
         foreach ($summary as $key => $value) {
-            $this->line($key . '=' . (int) $value);
+            $this->line($key.'='.(int) $value);
         }
 
         return self::SUCCESS;
     }
 
     /**
-     * @param array<string,int> $target
-     * @param array<string,int> $incoming
+     * @param  array<string,int>  $target
+     * @param  array<string,int>  $incoming
      */
     protected function mergeSummary(array &$target, array $incoming): void
     {

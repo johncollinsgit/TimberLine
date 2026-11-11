@@ -32,7 +32,7 @@ class MarketingProfileAnalyticsService
             ? (int) $profile->tenant_id
             : null;
 
-        $links = $profile->links()->get(['source_type', 'source_id']);
+        $links = $profile->links()->when($profileTenantId !== null, fn ($q) => $q->where('tenant_id', $profileTenantId), fn ($q) => $q->whereNull('tenant_id'))->get(['source_type', 'source_id']);
         $sourceTypes = $links->pluck('source_type')->filter()->unique()->values()->all();
         $sourceChannels = collect(is_array($profile->source_channels) ? $profile->source_channels : [])
             ->map(fn ($value) => strtolower(trim((string) $value)))
@@ -49,6 +49,7 @@ class MarketingProfileAnalyticsService
         $orders = $orderIds->isEmpty()
             ? collect()
             : Order::query()
+                ->when($profileTenantId !== null, fn ($q) => $q->where('tenant_id', $profileTenantId), fn ($q) => $q->whereNull('tenant_id'))
                 ->with('event:id,name,display_name')
                 ->whereIn('id', $orderIds->all())
                 ->get(['id', 'event_id', 'order_type', 'ordered_at']);
@@ -171,7 +172,7 @@ class MarketingProfileAnalyticsService
             'has_sms_consent' => (bool) $profile->accepts_sms_marketing,
             'has_square_link' => collect($sourceTypes)->contains(fn ($type) => str_starts_with((string) $type, 'square_')),
             'has_shopify_link' => in_array('shopify_order', $sourceTypes, true),
-            'purchased_at_event' => !empty($eventNames),
+            'purchased_at_event' => ! empty($eventNames),
             'purchased_event_names' => $eventNames,
             'last_event_name' => (string) ($lastEvent['name'] ?? ''),
             'source_diversity' => count(array_unique($sourceTypes)),
@@ -218,13 +219,51 @@ class MarketingProfileAnalyticsService
             'scent_axis_citrus' => (int) ($scentAxisScores['citrus'] ?? 0),
         ];
 
+        if ($profileTenantId !== null && $profile->archived_at === null && $profile->merged_into_profile_id === null) {
+            $confirmed = app(ConfirmedCustomerPurchaseProjection::class)->read($profile, $profileTenantId);
+            $metrics['legacy_order_record_count'] = $totalOrders;
+            $metrics['legacy_square_gross_spent'] = round($totalSquareSpend, 2);
+            $metrics['total_orders'] = $confirmed['confirmed_orders'];
+            $currency = count($confirmed['currencies']) === 1 ? $confirmed['currencies'][0] : null;
+            $metrics['total_spent'] = isset($currency['net_minor']) ? $currency['net_minor'] / 100 : null;
+            $metrics['total_spent_currency'] = $currency['currency'] ?? null;
+            $metrics['confirmed_purchase_currencies'] = $confirmed['currencies'];
+            foreach (['purchased_event_ids', 'purchased_series_ids', 'captured_event_ids', 'acquisition_event_id'] as $field) {
+                $metrics[$field] = $confirmed[$field];
+            }
+            $confirmedSources = array_flip($confirmed['confirmed_source_keys']);
+            $legacyIds = [];
+            $legacyNames = [];
+            foreach ($orders as $order) {
+                if (isset($confirmedSources['order:'.$order->id]) && $order->event) {
+                    $legacyIds[] = 'event:'.$order->event_id;
+                    $legacyNames[] = $order->event->display_name ?: $order->event->name;
+                }
+            }
+            foreach ($attributions as $attribution) {
+                if (isset($confirmedSources['square_order:'.$attribution->source_id]) && $attribution->eventInstance) {
+                    $legacyIds[] = 'event_instance:'.$attribution->event_instance_id;
+                    $legacyNames[] = $attribution->eventInstance->title;
+                }
+            }
+            $metrics['purchased_legacy_event_ids'] = array_values(array_unique($legacyIds));
+            $metrics['purchased_event_names'] = array_values(array_unique([...$legacyNames, ...$confirmed['purchased_event_names']]));
+            $metrics['purchased_at_event'] = count($metrics['purchased_event_names']) > 0;
+            $metrics['purchased_product_keys'] = $confirmed['behavior']['purchased_product_keys'] ?? [];
+            $metrics['purchased_scent_keys'] = $confirmed['behavior']['purchased_scent_keys'] ?? [];
+            $metrics['last_order_at'] = $confirmed['last_purchase_at'];
+            $metrics['days_since_last_order'] = $confirmed['last_purchase_at'] ? now()->diffInDays(CarbonImmutable::parse($confirmed['last_purchase_at'])) : null;
+            $metrics['purchase_coverage'] = ['has_more' => $confirmed['has_more'], 'issues' => $confirmed['issues'], 'as_of' => $confirmed['as_of']];
+            $metrics['location_point'] = app(CustomerLocationDistance::class)->point($profile->postal_code, $profile->country);
+        }
+
         $this->cache[$profileId] = $metrics;
 
         return $metrics;
     }
 
     /**
-     * @param Collection<int,MarketingProfile> $profiles
+     * @param  Collection<int,MarketingProfile>  $profiles
      * @return array<int,array<string,mixed>>
      */
     public function metricsForProfiles(Collection $profiles): array

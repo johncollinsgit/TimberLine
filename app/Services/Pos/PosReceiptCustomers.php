@@ -30,7 +30,7 @@ final class PosReceiptCustomers
     {
         $profile = $this->identities->byId((int) $sale->tenant_id, (int) ($snapshot['customer']['id'] ?? 0));
 
-        return $profile ? ['name' => trim($profile->first_name.' '.$profile->last_name), 'phone' => $profile->phone, 'email' => $profile->email] : null;
+        return $profile ? ['name' => trim($profile->first_name.' '.$profile->last_name) ?: ($profile->email ?: $profile->phone ?: 'Customer'), 'phone' => $profile->phone, 'email' => $profile->email] : null;
     }
 
     public function decorate(object $sale, array $snapshot): array
@@ -41,7 +41,7 @@ final class PosReceiptCustomers
             if (! $profile) {
                 throw new PosException('customer_identity_review_required');
             }
-            $snapshot['customer'] = ['id' => (int) $profile->id, 'name' => trim($profile->first_name.' '.$profile->last_name), 'shopify_customer_id' => null];
+            $snapshot['customer'] = ['id' => (int) $profile->id, 'name' => trim($profile->first_name.' '.$profile->last_name) ?: ($profile->email ?: $profile->phone ?: 'Customer'), 'shopify_customer_id' => null];
             if ($link->reward_context) {
                 $snapshot['customer_rewards'] = $this->store->decrypt($link->reward_context);
             }

@@ -91,3 +91,34 @@ evidence. Treat new source adapters and cross-product AI reuse as separate
 reviews. Do not claim these notes enforce runtime data filtering, establish PCI
 compliance, approve a merchant, or automatically accept future agreements.
 Do not copy one tenant's private account evidence into another tenant's memory.
+
+## Connected event inventory and customer context boundary
+
+Physical count photo interpretation uses the dedicated `inventory_count_draft`
+Ask Everbranch purpose. Its provider input is only the current bounded OCR text
+and numbered native inventory catalog. It never adds workspace adapters, page
+context, personal memories, prior messages, actions or tools, even when a count
+request is retried. Its private conversation scope and request fingerprint are
+separate from ordinary chat; existing authorization, approved provider/model,
+allowance reservation, ambiguous-response handling, settlement and current-access
+rechecks still apply. Manual count entry and review remain available; an AI draft
+does not change stock. Inventory draft conversations have their own bounded
+30-conversation limit and are excluded from ordinary web/native assistant lists
+before pagination. Monthly AI usage remains shared.
+
+The customer, follow-up and customer-activity workspace adapters exclude a
+canonical customer when that customer or a retained alias has Square source
+channels or a Square customer/order/payment link, including the established
+`legacy_square_marketing` channel and `square_marketing_contact` source link.
+Unknown or cross-tenant alias
+scope is excluded. These checks read current provenance without a persistent
+cache; adding a Square link also invalidates affected conversation history and
+replays before another provider dispatch or answer. Ordinary non-Square customer
+evidence and Marketing access are unchanged. Shared purchase projections are not
+AI evidence adapters.
+
+This is a bounded protection for the connected customer import flow, not a claim
+that arbitrary user-entered prompts, job text or personal memories are classified
+by source. Existing connection-status metadata is a separate adapter and is not
+expanded by this release. New provider-derived AI contexts still require the
+review described above.

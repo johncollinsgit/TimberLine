@@ -2759,3 +2759,5 @@ Route::get('/stockists/preview/{store}', [\App\Http\Controllers\StockistLocatorC
 Route::get('/stockists', [\App\Http\Controllers\StockistLocatorController::class, 'index'])->name('shopify.embedded.stockists');
 
 Route::get('/stockists/assets/{file}', [\App\Http\Controllers\StockistLocatorController::class, 'asset'])->where('file', '[A-Za-z0-9_.-]+')->name('stockists.assets');
+
+require __DIR__.'/square-customer.php';
