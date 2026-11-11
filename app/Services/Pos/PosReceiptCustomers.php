@@ -36,12 +36,15 @@ final class PosReceiptCustomers
     public function decorate(object $sale, array $snapshot): array
     {
         $link = $this->association($sale);
-        if ($link?->customer_profile_id && empty($snapshot['customer']['id'])) {
+        if ($link?->customer_profile_id) {
             $profile = $this->identities->byId((int) $sale->tenant_id, (int) $link->customer_profile_id);
-            if (! $profile) {
+            if (! $profile || (! empty($snapshot['customer']['id'])
+                && $this->identities->byId((int) $sale->tenant_id, (int) $snapshot['customer']['id'])?->id !== $profile->id)) {
                 throw new PosException('customer_identity_review_required');
             }
-            $snapshot['customer'] = ['id' => (int) $profile->id, 'name' => trim($profile->first_name.' '.$profile->last_name) ?: ($profile->email ?: $profile->phone ?: 'Customer'), 'shopify_customer_id' => null];
+            if (empty($snapshot['customer']['id'])) {
+                $snapshot['customer'] = ['id' => (int) $profile->id, 'name' => trim($profile->first_name.' '.$profile->last_name) ?: ($profile->email ?: $profile->phone ?: 'Customer'), 'shopify_customer_id' => null];
+            }
             if ($link->reward_context) {
                 $snapshot['customer_rewards'] = $this->store->decrypt($link->reward_context);
             }
@@ -72,8 +75,8 @@ final class PosReceiptCustomers
         $priorLink = $this->association($sale);
         $claimProfile = $customer['id'] ?? $priorLink?->customer_profile_id ?? ($snapshot['customer']['id'] ?? null);
         $unclaimed = $priorLink?->reward_context ? $this->store->decrypt($priorLink->reward_context) : ($snapshot['customer_rewards'] ?? ['enabled' => false]);
-        $claim = $claimProfile && ($unclaimed['anonymous'] ?? false)
-            ? $this->claimTerms($scope['tenant_id'], (int) $claimProfile, $sale, $unclaimed, $review, $scope['actor_id']) : null;
+        $claim = $claimProfile && (($unclaimed['anonymous'] ?? false) || ($review && ($unclaimed['historical_review_required'] ?? false)))
+            ? $this->claimTerms($scope['tenant_id'], (int) $claimProfile, $sale, $unclaimed, $review, $scope['actor_id'], $operation) : null;
         $result = $this->stock->operation($scope['tenant_id'], 'receipt:'.$this->store->runtime().':'.$input['request_id'], 'receipt_customer', $scope['actor_id'],
             [$sale->id, $input], function ($key) use ($scope, $sale, $snapshot, $customer, $contact, $review, $input, $claim, $claimProfile, $unclaimed): array {
                 $current = $this->association($sale);
@@ -84,7 +87,7 @@ final class PosReceiptCustomers
                 }
                 $profileId = $customer['id'] ?? $selected;
                 $reward = $current?->reward_context ? $this->store->decrypt($current->reward_context) : ($snapshot['customer_rewards'] ?? ['enabled' => false]);
-                if ($profileId && ($reward['anonymous'] ?? false)) {
+                if ($profileId && (($reward['anonymous'] ?? false) || ($review && ($reward['historical_review_required'] ?? false)))) {
                     if (! $claim || (int) $claimProfile !== (int) $profileId || \App\Services\PaymentsCore\Contract::hash($reward) !== \App\Services\PaymentsCore\Contract::hash($unclaimed)) {
                         throw new PosException('receipt_association_changed_retry');
                     }
@@ -115,7 +118,7 @@ final class PosReceiptCustomers
         return $result;
     }
 
-    private function claimTerms(int $tenant, int $profileId, object $sale, array $terms, ?array $review, int $actor): array
+    private function claimTerms(int $tenant, int $profileId, object $sale, array $terms, ?array $review, int $actor, array $payment): array
     {
         if (($terms['enabled'] ?? false) !== true) {
             return $terms;
@@ -126,18 +129,19 @@ final class PosReceiptCustomers
                 'eligibility_review' => ['actor_id' => $actor, 'reason' => $review['reason'], 'at' => now()->toIso8601String()]];
         }
         $profile = MarketingProfile::query()->forTenantId($tenant)->findOrFail($profileId);
-        $history = app(CustomerCommerceSnapshotService::class)->forProfile($profile, $tenant, 100);
+        $history = app(CustomerCommerceSnapshotService::class)->forReceiptAttributionHistory($profile, $tenant, $sale, $payment);
         $purchases = collect($history['purchases']);
-        $ambiguous = count($history['issues'] ?? []) > 0 || $purchases->count() >= 100
+        $ambiguous = count($history['issues'] ?? []) > 0 || ($history['has_more'] ?? false) || ($history['unverified_record_count'] ?? 0) > 0 || $purchases->count() >= 100
             || ($terms['rules']['candle_club_multiplier_enabled'] ?? false)
+            || $purchases->contains(fn ($p) => $p['confirmed'] && (! is_int($p['amount_minor']) || ! is_int($p['refunded_minor'])))
             // These summaries do not establish whether an older refund preceded this purchase.
             || $purchases->contains(fn ($p) => $p['confirmed'] && ($p['refunded_minor'] ?? 0) > 0 && ($p['source_id'] ?? null) !== $sale->id)
             || $purchases->contains(fn ($p) => $p['confirmed'] && empty($p['occurred_at']));
         if ($ambiguous) {
             return [...$terms, 'historical_review_required' => true];
         }
-        $prior = $purchases->filter(fn ($p) => $p['confirmed'] && $p['amount_minor'] !== null
-            && ($p['refunded_minor'] ?? 0) < $p['amount_minor'] && strtotime($p['occurred_at']) < strtotime($sale->created_at))->count();
+        $prior = $purchases->filter(fn ($p) => $p['confirmed'] && is_int($p['amount_minor']) && is_int($p['refunded_minor'])
+            && $p['refunded_minor'] < $p['amount_minor'] && strtotime($p['occurred_at']) < strtotime($sale->created_at))->count();
 
         return [...$terms, 'anonymous' => false, 'historical_review_required' => false, 'member' => false, 'order_number' => $prior + 1];
     }

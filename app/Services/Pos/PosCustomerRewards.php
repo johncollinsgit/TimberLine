@@ -71,11 +71,16 @@ final class PosCustomerRewards
         }
         $profile = $this->identities->byId($scope['tenant_id'], $customer['id']);
         $history = app(CustomerCommerceSnapshotService::class)->forProfile($profile, $scope['tenant_id'], 100);
-        $prior = collect($history['purchases'])->filter(fn ($p) => $p['confirmed']
-            && $p['amount_minor'] !== null && ($p['refunded_minor'] ?? 0) < $p['amount_minor'])->count();
+        $purchases = collect($history['purchases']);
+        $review = ! empty($history['issues']) || ($history['has_more'] ?? false) || ($history['unverified_record_count'] ?? 0) > 0
+            || $purchases->count() >= 100 || $purchases->contains(fn ($p) => $p['confirmed']
+                && (! is_int($p['amount_minor']) || ! is_int($p['refunded_minor']) || empty($p['occurred_at'])));
+        $prior = $purchases->filter(fn ($p) => $p['confirmed'] && is_int($p['amount_minor'])
+            && is_int($p['refunded_minor']) && $p['refunded_minor'] < $p['amount_minor'])->count();
 
         return ['enabled' => true, 'version' => $current['version'], 'rules' => $rules,
-            'program' => $current['program'], 'policy' => $current['policy'], 'order_number' => $prior + 1,
+            'program' => $current['program'], 'policy' => $current['policy'], 'order_number' => $review ? null : $prior + 1,
+            'historical_review_required' => $review,
             'member' => app(CandleClubMembershipService::class)->isActiveMember($profile),
             'threshold_mode' => $setup['threshold_mode'] ?? null, 'redemption' => 'online_only',
             'refund_policy' => 'recalculate_original_rules'];

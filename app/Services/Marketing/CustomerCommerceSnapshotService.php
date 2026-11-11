@@ -50,7 +50,44 @@ class CustomerCommerceSnapshotService
         return $this->snapshot($profile, $tenantId, 5000);
     }
 
-    private function snapshot(MarketingProfile $profile, int $tenantId, int $limit): array
+    /** Server-internal prior-history read for an already verified receipt attribution. */
+    public function forReceiptAttributionHistory(MarketingProfile $profile, int $tenantId, object $sale, array $payment): array
+    {
+        $store = app(\App\Services\Pos\PosStore::class);
+        if ((int) $sale->tenant_id !== $tenantId || $sale->runtime_id !== $store->runtime() || $sale->state !== 'succeeded') {
+            throw new \App\Services\Pos\PosException('paid_evidence_required');
+        }
+        $original = app(\App\Services\Pos\PosService::class)->snapshot($sale);
+        $currentPayment = app(\App\Services\Pos\PosSalePaymentEvidence::class)->read($sale, $original);
+        if (! $currentPayment || ($currentPayment['id'] ?? null) !== ($payment['id'] ?? null)
+            || ($currentPayment['provider_id'] ?? null) !== ($payment['provider_id'] ?? null)) {
+            throw new \App\Services\Pos\PosException('paid_evidence_required');
+        }
+        $payment = $currentPayment;
+        if (($payment['kind'] ?? null) !== 'payment' || ($payment['state'] ?? null) !== 'succeeded'
+            || ($payment['sale_id'] ?? null) !== $sale->id || ($payment['request_id'] ?? null) !== $sale->payment_request_id
+            || ($payment['amount_minor'] ?? null) !== (int) $sale->amount_minor || empty($payment['provider_id'])
+            || \App\Services\PaymentsCore\Contract::hash($payment['binding'] ?? []) !== \App\Services\PaymentsCore\Contract::hash($original['binding'])) {
+            throw new \App\Services\Pos\PosException('paid_evidence_required');
+        }
+        $excluded = ['pos_sale' => [$store->runtime().':'.$sale->id]];
+        if (in_array($original['binding']['provider'], ['square', 'square_native'], true)
+            && ! in_array($payment['source'] ?? '', ['everbranch_cash', 'everbranch_rewards_only'], true)) {
+            $orders = SquarePayment::forTenantId($tenantId)->where('square_payment_id', $payment['provider_id'])
+                ->where('location_id', $original['binding']['location_id'])->pluck('square_order_id')->filter()->all();
+            $excluded['square_order'] = array_values(array_unique(array_filter([$sale->provider_order_id, ...$orders])));
+            $tenders = SquarePayment::forTenantId($tenantId)->whereIn('square_order_id', $excluded['square_order'])
+                ->where('location_id', $original['binding']['location_id'])->limit(101)->pluck('square_payment_id');
+            if ($tenders->count() > 100) {
+                throw new \App\Services\Pos\PosException('customer_identity_review_required');
+            }
+            $excluded['square_payment'] = array_values(array_unique([$payment['provider_id'], ...$tenders->all()]));
+        }
+
+        return $this->snapshot($profile, $tenantId, 100, $excluded);
+    }
+
+    private function snapshot(MarketingProfile $profile, int $tenantId, int $limit, array $excluded = []): array
     {
         $canonical = $this->identities->byId($tenantId, (int) $profile->id);
         if (! $canonical || $tenantId <= 0) {
@@ -59,8 +96,9 @@ class CustomerCommerceSnapshotService
 
         $ids = $this->aliasIds($canonical, $tenantId);
         $links = MarketingProfileLink::query()->forTenantId($tenantId)
-            ->whereIn('marketing_profile_id', $ids)->get();
-        $native = app(\App\Services\Pos\PosCustomerPurchases::class)->forProfiles($tenantId, $ids, $limit);
+            ->whereIn('marketing_profile_id', $ids)->get()
+            ->reject(fn ($link) => in_array($link->source_id, $excluded[$link->source_type] ?? [], true));
+        $native = app(\App\Services\Pos\PosCustomerPurchases::class)->forProfiles($tenantId, $ids, $limit, $excluded['pos_sale'] ?? []);
         $issues = $native['issues'];
         $purchases = collect($native['purchases']);
 
@@ -113,10 +151,11 @@ class CustomerCommerceSnapshotService
 
                     continue;
                 }
-                if (in_array($order->square_order_id, $native['square_orders'], true)) {
+                $tenders = $payments->get($order->square_order_id, collect());
+                if (in_array($order->square_order_id, $native['square_orders'], true)
+                    || $tenders->contains(fn ($payment) => in_array($payment->square_payment_id, $native['square_payments'], true))) {
                     continue;
                 }
-                $tenders = $payments->get($order->square_order_id, collect());
                 $confirmed = app(SquarePurchaseEvidence::class)->confirmedOrder($order, $tenders);
                 if ($tenders->contains(fn ($payment) => in_array($payment->square_payment_id, $conflictingPayments, true))) {
                     continue;

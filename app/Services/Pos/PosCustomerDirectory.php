@@ -111,31 +111,64 @@ final class PosCustomerDirectory
                 throw new PosException('shopify_binding_unverified', 503);
             }
             $prefix = $store->store_key.':';
+            $family = $this->familyIds($scope['tenant_id'], $profile);
             $links = MarketingProfileLink::query()->forTenantId($scope['tenant_id'])->where('source_type', 'shopify_customer')
-                ->whereRaw("source_id LIKE ? ESCAPE '!'", [str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $prefix).'%'])->get();
-            $ids = [];
+                ->whereIn('marketing_profile_id', $family)
+                ->whereRaw("source_id LIKE ? ESCAPE '!'", [str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $prefix).'%'])
+                ->limit(1001)->pluck('source_id');
+            if ($links->count() > 1000) {
+                throw new PosException('customer_identity_review_required');
+            }
+            $sources = [];
             foreach ($links as $link) {
-                if ($this->identities->byId($scope['tenant_id'], (int) $link->marketing_profile_id)?->id === $profile->id
-                    && str_starts_with($link->source_id, $prefix)) {
-                    $customer = substr($link->source_id, strlen($prefix));
+                if (str_starts_with($link, $prefix)) {
+                    $customer = substr($link, strlen($prefix));
                     if (preg_match('/^[1-9][0-9]{0,19}$/D', $customer)) {
-                        $conflicts = $links->where('source_id', $link->source_id)->contains(fn ($other) => $this->identities->byId($scope['tenant_id'], (int) $other->marketing_profile_id)?->id !== $profile->id);
-                        if ($conflicts) {
-                            throw new PosException('customer_identity_review_required');
-                        }
-                        $ids[] = 'gid://shopify/Customer/'.$customer;
+                        $sources[$link] = $customer;
                     }
                 }
             }
-            $ids = array_values(array_unique($ids));
-            if (count($ids) > 1) {
+            if (count($sources) > 1) {
                 throw new PosException('customer_identity_review_required');
             }
-            $result['shopify_customer_id'] = $ids[0] ?? null;
+            if ($sources !== []) {
+                // Check the selected source across the tenant, including owners
+                // outside this family. Never scan/resolve unrelated customers.
+                $owners = MarketingProfileLink::query()->forTenantId($scope['tenant_id'])
+                    ->where('source_type', 'shopify_customer')->whereIn('source_id', array_keys($sources))
+                    ->whereNotIn('marketing_profile_id', $family)->limit(1001)->pluck('source_id');
+                // Keep literal prefix/source comparison even on case-insensitive
+                // database collations. Oversized evidence fails closed.
+                if ($owners->count() > 1000 || $owners->contains(fn ($source) => array_key_exists($source, $sources))) {
+                    throw new PosException('customer_identity_review_required');
+                }
+            }
+            $result['shopify_customer_id'] = $sources !== [] ? 'gid://shopify/Customer/'.reset($sources) : null;
             $result['shopify_store_key'] = $store->store_key;
         }
 
         return $result;
+    }
+
+    /** Current explicit tenant aliases only; no directory-wide or cross-request cache. */
+    private function familyIds(int $tenant, MarketingProfile $canonical): array
+    {
+        $ids = [(int) $canonical->id];
+        $frontier = $ids;
+        for ($depth = 0; $frontier !== [] && $depth < 32; $depth++) {
+            $frontier = MarketingProfile::query()->forTenantId($tenant)
+                ->whereIn('merged_into_profile_id', $frontier)->whereNotIn('id', $ids)
+                ->limit(1001)->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $ids = [...$ids, ...$frontier];
+            if (count($ids) > 1000) {
+                throw new PosException('customer_identity_review_required');
+            }
+        }
+        if ($frontier !== []) {
+            throw new PosException('customer_identity_review_required');
+        }
+
+        return $ids;
     }
 
     public function profile(int $tenant, int $id): MarketingProfile
