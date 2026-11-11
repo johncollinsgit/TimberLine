@@ -52,6 +52,7 @@ try{
         const swaps=page.getByRole('heading',{name:'Swap requests',exact:true}).locator('../..');
         assert.match(await swaps.innerText(),new RegExp(`Dec 6, ${year}`));
         assert.match(await swaps.innerText(),new RegExp(`Dec 20, ${year}`));
+        assert.doesNotMatch(await page.locator('body').innerText(),/\u00e2[\u20ac\u2020]|\u00c2\u00b7/,'calendar punctuation is valid Unicode');
         await page.locator('.week-row').first().click();
         await page.getByRole('dialog').waitFor();
         assert.equal(await page.getByLabel('Close panel',{exact:true}).evaluate(node=>node===document.activeElement),true);
@@ -88,6 +89,7 @@ try{
         releasePropertySave();
         await page.getByRole('dialog').waitFor({state:'hidden'});
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`${engine} ${width} fits viewport`);
+        assert.doesNotMatch(await page.locator('body').innerText(),/\u00e2[\u20ac\u2020]|\u00c2\u00b7/,'administration punctuation is valid Unicode');
         await page.screenshot({path:`${evidence}/${engine}-${width}.png`,fullPage:true});
         assert.deepEqual(errors,[]);await context.close();
       }
