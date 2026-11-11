@@ -1,3 +1,11 @@
+## 2026-11-11 - Everbranch relationship-led sharing preview
+
+The public Everbranch home and promo page share a watercolor forest and mountain
+card with the standard Everbranch leaf and the owner's development-partner copy.
+The page title is exact, with no duplicated brand suffix. A dedicated versioned
+image URL and image dimensions support social-preview refreshes. Other public,
+authentication, and tenant brand defaults retain their existing metadata.
+
 ## 2026-11-11 — Pay saved checkout recovery
 
 A product tap that encounters an absent unstarted quote returns to an empty
