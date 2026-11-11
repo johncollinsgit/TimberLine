@@ -38,6 +38,9 @@ final class PosCustomerDirectory
     public function create(string $register, array $input): array
     {
         $scope = $this->access->register($register, 'quote');
+        if (! app(PosCustomerEnrollment::class)->canCreateCustomer($scope)) {
+            throw new PosException('customer_admin_required', 403);
+        }
         $key = $this->requestKey($scope, $input['request_id']);
         $values = ['first_name' => trim($input['first_name'] ?? ''), 'last_name' => trim($input['last_name'] ?? ''),
             'email' => filled($input['email'] ?? null) ? Str::lower(trim($input['email'])) : null,
