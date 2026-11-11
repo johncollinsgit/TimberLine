@@ -48,14 +48,25 @@ test('public and auth surfaces render Everbranch logo assets and refreshed metad
         ->assertSee('brand/everbranch-lockup.svg?v='.$cacheTag, false)
         ->assertSee('brand/everbranch-mark.svg?v='.$cacheTag, false)
         ->assertSee('brand/everbranch-favicon.svg?v='.$cacheTag, false)
-        ->assertSee('og-image-v2.png?v='.$cacheTag, false)
+        ->assertSee('<title>Everbranch | A development partner who gets to know your business.</title>', false)
+        ->assertSee('Custom software, websites and automation built around your people, your needs and the way you work.', false)
+        ->assertSee('brand/everbranch-share-watercolor-v1.png?v='.$cacheTag, false)
+        ->assertSee('<meta property="og:image:width" content="1734">', false)
+        ->assertSee('<meta property="og:image:height" content="907">', false)
+        ->assertDontSee('og-image-v2.png?v='.$cacheTag, false)
         ->assertDontSee('brand/forestry-backstage-lockup.svg?v=fb2', false);
 
     $this->get(route('login'))
         ->assertOk()
         ->assertSee('brand/everbranch-auth.svg?v='.$cacheTag, false)
         ->assertSee('brand/everbranch-favicon.svg?v='.$cacheTag, false)
+        ->assertSee('og-image-v2.png?v='.$cacheTag, false)
         ->assertDontSee('brand/forestry-backstage-auth.svg?v=fb2', false);
+
+    $shareImage = getimagesize(public_path('brand/everbranch-share-watercolor-v1.png'));
+    expect($shareImage)->not->toBeFalse()
+        ->and($shareImage[0])->toBe(1734)
+        ->and($shareImage[1])->toBe(907);
 });
 
 test('shared logo components use config backed Everbranch assets', function (): void {
