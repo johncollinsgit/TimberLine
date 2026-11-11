@@ -91,7 +91,8 @@ def use_verified_mirror_fallback(diagnostics, root=Path('/etc/apt'), run=subproc
         rewritten.append(line)
     if policy.INDIRECT in uris:
         mirrors = root / 'apt-mirrors.txt'
-        mirrors.write_bytes((selected_uri + ' priority:0\n').encode() + mirrors.read_bytes())
+        # APT requires a TAB before metadata; a space becomes part of the URI.
+        mirrors.write_bytes((selected_uri + '\tpriority:0\n').encode() + mirrors.read_bytes())
     source.write_bytes(''.join(rewritten).encode('utf-8'))
     emit('Using verified Ubuntu mirror ' + selected_uri + ' on this disposable runner; APT signature and TLS verification remain required.')
     return True

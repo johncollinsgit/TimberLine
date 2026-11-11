@@ -42,7 +42,9 @@ class PackageNetworkTest(unittest.TestCase):
                 self.assertTrue(network.use_verified_mirror_fallback(
                     {'https archive.ubuntu.com': False, 'https security.ubuntu.com': False}, root, run, lambda _: None))
                 self.assertEqual(source.read_bytes(), before.replace(b'https://security.ubuntu.com/ubuntu/', network.KERNEL_URI.encode()))
-                self.assertEqual(mirrors.read_bytes(), network.KERNEL_URI.encode() + b' priority:0\n' + originals)
+                self.assertEqual(mirrors.read_bytes(), network.KERNEL_URI.encode() + b'\tpriority:0\n' + originals)
+                self.assertEqual(mirrors.read_bytes().splitlines()[0].split(b'\t'),
+                                 [network.KERNEL_URI.encode(), b'priority:0'])
 
     def test_unknown_source_fails_before_fallback_file_changes(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -70,14 +72,14 @@ class PackageNetworkTest(unittest.TestCase):
                       b'Suites: noble-security\nSigned-By:\n https://security.ubuntu.com/ubuntu/\n')
             source.write_bytes(before)
             mirrors = root / 'apt-mirrors.txt'
-            originals = b'https://archive.ubuntu.com/ubuntu/ priority:2\nhttps://security.ubuntu.com/ubuntu/ priority:3\n'
+            originals = b'https://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n'
             mirrors.write_bytes(originals)
             self.assertTrue(network.use_verified_mirror_fallback(
                 {'https archive.ubuntu.com': False, 'https security.ubuntu.com': False}, root,
                 Mock(return_value=Mock(returncode=0)), lambda _: None))
             self.assertEqual(source.read_bytes(), before.replace(
                 b'URIs:\n https://security.ubuntu.com/ubuntu/', b'URIs:\n https://azure.archive.ubuntu.com/ubuntu/'))
-            self.assertEqual(mirrors.read_bytes(), network.CLOUD_URI.encode() + b' priority:0\n' + originals)
+            self.assertEqual(mirrors.read_bytes(), network.CLOUD_URI.encode() + b'\tpriority:0\n' + originals)
             # Replay revalidates and does not duplicate the fallback entry.
             network.use_verified_mirror_fallback(
                 {'https archive.ubuntu.com': False, 'https security.ubuntu.com': False}, root,
