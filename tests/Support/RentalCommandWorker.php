@@ -3,12 +3,9 @@
 require __DIR__.'/../../vendor/autoload.php';
 $app = require __DIR__.'/../../bootstrap/app.php';
 $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
-if (! app()->environment('testing') || getenv('TEAM_WORK_DISPOSABLE_MYSQL') !== '1'
-    || \Illuminate\Support\Facades\DB::connection()->getDriverName() !== 'mysql'
-    || \Illuminate\Support\Facades\DB::connection()->getDatabaseName() !== 'everbranch_ci'
-    || ! in_array(config('database.connections.mysql.host'), ['127.0.0.1', 'localhost'], true)) {
-    throw new RuntimeException('Refusing worker outside disposable MySQL.');
-}
+\Tests\Support\RentalDisposableMySql::assertSafe(\Illuminate\Support\Facades\DB::connection()->getConfig(),
+    config('database.connections.'.\Illuminate\Support\Facades\DB::getDefaultConnection(), []),
+    app()->environment('testing'), getenv('TEAM_WORK_DISPOSABLE_MYSQL') === '1');
 [$script, $tenantId, $userId, $property, $week, $version, $key, $directory, $index] = $argv;
 config(['rentals.enabled' => true, 'rentals.tenant_allowlist' => [(string) $tenantId]]);
 $tenant = \App\Models\Tenant::findOrFail($tenantId);

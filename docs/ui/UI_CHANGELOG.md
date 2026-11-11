@@ -6,6 +6,9 @@ maintenance, journals and private team discussions. Administration starts with
 empty property data and explicit household/account links, weeks and dues records.
 Real membership replaces demo persona switching. Release remains independently
 disabled; Hi-Lo public cutover is held. See the [runbook](../operations/hi-lo-rentals-workspace.md).
+Swap and permanent-change approvals show the affected dates. Dialog focus stays
+inside enabled controls, and uncertain uploads offer status recovery or an exact
+original-file retry before another change can be saved.
 
 ## 2026-11-11 — Workspace controls sizing
 

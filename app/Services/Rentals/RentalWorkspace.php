@@ -77,7 +77,12 @@ class RentalWorkspace
                     abort_if($v['start'] < $week['end'] && $v['end'] > $week['start'], 409, 'This week overlaps an existing stay.');
                 }
                 $owner = $v['held'] ? '' : $household();
-                $state['weeks'][] = ['id' => $id, 'start' => $v['start'], 'end' => $v['end'], 'share' => $v['share'] ?? 0,
+                $share = $v['held'] ? 0 : (int) ($v['share'] ?? 0);
+                if (! $v['held']) {
+                    $allocation = $state['households'][$this->index($state['households'], $owner)];
+                    abort_unless(in_array($share, array_map('intval', $allocation['shares']), true), 422, 'Choose an ownership slot belonging to this household.');
+                }
+                $state['weeks'][] = ['id' => $id, 'start' => $v['start'], 'end' => $v['end'], 'share' => $share,
                     'owner' => $owner, 'originalOwner' => $owner, 'currentOwner' => $owner, 'status' => $v['held'] ? 'held' : 'assigned', 'color' => '#728f8c', 'comments' => []];
                 usort($state['weeks'], fn ($a, $b) => strcmp($a['start'], $b['start']));
                 $state['property']['scheduleStatus'] = 'Owner-entered weekly allocations';
@@ -129,6 +134,7 @@ class RentalWorkspace
             case 'permanentChange':
                 $i = $entry('weeks', 'weekId');
                 $ownStay($i);
+                abort_unless($state['weeks'][$i]['status'] === 'assigned' && $state['weeks'][$i]['currentOwner'] === $state['weeks'][$i]['owner'], 409, 'Only an unchanged permanent allocation can request a permanent change.');
                 $state['permanentRequests'][] = ['id' => $id, 'weekId' => $state['weeks'][$i]['id'], 'fromHouseholdId' => $state['weeks'][$i]['owner'],
                     'toHouseholdId' => $household(), 'reason' => $this->text($input, 'reason', 1000), 'status' => 'pending', 'date' => $now];
                 break;
@@ -225,7 +231,7 @@ class RentalWorkspace
                 $admin();
                 $i = $entry('dues', 'duesId');
                 $v = Validator::make($input, ['amountCents' => 'required|integer|min:1|max:100000000', 'method' => 'required|in:check,cash',
-                    'date' => 'required|date_format:Y-m-d|before_or_equal:today'])->validate();
+                    'date' => 'required|date_format:Y-m-d|before_or_equal:'.CarbonImmutable::today($state['property']['timezone'])->toDateString()])->validate();
                 $due = $state['dues'][$i];
                 $reference = $this->text($input, 'reference', 100);
                 abort_if(collect($due['payments'])->contains(fn ($payment) => ! isset($payment['voidedAt']) && $payment['method'] === $v['method']

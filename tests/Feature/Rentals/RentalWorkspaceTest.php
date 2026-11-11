@@ -175,3 +175,69 @@ test('held and overlapping weeks reject changes and comment deletion checks the 
     $state = rentalChange($tenant, $admin, $state, 'deleteStayComment', ['weekId' => $state['weeks'][0]['id'], 'commentId' => $comment['id']]);
     expect($state['weeks'][0]['comments'])->toBe([]);
 });
+
+test('owner stays require an ownership slot belonging to the allocated household', function (): void {
+    [$tenant, $admin, $state] = rentalFixture();
+    $a = rentalMember($tenant);
+    $b = rentalMember($tenant);
+    $state = rentalHousehold($tenant, $admin, $state, $a, 1);
+    $state = rentalHousehold($tenant, $admin, $state, $b, 2);
+    $url = route('rentals.command', ['property' => $state['property']['id'], 'tenant' => $tenant->slug]);
+    $input = ['action' => 'createStay', 'start' => '2035-07-01', 'end' => '2035-07-08', 'held' => false,
+        'householdId' => $state['households'][0]['id'], 'version' => $state['version']];
+    foreach ([null, 2, 99] as $share) {
+        $this->actingAs($admin)->postJson($url, $input + ['share' => $share, 'requestKey' => (string) Str::uuid()])->assertUnprocessable();
+    }
+    $state = rentalChange($tenant, $admin, $state, 'createStay', ['start' => '2035-07-01', 'end' => '2035-07-08', 'held' => false,
+        'householdId' => $state['households'][0]['id'], 'share' => 1]);
+    expect($state['weeks'][0]['share'])->toBe(1)->and($state['weeks'][0]['owner'])->toBe($state['households'][0]['id']);
+    $state = rentalChange($tenant, $admin, $state, 'createStay', ['start' => '2035-07-08', 'end' => '2035-07-15', 'held' => true, 'share' => 2]);
+    expect($state['weeks'][1]['share'])->toBe(0)->and($state['weeks'][1]['owner'])->toBe('');
+});
+
+test('temporary occupants cannot request a permanent transfer of another household allocation', function (): void {
+    [$tenant, $admin, $state] = rentalFixture();
+    $a = rentalMember($tenant);
+    $b = rentalMember($tenant);
+    $state = rentalHousehold($tenant, $admin, $state, $a, 1);
+    $state = rentalHousehold($tenant, $admin, $state, $b, 2);
+    $state = rentalChange($tenant, $admin, $state, 'createStay', ['start' => '2035-07-01', 'end' => '2035-07-08', 'held' => false,
+        'householdId' => $state['households'][0]['id'], 'share' => 1]);
+    $week = $state['weeks'][0];
+    $state = rentalChange($tenant, $a, $state, 'releaseWeek', ['weekId' => $week['id']]);
+    $state = rentalChange($tenant, $b, $state, 'claimWeek', ['weekId' => $week['id']]);
+    $this->actingAs($b)->postJson(route('rentals.command', ['property' => $state['property']['id'], 'tenant' => $tenant->slug]), [
+        'action' => 'permanentChange', 'weekId' => $week['id'], 'householdId' => $state['households'][1]['id'],
+        'reason' => 'Temporary occupancy is not permanent ownership', 'version' => $state['version'], 'requestKey' => (string) Str::uuid(),
+    ])->assertConflict();
+    $current = app(RentalRepository::class)->read($tenant, $admin, $state['property']['id']);
+    expect($current['permanentRequests'])->toBe([])->and($current['weeks'][0]['owner'])->toBe($state['households'][0]['id']);
+    $state = rentalChange($tenant, $admin, $current, 'createStay', ['start' => '2035-07-08', 'end' => '2035-07-15', 'held' => false,
+        'householdId' => $state['households'][0]['id'], 'share' => 1]);
+    $state = rentalChange($tenant, $a, $state, 'permanentChange', ['weekId' => $state['weeks'][1]['id'],
+        'householdId' => $state['households'][1]['id'], 'reason' => 'Owner-requested reviewed transfer']);
+    $state = rentalChange($tenant, $admin, $state, 'adminApprove', ['requestId' => $state['permanentRequests'][0]['id']]);
+    expect($state['weeks'][1]['owner'])->toBe($state['households'][1]['id'])
+        ->and($state['weeks'][1]['originalOwner'])->toBe($state['households'][0]['id'])
+        ->and($state['permanentRequests'][0]['status'])->toBe('approved');
+});
+
+test('received receipt dates use the property day instead of the UTC day', function (string $timezone, string $instant, string $localDate, string $tomorrow): void {
+    $this->travelTo(\Carbon\CarbonImmutable::parse($instant));
+    [$tenant, $admin, $state] = rentalFixture();
+    $state = rentalChange($tenant, $admin, $state, 'property', ['name' => 'Fictional timezone villa', 'timezone' => $timezone]);
+    $state = rentalHousehold($tenant, $admin, $state, rentalMember($tenant), 1);
+    $state = rentalChange($tenant, $admin, $state, 'chargeDues', ['householdId' => $state['households'][0]['id'],
+        'amountCents' => 10000, 'dueDate' => '2035-07-01', 'description' => 'Reviewed dues']);
+    expect($state['today'])->toBe($localDate);
+    $state = rentalChange($tenant, $admin, $state, 'recordPayment', ['duesId' => $state['dues'][0]['id'], 'amountCents' => 100,
+        'method' => 'cash', 'date' => $localDate, 'reference' => 'Received on the property local day']);
+    expect($state['dues'][0]['payments'][0]['date'])->toBe($localDate);
+    $this->actingAs($admin)->postJson(route('rentals.command', ['property' => $state['property']['id'], 'tenant' => $tenant->slug]), [
+        'action' => 'recordPayment', 'duesId' => $state['dues'][0]['id'], 'amountCents' => 100, 'method' => 'cash', 'date' => $tomorrow,
+        'reference' => 'Future local receipt', 'version' => $state['version'], 'requestKey' => (string) Str::uuid(),
+    ])->assertUnprocessable();
+})->with([
+    'property ahead of UTC' => ['Pacific/Kiritimati', '2035-06-01T12:00:00Z', '2035-06-02', '2035-06-03'],
+    'property behind UTC' => ['Pacific/Honolulu', '2035-06-01T01:00:00Z', '2035-05-31', '2035-06-01'],
+]);

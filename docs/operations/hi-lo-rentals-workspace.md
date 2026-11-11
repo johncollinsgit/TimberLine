@@ -32,6 +32,10 @@ ownership. Permanent changes need an administrator and reject changed temporary
 occupancy. Original allocation remains recorded. No unreviewed rotation is
 automatically treated as a real allocation.
 
+New owner stays must use an ownership slot belonging to their selected household;
+house-care holds have no owner slot. A temporary occupant cannot request a
+permanent transfer. Received check/cash dates use the property's local day.
+
 Maintenance, notices, stay journals and per-stay conversations persist on the
 property. Comment ownership uses actual user IDs. Private team notes and files
 are projected only to assigned households and administrators, with authorization
@@ -50,6 +54,12 @@ checks, the existing trusted `TeamFileScanner`, authenticated routes, opaque
 paths and integrity hashes. An unavailable or rejecting scanner never publishes
 bytes. A response failure after commit must not delete admitted bytes; unresolved
 private orphans require operator reconciliation. This is not public file hosting.
+
+An uncertain upload retains its original request key, property version, team and
+file identity in the current browser session. Status checks recover an existing
+receipt; a retry requires reselecting the same bytes. New changes stay blocked
+until the original outcome is resolved. File contents are not saved in browser
+storage. A failed property switch keeps edits bound to the displayed property.
 
 ## Release and cutover hold
 
@@ -75,6 +85,9 @@ readiness evidence.
 - `tests/Integration/RentalWorkspaceMySqlRecoveryTest.php` reconstructs durable
   partial rental DDL and uses separate processes for simultaneous claims. It
   refuses any database except explicitly disposable local `everbranch_ci`.
+  Its guard checks the resolved connection, including URL overrides, and rejects
+  socket or read/write routing. The full-schema fixture runs last in its MySQL
+  lane so it cannot contaminate another domain's recovery checks.
 - New migration `2026_11_11_190000_create_rental_workspaces.php` is additive and
   resumes missing tables/indexes; both indexes and data-free baseline require
   protected MySQL validation. The schema-baseline workflow supplies the actual

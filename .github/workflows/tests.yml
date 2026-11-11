@@ -584,11 +584,6 @@ jobs:
         tests/Integration/TeamFileEventTargetsMySqlRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php
         tests/Integration/ServiceProposalMySqlRecoveryTest.php tests/Integration/FieldMaterialReviewMySqlRecoveryTest.php --compact
       if: matrix.group == 'schema'
-    - name: Verify rental recovery and competing owner claims
-      env:
-        TEAM_WORK_DISPOSABLE_MYSQL: '1'
-      run: php ./vendor/bin/pest tests/Integration/RentalWorkspaceMySqlRecoveryTest.php --compact
-      if: matrix.group == 'schema'
     - name: Verify native Teams search migration recovery
       env:
         TEAM_WORK_DISPOSABLE_MYSQL: '1'
@@ -664,6 +659,13 @@ jobs:
       run: |
         set -euo pipefail
         git ls-files --error-unmatch database/schema/mysql-schema.sql database/schema/mysql-schema.sha256 >/dev/null
+      if: matrix.group == 'schema'
+    # This fixture rebuilds the complete disposable schema; keep it last in
+    # the schema lane so its tables cannot affect another domain's recovery.
+    - name: Verify rental recovery and competing owner claims
+      env:
+        TEAM_WORK_DISPOSABLE_MYSQL: '1'
+      run: php ./vendor/bin/pest tests/Integration/RentalWorkspaceMySqlRecoveryTest.php --compact
       if: matrix.group == 'schema'
     - name: Verify subscription provider workflows with durable commits
       run: php ./vendor/bin/pest tests/Integration/SubscriptionRuntime --compact

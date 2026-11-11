@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
+use Tests\Support\RentalDisposableMySql;
 
 uses(Tests\TestCase::class);
 require_once __DIR__.'/../Support/RentalFixtures.php';
@@ -15,10 +16,10 @@ it('retains partial rental DDL and serializes competing claims with durable rece
     if (DB::connection()->getDriverName() !== 'mysql' || getenv('TEAM_WORK_DISPOSABLE_MYSQL') !== '1') {
         $this->markTestSkipped('Requires explicitly isolated disposable MySQL.');
     }
-    if (! app()->environment('testing') || DB::connection()->getDatabaseName() !== 'everbranch_ci'
-        || ! in_array(config('database.connections.mysql.host'), ['127.0.0.1', 'localhost'], true)) {
-        throw new RuntimeException('Refusing rental recovery outside isolated MySQL.');
-    }
+    $connection = DB::connection();
+    $resolved = $connection->getConfig();
+    RentalDisposableMySql::assertSafe($resolved, config('database.connections.'.DB::getDefaultConnection(), []),
+        app()->environment('testing'), getenv('TEAM_WORK_DISPOSABLE_MYSQL') === '1');
     Artisan::call('migrate:fresh', ['--force' => true]);
     $migration = require database_path('migrations/2026_11_11_190000_create_rental_workspaces.php');
     $id = (string) Str::uuid();
@@ -56,9 +57,9 @@ it('retains partial rental DDL and serializes competing claims with durable rece
             $process = new Process([PHP_BINARY, base_path('tests/Support/RentalCommandWorker.php'), (string) $tenant->id, (string) $member->id,
                 $state['property']['id'], $state['weeks'][0]['id'], (string) $state['version'], $key, $directory, (string) $index], base_path(), [
                     'APP_ENV' => 'testing', 'APP_KEY' => config('app.key'), 'DB_CONNECTION' => 'mysql', 'DB_HOST' => '127.0.0.1',
-                    'DB_PORT' => (string) config('database.connections.mysql.port'), 'DB_DATABASE' => 'everbranch_ci',
-                    'DB_USERNAME' => config('database.connections.mysql.username'), 'DB_PASSWORD' => config('database.connections.mysql.password'),
-                    'TEAM_WORK_DISPOSABLE_MYSQL' => '1', 'DB_URL' => '', 'DATABASE_URL' => '',
+                    'DB_PORT' => (string) $resolved['port'], 'DB_DATABASE' => 'everbranch_ci',
+                    'DB_USERNAME' => $resolved['username'], 'DB_PASSWORD' => $resolved['password'],
+                    'TEAM_WORK_DISPOSABLE_MYSQL' => '1', 'DB_URL' => '', 'DATABASE_URL' => '', 'DB_SOCKET' => '',
                 ]);
             $process->setTimeout(30)->start();
             $processes[] = $process;

@@ -71,3 +71,83 @@ test('a definitive version conflict reloads state before the next new command',a
     assert.equal(posts[1].version,8);assert.notEqual(posts[1].requestKey,posts[0].requestKey);
   }finally{globalThis.fetch=original;}
 });
+
+test('a failed property switch leaves subsequent changes bound to the displayed property',async()=>{
+  const original=globalThis.fetch;const posts=[];
+  const displayed='00000000-0000-4000-8000-000000000001';
+  const unavailable='00000000-0000-4000-8000-000000000002';
+  try{
+    const {api,state}=await client(async(url,options)=>{
+      posts.push({path:new URL(url).pathname,input:JSON.parse(options.body)});
+      return Response.json({...state,version:8});
+    });
+    const configuredFetch=globalThis.fetch;
+    globalThis.fetch=async(url,options={})=>{
+      if(options.method!=='POST'&&new URL(url).pathname===`/rentals/properties/${unavailable}`)throw Error('connection lost while switching');
+      return configuredFetch(url,options);
+    };
+    await assert.rejects(api.loadProperty(unavailable),/could not be loaded/);
+    await api.command('property',{name:'Reviewed name for the displayed property'});
+    assert.equal(posts[0].path,`/rentals/properties/${displayed}/commands`);
+    assert.equal(posts[0].input.version,7);
+  }finally{globalThis.fetch=original;}
+});
+
+test('an unreadable success response retains the original change until its receipt is confirmed',async()=>{
+  const original=globalThis.fetch;let writes=0;
+  try{
+    const {api,state}=await client(async(_url,options)=>{
+      if(options.method==='POST'){writes++;state.version=8;return new Response('{incomplete',{status:200,headers:{'Content-Type':'application/json'}});}
+      return Response.json({applied:true,state});
+    });
+    await assert.rejects(api.command('claimWeek',{weekId:'fictional-week'}),/response/);
+    assert.equal(api.hasPending(),true);
+    await api.loadProperty();
+    assert.equal(api.hasPending(),false);assert.equal(writes,1);
+  }finally{globalThis.fetch=original;}
+});
+
+test('an uncertain upload blocks new writes and retries only matching bytes with its original metadata',async()=>{
+  const original=globalThis.fetch;const uploads=[];
+  try{
+    const {api,state,values}=await client(async(_url,options)=>{
+      if(options.method!=='POST')return Response.json({applied:false,state});
+      const form=options.body;
+      uploads.push({requestKey:form.get('requestKey'),version:form.get('version'),teamId:form.get('teamId'),body:await form.get('file').text()});
+      if(uploads.length===1)throw Error('upload response lost');
+      const file={id:form.get('requestKey'),name:'original.txt',teamId:'private-team'};
+      return Response.json({state:{...state,version:8,documents:[file]},file});
+    });
+    const file=new File(['original private contents'],'original.txt',{type:'text/plain'});
+    await assert.rejects(api.uploadFile(file,'private-team'),/response/);
+    assert.equal(api.pendingUpload().name,'original.txt');
+    assert.equal([...values.values()].some(value=>value.includes('original private contents')),false);
+    await assert.rejects(api.command('stayComment',{body:'another write'}),/original saved change/);
+    await assert.rejects(api.uploadFile(new File(['different bytes'],'original.txt',{type:'text/plain'})),/same original file/);
+    assert.equal(uploads.length,1);
+    await api.loadProperty();
+    assert.equal(api.hasPending(),true);
+    await api.uploadFile(file,'a-different-current-team');
+    assert.deepEqual(uploads[1],uploads[0]);
+    assert.equal(uploads[0].version,'7');assert.equal(uploads[0].teamId,'private-team');
+    assert.equal(api.hasPending(),false);
+  }finally{globalThis.fetch=original;}
+});
+
+test('a committed upload with a lost response resolves from its receipt without uploading again',async()=>{
+  const original=globalThis.fetch;let writes=0;
+  try{
+    const {api,state}=await client(async(_url,options)=>{
+      if(options.method==='POST'){
+        writes++;state.version=8;
+        state.documents=[{id:options.body.get('requestKey'),name:'original.txt',teamId:''}];
+        throw Error('upload response lost after commit');
+      }
+      return Response.json({applied:true,state});
+    });
+    await assert.rejects(api.uploadFile(new File(['original contents'],'original.txt',{type:'text/plain'})));
+    const loaded=await api.loadProperty();
+    assert.equal(loaded.recoveredUpload.name,'original.txt');
+    assert.equal(api.hasPending(),false);assert.equal(writes,1);
+  }finally{globalThis.fetch=original;}
+});
