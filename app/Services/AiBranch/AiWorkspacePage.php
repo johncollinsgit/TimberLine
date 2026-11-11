@@ -84,14 +84,15 @@ class AiWorkspacePage
             $valid = match ($source['type'] ?? 'job') {
                 'job' => $sources->jobsQuery($tenant, $user)->whereKey($id)->exists(),
                 'task' => $sources->tasksQuery($tenant, $user, false)->whereKey($id)->exists(),
-                'followup' => $sources->followupsQuery($tenant, $user, false)->whereKey($id)->exists(),
-                'customer' => MarketingProfile::query()->where('tenant_id', $tenant->id)->whereNull('archived_at')->whereNull('merged_into_profile_id')->whereKey($id)->exists(),
+                'followup' => ($action = $sources->followupsQuery($tenant, $user, false)->whereKey($id)->first()) && $sources->followupAllowed($action, $tenant),
+                'customer' => app(AiCustomerEvidence::class)->allowed($tenant, $id),
                 'class' => ScheduledClass::query()->where('tenant_id', $tenant->id)->where('status', 'published')->whereKey($id)->exists(),
                 'connection' => \App\Models\IntegrationConnection::query()->where('tenant_id', $tenant->id)->whereKey($id)->exists(),
                 'task_activity' => \App\Models\FieldServiceTaskEvent::query()->where('tenant_id', $tenant->id)->whereKey($id)
                     ->whereHas('task', fn ($task) => $task->where('tenant_id', $tenant->id)->whereHas('job', fn ($job) => $job->where('tenant_id', $tenant->id)->whereNull('archived_at')->whereNull('metadata->recycled_at')->notGeneratedQuickBooksInvoice()))->exists(),
                 'customer_activity' => \App\Models\CustomerLoopActivity::query()->where('tenant_id', $tenant->id)->whereKey($id)
-                    ->whereHas('profile', fn ($profile) => $profile->where('tenant_id', $tenant->id)->whereNull('archived_at')->whereNull('merged_into_profile_id'))->exists(),
+                    ->whereHas('profile', fn ($profile) => $profile->where('tenant_id', $tenant->id)->whereNull('archived_at')->whereNull('merged_into_profile_id'))
+                    ->get(['marketing_profile_id'])->contains(fn ($activity) => app(AiCustomerEvidence::class)->allowed($tenant, (int) $activity->marketing_profile_id)),
                 default => false,
             };
             abort_unless($valid, 409, 'A source is no longer accessible. Start a new chat.');

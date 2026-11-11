@@ -102,6 +102,7 @@ class AiWorkspaceSources
 
     public function customerRecord(MarketingProfile $customer, Tenant $tenant): array
     {
+        abort_unless(app(AiCustomerEvidence::class)->allowed($tenant, (int) $customer->id), 403, 'This customer is unavailable as AI evidence.');
         $name = trim($customer->first_name.' '.$customer->last_name);
 
         return $this->source('customer', $customer->id, $name ?: 'Customer', 'active', null,
@@ -110,9 +111,17 @@ class AiWorkspaceSources
 
     public function followupRecord(CustomerLoopAction $action, Tenant $tenant): array
     {
+        abort_unless($this->followupAllowed($action, $tenant), 403, 'This follow-up is unavailable as AI evidence.');
+
         return $this->source('followup', $action->id, $action->title, $action->status, $action->due_at?->toIso8601String(),
             route('customer-loop.index', ['tenant' => $tenant->slug], false),
             ['customer' => $action->profile ? mb_substr(trim($action->profile->first_name.' '.$action->profile->last_name), 0, 100) : 'Not linked']);
+    }
+
+    public function followupAllowed(CustomerLoopAction $action, Tenant $tenant): bool
+    {
+        return (int) $action->tenant_id === (int) $tenant->id && (! $action->marketing_profile_id
+            || app(AiCustomerEvidence::class)->allowed($tenant, (int) $action->marketing_profile_id));
     }
 
     public function classRecord(ScheduledClass $class, Tenant $tenant): array
@@ -158,6 +167,9 @@ class AiWorkspaceSources
                 ->with(['profile' => fn ($p) => $p->where('tenant_id', $tenant->id)->select(['id', 'first_name', 'last_name'])])
                 ->latest('occurred_at')->orderBy('id')->limit(5)->get(['id', 'marketing_profile_id', 'occurred_at']);
             foreach ($rows as $row) {
+                if (! app(AiCustomerEvidence::class)->allowed($tenant, (int) $row->marketing_profile_id)) {
+                    continue;
+                }
                 $events[] = $this->source('customer_activity', $row->id, trim($row->profile->first_name.' '.$row->profile->last_name) ?: 'Customer', 'Customer activity', null,
                     route('marketing.customers.show', ['marketingProfile' => $row->marketing_profile_id, 'tenant' => $tenant->slug], false),
                     ['event_type' => 'customer_activity', 'occurred_at' => $row->occurred_at?->toIso8601String()]);
@@ -202,11 +214,11 @@ class AiWorkspaceSources
                 'tasks' => ($rawTasks = $this->tasksQuery($tenant, $user)->orderByRaw('case when due_at < ? then 0 when due_at < ? then 2 when due_at <= ? then 3 else 5 end', [$now->utc(), $tomorrow, $week])
                     ->orderByRaw('due_at is null')->orderBy('due_at')->orderBy('id')->limit(5)->get())->map(fn ($r) => $this->taskRecord($r, $tenant))->all(),
                 'followups' => ($rawActions = $this->followupsQuery($tenant, $user)->orderByRaw('case when due_at < ? then 0 when due_at < ? then 2 when due_at <= ? then 3 else 5 end', [$now->utc(), $tomorrow, $week])
-                    ->orderByRaw('due_at is null')->orderBy('due_at')->orderBy('id')->limit(5)->get())->map(fn ($r) => $this->followupRecord($r, $tenant))->all(),
+                    ->orderByRaw('due_at is null')->orderBy('due_at')->orderBy('id')->limit(5)->get()->filter(fn ($r) => $this->followupAllowed($r, $tenant)))->map(fn ($r) => $this->followupRecord($r, $tenant))->values()->all(),
                 'customers' => MarketingProfile::query()->where('tenant_id', $tenant->id)->whereNull('archived_at')->whereNull('merged_into_profile_id')
                     ->whereIn('id', array_filter([...$rawJobs->pluck('marketing_profile_id')->all(), ...$rawTasks->pluck('job.marketing_profile_id')->all(), ...$rawActions->pluck('marketing_profile_id')->all(),
                         ...(($page['page']['kind'] ?? '') === 'customer' ? [$page['page']['id']] : [])]))
-                    ->orderBy('id')->limit(5)->get(['id', 'first_name', 'last_name'])->map(fn ($r) => $this->customerRecord($r, $tenant))->all(),
+                    ->orderBy('id')->limit(5)->get(['id', 'first_name', 'last_name'])->filter(fn ($r) => app(AiCustomerEvidence::class)->allowed($tenant, (int) $r->id))->map(fn ($r) => $this->customerRecord($r, $tenant))->values()->all(),
                 'scheduling' => ScheduledClass::query()->where('tenant_id', $tenant->id)->where('status', 'published')->whereBetween('starts_at', [$now->startOfDay()->utc(), $week])
                     ->orderBy('starts_at')->orderBy('id')->limit(5)->get(['id', 'title', 'status', 'starts_at'])->map(fn ($r) => $this->classRecord($r, $tenant))->all(),
                 'activity' => $this->activity($tenant, $user, $permissions),

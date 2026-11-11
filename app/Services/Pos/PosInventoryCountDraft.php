@@ -57,12 +57,12 @@ final class PosInventoryCountDraft
 
                 return $saved['conversation_id'];
             }
-            $conversation = $this->ask->start($tenant, $user);
+            $conversation = $this->ask->startInventoryDraft($tenant, $user);
             $this->store->event($tenant->id, $key, 'inventory_draft_conversation', ['conversation_id' => $conversation->id, 'input_hash' => $hash]);
 
             return $conversation->id;
         }, 3);
-        $reply = $this->ask->ask($tenant, $user, $conversation, $question, $requestId);
+        $reply = $this->ask->inventoryDraft($tenant, $user, $conversation, $question, $requestId);
         $this->access->register($register, 'quote');
         $json = preg_replace('/^```(?:json)?\s*|\s*```$/', '', trim($reply['text'] ?? ''));
         try {

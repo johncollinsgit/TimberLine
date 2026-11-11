@@ -236,8 +236,8 @@ it('treats photo interpretation as an untrusted editable draft and never changes
     app()->instance(\App\Services\AiBranch\AiBranchChat::class, $ask);
     $request = (string) Str::uuid();
     $conversation = new \App\Models\AiBranchConversation(['id' => 77]);
-    $ask->shouldReceive('start')->once()->withArgs(fn ($tenant, $actor) => $tenant->id === $this->tenant->id && $actor->id === $this->actor->id)->andReturn($conversation);
-    $ask->shouldReceive('ask')->twice()->withArgs(function ($tenant, $actor, $conversationId, $question, $id) use ($request): bool {
+    $ask->shouldReceive('startInventoryDraft')->once()->withArgs(fn ($tenant, $actor) => $tenant->id === $this->tenant->id && $actor->id === $this->actor->id)->andReturn($conversation);
+    $ask->shouldReceive('inventoryDraft')->twice()->withArgs(function ($tenant, $actor, $conversationId, $question, $id) use ($request): bool {
         expect($tenant->id)->toBe($this->tenant->id)->and($actor->id)->toBe($this->actor->id)->and($conversationId)->toBe(77)
             ->and($id)->toBe($request)->and($question)->toContain('CATALOG:', 'Fictional finished item', 'OCR:', 'FFI 12')
             ->not->toContain($this->profile->email, 'fixture_merchant', 'fixture-token');
@@ -258,6 +258,46 @@ it('treats photo interpretation as an untrusted editable draft and never changes
     expect($this->stock->listing($this->tenant->id, $this->pool)[0]['on_hand'])->toBe(2)
         ->and($this->stock->rows('operations', $this->tenant->id)->where('kind', 'count')->count())->toBe(1);
     Http::assertNothingSent();
+});
+
+it('sends only the current count text and catalog through the real Ask Everbranch provider path', function (): void {
+    \App\Models\TenantAccessProfile::create(['tenant_id' => $this->tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    \App\Models\TenantAccessAddon::create(['tenant_id' => $this->tenant->id, 'addon_key' => 'ai_branch_growth', 'enabled' => true, 'source' => 'stripe_fulfillment']);
+    \App\Models\TenantBillingSubscription::create(['tenant_id' => $this->tenant->id, 'provider' => 'stripe', 'provider_subscription_reference' => 'sub_inventory_transport',
+        'purchase_key' => 'addon.ai_branch_growth', 'status' => 'active', 'current_period_ends_at' => now()->addMonths(2)]);
+    \App\Models\AiBranchAccount::create(['tenant_id' => $this->tenant->id, 'enabled' => true, 'budget_cents' => 1500]);
+    \App\Models\AiBranchMemory::create(['tenant_id' => $this->tenant->id, 'user_id' => $this->actor->id,
+        'body' => 'SQUARE_MEMORY_SENTINEL', 'expires_at' => now()->addDay()]);
+    $this->profile->update(['first_name' => 'SQUARE_CUSTOMER_SENTINEL', 'source_channels' => ['square']]);
+    \App\Models\FieldServiceJob::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $this->profile->id,
+        'title' => 'WORKSPACE_JOB_SENTINEL', 'status' => 'open']);
+    config(['ai_branch.enabled' => true, 'ai_branch.tenant_ids' => [$this->tenant->id], 'ai_branch.api_key' => 'fictional-test-key',
+        'ai_branch.model' => 'test-model', 'ai_branch.input_micros_per_million' => 1000000, 'ai_branch.output_micros_per_million' => 4000000,
+        'ai_branch.workspace_context_enabled' => true, 'ai_branch.workspace_context_tenant_ids' => [$this->tenant->id]]);
+    Http::fake(['api.openai.com/*' => Http::response(['id' => 'resp_count_transport', 'status' => 'completed',
+        'output' => [['type' => 'message', 'role' => 'assistant', 'content' => [['type' => 'output_text',
+            'text' => '{"rows":[{"label":"FFI","catalog_index":0,"quantity":12,"uncertain":false}]}']]]],
+        'usage' => ['input_tokens' => 100, 'output_tokens' => 30]])]);
+    $body = ['request_id' => (string) Str::uuid(), 'text' => 'FFI 12'];
+    $this->postJson($this->base.'/stock-counts/draft', $body)->assertOk()->assertJsonPath('confirmation_required', true)
+        ->assertJsonPath('rows.0.item_id', $this->item)->assertJsonPath('rows.0.quantity', 12);
+    $this->postJson($this->base.'/stock-counts/draft', $body)->assertOk();
+    $this->postJson($this->base.'/stock-counts/draft', [...$body, 'text' => 'FFI 99'])->assertConflict();
+    Http::assertSentCount(1);
+    Http::assertSent(function ($request): bool {
+        expect($request->url())->toBe('https://api.openai.com/v1/responses')
+            ->and($request['input'])->toHaveCount(1)->and($request['input'][0]['role'])->toBe('user')
+            ->and($request['input'][0]['content'])->toContain("CATALOG:\n0=Fictional finished item", "OCR:\nFFI 12")
+            ->and($request['instructions'])->toBe(\App\Services\AiBranch\AiBranchProvider::INVENTORY_DRAFT_INSTRUCTIONS)
+            ->and($request['store'])->toBeFalse()->and($request->data())->not->toHaveKeys(['tools', 'previous_response_id'])
+            ->and(json_encode($request->data()))->not->toContain('SQUARE_CUSTOMER_SENTINEL', 'SQUARE_MEMORY_SENTINEL', 'WORKSPACE_JOB_SENTINEL', 'fixture_merchant', 'fixture-token', $this->profile->email);
+
+        return true;
+    });
+    expect($this->stock->listing($this->tenant->id, $this->pool)[0]['on_hand'])->toBe(2)
+        ->and($this->stock->rows('operations', $this->tenant->id)->where('kind', 'count')->count())->toBe(1)
+        ->and(\App\Models\TenantAiUsageEvent::sole()->status)->toBe('settled')
+        ->and(\App\Models\TenantAiUsageEvent::sole()->context)->toBe(\App\Services\AiBranch\AiBranchChat::INVENTORY_DRAFT_PURPOSE);
 });
 
 it('requires the saved contact and never turns a staff approval into a verified wallet account', function (): void {
