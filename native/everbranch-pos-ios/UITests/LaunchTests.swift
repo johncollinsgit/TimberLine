@@ -497,6 +497,39 @@ final class LaunchTests: XCTestCase {
         attach(app, name: "Cancel returns to empty Products without another quote")
     }
 
+    func testMissingUnstartedQuoteReturnsToProductsAndAllowsANewBasket() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-missing-quote-ui-tests"]; app.launch()
+        let product = app.buttons["Add River Birch to basket"]
+        XCTAssertTrue(product.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["An old uncharged basket was cleared. You can choose products for a new sale."].exists)
+        let basket = app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch
+        XCTAssertFalse(basket.isEnabled)
+        let search = app.textFields["Search products"]; search.tap(); search.typeText("River\n")
+        product.tap(); basket.tap()
+        XCTAssertTrue(app.buttons["Charge $21.80"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["quote not found"].exists)
+        attach(app, name: "New product checkout after missing uncharged quote")
+    }
+
+    func testMissingAttemptedPaymentKeepsOriginalForReview() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-missing-quote-ui-tests", "--pos-missing-quote-attempted-tests"]; app.launch()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "This saved payment couldn't be found.")).firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Return to products"].exists)
+        XCTAssertFalse(app.buttons["Charge $21.80"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.buttons["Payment saved · Open status"].waitForExistence(timeout: 5))
+        app.buttons["Payment saved · Open status"].tap()
+        XCTAssertTrue(app.staticTexts["Saved checkout unavailable"].waitForExistence(timeout: 5))
+        attach(app, name: "Original attempted payment remains recoverable")
+    }
+
+    func testMissingQuoteDoesNotClearWhenDiscardIsUnconfirmed() {
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-missing-quote-ui-tests", "--pos-discard-fail-tests"]; app.launch()
+        XCTAssertTrue(app.buttons["Cancel this sale"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.segmentedControls.buttons["Products"].exists)
+        XCTAssertFalse(app.buttons["Charge $21.80"].exists)
+    }
+
     private func attach(_ app: XCUIApplication, name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name
         attachment.lifetime = .keepAlways; add(attachment)

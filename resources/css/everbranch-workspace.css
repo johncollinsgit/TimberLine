@@ -277,6 +277,47 @@ body.mf-app-shell[data-eb-workspace], body.mf-app-shell[data-eb-landlord], body.
 [data-eb-landlord] .eb-landlord-tabs { margin-top: 24px; border: 0; }
 [data-eb-landlord] :is(.eb-admin-button, .eb-admin-overflow > summary) { min-height: 44px; border-radius: 12px; font-size: 15px; padding: 10px 16px; }
 [data-eb-landlord] .eb-admin-button.eb-admin-button--primary { background: #214a36; border-color: #214a36; color: #fffef9; }
+[data-eb-landlord] #app-main .eb-tenant-actions { align-items: center; gap: 8px; }
+[data-eb-landlord] #app-main .eb-tenant-actions > button,
+[data-eb-landlord] #app-main .eb-tenant-actions > .eb-admin-overflow > summary {
+  align-items: center;
+  background: #fffef9;
+  border: 1px solid #d5ddd2;
+  border-radius: 8px;
+  box-sizing: border-box;
+  color: #274435;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+  height: 44px;
+  justify-content: center;
+  line-height: 20px;
+  min-height: 44px;
+  padding: 0 14px;
+  white-space: nowrap;
+  width: max-content;
+}
+[data-eb-landlord] #app-main .eb-tenant-actions > .eb-admin-overflow > summary { background: transparent; border-color: transparent; color: #526456; }
+[data-eb-landlord] #app-main .eb-tenant-actions > button:hover,
+[data-eb-landlord] #app-main .eb-tenant-actions > .eb-admin-overflow > summary:hover,
+[data-eb-landlord] #app-main .eb-tenant-actions > .eb-admin-overflow[open] > summary { background: #eef3e9; }
+[data-eb-landlord] #app-main .eb-tenant-actions__menu {
+  background: #fffef9;
+  border: 1px solid #d5ddd2;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgb(23 45 35 / 10%);
+  display: grid;
+  gap: 2px;
+  min-width: 180px;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+}
+[data-eb-landlord] #app-main .eb-tenant-actions__menu > button { background: transparent; border: 0; border-radius: 6px; font-size: 13px; font-weight: 500; line-height: 20px; padding: 10px 12px; text-align: left; }
+[data-eb-landlord] #app-main .eb-tenant-actions__menu > button:hover { background: #eef3e9; }
 [data-eb-landlord] .eb-landlord-console > .space-y-8 { padding: 0; }
 [data-eb-landlord] .eb-landlord-card { padding: 24px; border: 1px solid #d2dccf; border-radius: 16px; background: #fffef9; }
 [data-eb-landlord] #app-main :is(section, article).bg-white { background: #fffef9; box-shadow: 0 4px 16px rgb(23 45 35 / 4%); }

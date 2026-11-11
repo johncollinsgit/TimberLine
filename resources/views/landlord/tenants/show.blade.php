@@ -70,11 +70,11 @@
                 </div>
             </div>
 
-            <div class="mt-5 flex flex-wrap gap-2">
+            <div class="eb-tenant-actions mt-5 flex flex-wrap gap-2">
                 <button type="button" @click="showEdit = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Edit workspace</button>
                 <details class="eb-admin-overflow">
-                    <summary>Workspace controls</summary>
-                    <div class="flex flex-wrap gap-3 p-3">
+                    <summary>More options <svg aria-hidden="true" width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="m6 8 4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg></summary>
+                    <div class="eb-tenant-actions__menu flex flex-wrap gap-3 p-3">
                 <button type="button" @click="showRole = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Role</button>
                 <button type="button" @click="showModules = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Modules</button>
                 <button type="button" @click="showType = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Tenant Type</button>

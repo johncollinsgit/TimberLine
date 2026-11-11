@@ -22,6 +22,16 @@ shard_spec.loader.exec_module(shards)
 
 
 class ParallelReleaseTest(unittest.TestCase):
+    def test_package_network_preparation_preserves_bounded_fail_closed_installs(self):
+        for name in ('build', 'php', 'browser'):
+            steps = self.jobs[name]['steps']
+            setup = next(step for step in steps if step.get('name') == 'Bound package network waits and diagnose runner connectivity')
+            self.assertEqual(setup['timeout-minutes'], 2)
+            self.assertIn('sudo python3 scripts/ci/ci-package-network.py', setup['run'])
+            self.assertNotIn('continue-on-error', setup)
+        pdf = next(step for step in self.jobs['php']['steps'] if step.get('name') == 'Prepare safe PDF conversion')
+        self.assertEqual(pdf['timeout-minutes'], 12)
+
     @classmethod
     def setUpClass(cls):
         cls.workflow = yaml.safe_load((ROOT / '.github/workflows/tests.yml').read_text())
@@ -125,6 +135,14 @@ class ParallelReleaseTest(unittest.TestCase):
         self.assertIn('github.event.pull_request.number', enterprise['concurrency']['group'])
         self.assertEqual(enterprise['jobs']['browser']['strategy']['max-parallel'], 12)
         self.assertTrue(self.workflow['concurrency']['group'].startswith('release-validation-'))
+
+    def test_rental_full_schema_fixture_cannot_contaminate_later_domain_checks(self):
+        steps = self.jobs['mysql']['steps']
+        schema_steps = [step for step in steps if "matrix.group == 'schema'" in step.get('if', '')]
+        self.assertEqual(schema_steps[-1]['name'], 'Verify rental recovery and competing owner claims')
+        production_steps = self.deploy['jobs']['migration_safety']['steps']
+        self.assertEqual(production_steps[-1]['name'], schema_steps[-1]['name'])
+        self.assertEqual(production_steps[-1]['env'], {'TEAM_WORK_DISPOSABLE_MYSQL': '1'})
 
     def test_only_public_build_outputs_and_pinned_tools_are_shared(self):
         for job in self.jobs.values():

@@ -14927,10 +14927,10 @@ body.eb-workflow-picker-open {
   display: inline-flex;
   font-size: 0.8rem;
   font-weight: 700;
-  height: 2.15rem;
+  height: auto;
   justify-content: center;
   list-style: none;
-  width: 2.15rem;
+  width: max-content;
 }
 .eb-admin-overflow > summary::-webkit-details-marker { display: none; }
 .eb-admin-overflow[open] > summary { background: #ededed; }

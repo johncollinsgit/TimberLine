@@ -8,6 +8,7 @@ export default defineConfig(() => ({
     react(),
     laravel({
       input: [
+        'resources/js/rentals/app.tsx',
         'resources/css/app.css',
         'resources/css/marketplace.css',
         'resources/css/subscriptions-pilot-customer.css',

@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_11_190000_create_rental_workspaces.php' => [
+        'test' => 'tests/Integration/RentalWorkspaceMySqlRecoveryTest.php',
+        'scenarios' => ['property rows retained before event table creation', 'event rows retained before request/version indexes; replay and competing claims serialize on real MySQL'],
+    ],
     '2026_11_08_190000_add_team_file_event_targets.php' => [
         'test' => 'tests/Integration/TeamFileEventTargetsMySqlRecoveryTest.php',
         'scenarios' => ['legacy task uploads survive partial target column creation, trailing index repair, retry and non-destructive rollback; explicit event targets retain their reserved non-task namespace'],

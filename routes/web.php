@@ -198,6 +198,7 @@ use Illuminate\Support\Facades\Route;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 
 require __DIR__.'/trajectory.php';
+require __DIR__.'/rentals.php';
 
 Route::post('/webhooks/modern-forestry/fundraiser-orders', [ModernForestryFundraiserZapierController::class, 'store'])
     ->withoutMiddleware([VerifyCsrfToken::class])

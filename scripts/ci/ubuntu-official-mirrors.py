@@ -14,7 +14,9 @@ MIRRORS = {f'{scheme}://{host}/ubuntu{slash}': kind
            for scheme in ('http', 'https') for slash in ('', '/')}
 
 
-def mirror_kind(uri):
+def mirror_kind(uri, allow_verified_fallback=False):
+    if allow_verified_fallback and uri == 'https://mirrors.edge.kernel.org/ubuntu/':
+        return 'fallback'
     kind = MIRRORS.get(uri)
     if kind is not None:
         return kind
@@ -38,7 +40,7 @@ def mirror_endpoint_description(uri):
         return '<unrecognized URI>'
 
 
-def verified_mirrors(content):
+def verified_mirrors(content, allow_verified_fallback=False):
     """Validate known endpoints before removing cloud mirrors and securing URLs."""
     lines = content.splitlines(keepends=True)
     entries = [line.decode('utf-8').split() for line in lines
@@ -50,8 +52,8 @@ def verified_mirrors(content):
     failure = 'Unsupported Ubuntu mirror list; refusing change. Entries: ' + repr(safe)
     seen = set()
     for words in entries:
-        kind = mirror_kind(words[0])
-        endpoint = 'cloud:' + str(urlsplit(words[0]).hostname) if kind == 'cloud' else kind
+        kind = mirror_kind(words[0], allow_verified_fallback=allow_verified_fallback)
+        endpoint = 'fallback:' + str(urlsplit(words[0]).hostname) if kind in ('cloud', 'fallback') else kind
         if (kind is None or endpoint in seen or len(words) > 2
                 or (len(words) == 2 and not re.fullmatch(r'priority:[0-9]{1,6}', words[1]))):
             raise ValueError(failure)
@@ -66,8 +68,8 @@ def verified_mirrors(content):
             after.append(line)
             continue
         uri = line.decode('utf-8').split()[0]
-        kind = mirror_kind(uri)
-        if kind != 'cloud':
+        kind = mirror_kind(uri, allow_verified_fallback=allow_verified_fallback)
+        if kind not in ('cloud', 'fallback'):
             target = f'https://{kind}.ubuntu.com/ubuntu/'
             after.append(line.replace(uri.encode('utf-8'), target.encode('utf-8'), 1))
     return b''.join(after)
@@ -90,7 +92,7 @@ def normalize_source(content):
     return ''.join(result).encode('utf-8')
 
 
-def source_uris(content):
+def source_uris(content, allow_verified_fallback=False):
     """Read folded fields (including inline Signed-By keys) without rewriting them."""
     fields, current = [], None
     for line in content.decode('utf-8').splitlines():
@@ -109,25 +111,28 @@ def source_uris(content):
             fields.append([match[1].lower(), match[2]])
             current = len(fields) - 1
     uris = [uri for name, value in fields if name == 'uris' for uri in value.split()]
-    if not uris or any(uri not in OFFICIAL | {INDIRECT} for uri in uris):
+    allowed = OFFICIAL | {INDIRECT}
+    if allow_verified_fallback:
+        allowed |= {'https://azure.archive.ubuntu.com/ubuntu/', 'https://mirrors.edge.kernel.org/ubuntu/'}
+    if not uris or any(uri not in allowed for uri in uris):
         raise ValueError('Unsupported Ubuntu source URIs: ' + repr(uris))
     return uris
 
 
-def configure(root=Path('/etc/apt')):
+def configure(root=Path('/etc/apt'), allow_verified_fallback=False):
     sources = root / 'sources.list.d/ubuntu.sources'
     mirrors = root / 'apt-mirrors.txt'
     if sources.is_symlink() or not sources.is_file():
         raise ValueError('Unsupported Ubuntu APT source file.')
     before_sources = sources.read_bytes()
     after_sources = normalize_source(before_sources)
-    uris = source_uris(after_sources)
+    uris = source_uris(after_sources, allow_verified_fallback=allow_verified_fallback)
     # Validate every input before changing either file.
     if INDIRECT in uris:
         if mirrors.is_symlink() or not mirrors.is_file():
             raise ValueError('Unsupported Ubuntu APT mirror file.')
         before = mirrors.read_bytes()
-        after = verified_mirrors(before)
+        after = verified_mirrors(before, allow_verified_fallback=allow_verified_fallback)
         if after != before:
             mirrors.write_bytes(after)
         if mirrors.read_bytes() != after:

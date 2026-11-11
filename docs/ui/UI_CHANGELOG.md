@@ -1,3 +1,29 @@
+## 2026-11-11 — Native shared-property workspace candidate
+
+The Hi-Lo reference layout now has a tenant-scoped native implementation: quiet
+sidebar, coastal overview, owner-week calendar and detail panels for stays,
+maintenance, journals and private team discussions. Administration starts with
+empty property data and explicit household/account links, weeks and dues records.
+Real membership replaces demo persona switching. Release remains independently
+disabled; Hi-Lo public cutover is held. See the [runbook](../operations/hi-lo-rentals-workspace.md).
+Swap and permanent-change approvals show the affected dates. Dialog focus stays
+inside enabled controls, and uncertain uploads offer status recovery or an exact
+original-file retry before another change can be saved.
+
+## 2026-11-11 — Pay saved checkout recovery
+
+A product tap that encounters an absent unstarted quote returns to an empty
+Products screen after the server confirms discard. A possible payment remains
+saved with a clear verification instruction. Recovery no longer displays the
+raw “quote not found” code; uncertain discard keeps the original request.
+
+## 2026-11-11 — Workspace controls sizing
+
+Use a compact outlined Edit workspace action with a matching, quieter More options
+disclosure. Both labels fit on one line with consistent typography and 44px targets;
+the row can wrap at narrow widths. Management actions open in a small anchored menu.
+Existing action handlers and tenant permissions remain unchanged.
+
 ## 2026-11-10 — Isolated property customer demo
 
 Adds a responsive fictional Hi-Lo property walkthrough with the canonical
