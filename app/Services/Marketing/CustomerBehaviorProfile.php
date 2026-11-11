@@ -4,6 +4,7 @@ namespace App\Services\Marketing;
 
 use App\Models\Order;
 use App\Models\ShopifyStore;
+use App\Models\SquareOrder;
 use App\Models\WebsiteOrderLine;
 use App\Services\Inventory\StockEventProduction;
 use App\Services\Inventory\StockLedger;
@@ -78,6 +79,7 @@ class CustomerBehaviorProfile
 
         return ['purchases' => $purchases, 'profile' => ['contract_version' => 1, 'ranking_limit' => $rankLimit, 'channels' => $channels,
             'most_purchased_products' => $rank(array_values($products)), 'most_purchased_scents' => $rank(array_values($scents)),
+            'purchased_product_keys' => array_keys($products), 'purchased_scent_keys' => array_keys($scents),
             'purchase_window_count' => array_sum($channels), 'last_purchase_at' => collect($purchases)->where('confirmed', true)->pluck('occurred_at')->filter()->max(),
             'missing_item_purchase_count' => $missing, 'excluded_refunded_or_unknown_refund_purchases' => $refunds, 'units_without_reviewed_scent' => $unmapped, 'units_without_product_identity' => $unknownProducts,
             'partial' => $hasMore || (bool) $sourceIssues || $missing > 0 || $refunds > 0 || $unmapped > 0 || $unknownProducts > 0,
@@ -126,6 +128,23 @@ class CustomerBehaviorProfile
                     }
                     $items[] = $item;
                 }
+            }
+        } elseif ($source === 'square_order') {
+            $order = SquareOrder::forTenantId($tenant)->where('square_order_id', $purchase['source_id'])->first();
+            $lines = $order?->raw_payload['line_items'] ?? [];
+            foreach (is_array($lines) ? array_slice($lines, 0, 501) : [] as $index => $line) {
+                if (! is_array($line)) {
+                    continue;
+                }
+                $quantity = (string) ($line['quantity'] ?? '');
+                // Candle quantities must be whole units. Provider labels never establish a scent mapping.
+                if (! preg_match('/^([0-9]{1,8})(?:\.0{1,5})?$/D', $quantity, $whole)) {
+                    continue;
+                }
+                $catalog = trim((string) ($line['catalog_object_id'] ?? ''));
+                $items[] = ['product_key' => $catalog !== '' ? 'square_catalog:'.$catalog : 'square_line:'.$purchase['source_id'].':'.$index,
+                    'product_identity_known' => $catalog !== '', 'title' => trim(($line['name'] ?? 'Recorded item').' '.($line['variation_name'] ?? '')),
+                    'quantity' => (int) $whole[1]];
             }
         } elseif ($source === 'website_order') {
             foreach (WebsiteOrderLine::forTenantId($tenant)->where('website_order_id', $purchase['source_id'])->orderBy('id')->limit(501)->get() as $line) {

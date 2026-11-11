@@ -48,7 +48,7 @@ final class PosRewardPaymentAdmission
         if (! $hold || $hold->state !== 'held' || (int) $hold->marketing_profile_id !== ($terms['profile_id'] ?? null)
             || (int) $hold->amount_minor !== ($terms['amount_minor'] ?? null) || $hold->policy_version !== $policy['version']
             || ! $authorization || ! $profile || (int) $authorization->marketing_profile_id !== (int) $profile->id
-            || ! app(PosVerifiedCustomerAccount::class)->verified($profile, (int) $authorization->account_link_id)) {
+            || ! app(PosRewardCustomerProof::class)->identityValid($profile, $authorization, $sale)) {
             throw new PosException('customer_identity_review_required', 409);
         }
         // Eligibility withdrawals serialize with admission. A later pause cannot rewrite an initiated purchase.
@@ -58,7 +58,7 @@ final class PosRewardPaymentAdmission
             $db->table('subscription_billing_agreements')->where('tenant_id', $binding->tenantId)->whereIn('member_id', $members)
                 ->orderBy('id')->lockForUpdate()->get();
         }
-        $effective = app(PosRewardRedemptionSettings::class)->forProfile($profile);
+        $effective = app(PosRewardRedemptionSettings::class)->forRegisterProfile(['tenant_id' => $binding->tenantId, 'register' => $register], $profile);
         if ((int) $hold->amount_minor > $effective['max_minor']) {
             throw new PosException('membership_redemption_limit_changed', 409);
         }

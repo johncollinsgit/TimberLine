@@ -70,7 +70,7 @@ final class PosCustomerPurchases
                         'address' => $snapshot['configuration']['shopify']['tax_address'] ?? null],
                     'items' => array_map(fn ($line) => array_intersect_key($line, array_flip(['item_id', 'line_id', 'sku', 'title', 'quantity', 'components'])), $snapshot['terms']['display']),
                     'currency' => 'USD', 'currency_scale' => 2, 'occurred_at' => \Carbon\CarbonImmutable::parse($sale->created_at)->toIso8601String()];
-                if (($payment['source'] ?? '') !== 'everbranch_rewards_only') {
+                if (! in_array($payment['source'] ?? '', ['everbranch_rewards_only', 'everbranch_cash'], true)) {
                     $result['square_payments'][] = $payment['provider_id'];
                 }
                 if ($sale->provider_order_id) {
@@ -159,13 +159,16 @@ final class PosCustomerPurchases
         $operations = $this->store->db->table('payment_core_operations')->where('tenant_id', $sale->tenant_id)
             ->where('original_id', $sale->attempt_id)->where('kind', 'refund')->orderBy('id')->when($lock, fn ($q) => $q->lockForUpdate())->get();
         $events = $this->store->rows('events', (int) $sale->tenant_id)->where('sale_id', $sale->id)
-            ->whereIn('code', ['customer_refund_confirmed', 'square_refund_observed'])->orderBy('id')->when($lock, fn ($q) => $q->lockForUpdate())->get();
+            ->whereIn('code', ['customer_refund_confirmed', 'square_refund_observed', 'cash_refund_completed'])->orderBy('id')->when($lock, fn ($q) => $q->lockForUpdate())->get();
 
         return \App\Services\PaymentsCore\Contract::hash([$operations->all(), $events->all()]);
     }
 
     public function confirmedRefunds(object $sale, ?array $additionalVerifiedRefund = null): int
     {
+        if ((app(PosService::class)->snapshot($sale)['tender'] ?? null) === 'cash') {
+            return app(PosCashSale::class)->refunded($sale);
+        }
         $operations = [];
         foreach ($this->store->db->table('payment_core_operations')->where('tenant_id', $sale->tenant_id)->where('original_id', $sale->attempt_id)->where('kind', 'refund')->where('state', 'succeeded')->pluck('id') as $id) {
             $refund = $this->journal->get((int) $sale->tenant_id, $id);

@@ -135,7 +135,12 @@ final class PosOutbox
 
             return;
         }
-        $operation = $this->journal->get($scope['tenant_id'], $payload['operation_id']);
+        $operation = ($snapshot['tender'] ?? 'card') === 'cash'
+            ? app(PosSalePaymentEvidence::class)->read($sale, $snapshot)
+            : $this->journal->get($scope['tenant_id'], $payload['operation_id']);
+        if (! $operation) {
+            throw new PosException('paid_evidence_required');
+        }
         if ($effect->effect_key === 'customer_purchase' || str_starts_with($effect->effect_key, 'customer_refund_') || str_starts_with($effect->effect_key, 'customer_association_')) {
             app(PosCustomerRewards::class)->apply($sale, $operation['kind'] === 'refund' ? $operation : null);
         } elseif ($effect->effect_key === 'finalize') {

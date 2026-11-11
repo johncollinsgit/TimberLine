@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
 use App\Models\MarketingSegment;
+use App\Services\Marketing\MarketingSegmentPreviewService;
 use App\Services\Marketing\MarketingTenantOwnershipService;
 use App\Support\Marketing\MarketingSectionRegistry;
-use App\Services\Marketing\MarketingSegmentPreviewService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,8 +16,7 @@ class MarketingSegmentsController extends Controller
 {
     public function __construct(
         protected MarketingTenantOwnershipService $ownershipService
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -100,10 +99,14 @@ class MarketingSegmentsController extends Controller
             ->with('toast', ['style' => 'success', 'message' => 'Segment created.']);
     }
 
-    public function edit(Request $request, MarketingSegment $segment): View
+    public function edit(Request $request, MarketingSegment $segment): View|RedirectResponse
     {
         $tenantId = $this->resolveTenantId($request);
         $this->assertSegmentAccess($segment, $tenantId);
+
+        if (isset($segment->rules_json['_event_audience'])) {
+            return redirect()->route('marketing.event-audiences', ['segment' => $segment->id, 'tenant' => $request->query('tenant')]);
+        }
 
         return view('marketing/segments/form', [
             'section' => MarketingSectionRegistry::section('segments'),
@@ -117,6 +120,9 @@ class MarketingSegmentsController extends Controller
     {
         $tenantId = $this->resolveTenantId($request);
         $this->assertSegmentAccess($segment, $tenantId);
+        if (isset($segment->rules_json['_event_audience'])) {
+            return redirect()->route('marketing.event-audiences', ['segment' => $segment->id, 'tenant' => $request->query('tenant')]);
+        }
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -149,9 +155,12 @@ class MarketingSegmentsController extends Controller
         MarketingSegment $segment,
         Request $request,
         MarketingSegmentPreviewService $previewService
-    ): View {
+    ): View|RedirectResponse {
         $tenantId = $this->resolveTenantId($request);
         $this->assertSegmentAccess($segment, $tenantId);
+        if (isset($segment->rules_json['_event_audience'])) {
+            return redirect()->route('marketing.event-audiences', ['segment' => $segment->id, 'tenant' => $request->query('tenant')]);
+        }
 
         $search = trim((string) $request->query('search', ''));
         $sampleSize = max(5, min(100, (int) $request->query('sample_size', 25)));
@@ -178,8 +187,8 @@ class MarketingSegmentsController extends Controller
         $this->assertSegmentAccess($segment, $tenantId);
 
         $clone = $segment->replicate(['slug', 'last_previewed_at']);
-        $clone->name = $segment->name . ' (Copy)';
-        $clone->slug = Str::slug($clone->name . '-' . Str::random(4));
+        $clone->name = $segment->name.' (Copy)';
+        $clone->slug = Str::slug($clone->name.'-'.Str::random(4));
         $clone->is_system = false;
         $clone->status = 'draft';
         $clone->tenant_id = $tenantId;
@@ -213,7 +222,7 @@ class MarketingSegmentsController extends Controller
     protected function rulesFromRequest(Request $request): array
     {
         $logic = strtolower(trim((string) $request->input('rule_logic', 'and')));
-        if (!in_array($logic, ['and', 'or'], true)) {
+        if (! in_array($logic, ['and', 'or'], true)) {
             $logic = 'and';
         }
 
@@ -273,7 +282,7 @@ class MarketingSegmentsController extends Controller
                 'key' => $key,
                 'label' => $section['label'],
                 'href' => route($section['route']),
-                'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'] . '.*'),
+                'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'].'.*'),
             ];
         }
 

@@ -24,12 +24,19 @@ class MarketingSyncProfiles extends Command
         {--chunk=500 : Chunk size for candidate streaming}
         {--since= : Process records updated on/after this datetime}
         {--order-id= : Process a single Shopify order row by ID}
+        {--tenant-id= : Restrict every candidate and import run to this tenant}
         {--dry-run : Preview changes without writing}';
 
     protected $description = 'Backfill/sync canonical marketing profiles from Shopify, Growave, and Square source layers.';
 
     public function handle(MarketingProfileSyncService $syncService, MarketingConsentService $consentService): int
     {
+        $tenant = $this->option('tenant-id');
+        if ($tenant !== null && (! ctype_digit((string) $tenant) || (int) $tenant < 1)) {
+            $this->error('Use a positive --tenant-id.');
+
+            return self::FAILURE;
+        }
         $dryRun = (bool) $this->option('dry-run');
         $verbose = $this->getOutput()->isVerbose();
         $source = strtolower(trim((string) $this->option('source')));
@@ -57,6 +64,7 @@ class MarketingSyncProfiles extends Command
             'ambiguous_collisions' => 0,
             'skipped_no_identity' => 0,
             'records_skipped' => 0,
+            'unowned_square_sources' => 0,
             'errors' => 0,
             'shopify_order_candidates' => 0,
             'shopify_customer_candidates' => 0,
@@ -70,7 +78,7 @@ class MarketingSyncProfiles extends Command
 
         try {
             if ($orderId !== null) {
-                $order = Order::query()->find($orderId);
+                $order = Order::query()->when($tenant, fn ($q) => $q->where('tenant_id', (int) $tenant))->find($orderId);
                 if (! $order) {
                     $this->error("Order {$orderId} not found.");
 
@@ -142,6 +150,7 @@ class MarketingSyncProfiles extends Command
             'ambiguous_collisions',
             'skipped_no_identity',
             'records_skipped',
+            'unowned_square_sources',
             'errors',
             'shopify_order_candidates',
             'shopify_customer_candidates',
@@ -150,14 +159,14 @@ class MarketingSyncProfiles extends Command
             'square_order_candidates',
             'square_payment_candidates',
         ] as $key) {
-            $this->line($key . '=' . (int) ($summary[$key] ?? 0));
+            $this->line($key.'='.(int) ($summary[$key] ?? 0));
         }
 
         return $summary['errors'] > 0 ? self::FAILURE : self::SUCCESS;
     }
 
     /**
-     * @param array<string,int> $summary
+     * @param  array<string,int>  $summary
      */
     protected function syncShopifyOrderCandidates(
         MarketingProfileSyncService $syncService,
@@ -169,6 +178,7 @@ class MarketingSyncProfiles extends Command
         bool $verbose
     ): void {
         $query = Order::query()
+            ->when($this->option('tenant-id'), fn ($q) => $q->where('tenant_id', (int) $this->option('tenant-id')))
             ->where(function (Builder $builder): void {
                 $builder
                     ->whereNotNull('shopify_order_id')
@@ -192,8 +202,8 @@ class MarketingSyncProfiles extends Command
     }
 
     /**
-     * @param array<string,int> $summary
-     * @param array<int,string> $integrations
+     * @param  array<string,int>  $summary
+     * @param  array<int,string>  $integrations
      */
     protected function syncExternalCandidates(
         MarketingProfileSyncService $syncService,
@@ -211,6 +221,7 @@ class MarketingSyncProfiles extends Command
         }
 
         $query = CustomerExternalProfile::query()
+            ->when($this->option('tenant-id'), fn ($q) => $q->where('tenant_id', (int) $this->option('tenant-id')))
             ->whereIn('integration', $integrations)
             ->when($since, fn (Builder $builder) => $builder->where('updated_at', '>=', $since))
             ->orderBy('id');
@@ -254,7 +265,7 @@ class MarketingSyncProfiles extends Command
             } catch (\Throwable $e) {
                 $summary['errors']++;
                 if ($verbose) {
-                    $this->warn('external#' . (int) $external->id . ' error=' . $e->getMessage());
+                    $this->warn('external#'.(int) $external->id.' error='.$e->getMessage());
                 }
             }
 
@@ -265,7 +276,7 @@ class MarketingSyncProfiles extends Command
     }
 
     /**
-     * @param array<string,int> $summary
+     * @param  array<string,int>  $summary
      */
     protected function syncSquareCustomerCandidates(
         MarketingProfileSyncService $syncService,
@@ -282,6 +293,7 @@ class MarketingSyncProfiles extends Command
         }
 
         $query = SquareCustomer::query()
+            ->when($this->option('tenant-id'), fn ($q) => $q->where('tenant_id', (int) $this->option('tenant-id')))
             ->when($since, fn (Builder $builder) => $builder->where('updated_at', '>=', $since))
             ->orderBy('id');
 
@@ -291,19 +303,29 @@ class MarketingSyncProfiles extends Command
             }
 
             $summary['square_customer_candidates']++;
+            // Original unowned source rows stay available for ownership review.
+            // A background backfill cannot infer their workspace or create a customer.
+            if (! $customer->tenant_id) {
+                $summary['candidates_scanned']++;
+                $summary['records_skipped']++;
+                $summary['unowned_square_sources']++;
+                if ($remaining !== null) {
+                    $remaining--;
+                }
+
+                continue;
+            }
 
             try {
-                $result = $syncService->syncExternalIdentity(
+                $result = app(\App\Services\Marketing\SquareCustomerIdentityService::class)->sync(
                     $this->identityPayloadFromSquareCustomer($customer),
-                    [
-                        'dry_run' => $dryRun,
-                        'review_context' => [
-                            'source_label' => 'marketing_profiles_sync',
-                            'source_id' => (string) $customer->square_customer_id,
-                            'source_record_id' => (int) $customer->id,
-                            'provider' => 'square',
-                            'integration' => 'square_customer',
-                        ],
+                    (int) $customer->tenant_id, $dryRun, [
+                        ...array_intersect_key((array) ($customer->raw_payload['_source_binding'] ?? []), array_flip(['connection_id', 'connection_generation', 'runtime_id', 'merchant_id', 'environment', 'location_ids', 'source_purpose'])),
+                        'source_label' => 'marketing_profiles_sync',
+                        'source_id' => (string) $customer->square_customer_id,
+                        'source_record_id' => (int) $customer->id,
+                        'provider' => 'square',
+                        'integration' => 'square_customer',
                     ]
                 );
                 $this->mergeSyncResult($summary, $result);
@@ -321,7 +343,7 @@ class MarketingSyncProfiles extends Command
             } catch (\Throwable $e) {
                 $summary['errors']++;
                 if ($verbose) {
-                    $this->warn('square_customer#' . (string) $customer->square_customer_id . ' error=' . $e->getMessage());
+                    $this->warn('square_customer#'.(string) $customer->square_customer_id.' error='.$e->getMessage());
                 }
             }
 
@@ -332,7 +354,7 @@ class MarketingSyncProfiles extends Command
     }
 
     /**
-     * @param array<string,mixed> $result
+     * @param  array<string,mixed>  $result
      */
     protected function applySquareCustomerConsent(
         SquareCustomer $customer,
@@ -349,14 +371,15 @@ class MarketingSyncProfiles extends Command
             return;
         }
 
-        $profile = MarketingProfile::query()->find($profileId);
+        $profile = MarketingProfile::query()->where('tenant_id', $customer->tenant_id)->find($profileId);
         if (! $profile) {
             return;
         }
 
-        $consentService->applyToProfile(
+        app(\App\Services\Marketing\SquareCustomerSource::class)->applyConsent(
             $profile,
-            $this->consentPayloadFromSquareCustomer($customer),
+            array_replace((array) ($customer->raw_payload ?? []), ['id' => $customer->square_customer_id,
+                'email_address' => $customer->email, 'phone_number' => $customer->phone, 'preferences' => $customer->preferences ?? []]),
             [
                 'source_type' => 'square_customer_sync',
                 'source_id' => (string) $customer->square_customer_id,
@@ -368,7 +391,7 @@ class MarketingSyncProfiles extends Command
     }
 
     /**
-     * @param array<string,int> $summary
+     * @param  array<string,int>  $summary
      */
     protected function syncSquareOrderCandidates(
         MarketingProfileSyncService $syncService,
@@ -384,7 +407,8 @@ class MarketingSyncProfiles extends Command
         }
 
         $query = SquareOrder::query()
-            ->with('customer')
+            ->when($this->option('tenant-id'), fn ($q) => $q->where('tenant_id', (int) $this->option('tenant-id')))
+
             ->when($since, fn (Builder $builder) => $builder->where('updated_at', '>=', $since))
             ->orderBy('id');
 
@@ -394,19 +418,29 @@ class MarketingSyncProfiles extends Command
             }
 
             $summary['square_order_candidates']++;
+            // Original unowned source rows stay available for ownership review.
+            // A background backfill cannot infer their workspace or create a customer.
+            if (! $order->tenant_id) {
+                $summary['candidates_scanned']++;
+                $summary['records_skipped']++;
+                $summary['unowned_square_sources']++;
+                if ($remaining !== null) {
+                    $remaining--;
+                }
+
+                continue;
+            }
 
             try {
-                $result = $syncService->syncExternalIdentity(
+                $result = app(\App\Services\Marketing\SquareCustomerIdentityService::class)->sync(
                     $this->identityPayloadFromSquareOrder($order),
-                    [
-                        'dry_run' => $dryRun,
-                        'review_context' => [
-                            'source_label' => 'marketing_profiles_sync',
-                            'source_id' => (string) $order->square_order_id,
-                            'source_record_id' => (int) $order->id,
-                            'provider' => 'square',
-                            'integration' => 'square_order',
-                        ],
+                    (int) $order->tenant_id, $dryRun, [
+                        ...array_intersect_key((array) ($order->raw_payload['_source_binding'] ?? []), array_flip(['connection_id', 'connection_generation', 'runtime_id', 'merchant_id', 'environment', 'location_ids', 'source_purpose'])),
+                        'source_label' => 'marketing_profiles_sync',
+                        'source_id' => (string) $order->square_order_id,
+                        'source_record_id' => (int) $order->id,
+                        'provider' => 'square',
+                        'integration' => 'square_order',
                     ]
                 );
                 $this->mergeSyncResult($summary, $result);
@@ -423,7 +457,7 @@ class MarketingSyncProfiles extends Command
             } catch (\Throwable $e) {
                 $summary['errors']++;
                 if ($verbose) {
-                    $this->warn('square_order#' . (string) $order->square_order_id . ' error=' . $e->getMessage());
+                    $this->warn('square_order#'.(string) $order->square_order_id.' error='.$e->getMessage());
                 }
             }
 
@@ -434,7 +468,7 @@ class MarketingSyncProfiles extends Command
     }
 
     /**
-     * @param array<string,int> $summary
+     * @param  array<string,int>  $summary
      */
     protected function syncSquarePaymentCandidates(
         MarketingProfileSyncService $syncService,
@@ -450,7 +484,8 @@ class MarketingSyncProfiles extends Command
         }
 
         $query = SquarePayment::query()
-            ->with('customer')
+            ->when($this->option('tenant-id'), fn ($q) => $q->where('tenant_id', (int) $this->option('tenant-id')))
+
             ->when($since, fn (Builder $builder) => $builder->where('updated_at', '>=', $since))
             ->orderBy('id');
 
@@ -460,19 +495,29 @@ class MarketingSyncProfiles extends Command
             }
 
             $summary['square_payment_candidates']++;
+            // Original unowned source rows stay available for ownership review.
+            // A background backfill cannot infer their workspace or create a customer.
+            if (! $payment->tenant_id) {
+                $summary['candidates_scanned']++;
+                $summary['records_skipped']++;
+                $summary['unowned_square_sources']++;
+                if ($remaining !== null) {
+                    $remaining--;
+                }
+
+                continue;
+            }
 
             try {
-                $result = $syncService->syncExternalIdentity(
+                $result = app(\App\Services\Marketing\SquareCustomerIdentityService::class)->sync(
                     $this->identityPayloadFromSquarePayment($payment),
-                    [
-                        'dry_run' => $dryRun,
-                        'review_context' => [
-                            'source_label' => 'marketing_profiles_sync',
-                            'source_id' => (string) $payment->square_payment_id,
-                            'source_record_id' => (int) $payment->id,
-                            'provider' => 'square',
-                            'integration' => 'square_payment',
-                        ],
+                    (int) $payment->tenant_id, $dryRun, [
+                        ...array_intersect_key((array) ($payment->raw_payload['_source_binding'] ?? []), array_flip(['connection_id', 'connection_generation', 'runtime_id', 'merchant_id', 'environment', 'location_ids', 'source_purpose'])),
+                        'source_label' => 'marketing_profiles_sync',
+                        'source_id' => (string) $payment->square_payment_id,
+                        'source_record_id' => (int) $payment->id,
+                        'provider' => 'square',
+                        'integration' => 'square_payment',
                     ]
                 );
                 $this->mergeSyncResult($summary, $result);
@@ -489,7 +534,7 @@ class MarketingSyncProfiles extends Command
             } catch (\Throwable $e) {
                 $summary['errors']++;
                 if ($verbose) {
-                    $this->warn('square_payment#' . (string) $payment->square_payment_id . ' error=' . $e->getMessage());
+                    $this->warn('square_payment#'.(string) $payment->square_payment_id.' error='.$e->getMessage());
                 }
             }
 
@@ -500,7 +545,7 @@ class MarketingSyncProfiles extends Command
     }
 
     /**
-     * @param array<string,int> $summary
+     * @param  array<string,int>  $summary
      */
     protected function syncOrderCandidate(
         MarketingProfileSyncService $syncService,
@@ -528,14 +573,14 @@ class MarketingSyncProfiles extends Command
         } catch (\Throwable $e) {
             $summary['errors']++;
             if ($verbose) {
-                $this->warn('order#' . (int) $order->id . ' error=' . $e->getMessage());
+                $this->warn('order#'.(int) $order->id.' error='.$e->getMessage());
             }
         }
     }
 
     /**
-     * @param array<string,int> $summary
-     * @param array<string,mixed> $result
+     * @param  array<string,int>  $summary
+     * @param  array<string,mixed>  $result
      */
     protected function mergeSyncResult(array &$summary, array $result): void
     {
@@ -642,20 +687,7 @@ class MarketingSyncProfiles extends Command
      */
     protected function consentPayloadFromSquareCustomer(SquareCustomer $customer): array
     {
-        $preferences = is_array($customer->preferences) ? $customer->preferences : [];
-        $emailUnsubscribed = $preferences['email_unsubscribed'] ?? null;
-        $smsUnsubscribed = $preferences['sms_unsubscribed'] ?? null;
-        $phone = $this->nullableString($customer->phone);
-        $smsOptIn = is_bool($smsUnsubscribed)
-            ? ! $smsUnsubscribed
-            : ($phone !== null ? true : null);
-
-        return [
-            'accepts_email_marketing' => is_bool($emailUnsubscribed) ? ! $emailUnsubscribed : null,
-            'accepts_sms_marketing' => $smsOptIn,
-            'email_opted_out_at' => $emailUnsubscribed === true ? now()->toIso8601String() : null,
-            'sms_opted_out_at' => $smsUnsubscribed === true ? now()->toIso8601String() : null,
-        ];
+        return app(\App\Services\Marketing\SquareCustomerSource::class)->consent(['preferences' => $customer->preferences ?? []]);
     }
 
     /**
@@ -672,11 +704,9 @@ class MarketingSyncProfiles extends Command
             $channels[] = 'online';
         }
 
-        $customer = $order->relationLoaded('customer')
-            ? $order->customer
-            : ($squareCustomerId !== null
-                ? SquareCustomer::query()->where('square_customer_id', $squareCustomerId)->first()
-                : null);
+        $customer = $squareCustomerId !== null
+            ? SquareCustomer::query()->where('tenant_id', $order->tenant_id)->where('square_customer_id', $squareCustomerId)->first()
+            : null;
 
         $sourceLinks = [[
             'source_type' => 'square_order',
@@ -727,11 +757,9 @@ class MarketingSyncProfiles extends Command
         $squareOrderId = $this->nullableString($payment->square_order_id);
         $squareCustomerId = $this->nullableString($payment->square_customer_id);
 
-        $customer = $payment->relationLoaded('customer')
-            ? $payment->customer
-            : ($squareCustomerId !== null
-                ? SquareCustomer::query()->where('square_customer_id', $squareCustomerId)->first()
-                : null);
+        $customer = $squareCustomerId !== null
+            ? SquareCustomer::query()->where('tenant_id', $payment->tenant_id)->where('square_customer_id', $squareCustomerId)->first()
+            : null;
 
         $sourceLinks = [[
             'source_type' => 'square_payment',
@@ -847,10 +875,10 @@ class MarketingSyncProfiles extends Command
         $externalId = $this->nullableString($external->external_customer_id);
 
         if ($externalId === null) {
-            return 'external-profile:' . $external->id;
+            return 'external-profile:'.$external->id;
         }
 
-        return $storeKey !== null ? $storeKey . ':' . $externalId : $externalId;
+        return $storeKey !== null ? $storeKey.':'.$externalId : $externalId;
     }
 
     /**
@@ -868,9 +896,10 @@ class MarketingSyncProfiles extends Command
         }
 
         $run = MarketingImportRun::query()->create([
+            'tenant_id' => $this->option('tenant-id') ? (int) $this->option('tenant-id') : null,
             'type' => 'marketing_profiles_sync',
             'status' => 'running',
-            'source_label' => 'marketing_profiles:' . $source,
+            'source_label' => 'marketing_profiles:'.$source,
             'started_at' => now(),
             'summary' => [
                 'mode' => $dryRun ? 'dry-run' : 'live-sync',
@@ -887,8 +916,8 @@ class MarketingSyncProfiles extends Command
     }
 
     /**
-     * @param array<string,mixed>|null $run
-     * @param array<string,int> $summary
+     * @param  array<string,mixed>|null  $run
+     * @param  array<string,int>  $summary
      */
     protected function finishRun(?array $run, string $status, array $summary, ?string $notes = null): void
     {
@@ -943,7 +972,7 @@ class MarketingSyncProfiles extends Command
     }
 
     /**
-     * @param array<int,mixed> $values
+     * @param  array<int,mixed>  $values
      */
     protected function firstNonEmpty(array $values): ?string
     {

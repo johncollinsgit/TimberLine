@@ -300,3 +300,111 @@ test('event summaries expose page denominators financial tenant access and revie
     $this->actingAs($foreignOwner)->getJson($url)->assertForbidden();
     $this->actingAs($this->owner)->getJson('/fixture/value/events/'.$event->id.'?tenant='.$foreign->slug.'&area='.$this->area->id)->assertForbidden();
 });
+
+function connectedValueSquare($test, array $ids): TeamOperationRecord
+{
+    return TeamOperationRecord::create(['id' => (string) Str::uuid(), 'tenant_id' => $test->tenant->id, 'area_id' => $test->area->id, 'kind' => 'event', 'title' => 'Connected show',
+        'source_key' => hash('sha256', Str::uuid()), 'status' => 'accepted', 'version' => 1,
+        'data' => ['_teams_enrichment' => ['commerce_event' => ['id' => 123], 'square_orders' => ['ids' => $ids, 'reviewed_by' => $test->owner->id, 'reviewed_at' => now()->toIso8601String()]]]]);
+}
+function connectedSquarePurchase($test, string $id, string $payment, int $refund = 0): void
+{
+    SquareOrder::create(['tenant_id' => $test->tenant->id, 'square_order_id' => $id, 'location_id' => 'fixture-location', 'state' => 'COMPLETED',
+        'closed_at' => '2026-01-02T13:00:00Z', 'synced_at' => now(), 'total_money_amount' => 1080, 'total_money_currency' => 'USD',
+        'raw_payload' => ['total_tax_money' => ['amount' => 80, 'currency' => 'USD'], 'line_items' => [['uid' => 'line1', 'name' => 'Garden candle', 'variation_name' => '8oz', 'quantity' => '1', 'total_money' => ['amount' => 1080], 'total_tax_money' => ['amount' => 80]]]]]);
+    SquarePayment::create(['tenant_id' => $test->tenant->id, 'square_payment_id' => $payment, 'square_order_id' => $id, 'location_id' => 'fixture-location',
+        'status' => 'COMPLETED', 'source_type' => 'CARD', 'currency' => 'USD', 'amount_money' => 1080,
+        'raw_payload' => ['refunded_money' => ['amount' => $refund, 'currency' => 'USD']]]);
+    MarketingProfileLink::create(['tenant_id' => $test->tenant->id, 'marketing_profile_id' => $test->profile->id, 'source_type' => 'square_order', 'source_id' => $id]);
+}
+
+test('reviewed Square event sales share customer history and distinguish a full refund from missing partial tax evidence', function (): void {
+    connectedSquarePurchase($this, 'external-confirmed', 'external-payment');
+    $event = connectedValueSquare($this, ['external-confirmed']);
+    $report = app(\App\Services\Pos\PosEventSales::class)->read($this->tenant->id, 123, 'UTC');
+    expect($report['sale_count'])->toBe(1)->and($report['net_sales_minor'])->toBe(1000)->and($report['sales_tax_minor'])->toBe(80)
+        ->and($report['customer_counts']['unique_buyers'])->toBe(1)->and($report['products'][0]['quantity'])->toBe(1);
+    $journey = app(CustomerEventValueService::class)->forProfile($this->profile, $this->tenant->id);
+    expect($journey['purchase_journey'][0]['purchase_event']['event']['id'])->toBe(123);
+    expect(app(EventCustomerCohort::class)->read($this->tenant->id, 123)['profile_ids'])->toContain($this->profile->id);
+    SquarePayment::forTenantId($this->tenant->id)->where('square_payment_id', 'external-payment')->update(['raw_payload' => ['refunded_money' => ['amount' => 100, 'currency' => 'USD']]]);
+    $partial = app(\App\Services\Pos\PosEventSales::class)->read($this->tenant->id, 123, 'UTC');
+    expect($partial['net_sales_minor'])->toBeNull()->and($partial['confirmed_refunds_minor'])->toBe(100)->and($partial['complete'])->toBeFalse();
+    SquarePayment::forTenantId($this->tenant->id)->where('square_payment_id', 'external-payment')->update(['raw_payload' => ['refunded_money' => ['amount' => 1080, 'currency' => 'USD']]]);
+    $full = app(\App\Services\Pos\PosEventSales::class)->read($this->tenant->id, 123, 'UTC');
+    expect($full['net_sales_minor'])->toBe(0)->and($full['sales_tax_minor'])->toBe(0);
+    Http::assertNothingSent();
+});
+
+test('event revenue deduplicates an imported Pay order and refuses conflicting event allocations', function (): void {
+    $sale = valueReceipt($this, $this->profile);
+    connectedSquarePurchase($this, $sale->provider_order_id, 'imported-pay-payment');
+    $event = connectedValueSquare($this, [$sale->provider_order_id]);
+    $report = app(\App\Services\Pos\PosEventSales::class)->read($this->tenant->id, 123, 'UTC');
+    expect($report['sale_count'])->toBe(1)->and($report['paid_total_minor'])->toBe(1070)
+        ->and($report['source_freshness']['square_deduplicated_orders'])->toBe(1);
+    $copy = $event->replicate();
+    $copy->id = (string) Str::uuid();
+    $copy->source_key = hash('sha256', Str::uuid());
+    $data = $copy->data;
+    unset($data['_teams_enrichment']['commerce_event']);
+    $copy->data = $data;
+    $copy->save();
+    $conflict = app(\App\Services\Pos\PosEventSales::class)->read($this->tenant->id, 123, 'UTC');
+    expect($conflict['complete'])->toBeFalse()->and(implode(' ', $conflict['review_items']))->toContain('more than one event');
+});
+
+test('external Square tender refunds use original payment allocations and disclose unknown refund coverage', function (): void {
+    connectedSquarePurchase($this, 'split-external', 'split-card');
+    connectedValueSquare($this, ['split-external']);
+    SquarePayment::forTenantId($this->tenant->id)->where('square_payment_id', 'split-card')->update(['amount_money' => 800,
+        'raw_payload' => ['refunded_money' => ['amount' => 100, 'currency' => 'USD']]]);
+    SquarePayment::create(['tenant_id' => $this->tenant->id, 'square_payment_id' => 'split-cash', 'square_order_id' => 'split-external', 'location_id' => 'fixture-location',
+        'status' => 'COMPLETED', 'source_type' => 'CASH', 'currency' => 'USD', 'amount_money' => 280,
+        'raw_payload' => ['refunded_money' => ['amount' => 0, 'currency' => 'USD']]]);
+    $read = fn () => app(\App\Services\Pos\PosEventSales::class)->read($this->tenant->id, 123, 'UTC');
+    $report = $read();
+    $tenders = collect($report['tenders'])->keyBy('tender');
+    expect($tenders['card']['refunded_minor'])->toBe(100)->and($tenders['cash']['refunded_minor'])->toBe(0)
+        ->and($report['collected_total_minor'])->toBe(980)->and($report['refunds_complete'])->toBeTrue();
+    SquarePayment::forTenantId($this->tenant->id)->where('square_payment_id', 'split-cash')->update(['raw_payload' => []]);
+    $report = $read();
+    $tenders = collect($report['tenders'])->keyBy('tender');
+    expect($report['collected_total_minor'])->toBeNull()->and($report['refunds_complete'])->toBeFalse()->and($tenders['cash']['refunded_minor'])->toBeNull();
+});
+
+test('an imported original Pay payment allocated to another event is excluded and requires event reconciliation', function (): void {
+    $sale = valueReceipt($this, $this->profile);
+    connectedSquarePurchase($this, $sale->provider_order_id, 'wrong-event-payment');
+    $event = connectedValueSquare($this, [$sale->provider_order_id]);
+    $data = $event->data;
+    $data['_teams_enrichment']['commerce_event']['id'] = 456;
+    $event->update(['data' => $data]);
+    $this->stock->rows('event_links', $this->tenant->id)->insert(['tenant_id' => $this->tenant->id, 'event_id' => 456, 'provider' => 'manual', 'external_id' => 'wrong-review-event',
+        'metadata' => json_encode(['name' => 'Other reviewed occurrence', 'timezone' => 'UTC']), 'reviewed_by' => $this->owner->id]);
+    $report = app(\App\Services\Pos\PosEventSales::class)->read($this->tenant->id, 456, 'UTC');
+    expect($report['sale_count'])->toBe(0)->and($report['complete'])->toBeFalse()
+        ->and(implode(' ', $report['review_items']))->toContain('conflicts with the original Pay event');
+});
+
+test('delayed Square order association deduplicates by the original provider payment id', function (): void {
+    $sale = valueReceipt($this, $this->profile);
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($sale);
+    $providerId = $this->paymentEvidence[$sale->attempt_id]['provider_id'];
+    $bindingId = DB::table('payment_core_bindings')->insertGetId(['tenant_id' => $this->tenant->id, 'register_id' => $sale->register_id,
+        'fingerprint' => Contract::hash($snapshot['binding']), 'binding' => $this->store->encrypt($snapshot['binding'])]);
+    DB::table('payment_core_operations')->insert(['id' => $sale->attempt_id, 'tenant_id' => $this->tenant->id, 'binding_id' => $bindingId,
+        'register_id' => $sale->register_id, 'sale_id' => $sale->id, 'payment_sale_key' => $sale->id, 'request_id' => $sale->payment_request_id,
+        'kind' => 'payment', 'terms_hash' => Contract::hash($snapshot['sale']), 'binding' => $this->store->encrypt($snapshot['binding']),
+        'terms' => $this->store->encrypt($snapshot['sale']), 'amount_minor' => 1070, 'currency' => 'usd', 'state' => 'succeeded', 'provider_id' => $providerId,
+        'effect_scope' => str_repeat('e', 64)]);
+    $this->store->rows('sales', $this->tenant->id)->where('id', $sale->id)->update(['provider_order_id' => null]);
+    connectedSquarePurchase($this, 'provider-later-order', $providerId);
+    SquareOrder::forTenantId($this->tenant->id)->where('square_order_id', 'provider-later-order')->update(['total_money_amount' => 1070]);
+    SquarePayment::forTenantId($this->tenant->id)->where('square_payment_id', $providerId)->update(['amount_money' => 1070]);
+    connectedValueSquare($this, ['provider-later-order']);
+    $report = app(\App\Services\Pos\PosEventSales::class)->read($this->tenant->id, 123, 'UTC');
+    expect($report['sale_count'])->toBe(1)->and($report['paid_total_minor'])->toBe(1070)
+        ->and($report['source_freshness']['square_deduplicated_orders'])->toBe(1)->and($report['complete'])->toBeTrue();
+    Http::assertNothingSent();
+});

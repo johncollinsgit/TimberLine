@@ -1207,7 +1207,9 @@ test('customer detail email timeline paginates legacy unknown rows safely', func
 });
 
 test('customers index includes shopify and square-only canonical profiles without requiring growave', function () {
+    $tenant = Tenant::create(['name' => 'Original Square workspace', 'slug' => 'index-original-square']);
     Order::factory()->create([
+        'tenant_id' => $tenant->id,
         'source' => 'shopify_retail',
         'order_type' => 'retail',
         'shopify_store_key' => 'retail',
@@ -1220,7 +1222,10 @@ test('customers index includes shopify and square-only canonical profiles withou
         'phone' => '+1 (555) 440-0101',
     ]);
 
+    $canonical = MarketingProfile::create(['tenant_id' => $tenant->id, 'first_name' => 'Square', 'last_name' => 'Only', 'email' => 'square.only.index@example.com', 'normalized_email' => 'square.only.index@example.com']);
+    MarketingProfileLink::create(['tenant_id' => $tenant->id, 'marketing_profile_id' => $canonical->id, 'source_type' => 'square_customer', 'source_id' => 'SQ-CUST-IDX-1']);
     SquareCustomer::query()->create([
+        'tenant_id' => $tenant->id,
         'square_customer_id' => 'SQ-CUST-IDX-1',
         'given_name' => 'Square',
         'family_name' => 'Only',
@@ -1243,13 +1248,14 @@ test('customers index includes shopify and square-only canonical profiles withou
         'email_verified_at' => now(),
     ]);
 
+    $tenant->users()->attach($admin->id, ['role' => 'admin', 'membership_active' => true]);
     $this->actingAs($admin)
-        ->get(route('marketing.customers'))
+        ->get(route('marketing.customers', ['tenant' => $tenant->slug]))
         ->assertOk()
         ->assertSeeText('Manage Customers');
 
     $response = $this->actingAs($admin)
-        ->getJson(route('marketing.customers.data'));
+        ->getJson(route('marketing.customers.data', ['tenant' => $tenant->slug]));
 
     $customers = collect($response->json('data'));
 

@@ -9,8 +9,8 @@ final class CustomerCommerceFlowTests: XCTestCase {
         app.buttons["Add customer"].tap()
         let field = app.textFields["Name, email or phone"]
         XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("Ada")
-        app.buttons["Find customer"].tap()
-        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Ada Buyer")).firstMatch.tap()
+        let ada = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Ada Buyer")).firstMatch
+        XCTAssertTrue(ada.waitForExistence(timeout: 10)); ada.tap()
         XCTAssertTrue(app.staticTexts["Candle Cash: 8.50"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Link to this purchase"].exists)
         app.buttons["Purchase history (2)"].tap()
@@ -31,8 +31,8 @@ final class CustomerCommerceFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Customers"].waitForExistence(timeout: 10)); app.buttons["Customers"].tap()
         let field = app.textFields["Name, email or phone"]
         XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("Ada")
-        app.buttons["Find customer"].tap()
-        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Ada Buyer")).firstMatch.tap()
+        let ada = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Ada Buyer")).firstMatch
+        XCTAssertTrue(ada.waitForExistence(timeout: 10)); ada.tap()
         XCTAssertTrue(app.staticTexts["Customer record. Viewing does not start a sale."].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Candle Cash: 8.50"].exists)
         XCTAssertFalse(app.buttons["Link to this purchase"].exists)

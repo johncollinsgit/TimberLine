@@ -11,6 +11,8 @@ use App\Models\SquarePayment;
 use App\Models\Tenant;
 use App\Services\Marketing\MarketingProfileSyncService;
 
+require_once __DIR__.'/../../Support/TeamStudioFixtures.php';
+
 test('shopify-only candidate creates profile from operational order data', function () {
     Order::factory()->create([
         'source' => 'shopify_retail',
@@ -104,77 +106,42 @@ test('shopify external candidate preserves tenant ownership on canonical profile
             ->exists())->toBeTrue();
 });
 
-test('square-only customer candidate creates canonical marketing profile', function () {
-    SquareCustomer::query()->create([
-        'square_customer_id' => 'SQ-CUST-PIPE-1',
-        'given_name' => 'Square',
-        'family_name' => 'Only',
-        'email' => 'square.only@example.com',
-        'phone' => '+1 (555) 801-9000',
-        'synced_at' => now(),
-    ]);
-
-    $this->artisan('marketing:sync-profiles --source=square')
-        ->assertExitCode(0);
-
-    $profile = MarketingProfile::query()->sole();
-
-    expect($profile->normalized_email)->toBe('square.only@example.com')
-        ->and($profile->normalized_phone)->toBe('5558019000')
-        ->and(MarketingProfileLink::query()->where('source_type', 'square_customer')->count())->toBe(1);
+test('unowned Square source remains retained and counted until original workspace ownership is proven', function () {
+    $source = SquareCustomer::create(['square_customer_id' => 'SQ-CUST-PIPE-1', 'given_name' => 'Square', 'email' => 'square.only@example.com', 'phone' => '+1 (555) 801-9000']);
+    $this->artisan('marketing:sync-profiles --source=square')->expectsOutputToContain('unowned_square_sources=1')->assertExitCode(0);
+    expect(MarketingProfile::count())->toBe(0)->and(MarketingProfileLink::count())->toBe(0)
+        ->and($source->fresh()->tenant_id)->toBeNull()->and($source->fresh()->email)->toBe('square.only@example.com');
 });
 
-test('square source sync applies sms consent from visible phone when sms preference is missing', function () {
-    SquareCustomer::query()->create([
-        'square_customer_id' => 'SQ-CUST-PIPE-SMS',
-        'given_name' => 'Square',
-        'family_name' => 'Consent',
-        'email' => 'square.sms@example.com',
-        'phone' => '+1 (555) 812-4567',
-        'preferences' => [
-            'email_unsubscribed' => false,
-        ],
-        'synced_at' => now(),
-    ]);
-
-    $this->artisan('marketing:sync-profiles --source=square')
-        ->assertExitCode(0);
-
-    $profile = MarketingProfile::query()->sole();
-
-    expect($profile->accepts_sms_marketing)->toBeTrue()
-        ->and($profile->accepts_email_marketing)->toBeTrue()
-        ->and(MarketingProfileLink::query()->where('source_type', 'square_customer')->count())->toBe(1);
+test('Square backfill preserves recorded contact permissions and only applies explicit provider unsubscribe evidence', function () {
+    [$tenant] = teamWorkspace();
+    $profile = MarketingProfile::create(['tenant_id' => $tenant->id, 'email' => 'square.sms@example.com', 'phone' => '5558124567', 'accepts_email_marketing' => false, 'accepts_sms_marketing' => true]);
+    MarketingProfileLink::create(['tenant_id' => $tenant->id, 'marketing_profile_id' => $profile->id, 'source_type' => 'square_customer', 'source_id' => 'SQ-CUST-PIPE-SMS']);
+    $source = SquareCustomer::create(['tenant_id' => $tenant->id, 'square_customer_id' => 'SQ-CUST-PIPE-SMS', 'email' => $profile->email, 'phone' => $profile->phone, 'preferences' => ['email_unsubscribed' => false]]);
+    $this->artisan('marketing:sync-profiles --source=square --tenant-id='.$tenant->id)->assertExitCode(0);
+    expect($profile->fresh()->accepts_sms_marketing)->toBeTrue()->and($profile->fresh()->accepts_email_marketing)->toBeFalse()->and(MarketingProfileLink::count())->toBe(1);
+    $source->update(['preferences' => ['sms_unsubscribed' => true]]);
+    $this->artisan('marketing:sync-profiles --source=square --tenant-id='.$tenant->id)->assertExitCode(0);
+    expect($profile->fresh()->accepts_sms_marketing)->toBeFalse()->and(\App\Models\MarketingConsentEvent::where('channel', 'sms')->where('event_type', 'unsubscribed')->count())->toBe(1);
 });
 
-test('square customer without direct email or phone still creates canonical profile from source link', function () {
-    SquareCustomer::query()->create([
-        'square_customer_id' => 'SQ-CUST-PIPE-NOID',
-        'given_name' => 'Square',
-        'family_name' => 'No Identity',
-        'email' => null,
-        'phone' => null,
-        'synced_at' => now(),
-    ]);
-
-    $this->artisan('marketing:sync-profiles --source=square')
-        ->assertExitCode(0);
-
-    $profile = MarketingProfile::query()->sole();
-
-    expect($profile->first_name)->toBe('Square')
-        ->and($profile->last_name)->toBe('No Identity')
-        ->and($profile->normalized_email)->toBeNull()
-        ->and($profile->normalized_phone)->toBeNull()
-        ->and(MarketingProfileLink::query()
-            ->where('marketing_profile_id', $profile->id)
-            ->where('source_type', 'square_customer')
-            ->where('source_id', 'SQ-CUST-PIPE-NOID')
-            ->exists())->toBeTrue();
+test('contactless Square original source link maintains its canonical customer without inventing contact data', function () {
+    [$tenant] = teamWorkspace();
+    $profile = MarketingProfile::create(['tenant_id' => $tenant->id, 'first_name' => 'Square', 'last_name' => 'No Identity']);
+    SquareCustomer::create(['tenant_id' => $tenant->id, 'square_customer_id' => 'SQ-CUST-PIPE-NOID', 'given_name' => 'Square', 'family_name' => 'No Identity']);
+    MarketingProfileLink::create(['tenant_id' => $tenant->id, 'marketing_profile_id' => $profile->id, 'source_type' => 'square_customer', 'source_id' => 'SQ-CUST-PIPE-NOID']);
+    $this->artisan('marketing:sync-profiles --source=square --tenant-id='.$tenant->id)->assertExitCode(0);
+    expect(MarketingProfile::count())->toBe(1)->and($profile->fresh()->first_name)->toBe('Square')->and($profile->fresh()->last_name)->toBe('No Identity')
+        ->and($profile->fresh()->normalized_email)->toBeNull()->and($profile->fresh()->normalized_phone)->toBeNull()
+        ->and(MarketingProfileLink::where('marketing_profile_id', $profile->id)->where('source_id', 'SQ-CUST-PIPE-NOID')->exists())->toBeTrue();
 });
 
 test('square order and payment records attach to existing square customer profile', function () {
+    [$tenant, $owner] = teamWorkspace();
+    $profile = MarketingProfile::create(['tenant_id' => $tenant->id, 'first_name' => 'Original buyer']);
+    $original = MarketingProfileLink::create(['marketing_profile_id' => $profile->id, 'source_type' => 'square_customer', 'source_id' => 'SQ-CUST-PIPE-2']);
     SquareCustomer::query()->create([
+        'tenant_id' => $tenant->id,
         'square_customer_id' => 'SQ-CUST-PIPE-2',
         'given_name' => 'Square',
         'family_name' => 'Buyer',
@@ -183,6 +150,7 @@ test('square order and payment records attach to existing square customer profil
         'synced_at' => now(),
     ]);
     SquareOrder::query()->create([
+        'tenant_id' => $tenant->id,
         'square_order_id' => 'SQ-ORDER-PIPE-2',
         'square_customer_id' => 'SQ-CUST-PIPE-2',
         'state' => 'COMPLETED',
@@ -191,6 +159,7 @@ test('square order and payment records attach to existing square customer profil
         'synced_at' => now(),
     ]);
     SquarePayment::query()->create([
+        'tenant_id' => $tenant->id,
         'square_payment_id' => 'SQ-PAY-PIPE-2',
         'square_order_id' => 'SQ-ORDER-PIPE-2',
         'square_customer_id' => 'SQ-CUST-PIPE-2',
@@ -199,7 +168,9 @@ test('square order and payment records attach to existing square customer profil
         'synced_at' => now(),
     ]);
 
-    $this->artisan('marketing:sync-profiles --source=square')
+    app(\App\Services\Marketing\CustomerSourceOwnershipReconciliation::class)->batch($tenant->id, $owner, apply: true);
+    expect($original->fresh()->tenant_id)->toBe($tenant->id);
+    $this->artisan('marketing:sync-profiles --source=square --tenant-id='.$tenant->id)
         ->assertExitCode(0);
 
     expect(MarketingProfile::query()->count())->toBe(1)
@@ -320,16 +291,20 @@ test('email and phone conflicts are held for identity review instead of auto mer
 });
 
 test('square email and phone conflicts are held for identity review instead of auto merge', function () {
+    [$tenant] = teamWorkspace();
     MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'email' => 'square-conflict@example.com',
         'normalized_email' => 'square-conflict@example.com',
     ]);
     MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'phone' => '5559996666',
         'normalized_phone' => '5559996666',
     ]);
 
     SquareCustomer::query()->create([
+        'tenant_id' => $tenant->id,
         'square_customer_id' => 'SQ-CUST-CONFLICT-1',
         'given_name' => 'Square',
         'family_name' => 'Conflict',
@@ -338,7 +313,7 @@ test('square email and phone conflicts are held for identity review instead of a
         'synced_at' => now(),
     ]);
 
-    $this->artisan('marketing:sync-profiles --source=square')
+    $this->artisan('marketing:sync-profiles --source=square --tenant-id='.$tenant->id)
         ->assertExitCode(0);
 
     expect(MarketingProfile::query()->count())->toBe(2)
@@ -388,7 +363,11 @@ test('rerunning sync is idempotent for profiles and links', function () {
 });
 
 test('rerunning square sync is idempotent for profiles and links', function () {
+    [$tenant] = teamWorkspace();
+    $profile = MarketingProfile::create(['tenant_id' => $tenant->id, 'email' => 'square-rerun@example.com']);
+    MarketingProfileLink::create(['tenant_id' => $tenant->id, 'marketing_profile_id' => $profile->id, 'source_type' => 'square_customer', 'source_id' => 'SQ-CUST-RERUN']);
     SquareCustomer::query()->create([
+        'tenant_id' => $tenant->id,
         'square_customer_id' => 'SQ-CUST-RERUN',
         'given_name' => 'Square',
         'family_name' => 'Rerun',
@@ -397,6 +376,7 @@ test('rerunning square sync is idempotent for profiles and links', function () {
         'synced_at' => now(),
     ]);
     SquareOrder::query()->create([
+        'tenant_id' => $tenant->id,
         'square_order_id' => 'SQ-ORDER-RERUN',
         'square_customer_id' => 'SQ-CUST-RERUN',
         'state' => 'COMPLETED',
@@ -405,8 +385,8 @@ test('rerunning square sync is idempotent for profiles and links', function () {
         'synced_at' => now(),
     ]);
 
-    $this->artisan('marketing:sync-profiles --source=square')->assertExitCode(0);
-    $this->artisan('marketing:sync-profiles --source=square')->assertExitCode(0);
+    $this->artisan('marketing:sync-profiles --source=square --tenant-id='.$tenant->id)->assertExitCode(0);
+    $this->artisan('marketing:sync-profiles --source=square --tenant-id='.$tenant->id)->assertExitCode(0);
 
     expect(MarketingProfile::query()->count())->toBe(1)
         ->and(MarketingProfileLink::query()->where('source_type', 'square_customer')->count())->toBe(1)

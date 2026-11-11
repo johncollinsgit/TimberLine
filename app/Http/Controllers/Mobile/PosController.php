@@ -41,6 +41,39 @@ final class PosController extends Controller
                 ->preview($register, $input['proof'], $input['expected_customer_id'] ?? null));
     }
 
+    public function eventStats(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, [], function () use ($r, $register): array {
+            abort_unless(config('pos_live.event_stats_enabled'), 404);
+
+            return app(\App\Services\Team\Studio\EventCommerceReport::class)->forRegister(app(\App\Services\Pos\PosAccess::class)->register($register), $r->user());
+        });
+    }
+
+    public function sales(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['cursor' => ['sometimes', 'nullable', 'string', 'max:4000'], 'unattributed' => ['sometimes', 'boolean']],
+            fn ($input) => app(\App\Services\Pos\PosSalesDirectory::class)->read($register, $input['cursor'] ?? null, (bool) ($input['unattributed'] ?? false)));
+    }
+
+    public function customerSuggestion(Request $r, string $tenant, string $register, string $sale): JsonResponse
+    {
+        return $this->respond($r, [], fn () => app(\App\Services\Pos\PosCustomerSuggestion::class)->read($register, $sale));
+    }
+
+    public function collectCash(Request $r, string $tenant, string $register, string $sale): JsonResponse
+    {
+        return $this->respond($r, ['received_minor' => ['required', 'integer', 'min:1', 'max:100000000']],
+            fn ($input) => app(\App\Services\Pos\PosCashSale::class)->collect($register, $sale, $input['received_minor']));
+    }
+
+    public function confirmStaffReward(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['customer_profile_id' => ['required', 'integer', 'min:1'], 'channel' => ['required', 'in:phone,email'],
+            'expected_contact' => ['required', 'string', 'max:190'], 'request_id' => ['required', 'uuid'],
+            'customer_confirmed' => ['required', 'boolean']], fn ($input) => app(\App\Services\Pos\PosStaffRewardAuthorization::class)->issue($register, $input));
+    }
+
     public function requestRewardContactCode(Request $r, string $tenant, string $register): JsonResponse
     {
         return $this->respond($r, ['customer_profile_id' => ['required', 'integer', 'min:1'], 'channel' => ['required', 'in:phone,email'],
@@ -165,22 +198,36 @@ final class PosController extends Controller
             'admin' => in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true)];
     }
 
+    public function inventoryCountDraft(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['request_id' => ['required', 'uuid'], 'text' => ['required', 'string', 'max:1400']],
+            fn ($input) => app(\App\Services\Pos\PosInventoryCountDraft::class)->prepare($register, $input['text'], $input['request_id']));
+    }
+
+    public function countStockBatch(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, ['request_id' => ['required', 'uuid'], 'physically_confirmed' => ['required', 'boolean'],
+            'expected_inventory_pool_id' => ['required', 'regex:/^[a-f0-9]{32}$/D'],
+            'expected_inventory_context_version' => ['required', 'regex:/^[a-f0-9]{64}$/D'],
+            'items' => ['required', 'array', 'min:1', 'max:100'], 'items.*' => ['array:item_id,quantity,expected_version'],
+            'items.*.item_id' => ['required', 'regex:/^[a-f0-9]{32}$/D', 'distinct'],
+            'items.*.quantity' => ['required', 'integer', 'min:0', 'max:1000000'],
+            'items.*.expected_version' => ['required', 'integer', 'min:0']], function ($input) use ($register): array {
+                app(\App\Services\Pos\PosInventoryCounts::class)->save($register, $input);
+
+                return $this->pos->catalog($register);
+            });
+    }
+
     public function countStock(Request $r, string $tenant, string $register): JsonResponse
     {
         return $this->respond($r, ['request_id' => ['required', 'uuid'], 'item_id' => ['required', 'regex:/^[a-f0-9]{32}$/D'],
             'quantity' => ['required', 'integer', 'min:0', 'max:10000000'], 'expected_version' => ['required', 'integer', 'min:0'],
+            'expected_inventory_pool_id' => ['required_with:expected_inventory_context_version', 'regex:/^[a-f0-9]{32}$/D'],
+            'expected_inventory_context_version' => ['required_with:expected_inventory_pool_id', 'regex:/^[a-f0-9]{64}$/D'],
             'physically_confirmed' => ['required', 'boolean']], function ($input) use ($register): array {
-                $scope = app(\App\Services\Pos\PosAccess::class)->register($register, 'quote');
-                if (! in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true)) {
-                    throw new PosException('inventory_owner_required', 403);
-                }
-                if (! is_int($input['quantity']) || ! is_int($input['expected_version']) || $input['physically_confirmed'] !== true) {
-                    throw new PosException('physical_count_confirmation_required', 422);
-                }
-                $settings = app(\App\Services\Pos\StockPosCommerce::class)->settings($scope);
-                app(\App\Services\Inventory\StockLedger::class)->count($scope['tenant_id'], 'mobile:'.$input['request_id'], $scope['actor_id'],
-                    $settings['inventory_pool_id'], [$input['item_id'] => $input['quantity']], 'physical_count', [$input['item_id'] => $input['expected_version']]);
-                app(\App\Services\Pos\StockPosCommerce::class)->queuePublications($scope['tenant_id']);
+                $items = [array_intersect_key($input, array_flip(['item_id', 'quantity', 'expected_version']))];
+                app(\App\Services\Pos\PosInventoryCounts::class)->save($register, [...array_diff_key($input, array_flip(['item_id', 'quantity', 'expected_version'])), 'items' => $items], true);
 
                 return $this->pos->catalog($register);
             });
@@ -274,7 +321,7 @@ final class PosController extends Controller
     public function createCustomer(Request $r, string $tenant, string $register): JsonResponse
     {
         return $this->respond($r, ['request_id' => ['required', 'uuid'],
-            'first_name' => ['required', 'string', 'max:120', 'regex:/\A[^\p{C}]+\z/u'],
+            'first_name' => ['sometimes', 'nullable', 'string', 'max:120', 'regex:/\A[^\p{C}]*\z/u'],
             'last_name' => ['sometimes', 'nullable', 'string', 'max:120', 'regex:/\A[^\p{C}]*\z/u'],
             'email' => ['sometimes', 'nullable', 'email:rfc', 'max:190'],
             'phone' => ['sometimes', 'nullable', 'string', 'max:80', 'regex:/\A[^\p{C}]*\z/u']],
@@ -304,6 +351,7 @@ final class PosController extends Controller
     public function quote(Request $r, string $tenant, string $register): JsonResponse
     {
         return $this->respond($r, [
+            'tender' => ['sometimes', 'in:card,cash'],
             'request_id' => ['required', 'uuid'], 'source_order_id' => ['sometimes', 'integer', 'min:1', 'prohibits:items,custom_charge,discounts,addons,reward_redemption'],
             'items' => ['required_without_all:source_order_id,custom_charge', 'array', 'min:1', 'max:50'],
             'custom_charge' => ['sometimes', 'array:description,amount_minor'],

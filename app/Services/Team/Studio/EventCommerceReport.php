@@ -33,7 +33,7 @@ class EventCommerceReport
         return $ids->count() === 1 ? (int) $ids[0] : null;
     }
 
-    public function forEvent(Tenant $tenant, User $user, TeamOperationRecord $event): array
+    public function forEvent(Tenant $tenant, User $user, TeamOperationRecord $event, bool $includeReceipts = false): array
     {
         $this->access->financial($tenant, $user);
         $this->access->record($tenant, $user, $event);
@@ -46,7 +46,7 @@ class EventCommerceReport
         $metadata = json_decode($link->metadata, true, 64, JSON_THROW_ON_ERROR);
         $timezone = $metadata['timezone'] ?? null;
         abort_unless(in_array($timezone, timezone_identifiers_list(), true), 422, 'Review the shared event timezone.');
-        $sales = app(PosEventSales::class)->read($tenant->id, $id, $timezone);
+        $sales = app(PosEventSales::class)->read($tenant->id, $id, $timezone, $includeReceipts);
         $names = User::whereIn('id', array_column($sales['operators'], 'user_id'))->whereHas('tenants', fn ($query) => $query->where('tenants.id', $tenant->id))->pluck('name', 'id');
         $sales['operators'] = array_map(fn ($operator) => $operator + ['name' => $names[$operator['user_id']] ?? null], $sales['operators']);
         $pointer = $event->data['_teams_enrichment']['budget_id'] ?? $event->data['budget_id'] ?? null;
@@ -71,7 +71,7 @@ class EventCommerceReport
             'budget' => $budget ? ['id' => $budget->id, 'policy_id' => $budget->data['policy_id'], 'policy_version' => $budget->data['policy_version'], 'frozen_at' => $budget->data['frozen_at']] : null,
             'annual_history' => $history['annual_history'], 'history' => $history['history'],
             'review_items' => $budget ? [] : ['Save an event budget to calculate estimated profitability and break-even.'],
-            'basis' => 'Current Pay revenue and saved event cost estimates. Recorded workbook comparisons remain separate; they are not added to current sales. Tax uses the register’s reviewed location, not cost settings.'];
+            'basis' => 'Confirmed event-linked Pay, cash and reviewed Square revenue with saved event cost estimates. Recorded workbook comparisons remain separate; they are not added to current sales. Tax uses the register’s reviewed location, not cost settings.'];
     }
 
     public function forRegister(array $scope, User $user): array

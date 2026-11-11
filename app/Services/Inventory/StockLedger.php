@@ -253,14 +253,17 @@ final class StockLedger
             ->contains(fn ($binding) => (json_decode($binding->settings, true, 64, JSON_THROW_ON_ERROR)['tracking_mode'] ?? null) === 'counted');
     }
 
-    public function listing(int $tenant, string $pool): array
+    public function listing(int $tenant, string $pool, ?array $itemIds = null): array
     {
         $this->pool($tenant, $pool);
 
         $countedPool = $this->countedPool($tenant, $pool);
 
-        return $this->rows('items', $tenant)->where('active', true)->orderBy('title')->get()->map(function ($item) use ($tenant, $pool, $countedPool): array {
-            $b = $this->rows('balances', $tenant)->where('pool_id', $pool)->where('item_id', $item->id)->first();
+        $items = $this->rows('items', $tenant)->where('active', true)->when($itemIds !== null, fn ($query) => $query->whereIn('id', $itemIds))->orderBy('title')->get();
+        $balances = $this->rows('balances', $tenant)->where('pool_id', $pool)->whereIn('item_id', $items->pluck('id'))->get()->keyBy('item_id');
+
+        return $items->map(function ($item) use ($pool, $countedPool, $balances): array {
+            $b = $balances->get($item->id);
             $bundleReview = json_decode($item->metadata ?? '{}', true)['requires_components'] ?? false;
             $tracked = $item->tracked || $countedPool;
             $available = $tracked ? max(0, (int) ($b->on_hand ?? 0) - (int) ($b->reserved ?? 0)) : null;

@@ -14,32 +14,10 @@ Artisan::command('inspire', function () {
 
 Schedule::command('stock:sync')->everyMinute()->withoutOverlapping(5)->runInBackground();
 
-// Square -> canonical marketing profile sync cadence.
-Schedule::command('marketing:sync-square-customers')
-    ->dailyAt('01:10')
-    ->withoutOverlapping(240)
-    ->runInBackground();
-
-Schedule::command('marketing:sync-square-orders', [
-    '--since' => '3 days ago',
-])
-    ->everyThirtyMinutes()
-    ->withoutOverlapping(120)
-    ->runInBackground();
-
-Schedule::command('marketing:sync-square-payments', [
-    '--since' => '3 days ago',
-])
-    ->everyThirtyMinutes()
-    ->withoutOverlapping(120)
-    ->runInBackground();
-
-Schedule::command('marketing:sync-profiles', [
-    '--source' => 'square',
-    '--chunk' => 1000,
-])
-    ->hourlyAt(20)
-    ->withoutOverlapping(180)
+// Only owner-reviewed original Square readers are enrolled; a connection grant alone never enables source polling.
+Schedule::command('customer-sources:sync-square --limit=500')
+    ->everyMinute()
+    ->withoutOverlapping(5)
     ->runInBackground();
 
 // Drain default queued profile/order jobs even if a daemon worker is not running.
@@ -366,3 +344,5 @@ Artisan::command('campus-facilities:expire-voice', function () {
     $this->info('Expired demo voice sessions: '.$count);
 })->purpose('Close expired public Facilities demo voice calls');
 Schedule::command('campus-facilities:expire-voice')->everyMinute()->withoutOverlapping(2);
+
+\Illuminate\Support\Facades\Schedule::command('customer-sources:renew-square --limit=200')->dailyAt('00:40')->withoutOverlapping();

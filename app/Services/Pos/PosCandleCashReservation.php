@@ -59,7 +59,7 @@ final class PosCandleCashReservation
             if ($profile->merged_at !== null || $profile->merged_into_profile_id !== null) {
                 throw new PosException('customer_identity_review_required', 409);
             }
-            if ($this->authority instanceof PosVerifiedRewardReservationAuthority
+            if ($this->authority instanceof PosVerifiedRewardReservationAuthority && empty($terms['staff_authorization_id'])
                 && (! is_int($terms['account_link_id'] ?? null)
                     || ! app(PosVerifiedCustomerAccount::class)->verified($profile, $terms['account_link_id']))) {
                 throw new PosException('customer_identity_review_required', 409);

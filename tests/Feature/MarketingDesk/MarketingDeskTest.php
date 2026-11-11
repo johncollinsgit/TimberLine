@@ -62,6 +62,19 @@ test('desk is default-off and tenant allowlist never expands when empty', functi
     $this->actingAs($actor)->get(route('marketing.desk.index', ['tenant' => $tenant->slug]))->assertForbidden();
 });
 
+test('connected audiences surface existing tenant customers and rules without sending or exposing another workspace', function (): void {
+    [$tenant, $actor] = deskWorkspace('connected-audience');
+    [$other] = deskWorkspace('other-audience');
+    $actor->refresh();
+    MarketingProfile::create(['tenant_id' => $tenant->id, 'first_name' => 'Own customer']);
+    MarketingProfile::create(['tenant_id' => $other->id, 'first_name' => 'Foreign secret customer']);
+    $this->actingAs($actor)->get(route('marketing.desk.index', ['tenant' => $tenant->slug, 'view' => 'audiences']))
+        ->assertOk()->assertSee('Build an event audience')->assertSee('Saved groups')->assertDontSee('Foreign secret customer')
+        ->assertViewHas('customerWorkspace', fn ($data) => $data['customers'] === 1 && $data['can_manage']);
+    $this->get(route('marketing.desk.index', ['tenant' => $other->slug, 'view' => 'audiences']))->assertForbidden();
+    Http::assertNothingSent();
+});
+
 test('Instagram refresh imports existing photos once while publishing remains off', function (): void {
     [$tenant, $actor] = deskWorkspace();
     $connection = deskConnection($tenant->id, 'instagram');

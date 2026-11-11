@@ -24,6 +24,7 @@ Route::middleware(['auth', 'verified', 'tenant.access', \App\Http\Middleware\Ens
         Route::get('/customers/{profile}', \App\Http\Controllers\TeamCustomerLookupController::class)->whereNumber('profile')->defaults('action', 'detail')->name('customers.detail');
         Route::get('/customers', \App\Http\Controllers\TeamCustomerLookupController::class)->name('customers.search');
         Route::get('/events/{event}/customer-value', \App\Http\Controllers\TeamCustomerEventValueController::class)->whereUuid('event')->name('events.customer-value');
+        Route::get('/events/{id}/confirmed-sales', \App\Http\Controllers\TeamConfirmedEventSalesController::class)->whereUuid('id')->name('events.confirmed-sales');
         Route::get('/events/{id}/profitability', \App\Http\Controllers\TeamEventProfitabilityController::class)->whereUuid('id')->name('events.profitability');
         Route::get('/events/{id}/intelligence', \App\Http\Controllers\TeamEventIntelligenceController::class)->whereUuid('id')->name('events.intelligence');
         Route::get('/events/{id}/essentials', \App\Http\Controllers\TeamEventEssentialsController::class)->whereUuid('id')->name('events.essentials');

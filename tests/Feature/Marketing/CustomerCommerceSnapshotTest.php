@@ -52,11 +52,11 @@ test('linked confirmed online and physical purchases share one existing balance 
             'financial_status' => 'paid', 'source_name' => 'web', 'total_price' => '18.25', 'refund_total' => '0.00', 'currency' => 'USD']]]);
     commerceLink($profile, 'order', $order->id);
     SquareOrder::query()->create(['tenant_id' => $profile->tenant_id, 'square_order_id' => 'physical-1',
-        'state' => 'COMPLETED', 'closed_at' => now(), 'total_money_amount' => 3000, 'total_money_currency' => 'USD']);
+        'state' => 'COMPLETED', 'closed_at' => now(), 'location_id' => 'physical-location', 'total_money_amount' => 3000, 'total_money_currency' => 'USD']);
     commerceLink($profile, 'square_order', 'physical-1');
     SquarePayment::query()->create(['tenant_id' => $profile->tenant_id, 'square_payment_id' => 'payment-1',
-        'square_order_id' => 'physical-1', 'status' => 'COMPLETED', 'amount_money' => 3000, 'currency' => 'USD',
-        'created_at_source' => now(), 'raw_payload' => ['card_details' => ['entry_method' => 'CONTACTLESS'], 'refunded_money' => ['amount' => 500]]]);
+        'square_order_id' => 'physical-1', 'status' => 'COMPLETED', 'amount_money' => 3000, 'currency' => 'USD', 'location_id' => 'physical-location',
+        'created_at_source' => now(), 'raw_payload' => ['card_details' => ['entry_method' => 'CONTACTLESS'], 'refunded_money' => ['amount' => 500, 'currency' => 'USD']]]);
     commerceLink($profile, 'square_payment', 'payment-1');
     CandleCashBalance::query()->create(['marketing_profile_id' => $profile->id, 'balance' => 7.25]);
     CandleCashTransaction::query()->create(['marketing_profile_id' => $profile->id, 'type' => 'earn',
@@ -177,4 +177,35 @@ test('contradictory order and tender customer associations hide the sale for bot
         expect($snapshot['purchases'])->toBe([])
             ->and($snapshot['issues'])->toContain('customer_identity_review_required');
     }
+});
+
+test('reporting retains purchases older than the mobile window and indexes them by the canonical tenant customer', function (): void {
+    $profile = commerceCustomer('connected-reporting-history');
+    for ($i = 0; $i < 110; $i++) {
+        $id = 'connected-history-'.$i;
+        SquareOrder::create(['tenant_id' => $profile->tenant_id, 'square_order_id' => $id, 'state' => 'COMPLETED',
+            'closed_at' => now()->subDays($i), 'location_id' => 'historic-location', 'total_money_amount' => 1000, 'total_money_currency' => 'USD']);
+        SquarePayment::create(['tenant_id' => $profile->tenant_id, 'square_payment_id' => 'payment-'.$id, 'square_order_id' => $id,
+            'location_id' => 'historic-location', 'status' => 'COMPLETED', 'amount_money' => 1000, 'currency' => 'USD',
+            'raw_payload' => ['refunded_money' => ['amount' => 0, 'currency' => 'USD']]]);
+        commerceLink($profile, 'square_order', $id);
+    }
+    $mobile = app(CustomerCommerceSnapshotService::class)->forProfile($profile, $profile->tenant_id, 100);
+    expect($mobile['has_more'])->toBeTrue()->and(count($mobile['purchases']))->toBe(100);
+    $projection = app(\App\Services\Marketing\ConfirmedCustomerPurchaseProjection::class)->read($profile, $profile->tenant_id);
+    expect($projection['confirmed_orders'])->toBe(110)->and($projection['has_more'])->toBeFalse()
+        ->and($projection['customer_id'])->toBe($profile->id)->and($projection['tenant_id'])->toBe($profile->tenant_id);
+    $other = commerceCustomer('connected-reporting-foreign');
+    expect(fn () => app(\App\Services\Marketing\ConfirmedCustomerPurchaseProjection::class)->read($profile, $other->tenant_id))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+});
+
+test('nearby audiences use approximate Census ZIP points and exclude missing or foreign locations', function (): void {
+    $distance = app(\App\Services\Marketing\CustomerLocationDistance::class);
+    $columbia = $distance->point('29201');
+    expect($columbia)->toHaveCount(2)->and($distance->miles($columbia, $columbia))->toBe(0.0)
+        ->and($distance->miles($columbia, $distance->point('29072')))->toBeLessThan(50)
+        ->and($distance->miles($columbia, $distance->point('29640')))->toBeGreaterThan(50)
+        ->and($distance->point(null))->toBeNull()->and($distance->point('29201', 'CA'))->toBeNull()
+        ->and($distance->point('29201', null))->toBeNull()->and($distance->miles(null, $columbia))->toBeNull();
 });

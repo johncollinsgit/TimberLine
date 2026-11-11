@@ -89,6 +89,12 @@ class SalesChannelSummaryService
         return [...$summary, 'basis' => 'Gross operational order amounts; refunds, taxes, processing fees and payouts require reconciliation.'];
     }
 
+    /** Tenant-scoped current event purchases, consumed by the shared Pay/Teams report. */
+    public function forReviewedSquareEvent(int $tenant, int $event): array
+    {
+        return app(ReviewedSquareEventPurchases::class)->read($tenant, $event);
+    }
+
     private function hasLivePos(): bool
     {
         return is_string(config('pos_live.runtime_id')) && config('pos_live.runtime_id') !== '' && Schema::hasTable('pos_live_sales');

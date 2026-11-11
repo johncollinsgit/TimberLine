@@ -40,7 +40,7 @@ class OperationsSquare
             $evidence[] = $this->order($tenant, $order, true, isset($conflicts[$order->square_order_id]));
         }
 
-        return ['items' => $items, 'selected' => $evidence, 'page' => $page, 'has_more' => $p->hasMorePages(), 'complete' => false, 'notice' => 'Square is reconciliation evidence. Order totals and recorded refunds are separate from spreadsheet net sales; they are never added to event revenue. Date-window matches require review. Offline orders and later refunds can arrive after the event.', 'source' => 'existing_tenant_square_history', 'as_of' => now()->toIso8601String()];
+        return ['items' => $items, 'selected' => $evidence, 'page' => $page, 'has_more' => $p->hasMorePages(), 'complete' => false, 'notice' => 'Reviewed completed Square orders with matching payment evidence feed current sales once. Spreadsheet comparisons remain separate. Date-window matches require review. Offline orders and later refunds can arrive after the event.', 'source' => 'existing_tenant_square_history', 'as_of' => now()->toIso8601String()];
     }
 
     private function order(Tenant $tenant, SquareOrder $order, bool $selected, bool $conflict): array

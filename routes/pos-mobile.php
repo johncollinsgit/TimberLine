@@ -18,8 +18,11 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
         Route::get('/customers/{profile}/commerce', [PosController::class, 'customerCommerce'])->whereNumber('profile')->middleware($read)->name('customers.commerce');
         Route::post('/customers', [PosController::class, 'createCustomer'])->middleware($write)->name('customers.create');
         Route::get('/customer-requests/{requestId}', [PosController::class, 'customerRequest'])->whereUuid('requestId')->middleware($read)->name('customers.request');
+        Route::get('/event-stats', [PosController::class, 'eventStats'])->middleware($read)->name('event-stats');
+        Route::get('/sales', [PosController::class, 'sales'])->middleware($read)->name('sales.index');
         Route::get('/catalog', [PosController::class, 'catalog'])->middleware($read)->name('catalog');
         Route::get('/reward-redemption', [PosController::class, 'rewardRedemption'])->middleware($read)->name('reward-redemption.show');
+        Route::post('/reward-codes/staff-confirmation', [PosController::class, 'confirmStaffReward'])->middleware($write)->name('reward-codes.staff-confirmation');
         Route::post('/reward-codes/preview', [PosController::class, 'previewRewardCode'])->middleware($write)->name('reward-codes.preview');
         Route::post('/reward-codes/contact', [PosController::class, 'requestRewardContactCode'])->middleware($write)->name('reward-codes.contact.request');
         Route::post('/reward-codes/contact/{challenge}', [PosController::class, 'verifyRewardContactCode'])->middleware($write)->name('reward-codes.contact.verify');
@@ -38,6 +41,8 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
         Route::get('/checkout-rules', [PosController::class, 'checkoutRules'])->middleware($read)->name('checkout-rules.index');
         Route::post('/checkout-rules', [PosController::class, 'saveCheckoutRule'])->middleware($write)->name('checkout-rules.save');
         Route::delete('/checkout-rules/{rule}', [PosController::class, 'deleteCheckoutRule'])->where('rule', '[a-z0-9][a-z0-9_-]{0,63}')->middleware($write)->name('checkout-rules.delete');
+        Route::post('/stock-counts/batch', [PosController::class, 'countStockBatch'])->middleware($write)->name('stock.batch');
+        Route::post('/stock-counts/draft', [PosController::class, 'inventoryCountDraft'])->middleware($write)->name('stock.draft');
         Route::post('/stock-counts', [PosController::class, 'countStock'])->middleware($write)->name('stock.counts');
         Route::get('/printing-quotes', [PosController::class, 'approvedQuotes'])->middleware($read)->name('printing-quotes');
         Route::post('/quotes', [PosController::class, 'quote'])->middleware($write)->name('quotes');
@@ -46,6 +51,8 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
         Route::post('/requests/{requestId}/discard', [PosController::class, 'discard'])->whereUuid('requestId')->middleware($write)->name('requests.discard');
         Route::prefix('/sales/{sale}')->where(['sale' => '[a-f0-9]{32}'])->group(function () use ($read, $write): void {
             Route::get('/', [PosController::class, 'show'])->middleware($read)->name('sales.show');
+            Route::get('/customer-suggestion', [PosController::class, 'customerSuggestion'])->middleware($read)->name('sales.customer-suggestion');
+            Route::post('/cash', [PosController::class, 'collectCash'])->middleware($write)->name('sales.cash');
             Route::post('/collect', [PosController::class, 'start'])->middleware($write)->name('sales.collect');
             Route::post('/reconcile', [PosController::class, 'reconcile'])->middleware($write)->name('sales.reconcile');
             Route::post('/leave-for-review', [PosController::class, 'leaveForReview'])->middleware($write)->name('sales.leave-for-review');

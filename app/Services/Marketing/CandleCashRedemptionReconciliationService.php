@@ -66,6 +66,26 @@ class CandleCashRedemptionReconciliationService
      */
     public function reconcileSquareOrder(SquareOrder $order, array $options = []): array
     {
+        $tenantId = (int) ($order->tenant_id ?? $options['tenant_id'] ?? 0);
+        $blocked = ['processed' => 0, 'matched' => 0, 'reconciled' => 0, 'already_reconciled' => 0, 'rejected' => 0, 'not_found' => 0, 'tenant_context_missing' => 1];
+        if ($tenantId < 1 || ! $order->exists || (isset($options['tenant_id']) && (int) $options['tenant_id'] !== $tenantId)) {
+            return $blocked;
+        }
+        $options['tenant_id'] = $tenantId;
+        $work = function () use ($order, $options, $tenantId, $blocked): array {
+            $current = SquareOrder::query()->whereKey($order->id)->where('tenant_id', $tenantId)->lockForUpdate()->first();
+
+            return $current ? $this->reconcileCurrentSquareOrder($current, $options) : $blocked;
+        };
+
+        return app(CustomerAccountFence::class)->forTenant($tenantId, $work);
+    }
+
+    protected function reconcileCurrentSquareOrder(SquareOrder $order, array $options): array
+    {
+        if (data_get($order->raw_payload, '_everbranch_source_import.historical_only') === true) {
+            return ['processed' => 0, 'matched' => 0, 'reconciled' => 0, 'already_reconciled' => 0, 'rejected' => 0, 'not_found' => 0, 'tenant_context_missing' => 0, 'historical_source_skipped' => 1];
+        }
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $tenantId = $this->tenantIdForSquareOrder($order, $options);
         $codes = $this->normalizeCodes((array) ($options['codes'] ?? []));

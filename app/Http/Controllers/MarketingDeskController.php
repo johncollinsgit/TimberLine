@@ -49,7 +49,7 @@ class MarketingDeskController extends Controller
     public function index(Request $request)
     {
         $view = (string) $request->query('view', 'today');
-        abort_unless(in_array($view, ['today', 'chat', 'calendar', 'insights', 'inbox', 'recipes', 'knowledge', 'settings'], true), 404);
+        abort_unless(in_array($view, ['today', 'chat', 'calendar', 'insights', 'inbox', 'recipes', 'knowledge', 'settings', 'audiences'], true), 404);
         $tenantId = $this->tenant($request, staff: $view === 'inbox');
         config(['marketing_desk.timezone' => app(\App\Services\Marketing\Desk\MarketingWorkspaceClock::class)->timezone($tenantId)]);
         $role = $request->user()->tenants()->whereKey($tenantId)->first()->pivot->role;
@@ -72,9 +72,21 @@ class MarketingDeskController extends Controller
         $platformFilter = in_array($request->query('platform'), ['instagram', 'facebook'], true) ? $request->query('platform') : 'all';
         $formatFilter = in_array($request->query('format'), ['image', 'carousel', 'video', 'text'], true) ? $request->query('format') : 'all';
         $results = app(SocialResultsService::class)->cards($posts, $publications, $ranking, $platformFilter, $formatFilter);
+        $customerWorkspace = null;
+        if (! $staff && in_array($view, ['today', 'audiences'], true)
+            && app(\App\Services\Marketing\CustomerProfileAccess::class)->allows($request->user(), $tenant)) {
+            $ownership = app(\App\Services\Marketing\MarketingTenantOwnershipService::class);
+            $customerWorkspace = [
+                'customers' => MarketingProfile::forTenantId($tenantId)->whereNull('archived_at')->whereNull('merged_into_profile_id')->count(),
+                'square_imported' => \App\Models\SquareCustomer::forTenantId($tenantId)->count(),
+                'square_linked' => \App\Models\MarketingProfileLink::forTenantId($tenantId)->where('source_type', 'square_customer')->distinct()->count('source_id'),
+                'saved_groups' => $ownership->tenantGroupIds($tenantId)->count(), 'saved_segments' => $ownership->tenantSegmentIds($tenantId)->count(),
+                'can_manage' => app(\App\Services\Marketing\CustomerCommerceLinkService::class)->canLink($request->user(), $tenantId),
+            ];
+        }
         $photoPosts = $posts->filter(fn ($post) => filled($post->content['thumbnail_url'] ?? (($post->content['media_type'] ?? '') !== 'video' ? ($post->content['media_urls'][0] ?? null) : null)))->take(4);
 
-        return response()->view('marketing.desk.index', compact('view', 'tenantId', 'tenant', 'staff', 'threads', 'selected', 'messages', 'controls', 'posts', 'publications', 'connections', 'knowledge', 'turns', 'workflows', 'policies', 'budget', 'recipes', 'ranking', 'platformFilter', 'formatFilter', 'results', 'photoPosts'))->header('Cache-Control', 'private, no-store');
+        return response()->view('marketing.desk.index', compact('view', 'tenantId', 'tenant', 'staff', 'threads', 'selected', 'messages', 'controls', 'posts', 'publications', 'connections', 'knowledge', 'turns', 'workflows', 'policies', 'budget', 'recipes', 'ranking', 'platformFilter', 'formatFilter', 'results', 'photoPosts', 'customerWorkspace'))->header('Cache-Control', 'private, no-store');
     }
 
     public function knowledge(Request $request)

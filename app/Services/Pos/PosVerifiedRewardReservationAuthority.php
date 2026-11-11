@@ -47,7 +47,7 @@ final class PosVerifiedRewardReservationAuthority implements PosRewardReservatio
         }
         $proof = $this->proofs->bind($tenant, $customerProof, $sale->id);
         if ((int) $proof->cap_minor < $amountMinor || ! hash_equals($policy['version'], $proof->policy_version)
-            || $proof->disclosure_version !== PosRewardCustomerProof::DISCLOSURE_VERSION) {
+            || ! in_array($proof->disclosure_version, [PosRewardCustomerProof::DISCLOSURE_VERSION, PosStaffRewardAuthorization::DISCLOSURE], true)) {
             throw new PosException('reward_authorization_invalid', 403);
         }
         $profileId = (int) $proof->marketing_profile_id;
@@ -56,7 +56,10 @@ final class PosVerifiedRewardReservationAuthority implements PosRewardReservatio
             throw new PosException('customer_identity_review_required', 409);
         }
 
-        $effective = $this->settings->forProfile($canonical);
+        if (! $this->proofs->identityValid($canonical, $proof, $sale)) {
+            throw new PosException('customer_identity_review_required', 409);
+        }
+        $effective = $this->settings->forRegisterProfile(['tenant_id' => $tenant, 'register' => $register], $canonical);
         if ($amountMinor > $effective['max_minor']) {
             throw new PosException('membership_redemption_limit_changed', 409);
         }
@@ -64,6 +67,6 @@ final class PosVerifiedRewardReservationAuthority implements PosRewardReservatio
         return ['profile_id' => $profileId, 'expected_amount_minor' => $terms['amount_minor'],
             'limit_minor' => $effective['max_minor'], 'eligible_minor' => $terms['eligible_minor'],
             'policy_version' => $policy['version'], 'authorization_reference' => $proof->id,
-            'account_link_id' => (int) $proof->account_link_id];
+            'account_link_id' => (int) $proof->account_link_id, 'staff_authorization_id' => $proof->disclosure_version === PosStaffRewardAuthorization::DISCLOSURE ? $proof->id : null];
     }
 }

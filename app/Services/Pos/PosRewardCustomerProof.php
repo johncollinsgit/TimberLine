@@ -62,6 +62,13 @@ final class PosRewardCustomerProof
             'max_minor' => $policy['max_minor'], 'policy_version' => $policy['version'], 'disclosure_version' => self::DISCLOSURE_VERSION];
     }
 
+    public function identityValid(MarketingProfile $profile, object $authorization, ?object $sale = null): bool
+    {
+        return $authorization->disclosure_version === PosStaffRewardAuthorization::DISCLOSURE
+            ? app(PosStaffRewardAuthorization::class)->valid($profile, $authorization, $sale)
+            : app(PosVerifiedCustomerAccount::class)->verified($profile, (int) $authorization->account_link_id);
+    }
+
     /** Resolve before quote calculation without granting or binding funds. */
     public function preview(int $tenant, string $payload): object
     {
@@ -97,9 +104,9 @@ final class PosRewardCustomerProof
     private function hasTerms(object $row): bool
     {
         return (int) ($row->cap_minor ?? 0) > 0
-            && (int) ($row->account_link_id ?? 0) > 0
+            && ((int) ($row->account_link_id ?? 0) > 0 || (($row->disclosure_version ?? null) === PosStaffRewardAuthorization::DISCLOSURE && $row->account_link_id === null))
             && is_string($row->policy_version ?? null) && preg_match('/^[a-f0-9]{64}$/D', $row->policy_version) === 1
-            && ($row->disclosure_version ?? null) === self::DISCLOSURE_VERSION;
+            && in_array($row->disclosure_version ?? null, [self::DISCLOSURE_VERSION, PosStaffRewardAuthorization::DISCLOSURE], true);
     }
 
     private function rows(int $tenant, string $payload): \Illuminate\Database\Query\Builder

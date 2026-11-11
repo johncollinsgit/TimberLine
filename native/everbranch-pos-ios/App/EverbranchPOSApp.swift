@@ -21,7 +21,7 @@ struct PayButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 52)
             .foregroundStyle(primary ? PayTheme.cream : PayTheme.ink)
-            .background(primary ? PayTheme.ink : PayTheme.paper, in: Capsule())
+            .background(primary ? PayTheme.ink : PayTheme.paper, in: Capsule()).contentShape(Capsule())
             .opacity(enabled ? (configuration.isPressed ? 0.75 : 1) : 0.4)
     }
 }
@@ -469,31 +469,36 @@ struct POSView: View {
             } else {
                 TextField("Name, email or phone", text: $model.customerQuery).payInput().textInputAutocapitalization(.never)
                     .focused($inputFocused).submitLabel(.search).onSubmit { model.searchCustomers() }
+                if model.customerSearchLoading { ProgressView("Finding customers…") }
                 Button("Find customer", action: { inputFocused = false; model.searchCustomers() })
                     .buttonStyle(PayButtonStyle(primary: false))
                     .disabled(model.customerQuery.trimmingCharacters(in: .whitespacesAndNewlines).count < 2)
                 ForEach(model.customers) { customer in
                     Button { inputFocused = false; model.selectedCustomer = customer } label: {
                         HStack {
-                            VStack(alignment: .leading, spacing: 5) { Text(customer.name); if let email = customer.email { Text(email).font(.caption).foregroundStyle(PayTheme.muted) } }
+                            VStack(alignment: .leading, spacing: 5) { Text(customer.name); if let email = customer.email { Text(email).font(.caption).foregroundStyle(PayTheme.muted) }; if let phone = customer.phone { Text(phone).font(.caption).foregroundStyle(PayTheme.muted) } }
                             Spacer(); Image(systemName: "plus.circle")
                         }.frame(maxWidth: .infinity, minHeight: 52).contentShape(Rectangle())
                     }
                 }
-                if model.customerEnrollmentSettings?.canCreateCustomers == true || model.selectedRegister?.canCreateCustomers == true {
+                if model.pendingCustomer == nil && (model.customerEnrollmentSettings?.canCreateCustomers == true || model.selectedRegister?.canCreateCustomers == true) {
                     DisclosureGroup("Create a new customer", isExpanded: $creatingCustomer) {
                         VStack(spacing: 12) {
-                            TextField("First name", text: $model.customerFirstName).payInput().textContentType(.givenName).focused($inputFocused)
+                            TextField("First name (optional)", text: $model.customerFirstName).payInput().textContentType(.givenName).focused($inputFocused)
                             TextField("Last name", text: $model.customerLastName).payInput().textContentType(.familyName).focused($inputFocused)
                             TextField("Email (optional)", text: $model.customerEmail).payInput().keyboardType(.emailAddress).textInputAutocapitalization(.never).focused($inputFocused)
-                            TextField("Phone (optional)", text: $model.customerPhone).payInput().keyboardType(.phonePad).focused($inputFocused)
+                            TextField("Phone", text: $model.customerPhone).payInput().keyboardType(.phonePad).focused($inputFocused)
                             Text("Creates a purchase record without marketing signup. Their online account must be connected separately.").font(.caption).foregroundStyle(PayTheme.muted)
                             Button("Create and select customer", action: { inputFocused = false; model.createCustomer() })
-                                .buttonStyle(PayButtonStyle()).disabled(model.customerFirstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                .buttonStyle(PayButtonStyle()).disabled(model.customerEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && model.customerPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         }.padding(.top, 12)
                     }.padding(.vertical, 6)
                 }
-                if model.pendingCustomer != nil { Button("Recover customer request", action: model.recoverCustomer).frame(minHeight: 44) }
+                if let saved = model.pendingCustomer {
+                    Text("A customer request is saved with its original contact details. Check or retry it before creating another customer.").font(.caption).foregroundStyle(PayTheme.muted)
+                    Button("Recover customer request", action: model.recoverCustomer).frame(minHeight: 44)
+                    if saved.firstName != nil { Button("Retry saved customer details", action: model.createCustomer).frame(minHeight: 44) }
+                }
             }
             if model.selectedRegister?.rewardsRedemptionAvailable == true && (screen != .customers || model.pending == nil) {
                 RewardCheckoutPanel(model: model, lookupOnly: screen == .customers)
@@ -537,13 +542,45 @@ struct POSView: View {
                         RewardCheckoutPanel(model: model, lookupOnly: false)
                     }
                     if model.savedBasketUnavailable { Text("This saved basket can’t be edited on this phone. Check the original sale or close this screen.").font(.subheadline).foregroundStyle(PayTheme.muted) }
-                    if sale.collectionReady != true && sale.state == "quoted" { Text(sale.inventoryAuthority == "everbranch" ? "Updating availability or awaiting register approval. You can check this basket again; no payment has started." : "Payment collection is awaiting setup or approval.").font(.subheadline).foregroundStyle(PayTheme.muted) }
+                    if sale.collectionReady != true && sale.state == "quoted" { Text(sale.tender == "cash" ? "Cash checkout needs current tax, catalog and stock review. Check this basket again, or open Account for the register setup." : sale.inventoryAuthority == "everbranch" ? "Updating availability or awaiting register approval. You can check this basket again; no payment has started." : "Payment collection is awaiting setup or approval.").font(.subheadline).foregroundStyle(PayTheme.muted) }
                     if sale.canonicalConfirmation && !sale.receiptAvailable { Text("Payment received. Order finalization needs review. Do not charge again.").font(.subheadline) }
                     if model.pending?.collectionRequested == false && sale.state == "quoted" {
-                        if !model.tapReady && sale.amountMinor > 0 { Button("Set up Tap to Pay", action: model.setup).buttonStyle(PayButtonStyle(primary: false)) }
-                        Button(sale.amountMinor == 0 ? "Complete rewards purchase" : "Charge \(POSMoney.display(sale.amountMinor))", action: model.pay).buttonStyle(PayButtonStyle()).disabled((!model.tapReady && sale.amountMinor > 0) || sale.collectionReady != true)
+                        if model.selectedRegister?.cashAvailable == true {
+                            HStack {
+                                Button("Card") { model.chooseTender("card") }.buttonStyle(PayButtonStyle(primary: sale.tender != "cash"))
+                                Button("Cash") { model.chooseTender("cash") }.buttonStyle(PayButtonStyle(primary: sale.tender == "cash"))
+                            }
+                        }
+                        if sale.tender == "cash" {
+                            TextField("Cash received", text: $model.cashReceived).payInput().keyboardType(.decimalPad).focused($inputFocused).disabled(model.pending?.cashReceivedMinor != nil)
+                            if let received = try? POSMoney.minor(model.cashReceived), received >= sale.amountMinor {
+                                Text("Change: \(POSMoney.display(received - sale.amountMinor))").font(.headline)
+                            }
+                            Button("Record cash payment", action: model.collectCash).buttonStyle(PayButtonStyle())
+                                .disabled((try? POSMoney.minor(model.cashReceived)) ?? 0 < sale.amountMinor || sale.collectionReady != true)
+                        } else {
+                            if !model.tapReady && sale.amountMinor > 0 { Button("Set up Tap to Pay", action: model.setup).buttonStyle(PayButtonStyle(primary: false)) }
+                            Button(sale.amountMinor == 0 ? "Complete rewards purchase" : "Charge \(POSMoney.display(sale.amountMinor))", action: model.pay).buttonStyle(PayButtonStyle()).disabled((!model.tapReady && sale.amountMinor > 0) || sale.collectionReady != true)
+                        }
                     }
                     if model.canEditBasket && sale.customer == nil { Button("Add customer") { contactOnly = false; showingCustomer = true }.buttonStyle(PayButtonStyle(primary: false)) }
+                    if sale.canonicalConfirmation, model.receipt?.customer == nil, model.selectedCustomer == nil, let suggestion = model.customerSuggestion {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Returning customer?").font(.subheadline)
+                            Text([suggestion.phone, suggestion.email].compactMap { $0 }.joined(separator: " · ")).font(.caption)
+                            Button("Confirm \(suggestion.name)", action: model.confirmSuggestedCustomer).buttonStyle(PayButtonStyle(primary: false))
+                        }
+                    }
+                    if sale.canonicalConfirmation, let receipt = model.receipt {
+                        let contact = receipt.contact ?? (receipt.customer != nil ? receipt.suggestedContact : nil)
+                        HStack {
+                            Button("Text") { model.deliverReceipt("sms") }.buttonStyle(PayButtonStyle(primary: false)).disabled(contact?.phone?.isEmpty != false)
+                            Button("Email") { model.deliverReceipt("email") }.buttonStyle(PayButtonStyle(primary: false)).disabled(contact?.email?.isEmpty != false)
+                            Button("Done", action: model.nextSale).buttonStyle(PayButtonStyle()).disabled(!sale.canLeave || model.pending?.refundRequestID != nil)
+                                .accessibilityIdentifier(sale.canLeave && model.pending?.refundRequestID == nil ? "Next sale" : "complete-sale")
+                        }
+                        Text("Receipts do not enroll customers in marketing.").font(.caption).foregroundStyle(PayTheme.muted)
+                    }
                     if sale.canonicalConfirmation && model.receipt?.customer == nil { Button("Add customer") { contactOnly = false; showingCustomer = true }.buttonStyle(PayButtonStyle(primary: false)) }
                     if sale.canonicalConfirmation, let customer = model.receipt?.customer {
                         Button("View customer") {
@@ -551,15 +588,15 @@ struct POSView: View {
                             contactOnly = false; showingCustomer = true
                         }.buttonStyle(PayButtonStyle(primary: false))
                     }
-                    if sale.canLeave && model.pending?.refundRequestID == nil { Button("Next sale", action: model.nextSale).buttonStyle(PayButtonStyle()) }
-                } else { Text(model.pending?.collectionRequested == true ? "Recover this sale before starting another payment." : "Preparing total…").font(.subheadline) }
+                    if sale.canLeave && model.pending?.refundRequestID == nil && (!sale.canonicalConfirmation || model.receipt == nil) { Button("Next sale", action: model.nextSale).buttonStyle(PayButtonStyle()) }
+                } else { Text(model.savedCheckoutMissing ? "Saved checkout unavailable" : model.pending?.collectionRequested == true ? "Recover this sale before starting another payment." : "Preparing total…").font(.subheadline) }
                 if model.pending?.collectionRequested == true || (model.sale == nil && !model.busy) || model.sale?.collectionReady == false {
                     Button(model.pending?.collectionRequested == true ? "Check payment status" : "Check basket") { model.perform { try await model.recover() } }.buttonStyle(PayButtonStyle(primary: false))
                 }
                 if model.sale?.state == "unknown" && model.pending?.refundRequestID == nil {
                     Button("Leave for review") { confirmUncollected = true }.buttonStyle(PayButtonStyle(primary: false))
                 }
-                if model.pending?.collectionRequested == false { Button("Cancel this sale", role: .destructive, action: model.discard).frame(minHeight: 44) }
+                if model.canDiscardPending { Button(model.savedCheckoutMissing ? "Return to products" : "Cancel this sale", role: model.savedCheckoutMissing ? nil : .destructive, action: model.discard).frame(minHeight: 44) }
             }
             if let receipt = model.receipt {
                 PayCard(title: "Receipt", icon: "receipt") {

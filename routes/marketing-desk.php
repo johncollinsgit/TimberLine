@@ -35,3 +35,10 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
 });
 Route::match(['GET', 'POST'], '/webhooks/marketing-facebook', [MarketingDeskMetaController::class, 'webhook'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])->middleware('throttle:120,1')->name('marketing.desk.facebook.webhook');
+
+// Customer/event audience preparation has its own active owner/admin guard and never grants delivery.
+Route::middleware(['auth', 'verified', 'tenant.access'])->prefix('marketing')->name('marketing.')->group(function (): void {
+    Route::get('/event-audiences', [\App\Http\Controllers\Marketing\EventAudiencesController::class, 'index'])->name('event-audiences');
+    Route::post('/event-audiences/preview', [\App\Http\Controllers\Marketing\EventAudiencesController::class, 'preview'])->middleware('throttle:90,1')->name('event-audiences.preview');
+    Route::post('/event-audiences', [\App\Http\Controllers\Marketing\EventAudiencesController::class, 'store'])->name('event-audiences.store');
+});

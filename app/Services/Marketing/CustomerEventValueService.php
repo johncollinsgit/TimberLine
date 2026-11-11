@@ -20,7 +20,7 @@ class CustomerEventValueService
     public function __construct(private CanonicalMarketingProfileResolver $identities, private StockLedger $stock) {}
 
     /** The caller must already authorize customer/financial access to this tenant. */
-    public function forProfile(MarketingProfile $profile, int $tenantId): array
+    public function forProfile(MarketingProfile $profile, int $tenantId, bool $reporting = false): array
     {
         $profile = (int) $profile->tenant_id === $tenantId ? $this->identities->byId($tenantId, (int) $profile->id) : null;
         if (! $profile || $tenantId < 1 || $profile->archived_at !== null) {
@@ -39,7 +39,8 @@ class CustomerEventValueService
             $first = null;
         }
         try {
-            $history = app(CustomerCommerceSnapshotService::class)->forProfile($profile, $tenantId, 100);
+            $history = $reporting ? app(CustomerCommerceSnapshotService::class)->forReportingProfile($profile, $tenantId)
+                : app(CustomerCommerceSnapshotService::class)->forProfile($profile, $tenantId, 100);
         } catch (\Throwable) {
             $history = ['customer_id' => (int) $profile->id, 'purchases' => [], 'has_more' => true, 'issues' => ['customer_history_unavailable']];
         }
@@ -96,6 +97,7 @@ class CustomerEventValueService
         return [
             'contract_version' => 1, 'tenant_id' => $tenantId, 'customer_id' => (int) $profile->id, 'as_of' => $now->toIso8601String(),
             'first_recorded_capture' => $first, 'captures' => $captures,
+            'behavior' => $history['behavior'] ?? null, 'history_has_more' => $history['has_more'] ?? true,
             'acquisition' => ['event' => $first['event'] ?? null, 'basis' => $review ? 'reviewed_first_customer_acquisition' : 'first_recorded_event_capture_only',
                 'first_customer_acquisition_confirmed' => $classification === 'new' && $review !== null,
                 'review' => $review, 'causal_credit' => null],
@@ -105,7 +107,7 @@ class CustomerEventValueService
             'purchase_journey' => $journey, 'membership_conversion' => $membership, 'windows' => $windows,
             'review_options' => $reviewOptions,
             'coverage' => ['source' => 'canonical_customer_commerce', 'scope' => 'explicitly_linked_records_only', 'complete' => false,
-                'purchase_limit' => 100, 'has_more_purchases' => (bool) ($history['has_more'] ?? true), 'capture_limit' => 5000],
+                'purchase_limit' => $reporting ? 5000 : 100, 'has_more_purchases' => (bool) ($history['has_more'] ?? true), 'capture_limit' => 5000],
             'contribution_margin_minor' => null, 'margin_missing_evidence' => ['original_item_cogs', 'shipping_cost', 'processing_cost', 'reward_cost'],
             'issues' => array_values(array_unique($issues)),
             'basis' => 'First recorded contact, each purchase event and membership conversion are separate relationships. Later linked activity is correlation; causal credit is unknown. Values are observed paid totals after recorded refunds, including tax, not accounting revenue or contribution margin.',
@@ -270,6 +272,36 @@ class CustomerEventValueService
                 $issues[] = 'purchase_event_evidence_unavailable';
 
                 return null;
+            }
+        }
+        if (in_array($purchase['source'] ?? null, ['square_order', 'square_payment'], true)) {
+            $orderId = ($purchase['source'] === 'square_order') ? $purchase['source_id']
+                : \App\Models\SquarePayment::forTenantId($tenant)->where('square_payment_id', $purchase['source_id'])->value('square_order_id');
+            $mapped = [];
+            if ($orderId) {
+                $occurrences = \App\Models\TeamOperationRecord::where(['tenant_id' => $tenant, 'kind' => 'event'])->where('status', '!=', 'withdrawn')
+                    ->get()->filter(fn ($record) => in_array($orderId, $record->data['_teams_enrichment']['square_orders']['ids'] ?? [], true));
+                foreach ($occurrences as $occurrence) {
+                    $review = $occurrence->data['_teams_enrichment']['square_orders'];
+                    if (! is_int($review['reviewed_by'] ?? null) || ! $this->date($review['reviewed_at'] ?? null)
+                        || $this->date($review['reviewed_at']) > $now
+                        || ! app(CustomerCommerceLinkService::class)->canLink(\App\Models\User::find($review['reviewed_by']), $tenant)) {
+                        continue;
+                    }
+                    $id = app(\App\Services\Team\Studio\EventCommerceReport::class)->commerceId($occurrence);
+                    $event = $id ? $this->reviewedEvent($tenant, $id) : null;
+                    if ($event) {
+                        $mapped[$event['id']] = $event;
+                    }
+                }
+            }
+            if (count($mapped) > 1) {
+                $issues[] = 'purchase_event_attribution_ambiguous';
+
+                return null;
+            }
+            if (count($mapped) === 1) {
+                return ['event' => reset($mapped), 'basis' => 'reviewed_teams_square_allocation', 'causal_credit' => null];
             }
         }
         $events = [];

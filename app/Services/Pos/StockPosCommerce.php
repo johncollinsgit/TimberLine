@@ -39,17 +39,16 @@ final class StockPosCommerce
     public function catalog(array $scope): array
     {
         $settings = $this->settings($scope);
-        $items = $this->stock->listing($scope['tenant_id'], $settings['inventory_pool_id']);
         if (isset($settings['catalog_item_ids'])) {
             if (! is_array($settings['catalog_item_ids']) || count($settings['catalog_item_ids']) > 1000
                 || count(array_filter($settings['catalog_item_ids'], fn ($id) => is_string($id) && preg_match('/^[a-f0-9]{32}$/D', $id))) !== count($settings['catalog_item_ids'])) {
                 throw new PosException('register_catalog_selection_invalid', 503);
             }
-            $items = array_values(array_filter($items, fn ($item) => in_array($item['item_id'], $settings['catalog_item_ids'], true)));
         }
+        $items = $this->stock->listing($scope['tenant_id'], $settings['inventory_pool_id'], $settings['catalog_item_ids'] ?? null);
         if ($scope['register']->catalog_source === 'shopify') {
             $mapping = $this->stock->rows('provider_items', $scope['tenant_id'])->where('store_id', $settings['shopify']['store_id'])
-                ->where('active', true)->get()->keyBy('item_id');
+                ->where('active', true)->whereIn('item_id', array_column($items, 'item_id'))->get()->keyBy('item_id');
             $items = array_values(array_filter($items, fn ($i) => isset($mapping[$i['item_id']])));
             foreach ($items as &$item) {
                 $item['unit_amount_minor'] = (int) $mapping[$item['item_id']]->unit_amount_minor;

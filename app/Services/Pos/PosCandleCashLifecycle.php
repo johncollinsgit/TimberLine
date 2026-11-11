@@ -142,6 +142,29 @@ final class PosCandleCashLifecycle
         }, 3);
     }
 
+    /** Restores the original shared hold only after an audited complete internal cash return. */
+    public function restoreFullCashReturn(int $tenant, string $saleId): void
+    {
+        $this->store->db->transaction(function () use ($tenant, $saleId): void {
+            $sale = $this->store->rows('sales', $tenant)->where('id', $saleId)->lockForUpdate()->firstOrFail();
+            $snapshot = $this->sales->snapshot($sale);
+            $evidence = app(PosSalePaymentEvidence::class)->read($sale, $snapshot);
+            if (($snapshot['tender'] ?? null) !== 'cash' || ($evidence['source'] ?? null) !== 'everbranch_cash'
+                || (int) $sale->amount_minor < 1 || app(PosCashSale::class)->refunded($sale) !== (int) $sale->amount_minor) {
+                throw new PosException('reward_payment_evidence_required');
+            }
+            $hold = $this->lockedHold($sale, $snapshot);
+            if ($hold->state === 'refunded') {
+                return;
+            }
+            if ($hold->state !== 'spent') {
+                throw new PosException('reward_lifecycle_review_required');
+            }
+            $this->credit($hold, 'pos_reservation_refund', 'Restored in-person reward after full cash return');
+            $this->setState($hold->id, 'refunded');
+        }, 3);
+    }
+
     private function assertPayment(object $sale, array $snapshot, array $operation): void
     {
         if ($operation['kind'] !== 'payment' || (int) $operation['tenant_id'] !== (int) $sale->tenant_id

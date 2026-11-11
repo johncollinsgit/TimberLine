@@ -21,38 +21,8 @@ final class PosCustomerDirectory
     public function search(string $register, string $query): array
     {
         $scope = $this->access->register($register, 'catalog');
-        if (mb_strlen(trim($query)) < 2) {
-            throw new PosException('customer_query_required', 422);
-        }
-        $matches = MarketingProfile::query()->forTenantId($scope['tenant_id'])->whereNull('archived_at');
-        $digits = preg_replace('/[^0-9]/', '', $query);
-        if (preg_match('/^[+()0-9.\s-]+$/D', trim($query)) && strlen($digits) >= 7) {
-            $phone = app(\App\Support\Marketing\MarketingIdentityNormalizer::class)->normalizePhone($query);
-            $matches->where(function ($q) use ($phone, $digits): void {
-                if ($phone !== null) {
-                    $q->where('normalized_phone', $phone);
-                }
-                $q->orWhere('normalized_phone', 'like', '%'.$digits.'%')
-                    ->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), '(', ''), ')', ''), '-', ''), ' ', ''), '.', '') LIKE ?", ['%'.$digits.'%']);
-            });
-        } else {
-            foreach (preg_split('/\s+/u', trim($query), -1, PREG_SPLIT_NO_EMPTY) as $part) {
-                $pattern = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], Str::lower($part)).'%';
-                $matches->where(function ($q) use ($pattern): void {
-                    foreach (['first_name', 'last_name', 'email', 'phone', 'normalized_email', 'normalized_phone'] as $column) {
-                        $q->orWhereRaw('LOWER('.$column.") LIKE ? ESCAPE '!'", [$pattern]);
-                    }
-                });
-            }
-        }
-        $found = $matches->orderBy('id')->limit(41)->get();
-        $canonical = $this->identities->canonicalCollection($found, $scope['tenant_id']);
-        if ($canonical === null) {
-            throw new PosException('customer_identity_review_required');
-        }
 
-        return ['customers' => $canonical->filter(fn ($p) => $p->archived_at === null)->take(20)
-            ->map(fn ($p) => $this->summary($p))->values()->all(), 'has_more' => $found->count() > 20];
+        return app(\App\Services\Marketing\TenantCustomerLookup::class)->search($scope['tenant_id'], $query);
     }
 
     /** Explicitly selected customer only; this reads existing source records and never links identities. */
@@ -69,12 +39,12 @@ final class PosCustomerDirectory
     {
         $scope = $this->access->register($register, 'quote');
         $key = $this->requestKey($scope, $input['request_id']);
-        $values = ['first_name' => trim($input['first_name']), 'last_name' => trim($input['last_name'] ?? ''),
+        $values = ['first_name' => trim($input['first_name'] ?? ''), 'last_name' => trim($input['last_name'] ?? ''),
             'email' => filled($input['email'] ?? null) ? Str::lower(trim($input['email'])) : null,
             'phone' => filled($input['phone'] ?? null) ? trim($input['phone']) : null];
         $hash = Contract::hash($values);
-        if ($values['first_name'] === '') {
-            throw new PosException('customer_name_required', 422);
+        if ($values['email'] === null && $values['phone'] === null) {
+            throw new PosException('customer_contact_required', 422);
         }
 
         return $this->store->db->transaction(function () use ($scope, $key, $values, $hash): array {
@@ -190,7 +160,7 @@ final class PosCustomerDirectory
 
     private function summary(MarketingProfile $profile): array
     {
-        return ['id' => (int) $profile->id, 'name' => trim($profile->first_name.' '.$profile->last_name),
+        return ['id' => (int) $profile->id, 'name' => (trim($profile->first_name.' '.$profile->last_name) ?: ($profile->email ?: $profile->phone ?: 'Customer')),
             'email' => $profile->email, 'phone' => $profile->phone];
     }
 

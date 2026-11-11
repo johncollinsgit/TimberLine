@@ -84,4 +84,21 @@ final class ContractsTests: XCTestCase {
         pending.collectionAttempted = true
         XCTAssertEqual(try JSONDecoder().decode(PendingSale.self, from: JSONEncoder().encode(pending)).collectionAttempted, true)
     }
+    func testCashRetryKeepsOriginalReceivedAmountAcrossRestart() throws {
+        var pending = PendingSale(workspace: "fixture", register: "counter")
+        try pending.beginCash(receivedMinor: 3000)
+        var recovered = try JSONDecoder().decode(PendingSale.self, from: JSONEncoder().encode(pending))
+        recovered.collectionRequested = false
+        try recovered.beginCash(receivedMinor: 3000)
+        XCTAssertThrowsError(try recovered.beginCash(receivedMinor: 4000))
+        XCTAssertEqual(recovered.cashReceivedMinor, 3000)
+        XCTAssertTrue(recovered.collectionAttempted == true)
+    }
+    func testCashCannotReplaceAnIssuedOrUncertainCardAttempt() throws {
+        var issued = PendingSale(workspace: "fixture", register: "counter"); issued.sdkStarted = true
+        XCTAssertThrowsError(try issued.beginCash(receivedMinor: 3000))
+        var uncertain = PendingSale(workspace: "fixture", register: "counter"); uncertain.collectionAttempted = true
+        XCTAssertThrowsError(try uncertain.beginCash(receivedMinor: 3000))
+        XCTAssertNil(uncertain.cashReceivedMinor)
+    }
 }

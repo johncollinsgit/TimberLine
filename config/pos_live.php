@@ -1,6 +1,11 @@
 <?php
 
 return [
+    'external_sales_ingest_enabled' => (bool) env('POS_EXTERNAL_SALES_INGEST_ENABLED', false),
+    'external_sales_queue_connection' => env('POS_EXTERNAL_SALES_QUEUE_CONNECTION', 'database'),
+    'staff_rewards_enabled' => (bool) env('POS_STAFF_REWARDS_ENABLED', false),
+    'event_stats_enabled' => (bool) env('POS_EVENT_STATS_ENABLED', false),
+    'cash_enabled' => (bool) env('POS_CASH_ENABLED', false),
     'enabled' => (bool) env('POS_LIVE_ENABLED', false),
     'owned_inventory_enabled' => (bool) env('POS_OWNED_INVENTORY_ENABLED', false),
     'inventory_publication_enabled' => (bool) env('POS_INVENTORY_PUBLICATION_ENABLED', false),

@@ -2050,3 +2050,129 @@ it('limits owner membership reviews to current account evidence and expires or r
     $this->postJson($url, [...$body, 'active' => false])->assertOk();
     expect(app(\App\Services\Pos\PosRewardRedemptionSettings::class)->forProfile($this->profile)['max_minor'])->toBe(500);
 });
+
+function connectedEventRegister($test): void
+{
+    config(['pos_live.cash_enabled' => true, 'pos_live.staff_rewards_enabled' => true]);
+    $register = $test->store->rows('registers', $test->tenant->id)->firstOrFail();
+    $settings = $test->store->decrypt($register->configuration);
+    $test->store->rows('registers', $test->tenant->id)->update(['configuration' => $test->store->encrypt([...$settings, 'cash_enabled' => true, 'staff_rewards_enabled' => true])]);
+}
+
+it('completes a cash sale once with change and no Square attempt', function (): void {
+    connectedEventRegister($this);
+    // Cash has its own reviewed enablement; a disabled card collector cannot fabricate a Square charge.
+    config(['pos_live.collection_enabled' => false]);
+    $this->store->rows('registers', $this->tenant->id)->update(['collection_enabled' => false]);
+    $quote = $this->postJson($this->base.'/quotes', [...$this->selection, 'tender' => 'cash'])->assertOk()->assertJsonPath('tender', 'cash')->assertJsonPath('collection_ready', true)->json();
+    $path = $this->base.'/sales/'.$quote['sale_id'];
+    $this->postJson($path.'/collect')->assertConflict()->assertJsonPath('error.code', 'cash_confirmation_required');
+    config(['pos_live.cash_enabled' => false]);
+    $this->getJson($path)->assertOk()->assertJsonPath('collection_ready', false);
+    $this->postJson($path.'/cash', ['received_minor' => 2000])->assertStatus(503);
+    config(['pos_live.cash_enabled' => true]);
+    $this->postJson($path.'/cash', ['received_minor' => 1000])->assertStatus(422);
+    $this->postJson($path.'/cash', ['received_minor' => 2000])->assertOk()->assertJsonPath('canonical_confirmation', true);
+    $this->postJson($path.'/cash', ['received_minor' => 2000])->assertOk();
+    $this->postJson($path.'/cash', ['received_minor' => 3000])->assertConflict();
+    $this->getJson($path.'/receipt')->assertOk()->assertJsonPath('payment_source', 'everbranch_cash')
+        ->assertJsonPath('change_minor', 930)->assertJsonPath('settlement_status', 'no_external_payment');
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->first();
+    expect($sale->attempt_id)->toBeNull()->and($sale->descriptor_issued_at)->toBeNull()
+        ->and($this->stock->listing($this->tenant->id, $this->pool)[0]['on_hand'])->toBe(1)
+        ->and($this->store->rows('events', $this->tenant->id)->where('code', 'cash_sale_completed')->count())->toBe(1);
+    Http::assertNothingSent();
+});
+
+it('retains cash evidence through a lost response and refuses a changed tax review', function (): void {
+    connectedEventRegister($this);
+    $quote = $this->postJson($this->base.'/quotes', [...$this->selection, 'tender' => 'cash'])->assertOk()->json();
+    $register = $this->store->rows('registers', $this->tenant->id)->first();
+    $settings = $this->store->decrypt($register->configuration);
+    $settings['tax_valid_until'] = now()->subMinute()->toIso8601String();
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/cash', ['received_minor' => 2000])->assertStatus(503);
+    expect($this->store->rows('events', $this->tenant->id)->where('code', 'cash_sale_completed')->count())->toBe(0);
+});
+
+it('authorizes a saved-contact customer through an audited staff confirmation and spends once', function (): void {
+    ownedStockRewardCredential($this);
+    connectedEventRegister($this);
+    $input = ['customer_profile_id' => $this->profile->id, 'channel' => 'email', 'expected_contact' => $this->profile->email,
+        'request_id' => (string) Str::uuid(), 'customer_confirmed' => true];
+    $this->postJson($this->base.'/reward-codes/staff-confirmation', [...$input, 'customer_confirmed' => false])->assertStatus(422);
+    $issued = $this->postJson($this->base.'/reward-codes/staff-confirmation', $input)->assertOk()->json();
+    $retry = $this->postJson($this->base.'/reward-codes/staff-confirmation', $input)->assertOk()->json();
+    expect($retry['qr_payload'])->toBe($issued['qr_payload']);
+    $this->postJson($this->base.'/reward-codes/preview', ['proof' => $issued['qr_payload'], 'expected_customer_id' => $this->profile->id])
+        ->assertOk()->assertJsonPath('available_minor', 500);
+    $quote = $this->postJson($this->base.'/quotes', [...$this->selection, 'tender' => 'cash',
+        'reward_redemption' => ['proof' => $issued['qr_payload'], 'amount_minor' => 350]])->assertOk()->assertJsonPath('amount_minor', 696)->json();
+    $path = $this->base.'/sales/'.$quote['sale_id'].'/cash';
+    $this->postJson($path, ['received_minor' => 1000])->assertOk();
+    $this->postJson($path, ['received_minor' => 1000])->assertOk();
+    expect(DB::table('pos_candle_cash_reservations')->where('sale_id', $quote['sale_id'])->value('state'))->toBe('spent');
+});
+
+it('limits a reviewed event register to five dollars without changing the tenants higher member allowance', function (): void {
+    ownedStockRewardCredential($this);
+    connectedEventRegister($this);
+    $settings = app(\App\Services\Pos\PosRewardRedemptionSettings::class);
+    $row = \App\Models\TenantMarketingSetting::forTenantId($this->tenant->id)->where('key', \App\Services\Pos\PosRewardRedemptionSettings::SETTING_KEY)->firstOrFail();
+    $policy = $row->value;
+    $policy['member_max_minor'] = 1000;
+    $policy['reviewed_version'] = $settings->version($policy, app(\App\Services\Pos\PosCustomerRewards::class)->policy($this->tenant->id)['version']);
+    $row->update(['value' => $policy]);
+    $register = $this->store->rows('registers', $this->tenant->id)->firstOrFail();
+    $config = $this->store->decrypt($register->configuration);
+    $config['pos_candle_cash_reviewed_version'] = $policy['reviewed_version'];
+    $config['pos_candle_cash_register_cap'] = ['max_minor' => 500, 'reviewed_by' => $this->actor->id, 'reviewed_at' => now()->toIso8601String(), 'policy_version' => $policy['reviewed_version']];
+    $this->store->rows('registers', $this->tenant->id)->update(['configuration' => $this->store->encrypt($config)]);
+    $this->postJson($this->base.'/customers/'.$this->profile->id.'/membership-review', ['active' => true, 'confirmed' => true, 'reference' => 'Fictional current paid membership verified'])->assertOk();
+    \App\Models\CandleCashBalance::whereKey($this->profile->id)->update(['balance' => 15]);
+    expect($settings->forProfile($this->profile)['max_minor'])->toBe(1000);
+    $input = ['customer_profile_id' => $this->profile->id, 'channel' => 'email', 'expected_contact' => $this->profile->email,
+        'request_id' => (string) Str::uuid(), 'customer_confirmed' => true];
+    $proof = $this->postJson($this->base.'/reward-codes/staff-confirmation', $input)->assertOk()->assertJsonPath('max_minor', 500)->json('qr_payload');
+    $this->postJson($this->base.'/reward-codes/preview', ['proof' => $proof, 'expected_customer_id' => $this->profile->id])->assertOk()->assertJsonPath('available_minor', 500);
+    $this->postJson($this->base.'/quotes', [...$this->selection, 'tender' => 'cash', 'reward_redemption' => ['proof' => $proof, 'amount_minor' => 501]])->assertForbidden();
+    $quote = $this->postJson($this->base.'/quotes', [...$this->selection, 'request_id' => (string) Str::uuid(), 'tender' => 'cash', 'reward_redemption' => ['proof' => $proof, 'amount_minor' => 350]])->assertOk()->json();
+    $this->postJson($this->base.'/sales/'.$quote['sale_id'].'/cash', ['received_minor' => 1000])->assertOk();
+    expect($settings->forProfile($this->profile)['max_minor'])->toBe(1000);
+});
+
+it('requires contact for a nameless new customer and preserves the contact-only receipt distinction', function (): void {
+    connectedEventRegister($this);
+    $response = $this->postJson($this->base.'/customers', ['request_id' => (string) Str::uuid(), 'email' => 'new-buyer@example.invalid'])->assertOk();
+    $id = $response->json('customer.id');
+    expect(\App\Models\MarketingProfile::findOrFail($id)->accepts_email_marketing)->toBeFalse();
+    $this->postJson($this->base.'/customers', ['request_id' => (string) Str::uuid()])->assertStatus(422);
+    $quote = $this->postJson($this->base.'/quotes', [...$this->selection, 'tender' => 'cash'])->assertOk()->json();
+    $path = $this->base.'/sales/'.$quote['sale_id'];
+    $this->postJson($path.'/cash', ['received_minor' => 2000])->assertOk();
+    $this->postJson($path.'/receipt/customer', ['request_id' => (string) Str::uuid(), 'customer_profile_id' => $id])
+        ->assertOk()->assertJsonPath('receipt.customer.name', 'new-buyer@example.invalid');
+    $this->getJson($path.'/receipt')->assertOk()->assertJsonPath('customer.id', $id)->assertJsonPath('customer.name', 'new-buyer@example.invalid');
+    expect(\App\Models\MarketingProfile::findOrFail($id)->accepts_email_marketing)->toBeFalse();
+});
+
+it('refunds a complete cash purchase once and restores the original fractional reward hold', function (): void {
+    ownedStockRewardCredential($this);
+    connectedEventRegister($this);
+    $proof = $this->postJson($this->base.'/reward-codes/staff-confirmation', ['customer_profile_id' => $this->profile->id,
+        'channel' => 'email', 'expected_contact' => $this->profile->email, 'request_id' => (string) Str::uuid(), 'customer_confirmed' => true])->assertOk()->json('qr_payload');
+    $quote = $this->postJson($this->base.'/quotes', [...$this->selection, 'tender' => 'cash',
+        'reward_redemption' => ['proof' => $proof, 'amount_minor' => 350]])->assertOk()->json();
+    $path = $this->base.'/sales/'.$quote['sale_id'];
+    $this->postJson($path.'/cash', ['received_minor' => 1000])->assertOk();
+    $request = ['request_id' => (string) Str::uuid(), 'amount_minor' => $quote['amount_minor'], 'reason' => 'requested_by_customer'];
+    $this->postJson($path.'/refunds', [...$request, 'amount_minor' => 1])->assertUnprocessable();
+    $this->postJson($path.'/refunds', $request)->assertOk()->assertJsonPath('state', 'succeeded')->assertJsonPath('sale.tender', 'cash');
+    $this->postJson($path.'/refunds', $request)->assertOk();
+    $this->postJson($path.'/refunds', [...$request, 'request_id' => (string) Str::uuid()])->assertConflict();
+    $this->getJson($path.'/receipt')->assertOk()->assertJsonPath('refunded_minor', $quote['amount_minor']);
+    expect(DB::table('pos_candle_cash_reservations')->where('sale_id', $quote['sale_id'])->value('state'))->toBe('refunded');
+    expect((float) \App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'pos_reservation_refund')->sum('candle_cash_delta'))->toBe(3.5);
+    expect($this->stock->listing($this->tenant->id, $this->pool)[0]['on_hand'])->toBe(1);
+    expect($this->store->rows('outbox', $this->tenant->id)->where('sale_id', $quote['sale_id'])->where('effect_key', 'customer_refund_cash')->value('state'))->toBe('completed');
+});
