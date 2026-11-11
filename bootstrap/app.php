@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prepend(\App\Http\Middleware\ServePropertyCustomerDemo::class);
         $middleware->remove(FrameGuard::class);
         // WebRTC SDP is line-oriented and its final CRLF is significant. Leave
         // other requests on Laravel's normal TrimStrings behavior.
