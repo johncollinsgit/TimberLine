@@ -144,6 +144,20 @@ Scope references: [Square OAuth permissions](https://developer.squareup.com/docs
 
 ## Source refresh, review and historical boundaries
 
+Each tenant-owned original POS connection has its own legacy-reader option for
+its exact location when the existing reader environment matches. Locations are
+not collapsed into one option per merchant. Owner controls show the saved
+register location name and original provider location ID so the intended reader
+can be selected explicitly. Listing performs local reads only; retrieval still
+re-proves the original merchant and retains generation, tenant and environment
+admission. A policy for a later location remains valid when another location is
+listed first; configuring one does not enroll any other location.
+
+Event audience replay compares JSON rules independently of associative object-key
+order, including MySQL's stored ordering. Ordered lists, field values and JSON
+value types still belong to the original intent. The global financial/hash
+contract and saved-audience edit version remain unchanged.
+
 Core Customers → Square source connection supports keeping Square as checkout while using Everbranch customer profiles, Website and reviewed rewards tools. It does not require Everbranch Pay or a global Marketing role. A verified active tenant owner, tenant_owner or administrator with Customers access manages the source connection and identity decisions. Isolated Soccer workspaces cannot use this retail flow.
 
 ## Existing authorities reused
