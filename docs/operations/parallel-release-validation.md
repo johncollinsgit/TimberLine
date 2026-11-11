@@ -98,13 +98,19 @@ than silently accepting stale metadata. Fixed-host DNS and HTTPS probes log only
 status codes, with bounded waits and no environment or response dumps. The PHP
 Ghostscript step has a 12-minute limit; browser installation retains its existing
 45-minute limit. If both canonical Ubuntu HTTPS probes fail, the runner checks
-DNS and HTTPS for the known official `azure.archive.ubuntu.com` mirror. Only if
-both checks succeed does it select that HTTPS mirror for its Ubuntu URI fields
+DNS and HTTPS for the known official `azure.archive.ubuntu.com` mirror, followed
+by the Linux Kernel Archives' published Ubuntu mirror at `mirrors.edge.kernel.org`
+if Azure is also unreachable. Only if both checks for a candidate succeed does it
+select that HTTPS mirror for its Ubuntu URI fields
 and mirror list, preserving suites, components, signing keys and unrelated fields.
 Unknown source layouts fail closed. This fallback applies only to the disposable
 runner; TLS/signature verification, test commands, matrices and required checks
 remain intact. Failed fallback probes leave the normal sources in place and the
 required package install still fails closed.
+
+The independent-domain archive is published by its operator at
+https://mirrors.edge.kernel.org/ (Ubuntu entry). Its signed Ubuntu metadata and
+packages remain subject to the unchanged Ubuntu keyring and validity checks.
 
 The release verification plan and serialized Forge activation retain their gates.
 The hook now supplies an immutable custom release pin to the installed
