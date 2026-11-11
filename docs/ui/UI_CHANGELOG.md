@@ -1,3 +1,12 @@
+## 2026-11-10 — Isolated property customer demo
+
+Adds a responsive fictional Hi-Lo property walkthrough with the canonical
+Everbranch leaf, calendar/stay discussion, square photo/document previews,
+rounded entry panels and a docked comment composer. Anonymous demo changes
+and sample files remain in that visitor's browser. Production records,
+payments and message delivery are not connected. Exact approved host routing
+and the protected release process remain separate acceptance requirements.
+
 ## 2026-11-10 — Freight setup before the first order
 
 Pickup and shipping links to a store-scoped freight setup screen with saved

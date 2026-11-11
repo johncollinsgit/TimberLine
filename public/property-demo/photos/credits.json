@@ -1,0 +1,13 @@
+{
+  "notice": "Illustrative regional and interior photography. None is represented as Villa 2409. Original photographs downloaded directly from verified Unsplash image URLs.",
+  "license": "https://unsplash.com/license",
+  "property_reference": "https://www.hhiresortvillas.com/",
+  "assets": [
+    {"file":"hhi-dunes.jpg","credit":"Justin Fisher / Unsplash","page":"https://unsplash.com/photos/a-sandy-beach-with-grass-growing-out-of-the-sand-4VACHanWb_8","image":"https://images.unsplash.com/photo-1690970525629-29c540b7e7d6?auto=format&fit=crop&w=1600&q=85","location":"Hilton Head Island, SC","orientation":"landscape","recommended_use":"Hero or stay overview"},
+    {"file":"hhi-palm.jpg","credit":"Catherine Hughes / Unsplash","page":"https://unsplash.com/photos/a-palm-tree-sitting-on-top-of-a-sandy-beach-BwthfflxCdI","image":"https://images.unsplash.com/photo-1650278267189-7d0a1d748ccc?auto=format&fit=crop&w=1600&q=85","location":"Hilton Head Island, SC","orientation":"landscape","recommended_use":"Welcome or announcement banner"},
+    {"file":"hhi-oaks.jpg","credit":"LaDawn Preuninger / Unsplash","page":"https://unsplash.com/photos/a-dirt-road-surrounded-by-trees-covered-in-spanish-moss-SIfNIfN4JS4","image":"https://images.unsplash.com/photo-1700484322558-42fd3f91c2a9?auto=format&fit=crop&w=1600&q=85","location":"Hilton Head Island, SC","orientation":"landscape","recommended_use":"Local links or property guide"},
+    {"file":"hhi-harbour.jpg","credit":"Nikhil Mistry / Unsplash","page":"https://unsplash.com/photos/a-group-of-people-standing-on-a-pier-at-sunset-xzq5VP4D_50","image":"https://images.unsplash.com/photo-1634948601598-dfe5fa67a48c?auto=format&fit=crop&w=1600&q=85","location":"Harbour Town, Hilton Head Island, SC","orientation":"landscape","recommended_use":"Explore Hilton Head links"},
+    {"file":"hhi-sunset.jpg","credit":"Sara Balavage / Unsplash","page":"https://unsplash.com/photos/a-beach-at-sunset-NTdQaCOyB2Q","image":"https://images.unsplash.com/photo-1663186149514-9d6eb7bffdc2?auto=format&fit=crop&w=1600&q=85","location":"Hilton Head Island, SC","orientation":"portrait","recommended_use":"Mobile portrait accent"},
+    {"file":"coastal-interior-illustrative.jpg","credit":"Luis J. Corniel / Unsplash","page":"https://unsplash.com/photos/a-beautiful-bohemian-style-kitchen-and-living-area-8R_eeyi5bFg","image":"https://images.unsplash.com/photo-1747336754979-cb1078ce73f5?auto=format&fit=crop&w=1600&q=85","location":"Punta Cana, Dominican Republic","orientation":"landscape","recommended_use":"Illustrative coastal interior only; do not label as Villa2409"}
+  ]
+}

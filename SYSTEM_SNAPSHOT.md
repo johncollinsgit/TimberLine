@@ -1,3 +1,13 @@
+## Isolated property customer demo (November 10; source candidate)
+
+The property customer demo is a fixed fictional static bundle, isolated from
+tenant records, sessions, provider calls and server mutations. An exact-host
+global handler serves its explicit asset map before web/API tenant middleware;
+all other hosts keep the existing request pipeline. Browser changes stay in
+IndexedDB. See `docs/operations/property-customer-demo.md` for host, release and
+live acceptance requirements. Registration or passing source tests alone does
+not establish that DNS, origin TLS or the customer hostname is live.
+
 ## Freight setup before orders (November 10; source candidate)
 
 `/website/commerce/freight` provides saved tenant/site freight account setup
