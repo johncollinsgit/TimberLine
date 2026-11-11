@@ -185,7 +185,8 @@ test('the warm event index keeps late confirmation, new backdated sales and post
     DB::enableQueryLog();
     DB::flushQueryLog();
     expect($read()['sale_count'])->toBe(1);
-    $reads = collect(DB::getQueryLog())->pluck('query')->filter(fn ($sql) => str_contains($sql, 'from "pos_live_sales"') && ! str_contains($sql, 'count(*)'));
+    $reads = collect(DB::getQueryLog())->pluck('query')->map(fn ($sql) => str_replace('`', '"', $sql))
+        ->filter(fn ($sql) => str_contains($sql, 'from "pos_live_sales"') && ! str_contains($sql, 'count(*)'));
     expect($reads->isNotEmpty())->toBeTrue()->and($reads->every(fn ($sql) => str_contains($sql, '"id" in')))->toBeTrue();
     DB::disableQueryLog();
     $buyer = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Late buyer']);
