@@ -61,6 +61,9 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
             if path.contains("/customers/") && path.hasSuffix("/enrollment") && (400...499).contains(http.statusCode) {
                 throw POSError.enrollmentRejected(code)
             }
+            if http.statusCode == 404 && ["quote_not_found", "sale_unavailable"].contains(code) && method == "GET" && (path.contains("/requests/") || path.contains("/sales/")) {
+                throw POSError.savedCheckoutUnavailable
+            }
             let messages = ["select_existing_customer": "This contact already has a customer record. Find and select it instead.",
                 "customer_request_conflict": "The original customer request has different details. Recover that request before continuing.",
                 "customer_admin_required": "An owner or administrator can create a customer. Select an existing customer or ask your manager.",
@@ -122,6 +125,11 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
         guard let url = request.url else { return }
         do {
             let data: Data
+            if ProcessInfo.processInfo.arguments.contains("--pos-missing-quote-ui-tests") && request.httpMethod == "GET" && url.path.contains("/requests/") {
+                client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: Data(#"{"error":{"code":"quote_not_found"}}"#.utf8))
+                client?.urlProtocolDidFinishLoading(self); return
+            }
             if ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests") && url.path.hasSuffix("/reward-codes/preview") {
                 data = Data(#"{"customer":{"id":1,"name":"Ada Buyer","email":"ada@example.test","phone":"+12025550123"},"label":"Candle Cash","balance_minor":850,"max_minor":500,"available_minor":500,"expires_at":"2026-11-08T00:00:00Z"}"#.utf8)
             } else if ProcessInfo.processInfo.arguments.contains("--pos-refund-review-ui-tests") && url.path.contains("/refund-rewards-review") {

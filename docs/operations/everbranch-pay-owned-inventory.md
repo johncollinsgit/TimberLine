@@ -294,3 +294,21 @@ quotes, invoices, arbitrary custom descriptions, reward redemptions and unknown
 future quote fields remain recovery-only. QR proofs, reward credentials and
 payment credentials are never stored in this draft. A payment that was
 requested or reached the SDK is never restored as editable.
+
+### Missing saved checkout recovery (November 11 source candidate)
+
+When a product tap opens a saved checkout whose original request or sale no
+longer exists, Pay handles the server's missing-record response explicitly.
+For a locally unstarted request only, Pay asks the existing server discard
+endpoint to confirm retirement before clearing the basket and returning to
+Products. It clears quantities, bundles, customer/reward selection and receipt
+inputs together. A failed discard retains the original request for retry.
+
+A collection request, previous collection attempt, started SDK, pending refund
+or in-flight collector prevents automatic clearing. Pay retains that original
+payment and explains that Sales or a manager must verify it before another
+charge. This behavior does not infer financial cancellation from a missing
+record, a network failure or an empty provider response. Fictional intercepted
+UI tests cover a new product checkout after recovery, retained payment attempts,
+unconfirmed discard and ordinary uncharged cancellation. Exact signed-device
+installation and physical product-tap acceptance remain separate release steps.

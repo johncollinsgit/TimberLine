@@ -1,3 +1,10 @@
+## 2026-11-11 — Pay saved checkout recovery
+
+A product tap that encounters an absent unstarted quote returns to an empty
+Products screen after the server confirms discard. A possible payment remains
+saved with a clear verification instruction. Recovery no longer displays the
+raw “quote not found” code; uncertain discard keeps the original request.
+
 ## 2026-11-11 — Workspace controls sizing
 
 Use a compact outlined Edit workspace action with a matching, quieter More options
