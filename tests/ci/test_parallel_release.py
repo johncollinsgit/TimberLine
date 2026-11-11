@@ -22,6 +22,16 @@ shard_spec.loader.exec_module(shards)
 
 
 class ParallelReleaseTest(unittest.TestCase):
+    def test_package_network_preparation_preserves_bounded_fail_closed_installs(self):
+        for name in ('build', 'php', 'browser'):
+            steps = self.jobs[name]['steps']
+            setup = next(step for step in steps if step.get('name') == 'Bound package network waits and diagnose runner connectivity')
+            self.assertEqual(setup['timeout-minutes'], 2)
+            self.assertIn('sudo python3 scripts/ci/ci-package-network.py', setup['run'])
+            self.assertNotIn('continue-on-error', setup)
+        pdf = next(step for step in self.jobs['php']['steps'] if step.get('name') == 'Prepare safe PDF conversion')
+        self.assertEqual(pdf['timeout-minutes'], 12)
+
     @classmethod
     def setUpClass(cls):
         cls.workflow = yaml.safe_load((ROOT / '.github/workflows/tests.yml').read_text())

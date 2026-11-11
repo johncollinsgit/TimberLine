@@ -1,3 +1,10 @@
+## 2026-11-11 — Workspace controls sizing
+
+Use a compact outlined Edit workspace action with a matching, quieter More options
+disclosure. Both labels fit on one line with consistent typography and 44px targets;
+the row can wrap at narrow widths. Management actions open in a small anchored menu.
+Existing action handlers and tenant permissions remain unchanged.
+
 ## 2026-11-10 — Freight setup before the first order
 
 Pickup and shipping links to a store-scoped freight setup screen with saved
