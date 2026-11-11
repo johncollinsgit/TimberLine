@@ -91,6 +91,7 @@ $catalog = [
     ],
 
     'capabilities' => [
+        'rentals.workspace' => ['display_name' => 'Property workspace', 'module_key' => 'property_rentals'],
         'pos.register' => ['display_name' => 'Point of sale', 'module_key' => 'pos'],
         'pos.locations' => ['display_name' => 'POS locations', 'module_key' => 'pos'],
         'pos.reports' => ['display_name' => 'POS reports', 'module_key' => 'pos'],
@@ -622,6 +623,24 @@ $catalog = [
             'visibility' => ['public_site' => false, 'app_store' => false, 'mobile_store' => false],
             'cta_routing' => 'none',
             'capabilities' => [],
+            'mobile' => ['status' => 'hidden'],
+        ],
+        'property_rentals' => [
+            'display_name' => 'Property workspace',
+            'description' => 'Shared properties, owner weeks, maintenance and stay discussions.',
+            'status' => 'live',
+            'market_state' => 'INTERNAL_ONLY',
+            'channels' => ['both'],
+            'classification' => 'tenant-vertical',
+            'activation_policy' => 'operator_only',
+            'included_in_plans' => [],
+            'default_enabled' => false,
+            'default_setup_status' => 'not_started',
+            'dependencies' => [],
+            'billing_mode' => 'included',
+            'visibility' => ['public_site' => false, 'app_store' => false, 'mobile_store' => false],
+            'cta_routing' => 'none',
+            'capabilities' => ['rentals.workspace'],
             'mobile' => ['status' => 'hidden'],
         ],
         'team_work' => [
