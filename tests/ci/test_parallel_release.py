@@ -136,6 +136,14 @@ class ParallelReleaseTest(unittest.TestCase):
         self.assertEqual(enterprise['jobs']['browser']['strategy']['max-parallel'], 12)
         self.assertTrue(self.workflow['concurrency']['group'].startswith('release-validation-'))
 
+    def test_rental_full_schema_fixture_cannot_contaminate_later_domain_checks(self):
+        steps = self.jobs['mysql']['steps']
+        schema_steps = [step for step in steps if "matrix.group == 'schema'" in step.get('if', '')]
+        self.assertEqual(schema_steps[-1]['name'], 'Verify rental recovery and competing owner claims')
+        production_steps = self.deploy['jobs']['migration_safety']['steps']
+        self.assertEqual(production_steps[-1]['name'], schema_steps[-1]['name'])
+        self.assertEqual(production_steps[-1]['env'], {'TEAM_WORK_DISPOSABLE_MYSQL': '1'})
+
     def test_only_public_build_outputs_and_pinned_tools_are_shared(self):
         for job in self.jobs.values():
             for step in job.get('steps', []):

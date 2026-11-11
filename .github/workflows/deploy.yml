@@ -279,6 +279,13 @@ jobs:
       - name: Verify AI quota and approval concurrency on MySQL
         run: php ./vendor/bin/pest tests/Integration/AiBranchMySqlConcurrencyTest.php --compact
 
+      # This fixture rebuilds the complete disposable schema and must not
+      # leave tables behind for another domain's recovery/concurrency checks.
+      - name: Verify rental recovery and competing owner claims
+        env:
+          TEAM_WORK_DISPOSABLE_MYSQL: '1'
+        run: php ./vendor/bin/pest tests/Integration/RentalWorkspaceMySqlRecoveryTest.php --compact
+
   deploy:
     name: Deploy
     runs-on: ubuntu-latest

@@ -22,6 +22,11 @@ final class EnterprisePosRuntimeTest extends TestCase
         putenv('ENTERPRISE_POS_ENABLED=true');
         $app = require dirname(__DIR__, 3).'/apps/enterprise/bootstrap/app.php';
         $this->traitsUsedByTest = array_flip(class_uses_recursive(self::class));
+        // Providers resolve RateLimiter during boot. Select this fixture's store
+        // before that singleton can retain the shared Enterprise file cache.
+        $app->afterBootstrapping(\Illuminate\Foundation\Bootstrap\LoadConfiguration::class, static function ($app): void {
+            $app['config']->set('cache.default', 'array');
+        });
         $app->make(Kernel::class)->bootstrap();
         $app->detectEnvironment(fn () => 'testing');
         $app['config']->set(['app.env' => 'testing', 'app.url' => 'https://enterprise.example.invalid',
@@ -87,6 +92,24 @@ final class EnterprisePosRuntimeTest extends TestCase
         $this->assertNull(config('pos_live.square_application_secret'));
         $this->assertArrayNotHasKey(\App\Providers\AppServiceProvider::class, $this->app->getLoadedProviders());
         $this->assertTrue(Schema::hasTable('payment_core_operations'));
+    }
+
+    public function test_runtime_throttle_counters_use_the_fixture_array_store(): void
+    {
+        $key = 'enterprise-pos-runtime-fixture:'.\Illuminate\Support\Str::uuid();
+        $limiter = $this->app->make(\Illuminate\Cache\RateLimiter::class);
+        $limiter->hit($key);
+        $this->assertSame(1, $this->app['cache']->store('array')->get($key));
+        $this->assertNull($this->app['cache']->store('file')->get($key));
+        $this->assertNotNull($limiter->limiter('service-proposals-public'));
+    }
+
+    public function test_native_exchange_keeps_its_real_twenty_request_throttle(): void
+    {
+        for ($attempt = 0; $attempt < 20; $attempt++) {
+            $this->postJson('/api/mobile/v1/auth/exchange', [])->assertUnprocessable();
+        }
+        $this->postJson('/api/mobile/v1/auth/exchange', [])->assertStatus(429);
     }
 
     public function test_location_manager_cannot_read_or_adjust_the_second_location(): void

@@ -35,6 +35,13 @@ return [
     */
 
     'disks' => [
+        'rentals_private' => [
+            'driver' => 'local',
+            'root' => storage_path('app/rentals-private'),
+            'serve' => false,
+            'visibility' => 'private',
+            'throw' => true,
+        ],
 
         'team_private' => [
             'driver' => 'local',
