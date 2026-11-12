@@ -153,17 +153,27 @@ Each cohort still resolves the current tenant-owned canonical root; marketing
 permissions and suppressions are checked separately at preview/send admission.
 Reporting does not evict caches or change receipt/rewards eligibility authority.
 Empty source-ID sets skip queries rather than loading unrelated channel data.
+An actual matched HTTP request also retains its admitted customer projection
+while cohort and rule evaluation finish, preventing a slow request from rebuilding
+the same history after the shared TTL expires. Every hit still resolves current
+tenant/canonical/archive state. A new request, console task or queue job gets no
+retained request result; the shared five-second TTL and fresh channel checks stay
+unchanged.
 
-The branded Modern Forestry Pay development build is installed. Its local
-catalog and basket do not yet submit sales. The live POS candidate remains a
-separate draft, and physical payment, canonical-customer association, combined
-history, earning/refund and settlement acceptance are not established.
+Server-backed Pay checkout now implements optional canonical-customer selection,
+confirmed card, cash and rewards-only completion, audited later customer
+association, receipts, and replay-safe stock and reward effects. Original provider
+confirmation, saved reservations and the shared rewards ledger remain authoritative.
+The earlier read-only implementation milestones above describe the historical
+delivery sequence.
 
-Remaining release milestones: finish the native register's canonical-customer selection
-and sale snapshot against the live POS candidate; implement and validate the
-configured earning/refund lifecycle without changing historical terms; distribute
-the paired native customer updates; and pass the two-tenant live
-acceptance matrix before marketing the end-to-end result as demonstrated.
+Implemented source and fixture checks do not establish physical readiness. Each
+tenant still needs reviewed program/register/inventory configuration and its
+normal collection and signing gates. Acceptance on the exact deployed release
+must prove actual phone checkout, customer attribution, payment and receipt
+delivery, earning/refund behavior, settlement and measured performance. The
+two-tenant live acceptance matrix remains required before describing the complete
+experience as demonstrated.
 
 Source implementation and passing fixture tests must be reported separately
 from deployment and real customer acceptance. Only after the full matrix passes

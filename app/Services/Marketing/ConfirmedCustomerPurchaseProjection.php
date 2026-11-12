@@ -12,11 +12,21 @@ final class ConfirmedCustomerPurchaseProjection
 {
     public function read(MarketingProfile $profile, int $tenant): array
     {
+        abort_unless($tenant > 0 && (int) $profile->tenant_id === $tenant, 404);
         $current = app(CanonicalMarketingProfileResolver::class)->byId($tenant, (int) $profile->id);
-        abort_unless($current && $current->archived_at === null, 404);
+        abort_unless($current && (int) $current->tenant_id === $tenant && $current->archived_at === null, 404);
         $key = 'customer-confirmed-purchases-v1:'.hash('sha256', (string) config('pos_live.runtime_id')).':'.$tenant.':'.$current->id;
+        $request = app('request');
+        $route = $request instanceof \Illuminate\Http\Request ? $request->route() : null;
+        $memoize = $route instanceof \Illuminate\Routing\Route && $route->matches($request);
+        $memoKey = 'request:'.$key;
+        if ($memoize && is_array($value = $request->attributes->get($memoKey))) {
+            abort_unless(($value['tenant_id'] ?? null) === $tenant && ($value['customer_id'] ?? null) === (int) $current->id, 409);
 
-        return Cache::remember($key, 5, function () use ($current, $tenant): array {
+            return $value;
+        }
+
+        $value = Cache::remember($key, 5, function () use ($current, $tenant): array {
             $value = app(CustomerEventValueService::class)->forProfile($current, $tenant, true);
             $purchases = collect($value['purchase_journey'])->where('confirmed_purchase', true);
             $events = $purchases->pluck('purchase_event.event')->filter()->unique('id')->values();
@@ -62,5 +72,13 @@ final class ConfirmedCustomerPurchaseProjection
                 'behavior' => $value['behavior'], 'has_more' => $value['history_has_more'], 'issues' => $value['issues'],
                 'as_of' => $value['as_of'], 'basis' => 'Explicit customer associations to confirmed original purchases. Acquisition capture is separate from purchases and repeat attendance.'];
         });
+        abort_unless(($value['tenant_id'] ?? null) === $tenant && ($value['customer_id'] ?? null) === (int) $current->id, 409);
+        // Cohort admission and rule evaluation can span the shared five-second
+        // TTL. Reuse their admitted result only for this actual HTTP request.
+        if ($memoize) {
+            $request->attributes->set($memoKey, $value);
+        }
+
+        return $value;
     }
 }
