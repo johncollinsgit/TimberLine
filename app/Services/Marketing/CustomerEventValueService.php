@@ -279,8 +279,7 @@ class CustomerEventValueService
                 : \App\Models\SquarePayment::forTenantId($tenant)->where('square_payment_id', $purchase['source_id'])->value('square_order_id');
             $mapped = [];
             if ($orderId) {
-                $occurrences = \App\Models\TeamOperationRecord::where(['tenant_id' => $tenant, 'kind' => 'event'])->where('status', '!=', 'withdrawn')
-                    ->get()->filter(fn ($record) => in_array($orderId, $record->data['_teams_enrichment']['square_orders']['ids'] ?? [], true));
+                $occurrences = app(\App\Services\Team\Studio\EventCommerceReport::class)->squareOccurrences($tenant, $orderId);
                 foreach ($occurrences as $occurrence) {
                     $review = $occurrence->data['_teams_enrichment']['square_orders'];
                     if (! is_int($review['reviewed_by'] ?? null) || ! $this->date($review['reviewed_at'] ?? null)

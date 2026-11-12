@@ -17,18 +17,19 @@ class EventCommerceReport
 
     public function commerceId(TeamOperationRecord $event): ?int
     {
-        $explicit = $event->data['_teams_enrichment']['commerce_event']['id'] ?? null;
+        $data = $event->data;
+        $explicit = $data['_teams_enrichment']['commerce_event']['id'] ?? null;
         if ($explicit) {
             return $this->stock->rows('event_links', $event->tenant_id)->where('event_id', $explicit)->whereNotNull('reviewed_by')->exists() ? (int) $explicit : null;
         }
-        if (! $event->connection_id || ! isset($event->data['source_id'])) {
+        if (! $event->connection_id || ! isset($data['source_id'])) {
             return null;
         }
         $connection = \App\Models\TeamProviderConnection::where('tenant_id', $event->tenant_id)->find($event->connection_id);
         if ($connection?->provider !== 'asana') {
             return null;
         }
-        $ids = $this->stock->rows('event_links', $event->tenant_id)->where('provider', 'asana')->where('external_id', $event->data['source_id'])->whereNotNull('reviewed_by')->distinct()->pluck('event_id');
+        $ids = $this->stock->rows('event_links', $event->tenant_id)->where('provider', 'asana')->where('external_id', $data['source_id'])->whereNotNull('reviewed_by')->distinct()->pluck('event_id');
 
         return $ids->count() === 1 ? (int) $ids[0] : null;
     }
@@ -95,7 +96,11 @@ class EventCommerceReport
 
     public function candidate(int $tenantId, int $eventId): ?TeamOperationRecord
     {
-        $candidates = TeamOperationRecord::where(['tenant_id' => $tenantId, 'kind' => 'event'])->where('status', '!=', 'withdrawn')->get()
+        $ids = $this->lookup($tenantId)['commerce'][$eventId] ?? [];
+        if (! $ids) {
+            return null;
+        }
+        $candidates = TeamOperationRecord::where(['tenant_id' => $tenantId, 'kind' => 'event'])->where('status', '!=', 'withdrawn')->whereIn('id', $ids)->get()
             ->filter(fn ($event) => $this->commerceId($event) === $eventId);
         $explicit = $candidates->filter(fn ($event) => isset($event->data['_teams_enrichment']['commerce_event']['id']));
         if ($explicit->isNotEmpty()) {
@@ -104,5 +109,73 @@ class EventCommerceReport
 
         return $candidates->count() === 1 ? $candidates->first() : null;
 
+    }
+
+    /** Candidate IDs only; fresh source review, actor and event ownership remain the caller's authority. */
+    public function squareOccurrences(int $tenantId, string $orderId): \Illuminate\Support\Collection
+    {
+        $ids = $this->lookup($tenantId)['square'][$orderId] ?? [];
+        if (! $ids) {
+            return collect();
+        }
+
+        return TeamOperationRecord::where(['tenant_id' => $tenantId, 'kind' => 'event'])->where('status', '!=', 'withdrawn')->whereIn('id', $ids)->get()
+            ->filter(fn ($event) => in_array($orderId, $event->data['_teams_enrichment']['square_orders']['ids'] ?? [], true));
+    }
+
+    /**
+     * One encrypted scan per actual HTTP request, shared across its profiles/purchases.
+     * Store IDs only. Console/queue callers rebuild instead of retaining state between jobs.
+     */
+    private function lookup(int $tenant): array
+    {
+        if ($tenant < 1) {
+            return ['commerce' => [], 'square' => []];
+        }
+        $request = app('request');
+        $memoize = $request instanceof \Illuminate\Http\Request && $request->route() instanceof \Illuminate\Routing\Route;
+        $key = 'everbranch.event-purchase-lookup.v1:'.hash('sha256', (string) config('pos_live.runtime_id')).':'.$tenant;
+        if ($memoize && is_array($cached = $request->attributes->get($key))) {
+            return $cached;
+        }
+        $reviewed = [];
+        $asana = [];
+        foreach ($this->stock->rows('event_links', $tenant)->whereNotNull('reviewed_by')->get(['event_id', 'provider', 'external_id']) as $link) {
+            $reviewed[(int) $link->event_id] = true;
+            if ($link->provider === 'asana') {
+                $asana[(string) $link->external_id][(int) $link->event_id] = (int) $link->event_id;
+            }
+        }
+        $connections = array_fill_keys(\App\Models\TeamProviderConnection::where(['tenant_id' => $tenant, 'provider' => 'asana'])->pluck('id')->all(), true);
+        $lookup = ['commerce' => [], 'square' => []];
+        foreach (TeamOperationRecord::where(['tenant_id' => $tenant, 'kind' => 'event'])->where('status', '!=', 'withdrawn')->get(['id', 'connection_id', 'data']) as $record) {
+            $data = $record->data;
+            $explicit = $data['_teams_enrichment']['commerce_event']['id'] ?? null;
+            $commerce = null;
+            if ($explicit) {
+                if ((is_int($explicit) || (is_string($explicit) && ctype_digit($explicit))) && isset($reviewed[(int) $explicit])) {
+                    $commerce = (int) $explicit;
+                }
+            } elseif (isset($connections[$record->connection_id], $data['source_id'])) {
+                $ids = $asana[(string) $data['source_id']] ?? [];
+                if (count($ids) === 1) {
+                    $commerce = reset($ids);
+                }
+            }
+            if ($commerce !== null) {
+                $lookup['commerce'][$commerce][] = $record->id;
+            }
+            $orders = $data['_teams_enrichment']['square_orders']['ids'] ?? [];
+            foreach (is_array($orders) ? $orders : [] as $id) {
+                if (is_string($id)) {
+                    $lookup['square'][$id][] = $record->id;
+                }
+            }
+        }
+        if ($memoize) {
+            $request->attributes->set($key, $lookup);
+        }
+
+        return $lookup;
     }
 }

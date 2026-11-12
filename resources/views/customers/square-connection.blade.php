@@ -66,7 +66,7 @@
             <p>Choose whether this workspace should refresh its original Square customers, orders and payments after events. A connection alone leaves this off. Confirmed event allocation and customer attribution retain their existing review rules.</p>
             <form method="POST" action="{{ route('customers.square.refresh-settings', ['tenant'=>$tenant->slug]) }}" class="eb-square-grid">
                 @csrf<input type="hidden" name="expected_version" value="{{ $sourceRefresh['version'] }}"><input type="hidden" name="enabled" value="0"><input type="hidden" name="create_unmatched" value="0">
-                <label class="eb-square-field">Original Square reader<select name="connection_id">@foreach($connections as $connection)<option value="{{ $connection['id'] }}" @selected(($sourceRefresh['binding']['connection_id'] ?? '') === $connection['id'])>{{ $connection['kind'] }} · {{ $connection['environment'] }}</option>@endforeach</select></label>
+                <label class="eb-square-field">Original Square reader<select name="connection_id">@foreach($connections as $connection)<option value="{{ $connection['id'] }}" @selected(($sourceRefresh['binding']['connection_id'] ?? '') === $connection['id'])>{{ $connection['kind'] }} · {{ $connection['environment'] }} · {{ $connection['location_label'] ?? implode(', ', $connection['location_ids'] ?? array_filter([$connection['location_id'] ?? null])) }}</option>@endforeach</select></label>
                 <label class="eb-square-field">Recent history window in days<input name="lookback_days" type="number" min="1" max="90" value="{{ $sourceRefresh['lookback_days'] }}"></label>
                 <label class="eb-square-check eb-square-wide"><input type="checkbox" name="enabled" value="1" @checked($sourceRefresh['enabled'])><span>Automatically refresh this reviewed original reader. Customer and purchase source reads only; no campaigns or historical reward awards.</span></label>
                 <label class="eb-square-check eb-square-wide"><input type="checkbox" name="create_unmatched" value="1" @checked($sourceRefresh['create_unmatched'])><span>Create contact-only customer records for genuinely unmatched original Square customer IDs. Conflicting identities stay in review; marketing permission is not inferred.</span></label>
@@ -118,7 +118,7 @@
                 $latest = $runs->first(fn($run) => data_get($run->summary, 'source_binding.connection_id') === $connection['id']);
             @endphp
             <article class="eb-square-card">
-                <h3>Square source · {{ $connection['environment'] ?? 'environment needs review' }}</h3>
+                <h3>Square source · {{ $connection['environment'] ?? 'environment needs review' }} · {{ $connection['location_label'] ?? implode(', ', $connection['location_ids'] ?? array_filter([$connection['location_id'] ?? null])) }}</h3>
                 @if($connection['kind'] === 'original_merchant_verified_legacy_reader')<p>The existing reader is used only after it proves access to this exact original merchant. Other companies cannot inherit it.</p>@endif
                 <p class="eb-square-meta">Last recorded batch: <span class="eb-square-status">{{ $latest?->status ?? 'Not refreshed here' }}</span><span>{{ $squareConnectionDate($latest?->finished_at ?? $latest?->started_at) }} · {{ (int) data_get($latest?->summary, 'processed', 0) }} processed · {{ (int) data_get($latest?->summary, 'errors', 0) }} errors.</span></p>
                 <details class="eb-square-details">
@@ -127,6 +127,7 @@
                         <div><dt>Original merchant</dt><dd>{{ $connection['merchant_id'] ?? 'verified when read' }}</dd></div>
                         <div><dt>Connection ID</dt><dd>{{ $connection['id'] }}</dd></div>
                         <div><dt>Connection kind</dt><dd>{{ str_replace('_', ' ', $connection['kind']) }}</dd></div>
+                        <div><dt>Original locations</dt><dd>{{ implode(', ', $connection['location_ids'] ?? array_filter([$connection['location_id'] ?? null])) ?: 'Not recorded' }}</dd></div>
                         <div><dt>Connection generation</dt><dd>{{ $connection['connection_generation'] ?? 'unknown' }}</dd></div>
                         <div><dt>Exact last batch timestamp</dt><dd>{{ $latest?->finished_at ?? $latest?->started_at ?? 'Unknown' }}</dd></div>
                     </dl>

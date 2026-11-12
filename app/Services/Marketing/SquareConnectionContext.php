@@ -14,15 +14,16 @@ class SquareConnectionContext
     public function available(int $tenantId): array
     {
         $items = [];
-        $seenLegacy = [];
         try {
+            $registerLabels = $this->store->rows('registers', $tenantId)->whereNotNull('connection_id')->get(['connection_id', 'location_name'])
+                ->groupBy('connection_id')->map(fn ($rows) => $rows->pluck('location_name')->filter(fn ($name) => is_string($name) && trim($name) !== '')->map(fn ($name) => trim($name))->unique()->take(2)->implode(' / '));
             foreach ($this->store->rows('connections', $tenantId)->get() as $row) {
+                $label = $registerLabels->get($row->id);
+                $locationLabel = $label ? $label.' · '.$row->provider_location_id : $row->provider_location_id;
                 $items[] = ['id' => $row->id, 'kind' => 'original_square', 'merchant_id' => $row->merchant_id,
-                    'location_id' => $row->provider_location_id, 'environment' => $row->environment, 'verified_at' => $row->verified_at ?? null, 'connection_generation' => $this->rowGeneration($row)];
-                $key = $row->environment.':'.$row->merchant_id;
-                if (! isset($seenLegacy[$key]) && filled(config('marketing.square.access_token')) && $row->environment === config('marketing.square.environment', 'production')) {
-                    $seenLegacy[$key] = true;
-                    $items[] = ['id' => 'legacy:'.$row->id, 'kind' => 'original_merchant_verified_legacy_reader', 'merchant_id' => $row->merchant_id, 'environment' => $row->environment, 'location_ids' => [$row->provider_location_id], 'connection_generation' => $this->rowGeneration($row, (string) config('marketing.square.access_token'))];
+                    'location_id' => $row->provider_location_id, 'location_label' => $locationLabel, 'environment' => $row->environment, 'verified_at' => $row->verified_at ?? null, 'connection_generation' => $this->rowGeneration($row)];
+                if (filled(config('marketing.square.access_token')) && $row->environment === config('marketing.square.environment', 'production')) {
+                    $items[] = ['id' => 'legacy:'.$row->id, 'kind' => 'original_merchant_verified_legacy_reader', 'merchant_id' => $row->merchant_id, 'environment' => $row->environment, 'location_ids' => [$row->provider_location_id], 'location_label' => $locationLabel, 'connection_generation' => $this->rowGeneration($row, (string) config('marketing.square.access_token'))];
                 }
             }
         } catch (\App\Services\Pos\PosException) {

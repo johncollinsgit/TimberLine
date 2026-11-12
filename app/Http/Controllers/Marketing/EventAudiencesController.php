@@ -18,6 +18,23 @@ use Illuminate\Support\Facades\Cache;
 
 class EventAudiencesController extends Controller
 {
+    /** MySQL may reorder JSON object keys; ordered filters and JSON values remain part of the intent. */
+    private function rulesHash(array $rules): string
+    {
+        $canonical = function (mixed $value) use (&$canonical): mixed {
+            if (! is_array($value)) {
+                return $value;
+            }
+            if (! array_is_list($value)) {
+                ksort($value, SORT_STRING);
+            }
+
+            return array_map($canonical, $value);
+        };
+
+        return Contract::hash($canonical($rules));
+    }
+
     private function tenant(Request $request): Tenant
     {
         $tenant = $request->attributes->get('current_tenant');
@@ -126,7 +143,7 @@ class EventAudiencesController extends Controller
                 $segment = MarketingSegment::forTenantId($tenant->id)->whereKey($request->integer('segment_id'))->lockForUpdate()->firstOrFail();
                 abort_unless(isset($segment->rules_json['_event_audience']), 404);
                 $version = Contract::hash([$segment->rules_json, $segment->name, $segment->status, (string) $segment->updated_at]);
-                if (Contract::hash($segment->rules_json) === Contract::hash($rules) && $segment->name === trim($request->input('name'))) {
+                if ($this->rulesHash($segment->rules_json) === $this->rulesHash($rules) && $segment->name === trim($request->input('name'))) {
                     return $segment;
                 }
                 abort_unless(is_string($request->input('expected_version')) && hash_equals($version, $request->input('expected_version')), 409, 'The saved audience changed. Refresh it before editing.');
@@ -138,7 +155,7 @@ class EventAudiencesController extends Controller
             $segment = MarketingSegment::forTenantId($tenant->id)->firstOrCreate(['slug' => $slug], ['tenant_id' => $tenant->id,
                 'name' => trim($request->input('name')), 'status' => 'draft', 'channel_scope' => 'any', 'rules_json' => $rules,
                 'is_system' => false, 'created_by' => $request->user()->id, 'updated_by' => $request->user()->id]);
-            abort_unless(Contract::hash($segment->rules_json) === Contract::hash($rules) && $segment->name === trim($request->input('name')), 409, 'The original audience has different filters. Create a new audience.');
+            abort_unless($this->rulesHash($segment->rules_json) === $this->rulesHash($rules) && $segment->name === trim($request->input('name')), 409, 'The original audience has different filters. Create a new audience.');
 
             return $segment;
         });

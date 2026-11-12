@@ -90,7 +90,7 @@ test('offline receipts use cents replay once retain void evidence and never fabr
     $member = rentalMember($tenant);
     $state = rentalHousehold($tenant, $admin, $state, $member, 1);
     $state = rentalChange($tenant, $admin, $state, 'chargeDues', ['householdId' => $state['households'][0]['id'], 'amountCents' => 12345, 'dueDate' => '2035-01-01', 'description' => 'Reviewed annual dues']);
-    $input = ['action' => 'recordPayment', 'duesId' => $state['dues'][0]['id'], 'amountCents' => 2345, 'method' => 'check', 'date' => now()->toDateString(), 'reference' => 'Fictional check 123', 'version' => $state['version'], 'requestKey' => (string) Str::uuid()];
+    $input = ['action' => 'recordPayment', 'duesId' => $state['dues'][0]['id'], 'amountCents' => 2345, 'method' => 'check', 'date' => $state['today'], 'reference' => 'Fictional check 123', 'version' => $state['version'], 'requestKey' => (string) Str::uuid()];
     $repo = app(RentalRepository::class);
     $state = $repo->execute($tenant, $admin, $state['property']['id'], $input);
     $state = $repo->execute($tenant, $admin, $state['property']['id'], $input);

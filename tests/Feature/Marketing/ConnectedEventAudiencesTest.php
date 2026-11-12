@@ -111,3 +111,52 @@ it('keeps unknown net spend out of numeric low-spend segments when original refu
         expect($result['matched'])->toBeFalse()->and($result['metrics']['total_spent'])->toBeNull()->and($result['metrics']['total_orders'])->toBe(1);
     }
 });
+
+it('replays and keeps an unchanged edit after the database reorders nested JSON object keys', function (): void {
+    $campaignsBefore = \App\Models\MarketingCampaign::count();
+    $url = '/marketing/event-audiences?tenant='.$this->tenant->slug;
+    $input = ['kind' => 'event_buyers', 'event_id' => 123, 'name' => 'Stable audience', 'request_id' => (string) Str::uuid()];
+    $this->actingAs($this->owner)->post($url, $input)->assertRedirect();
+    $segment = MarketingSegment::forTenantId($this->tenant->id)->sole();
+    $reorder = function ($value) use (&$reorder) {
+        if (! is_array($value)) {
+            return $value;
+        }
+        if (! array_is_list($value)) {
+            krsort($value, SORT_STRING);
+        }
+
+        return array_map($reorder, $value);
+    };
+    $rules = $segment->rules_json;
+    $segment->update(['rules_json' => $reorder($rules)]);
+    expect(\App\Services\PaymentsCore\Contract::hash($segment->fresh()->rules_json))->not->toBe(\App\Services\PaymentsCore\Contract::hash($rules));
+    $updated = (string) $segment->fresh()->updated_at;
+    $this->travel(5)->seconds();
+    $this->post($url, $input)->assertRedirect();
+    $this->post($url, [...$input, 'segment_id' => $segment->id])->assertRedirect();
+    $this->post($url, [...$input, 'segment_id' => $segment->id, 'kind' => 'captured_contacts', 'expected_version' => str_repeat('0', 64)])->assertConflict();
+    expect(MarketingSegment::forTenantId($this->tenant->id)->count())->toBe(1)
+        ->and((string) $segment->fresh()->updated_at)->toBe($updated)
+        ->and(\App\Models\MarketingCampaign::count())->toBe($campaignsBefore);
+    Http::assertNothingSent();
+});
+
+it('rejects a replay with changed JSON value types or ordered filter values', function (string $change): void {
+    $campaignsBefore = \App\Models\MarketingCampaign::count();
+    $segmentsBefore = MarketingSegment::count();
+    $url = '/marketing/event-audiences?tenant='.$this->tenant->slug;
+    $input = ['kind' => 'event_buyers', 'event_id' => 123, 'legacy_ids' => ['first', 'second'], 'name' => 'Immutable audience', 'request_id' => (string) Str::uuid()];
+    $this->actingAs($this->owner)->post($url, $input)->assertRedirect();
+    $segment = MarketingSegment::forTenantId($this->tenant->id)->sole();
+    $rules = $segment->rules_json;
+    if ($change === 'value_type') {
+        $rules['conditions'][0]['value'] = 123;
+    } else {
+        $rules['_event_audience']['filters']['legacy_ids'] = ['second', 'first'];
+    }
+    $segment->update(['rules_json' => $rules]);
+    $this->post($url, $input)->assertConflict();
+    expect($segment->fresh()->rules_json)->toBe($rules)->and(MarketingSegment::count())->toBe($segmentsBefore + 1)->and(\App\Models\MarketingCampaign::count())->toBe($campaignsBefore);
+    Http::assertNothingSent();
+})->with(['value_type', 'list_order']);

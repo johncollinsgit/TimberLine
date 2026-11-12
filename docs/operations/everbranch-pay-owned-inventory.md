@@ -115,6 +115,14 @@ If fresh Square evidence includes a cardholder name, offer explicit receipt-only
 confirmation. Retain receipt-appropriate card/EMV details, not fingerprints or
 marketing profiles. No email/SMS receipt is sent automatically.
 
+For Shopify-priced registers, freezing a selected customer reads that canonical
+profile's current explicit tenant aliases and source links, then checks matching
+Shopify source IDs for owners outside the family. It does not scan unrelated
+customers or cache identity decisions across requests. Conflicting ownership,
+multiple valid Shopify IDs, or excessive alias/source evidence still requires
+identity review; family reads are bounded to 1,000 profiles and 32 traversal steps.
+Tenant, reviewed store/domain and literal store-prefix fences remain mandatory.
+
 Quotes reserve stock atomically and freeze merchant/location, adapter, basket,
 customer (if selected) and rewards policy. Shared-stock publication acknowledgments
 are awaited during basket review. No Shopify inventory/order HTTP call belongs

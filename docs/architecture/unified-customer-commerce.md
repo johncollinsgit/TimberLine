@@ -117,7 +117,16 @@ Implemented in the October 30 source candidate:
   Shopify test orders are excluded, and recorded refund amounts use successful
   unique refund transactions in the original currency, not line subtotals.
 - Confirmed Square order/tender representations are shown once with recorded
-  refunds; contradictory customer associations are hidden for identity review.
+  refunds; contradictory customer associations are hidden for identity review. Imported Square mirrors of a known Pay receipt remain excluded until the
+  original Pay payment is confirmed and its explicit selection or audited receipt
+  association resolves to that same canonical customer. A later provider customer
+  suggestion, receipt delivery contact, or pending Pay state cannot supply this
+  attribution; unrelated original Square purchases retain their source links. Prior-purchase reward eligibility
+  keeps incomplete identity/refund evidence in review. Its internal receipt claim
+  excludes only the current verified transaction by exact original references;
+  other historical issues and club review remain. An audited owner review can
+  resolve eligibility for a guest or preselected receipt without changing the
+  payment snapshot, published policy, independent reward spend or stock effects.
   Website practice receipts remain excluded. Original records are not copied.
 - Rewards use the survivor's existing balance and ledger. Customer-safe labels
   exclude staff descriptions. Viewing a customer never earns, redeems or adjusts
@@ -129,6 +138,15 @@ unverified with amounts withheld until a currency-aware adapter is added.
 Field-service accounting invoices and other unadapted payment providers are
 not yet normalized into this history; their existing authorized views remain
 authoritative. These are coverage gaps, never a complete zero-purchase claim.
+
+Event purchase reads share one tenant/runtime-scoped candidate-ID lookup within
+each HTTP request, so an audience does not repeatedly decrypt every Teams event
+for each customer and purchase. Current candidate records, source review and
+actor permissions are still reloaded and checked. The lookup stores no customer
+payloads and survives neither requests nor queue jobs; console callers rebuild
+it. The existing five-second customer projection bounds refresh after explicit
+attribution, while event occurrence/series provenance and unknown refund
+coverage remain unchanged.
 
 The branded Modern Forestry Pay development build is installed. Its local
 catalog and basket do not yet submit sales. The live POS candidate remains a

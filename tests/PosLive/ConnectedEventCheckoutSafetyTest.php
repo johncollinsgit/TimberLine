@@ -440,3 +440,80 @@ it('reverses the original cash earned ledger once and restores the fractional re
         ->and($this->stock->listing($this->tenant->id, $this->pool)[0]['on_hand'])->toBe(1);
     Http::assertNothingSent();
 });
+
+it('settles the original reward and stock holds once while historical earning remains under review', function (string $tender): void {
+    $approval = eventSafetyRewards($this);
+    $historicalPayment = 'historical-refund-unknown-'.Str::uuid();
+    \App\Models\SquarePayment::create(['tenant_id' => $this->tenant->id, 'square_payment_id' => $historicalPayment,
+        'status' => 'COMPLETED', 'amount_money' => 2000, 'currency' => 'USD', 'location_id' => 'fixture_location',
+        'source_type' => 'CARD', 'created_at_source' => now()->subWeek(),
+        'raw_payload' => ['card_details' => ['entry_method' => 'CONTACTLESS']]]);
+    \App\Models\MarketingProfileLink::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $this->profile->id,
+        'source_type' => 'square_payment', 'source_id' => $historicalPayment]);
+    $history = app(\App\Services\Marketing\CustomerCommerceSnapshotService::class)->forProfile($this->profile, $this->tenant->id);
+    expect($history['purchases'])->toHaveCount(1)
+        ->and($history['purchases'][0]['confirmed'])->toBeTrue()
+        ->and($history['purchases'][0]['refunded_minor'])->toBeNull();
+
+    $proof = $this->postJson($this->base.'/reward-codes/staff-confirmation', $approval)->assertOk()->json('qr_payload');
+    $input = [...$this->selection, 'tender' => $tender, 'reward_redemption' => ['proof' => $proof, 'amount_minor' => 350]];
+    $quote = $this->postJson($this->base.'/quotes', $input)->assertOk()->json();
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->firstOrFail();
+    $snapshot = app(\App\Services\Pos\PosService::class)->snapshot($sale);
+    $hold = DB::table('pos_candle_cash_reservations')->where('sale_id', $sale->id)->sole();
+    $stockHold = 'pos:'.$this->store->runtime().':'.$sale->id;
+    expect($snapshot['customer_rewards']['historical_review_required'])->toBeTrue()
+        ->and($snapshot['terms']['pos_candle_cash']['amount_minor'])->toBe(350)
+        ->and($hold->state)->toBe('held')
+        ->and((float) \App\Models\CandleCashBalance::findOrFail($this->profile->id)->balance)->toBe(6.5);
+
+    $scope = ['tenant_id' => $this->tenant->id, 'actor_id' => $this->actor->id,
+        'register' => $this->store->rows('registers', $this->tenant->id)->where('id', $this->register)->firstOrFail()];
+    $path = $this->base.'/sales/'.$sale->id;
+    if ($tender === 'cash') {
+        $this->postJson($path.'/cash', ['received_minor' => 1000])->assertOk()->assertJsonPath('canonical_confirmation', true);
+    } else {
+        // A fixture supplies the original confirmed terminal card operation.
+        // This covers HTTP receipt/outbox replay, not native device admission.
+        $operation = ['id' => 'original-fixture-card-operation', 'tenant_id' => $this->tenant->id,
+            'kind' => 'payment', 'state' => 'succeeded', 'sale_id' => $sale->id, 'request_id' => $sale->payment_request_id,
+            'binding' => $snapshot['binding'], 'amount_minor' => (int) $sale->amount_minor, 'currency' => 'usd',
+            'provider_id' => 'original-fixture-card-payment'];
+        $journal = \Mockery::mock(PaymentJournal::class);
+        $journal->shouldReceive('get')->with($this->tenant->id, $operation['id'])->andReturn($operation);
+        $journal->shouldReceive('findByRequest')->with($this->tenant->id, $sale->payment_request_id)->andReturn($operation);
+        app()->instance(PaymentJournal::class, $journal);
+        app(\App\Services\Pos\PosService::class)->recordOutcome($sale, $operation);
+    }
+    app(\App\Services\Pos\PosOutbox::class)->drainSale($scope, $sale->id);
+    app(\App\Services\Pos\PosOutbox::class)->drainSale($scope, $sale->id);
+    $this->getJson($path.'/receipt')->assertOk()->assertJsonPath('rewards_redeemed_minor', 350)
+        ->assertJsonPath('customer_rewards_status', 'review_required');
+    $movements = $this->stock->rows('movements', $this->tenant->id)->count();
+    $effects = $this->store->rows('outbox', $this->tenant->id)->where('sale_id', $sale->id)->count();
+
+    if ($tender === 'cash') {
+        $this->postJson($path.'/cash', ['received_minor' => 1000])->assertOk()->assertJsonPath('canonical_confirmation', true);
+    } else {
+        app(\App\Services\Pos\PosService::class)->recordOutcome($sale, $operation);
+    }
+    $this->postJson($this->base.'/quotes', $input)->assertOk()->assertJsonPath('sale_id', $sale->id);
+    app(\App\Services\Pos\PosOutbox::class)->drainSale($scope, $sale->id);
+    $this->getJson($path.'/receipt')->assertOk()->assertJsonPath('customer_rewards_status', 'review_required');
+    $effect = $this->store->rows('outbox', $this->tenant->id)->where('sale_id', $sale->id)->where('effect_key', 'customer_purchase')->sole();
+    expect($effect->state)->toBe('review')->and($effect->error_code)->toBe('customer_rewards_historical_review')
+        ->and((int) $effect->attempts)->toBe(1)
+        ->and(DB::table('pos_candle_cash_reservations')->where('sale_id', $sale->id)->count())->toBe(1)
+        ->and(DB::table('pos_candle_cash_reservations')->where('id', $hold->id)->value('state'))->toBe('spent')
+        ->and($this->stock->rows('reservations', $this->tenant->id)->where('hold_key', $stockHold)->sole()->state)->toBe('consumed')
+        ->and($this->stock->listing($this->tenant->id, $this->pool)[0]['on_hand'])->toBe(1)
+        ->and($this->stock->listing($this->tenant->id, $this->pool)[0]['reserved_quantity'])->toBe(0)
+        ->and($this->stock->rows('movements', $this->tenant->id)->where('reason', 'sale')->where('source_ref', $stockHold)->count())->toBe(1)
+        ->and($this->stock->rows('movements', $this->tenant->id)->count())->toBe($movements)
+        ->and($this->store->rows('outbox', $this->tenant->id)->where('sale_id', $sale->id)->count())->toBe($effects)
+        ->and((float) \App\Models\CandleCashBalance::findOrFail($this->profile->id)->balance)->toBe(6.5)
+        ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'pos_reservation')->where('source_id', $hold->id)->count())->toBe(1)
+        ->and(\App\Models\CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'everbranch_pay')->count())->toBe(0)
+        ->and($this->store->rows('sales', $this->tenant->id)->where('id', $sale->id)->value('snapshot_hash'))->toBe($sale->snapshot_hash);
+    Http::assertNothingSent();
+})->with(['cash', 'card']);

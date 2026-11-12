@@ -15,14 +15,14 @@ final class PosCustomerPurchases
     public function __construct(private PosStore $store, private PaymentJournal $journal,
         private CanonicalMarketingProfileResolver $identities) {}
 
-    public function forProfiles(int $tenant, array $profiles, int $limit): array
+    public function forProfiles(int $tenant, array $profiles, int $limit, array $excludedReceipts = []): array
     {
         $result = ['purchases' => [], 'square_payments' => [], 'square_orders' => [], 'shopify_orders' => [], 'issues' => []];
         if (! Schema::hasTable('pos_live_sales') || ! filled(config('pos_live.runtime_id'))) {
             return $result;
         }
         $links = MarketingProfileLink::query()->forTenantId($tenant)->whereIn('marketing_profile_id', $profiles)
-            ->where('source_type', 'pos_sale')->latest('id')->limit($limit + 1)->get();
+            ->where('source_type', 'pos_sale')->whereNotIn('source_id', $excludedReceipts)->latest('id')->limit($limit + 1)->get();
         foreach ($links as $link) {
             $prefix = $this->store->runtime().':';
             if (! str_starts_with($link->source_id, $prefix)) {
@@ -93,12 +93,15 @@ final class PosCustomerPurchases
         if (! Schema::hasTable('pos_live_sales') || ! filled(config('pos_live.runtime_id'))) {
             return false;
         }
-        $query = $this->store->rows('sales', $tenant)->where('state', 'succeeded');
+        $query = $this->store->rows('sales', $tenant);
         if ($type === 'square_order') {
-            $query->where('provider_order_id', $source);
+            $payments = \App\Models\SquarePayment::forTenantId($tenant)->where('square_order_id', $source)->select('square_payment_id');
+            $query->where(fn ($q) => $q->where('provider_order_id', $source)->orWhereIn('attempt_id',
+                $this->store->db->table('payment_core_operations')->select('id')->where('tenant_id', $tenant)->where('kind', 'payment')->whereIn('provider_id', $payments)));
         } elseif ($type === 'square_payment') {
-            $query->whereIn('attempt_id', $this->store->db->table('payment_core_operations')->select('id')
-                ->where('tenant_id', $tenant)->where('kind', 'payment')->where('state', 'succeeded')->where('provider_id', $source));
+            $orders = \App\Models\SquarePayment::forTenantId($tenant)->where('square_payment_id', $source)->whereNotNull('square_order_id')->select('square_order_id');
+            $query->where(fn ($q) => $q->whereIn('provider_order_id', $orders)->orWhereIn('attempt_id',
+                $this->store->db->table('payment_core_operations')->select('id')->where('tenant_id', $tenant)->where('kind', 'payment')->where('provider_id', $source)));
         } elseif ($type === 'order') {
             $order = \App\Models\Order::forTenantId($tenant)->find($source);
             if (! $order || ! $order->shopify_store_key || ! $order->shopify_order_id) {
@@ -111,12 +114,24 @@ final class PosCustomerPurchases
         }
         foreach ($query->limit(2)->get() as $sale) {
             try {
-                $snapshot = app(PosReceiptCustomers::class)->decorate($sale, app(PosService::class)->snapshot($sale));
-                if (! empty($snapshot['customer']['id']) && $this->mirrorLinksConflict($tenant, $sale, $snapshot, $this->journal->get($tenant, $sale->attempt_id)['provider_id'], (int) $snapshot['customer']['id'])) {
+                // Imported provider identification never confirms a pending Pay receipt or
+                // substitutes for its original selection/audited receipt attribution.
+                if ($sale->state !== 'succeeded') {
                     return true;
                 }
-                if (! empty($snapshot['customer']['id'])
-                    && $this->identities->byId($tenant, (int) $snapshot['customer']['id'])?->id !== $profile) {
+                $original = app(PosService::class)->snapshot($sale);
+                $snapshot = app(PosReceiptCustomers::class)->decorate($sale, $original);
+                $customer = $this->identities->byId($tenant, (int) ($snapshot['customer']['id'] ?? 0));
+                if (! $customer || $customer->id !== $profile) {
+                    return true;
+                }
+                $payment = app(PosSalePaymentEvidence::class)->read($sale, $original);
+                if (! $payment || $payment['state'] !== 'succeeded' || $payment['kind'] !== 'payment'
+                    || ($payment['binding']['environment'] ?? null) !== 'live' || $payment['provider_id'] === null
+                    || $payment['sale_id'] !== $sale->id || (int) $payment['amount_minor'] !== (int) $sale->amount_minor
+                    || $payment['request_id'] !== $sale->payment_request_id
+                    || \App\Services\PaymentsCore\Contract::hash($payment['binding']) !== \App\Services\PaymentsCore\Contract::hash($original['binding'])
+                    || $this->mirrorLinksConflict($tenant, $sale, $snapshot, $payment['provider_id'], $customer->id)) {
                     return true;
                 }
             } catch (\Throwable) {
