@@ -210,7 +210,16 @@ private struct RestorableQuote: Decodable {
     @Published var simulatedReadinessSetups = 0
     @Published var startupOfferResponses = 0
     @Published var simulatedSetupCallbackPending = false
+    @Published private(set) var catalogFixtureInitializations = 0
     var startupEnrichmentCleared: Bool { catalogBase == nil && checkoutRulesVersion == nil && checkoutRules.isEmpty && customerEnrollmentSettings == nil && customerCommerce == nil }
+    func seedCatalogFixtureContext() {
+        guard ProcessInfo.processInfo.arguments.contains("--pos-catalog-ui-tests"),
+              ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests"), let base else { return }
+        // The fixture already populated this scope's catalog. Match the normal
+        // catalog response so a refresh cannot replay its initial payment state.
+        catalogBase = base
+        catalogFixtureInitializations += 1
+    }
     #endif
     @Published var receiptContactName = ""
     @Published var receiptContactPhone = ""

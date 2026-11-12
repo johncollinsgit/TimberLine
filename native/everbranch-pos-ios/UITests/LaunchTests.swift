@@ -593,10 +593,11 @@ final class LaunchTests: XCTestCase {
     }
 
     func testClosingCompletedSaleClearsBasketAndKeepsReceiptAccessible() {
-        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-completed-ui-tests"]; app.launch()
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-completed-ui-tests", "--pos-catalog-initialization-proof-tests"]; app.launch()
         XCTAssertTrue(app.staticTexts["fixture-receipt"].waitForExistence(timeout: 10))
         app.buttons["Close"].tap()
         XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["Sales"].value as? String, "Catalog fixture initializations 1")
         let basket = app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch
         XCTAssertFalse(basket.isEnabled)
         XCTAssertFalse(app.buttons["Payment saved · Open status"].exists)

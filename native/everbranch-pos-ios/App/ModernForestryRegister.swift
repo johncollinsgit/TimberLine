@@ -184,6 +184,9 @@ private struct NativeRegister: View {
                 HStack(spacing: 6) {
                     headerAction("Sales", image: "receipt") { serverSales = true }
                         .disabled(model.collector.hasInFlightPayment || model.base == nil)
+                        #if DEBUG
+                        .accessibilityValue(ProcessInfo.processInfo.arguments.contains("--pos-catalog-initialization-proof-tests") ? "Catalog fixture initializations \(model.catalogFixtureInitializations)" : "")
+                        #endif
                     headerAction("Customers", image: "person.2") { onCustomers() }
                         .disabled(model.busy || model.collector.hasActivePayment)
                     headerAction("Account", image: "gearshape") { onAccount() }.accessibilityLabel("Account & Tap to Pay")
@@ -477,6 +480,7 @@ extension POSViewModel {
             sale = try? decoder.decode(Sale.self, from: data)
             POSCheckoutFixtureProtocol.setReadinessQuote(data)
         }
+        seedCatalogFixtureContext()
     }
 }
 #endif
