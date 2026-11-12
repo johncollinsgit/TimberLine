@@ -188,3 +188,15 @@
 .eb-studio-support-body .fb-contact-title { margin: 12px 0; font-size: clamp(2.1rem, 4.5vw, 3.5rem); line-height: 1.12; }
 .eb-studio-support-body .fb-section-header h2 { font-size: clamp(1.6rem, 3vw, 2.2rem); line-height: 1.2; }
 .eb-studio-support-body .fb-contact-summary { max-width: 65ch; line-height: 1.7; }
+.eb-studio-demo { padding: 88px 0; background: #fff; scroll-margin-top: 100px; }
+.eb-studio-demo__grid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 48px; align-items: center; }
+.eb-studio-demo .eb-studio-section-heading { margin-bottom: 0; }
+.eb-studio-body .eb-studio-demo h2 { max-width: 600px; margin: 0 0 20px; font-family: Fraunces, Georgia, serif; font-size: clamp(2rem, 3.3vw, 3rem); font-weight: 500; line-height: 1.08; letter-spacing: -.045em; }
+.eb-studio-demo .eb-studio-section-heading > p:not(.eb-studio-eyebrow):not(.eb-studio-demo__note) { margin-bottom: 24px; line-height: 1.65; }
+.eb-studio-demo__types { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 24px; }
+.eb-studio-demo__types a { color: var(--eb-ink); font-size: .85rem; font-weight: 700; text-underline-offset: 4px; }
+.eb-studio-demo .eb-studio-demo__note { margin-top: 20px; font-size: .8rem; line-height: 1.6; color: #65726c; }
+.eb-studio-demo__preview { display: block; overflow: hidden; border: 1px solid #dce5dc; border-radius: 16px; box-shadow: 0 18px 48px rgba(23,62,59,.09); }
+.eb-studio-demo__preview img { display: block; width: 100%; height: auto; }
+.eb-studio-demo a:focus-visible { outline: 3px solid var(--eb-clay); outline-offset: 5px; }
+@media (max-width: 840px) { .eb-studio-demo { padding: 64px 0; }.eb-studio-demo__grid { grid-template-columns: 1fr; gap: 32px; } }
