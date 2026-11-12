@@ -24,8 +24,18 @@ final class ConnectedEventTests: XCTestCase {
         XCTAssertTrue(app.buttons["Count stock · photo or manual"].waitForExistence(timeout: 10)); app.buttons["Count stock · photo or manual"].tap()
         app.buttons["Load fictional count photo"].tap()
         let ask = app.buttons["Ask Everbranch to read counts"]
-        XCTAssertTrue(ask.waitForExistence(timeout: 10))
-        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: ask); waitForExpectations(timeout: 10); ask.tap()
+        // Verify real Vision output, then resolve the current control on each
+        // poll. A cached enabled-only snapshot is not OCR readiness evidence.
+        let recognizedAndReady = NSPredicate { _, _ in
+            let notes = app.textViews.firstMatch
+            let recognized = (notes.value as? String ?? "").split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+            let currentAsk = app.buttons["Ask Everbranch to read counts"]
+            return recognized == "RB8 12" && currentAsk.exists && currentAsk.isEnabled && currentAsk.isHittable
+        }
+        guard XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: recognizedAndReady, object: nil)], timeout: 10) == .completed else {
+            XCTFail("The photo must produce the recognized count notes and a usable Ask action."); return
+        }
+        ask.tap()
         let units = app.textFields["Physical units"].firstMatch
         XCTAssertTrue(units.waitForExistence(timeout: 10)); show(units, in: app); replace(units, with: "7")
         if app.buttons["count-keyboard-done"].exists { app.buttons["count-keyboard-done"].tap() }
@@ -44,9 +54,19 @@ final class ConnectedEventTests: XCTestCase {
     }
     func testChangedStockContextRequiresReviewBeforeCountingTheNewPool() {
         let app = app(["--pos-stock-count-ui-tests", "--pos-connected-count-context-change-tests"])
-        app.buttons["Count stock · photo or manual"].tap(); app.buttons["Load fictional count photo"].tap()
+        let open = app.buttons["Count stock · photo or manual"]
+        XCTAssertTrue(open.waitForExistence(timeout: 10)); open.tap()
+        // This case verifies stock-location protection through the supported
+        // manual-notes path; photo recognition has its own full flow above.
+        let notes = app.textViews.firstMatch
+        XCTAssertTrue(notes.waitForExistence(timeout: 10)); notes.tap(); notes.typeText("RB8 12")
+        if app.buttons["count-keyboard-done"].exists { app.buttons["count-keyboard-done"].tap() }
         let ask = app.buttons["Ask Everbranch to read counts"]
-        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: ask); waitForExpectations(timeout: 10); ask.tap()
+        let ready = NSPredicate { _, _ in ask.exists && ask.isEnabled && ask.isHittable }
+        guard XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: nil)], timeout: 10) == .completed else {
+            XCTFail("The manually entered count notes must enable Ask."); return
+        }
+        ask.tap()
         let units = app.textFields["Physical units"].firstMatch
         XCTAssertTrue(units.waitForExistence(timeout: 10)); show(units, in: app); replace(units, with: "7")
         if app.buttons["count-keyboard-done"].exists { app.buttons["count-keyboard-done"].tap() }

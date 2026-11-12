@@ -269,6 +269,14 @@ completed state or refunds. Staff identities, event allocation and financial
 confirmation remain independently reviewed original evidence. No matching dates,
 source label, contact or card infer physical event ownership.
 
+After a zero-downtime deploy, check Forge/Supervisor's dedicated worker PID and
+its working directory against the new release directory. A command naming the
+`current` symlink does not prove an existing process loaded the new code. If it
+still holds the prior release, gracefully restart only the `event-sales-history`
+daemon through its own Supervisor identity, then verify the new PID and working
+directory. Leave the default/campaign queue untouched; do not use a global queue
+restart for this source worker.
+
 Square ListPayments must specify each original location; omitting location reads
 only the main location. Its default begin time is one year ago, so a full historical
 payment import needs an explicit reviewed business-start date. Multiple-location
