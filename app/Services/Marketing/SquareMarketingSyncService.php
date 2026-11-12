@@ -596,6 +596,10 @@ class SquareMarketingSyncService
 
                 return $size;
             }
+            // The old adapter could enter a later location using only its
+            // remaining budget, so the root limit cannot prove that page size.
+            abort_if($type === 'square_payments_sync' && count($binding['location_ids'] ?? []) > 1, 409,
+                'Review the original Square cursor page size: legacy multi-location payment page sizes were not recorded.');
             $parent = $summary['resumed_from_run_id'] ?? null;
             if ($parent === null) {
                 // finalSummary advances summary.cursor, so only the retained

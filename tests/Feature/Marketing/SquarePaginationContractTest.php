@@ -5,6 +5,7 @@ use App\Models\MarketingImportRun;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
 use App\Models\SquareCustomer;
+use App\Models\SquarePayment;
 use App\Models\Tenant;
 use App\Models\TenantMarketingSetting;
 use App\Models\User;
@@ -203,4 +204,49 @@ test('cards retain their existing complete manual page behavior because their ad
     $result = $this->sync->syncCards(array_replace($this->sourceOptions, ['limit' => 1]));
     expect($result['status'])->toBe('completed')->and($result['summary']['processed'])->toBe(2)->and($result['summary'])->not->toHaveKey('provider_page_limit')
         ->and(MarketingProfile::count())->toBe(0)->and(CandleCashTransaction::count())->toBe(0);
+});
+
+test('legacy multi-location payment cursors without a recorded page size require review before any payment read', function (): void {
+    $setting = TenantMarketingSetting::where('tenant_id', $this->tenant->id)->where('key', 'square_config')->firstOrFail();
+    $setting->update(['value' => array_replace($setting->value, ['location_ids' => ['PAGINGLOCATION', 'SECONDLOCATION']])]);
+    $calls = 0;
+    squarePagingFake(function () use (&$calls) {
+        $calls++;
+        throw new RuntimeException('An ambiguous legacy location cursor must not be fetched.');
+    });
+    $old = squarePagingLegacyRun($this, 500, 'legacy-location-cursor');
+    $summary = $old->summary;
+    $summary['intent_hash'] = hash('sha256', json_encode(['square_payments_sync', $summary['source_binding'], 500, null, null, false, false, true], JSON_THROW_ON_ERROR));
+    $old->update(['type' => 'square_payments_sync', 'summary' => $summary]);
+    try {
+        $this->sync->syncPayments(array_replace($this->sourceOptions, ['resume_run_id' => $old->id]));
+        $this->fail('An unrecorded legacy location page size must require review.');
+    } catch (HttpException $error) {
+        expect($error->getStatusCode())->toBe(409)->and($error->getMessage())->toContain('legacy multi-location');
+    }
+    expect($calls)->toBe(0)->and(MarketingImportRun::count())->toBe(1)->and(SquarePayment::count())->toBe(0);
+});
+
+test('recorded page sizes resume new multi-location payment chains without changing location or query parameters', function (): void {
+    $setting = TenantMarketingSetting::where('tenant_id', $this->tenant->id)->where('key', 'square_config')->firstOrFail();
+    $setting->update(['value' => array_replace($setting->value, ['location_ids' => ['PAGINGLOCATION', 'SECONDLOCATION']])]);
+    $calls = [];
+    squarePagingFake(function ($path, $data) use (&$calls) {
+        expect($path)->toBe('/v2/payments')->and((int) $data['limit'])->toBe(5);
+        $calls[] = [$data['location_id'], (int) $data['limit']];
+        $first = $data['location_id'] === 'PAGINGLOCATION';
+        $rows = squarePagingRows('payments', $first ? 0 : 4, $first ? 4 : 1);
+        foreach ($rows as &$row) {
+            $row['location_id'] = $data['location_id'];
+        }
+        unset($row);
+
+        return Http::response(['payments' => $rows]);
+    });
+    $first = $this->sync->syncPayments(array_replace($this->sourceOptions, ['limit' => 5]));
+    expect($first['status'])->toBe('partial')->and($first['summary']['processed'])->toBe(4)->and($first['summary']['provider_page_limit'])->toBe(5);
+    $last = $this->sync->syncPayments(array_replace($this->sourceOptions, ['limit' => 10, 'resume_run_id' => $first['run_id'], 'request_id' => (string) Str::uuid()]));
+    expect($last['status'])->toBe('completed')->and($last['summary']['provider_page_limit'])->toBe(5)
+        ->and($calls)->toBe([['PAGINGLOCATION', 5], ['SECONDLOCATION', 5]])->and(SquarePayment::count())->toBe(5)
+        ->and(CandleCashTransaction::count())->toBe(0);
 });
