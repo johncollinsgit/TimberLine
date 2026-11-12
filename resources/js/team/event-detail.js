@@ -49,7 +49,11 @@ export function installEventDetail(body, { record, api, tenant, scope, current, 
     if (!stay.childElementCount) stay.append(node('span', 'Not recorded'));
     facts.replaceChildren(field('Event dates', dateRange(dates.starts_on, dates.ends_on), dates.setup_dates?.length ? 'Setup · ' + dates.setup_dates.map(date).join(', ') : null), field('Location', venue), field('Team members', team));
     if (sales.can_view) {
-      facts.append(field(sales.previous?.year ? sales.previous.year + ' sales' : 'Previous year’s sales', currency(sales.previous?.amount_cents, sales.previous?.currency), sales.previous?.status === 'recorded' ? 'Net sales' : 'No linked comparison yet'), field('Current sales', currency(sales.current?.amount_cents, sales.current?.currency), sales.current?.status === 'recorded' ? 'Net sales' : sales.current?.status === 'needs_event_link' ? 'Link this event to its register' : 'No confirmed total yet'));
+      const linked = Boolean(data.commerce_event_id), recorded = sales.current?.status === 'recorded';
+      const currentLabel = !linked && recorded ? 'Recorded sales comparison' : 'Current sales';
+      const currentValue = linked ? 'See Sales below' : recorded ? currency(sales.current.amount_cents, sales.current.currency) : sales.current?.status === 'needs_event_link' ? 'Not linked' : sales.current?.status === 'needs_review' ? 'Needs review' : 'Not recorded';
+      const currentHint = linked ? 'Confirmed Pay, cash and reviewed Square purchases' : recorded ? 'Historical net sales comparison' : sales.current?.status === 'needs_event_link' ? 'Link this event to its register' : sales.current?.status === 'temporarily_unavailable' ? 'Current sales are temporarily unavailable' : 'No confirmed total yet';
+      facts.append(field(sales.previous?.year ? sales.previous.year + ' comparison' : 'Previous year comparison', sales.previous?.status === 'needs_review' ? 'Needs review' : currency(sales.previous?.amount_cents, sales.previous?.currency), sales.previous?.status === 'recorded' ? 'Historical net sales comparison' : 'No linked comparison yet'), field(currentLabel, currentValue, currentHint));
     }
     facts.append(field('Hotel', stay));
     aside.replaceChildren();

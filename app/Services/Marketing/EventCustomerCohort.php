@@ -42,13 +42,14 @@ class EventCustomerCohort
             $metadata = json_decode($link->metadata, true, 64, JSON_THROW_ON_ERROR);
             $sales = app(PosEventSales::class)->read($tenant, $eventId, $metadata['timezone'] ?? 'UTC', true);
             $issues = [...$issues, ...$sales['review_items']];
-            $externalLinks = MarketingProfileLink::forTenantId($tenant)->where('source_type', 'square_order')->whereIn('source_id', $sales['square_order_ids'] ?? [])->get();
+            $externalIds = $sales['square_order_ids'] ?? [];
+            $externalLinks = $externalIds ? MarketingProfileLink::forTenantId($tenant)->where('source_type', 'square_order')->whereIn('source_id', $externalIds)->get() : collect();
             foreach ($externalLinks->groupBy('source_id') as $links) {
                 $groups[] = ['links' => $links, 'relation' => 'purchased', 'purchase_type' => 'square_order', 'purchase_id' => $links->first()->source_id];
             }
             $prefix = app(PosStore::class)->runtime().':';
             $sourceIds = array_map(fn ($id) => $prefix.$id, $sales['receipt_ids']);
-            $linked = MarketingProfileLink::query()->forTenantId($tenant)->where('source_type', 'pos_sale')->whereIn('source_id', $sourceIds)->get();
+            $linked = $sourceIds ? MarketingProfileLink::query()->forTenantId($tenant)->where('source_type', 'pos_sale')->whereIn('source_id', $sourceIds)->get() : collect();
             foreach ($linked->groupBy('source_id') as $links) {
                 $groups[] = ['links' => $links, 'relation' => 'purchased', 'purchase_type' => 'pos_sale', 'purchase_id' => substr($links->first()->source_id, strlen($prefix))];
             }
@@ -58,7 +59,7 @@ class EventCustomerCohort
         if ($teamsEvent) {
             abort_unless((int) $teamsEvent->tenant_id === $tenant, 404);
             $squareIds = $teamsEvent->data['_teams_enrichment']['square_orders']['ids'] ?? [];
-            $selected = MarketingProfileLink::query()->forTenantId($tenant)->where('source_type', 'square_order')->whereIn('source_id', $squareIds)->get();
+            $selected = $squareIds ? MarketingProfileLink::query()->forTenantId($tenant)->where('source_type', 'square_order')->whereIn('source_id', $squareIds)->get() : collect();
             foreach ($selected->groupBy('source_id') as $links) {
                 $groups[] = ['links' => $links, 'relation' => 'purchased', 'purchase_type' => 'square_order', 'purchase_id' => $links->first()->source_id];
             }
@@ -86,8 +87,11 @@ class EventCustomerCohort
             }
         }
         $resolver = app(CanonicalMarketingProfileResolver::class);
+        $histories = [];
+        $sourceProfiles = $this->profiles($tenant, collect($groups)->flatMap(fn ($group) => $group['links']->pluck('marketing_profile_id'))->unique()->all());
+        $admittedSources = [];
         foreach ($groups as $group) {
-            $profiles = MarketingProfile::query()->forTenantId($tenant)->whereIn('id', $group['links']->pluck('marketing_profile_id'))->get();
+            $profiles = $sourceProfiles->only($group['links']->pluck('marketing_profile_id')->all())->values();
             if ($profiles->count() !== $group['links']->pluck('marketing_profile_id')->unique()->count()) {
                 $issues[] = 'Some event/customer identities need review.';
 
@@ -100,8 +104,11 @@ class EventCustomerCohort
                 continue;
             }
             if (isset($group['purchase_id'])) {
-                $history = app(CustomerCommerceSnapshotService::class)->forReportingProfile($profile, $tenant);
-                if (! collect($history['purchases'])->contains(fn ($purchase) => $purchase['confirmed'] && $purchase['source'] === $group['purchase_type'] && $purchase['source_id'] === $group['purchase_id'])) {
+                // Same bounded reporting projection used by audience rules. Rebuilding all
+                // original history again per source group makes a cold audience quadratic.
+                $history = $histories[$profile->id] ??= app(ConfirmedCustomerPurchaseProjection::class)->read($profile, $tenant);
+                abort_unless((int) $history['customer_id'] === (int) $profile->id, 409, 'Event customer identities changed. Refresh the event.');
+                if (! in_array($group['purchase_type'].':'.$group['purchase_id'], $history['confirmed_source_keys'], true)) {
                     if ($history['has_more']) {
                         $issues[] = 'Some linked purchase coverage is incomplete.';
                     }
@@ -111,9 +118,30 @@ class EventCustomerCohort
             }
             $ids[$profile->id] = $profile->id;
             $relations[$profile->id][$group['relation']] = true;
+            foreach ($profiles as $source) {
+                $admittedSources[$source->id] = (int) $profile->id;
+            }
+        }
+        // Batch loading is not an identity lease: fail closed if a retained alias
+        // or canonical root changed while this read was assembled.
+        $currentSources = $this->profiles($tenant, array_keys($admittedSources));
+        abort_unless($currentSources->count() === count($admittedSources), 409, 'Event customer identities changed. Refresh the event.');
+        foreach ($currentSources as $source) {
+            $current = $resolver->canonical($source, $tenant);
+            abort_unless($current && $current->archived_at === null && (int) $current->id === $admittedSources[$source->id], 409, 'Event customer identities changed. Refresh the event.');
         }
 
         return ['profile_ids' => array_values($ids), 'relations' => $relations, 'review_items' => array_values(array_unique($issues)),
             'basis' => 'Recorded event capture or an explicitly linked confirmed purchase. Later online purchases remain in the selected customer history.'];
+    }
+
+    private function profiles(int $tenant, array $ids): \Illuminate\Support\Collection
+    {
+        $profiles = collect();
+        foreach (array_chunk($ids, 500) as $chunk) {
+            $profiles = $profiles->concat(MarketingProfile::forTenantId($tenant)->whereIn('id', $chunk)->get());
+        }
+
+        return $profiles->keyBy('id');
     }
 }

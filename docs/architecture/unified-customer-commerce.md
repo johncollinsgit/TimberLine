@@ -147,6 +147,12 @@ payloads and survives neither requests nor queue jobs; console callers rebuild
 it. The existing five-second customer projection bounds refresh after explicit
 attribution, while event occurrence/series provenance and unknown refund
 coverage remain unchanged.
+Event cohorts and audience rules reuse that same five-second confirmed-purchase
+projection once per canonical customer, including exact original-source keys.
+Each cohort still resolves the current tenant-owned canonical root; marketing
+permissions and suppressions are checked separately at preview/send admission.
+Reporting does not evict caches or change receipt/rewards eligibility authority.
+Empty source-ID sets skip queries rather than loading unrelated channel data.
 
 The branded Modern Forestry Pay development build is installed. Its local
 catalog and basket do not yet submit sales. The live POS candidate remains a

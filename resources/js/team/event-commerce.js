@@ -20,10 +20,11 @@ export function installEventCommerce(host, { record, api, tenant, current }) {
   }
   function stats(data) {
     const grid = el('dl', '', 'event-facts');
-    for (const [title, value] of [['Net sales', money(data.net_sales_minor)], ['Orders', data.sale_count], ['Sales tax', money(data.sales_tax_minor)], ['Collected after refunds', money(data.collected_total_minor)], ['Confirmed refunds', money(data.confirmed_refunds_minor)], ['Average order', money(data.average_order_minor)]]) {
+    for (const [title, value] of [['Collected before refunds', money(data.paid_total_minor)], ['Orders', data.sale_count], ['Net sales', money(data.net_sales_minor)], ['Sales tax', money(data.sales_tax_minor)], ['Collected after refunds', money(data.collected_total_minor)], ['Recorded refunds', money(data.confirmed_refunds_minor)], ['Average order', data.sale_count === 0 ? 'No sales yet' : money(data.average_order_minor)]]) {
       const box = el('div', '', 'event-fact'); box.append(el('dt', title), el('dd', String(value))); grid.append(box);
     }
     content.append(grid);
+    if (data.refunds_complete === false) content.append(el('p', 'Recorded refunds cover available evidence only. Refund coverage and net totals need review.', 'event-detail-status'));
     if (data.customer_counts) content.append(el('p', data.customer_counts.unique_buyers + ' customers · ' + data.customer_counts.attributed_orders + ' attributed orders · ' + data.customer_counts.unattributed_orders + ' to attribute', 'event-soft'));
     if (data.review_items?.length) content.append(el('p', data.review_items.join(' '), 'event-detail-status'));
     if (data.customer_review_items?.length) content.append(el('p', data.customer_review_items.join(' '), 'event-detail-status'));
@@ -65,7 +66,7 @@ export function installEventCommerce(host, { record, api, tenant, current }) {
         const result = await api('/customers', { query: { event_id: eventID, query: requestedQuery, page: requestedPage } });
         if (!valid(ticket)) return;
         const list = el('div', '', 'event-customer-list');
-        for (const customer of result.customers) { const row = button(customer.name, () => showCustomer(customer.id)); row.append(el('span', [customer.phone, customer.email].filter(Boolean).join(' · '), 'event-small event-soft')); list.append(row); }
+        for (const customer of result.customers) { const name = String(customer.name || 'Customer').trim(), row = button(name, () => showCustomer(customer.id)); const contacts = [customer.phone, customer.email].filter(value => value && String(value).trim().toLowerCase() !== name.toLowerCase()); if (contacts.length) row.append(el('span', contacts.join(' · '), 'event-small event-soft')); list.append(row); }
         if (!result.customers.length) list.append(el('p', 'No matching captured contacts or confirmed buyers. Attribution added in Pay appears here automatically.', 'event-soft'));
         customerResults.replaceChildren(list); if (result.event_context?.review_items?.length) customerResults.append(el('p', result.event_context.review_items.join(' '), 'event-small event-soft'));
         pagination(result.has_more, customerResults); feedback.textContent = 'Captured contacts and confirmed buyers · updated just now';
@@ -78,9 +79,11 @@ export function installEventCommerce(host, { record, api, tenant, current }) {
     try {
       const result = await api('/customers/' + id); if (!valid(ticket)) return;
       content.replaceChildren(button('Back to ' + tab, () => { detail = false; load(); }), el('h3', result.customer.name));
-      content.append(el('p', [result.customer.phone, result.customer.email].filter(Boolean).join(' · ')), newLink('Open customer', '/workspace/customers/' + id + '?tenant=' + encodeURIComponent(tenant) + '&event_id=' + eventID));
-      const rewards = result.commerce.rewards; if (rewards?.available) content.append(el('p', (rewards.label || 'Rewards') + ' · ' + rewards.balance));
-      for (const purchase of result.commerce.purchases) content.append(el('p', purchase.number + ' · ' + (purchase.confirmed ? money(purchase.amount_minor, purchase.currency) : 'Unverified record') + ' · ' + date(purchase.occurred_at)));
+      const contacts = [result.customer.phone, result.customer.email].filter(value => value && String(value).trim().toLowerCase() !== String(result.customer.name || '').trim().toLowerCase());
+      if (contacts.length) content.append(el('p', contacts.join(' · ')));
+      content.append(newLink('Open customer', '/workspace/customers/' + id + '?tenant=' + encodeURIComponent(tenant) + '&event_id=' + eventID));
+      const rewards = result.commerce.rewards; if (rewards?.available) content.append(el('p', (rewards.label || 'Rewards') + ' · ' + (rewards.balance == null || String(rewards.balance).trim() === '' ? 'Balance unavailable' : rewards.balance)));
+      for (const purchase of result.commerce.purchases) { const label = ['square_order', 'square_payment'].includes(purchase.source) ? 'Square purchase' : purchase.source === 'pos_sale' ? 'In-person purchase' : purchase.number || 'Purchase'; const row = el('details', '', 'event-purchase'); row.append(el('summary', label + ' · ' + (purchase.confirmed ? money(purchase.amount_minor, purchase.currency) : 'Unverified record') + ' · ' + date(purchase.occurred_at))); if (purchase.source_id || purchase.number) row.append(el('p', 'Reference: ' + (purchase.source_id || purchase.number), 'event-small event-soft')); content.append(row); }
       if (result.commerce.has_more) content.append(el('p', 'Open the customer to review older linked history.', 'event-small event-soft'));
       feedback.textContent = 'Customer purchases and rewards';
     } catch (error) { fail(error, ticket, () => showCustomer(id)); }

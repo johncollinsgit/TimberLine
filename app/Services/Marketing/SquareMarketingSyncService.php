@@ -387,6 +387,10 @@ class SquareMarketingSyncService
         $since = $this->asDate($options['since'] ?? null);
         $createdBy = isset($options['created_by']) ? (int) $options['created_by'] : null;
         $checkpointEvery = max(1, (int) ($options['checkpoint_every'] ?? 100));
+        // These Square cursors bind the provider page size, not our unit budget.
+        // Cards use a different adapter which deliberately ignores this argument.
+        $fixedPagination = in_array($type, ['square_customers_sync', 'square_orders_sync', 'square_payments_sync'], true);
+        $providerPageLimit = $limit === null ? 100 : min(100, $limit);
 
         $summary = [
             'processed' => 0,
@@ -418,18 +422,27 @@ class SquareMarketingSyncService
             abort_unless(($prior->summary['request_context'] ?? []) === $summary['request_context'], 409, 'Resume the original source query and date field.');
             abort_unless((is_string($cursor) && $cursor !== '') || ($prior->status === 'failed' && ($prior->summary['retry_page'] ?? false)), 409, 'No remaining provider page is recorded for this run.');
             $summary['resumed_from_run_id'] = $prior->id;
+            if ($fixedPagination) {
+                $providerPageLimit = $this->originalProviderPageLimit($prior, $tenantId, $type, $summary['source_binding'], $summary['request_context'], $since);
+            }
+        }
+        if ($fixedPagination) {
+            abort_if($limit !== null && $limit < $providerPageLimit, 409, 'The resume budget must allow at least one original Square provider page ('.$providerPageLimit.' records).');
+            $summary['provider_page_limit'] = $providerPageLimit;
         }
         $intent = [$type, $summary['source_binding'], $limit, $since?->toIso8601String(), $cursor, $dryRun, $summary['create_unmatched'], $summary['historical_source_only']];
         if ($summary['request_context']) {
             $intent[] = $summary['request_context'];
         }
-        $intentHash = hash('sha256', json_encode($intent, JSON_THROW_ON_ERROR));
+        $legacyIntentHash = hash('sha256', json_encode($intent, JSON_THROW_ON_ERROR));
+        $intentHash = $fixedPagination ? hash('sha256', json_encode([...$intent, ['provider_page_limit' => $providerPageLimit]], JSON_THROW_ON_ERROR)) : $legacyIntentHash;
 
-        $run = app(CustomerAccountFence::class)->forTenant($tenantId, function () use ($options, $tenantId, $type, $sourceLabel, $dryRun, $limit, $cursor, $since, $checkpointEvery, $createdBy, $summary, $intentHash) {
+        $run = app(CustomerAccountFence::class)->forTenant($tenantId, function () use ($options, $tenantId, $type, $sourceLabel, $dryRun, $limit, $cursor, $since, $checkpointEvery, $createdBy, $summary, $intentHash, $legacyIntentHash) {
             if (! empty($options['request_id'])) {
                 $prior = MarketingImportRun::query()->where('tenant_id', $tenantId)->where('summary->request_id', $options['request_id'])->lockForUpdate()->first();
                 if ($prior) {
-                    abort_unless(hash_equals((string) ($prior->summary['intent_hash'] ?? ''), $intentHash) && (int) $prior->created_by === (int) $createdBy, 409, 'This refresh request belongs to different original content.');
+                    $expectedHash = array_key_exists('provider_page_limit', $prior->summary ?? []) ? $intentHash : $legacyIntentHash;
+                    abort_unless(hash_equals((string) ($prior->summary['intent_hash'] ?? ''), $expectedHash) && (int) $prior->created_by === (int) $createdBy, 409, 'This refresh request belongs to different original content.');
 
                     return $prior;
                 }
@@ -466,6 +479,12 @@ class SquareMarketingSyncService
             $nextCheckpoint = $checkpointEvery;
             $seenCursors = [];
             do {
+                if ($fixedPagination && $remaining !== null && $remaining < $providerPageLimit) {
+                    // A short nonterminal page can leave nine of a 500-record
+                    // budget. Save its cursor; do not change the next request to nine.
+                    $this->persistCheckpoint($run, $summary, $cursor, $limit, $since, $checkpointEvery, $dryRun);
+                    break;
+                }
                 $cursorHash = hash('sha256', (string) $cursor);
                 abort_if(isset($seenCursors[$cursorHash]), 409, 'Square returned a repeated source cursor. The original checkpoint is retained for review.');
                 $seenCursors[$cursorHash] = true;
@@ -473,7 +492,7 @@ class SquareMarketingSyncService
                     app(SquareSourceRefresh::class)->assertPolicyCurrent($tenantId, $options['source_refresh_policy_version']);
                 }
                 app(SquareConnectionContext::class)->assertCurrent($tenantId, $summary['source_binding']);
-                $pageLimit = $remaining === null ? 100 : min(100, $remaining);
+                $pageLimit = $fixedPagination ? $providerPageLimit : ($remaining === null ? 100 : min(100, $remaining));
                 $page = $fetchPage($cursor, $pageLimit, $since);
                 $items = is_array($page['items'] ?? null) ? $page['items'] : [];
 
@@ -556,6 +575,65 @@ class SquareMarketingSyncService
             'run_id' => $run->id,
             'summary' => $summary,
         ];
+    }
+
+    /** Old resumed runs may have a different unit budget from the original cursor request. */
+    private function originalProviderPageLimit(MarketingImportRun $run, int $tenantId, string $type, array $binding, array $context, ?CarbonImmutable $since): int
+    {
+        $seen = [];
+        for ($depth = 0; $depth < 128; $depth++) {
+            abort_if(isset($seen[$run->id]), 409, 'Review the original Square cursor page size: the resume lineage is cyclic.');
+            $seen[$run->id] = true;
+            $summary = $run->summary ?? [];
+            abort_unless((int) $run->tenant_id === $tenantId && $run->type === $type
+                && $this->canonicalBinding($summary['source_binding'] ?? []) === $this->canonicalBinding($binding)
+                && ($summary['request_context'] ?? []) === $context
+                && $this->asDate($summary['since'] ?? null)?->toIso8601String() === $since?->toIso8601String(),
+                409, 'Review the original Square cursor page size: its source query lineage changed.');
+            if (array_key_exists('provider_page_limit', $summary)) {
+                $size = $summary['provider_page_limit'];
+                abort_unless(is_int($size) && $size >= 1 && $size <= 100, 409, 'Review the original Square cursor page size before resuming.');
+
+                return $size;
+            }
+            $parent = $summary['resumed_from_run_id'] ?? null;
+            if ($parent === null) {
+                // finalSummary advances summary.cursor, so only the retained
+                // original intent can prove that this chain began without one.
+                abort_unless($this->legacySourceIntentMatches($summary, $type, $binding, $context, null), 409, 'Review the original Square cursor page size: the initial request cannot be proved.');
+                $originalLimit = $this->nullableInt($summary['limit'] ?? null);
+
+                return $originalLimit === null ? 100 : min(100, $originalLimit);
+            }
+            abort_unless(is_int($parent) && $parent > 0, 409, 'Review the original Square cursor page size: the parent run is invalid.');
+            $ancestor = MarketingImportRun::tenantScopedRun($parent, $type, $tenantId);
+            abort_unless($ancestor, 409, 'Review the original Square cursor page size: the original run is unavailable.');
+            $parentCursor = data_get($ancestor->summary, 'checkpoint.cursor');
+            abort_unless($parentCursor === null || is_string($parentCursor), 409, 'Review the original Square cursor page size: the parent cursor is invalid.');
+            abort_unless($this->legacySourceIntentMatches($summary, $type, $binding, $context, $parentCursor), 409, 'Review the original Square cursor page size: the parent request cannot be proved.');
+            $run = $ancestor;
+        }
+        abort(409, 'Review the original Square cursor page size: the bounded resume lineage is too long.');
+    }
+
+    private function legacySourceIntentMatches(array $summary, string $type, array $binding, array $context, ?string $initialCursor): bool
+    {
+        // MySQL can reorder JSON object keys. Canonical equality is checked by
+        // the lineage reader; the fresh trusted builder retains the original
+        // request projection's order. Keep the stored projection as a fallback
+        // for unchanged legacy builders, never relax the stored intent hash.
+        foreach ([$binding, $summary['source_binding'] ?? []] as $projection) {
+            $intent = [$type, $projection, $this->nullableInt($summary['limit'] ?? null), $this->asDate($summary['since'] ?? null)?->toIso8601String(),
+                $initialCursor, ($summary['mode'] ?? '') === 'dry-run', (bool) ($summary['create_unmatched'] ?? false), (bool) ($summary['historical_source_only'] ?? false)];
+            if ($context) {
+                $intent[] = $context;
+            }
+            if (hash_equals((string) ($summary['intent_hash'] ?? ''), hash('sha256', json_encode($intent, JSON_THROW_ON_ERROR)))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -223,7 +223,8 @@ test('failed source page retries its original first page and never skips a faile
     expect(fn () => $this->sync->syncCustomers($this->sourceOptions))->toThrow(RuntimeException::class);
     $original = MarketingImportRun::sole();
     expect($original->summary['retry_page'])->toBeTrue()->and($original->summary['checkpoint']['cursor'])->toBeNull()->and(SquareCustomer::count())->toBe(0);
-    $result = $this->sync->syncCustomers(array_replace($this->sourceOptions, ['request_id' => (string) Str::uuid(), 'resume_run_id' => $original->id, 'limit' => 1]));
+    // Preserve the original provider page size when retrying the same page.
+    $result = $this->sync->syncCustomers(array_replace($this->sourceOptions, ['request_id' => (string) Str::uuid(), 'resume_run_id' => $original->id, 'limit' => 100]));
     expect($result['status'])->toBe('partial')->and(SquareCustomer::count())->toBe(2);
 });
 

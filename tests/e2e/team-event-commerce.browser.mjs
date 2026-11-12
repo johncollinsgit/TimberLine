@@ -38,6 +38,8 @@ try {
     await workspace.getByText('Fictional Returning customer · $21.60', { exact: true }).waitFor();
     assert.equal(await workspace.getByText('$20.00', { exact: true }).count(), 2, 'Net sales and average order use net merchandise totals');
     await workspace.getByRole('link', { name: 'Marketing audience', exact: true }).waitFor();
+    await dialog.locator('.event-glance').getByText('See Sales below', { exact: true }).waitFor();
+    await workspace.getByText('Collected before refunds', { exact: true }).waitFor();
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
       assert.ok(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth + 1), `${name}@${width} no horizontal overflow`);
@@ -62,6 +64,61 @@ try {
       await workspace.getByText('Fictional Returning customer · $21.60', { exact: true }).waitFor();
       checked.push(`${name}@${width}`);
     }
+    await workspace.getByRole('button', { name: 'Customers', exact: true }).click();
+    const contactSearch = workspace.getByRole('searchbox', { name: 'Search event customers', exact: true });
+    await contactSearch.fill(fixture.contact_phone);
+    const contact = workspace.getByRole('button', { name: fixture.contact_phone, exact: true }); await contact.waitFor();
+    assert.equal(await contact.locator('span').count(), 0, 'Phone-only label is not repeated as its subtitle');
+    await contact.click(); await workspace.getByRole('heading', { name: fixture.contact_phone, exact: true }).waitFor();
+    assert.equal(await workspace.getByText(fixture.contact_phone, { exact: true }).count(), 1, 'Customer detail displays a fallback contact once');
+    await workspace.getByText(/Balance unavailable/).waitFor();
+    await workspace.getByRole('button', { name: 'Back to customers', exact: true }).click();
+    await workspace.getByRole('searchbox').fill('');
+    await workspace.getByRole('button', { name: 'Customer', exact: true }).click();
+    await workspace.getByRole('heading', { name: 'Customer', exact: true }).waitFor();
+    await workspace.getByRole('link', { name: 'Open customer', exact: true }).waitFor();
+    await workspace.getByRole('button', { name: 'Back to customers', exact: true }).click();
+    await workspace.getByRole('searchbox').fill('fictional');
+    await workspace.getByRole('button', { name: /Fictional Returning customer/ }).click();
+    const purchase = workspace.locator('.event-purchase').first(); await purchase.locator('summary').waitFor();
+    assert.match(await purchase.locator('summary').innerText(), /^Square purchase · \$21\.60 · /);
+    assert.equal(await purchase.locator('summary').innerText().then(text => text.includes('fictional-commerce-order')), false, 'Original provider reference stays out of the purchase heading');
+    assert.equal(await purchase.getAttribute('open'), null);
+    await purchase.locator('summary').click(); await purchase.getByText('Reference: fictional-commerce-order', { exact: true }).waitFor();
+    await workspace.getByRole('button', { name: 'Back to customers', exact: true }).click();
+    let emptySales = false;
+    await page.route(`**/team/events/${fixture.event_id}/confirmed-sales*`, async route => {
+      const response = await route.fetch(), body = await response.json(), sales = body.report.sales;
+      Object.assign(sales, { refunds_complete: false, net_sales_minor: null, sales_tax_minor: null, collected_total_minor: null, average_order_minor: null });
+      if (emptySales) {
+        Object.assign(sales, { sale_count: 0, paid_total_minor: 0, refunds_complete: true, net_sales_minor: 0, sales_tax_minor: 0, collected_total_minor: 0, average_order_minor: null });
+        body.sales = []; body.has_more = false;
+      }
+      await route.fulfill({ response, json: body });
+    });
+    await workspace.getByRole('button', { name: 'Sales', exact: true }).click();
+    await workspace.getByText('Recorded refunds cover available evidence only. Refund coverage and net totals need review.', { exact: true }).waitFor();
+    assert.equal(await workspace.getByText('Confirmed refunds', { exact: true }).count(), 0);
+    const gross = workspace.locator('.event-fact').filter({ hasText: 'Collected before refunds' });
+    assert.equal(await gross.locator('dd').innerText(), '$21.60', 'Known original collected total remains visible with unknown refunds');
+    assert.equal(await workspace.locator('.event-fact').filter({ hasText: 'Net sales' }).locator('dd').innerText(), 'Needs review');
+    await page.screenshot({ path: join(evidence, `event-unknown-refunds-${name}.png`) });
+    emptySales = true;
+    await workspace.getByRole('button', { name: 'Customers', exact: true }).click();
+    await workspace.getByRole('button', { name: 'Sales', exact: true }).click();
+    await workspace.getByText('No sales yet', { exact: true }).waitFor();
+    assert.equal(await workspace.locator('.event-fact').filter({ hasText: 'Average order' }).locator('dd').innerText(), 'No sales yet', 'An empty event has no invented or disputed average');
+    await dialog.locator('#tops-detail-close').click();
+    await page.route(`**/team/events/${fixture.event_id}/essentials*`, async route => {
+      const response = await route.fetch(), body = await response.json();
+      body.commerce_event_id = null; body.sales.current = { status: 'recorded', amount_cents: 12345, currency: 'USD' };
+      await route.fulfill({ response, json: body });
+    });
+    await page.locator('.teams-event-board .teams-task-card').filter({ hasText: 'Fictional seasonal makers and home goods weekend market' }).first().click();
+    const recorded = dialog.locator('.event-fact').filter({ hasText: 'Recorded sales comparison' });
+    assert.equal(await recorded.locator('dd').innerText(), '$123.45');
+    assert.equal(await recorded.locator('.event-fact-hint').innerText(), 'Historical net sales comparison');
+    assert.equal(await dialog.getByText(/temporarily unavailable/).count(), 0, 'An unlinked recorded comparison is not labeled a provider outage');
     await dialog.locator('#tops-detail-close').click(); assert.deepEqual(errors, []); await browser.close(); browser = null;
   }
   console.log(JSON.stringify({ checked, errors: [], evidence }));
