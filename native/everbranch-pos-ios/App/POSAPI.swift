@@ -48,6 +48,15 @@ struct CustomerCreationRejected: Error { let code: String }
         request.setValue(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown", forHTTPHeaderField: "X-Pos-Build")
         if let requestSession { request.setValue("Bearer \(requestSession)", forHTTPHeaderField: "Authorization") }
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests")
+            && ProcessInfo.processInfo.arguments.contains("--pos-customer-search-layout-ui-tests")
+            && method == "GET" && path.hasSuffix("/customers") {
+            // Hold only the fictional transport response so UI tests can inspect
+            // both loading transitions without racing an immediate fixture.
+            try await Task.sleep(for: .seconds(5))
+        }
+        #endif
         let (data, response) = try await session.data(for: request)
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") && ProcessInfo.processInfo.arguments.contains("--pos-refund-review-session-change-tests") && path.hasSuffix("/refund-rewards-review/status") {

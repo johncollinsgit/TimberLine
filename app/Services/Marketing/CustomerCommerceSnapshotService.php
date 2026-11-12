@@ -98,14 +98,17 @@ class CustomerCommerceSnapshotService
         $links = MarketingProfileLink::query()->forTenantId($tenantId)
             ->whereIn('marketing_profile_id', $ids)->get()
             ->reject(fn ($link) => in_array($link->source_id, $excluded[$link->source_type] ?? [], true));
-        $native = app(\App\Services\Pos\PosCustomerPurchases::class)->forProfiles($tenantId, $ids, $limit, $excluded['pos_sale'] ?? []);
+        $native = $links->contains('source_type', 'pos_sale')
+            ? app(\App\Services\Pos\PosCustomerPurchases::class)->forProfiles($tenantId, $ids, $limit, $excluded['pos_sale'] ?? [])
+            : ['purchases' => [], 'square_payments' => [], 'square_orders' => [], 'shopify_orders' => [], 'issues' => []];
         $issues = $native['issues'];
         $purchases = collect($native['purchases']);
 
-        if (Schema::hasTable('orders')) {
+        if ($links->contains('source_type', 'order') && Schema::hasTable('orders')) {
             $orderIds = $this->sourceIds($links, 'order', $tenantId, $canonical, $issues);
-            foreach (Order::query()->forTenantId($tenantId)->whereIn('id', $orderIds)
-                ->latest('ordered_at')->latest('id')->limit($limit + 1)->get() as $order) {
+            $orders = $orderIds ? Order::query()->forTenantId($tenantId)->whereIn('id', $orderIds)
+                ->latest('ordered_at')->latest('id')->limit($limit + 1)->get() : collect();
+            foreach ($orders as $order) {
                 if (app(\App\Services\Pos\PosCustomerPurchases::class)->sourceConflicts($tenantId, 'order', (string) $order->id, $canonical->id)) {
                     $issues[] = 'customer_identity_review_required';
 
@@ -137,13 +140,13 @@ class CustomerCommerceSnapshotService
         }
 
         $squareOrders = collect();
-        if (Schema::hasTable('square_orders')) {
+        if ($links->contains('source_type', 'square_order') && Schema::hasTable('square_orders')) {
             $sourceIds = $this->sourceIds($links, 'square_order', $tenantId, $canonical, $issues);
-            $squareOrders = SquareOrder::query()->forTenantId($tenantId)->whereIn('square_order_id', $sourceIds)
-                ->latest('closed_at')->latest('id')->limit($limit + 1)->get();
-            $payments = SquarePayment::query()->forTenantId($tenantId)
+            $squareOrders = $sourceIds ? SquareOrder::query()->forTenantId($tenantId)->whereIn('square_order_id', $sourceIds)
+                ->latest('closed_at')->latest('id')->limit($limit + 1)->get() : collect();
+            $payments = $squareOrders->isNotEmpty() ? SquarePayment::query()->forTenantId($tenantId)
                 ->whereIn('square_order_id', $squareOrders->pluck('square_order_id'))
-                ->where('status', 'COMPLETED')->get()->groupBy('square_order_id');
+                ->where('status', 'COMPLETED')->get()->groupBy('square_order_id') : collect();
             $conflictingPayments = $this->conflictingSourceIds('square_payment', $payments->flatten(1)->pluck('square_payment_id'), $tenantId, $canonical, $issues);
             foreach ($squareOrders as $order) {
                 if (app(\App\Services\Pos\PosCustomerPurchases::class)->sourceConflicts($tenantId, 'square_order', $order->square_order_id, $canonical->id)) {
@@ -174,10 +177,10 @@ class CustomerCommerceSnapshotService
             }
         }
 
-        if (Schema::hasTable('square_payments')) {
+        if ($links->contains('source_type', 'square_payment') && Schema::hasTable('square_payments')) {
             $sourceIds = $this->sourceIds($links, 'square_payment', $tenantId, $canonical, $issues);
-            $payments = SquarePayment::query()->forTenantId($tenantId)->whereIn('square_payment_id', $sourceIds)
-                ->latest('created_at_source')->latest('id')->limit($limit + 1)->get();
+            $payments = $sourceIds ? SquarePayment::query()->forTenantId($tenantId)->whereIn('square_payment_id', $sourceIds)
+                ->latest('created_at_source')->latest('id')->limit($limit + 1)->get() : collect();
             $conflictingOrders = $this->conflictingSourceIds('square_order', $payments->pluck('square_order_id')->filter(), $tenantId, $canonical, $issues);
             foreach ($payments as $payment) {
                 if (app(\App\Services\Pos\PosCustomerPurchases::class)->sourceConflicts($tenantId, 'square_payment', $payment->square_payment_id, $canonical->id)) {
@@ -202,13 +205,13 @@ class CustomerCommerceSnapshotService
             }
         }
 
-        if (Schema::hasTable('website_orders')) {
+        if ($links->contains(fn ($link) => in_array($link->source_type, ['website_customer', 'website_order'], true)) && Schema::hasTable('website_orders')) {
             $customerIds = $this->sourceIds($links, 'website_customer', $tenantId, $canonical, $issues);
             $orderIds = $this->sourceIds($links, 'website_order', $tenantId, $canonical, $issues);
             // Only an explicit source association admits Website records. No contact matching.
-            $websiteOrders = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($tenantId)
+            $websiteOrders = $customerIds || $orderIds ? WebsiteOrder::query()->withoutPosSimulation()->forTenantId($tenantId)
                 ->where(fn ($q) => $q->whereIn('website_customer_id', $customerIds)->orWhereIn('id', $orderIds))
-                ->latest('paid_at')->latest('id')->limit($limit + 1)->get();
+                ->latest('paid_at')->latest('id')->limit($limit + 1)->get() : collect();
             $conflictingOrders = $this->conflictingSourceIds('website_order', $websiteOrders->pluck('id')->map('strval'), $tenantId, $canonical, $issues);
             $conflictingCustomers = $this->conflictingSourceIds('website_customer', $websiteOrders->pluck('website_customer_id')->filter()->map('strval'), $tenantId, $canonical, $issues);
             foreach ($websiteOrders as $order) {
@@ -275,6 +278,9 @@ class CustomerCommerceSnapshotService
 
     private function conflictingSourceIds(string $type, Collection $ids, int $tenantId, MarketingProfile $canonical, array &$issues): array
     {
+        if ($ids->isEmpty()) {
+            return [];
+        }
         $conflicts = MarketingProfileLink::query()->forTenantId($tenantId)->where('source_type', $type)
             ->whereIn('source_id', $ids)->with('marketingProfile')->get()
             ->filter(fn ($link) => $this->identities->canonical($link->marketingProfile, $tenantId)?->id !== $canonical->id)

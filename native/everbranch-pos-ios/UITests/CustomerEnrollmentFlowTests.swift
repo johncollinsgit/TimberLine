@@ -8,8 +8,14 @@ final class CustomerEnrollmentFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Add customer"].waitForExistence(timeout: 10)); app.buttons["Add customer"].tap()
         let query = app.textFields["Name, email or phone"]
         XCTAssertTrue(query.waitForExistence(timeout: 5)); query.tap(); query.typeText("Ada")
-        app.buttons["Find customer"].tap()
-        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Ada Buyer")).firstMatch.tap()
+        let customer = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Ada Buyer", "ada@example.test")).firstMatch
+        // The field searches as the operator types; wait for its exact result.
+        let selectable = NSPredicate { _, _ in customer.exists && customer.isEnabled && customer.isHittable }
+        guard XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: selectable, object: nil)], timeout: 10) == .completed else {
+            XCTFail("The requested customer search result did not become selectable.")
+            return
+        }
+        customer.tap()
         XCTAssertTrue(app.buttons["Birthday & updates"].waitForExistence(timeout: 8)); app.buttons["Birthday & updates"].tap()
         let birthday = app.switches["Save birthday for the birthday program"]
         let email = app.switches[emailText]
@@ -45,6 +51,47 @@ final class CustomerEnrollmentFlowTests: XCTestCase {
         let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-completed-ui-tests", "--pos-customer-commerce-ui-tests", "--pos-enrollment-ui-tests", "--pos-enrollment-fail-once-tests"]; app.launch()
         selectCustomerAndRecordChoices(app, failOnce: true)
         XCTAssertTrue(app.buttons["Link to this purchase"].exists)
+    }
+
+    func testCustomerSearchKeepsFindAndExistingResultsStillWhileLoading() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-completed-ui-tests", "--pos-customer-commerce-ui-tests", "--pos-customer-search-layout-ui-tests"]
+        app.launch()
+        let open = app.buttons["Add customer"]
+        XCTAssertTrue(open.waitForExistence(timeout: 10)); open.tap()
+        let query = app.textFields["Name, email or phone"]
+        XCTAssertTrue(query.waitForExistence(timeout: 5)); query.tap(); query.typeText("Ad")
+        let result = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Ada Buyer", "ada@example.test")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 10))
+        let find = app.buttons["Find customer"]
+        let findBefore = find.frame; let resultBefore = result.frame
+
+        // An uncached refinement keeps the previous rows visible. Both controls
+        // must retain the same hit areas while the response is outstanding.
+        query.typeText("a")
+        let loading = NSPredicate { _, _ in find.value as? String == "Finding customers" }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: loading, object: nil)], timeout: 5), .completed)
+        assertSameFrame(find.frame, findBefore)
+        assertSameFrame(result.frame, resultBefore)
+        let finished = NSPredicate { _, _ in find.value as? String != "Finding customers" }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: finished, object: nil)], timeout: 10), .completed)
+        assertSameFrame(find.frame, findBefore)
+        assertSameFrame(result.frame, resultBefore)
+        XCTAssertFalse(app.buttons["Choose another customer"].exists)
+
+        find.tap()
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Choose another customer"].exists, "Finding a customer must not select a row.")
+        result.tap()
+        XCTAssertTrue(app.staticTexts["ada@example.test"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Link to this purchase"].exists, "Selection must still require explicit purchase attribution.")
+    }
+
+    private func assertSameFrame(_ actual: CGRect, _ expected: CGRect, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(actual.minX, expected.minX, accuracy: 1, file: file, line: line)
+        XCTAssertEqual(actual.minY, expected.minY, accuracy: 1, file: file, line: line)
+        XCTAssertEqual(actual.width, expected.width, accuracy: 1, file: file, line: line)
+        XCTAssertEqual(actual.height, expected.height, accuracy: 1, file: file, line: line)
     }
 
 }

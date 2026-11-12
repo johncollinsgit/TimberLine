@@ -23,4 +23,10 @@ App\Models\SquarePayment::create(['tenant_id' => $tenant->id, 'square_payment_id
     'status' => 'COMPLETED', 'source_type' => 'CARD', 'currency' => 'USD', 'amount_money' => 2160, 'raw_payload' => ['refunded_money' => ['amount' => 0, 'currency' => 'USD']]]);
 App\Models\MarketingProfileLink::create(['tenant_id' => $tenant->id, 'marketing_profile_id' => $profile->id, 'source_type' => 'square_order', 'source_id' => 'fictional-commerce-order']);
 $fixture['customer_id'] = $profile->id;
+foreach ([['phone' => '+15551234567', 'normalized_phone' => '+15551234567'], []] as $index => $contact) {
+    $profile = App\Models\MarketingProfile::create(['tenant_id' => $tenant->id, ...$contact]);
+    App\Models\MarketingProfileLink::create(['tenant_id' => $tenant->id, 'marketing_profile_id' => $profile->id, 'source_type' => 'pos_event_capture', 'source_id' => 'fictional-contact-'.$index,
+        'source_meta' => ['event_id' => 730, 'captured_at' => '2026-11-06T14:00:00Z', 'capture_evidence_version' => 1, 'record_origin' => 'selected']]);
+}
+$fixture['contact_phone'] = '+15551234567';
 echo json_encode($fixture, JSON_THROW_ON_ERROR);

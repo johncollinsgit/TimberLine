@@ -469,9 +469,18 @@ struct POSView: View {
             } else {
                 TextField("Name, email or phone", text: $model.customerQuery).payInput().textInputAutocapitalization(.never)
                     .focused($inputFocused).submitLabel(.search).onSubmit { model.searchCustomers() }
-                if model.customerSearchLoading { ProgressView("Finding customers…") }
-                Button("Find customer", action: { inputFocused = false; model.searchCustomers() })
+                Button(action: { inputFocused = false; model.searchCustomers() }) {
+                    Text("Find customer").frame(maxWidth: .infinity)
+                        // Loading occupies the same button rather than moving
+                        // either its hit area or the customer rows below it.
+                        .overlay(alignment: .trailing) {
+                            ProgressView().opacity(model.customerSearchLoading ? 1 : 0)
+                                .padding(.trailing, 20).accessibilityHidden(true)
+                        }
+                }
                     .buttonStyle(PayButtonStyle(primary: false))
+                    .accessibilityLabel("Find customer")
+                    .accessibilityValue(model.customerSearchLoading ? "Finding customers" : "")
                     .disabled(model.customerQuery.trimmingCharacters(in: .whitespacesAndNewlines).count < 2)
                 ForEach(model.customers) { customer in
                     Button { inputFocused = false; model.selectedCustomer = customer } label: {

@@ -31,6 +31,7 @@ function purchaseLookupScans(): array
 }
 
 beforeEach(function (): void {
+    $this->freezeTime();
     $this->withoutVite();
     Http::preventStrayRequests();
     config(['team_work.enabled' => true, 'team_work.premium_enabled' => true, 'team_operations.enabled' => true, 'pos_live.runtime_id' => 'request_lookup_fixture']);
@@ -75,6 +76,12 @@ it('bounds encrypted event scans across a cold audience and refreshes late attri
     $preview = $this->actingAs($this->owner)->postJson($url, [...$input, 'preview_id' => (string) Str::uuid()])
         ->assertOk()->assertJsonPath('matched', 24)->assertJsonPath('complete', true);
     $scans = purchaseLookupScans();
+    $coldQueryCount = count(DB::getQueryLog());
+    $coldHistoryReads = collect(DB::getQueryLog())->filter(function ($query) {
+        $sql = str_replace(['"', '`'], '', $query['query']);
+
+        return str_contains($sql, 'from square_orders') && str_contains($sql, 'order by closed_at desc, id desc');
+    })->count();
     DB::disableQueryLog();
     // One shared lookup plus the independent original-sales allocation conflict check, rather than a scan per purchase/profile.
     expect($scans)->toHaveCount(2);
@@ -82,11 +89,25 @@ it('bounds encrypted event scans across a cold audience and refreshes late attri
         expect($scan['bindings'])->toContain($this->tenant->id)->not->toContain($foreign->id);
     }
     expect(collect($scans)->filter(fn ($scan) => str_contains(str_replace(['"', '`'], '', $scan['query']), 'select id, connection_id, data')))->toHaveCount(1);
+    // Cohort source confirmation and rule evaluation share one original-history rebuild per canonical buyer.
+    expect($coldHistoryReads)->toBe(24)->and($coldQueryCount)->toBeLessThan(1600);
     expect($preview->json('samples.0.reasons'))->toBe(['Previous buyer at '.$series->title]);
     $projection = app(ConfirmedCustomerPurchaseProjection::class)->read($buyers->first(), $this->tenant->id);
     expect($projection['confirmed_orders'])->toBe(2)->and($projection['purchased_event_ids'])->toBe(['123'])
         ->and($projection['purchased_series_ids'])->toBe([$series->id])->and($projection['currencies'][0]['net_minor'])->toBeNull()
         ->and($projection['currencies'][0]['refunds_known'])->toBeFalse()->and($projection['captured_event_ids'])->toBe([]);
+
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    $this->postJson($url, [...$input, 'preview_id' => (string) Str::uuid()])->assertOk()->assertJsonPath('matched', 24);
+    $warmHistoryReads = collect(DB::getQueryLog())->filter(function ($query) {
+        $sql = str_replace(['"', '`'], '', $query['query']);
+
+        return str_contains($sql, 'from square_orders') && str_contains($sql, 'order by closed_at desc, id desc');
+    })->count();
+    $warmQueries = count(DB::getQueryLog());
+    DB::disableQueryLog();
+    expect($warmHistoryReads)->toBe(0)->and($warmQueries)->toBeLessThan(700);
 
     // Explicit attribution can move to a newly confirmed canonical customer; another HTTP request must not reuse the old lookup/projection.
     $late = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Confirmed later', 'country' => 'US', 'postal_code' => '75201']);

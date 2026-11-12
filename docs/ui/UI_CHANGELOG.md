@@ -1,3 +1,18 @@
+## 2026-11-12 — Connected event reporting clarity
+
+Teams shows the known collected total before refunds while incomplete refund
+coverage keeps net sales, tax and adjusted totals in review. Recorded refunds
+have an explicit coverage note. At a glance points linked current sales to the
+shared Sales area; previous-year figures remain labeled comparisons. Customer
+contacts appear once, missing reward balances say Balance unavailable, and
+purchase summaries use friendly labels with original references in a disclosure.
+Event buyer candidates reuse the same bounded confirmed-purchase projection as
+Marketing rules, while current customer identity and channel eligibility remain
+separate checks. An empty event shows No sales yet for its average order.
+Native customer search shows loading inside the existing 52-point Find button,
+keeping its tap target and visible result rows in place through debounced loads.
+Staff select a matching name/contact, then separately confirm receipt association.
+
 ## 2026-11-11 - Everbranch relationship-led sharing preview
 
 The public Everbranch home and promo page share a watercolor forest and mountain

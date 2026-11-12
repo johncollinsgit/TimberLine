@@ -331,3 +331,20 @@ exact frozen webhook binding, failed-read retry, monotonic refunds, coherent sav
 locations, original-page resume, legacy draft-copy replay, older history privacy,
 post-sale audience membership and tenant isolation. Actual import count/financial
 reconciliation and physical event acceptance remain post-release operations.
+
+Customer, order and payment cursors retain a frozen `provider_page_limit`, separate
+from the bounded import unit's record budget. A short nonterminal page can leave
+491 processed rows in a 500-row unit; save its cursor instead of requesting its
+next page with a changed limit of nine. The next unit uses the original page size.
+A resume budget smaller than one frozen provider page fails clearly before any
+source read. Cards retain their existing adapter and complete manual-page behavior.
+Unexpected excess rows in a manual provider page remain preserved, never discarded.
+
+Legacy cursor recovery proves the original page size through at most 128 recorded
+resume ancestors with the same tenant, source binding and date query. The original
+intent hash proves the initial request even though old summaries advance their
+`cursor` field; MySQL object-key ordering does not replace that proof. Unknown,
+cyclic or mismatched lineage needs review. Existing request replays and failed-run
+evidence remain unchanged. Count valid persisted rows from a failed read separately
+from successful-unit totals; an empty EOF recovery does not erase those rows or
+the original provider error. Historical reads still award no rewards or campaigns.
