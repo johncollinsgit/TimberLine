@@ -69,8 +69,12 @@ final class CustomerSourceOwnershipReconciliation
             }
         }
         if ($apply) {
-            MarketingImportRun::create(['tenant_id' => $tenant, 'type' => 'customer_source_ownership', 'status' => $result['review_required'] ? 'partial' : 'completed',
-                'source_label' => 'existing_original_source_links', 'created_by' => $actor->id, 'started_at' => now(), 'finished_at' => now(), 'summary' => $result]);
+            app(CustomerAccountFence::class)->forTenant($tenant, function () use ($tenant, $actor, $result): void {
+                // Match source refresh authorization before the audit's user/tenant foreign keys.
+                app(SquareCustomerIdentityService::class)->authorize($tenant, User::findOrFail($actor->id));
+                MarketingImportRun::create(['tenant_id' => $tenant, 'type' => 'customer_source_ownership', 'status' => $result['review_required'] ? 'partial' : 'completed',
+                    'source_label' => 'existing_original_source_links', 'created_by' => $actor->id, 'started_at' => now(), 'finished_at' => now(), 'summary' => $result]);
+            });
         }
 
         return $result;
