@@ -1,3 +1,11 @@
+## 2026-11-11: Public interactive demo entry
+
+The guest homepage links to the branded interactive demo from the hero and
+navigation. A screenshot and four business-type links introduce the property,
+service crew, retail and campus simulations. The public entry explains that the
+data is fictional, progress stays in the browser and no live transactions or
+messages are created. Existing industry examples and account flows remain intact.
+
 ## 2026-11-12 — Connected event reporting clarity
 
 Teams shows the known collected total before refunds while incomplete refund
