@@ -122,10 +122,22 @@ private struct RestorableQuote: Decodable {
 }
 
 @MainActor final class POSViewModel: ObservableObject {
+    enum StartupPhase: Equatable { case restoring, ready, failed }
     let api = POSAPI()
     let signIn = POSSignIn()
     let collector = SquareCollector()
     @Published var signedIn = false
+    @Published private(set) var startupPhase: StartupPhase = .ready
+    private var startupStarted = false
+    private var workspacesLoaded = false
+    private var startupRecoveryPresented = false
+    private var catalogGeneration = 0
+    private var catalogBase: String?
+    private var enrollmentTask: Task<Void, Never>?
+    private var offersTask: Task<Void, Never>?
+    private var setupTask: Task<Void, Never>?
+    private var signingOutAfterSetup = false
+    private var deferredOffers: (base: String, token: String?, generation: Int, value: CheckoutOfferRuleList)?
     @Published var workspaces: [Workspace] = []
     @Published var registers: [Register] = []
     @Published var printingQuotes: [PrintingQuote] = []
@@ -196,6 +208,18 @@ private struct RestorableQuote: Decodable {
     }
     #if DEBUG
     @Published var simulatedReadinessSetups = 0
+    @Published var startupOfferResponses = 0
+    @Published var simulatedSetupCallbackPending = false
+    @Published private(set) var catalogFixtureInitializations = 0
+    var startupEnrichmentCleared: Bool { catalogBase == nil && checkoutRulesVersion == nil && checkoutRules.isEmpty && customerEnrollmentSettings == nil && customerCommerce == nil }
+    func seedCatalogFixtureContext() {
+        guard ProcessInfo.processInfo.arguments.contains("--pos-catalog-ui-tests"),
+              ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests"), let base else { return }
+        // The fixture already populated this scope's catalog. Match the normal
+        // catalog response so a refresh cannot replay its initial payment state.
+        catalogBase = base
+        catalogFixtureInitializations += 1
+    }
     #endif
     @Published var receiptContactName = ""
     @Published var receiptContactPhone = ""
@@ -335,6 +359,17 @@ private struct RestorableQuote: Decodable {
     init(basket: [RegisterBasketLine] = []) {
         initialBasket = basket
         #if DEBUG
+        if POSStartupFixture.enabled {
+            api.token = ProcessInfo.processInfo.arguments.contains("--pos-startup-no-session-tests") ? nil : "fictional-startup-session"
+            signedIn = api.token != nil
+            startupPhase = signedIn ? .restoring : .ready
+            if ProcessInfo.processInfo.arguments.contains("--pos-startup-pending-tests") {
+                var original = PendingSale(workspace: "startup", register: "startup-register", requestID: POSStartupFixture.originalRequestID)
+                original.saleID = "startup-original-payment"; original.collectionRequested = true; original.sdkStarted = true
+                pending = original
+            }
+            return
+        }
         if ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-ui-tests") {
             if ProcessInfo.processInfo.arguments.contains("--pos-restored-draft-reset") {
                 try? SecureStore.write("pending-sale", nil); try? SecureStore.write("quote-draft", nil)
@@ -351,24 +386,72 @@ private struct RestorableQuote: Decodable {
         if let value = SecureStore.read("pending-customer") { pendingCustomer = try? JSONDecoder().decode(PendingCustomerCreation.self, from: value) }
         if let value = SecureStore.read("pending-enrollment") { pendingEnrollment = try? JSONDecoder().decode(PendingCustomerEnrollment.self, from: value) }
         signedIn = api.token != nil
+        startupPhase = signedIn ? .restoring : .ready
         if let value = SecureStore.read("pending-sale") { pending = try? JSONDecoder().decode(PendingSale.self, from: value) }
         if let value = SecureStore.read("payments-for-review") { savedPaymentReviews = (try? JSONDecoder().decode([SavedPaymentReview].self, from: value)) ?? [] }
+    }
+    func start() {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--pos-catalog-ui-tests") ||
+            (ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") && !ProcessInfo.processInfo.arguments.contains("--pos-startup-ui-tests")) { return }
+        #endif
+        guard !startupStarted else { return }
+        startupStarted = true
+        guard signedIn else { startupPhase = .ready; return }
+        perform { try await self.restoreStartup() }
+    }
+    func retryStartup() {
+        guard startupPhase == .failed, !busy else { return }
+        perform { try await self.restoreStartup() }
+    }
+    func openStartupRecovery() {
+        guard pending != nil else { return }
+        startupPhase = .ready
+    }
+    func openLoadedStartupRegister() {
+        guard registerLoaded else { return }
+        startupPhase = .ready
+    }
+    private func restoreStartup() async throws {
+        startupPhase = .restoring
+        do {
+            try await loadWorkspaces()
+            if pending != nil && (selectedWorkspace == nil || selectedRegister == nil) {
+                throw POSError.unavailable("Your saved payment is retained, but this sign-in cannot access its register. Use the original account or ask an administrator to restore access.")
+            }
+            startupRecoveryPresented = pending != nil && sale != nil
+            startupPhase = .ready
+        } catch {
+            if case POSError.signInRequired = error { startupPhase = .ready }
+            else { startupPhase = .failed }
+            throw error
+        }
+    }
+    func needsWorkspaceLoad() -> Bool { !workspacesLoaded && !registerLoaded }
+    func needsPresentationRecovery() -> Bool {
+        guard pending != nil else { return false }
+        if startupRecoveryPresented { startupRecoveryPresented = false; return false }
+        return true
     }
     func perform(_ action: @escaping () async throws -> Void) {
         guard !busy else { return }
         busy = true; message = nil
         Task {
-            defer { busy = false; paymentPhase = "" }
+            defer { busy = false; paymentPhase = ""; applyDeferredOffers() }
             do { try await action() }
             catch POSError.signInRequired {
+                signingOutAfterSetup = true
                 try? SecureStore.write("session", nil)
                 api.token = nil; signedIn = false; tapReady = false; registerLoaded = false
                 selectedWorkspace = nil; selectedRegister = nil; selectedCustomer = nil; customers = []
+                workspacesLoaded = false; invalidateRegisterEnrichment(); clearSessionEnrichment()
                 workspaces = []; registers = []; items = []; printingQuotes = []; quantities = [:]; bundleComponents = [:]; bundleLines = []; sale = nil; receipt = nil
                 customerQuery = ""; customerFirstName = ""; customerLastName = ""; customerEmail = ""; customerPhone = ""; customerName = ""
                 invoiceID = ""; refundAmount = ""; initialBasket = []; basketIssue = nil
                 clearReceiptInputs()
+                if let setupTask { await setupTask.value }
                 await collector.signOut()
+                signingOutAfterSetup = false
                 message = "Sign in again to continue. Any unfinished payment is saved for recovery."
             }
             catch POSError.savedCheckoutUnavailable {
@@ -403,31 +486,45 @@ private struct RestorableQuote: Decodable {
         return "api/mobile/v1/workspaces/\(workspace)/pos/registers/\(register)"
     }
     func login() {
-        perform { try await self.signIn.signIn(api: self.api); self.signedIn = true; try await self.loadWorkspaces() }
+        perform { try await self.signIn.signIn(api: self.api); self.signedIn = true; try await self.restoreStartup() }
     }
     func loginWithGoogle() {
-        perform { try await self.signIn.signIn(api: self.api, method: .google); self.signedIn = true; try await self.loadWorkspaces() }
+        perform { try await self.signIn.signIn(api: self.api, method: .google); self.signedIn = true; try await self.restoreStartup() }
     }
     func loadWorkspaces() async throws {
+        let session = api.token
         let response: WorkspaceList = try await api.request("api/mobile/v1/workspaces")
+        guard api.token == session else { return }
         workspaces = response.workspaces
+        workspacesLoaded = true
         // Restore identifiers only after checking current membership and device assignments.
-        let saved = SecureStore.read("selected-register").flatMap { try? JSONDecoder().decode(SavedRegister.self, from: $0) }
+        let saved = savedRegisterSelection()
         let slug = pending?.workspace ?? selectedWorkspace?.slug ?? saved?.workspace
         guard let workspace = workspaces.first(where: { $0.slug == slug }) else {
+            invalidateRegisterEnrichment()
             selectedWorkspace = nil; selectedRegister = nil; registerLoaded = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; bundleComponents = [:]; bundleLines = []; tapReady = false
             return
         }
         selectedWorkspace = workspace
         let result: RegisterList = try await api.request("api/mobile/v1/workspaces/\(workspace.slug)/pos/registers")
+        guard api.token == session, selectedWorkspace?.slug == workspace.slug else { return }
         registers = result.registers
         let registerID = POSOperatorRegisterSelection.pick(pending: pending?.register, current: selectedRegister?.id,
             manual: manuallySelectedRegister, recommended: result.operatorContext?.recommendedRegisterId, saved: saved?.register, hasBasket: hasRegisterBasket)
         guard let register = registers.first(where: { $0.id == registerID }) else {
+            invalidateRegisterEnrichment()
             selectedRegister = nil; registerLoaded = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; bundleComponents = [:]; bundleLines = []; tapReady = false
             return
         }
         try await loadRegister(register)
+    }
+    private func savedRegisterSelection() -> SavedRegister? {
+        #if DEBUG
+        if POSStartupFixture.enabled {
+            return SavedRegister(workspace: "startup", register: "startup-register")
+        }
+        #endif
+        return SecureStore.read("selected-register").flatMap { try? JSONDecoder().decode(SavedRegister.self, from: $0) }
     }
     func begin(basket: [RegisterBasketLine]) {
         guard pending == nil, !busy else { return }
@@ -435,31 +532,27 @@ private struct RestorableQuote: Decodable {
         selectedCustomer = nil; customers = []; customerQuery = ""; invoiceID = ""
     }
     private func loadRegister(_ register: Register) async throws {
-        if selectedRegister?.id != register.id {
-            registerLoaded = false; tapReady = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; bundleComponents = [:]; bundleLines = []; invoiceID = ""
-        }
         selectedRegister = register
         guard let base else { return }
-        let value: CatalogList = try await api.request(base + "/catalog")
-        applyCatalog(value, base: base)
-        registerLoaded = true
-        let enrollmentToken = api.token
-        Task { [weak self] in
-            guard let self else { return }
-            let settings: CustomerEnrollmentSettings? = try? await self.api.request(base + "/customer-enrollment")
-            guard self.base == base, self.api.token == enrollmentToken else { return }
-            self.customerEnrollmentSettings = settings
+        let session = api.token
+        invalidateRegisterEnrichment()
+        let generation = catalogGeneration
+        if catalogBase != base {
+            registerLoaded = false; tapReady = false; items = []; printingQuotes = []; selectedCustomer = nil; customers = []; quantities = [:]; bundleComponents = [:]; bundleLines = []; invoiceID = ""
+            checkoutRules = []; checkoutRulesVersion = nil; clearOfferDraft()
+            customerEnrollmentSettings = nil; customerCommerce = nil; customerCommerceError = nil
         }
-        // Checkout remains available if offers are unavailable or have not been reviewed.
-        let offers: CheckoutOfferRuleList? = try? await api.request(base + "/checkout-rules/available")
-        checkoutRulesVersion = offers?.version; checkoutRules = offers?.rules ?? []
-        registerLoaded = true
+        let value: CatalogList = try await api.request(base + "/catalog")
+        guard self.base == base, api.token == session, catalogGeneration == generation else { return }
+        applyCatalog(value, base: base, session: session)
         if !initialBasket.isEmpty {
             guard register.catalogSource == "shopify", initialBasket.allSatisfy({ line in
                 value.items.contains(where: { $0.id == line.variantID && line.quantity <= ($0.availableQuantity ?? 99) })
             }) else {
                 quantities = [:]; bundleComponents = [:]; bundleLines = []
                 basketIssue = "Your basket includes products that this register cannot sell. Return to products or choose from the available items below."
+                registerLoaded = true
+                loadRegisterEnrichment(base: base, session: session, generation: generation)
                 return
             }
             quantities = Dictionary(uniqueKeysWithValues: initialBasket.map { ($0.variantID, $0.quantity) })
@@ -467,13 +560,63 @@ private struct RestorableQuote: Decodable {
         }
         if register.catalogSource == "native" {
             let quotes: PrintingQuoteList = try await api.request(base + "/printing-quotes")
+            guard self.base == base, api.token == session, catalogGeneration == generation else { return }
             printingQuotes = quotes.quotes
         } else { printingQuotes = [] }
+        // Only recovery of an existing discounted draft needs its original rule
+        // definitions before reconstruction. A new guest register does not.
+        if savedDraftNeedsOfferRules() {
+            let offers: CheckoutOfferRuleList? = try? await api.request(base + "/checkout-rules/available")
+            guard self.base == base, api.token == session, catalogGeneration == generation else { return }
+            checkoutRulesVersion = offers?.version; checkoutRules = offers?.rules ?? []
+        }
         if let saved = pending, saved.workspace == selectedWorkspace?.slug, saved.register == register.id, sale == nil {
             try await recover()
         }
-        let blockers = register.setupBlockers ?? register.blockers
-        if !tapReady && pending?.collectionRequested != true && !blockers.contains(where: { $0 != "merchant_evidence_stale" }) { await initializeTapToPay() }
+        guard self.base == base, api.token == session, catalogGeneration == generation else { return }
+        registerLoaded = true
+        loadRegisterEnrichment(base: base, session: session, generation: generation)
+    }
+    private func invalidateRegisterEnrichment() {
+        catalogGeneration += 1
+        enrollmentTask?.cancel(); offersTask?.cancel(); deferredOffers = nil
+    }
+    private func clearSessionEnrichment() {
+        catalogBase = nil
+        checkoutRules = []; checkoutRulesVersion = nil; clearOfferDraft()
+        customerEnrollmentSettings = nil; customerCommerce = nil; customerCommerceError = nil; customerCommerceLoading = false
+        customerCommerceTask?.cancel()
+    }
+    private func savedDraftNeedsOfferRules() -> Bool {
+        guard let pending, !pending.collectionRequested, !pending.sdkStarted,
+              let data = SecureStore.read("quote-draft"), let saved = try? JSONDecoder().decode(SavedQuoteDraft.self, from: data),
+              saved.workspace == pending.workspace, saved.register == pending.register, saved.requestID == pending.requestID else { return false }
+        let decoder = JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase
+        guard let draft = try? decoder.decode(RestorableQuote.self, from: saved.payload) else { return false }
+        return !(draft.discounts ?? []).isEmpty || !(draft.addons ?? []).isEmpty
+    }
+    private func loadRegisterEnrichment(base: String, session: String?, generation: Int) {
+        enrollmentTask = Task { [weak self] in
+            guard let self else { return }
+            let settings: CustomerEnrollmentSettings? = try? await self.api.request(base + "/customer-enrollment")
+            guard !Task.isCancelled, self.base == base, self.api.token == session, self.catalogGeneration == generation else { return }
+            self.customerEnrollmentSettings = settings
+        }
+        offersTask = Task { [weak self] in
+            guard let self else { return }
+            let offers: CheckoutOfferRuleList? = try? await self.api.request(base + "/checkout-rules/available")
+            guard !Task.isCancelled, let offers, self.base == base, self.api.token == session, self.catalogGeneration == generation else { return }
+            self.deferredOffers = (base, session, generation, offers)
+            #if DEBUG
+            self.startupOfferResponses += 1
+            #endif
+            self.applyDeferredOffers()
+        }
+    }
+    private func applyDeferredOffers() {
+        guard let value = deferredOffers, value.base == base, value.token == api.token, value.generation == catalogGeneration,
+              !busy, pending == nil, offerDraftQuoteID == nil, checkoutDiscounts.isEmpty, checkoutAddons.isEmpty else { return }
+        checkoutRules = value.value.rules; checkoutRulesVersion = value.value.version; deferredOffers = nil
     }
     func chooseAvailableProducts() { initialBasket = []; basketIssue = nil; quantities = [:]; bundleComponents = [:]; bundleLines = [] }
     func appActivityChanged(_ active: Bool) {
@@ -493,6 +636,7 @@ private struct RestorableQuote: Decodable {
               readinessRefreshAllowed else { return }
         readinessRefreshWanted = false
         readinessRefreshRunning = true
+        let session = api.token, generation = catalogGeneration
         Task {
             defer {
                 readinessRefreshRunning = false
@@ -500,7 +644,7 @@ private struct RestorableQuote: Decodable {
             }
             do {
                 let response: RegisterList = try await api.request("api/mobile/v1/workspaces/\(workspace.slug)/pos/registers")
-                guard selectedWorkspace?.id == workspace.id, selectedRegister?.id == register.id else { return }
+                guard api.token == session, catalogGeneration == generation, selectedWorkspace?.id == workspace.id, selectedRegister?.id == register.id else { return }
                 guard appIsActive, readinessRefreshAllowed else { readinessRefreshWanted = true; return }
                 guard let current = response.registers.first(where: { $0.id == register.id }) else {
                     tapReady = false
@@ -517,10 +661,10 @@ private struct RestorableQuote: Decodable {
                 selectedRegister = current
                 let blockers = current.setupBlockers ?? current.blockers
                 if !tapReady && !blockers.contains(where: { $0 != "merchant_evidence_stale" }) {
-                    perform { await self.initializeTapToPay() }
+                    await initializeTapToPay()
                 }
             } catch {
-                guard selectedWorkspace?.id == workspace.id, selectedRegister?.id == register.id else { return }
+                guard api.token == session, catalogGeneration == generation, selectedWorkspace?.id == workspace.id, selectedRegister?.id == register.id else { return }
                 if !tapReady { message = "Couldn't refresh payment readiness. Check your connection and try again." }
             }
         }
@@ -539,6 +683,7 @@ private struct RestorableQuote: Decodable {
     }
     func choose(_ workspace: Workspace) {
         guard pending == nil else { return }
+        guard !setupInProgress else { message = "Payment setup is finishing. Change business after it completes."; return }
         perform {
             self.manuallySelectedRegister = nil
             self.selectedWorkspace = workspace; self.selectedRegister = nil; self.registerLoaded = false; self.tapReady = false; self.selectedCustomer = nil; self.customers = []; self.items = []; self.quantities = [:]; self.bundleComponents = [:]; self.bundleLines = []; self.invoiceID = ""
@@ -551,6 +696,7 @@ private struct RestorableQuote: Decodable {
     }
     func chooseRegister(_ register: Register) {
         guard pending == nil else { return }
+        guard !setupInProgress else { message = "Payment setup is finishing. Change register after it completes."; return }
         perform {
             self.quantities = [:]; self.bundleComponents = [:]; self.bundleLines = []
             try await self.loadRegister(register)
@@ -565,24 +711,50 @@ private struct RestorableQuote: Decodable {
         perform { await self.initializeTapToPay() }
     }
     private func initializeTapToPay() async {
-        guard let base, !setupInProgress, appIsActive, !collector.hasInFlightPayment, pending?.refundRequestID == nil,
+        guard signedIn, let session = api.token, let base, !setupInProgress, setupTask == nil, appIsActive, !collector.hasInFlightPayment, pending?.refundRequestID == nil,
               pending == nil || (pending?.workspace == selectedWorkspace?.slug && pending?.register == selectedRegister?.id),
               pending == nil || (pending?.collectionRequested == false && pending?.sdkStarted == false && sale?.state == "quoted") else { return }
         setupInProgress = true
-        defer { setupInProgress = false }
+        let generation = catalogGeneration, registerID = selectedRegister?.id, workspaceID = selectedWorkspace?.id
+        let task = Task { await self.finishTapToPaySetup(base: base, session: session, generation: generation, workspaceID: workspaceID, registerID: registerID) }
+        setupTask = task
+        await task.value
+        setupTask = nil; setupInProgress = false
+    }
+    private func finishTapToPaySetup(base: String, session: String, generation: Int, workspaceID: Int?, registerID: String?) async {
+        func current() -> Bool {
+            signedIn && api.token == session && self.base == base && catalogGeneration == generation &&
+                selectedWorkspace?.id == workspaceID && selectedRegister?.id == registerID
+        }
         do {
             let auth: DeviceAuthorization = try await self.api.request(base + "/authorize-device", method: "POST", body: [:])
-            guard appIsActive, !collector.hasInFlightPayment, self.base == base, pending?.refundRequestID == nil,
+            guard current(), appIsActive, !collector.hasInFlightPayment, pending?.refundRequestID == nil,
                   pending == nil || (pending?.workspace == selectedWorkspace?.slug && pending?.register == selectedRegister?.id),
                   pending == nil || (pending?.collectionRequested == false && pending?.sdkStarted == false && sale?.state == "quoted") else { return }
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") {
-                simulatedReadinessSetups += 1; tapReady = true; return
-            }
+                if POSStartupFixture.enabled {
+                    simulatedSetupCallbackPending = true
+                    defer { simulatedSetupCallbackPending = false }
+                    try await POSStartupFixture.waitForSetup()
+                }
+            } else { try await collector.setup(auth, diagnostics: diagnostics) }
+            #else
+            try await collector.setup(auth, diagnostics: diagnostics)
             #endif
-            try await self.collector.setup(auth, diagnostics: self.diagnostics)
-            self.tapReady = true
+            guard current() else {
+                if !signingOutAfterSetup && !collector.hasInFlightPayment { await collector.signOut() }
+                return
+            }
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") { simulatedReadinessSetups += 1 }
+            #endif
+            tapReady = true
         } catch {
+            guard current() else {
+                if !signingOutAfterSetup && !collector.hasInFlightPayment { await collector.signOut() }
+                return
+            }
             tapReady = false
             message = "Tap to Pay needs attention. Open Account to complete the required step."
         }
@@ -1055,6 +1227,7 @@ private struct RestorableQuote: Decodable {
     }
     private func clearOfferDraft() {
         checkoutDiscounts = []; checkoutAddons = []; offerDraftQuoteID = nil; editingBasket = false
+        applyDeferredOffers()
     }
     private var availabilityPoll: Task<Void, Never>?
     private func pollAvailabilityIfNeeded() {
@@ -1417,11 +1590,13 @@ private struct RestorableQuote: Decodable {
     }
     func refreshProducts() {
         guard pending == nil, let base, let workspace = selectedWorkspace, let register = selectedRegister else { return }
+        let session = api.token
         perform {
             let registers: RegisterList = try await self.api.request("api/mobile/v1/workspaces/\(workspace.slug)/pos/registers")
             guard let current = registers.registers.first(where: { $0.id == register.id }) else { throw POSError.unavailable("Choose an available register in Account.") }
+            guard self.base == base, self.api.token == session else { return }
             self.registers = registers.registers; self.selectedRegister = current
-            let result: CatalogList = try await self.api.request(base + "/catalog"); self.applyCatalog(result, base: base)
+            let result: CatalogList = try await self.api.request(base + "/catalog"); self.applyCatalog(result, base: base, session: session)
         }
     }
     func reviewReceiptRewards() {
@@ -1438,6 +1613,7 @@ private struct RestorableQuote: Decodable {
     }
     func countStock(_ item: CatalogItem, quantity: String) {
         guard pending == nil, selectedRegister?.canManageInventory == true, let base, let count = Int(quantity), count >= 0, count <= 1_000_000 else { return }
+        let session = api.token
         perform {
             var body: [String: Any] = [
                 "request_id": UUID().uuidString.lowercased(), "item_id": item.id, "quantity": count,
@@ -1446,11 +1622,13 @@ private struct RestorableQuote: Decodable {
                 body["expected_inventory_pool_id"] = context.pool; body["expected_inventory_context_version"] = context.version
             }
             let result: CatalogList = try await self.api.request(base + "/stock-counts", method: "POST", body: body)
-            self.applyCatalog(result, base: base); self.stockCountGeneration += 1
+            self.applyCatalog(result, base: base, session: session); self.stockCountGeneration += 1
         }
     }
-    private func applyCatalog(_ result: CatalogList, base: String) {
+    private func applyCatalog(_ result: CatalogList, base: String, session: String?) {
+        guard self.base == base, api.token == session else { return }
         items = result.items
+        catalogBase = base
         if let pool = result.inventoryPoolId, let version = result.inventoryContextVersion {
             inventoryContext = (base, pool, version)
         } else { inventoryContext = nil }
@@ -1463,11 +1641,16 @@ private struct RestorableQuote: Decodable {
         rewardMemberAtPurchase = false; rewardPriorOrders = ""; rewardReviewReason = ""; rewardReviewRequestID = nil
     }
     func logout() {
+        guard !setupInProgress, !collector.hasInFlightPayment else {
+            message = setupInProgress ? "Payment setup is finishing. Sign out after it completes." : "Keep this payment open until its SDK interaction finishes."
+            return
+        }
         manuallySelectedRegister = nil
         perform {
             await self.collector.signOut(); try SecureStore.write("session", nil)
             try SecureStore.write("selected-register", nil)
             self.api.token = nil; self.signedIn = false; self.tapReady = false
+            self.workspacesLoaded = false; self.invalidateRegisterEnrichment(); self.clearSessionEnrichment(); self.startupPhase = .ready
             self.selectedWorkspace = nil; self.selectedRegister = nil; self.registerLoaded = false; self.quantities = [:]; self.bundleComponents = [:]; self.bundleLines = []; self.initialBasket = []; self.basketIssue = nil
             self.workspaces = []; self.registers = []; self.items = []; self.sale = nil; self.receipt = nil; self.selectedCustomer = nil; self.customers = []; self.customerQuery = ""; self.customerFirstName = ""; self.customerLastName = ""; self.customerEmail = ""; self.customerPhone = ""
             self.clearReceiptInputs(); self.clearOfferDraft(); self.checkoutRules = []; self.checkoutRulesVersion = nil

@@ -1,6 +1,170 @@
 import XCTest
 
 final class LaunchTests: XCTestCase {
+    private func startupApp(_ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-checkout-ui-tests", "--pos-startup-ui-tests", "--pos-startup-hold-catalog-tests"] + extra
+        app.launch(); return app
+    }
+    private func finishStartup(_ app: XCUIApplication) {
+        let finish = app.buttons["Finish catalog load"]
+        XCTAssertTrue(finish.waitForExistence(timeout: 10)); finish.tap()
+    }
+    private func startupStatus(_ app: XCUIApplication, contains value: String) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", value)).firstMatch
+    }
+    func testSavedStartupUsesOnlyBrandAnimationThenInteractiveCatalogBeforeOffersAndSDK() {
+        let app = startupApp(["--pos-startup-slow-offers-tests", "--pos-startup-slow-setup-tests", "--pos-readiness-ui-tests"])
+        XCTAssertTrue(app.staticTexts["Opening your register…"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Continue with Google"].exists)
+        XCTAssertFalse(app.navigationBars["Account & Tap to Pay"].exists)
+        XCTAssertFalse(app.staticTexts["No matching products"].exists)
+        finishStartup(app)
+        let product = app.buttons["Add Startup candle to basket"]
+        XCTAssertTrue(product.waitForExistence(timeout: 10)); XCTAssertTrue(product.isEnabled)
+        XCTAssertTrue(startupStatus(app, contains: "Offers: pending").exists)
+        XCTAssertTrue(startupStatus(app, contains: "SDK callback: pending").waitForExistence(timeout: 10))
+        product.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.isEnabled)
+        XCTAssertTrue(startupStatus(app, contains: "Catalog reads: 1").exists)
+        app.buttons["Finish optional lookup"].tap(); app.buttons["Finish setup"].tap()
+        XCTAssertTrue(startupStatus(app, contains: "SDK ready: yes").waitForExistence(timeout: 10))
+    }
+    func testWarmSavedStartupRevalidatesWithoutShowingChooserOrOldProducts() {
+        let app = startupApp(); finishStartup(app)
+        XCTAssertTrue(app.buttons["Add Startup candle to basket"].waitForExistence(timeout: 10))
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["Opening your register…"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Add Startup candle to basket"].exists)
+        XCTAssertFalse(app.staticTexts["Startup business"].exists)
+        finishStartup(app)
+        XCTAssertTrue(app.buttons["Add Startup candle to basket"].waitForExistence(timeout: 10))
+        XCTAssertTrue(startupStatus(app, contains: "Catalog reads: 1").exists)
+    }
+    func testStartupWithoutSessionShowsSignInWithoutBusinessData() {
+        let app = startupApp(["--pos-startup-no-session-tests"])
+        XCTAssertTrue(app.buttons["Continue with Google"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["Opening your register…"].exists)
+        XCTAssertFalse(app.staticTexts["Startup business"].exists)
+        XCTAssertFalse(app.segmentedControls.buttons["Products"].exists)
+    }
+    func testStartupFailureHasRetryAndReturnsDirectlyToAuthorizedCatalog() {
+        let app = startupApp(["--pos-startup-fail-once-tests"])
+        let retry = app.buttons["Try again"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 10)); XCTAssertTrue(app.buttons["Account"].exists)
+        XCTAssertFalse(app.buttons["Add Startup candle to basket"].exists)
+        retry.tap(); finishStartup(app)
+        XCTAssertTrue(app.buttons["Add Startup candle to basket"].waitForExistence(timeout: 10))
+        XCTAssertTrue(startupStatus(app, contains: "Catalog reads: 1").exists)
+    }
+    func testStartupPendingPaymentWinsFirstUsableNavigationAndDoesNotReadTwice() {
+        let app = startupApp(["--pos-startup-pending-tests"]); finishStartup(app)
+        XCTAssertTrue(app.navigationBars["Current sale"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.segmentedControls.buttons["Products"].exists)
+        XCTAssertTrue(startupStatus(app, contains: "Original pending: yes").exists)
+        XCTAssertTrue(startupStatus(app, contains: "recovery reads: 2; discards: 0").exists)
+    }
+    func testStartupMissingAttemptRetainsRecoveryAndAccountEscapes() {
+        let app = startupApp(["--pos-startup-pending-tests", "--pos-startup-missing-payment-tests"]); finishStartup(app)
+        XCTAssertTrue(app.buttons["Try again"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Review saved payment"].exists)
+        app.buttons["Account"].tap()
+        XCTAssertTrue(app.navigationBars["Account & Tap to Pay"].waitForExistence(timeout: 10))
+        let close = app.navigationBars["Account & Tap to Pay"].buttons["Close"]
+        let usable = NSPredicate { _, _ in close.exists && close.isEnabled }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: usable, object: nil)], timeout: 10), .completed)
+        close.tap(); app.buttons["Review saved payment"].tap()
+        XCTAssertTrue(app.navigationBars["Current sale"].waitForExistence(timeout: 10))
+        XCTAssertTrue(startupStatus(app, contains: "Original pending: yes").exists)
+        XCTAssertTrue(startupStatus(app, contains: "discards: 0").exists)
+    }
+    func testLateOfferLookupCannotChangeAnActiveQuoteRuleVersion() {
+        let app = startupApp(["--pos-startup-slow-offers-tests"]); finishStartup(app)
+        let product = app.buttons["Add Startup candle to basket"]
+        XCTAssertTrue(product.waitForExistence(timeout: 10)); product.tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Review before payment"].waitForExistence(timeout: 10))
+        app.navigationBars["Current sale"].buttons["Close"].tap()
+        XCTAssertTrue(app.buttons["Finish optional lookup"].waitForExistence(timeout: 5)); app.buttons["Finish optional lookup"].tap()
+        XCTAssertTrue(startupStatus(app, contains: "Offers: pending; responses: 1").waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Payment saved · Open status"].exists)
+    }
+    func testSlowSetupPreventsBusinessSwitchAndSignOutUntilItCompletes() {
+        let app = startupApp(["--pos-startup-slow-setup-tests", "--pos-readiness-ui-tests"]); finishStartup(app)
+        XCTAssertTrue(app.buttons["Add Startup candle to basket"].waitForExistence(timeout: 10))
+        XCTAssertTrue(startupStatus(app, contains: "setup: yes").waitForExistence(timeout: 10))
+        app.buttons["Account & Tap to Pay"].tap()
+        XCTAssertTrue(app.buttons["Connecting this iPhone…"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Connecting this iPhone…"].isEnabled)
+        let details = app.buttons["Account & device details"]
+        for _ in 0..<6 where !details.isHittable { app.swipeUp() }
+        XCTAssertTrue(details.exists); details.tap()
+        let signOut = app.buttons["Sign out"]
+        for _ in 0..<6 where !signOut.isHittable { app.swipeUp() }
+        XCTAssertTrue(signOut.exists); signOut.tap()
+        XCTAssertFalse(app.buttons["Continue with Google"].exists)
+        let change = app.buttons["Change business or register"]
+        for _ in 0..<6 where !change.isHittable { app.swipeDown() }
+        change.tap(); app.buttons["Change business"].tap()
+        let other = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Other business")).firstMatch
+        XCTAssertTrue(other.waitForExistence(timeout: 5)); other.tap()
+        XCTAssertTrue(app.staticTexts["Payment setup is finishing. Change business after it completes."].exists)
+        let register = app.buttons.matching(NSPredicate(format: "label == %@", "Register, Fixture")).firstMatch
+        XCTAssertTrue(register.waitForExistence(timeout: 5)); register.tap()
+        XCTAssertTrue(app.staticTexts["Payment setup is finishing. Change register after it completes."].exists)
+        app.navigationBars["Account & Tap to Pay"].buttons["Close"].tap()
+        app.buttons["Finish setup"].tap()
+        XCTAssertTrue(startupStatus(app, contains: "SDK ready: yes").waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Add Startup candle to basket"].exists)
+        XCTAssertFalse(app.buttons["Add Other candle to basket"].exists)
+    }
+    func testAuthenticationFailureDuringSlowSetupCannotMarkTheOldContextReady() {
+        let app = startupApp(["--pos-startup-slow-setup-tests", "--pos-readiness-ui-tests", "--pos-startup-revoke-on-quote-tests"]); finishStartup(app)
+        let product = app.buttons["Add Startup candle to basket"]
+        XCTAssertTrue(product.waitForExistence(timeout: 10))
+        XCTAssertTrue(startupStatus(app, contains: "SDK callback: pending").waitForExistence(timeout: 10)); product.tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch.tap()
+        XCTAssertTrue(app.buttons["Continue with Google"].waitForExistence(timeout: 10))
+        app.buttons["Finish setup"].tap()
+        XCTAssertTrue(startupStatus(app, contains: "SDK ready: no; setup: no").waitForExistence(timeout: 10))
+        XCTAssertTrue(startupStatus(app, contains: "Scoped enrichment: cleared").exists)
+        XCTAssertFalse(app.staticTexts["Startup business"].exists)
+        XCTAssertTrue(app.buttons["Continue with Google"].exists)
+    }
+    func testStartupFailureActionsStayReachableWhenContentNeedsScrolling() {
+        let app = startupApp(["--pos-startup-pending-tests", "--pos-startup-missing-payment-tests", "--pos-startup-hide-diagnostics-tests"])
+        finishStartup(app)
+        let retry = app.buttons["Try again"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 10))
+        for _ in 0..<6 where !retry.isHittable { app.swipeUp() }
+        XCTAssertTrue(retry.isHittable)
+        let account = app.buttons["Account"]
+        for _ in 0..<6 where !account.isHittable { app.swipeUp() }
+        XCTAssertTrue(account.isHittable)
+        attach(app, name: "Startup failure actions remain reachable")
+        account.tap()
+        let close = app.navigationBars["Account & Tap to Pay"].buttons["Close"]
+        let closable = NSPredicate { _, _ in close.exists && close.isEnabled }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: closable, object: nil)], timeout: 10), .completed)
+        close.tap()
+        let recovery = app.buttons["Review saved payment"]
+        for _ in 0..<6 where !recovery.isHittable { app.swipeUp() }
+        XCTAssertTrue(recovery.isHittable); recovery.tap()
+        XCTAssertTrue(app.navigationBars["Current sale"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Charge '")).firstMatch.exists)
+    }
+    func testAccountShowsTapStatusBeforeOptionalConfigurationCards() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-online-rules-ui-tests", "--pos-enrollment-ui-tests"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Account & Tap to Pay"].waitForExistence(timeout: 10)); app.buttons["Account & Tap to Pay"].tap()
+        let tapStatus = app.staticTexts["Tap to Pay on iPhone"]
+        XCTAssertTrue(tapStatus.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["iPhone setup complete"].isHittable)
+        XCTAssertLessThan(tapStatus.frame.minY, app.staticTexts["Tax location"].frame.minY)
+        XCTAssertLessThan(tapStatus.frame.minY, app.staticTexts["Rewards at checkout"].frame.minY)
+        XCTAssertLessThan(tapStatus.frame.minY, app.staticTexts["Birthday & updates"].frame.minY)
+    }
     func testSignInComesBeforeAnyBusinessCatalog() {
         let app = XCUIApplication(); app.launch()
         XCTAssertTrue(app.buttons["Continue with Google"].waitForExistence(timeout: 10))
@@ -429,10 +593,11 @@ final class LaunchTests: XCTestCase {
     }
 
     func testClosingCompletedSaleClearsBasketAndKeepsReceiptAccessible() {
-        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-completed-ui-tests"]; app.launch()
+        let app = XCUIApplication(); app.launchArguments = ["--pos-catalog-ui-tests", "--pos-checkout-ui-tests", "--pos-completed-ui-tests", "--pos-catalog-initialization-proof-tests"]; app.launch()
         XCTAssertTrue(app.staticTexts["fixture-receipt"].waitForExistence(timeout: 10))
         app.buttons["Close"].tap()
         XCTAssertTrue(app.segmentedControls.buttons["Products"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["Sales"].value as? String, "Catalog fixture initializations 1")
         let basket = app.buttons.matching(NSPredicate(format: "label CONTAINS 'View basket'")).firstMatch
         XCTAssertFalse(basket.isEnabled)
         XCTAssertFalse(app.buttons["Payment saved · Open status"].exists)
