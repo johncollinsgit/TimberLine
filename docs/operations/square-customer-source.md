@@ -299,6 +299,14 @@ Shopify order source IDs are original `store_key:shopify_order_id` pairs, distin
 from the internal `order` row ID. Proven restoration preserves source metadata,
 canonical identity, saved groups, contact permissions, suppressions and rewards.
 
+Restored links commit independently under the existing customer account fence.
+The final batch audit takes that same fence and rechecks current owner authority
+before its user/tenant foreign keys are written, matching source refresh's tenant
+then user lock order. An interrupted or newly unauthorized final audit does not
+roll back previously committed links. Retain the original error and saved cursor;
+review and replay the remaining unowned links through the normal batch service,
+which does not restore an already owned link again.
+
 ```sh
 php artisan marketing:reconcile-customer-sources TENANT_ID --actor=OWNER_ID --limit=500 --after-id=0
 php artisan marketing:reconcile-customer-sources TENANT_ID --actor=OWNER_ID --limit=500 --after-id=0 --apply
