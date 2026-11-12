@@ -139,6 +139,15 @@ Field-service accounting invoices and other unadapted payment providers are
 not yet normalized into this history; their existing authorized views remain
 authoritative. These are coverage gaps, never a complete zero-purchase claim.
 
+Event purchase reads share one tenant/runtime-scoped candidate-ID lookup within
+each HTTP request, so an audience does not repeatedly decrypt every Teams event
+for each customer and purchase. Current candidate records, source review and
+actor permissions are still reloaded and checked. The lookup stores no customer
+payloads and survives neither requests nor queue jobs; console callers rebuild
+it. The existing five-second customer projection bounds refresh after explicit
+attribution, while event occurrence/series provenance and unknown refund
+coverage remain unchanged.
+
 The branded Modern Forestry Pay development build is installed. Its local
 catalog and basket do not yet submit sales. The live POS candidate remains a
 separate draft, and physical payment, canonical-customer association, combined
