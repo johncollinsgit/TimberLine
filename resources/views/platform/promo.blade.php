@@ -33,6 +33,7 @@
             <div class="eb-studio-nav__links" aria-label="Explore Everbranch">
                 <a href="#how-it-works">How it works</a>
                 <a href="#industries">Who it helps</a>
+                <a href="#interactive-demo">Try the demo</a>
                 <a href="#customer-loop">Customer Loop</a>
                 <a class="eb-studio-nav__demo-link" href="{{ route('platform.industry-demo', ['discipline' => 'field']) }}">Explore a system</a>
                 <a href="{{ route('platform.pest-control-fleet-demo') }}">Fleet demo</a>
@@ -60,6 +61,7 @@
                 <p class="eb-studio-hero__lede">Customers, work, messages, files, and the next thing that needs attention, connected in one place that feels like it was made for how your team actually operates.</p>
                 <div class="eb-studio-hero__actions">
                     <a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}">Get started <span aria-hidden="true">↗</span></a>
+                    <a class="eb-studio-button eb-studio-button--light" href="https://teams-demo.theeverbranch.com/#property">Try the demo <span aria-hidden="true">↗</span></a>
                     <button class="eb-studio-play" type="button" data-studio-film-open aria-haspopup="dialog">
                         <span class="eb-studio-play__icon" aria-hidden="true">▶</span>
                         <span>See the Everbranch story</span>
@@ -67,6 +69,27 @@
                 </div>
                 <p class="eb-studio-hero__note">{{ config('product_surfaces.public_offer.summary') }}</p>
                 <p class="eb-studio-hero__note">{{ config('product_surfaces.public_offer.included_note') }}</p>
+            </div>
+        </section>
+
+        <section id="interactive-demo" class="eb-studio-demo" aria-labelledby="interactive-demo-title">
+            <div class="eb-studio-container eb-studio-demo__grid">
+                <div class="eb-studio-section-heading">
+                    <p class="eb-studio-eyebrow">Interactive demo</p>
+                    <h2 id="interactive-demo-title">Try Everbranch with a business like yours.</h2>
+                    <p>Choose a property, assign a repair and follow it to the dashboard. Or try a service job, a retail order or a campus maintenance request.</p>
+                    <a class="eb-studio-button eb-studio-button--dark" href="https://teams-demo.theeverbranch.com/#property">Open the interactive demo <span aria-hidden="true">↗</span></a>
+                    <nav class="eb-studio-demo__types" aria-label="Choose an interactive demo">
+                        <a href="https://teams-demo.theeverbranch.com/#property">Property management</a>
+                        <a href="https://teams-demo.theeverbranch.com/#trades">Service crews</a>
+                        <a href="https://teams-demo.theeverbranch.com/#makers">Retail &amp; makers</a>
+                        <a href="https://teams-demo.theeverbranch.com/#campus">Campus facilities</a>
+                    </nav>
+                    <p class="eb-studio-demo__note">No sign-up. Fictional data and changes saved in your browser. No live bookings, payments or messages.</p>
+                </div>
+                <a class="eb-studio-demo__preview" href="https://teams-demo.theeverbranch.com/#property" aria-label="Open the Everbranch property management demo">
+                    <img src="{{ asset('images/public-site/everbranch-interactive-demo.png') }}" width="1440" height="900" alt="Everbranch property management demo with three fictional properties, photos and a portfolio overview." loading="lazy" decoding="async" />
+                </a>
             </div>
         </section>
 
