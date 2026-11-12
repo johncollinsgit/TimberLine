@@ -49,6 +49,7 @@ struct CustomerCreationRejected: Error { let code: String }
         if let requestSession { request.setValue("Bearer \(requestSession)", forHTTPHeaderField: "Authorization") }
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
         #if DEBUG
+        if POSStartupFixture.enabled { try await POSStartupFixture.wait(path: path) }
         if ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests")
             && ProcessInfo.processInfo.arguments.contains("--pos-customer-search-layout-ui-tests")
             && method == "GET" && path.hasSuffix("/customers") {
@@ -120,6 +121,90 @@ struct CustomerCreationRejected: Error { let code: String }
 }
 
 #if DEBUG
+/// Exercises normal membership/register/catalog restoration through a fully
+/// intercepted transport. It never preloads model state or contacts a provider.
+enum POSStartupFixture {
+    static let originalRequestID = "11111111-1111-4111-8111-111111111111"
+    static var enabled: Bool { ProcessInfo.processInfo.arguments.contains("--pos-startup-ui-tests") && ProcessInfo.processInfo.arguments.contains("--pos-checkout-ui-tests") }
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var counts: [String: Int] = [:]
+    nonisolated(unsafe) private static var offersReleased = false
+    nonisolated(unsafe) private static var setupReleased = false
+    nonisolated(unsafe) private static var catalogReleased = false
+    static func has(_ flag: String) -> Bool { ProcessInfo.processInfo.arguments.contains(flag) }
+    static func count(_ key: String) -> Int { lock.lock(); defer { lock.unlock() }; return counts[key, default: 0] }
+    private static func record(_ key: String) { lock.lock(); defer { lock.unlock() }; counts[key, default: 0] += 1 }
+    static func releaseOffers() { lock.lock(); defer { lock.unlock() }; offersReleased = true }
+    static func releaseSetup() { lock.lock(); defer { lock.unlock() }; setupReleased = true }
+    static func releaseCatalog() { lock.lock(); defer { lock.unlock() }; catalogReleased = true }
+    private static var canLoadCatalog: Bool { lock.lock(); defer { lock.unlock() }; return catalogReleased }
+    private static func released(_ setup: Bool) -> Bool { lock.lock(); defer { lock.unlock() }; return setup ? setupReleased : offersReleased }
+    static func wait(path: String) async throws {
+        if path.hasSuffix("/workspaces") || path.hasSuffix("/registers") || path.hasSuffix("/catalog") {
+            try await Task.sleep(for: .milliseconds(800))
+        }
+        if path.hasSuffix("/checkout-rules/available"), has("--pos-startup-slow-offers-tests") {
+            while !released(false) { try await Task.sleep(for: .milliseconds(50)) }
+        }
+        if path.hasSuffix("/catalog"), has("--pos-startup-hold-catalog-tests") {
+            while !canLoadCatalog { try await Task.sleep(for: .milliseconds(50)) }
+        }
+    }
+    static func waitForSetup() async throws {
+        if has("--pos-startup-slow-setup-tests") {
+            while !released(true) { try await Task.sleep(for: .milliseconds(50)) }
+        }
+    }
+    private static func body(_ request: URLRequest) -> [String: Any] {
+        var data = request.httpBody ?? Data()
+        if data.isEmpty, let stream = request.httpBodyStream {
+            stream.open(); defer { stream.close() }
+            var buffer = [UInt8](repeating: 0, count: 1024)
+            while stream.hasBytesAvailable { let length = stream.read(&buffer, maxLength: buffer.count); if length <= 0 { break }; data.append(buffer, count: length) }
+        }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+    }
+    static func response(_ request: URLRequest) throws -> (Int, Data)? {
+        guard enabled, let path = request.url?.path else { return nil }
+        func json(_ value: [String: Any], status: Int = 200) throws -> (Int, Data) { (status, try JSONSerialization.data(withJSONObject: value)) }
+        if path.hasSuffix("/workspaces") {
+            record("workspaces")
+            if has("--pos-startup-fail-once-tests"), count("workspaces") == 1 { return try json(["error": ["code": "fixture_unavailable"]], status: 503) }
+            return try json(["workspaces": [["id": 1, "name": "Startup business", "slug": "startup"], ["id": 2, "name": "Other business", "slug": "other"]]])
+        }
+        let other = path.contains("/workspaces/other/")
+        if path.hasSuffix("/registers") {
+            record("registers")
+            return try json(["runtime_id": "fixture", "registers": [["id": other ? "other-register" : "startup-register", "name": "Register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": has("--pos-readiness-ui-tests") ? [] : ["needs_setup"], "guest_checkout": true]], "operator_context": ["status": "assigned", "recommended_register_id": other ? "other-register" : "startup-register"]])
+        }
+        if path.hasSuffix("/catalog") {
+            record("catalog")
+            return try json(["items": [["item_id": String(repeating: other ? "b" : "a", count: 32), "product_key": "startup-candle", "title": other ? "Other candle" : "Startup candle", "variant_label": "8oz", "unit_amount_minor": 2000, "kind": "merchandise", "revision": String(repeating: "d", count: 64), "available_quantity": 2, "availability": "available"]]])
+        }
+        if path.hasSuffix("/checkout-rules/available") { record("offers"); return try json(["version": String(repeating: "f", count: 64), "rules": []]) }
+        if path.hasSuffix("/customer-enrollment") {
+            return try json(["birthday_enabled": true, "birthday_configured": true, "can_manage": true, "can_create_customers": true,
+                "cashier_create_enabled": false, "email_enabled": true, "email_wording": "Fictional email consent", "sms_enabled": false,
+                "sms_wording": "Fictional SMS consent", "version": String(repeating: "d", count: 64)])
+        }
+        if path.hasSuffix("/authorize-device") {
+            record("setup")
+            return try json(["application_id": "fixture", "access_token": "fictional", "location_id": "fixture", "merchant_id": "fixture", "environment": "sandbox", "can_link_apple_account": false])
+        }
+        if path.hasSuffix("/quotes") {
+            if has("--pos-startup-revoke-on-quote-tests") { return try json(["error": ["code": "unauthenticated"]], status: 401) }
+            return try json(["sale_id": "startup-quote", "request_id": body(request)["request_id"] as? String ?? "invalid-fixture-request", "state": "quoted", "stock_state": "reserved", "amount_minor": 2000, "currency": "USD", "receipt_available": false, "canonical_confirmation": false, "recovery_required": false, "collection_ready": true])
+        }
+        if path.contains("/startup-original-payment") {
+            record("recovery")
+            if has("--pos-startup-missing-payment-tests") { return try json(["error": ["code": "quote_not_found"]], status: 404) }
+            return try json(["sale_id": "startup-original-payment", "request_id": originalRequestID, "state": "unknown", "stock_state": "reserved", "amount_minor": 2000, "currency": "USD", "receipt_available": false, "canonical_confirmation": false, "recovery_required": true])
+        }
+        if path.hasSuffix("/discard") { record("discard") }
+        return try json(["error": ["code": "fixture_unavailable"]], status: 404)
+    }
+}
+
 /// Intercepts every request in the fictional checkout UI fixture; it cannot contact a processor.
 final class POSCheckoutFixtureProtocol: URLProtocol {
     private static let lock = NSLock()
@@ -156,6 +241,10 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
         guard let url = request.url else { return }
         do {
             let data: Data
+            if let startup = try POSStartupFixture.response(request) {
+                client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: startup.0, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: startup.1); client?.urlProtocolDidFinishLoading(self); return
+            }
             if let connected = try ConnectedEventFixture.response(request, catalog: Self.catalog()) {
                 client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
                 client?.urlProtocol(self, didLoad: connected); client?.urlProtocolDidFinishLoading(self); return

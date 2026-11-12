@@ -20,6 +20,14 @@ final class EventAudienceDefinition
         return Cache::remember('event-audience-options-v2:'.hash('sha256', (string) config('pos_live.runtime_id')).':'.$tenant, 5, fn () => $this->buildOptions($tenant));
     }
 
+    /** Typed event filters need reviewed event identities, not the lifetime product catalog. */
+    public function optionsForInput(int $tenant, array $input): array
+    {
+        return in_array($input['kind'] ?? null, ['event_buyers', 'captured_contacts'], true)
+            ? ['events' => app(EventCustomerCohort::class)->options($tenant), 'series' => [], 'legacy' => [], 'products' => [], 'scents' => []]
+            : $this->options($tenant);
+    }
+
     private function buildOptions(int $tenant): array
     {
         $events = app(EventCustomerCohort::class)->options($tenant);
@@ -78,12 +86,13 @@ final class EventAudienceDefinition
         return compact('events', 'series', 'legacy', 'products', 'scents');
     }
 
-    public function candidateIds(int $tenant, array $input): array
+    public function candidateIds(int $tenant, array $input, ?array &$cohort = null): array
     {
         $ids = [];
         $query = \App\Models\MarketingProfile::forTenantId($tenant)->whereNull('archived_at')->whereNull('merged_into_profile_id');
         if (in_array($input['kind'], ['event_buyers', 'captured_contacts'], true)) {
-            $ids = app(EventCustomerCohort::class)->read($tenant, (int) $input['event_id'])['profile_ids'];
+            $cohort = app(EventCustomerCohort::class)->read($tenant, (int) $input['event_id'], selectedEvidence: true);
+            $ids = $cohort['profile_ids'];
 
             return $query->whereIn('id', $ids)->orderBy('id')->pluck('id')->all();
         }
@@ -127,7 +136,7 @@ final class EventAudienceDefinition
 
     public function rules(int $tenant, array $input): array
     {
-        $options = $this->options($tenant);
+        $options = $this->optionsForInput($tenant, $input);
         $condition = fn ($field, $value) => ['field' => $field, 'operator' => 'contains_exact', 'value' => (string) $value];
         $owned = function ($key, $value) use ($options): void {
             if (! in_array((string) $value, array_map('strval', array_column($options[$key], 'id')), true)) {

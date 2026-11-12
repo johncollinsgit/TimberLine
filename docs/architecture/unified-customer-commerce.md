@@ -147,7 +147,7 @@ payloads and survives neither requests nor queue jobs; console callers rebuild
 it. The existing five-second customer projection bounds refresh after explicit
 attribution, while event occurrence/series provenance and unknown refund
 coverage remain unchanged.
-Event cohorts and audience rules reuse that same five-second confirmed-purchase
+General event cohorts and audience rules reuse that same five-second confirmed-purchase
 projection once per canonical customer, including exact original-source keys.
 Each cohort still resolves the current tenant-owned canonical root; marketing
 permissions and suppressions are checked separately at preview/send admission.
@@ -159,6 +159,20 @@ the same history after the shared TTL expires. Every hit still resolves current
 tenant/canonical/archive state. A new request, console task or queue job gets no
 retained request result; the shared five-second TTL and fresh channel checks stay
 unchanged.
+
+Typed event-buyer and captured-contact previews use the same original snapshot
+and event-attribution readers in selected-source mode. They select the chosen
+event's external originals and retain native receipts for original-order mirror
+priority, global source/customer conflict checks, current capture dates and
+reviewer permissions. They do not build unrelated lifetime product preferences,
+rewards or membership history. Their options read reviewed event identities
+without loading the full historical catalog. Each resumed preview batch proves
+the current relationship again; canonical identity, contact permission and
+suppression checks remain fresh. Custom, product, series and geographic rules
+retain their full reporting evaluation and message preparation keeps its normal
+eligibility gates. Workspace location coverage groups exact original ZIP/country
+bytes before applying the same Census validation, rather than hydrating every
+customer. These changes do not extend a cache lifetime or establish live latency.
 
 Server-backed Pay checkout now implements optional canonical-customer selection,
 confirmed card, cash and rewards-only completion, audited later customer

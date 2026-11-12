@@ -1,3 +1,19 @@
+## 2026-11-12 — Pay startup and selected-event previews
+
+Pay shows one Everbranch loading animation while restoring the authorized
+register and catalog, then opens the usable register or original saved payment.
+The animation respects Reduce Motion and adds no minimum delay. Optional offers,
+enrollment and SDK setup load separately; a failed restore offers retry, Account
+and saved-payment review. Account places iPhone payment setup directly below the
+selected register, before tax, rewards and enrollment controls.
+
+Event-buyer and captured-contact previews check the selected event's original
+purchase and capture evidence through the shared customer readers. They skip
+unrelated lifetime catalog, preference, rewards and membership work. Audience
+membership retains current canonical identity, source review and channel eligibility
+checks. Missing-location totals use grouped original ZIP/country values with the
+same Census validation.
+
 ## 2026-11-11: Public interactive demo entry
 
 The guest homepage links to the branded interactive demo from the hero and
