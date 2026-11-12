@@ -34,6 +34,24 @@ final class CustomerLocationDistance
         return $result;
     }
 
+    /** Exact current coverage, aggregating equal bytes before validating with the same ZIP rules. */
+    public function missingProfileCount(int $tenant): int
+    {
+        $missing = 0;
+        // HEX keeps MySQL's case/accent-insensitive collation from combining a
+        // valid country/ZIP with different, invalid original text. SQLite agrees.
+        $groups = \App\Models\MarketingProfile::forTenantId($tenant)->whereNull('archived_at')->whereNull('merged_into_profile_id')
+            ->selectRaw('HEX(postal_code) AS postal_hex, HEX(country) AS country_hex, COUNT(*) AS profile_count')
+            ->groupByRaw('HEX(postal_code), HEX(country)')->cursor();
+        foreach ($groups as $group) {
+            if ($this->point($group->postal_hex === null ? null : hex2bin($group->postal_hex), $group->country_hex === null ? null : hex2bin($group->country_hex)) === null) {
+                $missing += (int) $group->profile_count;
+            }
+        }
+
+        return $missing;
+    }
+
     public function miles(?array $from, ?array $to): ?float
     {
         foreach ([$from, $to] as $point) {

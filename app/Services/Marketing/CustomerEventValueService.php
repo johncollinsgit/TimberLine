@@ -57,9 +57,7 @@ class CustomerEventValueService
         $journey = [];
         foreach ($purchases as $purchase) {
             $date = $this->date($purchase['occurred_at'] ?? null);
-            $valid = ($purchase['confirmed'] ?? false) === true && $date && $date <= $now
-                && is_int($purchase['amount_minor'] ?? null) && $purchase['amount_minor'] >= 0
-                && is_string($purchase['currency'] ?? null) && $purchase['currency'] !== '';
+            $valid = $this->validPurchase($purchase, $date, $now);
             if (($purchase['confirmed'] ?? false) && ! $valid) {
                 $issues[] = 'purchase_timing_or_amount_unknown';
             }
@@ -112,6 +110,43 @@ class CustomerEventValueService
             'issues' => array_values(array_unique($issues)),
             'basis' => 'First recorded contact, each purchase event and membership conversion are separate relationships. Later linked activity is correlation; causal credit is unknown. Values are observed paid totals after recorded refunds, including tax, not accounting revenue or contribution margin.',
         ];
+    }
+
+    /** Exact event relationships without rebuilding unrelated lifetime value, rewards or membership. */
+    public function eventSourceRelations(MarketingProfile $profile, int $tenant, int $event, array $sources): array
+    {
+        $profile = (int) $profile->tenant_id === $tenant ? $this->identities->byId($tenant, (int) $profile->id) : null;
+        abort_unless($profile && $profile->archived_at === null && $this->reviewedEvent($tenant, $event), 404);
+        $now = CarbonImmutable::now('UTC');
+        $issues = [];
+        $links = $this->profileLinks($profile, $tenant, $issues, $sources);
+        $captures = $this->captures($links, $profile, $tenant, $now, $issues);
+        try {
+            $history = $sources ? app(CustomerCommerceSnapshotService::class)->forSelectedSources($profile, $tenant, $sources)
+                : ['customer_id' => (int) $profile->id, 'purchases' => [], 'has_more' => false, 'issues' => []];
+        } catch (\Throwable) {
+            $history = ['customer_id' => (int) $profile->id, 'purchases' => [], 'has_more' => true, 'issues' => ['customer_history_unavailable']];
+        }
+        abort_unless((int) $history['customer_id'] === (int) $profile->id, 409, 'Event customer identities changed. Refresh the event.');
+        $keys = [];
+        foreach ($history['purchases'] as $purchase) {
+            if ($this->validPurchase($purchase, $this->date($purchase['occurred_at'] ?? null), $now)
+                && ($this->purchaseEvent($purchase, $links, $tenant, $profile, $now, $issues)['event']['id'] ?? null) === $event) {
+                $keys[] = $purchase['source'].':'.$purchase['source_id'];
+            }
+        }
+        $this->assertCurrentProfile($tenant, (int) $profile->id);
+
+        return ['customer_id' => (int) $profile->id, 'confirmed_source_keys' => $keys,
+            'capture_link_ids' => collect($captures)->where('event.id', $event)->pluck('source_link_id')->all(),
+            'has_more' => $history['has_more'], 'issues' => array_values(array_unique([...$issues, ...$history['issues']]))];
+    }
+
+    private function validPurchase(array $purchase, ?CarbonImmutable $date, CarbonImmutable $now): bool
+    {
+        return ($purchase['confirmed'] ?? false) === true && $date && $date <= $now
+            && is_int($purchase['amount_minor'] ?? null) && $purchase['amount_minor'] >= 0
+            && is_string($purchase['currency'] ?? null) && $purchase['currency'] !== '';
     }
 
     /** Event cohort uses the existing capture/confirmed-receipt source definitions. */
@@ -185,7 +220,7 @@ class CustomerEventValueService
             409, 'Customer identity changed. Refresh before displaying event value.');
     }
 
-    private function profileLinks(MarketingProfile $profile, int $tenant, array &$issues): Collection
+    private function profileLinks(MarketingProfile $profile, int $tenant, array &$issues, ?array $selected = null): Collection
     {
         $aliasIds = [(int) $profile->id];
         $frontier = $aliasIds;
@@ -204,9 +239,19 @@ class CustomerEventValueService
             $issues[] = 'capture_coverage_incomplete';
         }
 
-        return $captures->take(5000)->whereIn('marketing_profile_id', $aliasIds)->concat(
-            MarketingProfileLink::forTenantId($tenant)->whereIn('marketing_profile_id', $aliasIds)->where('source_type', '!=', 'pos_event_capture')->get()
-        );
+        $other = MarketingProfileLink::forTenantId($tenant)->whereIn('marketing_profile_id', $aliasIds)->where('source_type', '!=', 'pos_event_capture');
+        if ($selected !== null) {
+            if (! $selected) {
+                return $captures->take(5000);
+            }
+            $other->where(function ($query) use ($selected): void {
+                foreach (collect($selected)->groupBy('type') as $type => $sources) {
+                    $query->orWhere(fn ($query) => $query->where('source_type', $type)->whereIn('source_id', $sources->pluck('id')));
+                }
+            });
+        }
+
+        return $captures->take(5000)->concat($other->get());
     }
 
     private function captures(Collection $links, MarketingProfile $profile, int $tenant, CarbonImmutable $now, array &$issues): array

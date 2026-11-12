@@ -18,7 +18,12 @@ struct EverbranchRegisterView: View {
     }
     var body: some View {
         Group {
-            if model.pending != nil && !basket && showRecovery { POSView(onClose: { showRecovery = false }, onAccount: { showRecovery = false; account = true }, screen: .checkout, model: model) }
+            if model.startupPhase != .ready {
+                PayStartupView(failed: model.startupPhase == .failed, message: model.message, busy: model.busy,
+                    retry: model.retryStartup, account: { account = true },
+                    recovery: model.pending == nil ? nil : { showRecovery = true; model.openStartupRecovery() })
+            }
+            else if model.pending != nil && !basket && showRecovery { POSView(onClose: { showRecovery = false }, onAccount: { showRecovery = false; account = true }, screen: .checkout, model: model) }
             else if model.signedIn && model.registerLoaded && model.selectedRegister?.catalogSource == "native" && model.selectedRegister?.guestCheckout != true {
                 // Retain the original service/invoice lane until its merchant activates the stock adapter.
                 POSView(screen: .checkout, model: model)
@@ -28,20 +33,90 @@ struct EverbranchRegisterView: View {
             } else { POSView(screen: .setup, model: model) }
         }
         .background(PayTheme.paper)
+        .task { model.start() }
         .sheet(isPresented: $basket, onDismiss: {
             if model.sale?.canLeave == true && model.pending?.refundRequestID == nil { model.nextSale() }
         }) { POSView(onClose: { basket = false }, screen: .checkout, model: model) }
         .sheet(isPresented: $customerLookup, onDismiss: { if model.base == lookupRegister { model.selectedCustomer = previousCustomer }; previousCustomer = nil; lookupRegister = nil; model.refreshCustomerCommerce() }) {
             POSView(onClose: { customerLookup = false }, screen: .customers, model: model)
         }
-        .sheet(isPresented: $account) { POSView(onClose: { account = false }, onOpenRegister: { account = false }, screen: .setup, model: model) }
+        .sheet(isPresented: $account) { POSView(onClose: { account = false }, onOpenRegister: { model.openLoadedStartupRegister(); account = false }, screen: .setup, model: model) }
         .onChange(of: model.completedSaleGeneration) { _, _ in basket = false; showRecovery = false }
         .onChange(of: model.editingBasket) { _, editing in if editing { showRecovery = false; basket = true } }
         .onChange(of: model.signedIn) { _, value in if !value { previousCustomer = nil; lookupRegister = nil; customerLookup = false; account = false; basket = false } }
         .modifier(ReadinessRefreshObserver(model: model, account: $account, basket: $basket))
         #if DEBUG
+        .overlay(alignment: .bottom) {
+            if POSStartupFixture.enabled, model.startupPhase == .restoring, POSStartupFixture.has("--pos-startup-hold-catalog-tests") {
+                Button("Finish catalog load") { POSStartupFixture.releaseCatalog() }.padding(8)
+            } else if POSStartupFixture.enabled, model.startupPhase != .restoring, !POSStartupFixture.has("--pos-startup-hide-diagnostics-tests") {
+                VStack(spacing: 2) {
+                    Text("Catalog reads: \(POSStartupFixture.count("catalog")); recovery reads: \(POSStartupFixture.count("recovery")); discards: \(POSStartupFixture.count("discard"))")
+                    Text("Offers: \(model.checkoutRulesVersion == nil ? "pending" : "loaded"); responses: \(model.startupOfferResponses); SDK ready: \(model.tapReady ? "yes" : "no"); setup: \(model.setupInProgress ? "yes" : "no")")
+                    Text("Original pending: \(model.pending?.saleID == "startup-original-payment" ? "yes" : "no")")
+                    Text("SDK callback: \(model.simulatedSetupCallbackPending ? "pending" : "idle")")
+                    Text("Scoped enrichment: \(model.startupEnrichmentCleared ? "cleared" : "loaded")")
+                    if POSStartupFixture.has("--pos-startup-slow-offers-tests") { Button("Finish optional lookup") { POSStartupFixture.releaseOffers() } }
+                    if POSStartupFixture.has("--pos-startup-slow-setup-tests") { Button("Finish setup") { POSStartupFixture.releaseSetup() } }
+                }.font(.caption2).padding(4).background(PayTheme.cream).accessibilityIdentifier("startup-fixture-status")
+            }
+        }
         .onAppear { if ProcessInfo.processInfo.arguments.contains("--pos-completed-sheet-ui-tests") { showRecovery = false } }
         #endif
+    }
+}
+
+private struct PayStartupView: View {
+    let failed: Bool
+    let message: String?
+    let busy: Bool
+    let retry: () -> Void
+    let account: () -> Void
+    let recovery: (() -> Void)?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var breathing = false
+
+    var body: some View {
+        GeometryReader { geometry in
+        ZStack(alignment: .bottom) {
+            PayTheme.paper.ignoresSafeArea()
+            Image("RegisterMountains").resizable().scaledToFill().frame(width: geometry.size.width, height: 180).clipped()
+                .opacity(0.14).accessibilityHidden(true).allowsHitTesting(false)
+            if failed {
+                ScrollView {
+                    VStack(spacing: 20) {
+                        brand
+                    Text(message ?? "Your register couldn't load. Check your connection and try again.")
+                        .font(.body).multilineTextAlignment(.center).foregroundStyle(PayTheme.muted)
+                    Button("Try again", action: retry).buttonStyle(PayButtonStyle()).disabled(busy).frame(maxWidth: 280)
+                    if let recovery { Button("Review saved payment", action: recovery).buttonStyle(PayButtonStyle(primary: false)).disabled(busy).frame(maxWidth: 280) }
+                    Button("Account", action: account).frame(minHeight: 44).foregroundStyle(PayTheme.ink).disabled(busy)
+                    }.padding(32).frame(maxWidth: .infinity)
+                }
+            } else {
+                VStack(spacing: 20) {
+                    Spacer(); brand
+                    Text("Opening your register…").font(.subheadline).foregroundStyle(PayTheme.muted)
+                    Spacer(); Spacer().frame(height: 80)
+                }.padding(32)
+            }
+        }.frame(width: geometry.size.width, height: geometry.size.height)
+        .accessibilityIdentifier(failed ? "startup-error" : "startup-loading")
+        .onAppear { breathing = !reduceMotion }
+        .onChange(of: reduceMotion) { _, value in breathing = !value }
+        }
+    }
+    private var brand: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                Circle().stroke(PayTheme.ink.opacity(0.10), lineWidth: 1).frame(width: 104, height: 104)
+                    .scaleEffect(breathing && !reduceMotion && !failed ? 1.16 : 1)
+                Image(systemName: "leaf.fill").font(.system(size: 44, weight: .light)).foregroundStyle(PayTheme.ink)
+                    .scaleEffect(breathing && !reduceMotion && !failed ? 1.06 : 1)
+            }.animation(reduceMotion || failed ? nil : .easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: breathing).accessibilityHidden(true)
+            Text("Everbranch Pay").font(.system(.largeTitle, design: .serif).weight(.semibold)).foregroundStyle(PayTheme.ink)
+                .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.5)
+        }
     }
 }
 

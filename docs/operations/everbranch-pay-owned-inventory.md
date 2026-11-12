@@ -94,6 +94,20 @@ reviewed mix-and-match bundles use one component sheet. Labeled pills replace
 small navigation arrows. Search must not zoom or allow the basket dock to cover
 product controls while the keyboard is open.
 
+A saved session opens through one Everbranch Pay loading view while current
+membership, assigned register and catalog are restored. An original pending
+payment opens its recovery before Products. A failed restore offers retry,
+Account and saved-payment review without clearing the original request. The
+animation respects Reduce Motion and adds no minimum wait.
+
+Optional enrollment, offers and automatic SDK setup run after the catalog is
+usable. Restoring a discounted saved draft may still need its original offer
+rules. Session/register/generation checks fence asynchronous enrichment, and SDK
+setup is serialized with register changes and sign-out. Late offers wait until
+the active quote or draft has ended. This separates a usable basket from payment
+readiness; the existing server admission, SDK preflight and physical acceptance
+requirements still govern collection.
+
 The unused 57 MB bundled photo demo is excluded from application resources;
 the installed register loads live catalog images. Catalog import paginates the
 complete active catalog and images. It imports

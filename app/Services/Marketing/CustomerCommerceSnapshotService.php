@@ -50,6 +50,16 @@ class CustomerCommerceSnapshotService
         return $this->snapshot($profile, $tenantId, 5000);
     }
 
+    /** Internal event relationship evidence; source selection never bypasses original admission or mirror priority. */
+    public function forSelectedSources(MarketingProfile $profile, int $tenantId, array $sources): array
+    {
+        abort_unless(count($sources) <= 5000 && collect($sources)->every(fn ($source) => is_array($source)
+            && in_array($source['type'] ?? null, ['pos_sale', 'order', 'square_order', 'square_payment', 'website_order'], true)
+            && is_string($source['id'] ?? null) && $source['id'] !== ''), 422);
+
+        return $this->snapshot($profile, $tenantId, 5000, [], $sources);
+    }
+
     /** Server-internal prior-history read for an already verified receipt attribution. */
     public function forReceiptAttributionHistory(MarketingProfile $profile, int $tenantId, object $sale, array $payment): array
     {
@@ -87,7 +97,7 @@ class CustomerCommerceSnapshotService
         return $this->snapshot($profile, $tenantId, 100, $excluded);
     }
 
-    private function snapshot(MarketingProfile $profile, int $tenantId, int $limit, array $excluded = []): array
+    private function snapshot(MarketingProfile $profile, int $tenantId, int $limit, array $excluded = [], ?array $selected = null): array
     {
         $canonical = $this->identities->byId($tenantId, (int) $profile->id);
         if (! $canonical || $tenantId <= 0) {
@@ -95,14 +105,38 @@ class CustomerCommerceSnapshotService
         }
 
         $ids = $this->aliasIds($canonical, $tenantId);
+        $selection = null;
+        if ($selected !== null) {
+            $keys = collect($selected)->map(fn ($source) => $source['type'].':'.$source['id'])->all();
+            $selection = collect($selected)->groupBy('type')->map(fn ($rows) => $rows->pluck('id')->all())->all();
+            // A selected tender must still yield to its linked original order.
+            $orders = ! empty($selection['square_payment']) ? SquarePayment::forTenantId($tenantId)->whereIn('square_payment_id', $selection['square_payment'])
+                ->pluck('square_order_id')->filter()->all() : [];
+            $selection['square_order'] = array_values(array_unique([...($selection['square_order'] ?? []), ...$orders]));
+        }
         $links = MarketingProfileLink::query()->forTenantId($tenantId)
-            ->whereIn('marketing_profile_id', $ids)->get()
+            ->whereIn('marketing_profile_id', $ids)
+            ->when($selection !== null, fn ($query) => $query->where(function ($query) use ($selection): void {
+                // All native receipts retain their original mirror priority; unrelated
+                // external customer histories need not be downloaded to prove an event.
+                $query->where('source_type', 'pos_sale');
+                foreach ($selection as $type => $sourceIds) {
+                    if ($sourceIds && $type !== 'pos_sale') {
+                        $query->orWhere(fn ($query) => $query->where('source_type', $type)->whereIn('source_id', $sourceIds));
+                    }
+                }
+            }))->get()
             ->reject(fn ($link) => in_array($link->source_id, $excluded[$link->source_type] ?? [], true));
         $native = $links->contains('source_type', 'pos_sale')
             ? app(\App\Services\Pos\PosCustomerPurchases::class)->forProfiles($tenantId, $ids, $limit, $excluded['pos_sale'] ?? [])
             : ['purchases' => [], 'square_payments' => [], 'square_orders' => [], 'shopify_orders' => [], 'issues' => []];
         $issues = $native['issues'];
         $purchases = collect($native['purchases']);
+
+        if ($selected !== null) {
+            $selectedKeys = array_fill_keys([...$keys, ...array_map(fn ($id) => 'square_order:'.$id, $selection['square_order'])], true);
+            $links = $links->filter(fn ($link) => isset($selectedKeys[$link->source_type.':'.$link->source_id]));
+        }
 
         if ($links->contains('source_type', 'order') && Schema::hasTable('orders')) {
             $orderIds = $this->sourceIds($links, 'order', $tenantId, $canonical, $issues);
@@ -228,9 +262,14 @@ class CustomerCommerceSnapshotService
         }
 
         $purchases = $purchases->unique('id')->sortByDesc('occurred_at')->values();
+        if ($selected !== null) {
+            $selectedKeys = array_fill_keys($keys, true);
+            $purchases = $purchases->filter(fn ($purchase) => isset($selectedKeys[$purchase['source'].':'.$purchase['source_id']]))->values();
+        }
         $shown = $purchases->take($limit)->values();
 
-        $behavior = app(CustomerBehaviorProfile::class)->build($tenantId, $shown->all(), $purchases->count() > $limit, $issues);
+        $behavior = $selected === null ? app(CustomerBehaviorProfile::class)->build($tenantId, $shown->all(), $purchases->count() > $limit, $issues)
+            : ['profile' => null, 'purchases' => $shown->all()];
 
         return [
             'behavior' => $behavior['profile'],
@@ -244,7 +283,7 @@ class CustomerCommerceSnapshotService
             'coverage' => 'explicitly_linked_records_only',
             'has_more' => $purchases->count() > $limit,
             'issues' => array_values(array_unique($issues)),
-            'rewards' => $this->rewards($canonical, $tenantId),
+            'rewards' => $selected === null ? $this->rewards($canonical, $tenantId) : null,
         ];
     }
 

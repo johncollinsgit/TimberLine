@@ -194,9 +194,12 @@ struct POSView: View {
                 if shouldAutoQuote && !model.editingBasket && screen == .checkout && model.registerLoaded && model.pending == nil && model.selectedRegister?.guestCheckout == true && quoteAllowed && !automaticQuoteRequested {
                     automaticQuoteRequested = true; model.quote(); return
                 }
+                let loadWorkspaces = model.needsWorkspaceLoad()
+                let recover = model.needsPresentationRecovery()
+                guard loadWorkspaces || recover else { return }
                 model.perform {
-                    if !model.registerLoaded { try await model.loadWorkspaces() }
-                    if model.pending != nil { try await model.recover() }
+                    if loadWorkspaces { try await model.loadWorkspaces() }
+                    else if recover { try await model.recover() }
                 }
             }
             .onChange(of: model.completedSaleGeneration) { _, _ in onClose?() }
@@ -303,7 +306,7 @@ struct POSView: View {
                             Spacer()
                             if model.selectedWorkspace?.id == workspace.id { Image(systemName: "checkmark.circle.fill") }
                             else { Text("Choose").font(.subheadline.weight(.semibold)).padding(.horizontal, 16).padding(.vertical, 10).background(PayTheme.paper, in: Capsule()) }
-                        }.frame(minHeight: 44)
+                        }.frame(minHeight: 44).contentShape(Rectangle())
                     }
                     Divider()
                     }
@@ -318,7 +321,7 @@ struct POSView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(register.name).font(.body.weight(.semibold))
                                 Text(register.location).font(.subheadline).foregroundStyle(PayTheme.muted)
-                            }.frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                            }.frame(maxWidth: .infinity, minHeight: 52, alignment: .leading).contentShape(Rectangle())
                         }
                     }
                     if model.registers.isEmpty {
@@ -343,6 +346,7 @@ struct POSView: View {
     private var setup: some View {
         VStack(spacing: 16) {
             registerSummary
+            tapToPayStatus
             if model.selectedRegister?.canManageCheckoutRules == true {
                 PayCard(title: "Tax location", icon: "mappin.and.ellipse") {
                     Text("Review where this register sells and its tax calculation.").font(.subheadline).foregroundStyle(PayTheme.muted)
@@ -367,17 +371,20 @@ struct POSView: View {
                     Button("Manage enrollment") { showingEnrollmentSettings = true }.buttonStyle(PayButtonStyle(primary: false))
                 }
             }
-            PayCard(title: "Tap to Pay on iPhone", icon: "wave.3.right") {
-                Label(model.tapReady ? "iPhone setup complete" : "Connect this iPhone", systemImage: model.tapReady ? "checkmark.circle.fill" : "iphone")
-                    .font(.body.weight(.semibold))
-                Text(model.tapReady ? "This iPhone is connected to your business’s Square account. Payment availability is checked separately for each sale." : "Connect Square and complete Apple’s setup to accept contactless cards and digital wallets.")
-                    .font(.subheadline).foregroundStyle(PayTheme.muted)
-                if !setupAllowed { Text("An administrator needs to finish register setup before this iPhone can connect.").font(.subheadline) }
-            }
             PayCard(title: "Purchases & rewards", icon: "person.crop.circle.badge.checkmark") {
                 Text("After payment, optionally link the purchase to a customer. Eligible rewards can be spent online.")
                     .font(.subheadline).foregroundStyle(PayTheme.muted)
             }
+        }
+    }
+
+    private var tapToPayStatus: some View {
+        PayCard(title: "Tap to Pay on iPhone", icon: "wave.3.right") {
+            Label(model.tapReady ? "iPhone setup complete" : "Connect this iPhone", systemImage: model.tapReady ? "checkmark.circle.fill" : "iphone")
+                .font(.body.weight(.semibold))
+            Text(model.tapReady ? "This iPhone is connected to your business’s Square account. Payment availability is checked separately for each sale." : "Connect Square and complete Apple’s setup to accept contactless cards and digital wallets.")
+                .font(.subheadline).foregroundStyle(PayTheme.muted)
+            if !setupAllowed { Text("An administrator needs to finish register setup before this iPhone can connect.").font(.subheadline) }
         }
     }
 
@@ -387,7 +394,8 @@ struct POSView: View {
                 if isSetup {
                     if model.tapReady, let open = onOpenRegister ?? onClose { Button("Open register", action: open).buttonStyle(PayButtonStyle()) }
                     else {
-                        Button("Set up Tap to Pay", action: model.setup).buttonStyle(PayButtonStyle()).disabled(!setupAllowed)
+                        Button(model.setupInProgress ? "Connecting this iPhone…" : "Set up Tap to Pay", action: model.setup)
+                            .buttonStyle(PayButtonStyle()).disabled(!setupAllowed || model.setupInProgress)
                         if let open = onOpenRegister ?? onClose { Button("Open register", action: open).frame(minHeight: 44).disabled(!model.registerLoaded) }
                     }
                 } else {

@@ -73,21 +73,16 @@ class EventAudiencesController extends Controller
         $input = $this->input($request);
         $request->validate(['preview_id' => 'required|uuid']);
         $rules = app(EventAudienceDefinition::class)->rules($tenant->id, $input);
-        $options = app(EventAudienceDefinition::class)->options($tenant->id);
+        $options = app(EventAudienceDefinition::class)->optionsForInput($tenant->id, $input);
         $hash = Contract::hash($rules);
         $key = 'event-audience-preview:'.hash('sha256', implode(':', [$tenant->id, $request->user()->id, $request->session()->getId(), $request->input('preview_id')]));
         $result = Cache::lock($key.':lock', 120)->block(5, function () use ($tenant, $rules, $key, $hash, $input, $options): array {
             $state = Cache::get($key);
+            $cohort = null;
             if (! $state) {
-                $ids = app(EventAudienceDefinition::class)->candidateIds($tenant->id, $input);
-                $missingLocations = Cache::remember('audience-location-coverage-v1:'.$tenant->id, 5, function () use ($tenant): int {
-                    $missing = 0;
-                    foreach (MarketingProfile::forTenantId($tenant->id)->whereNull('archived_at')->whereNull('merged_into_profile_id')->select(['id', 'postal_code', 'country'])->lazyById(1000) as $profile) {
-                        $missing += (int) (app(CustomerLocationDistance::class)->point($profile->postal_code, $profile->country) === null);
-                    }
-
-                    return $missing;
-                });
+                $ids = app(EventAudienceDefinition::class)->candidateIds($tenant->id, $input, $cohort);
+                $missingLocations = Cache::remember('audience-location-coverage-v1:'.$tenant->id, 5,
+                    fn () => app(CustomerLocationDistance::class)->missingProfileCount($tenant->id));
                 $state = ['hash' => $hash, 'ids' => $ids, 'offset' => 0, 'matched' => 0, 'email_eligible' => 0, 'sms_eligible' => 0,
                     'missing_location' => 0, 'workspace_missing_locations' => $missingLocations, 'missing_email_permission' => 0, 'missing_sms_permission' => 0, 'samples' => [], 'review_items' => [], 'as_of' => now()->toIso8601String()];
             }
@@ -96,8 +91,18 @@ class EventAudiencesController extends Controller
             $profiles = MarketingProfile::forTenantId($tenant->id)->whereIn('id', $batch)->whereNull('archived_at')->whereNull('merged_into_profile_id')->get();
             $sms = app(MarketingSmsEligibilityService::class)->evaluateProfiles($profiles, $tenant->id);
             $segment = new MarketingSegment(['tenant_id' => $tenant->id, 'rules_json' => $rules]);
+            $relation = match ($input['kind']) {
+                'event_buyers' => 'purchased', 'captured_contacts' => 'captured', default => null
+            };
+            if ($relation && $batch) {
+                $cohort ??= app(\App\Services\Marketing\EventCustomerCohort::class)->read($tenant->id, (int) $input['event_id'], selectedEvidence: true);
+                $state['review_items'] = [...$state['review_items'], ...$cohort['review_items']];
+            }
             foreach ($profiles as $profile) {
-                $evaluated = app(MarketingSegmentEvaluator::class)->evaluateProfile($segment, $profile);
+                // These exact typed rules contain only the selected event relationship.
+                // The shared cohort already proved it through the original purchase readers.
+                $evaluated = $relation ? ['matched' => isset($cohort['relations'][$profile->id][$relation]), 'metrics' => [], 'reasons' => []]
+                    : app(MarketingSegmentEvaluator::class)->evaluateProfile($segment, $profile);
                 if (! app(CustomerLocationDistance::class)->point($profile->postal_code, $profile->country)) {
                     $state['missing_location']++;
                 }

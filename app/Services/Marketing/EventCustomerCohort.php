@@ -21,7 +21,7 @@ class EventCustomerCohort
         })->values()->all();
     }
 
-    public function read(int $tenant, int $eventId, ?TeamOperationRecord $teamsEvent = null): array
+    public function read(int $tenant, int $eventId, ?TeamOperationRecord $teamsEvent = null, bool $selectedEvidence = false): array
     {
         $link = app(StockLedger::class)->rows('event_links', $tenant)->where('event_id', $eventId)->whereNotNull('reviewed_by')->first();
         abort_unless($link, 404);
@@ -90,6 +90,8 @@ class EventCustomerCohort
         $histories = [];
         $sourceProfiles = $this->profiles($tenant, collect($groups)->flatMap(fn ($group) => $group['links']->pluck('marketing_profile_id'))->unique()->all());
         $admittedSources = [];
+        $resolved = [];
+        $selected = [];
         foreach ($groups as $group) {
             $profiles = $sourceProfiles->only($group['links']->pluck('marketing_profile_id')->all())->values();
             if ($profiles->count() !== $group['links']->pluck('marketing_profile_id')->unique()->count()) {
@@ -102,6 +104,19 @@ class EventCustomerCohort
                 $issues[] = 'Some event/customer identities need review.';
 
                 continue;
+            }
+            $resolved[] = compact('group', 'profiles', 'profile');
+            if (isset($group['purchase_id'])) {
+                $selected[$profile->id][$group['purchase_type'].':'.$group['purchase_id']] = ['type' => $group['purchase_type'], 'id' => (string) $group['purchase_id']];
+            }
+        }
+        foreach ($resolved as $row) {
+            ['group' => $group, 'profiles' => $profiles, 'profile' => $profile] = $row;
+            if ($selectedEvidence) {
+                $history = $histories[$profile->id] ??= app(CustomerEventValueService::class)->eventSourceRelations($profile, $tenant, $eventId, array_values($selected[$profile->id] ?? []));
+                if ($group['relation'] === 'captured' && ! $group['links']->contains(fn ($link) => in_array((int) $link->id, $history['capture_link_ids'], true))) {
+                    continue;
+                }
             }
             if (isset($group['purchase_id'])) {
                 // Same bounded reporting projection used by audience rules. Rebuilding all
