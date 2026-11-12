@@ -16,8 +16,11 @@ uses(Tests\Support\PosLiveTestCase::class);
 
 beforeEach(function (): void {
     $this->tenant = Tenant::create(['name' => 'Fictional customer checkout', 'slug' => 'customer-scope-'.Str::random(8)]);
-    $this->shop = ShopifyStore::create(['tenant_id' => $this->tenant->id, 'store_key' => 'counter_%!',
-        'shop_domain' => 'fictional-checkout.myshopify.com', 'access_token' => 'fixture-not-used']);
+    // Disposable MySQL retains application fixtures between POS cases. Keep the
+    // globally unique store binding isolated while exercising literal wildcards.
+    $key = 'counter_'.$this->tenant->id.'_%!';
+    $this->shop = ShopifyStore::create(['tenant_id' => $this->tenant->id, 'store_key' => $key,
+        'shop_domain' => 'fictional-checkout-'.$this->tenant->id.'.myshopify.com', 'access_token' => 'fixture-not-used']);
     $this->profile = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Fictional', 'email' => 'checkout@example.invalid']);
     $this->scope = ['tenant_id' => $this->tenant->id, 'register' => (object) ['catalog_source' => 'shopify',
         'configuration' => app(PosStore::class)->encrypt(['commerce_adapter' => StockPosCommerce::VERSION,
@@ -101,7 +104,7 @@ it('preserves duplicate source conflict checks outside the alias family and rere
 
 it('keeps tenant store prefix and source type fences and ignores malformed Shopify identifiers', function (): void {
     directoryScopeLink($this->tenant->id, $this->profile->id, $this->shop->store_key.':12345');
-    foreach (['counterXab!:777', 'other:12345', 'COUNTER_%!:999', $this->shop->store_key.':001', $this->shop->store_key.':0', $this->shop->store_key.':123oops'] as $source) {
+    foreach ([str_replace('_%!', 'Xab!', $this->shop->store_key).':777', 'other:12345', strtoupper($this->shop->store_key).':999', $this->shop->store_key.':001', $this->shop->store_key.':0', $this->shop->store_key.':123oops'] as $source) {
         directoryScopeLink($this->tenant->id, $this->profile->id, $source);
     }
     directoryScopeLink($this->tenant->id, $this->profile->id, $this->shop->store_key.':777', 'square_customer');
@@ -112,8 +115,8 @@ it('keeps tenant store prefix and source type fences and ignores malformed Shopi
     expect(fn () => app(PosCustomerDirectory::class)->freeze($this->scope, $foreignProfile->id))->toThrow(PosException::class, 'customer_unavailable');
     $this->scope['register']->configuration = app(PosStore::class)->encrypt(['shopify' => ['store_id' => $this->shop->id, 'shop_domain' => 'different.myshopify.com']]);
     expect(fn () => app(PosCustomerDirectory::class)->freeze($this->scope, $this->profile->id))->toThrow(PosException::class, 'shopify_binding_unverified');
-    $foreignStore = ShopifyStore::create(['tenant_id' => $foreign->id, 'store_key' => 'foreign-counter',
-        'shop_domain' => 'foreign-counter.myshopify.com', 'access_token' => 'fixture-not-used']);
+    $foreignStore = ShopifyStore::create(['tenant_id' => $foreign->id, 'store_key' => 'foreign-counter-'.$foreign->id,
+        'shop_domain' => 'foreign-counter-'.$foreign->id.'.myshopify.com', 'access_token' => 'fixture-not-used']);
     $this->scope['register']->configuration = app(PosStore::class)->encrypt(['shopify' => ['store_id' => $foreignStore->id, 'shop_domain' => $foreignStore->shop_domain]]);
     expect(fn () => app(PosCustomerDirectory::class)->freeze($this->scope, $this->profile->id))->toThrow(PosException::class, 'shopify_binding_unverified');
 });
