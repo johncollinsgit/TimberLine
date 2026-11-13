@@ -13,6 +13,13 @@ require an audit of the whole repository or its release history.
   to your change. Do not load the full historical documents by default.
 - Follow existing services and ownership boundaries. Expand inspection when the
   dependency path, a failing test, or a shared contract calls for it.
+- Every current/future customer-touching app must follow
+  [the universal customer profile contract](docs/architecture/unified-customer-commerce.md):
+  one canonical customer per business, shared behavior/history, source provenance
+  and tenant isolation. This is included for all retail tenants. Modern Forestry's
+  current sources are Shopify, Square, Asana and Recharge; future Everbranch retail,
+  Pay, Teams and Subscriptions join that identity after reviewed cutover. Record
+  the source/read-contract mapping in the app README and validate it before launch.
 - Do not turn a visual or copy fix into unrelated refactoring, provider setup,
   billing activation, dependency upgrades, or a new acceptance project.
 - Report a real prerequisite or incompatibility promptly. Fix related regressions

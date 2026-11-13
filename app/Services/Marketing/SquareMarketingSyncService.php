@@ -126,14 +126,15 @@ class SquareMarketingSyncService
             sourceLabel: 'square_orders',
             options: $options,
             tenantId: $tenantId,
-            fetchPage: fn (?string $cursor, int $pageLimit, ?CarbonImmutable $since): array => $fetchClient->searchOrders(
+            fetchPage: fn (?string $cursor, int $pageLimit, ?CarbonImmutable $since): array => $fetchClient->searchLocationOrders(
                 cursor: $cursor,
                 limit: $pageLimit,
                 since: $since,
-                locationIds: $locationIds,
+                locations: $locationIds,
                 dateField: ! empty($options['updated_since']) ? 'updated_at' : 'closed_at'
             ),
             handleItem: function (array $payload, bool $dryRun, array &$summary) use ($tenantId, $config, $sourceOnly): void {
+                abort_if(! empty($config['all_locations_reviewed']) && ! in_array($payload['location_id'] ?? null, $config['location_ids'], true), 409, 'The order belongs to an unreviewed Square location.');
                 $payload['_source_binding'] = app(SquareConnectionContext::class)->publicBinding($config);
                 if ($sourceOnly) {
                     $payload['_everbranch_source_import'] = ['historical_only' => true, 'reward_earning_authority' => false, 'reward_redemption_authority' => false];
@@ -207,6 +208,7 @@ class SquareMarketingSyncService
             tenantId: $tenantId,
             fetchPage: fn (?string $cursor, int $pageLimit, ?CarbonImmutable $since): array => $fetchClient->fetchLocationPayments($cursor, $pageLimit, $since, $config['location_ids'] ?? [], ! empty($options['updated_since'])),
             handleItem: function (array $payload, bool $dryRun, array &$summary) use ($tenantId, $config): void {
+                abort_if(! empty($config['all_locations_reviewed']) && ! in_array($payload['location_id'] ?? null, $config['location_ids'], true), 409, 'The payment belongs to an unreviewed Square location.');
                 $payload['_source_binding'] = app(SquareConnectionContext::class)->publicBinding($config);
                 $paymentResult = $this->upsertSquarePayment($payload, $dryRun, $tenantId);
                 $summary[$paymentResult['action']]++;
@@ -232,6 +234,71 @@ class SquareMarketingSyncService
                 $this->mergeProfileSummary($summary, $result);
             }
         );
+    }
+
+    /** Targeted verified-provider source refresh. No rewards, campaign or inventory effects. */
+    public function reconcileCustomerReferences(array $options): array
+    {
+        $tenant = $this->tenantIdFromOptions($options);
+        abort_unless($tenant && $this->manualRefresh($tenant, $options) && ! empty($options['source_refresh_policy_version']), 403);
+        $ids = array_values(array_unique((array) ($options['customer_ids'] ?? [])));
+        sort($ids);
+        abort_unless($ids && count($ids) <= 100, 422);
+        $config = $this->requireTenantConfig($tenant, $options);
+        abort_unless($config, 409);
+        $client = $this->clientForConfig($config);
+        $options = [...$options, 'limit' => count($ids), 'historical_source_only' => true,
+            'source_binding' => app(SquareConnectionContext::class)->publicBinding($config),
+            'request_context' => ['kind' => 'square_customer_reference_reconciliation', 'requested_customer_ids' => $ids]];
+
+        return $this->runSync('square_customer_references_sync', 'square_original_customer_references', $options,
+            function () use ($client, $ids): array {
+                $responses = $client->bulkRetrieveCustomers($ids);
+                $items = [];
+                foreach ($ids as $id) {
+                    $response = $responses[$id] ?? [];
+                    $items[] = ['requested_id' => $id, 'customer' => $response['customer'] ?? null,
+                        'error_codes' => array_values(array_unique(array_column($response['errors'] ?? [], 'code')))];
+                }
+
+                return ['items' => $items, 'cursor' => null];
+            },
+            function (array $row, bool $dryRun, array &$summary) use ($tenant, $config, $options): void {
+                $payload = $row['customer'];
+                if (! is_array($payload) || ! is_string($payload['id'] ?? null) || $payload['id'] === '') {
+                    $summary['records_skipped']++;
+                    $summary['unresolved_customer_references'][] = ['requested_id' => $row['requested_id'], 'codes' => $row['error_codes']];
+
+                    return;
+                }
+                $payload['_source_binding'] = app(SquareConnectionContext::class)->publicBinding($config);
+                $saved = $this->upsertSquareCustomer($payload, $dryRun, $tenant);
+                $summary[$saved['action']]++;
+                $effective = $dryRun ? $payload : (SquareCustomer::forTenantId($tenant)->where('square_customer_id', $payload['id'])->first()?->raw_payload ?: $payload);
+                $identity = $this->identityFromSquareCustomerPayload($effective);
+                $redirect = $row['requested_id'] !== $payload['id'];
+                if ($redirect) {
+                    $proof = ['requested_customer_id' => $row['requested_id'], 'current_customer_id' => $payload['id'],
+                        'basis' => 'square_bulk_retrieve_customer_redirect', 'observed_at' => now()->toIso8601String()];
+                    $identity['source_links'][] = ['source_type' => 'square_customer', 'source_id' => $row['requested_id'], 'source_meta' => ['square_customer_redirect' => $proof]];
+                    foreach ($identity['source_links'] as &$link) {
+                        $link['source_meta']['square_customer_redirect'] = $proof;
+                    }
+                    unset($link);
+                    $summary['provider_customer_redirects'][] = $proof;
+                }
+                $result = app(SquareCustomerIdentityService::class)->sync($identity, $tenant, $dryRun, [
+                    ...app(SquareConnectionContext::class)->publicBinding($config), 'source_label' => 'square_customer_reference_reconciliation',
+                    'source_id' => $payload['id'], 'create_unmatched' => ! empty($options['create_unmatched']),
+                    'actor_id' => $options['created_by'], 'request_id' => $options['request_id'], 'reconcile_recorded_history' => true,
+                ]);
+                $this->mergeProfileSummary($summary, $result);
+                if (! $dryRun && ! empty($result['profile_id'])) {
+                    $profile = \App\Models\MarketingProfile::forTenantId($tenant)->findOrFail($result['profile_id']);
+                    app(SquareCustomerSource::class)->applyConsent($profile, $effective, ['source_type' => 'square_customer_sync',
+                        'source_id' => $payload['id'], 'details' => ['basis' => 'explicit_provider_unsubscribe_only']]);
+                }
+            }, $tenant);
     }
 
     /** Targeted verified-provider source refresh. No rewards, campaign or inventory effects. */
@@ -1097,6 +1164,9 @@ class SquareMarketingSyncService
         $config = app(SquareConnectionContext::class)->resolve($tenantId, $options['connection_id'] ?? null);
         if ($config && isset($options['expected_connection_generation'])) {
             abort_unless((string) $config['connection_generation'] === (string) $options['expected_connection_generation'], 409, 'The Square connection changed. Refresh its current state first.');
+        }
+        if ($config && ! empty($options['source_refresh_policy_version'])) {
+            $config = app(SquareSourceRefresh::class)->configForPolicy($tenantId, $options['source_refresh_policy_version'], $config);
         }
 
         return $config;

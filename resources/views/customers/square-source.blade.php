@@ -76,6 +76,8 @@
         <article class="eb-square-record">
             <p class="eb-square-record-title"><strong>Square order</strong><span class="eb-square-status">{{ $order['state'] ?? 'state unknown' }}</span></p>
             <p>{{ $squareSourceDate($order['closed_at'] ?? null) }}</p>
+            @if(!empty($order['tax_names']))<p>Original tax place: {{ implode(' · ', $order['tax_names']) }}</p>@endif
+            @if(!empty($order['purchase_place']))<p>Recognized purchase-area ZIPs: {{ implode(', ', $order['purchase_place']['postal_codes']) }}. Customer home address is separate.</p>@endif
             <p class="eb-square-amount">{{ $order['total_amount'] === null ? 'amount unknown' : ($order['currency'] === 'USD' ? number_format($order['total_amount'] / 100, 2) : $order['total_amount'].' minor units') }} {{ $order['currency'] }}</p>
             <ul>@foreach($order['items'] as $item)<li>{{ $item['quantity'] ?? 'quantity unknown' }} × {{ $item['label'] ?? 'original item label unavailable' }} @if($item['variation'])· {{ $item['variation'] }}@endif</li>@endforeach</ul>
             @if(!$order['items'])<p>Original line items are not present in this cached source.</p>@endif

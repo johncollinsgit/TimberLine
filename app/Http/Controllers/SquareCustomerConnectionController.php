@@ -21,6 +21,20 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 /** Core connection controls reuse the established Square sync, identity reviews and import audits. */
 class SquareCustomerConnectionController extends Controller
 {
+    public function reconcileReferences(Request $request, SquareCustomerIdentityService $identities, \App\Services\Marketing\SquareCustomerReferenceReconciliation $service)
+    {
+        [$tenant, $actor] = $this->access($request, $identities);
+        $input = $request->validate(['request_id' => 'required|uuid', 'policy_version' => 'required|string|size:64',
+            'after' => 'nullable|string|max:192', 'apply' => 'required|boolean']);
+        $result = $service->batch($tenant->id, $actor, $input['policy_version'], $input['request_id'], $input['after'] ?? null, 500, (bool) $input['apply']);
+        if ($request->expectsJson()) {
+            return response()->json($result)->header('Cache-Control', 'private, no-store');
+        }
+
+        return redirect()->route('customers.square.index', ['tenant' => $tenant->slug, 'reference_after' => $result['has_more'] ? $result['after'] : null])
+            ->with('toast', ['style' => 'success', 'message' => $result['processed'].' original customer references checked; '.$result['redirects'].' provider redirects and '.$result['reviews_created'].' identity reviews recorded. No messages sent.']);
+    }
+
     public function refreshSettings(Request $request, SquareCustomerIdentityService $identities, \App\Services\Marketing\SquareSourceRefresh $service)
     {
         [$tenant, $actor] = $this->access($request, $identities);
@@ -61,13 +75,13 @@ class SquareCustomerConnectionController extends Controller
     {
         [$tenant, $actor] = $this->access($request, $identities);
         $queryInput = $request->query('customer_query');
-        $input = validator(['customer_query' => is_string($queryInput) ? trim($queryInput) : $queryInput], [
-            'customer_query' => 'nullable|string|min:2|max:120',
+        $input = validator(['customer_query' => is_string($queryInput) ? trim($queryInput) : $queryInput, 'reference_after' => $request->query('reference_after')], [
+            'customer_query' => 'nullable|string|min:2|max:120', 'reference_after' => 'nullable|string|max:192',
         ])->validate();
         $customerQuery = $input['customer_query'] ?? '';
         $lookup = app(TenantCustomerLookup::class);
         $customerSearch = $customerQuery !== '' ? $lookup->search($tenant->id, $customerQuery) : ['customers' => [], 'has_more' => false, 'page' => 1];
-        $runs = MarketingImportRun::query()->where('tenant_id', $tenant->id)->whereIn('type', ['square_customers_sync', 'square_orders_sync', 'square_payments_sync', 'square_cards_sync'])->latest('id')->limit(20)->get();
+        $runs = MarketingImportRun::query()->where('tenant_id', $tenant->id)->whereIn('type', ['square_customers_sync', 'square_orders_sync', 'square_payments_sync', 'square_cards_sync', 'square_customer_references_sync'])->latest('id')->limit(20)->get();
         $reviews = MarketingIdentityReview::query()->where('source_type', 'square_customer')->where('payload->source_context->tenant_id', $tenant->id)->where('status', 'pending')->latest('id')->paginate(25);
         $reviewCustomerChoices = [];
         foreach ($reviews as $review) {
@@ -81,6 +95,7 @@ class SquareCustomerConnectionController extends Controller
         return response()->view('customers.square-connection', ['tenant' => $tenant, 'connections' => $connections->available($tenant->id), 'runs' => $runs,
             'reviews' => $reviews, 'identities' => $identities, 'oauth' => $oauth, 'sourceRefresh' => app(\App\Services\Marketing\SquareSourceRefresh::class)->status($tenant->id),
             'customerQuery' => $customerQuery, 'customerSearch' => $customerSearch, 'reviewCustomerChoices' => $reviewCustomerChoices,
+            'referenceAfter' => $input['reference_after'] ?? null,
             'counts' => ['customers' => SquareCustomer::where('tenant_id', $tenant->id)->count(), 'orders' => SquareOrder::where('tenant_id', $tenant->id)->count(), 'payments' => SquarePayment::where('tenant_id', $tenant->id)->count()],
         ])->header('Cache-Control', 'private, no-store');
     }
@@ -90,7 +105,7 @@ class SquareCustomerConnectionController extends Controller
         [$tenant, $actor] = $this->access($request, $identities);
         $data = $request->validate(['request_id' => 'required|uuid', 'connection_id' => 'required|string|max:120',
             'expected_connection_generation' => 'required|string|max:128', 'sync_type' => 'required|in:customers,orders,payments,cards',
-            'mode' => 'required|in:preview,import', 'limit' => 'required|integer|min:1|max:500', 'since' => 'nullable|date', 'resume_run_id' => 'nullable|integer|min:1', 'create_unmatched' => 'sometimes|boolean']);
+            'mode' => 'required|in:preview,import', 'limit' => 'required|integer|min:1|max:500', 'since' => 'nullable|date', 'resume_run_id' => 'nullable|integer|min:1', 'create_unmatched' => 'sometimes|boolean', 'source_refresh_policy_version' => 'nullable|string|size:64']);
         try {
             $options = $data + ['tenant_id' => $tenant->id, 'created_by' => $actor->id, 'manual_refresh' => true, 'historical_source_only' => true];
             $options['dry_run'] = $data['mode'] === 'preview';

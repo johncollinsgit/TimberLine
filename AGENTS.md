@@ -104,6 +104,21 @@ Checking label. Server quote/payment verification and mutation locks remain.
 
 ## Universal customer commerce capability (owner direction, 2026-10-30)
 
+- Owner expansion, 2026-11-13: every existing and future customer-touching app
+  must resolve the same tenant-owned canonical customer and reuse shared purchase,
+  product/preference, event, subscription, rewards and marketing-group evidence.
+  This included capability applies to all future retail businesses, not only
+  Modern Forestry. Keep business customer relationships isolated by tenant.
+- Modern Forestry currently uses Shopify for online retail, Square for in-person
+  sales, Asana for events and Recharge for subscriptions. Future Everbranch retail,
+  Pay, Teams and Subscriptions adapters join the same customer after their reviewed
+  cutovers. Do not treat roadmap replacements as current authority.
+- Read the universal profile/app integration contract below before introducing
+  any customer-touching app. Its README and review must identify the canonical
+  customer reference, source authority, shared read contract and relevant
+  cross-surface/isolation acceptance. No independent app customer master or
+  duplicate behavior/rewards ledger. Save discovery/reconciliation in Customers
+  with provenance; campaign exports are not the customer source of truth.
 - Every tenant must have the included capability to associate confirmed online
   and in-person purchases and rewards with one tenant-scoped canonical customer.
   Modern Forestry is the first pilot, not a hardcoded tenant exception. Read

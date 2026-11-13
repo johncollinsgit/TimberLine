@@ -255,6 +255,18 @@ class SquareCustomerSource
                 $issues[] = 'square_saved_location_review_required';
             }
             $source = SquareCustomer::query()->where('tenant_id', $tenantId)->where('square_customer_id', $link->source_id)->first();
+            $redirect = $link->source_meta['square_customer_redirect'] ?? null;
+            if (is_array($redirect) && ($redirect['requested_customer_id'] ?? null) === $link->source_id) {
+                $targetId = $redirect['current_customer_id'] ?? null;
+                $targetClaims = MarketingProfileLink::forTenantId($tenantId)->where('source_type', 'square_customer')->where('source_id', $targetId)->get();
+                if ($targetClaims->isNotEmpty() && $targetClaims->every(fn ($claim) => $resolver->byId($tenantId, $claim->marketing_profile_id)?->id === $canonical->id)) {
+                    $source = SquareCustomer::forTenantId($tenantId)->where('square_customer_id', $targetId)->first();
+                } else {
+                    $issues[] = 'square_customer_redirect_review_required';
+
+                    continue;
+                }
+            }
             $originalBinding = (array) ($source?->raw_payload['_source_binding'] ?? []);
             $sourceBinding = (array) ($link->source_meta ?? []) + $originalBinding;
             $normalizer = app(\App\Support\Marketing\MarketingIdentityNormalizer::class);
@@ -278,6 +290,7 @@ class SquareCustomerSource
                 }
             }
             $sources[] = ['square_customer_id' => $link->source_id, 'identity_basis' => $link->match_method, 'source_binding' => $sourceBinding,
+                'provider_customer_redirect' => $redirect,
                 'synced_at' => $source?->synced_at?->toIso8601String(), 'provider_preferences' => $this->observedPreferences($source?->raw_payload ?? []),
                 'cards' => $cards, 'card_identity_or_payment_authority' => false];
         }
@@ -355,7 +368,8 @@ class SquareCustomerSource
                             'total_amount' => $item['total_money']['amount'] ?? null, 'currency' => $item['total_money']['currency'] ?? null, 'scent_inferred' => false];
                     }
                     $orders[] = $base + ['state' => $row->state, 'closed_at' => $row->closed_at?->toIso8601String(), 'total_amount' => $row->total_money_amount, 'currency' => $row->total_money_currency,
-                        'items' => $items, 'items_complete' => count((array) ($raw['line_items'] ?? [])) <= 100, 'recorded_refunds' => count((array) ($raw['refunds'] ?? []))];
+                        'items' => $items, 'items_complete' => count((array) ($raw['line_items'] ?? [])) <= 100, 'recorded_refunds' => count((array) ($raw['refunds'] ?? [])),
+                        'tax_names' => (array) $row->raw_tax_names, 'purchase_place' => app(CustomerPurchasePlaceMap::class)->places($tenantId, (array) $row->raw_tax_names)];
                 } else {
                     $payments[] = $base + ['order_id' => $row->square_order_id, 'status' => $row->status, 'amount' => $row->amount_money, 'currency' => $row->currency,
                         'recorded_at' => $row->created_at_source?->toIso8601String(), 'refunded_amount' => data_get($raw, 'refunded_money.amount'), 'reward_earning_proof' => false];

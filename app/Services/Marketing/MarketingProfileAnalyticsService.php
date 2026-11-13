@@ -232,6 +232,7 @@ class MarketingProfileAnalyticsService
                 $metrics[$field] = $confirmed[$field];
             }
             $confirmedSources = array_flip($confirmed['confirmed_source_keys']);
+            $metrics['confirmed_source_keys'] = $confirmed['confirmed_source_keys'];
             $legacyIds = [];
             $legacyNames = [];
             foreach ($orders as $order) {

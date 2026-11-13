@@ -1,3 +1,12 @@
+## 2026-11-13 — Reusable historical customer discovery
+
+Customers source history adds reviewed active/inactive Square location coverage
+and bounded original customer-reference preview/reconciliation. Sources &
+reconciliation retains recognized original tax-place labels and their approximate
+ZIP points. Staff can inspect that purchase-place evidence in customer history
+and reuse it in the area/nearby audience builder. Saved home addresses, exact
+event attribution and channel permissions remain separate evidence.
+
 ## 2026-11-12 — Pay startup and selected-event previews
 
 Pay shows one Everbranch loading animation while restoring the authorized

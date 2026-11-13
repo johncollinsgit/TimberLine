@@ -47,7 +47,7 @@ class EventAudiencesController extends Controller
 
     private function input(Request $request): array
     {
-        return $request->validate(['kind' => 'required|in:event_buyers,captured_contacts,product_buyers,scent_buyers,previous_show_nearby',
+        return $request->validate(['kind' => 'required|in:event_buyers,captured_contacts,product_buyers,scent_buyers,previous_show_nearby,area_buyers_nearby',
             'event_id' => 'nullable|integer|min:1', 'series_id' => 'nullable|uuid', 'legacy_ids' => 'nullable|array|max:100', 'legacy_ids.*' => 'string|max:100',
             'item_key' => 'nullable|string|max:190', 'postal_code' => 'nullable|regex:/^[0-9]{5}$/D', 'radius_miles' => 'nullable|numeric|min:1|max:500']);
     }

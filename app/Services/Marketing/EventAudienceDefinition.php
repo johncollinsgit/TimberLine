@@ -23,6 +23,10 @@ final class EventAudienceDefinition
     /** Typed event filters need reviewed event identities, not the lifetime product catalog. */
     public function optionsForInput(int $tenant, array $input): array
     {
+        if (($input['kind'] ?? '') === 'area_buyers_nearby') {
+            return ['events' => [], 'series' => [], 'legacy' => [], 'products' => [], 'scents' => []];
+        }
+
         return in_array($input['kind'] ?? null, ['event_buyers', 'captured_contacts'], true)
             ? ['events' => app(EventCustomerCohort::class)->options($tenant), 'series' => [], 'legacy' => [], 'products' => [], 'scents' => []]
             : $this->options($tenant);
@@ -96,6 +100,16 @@ final class EventAudienceDefinition
 
             return $query->whereIn('id', $ids)->orderBy('id')->pluck('id')->all();
         }
+        if ($input['kind'] === 'area_buyers_nearby') {
+            $linked = app(CustomerPurchasePlaceMap::class)->candidateProfileIds($tenant, (string) ($input['postal_code'] ?? ''), (float) ($input['radius_miles'] ?? 50));
+            $profiles = \App\Models\MarketingProfile::forTenantId($tenant)->whereIn('id', $linked)->get();
+            $canonical = app(CanonicalMarketingProfileResolver::class)->canonicalCollection($profiles, $tenant);
+            abort_unless($canonical, 409, 'Some original customer identities need reconciliation.');
+            $zips = app(CustomerLocationDistance::class)->postalCodesWithin($input['postal_code'], (float) ($input['radius_miles'] ?? 50));
+
+            return $query->where(fn ($q) => $q->whereIn('id', $canonical->pluck('id')->all())
+                ->orWhere(fn ($q) => $q->whereIn('country', ['US', 'USA', 'United States', 'United States of America'])->whereIn(DB::raw('SUBSTR(postal_code, 1, 5)'), $zips)))->orderBy('id')->pluck('id')->all();
+        }
         if ($input['kind'] === 'previous_show_nearby') {
             $links = TeamOperationRecord::where(['tenant_id' => $tenant, 'kind' => 'event_link', 'status' => 'accepted'])->get()
                 ->filter(fn ($link) => ($link->data['series_id'] ?? null) === ($input['series_id'] ?? null));
@@ -162,18 +176,23 @@ final class EventAudienceDefinition
                 $owned('legacy', $id);
                 $previous[] = $condition('purchased_legacy_event_ids', $id);
             }
-            if (! $previous) {
+            if (! $previous && $input['kind'] !== 'area_buyers_nearby') {
                 throw ValidationException::withMessages(['series_id' => 'Choose the recurring show or its historical occurrences.']);
             }
             $point = app(CustomerLocationDistance::class)->point($input['postal_code'] ?? null);
             if (! $point) {
                 throw ValidationException::withMessages(['postal_code' => 'Enter a US event ZIP with a Census reference point.']);
             }
-            $groups[] = ['logic' => 'or', 'conditions' => $previous, 'groups' => []];
+            if ($previous) {
+                $groups[] = ['logic' => 'or', 'conditions' => $previous, 'groups' => []];
+            }
+            if ($input['kind'] === 'area_buyers_nearby') {
+                $groups[] = ['logic' => 'and', 'conditions' => [['field' => 'purchased_near_zip', 'operator' => 'within', 'value' => ['postal_code' => $input['postal_code'], 'radius_miles' => (float) ($input['radius_miles'] ?? 50)]]], 'groups' => []];
+            }
             $groups[] = ['logic' => 'and', 'conditions' => [['field' => 'near_event_zip', 'operator' => 'within', 'value' => ['postal_code' => $input['postal_code'], 'radius_miles' => (float) ($input['radius_miles'] ?? 50)]]], 'groups' => []];
         }
 
-        return ['logic' => $input['kind'] === 'previous_show_nearby' ? 'or' : 'and', 'conditions' => $conditions, 'groups' => $groups,
+        return ['logic' => in_array($input['kind'], ['previous_show_nearby', 'area_buyers_nearby'], true) ? 'or' : 'and', 'conditions' => $conditions, 'groups' => $groups,
             '_event_audience' => ['version' => 1, 'filters' => $input, 'source' => 'confirmed_customer_purchase_projection']];
     }
 
@@ -189,7 +208,7 @@ final class EventAudienceDefinition
             default => array_values(array_filter([
                 ...(! empty($input['series_id']) && in_array((string) $input['series_id'], $metrics['purchased_series_ids'] ?? [], true) ? ['Previous buyer at '.$label('series', $input['series_id'])] : []),
                 ...array_map(fn ($id) => in_array($id, $metrics['purchased_legacy_event_ids'] ?? [], true) ? 'Previous buyer at '.$label('legacy', $id) : null, $input['legacy_ids'] ?? []),
-                ...array_filter($evaluated, fn ($reason) => str_starts_with($reason, 'Approximately ')),
+                ...array_filter($evaluated, fn ($reason) => str_starts_with($reason, 'Approximately ') || str_starts_with($reason, 'Past confirmed purchase ')),
             ])),
         };
     }

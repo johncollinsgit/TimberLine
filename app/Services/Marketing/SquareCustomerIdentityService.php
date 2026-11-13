@@ -61,6 +61,19 @@ class SquareCustomerIdentityService
                                 'source_type' => $link['source_type'], 'source_id' => $link['source_id'], 'match_method' => 'explicit_square_source_id',
                                 'source_meta' => array_replace((array) ($link['source_meta'] ?? []), $this->binding($context))]);
                         }
+                    } elseif (! $dryRun && ($context['source_label'] ?? '') === 'square_customer_reference_reconciliation'
+                        && isset($link['source_meta']['square_customer_redirect'])) {
+                        foreach ($query->get() as $existing) {
+                            $meta = (array) $existing->source_meta;
+                            $proof = $link['source_meta']['square_customer_redirect'];
+                            if (data_get($meta, 'square_customer_redirect.current_customer_id') === $proof['current_customer_id']) {
+                                continue;
+                            }
+                            if (isset($meta['square_customer_redirect'])) {
+                                $meta['square_customer_redirect_history'] = [...(array) ($meta['square_customer_redirect_history'] ?? []), $meta['square_customer_redirect']];
+                            }
+                            $existing->update(['source_meta' => array_replace($meta, $this->binding($context), ['square_customer_redirect' => $proof])]);
+                        }
                     }
                 }
 
@@ -68,6 +81,9 @@ class SquareCustomerIdentityService
                     foreach ($links as $link) {
                         if ($link['source_type'] === 'square_customer') {
                             $this->source->applySavedLocation($profile, $link['source_id']);
+                            if (! empty($context['reconcile_recorded_history'])) {
+                                $this->linkRecordedHistory($tenantId, $profile, $link['source_id'], $context);
+                            }
                         }
                     }
                 }
@@ -92,7 +108,7 @@ class SquareCustomerIdentityService
                         foreach ($links as $link) {
                             MarketingProfileLink::create(['tenant_id' => $tenantId, 'marketing_profile_id' => $profile->id,
                                 'source_type' => $link['source_type'], 'source_id' => $link['source_id'], 'match_method' => 'owner_confirmed_unmatched_square_source',
-                                'source_meta' => $this->binding($context) + ['reviewed_by' => $actor->id, 'request_id' => $context['request_id'] ?? null]]);
+                                'source_meta' => array_replace((array) ($link['source_meta'] ?? []), $this->binding($context), ['reviewed_by' => $actor->id, 'request_id' => $context['request_id'] ?? null])]);
                         }
                     }
 
@@ -100,6 +116,9 @@ class SquareCustomerIdentityService
                         foreach ($links as $link) {
                             if ($link['source_type'] === 'square_customer') {
                                 $this->source->applySavedLocation($profile, $link['source_id']);
+                                if (! empty($context['reconcile_recorded_history'])) {
+                                    $this->linkRecordedHistory($tenantId, $profile, $link['source_id'], $context);
+                                }
                             }
                         }
                     }

@@ -69,6 +69,8 @@
                 <label class="eb-square-field">Original Square reader<select name="connection_id">@foreach($connections as $connection)<option value="{{ $connection['id'] }}" @selected(($sourceRefresh['binding']['connection_id'] ?? '') === $connection['id'])>{{ $connection['kind'] }} · {{ $connection['environment'] }} · {{ $connection['location_label'] ?? implode(', ', $connection['location_ids'] ?? array_filter([$connection['location_id'] ?? null])) }}</option>@endforeach</select></label>
                 <label class="eb-square-field">Recent history window in days<input name="lookback_days" type="number" min="1" max="90" value="{{ $sourceRefresh['lookback_days'] }}"></label>
                 <label class="eb-square-check eb-square-wide"><input type="checkbox" name="enabled" value="1" @checked($sourceRefresh['enabled'])><span>Automatically refresh this reviewed original reader. Customer and purchase source reads only; no campaigns or historical reward awards.</span></label>
+                <label class="eb-square-check eb-square-wide"><input type="checkbox" name="all_locations" value="1" @checked($sourceRefresh['all_locations'] ?? false)><span>Discover and include all current Square locations for this merchant, including inactive locations with older sales. Keep each location's original purchase history.</span></label>
+                @if($sourceRefresh['all_locations'] ?? false)<p class="eb-square-wide">{{ count($sourceRefresh['discovered_locations'] ?? []) }} merchant locations discovered at the last review. Save again to discover locations added later.</p>@endif
                 <label class="eb-square-check eb-square-wide"><input type="checkbox" name="create_unmatched" value="1" @checked($sourceRefresh['create_unmatched'])><span>Create contact-only customer records for genuinely unmatched original Square customer IDs. Conflicting identities stay in review; marketing permission is not inferred.</span></label>
                 <div class="eb-square-actions eb-square-wide"><button>Save source refresh settings</button><span class="eb-square-status">{{ $sourceRefresh['enabled'] ? 'Reviewed refresh enabled' : 'Automatic source refresh off' }}</span></div>
             </form>
@@ -137,6 +139,7 @@
                     <input type="hidden" name="request_id" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
                     <input type="hidden" name="connection_id" value="{{ $connection['id'] }}">
                     <input type="hidden" name="expected_connection_generation" value="{{ $connection['connection_generation'] ?? '' }}">
+                    @if(($sourceRefresh['enabled'] ?? false) && ($sourceRefresh['binding']['connection_id'] ?? null) === $connection['id'])<input type="hidden" name="source_refresh_policy_version" value="{{ $sourceRefresh['version'] }}">@endif
                     <label class="eb-square-field">Source <select name="sync_type"><option value="customers">Customers and declared provider preferences</option><option value="cards">Card references only</option><option value="orders">Historical order sources</option><option value="payments">Historical payment sources and recorded locations</option></select></label>
                     <label class="eb-square-field">Action <select name="mode"><option value="preview">Preview source changes</option><option value="import">Import source batch and stage identity review</option></select></label>
                     <label class="eb-square-field">Batch target <input name="limit" type="number" min="1" max="500" value="100"></label>
@@ -148,6 +151,18 @@
             </article>
         @empty<p>No tenant-owned Square source connection is recorded yet. Connect one above; no global company token is substituted.</p>@endforelse
     </section>
+    @if($sourceRefresh['enabled'] ?? false)
+        <section class="eb-square-card" aria-label="Original customer reconciliation">
+            <h2>Reconnect older purchases to their current customers</h2>
+            <p>Square sometimes replaces a customer ID after merging profiles. Check those original references and retain both IDs on the same proven customer. Conflicting customers remain in identity review.</p>
+            <form method="POST" action="{{ route('customers.square.reconcile-references', ['tenant'=>$tenant->slug]) }}" class="eb-square-grid">@csrf
+                <input type="hidden" name="request_id" value="{{ (string) \Illuminate\Support\Str::uuid() }}"><input type="hidden" name="policy_version" value="{{ $sourceRefresh['version'] }}"><input type="hidden" name="after" value="{{ $referenceAfter ?? '' }}">
+                <label class="eb-square-field">Action<select name="apply"><option value="0">Preview next 500 original references</option><option value="1">Reconcile next 500 original references</option></select></label>
+                <div class="eb-square-actions"><button>Check original customer references</button></div>
+            </form>
+            <p>Each batch retains its provider evidence and progress. This does not merge Everbranch customers, create subscriptions, send campaigns, or award historical rewards.</p>
+        </section>
+    @endif
     <section aria-label="Square refresh runs">
         <h2>Progress and original checkpoints</h2>
         @forelse($runs as $run)
@@ -174,6 +189,7 @@
                         <input type="hidden" name="connection_id" value="{{ data_get($run->summary, 'source_binding.connection_id') }}"><input type="hidden" name="expected_connection_generation" value="{{ data_get($run->summary, 'source_binding.connection_generation') }}">
                         <input type="hidden" name="sync_type" value="{{ str_replace(['square_', '_sync'], '', $run->type) }}"><input type="hidden" name="mode" value="{{ data_get($run->summary, 'mode') === 'dry-run' ? 'preview' : 'import' }}"><input type="hidden" name="limit" value="100">
                         <input type="hidden" name="create_unmatched" value="{{ data_get($run->summary, 'create_unmatched') ? '1' : '0' }}">
+                        @if(data_get($run->summary, 'source_refresh_policy_version'))<input type="hidden" name="source_refresh_policy_version" value="{{ data_get($run->summary, 'source_refresh_policy_version') }}">@endif
                         <button type="submit">Resume original source batch</button>
                     </form>
                 @endif

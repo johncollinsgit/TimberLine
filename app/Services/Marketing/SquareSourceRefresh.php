@@ -28,13 +28,26 @@ class SquareSourceRefresh
     {
         app(SquareCustomerIdentityService::class)->authorize($tenant, $actor);
         $data = validator($input, ['enabled' => 'required|boolean', 'expected_version' => 'required|string|size:64', 'connection_id' => 'nullable|string|max:120',
-            'lookback_days' => 'required|integer|min:1|max:90', 'create_unmatched' => 'required|boolean'])->validate();
+            'lookback_days' => 'required|integer|min:1|max:90', 'create_unmatched' => 'required|boolean', 'all_locations' => 'sometimes|boolean'])->validate();
         $config = $data['enabled'] ? app(SquareConnectionContext::class)->resolve($tenant, $data['connection_id'] ?? null) : null;
+        $readerLocations = $config['location_ids'] ?? [];
+        $discoveredLocations = [];
         if ($data['enabled']) {
             abort_unless($config && ! empty($config['location_ids']), 409, 'Review the original reader and locations before enabling refresh.');
+            if (! empty($data['all_locations'])) {
+                $rows = (new SquareClient($config['access_token'], $config['base_url']))->locations();
+                foreach ($rows as $location) {
+                    abort_unless(is_array($location) && is_string($location['id'] ?? null) && $location['id'] !== ''
+                        && (! isset($location['merchant_id']) || $location['merchant_id'] === $config['merchant_id']), 409, 'Square location ownership needs review.');
+                    $discoveredLocations[$location['id']] = ['id' => $location['id'], 'name' => $location['name'] ?? null, 'status' => $location['status'] ?? null];
+                }
+                abort_unless($discoveredLocations, 409, 'Square returned no original merchant locations.');
+                ksort($discoveredLocations);
+                $config['location_ids'] = array_keys($discoveredLocations);
+            }
         }
 
-        return DB::transaction(function () use ($tenant, $actor, $data, $config): array {
+        return DB::transaction(function () use ($tenant, $actor, $data, $config, $readerLocations, $discoveredLocations): array {
             Tenant::whereKey($tenant)->lockForUpdate()->firstOrFail();
             app(SquareCustomerIdentityService::class)->authorize($tenant, User::findOrFail($actor->id));
             $current = $this->status($tenant);
@@ -45,6 +58,12 @@ class SquareSourceRefresh
             $value = ['enabled' => (bool) $data['enabled'], 'binding' => $config ? $this->binding($config) : ($current['binding'] ?? null),
                 'lookback_days' => (int) $data['lookback_days'], 'create_unmatched' => (bool) $data['create_unmatched'], 'reviewed_by' => $actor->id,
                 'reviewed_at' => now()->toIso8601String(), 'historical_source_only' => true];
+            if ($config && ! empty($data['all_locations'])) {
+                sort($readerLocations);
+                $value['all_locations'] = true;
+                $value['reader_location_ids'] = $readerLocations;
+                $value['discovered_locations'] = array_values($discoveredLocations);
+            }
             $value['version'] = $this->policyHash($value);
             TenantMarketingSetting::updateOrCreate(['tenant_id' => $tenant, 'key' => self::KEY], ['value' => $value]);
             MarketingImportRun::create(['tenant_id' => $tenant, 'created_by' => $actor->id, 'type' => 'square_source_refresh_settings', 'source_label' => 'owner_reviewed_original_reader',
@@ -91,11 +110,29 @@ class SquareSourceRefresh
             && ($reader['merchant_id'] ?? null) === ($binding['merchant_id'] ?? null) && ($reader['environment'] ?? null) === ($binding['environment'] ?? null), 409, 'The original Square reader needs review.');
         $locations = $reader['location_ids'] ?? (isset($reader['location_id']) ? [$reader['location_id']] : []);
         sort($locations);
-        $expected = $binding['location_ids'] ?? [];
+        $expected = ! empty($policy['all_locations']) ? ($policy['reader_location_ids'] ?? []) : ($binding['location_ids'] ?? []);
         sort($expected);
         abort_unless($expected && $locations === $expected, 409, 'Square locations changed. Review source refresh settings.');
 
         return $policy;
+    }
+
+    /** Only a recorded owner policy can widen a source reader beyond its original register. */
+    public function configForPolicy(int $tenant, string $version, array $config): array
+    {
+        $policy = $this->assertPolicyCurrent($tenant, $version);
+        $binding = $policy['binding'];
+        foreach (['connection_id', 'merchant_id', 'environment', 'runtime_id'] as $key) {
+            abort_unless(($config[$key] ?? null) === ($binding[$key] ?? null), 409, 'Source refresh belongs to a different original reader.');
+        }
+        if (! empty($policy['all_locations'])) {
+            abort_unless(is_array($binding['location_ids'] ?? null) && $binding['location_ids'], 409);
+            $config['location_ids'] = $binding['location_ids'];
+            $config['source_purpose'] = 'customer_history';
+            $config['all_locations_reviewed'] = true;
+        }
+
+        return $config;
     }
 
     public function refreshObject(int $tenant, array $originalBinding, string $kind, string $providerId, string $requestId): array
@@ -158,6 +195,10 @@ class SquareSourceRefresh
                 }
             }
             $result[$kind] = app(SquareMarketingSyncService::class)->{$method}($options);
+        }
+        if (! empty($policy['all_locations'])) {
+            $result['customer_references'] = app(SquareCustomerReferenceReconciliation::class)->scheduled($tenant, User::findOrFail($policy['reviewed_by']), $policy['version'],
+                $this->uuid($tenant.':'.$policy['version'].':customer-references:'.$anchor->toIso8601String()), max(1, min(500, $limit)));
         }
 
         return $result;

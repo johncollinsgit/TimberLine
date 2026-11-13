@@ -1,9 +1,81 @@
-# One customer, purchases across channels, one rewards history
+# Universal customer profile across every Everbranch app
 
 Owner direction recorded October 30, 2026: every Everbranch tenant should have
 the capability to connect a payment to one customer entry and track that
 customer's online and in-person purchases and rewards together. Modern Forestry
 is the first pilot, not a tenant-specific implementation or exclusive entitlement.
+
+Owner direction expanded November 13, 2026: every current and future
+customer-facing or staff app that touches a business's customers must use the
+same tenant-owned canonical customer. This included capability applies to future
+retail businesses using these branches as well as Modern Forestry. Each business
+owns its own customer relationships; it is not a shared customer directory across
+unrelated businesses.
+
+## Current sources and future replacements
+
+Modern Forestry's current source assignments are explicit. A future adapter joins
+the same canonical customer; installing an app never performs a source cutover.
+Other businesses configure their own sources without inheriting these connections.
+
+| Domain | Current Modern Forestry authority | Future Everbranch authority |
+| --- | --- | --- |
+| Online retail purchases | Shopify | Everbranch retail / Website commerce after reviewed cutover |
+| In-person purchases | Square | Everbranch Pay after reviewed cutover; its processor retains payment evidence |
+| Event operations, dates, booth details | Asana | Everbranch Teams after reviewed cutover |
+| Recurring subscriptions and original membership history | Recharge | Everbranch Subscriptions after reviewed cutover |
+
+Growave/Yotpo imports and historical Square connections remain provenance-bearing
+customer, loyalty and permission evidence. They do not replace current purchase,
+event or subscription authority. Source-specific cutover requirements still apply;
+especially preserve Recharge billing anchors and avoid duplicate subscription
+collection. The subscription replacement runbook owns that transition.
+
+## Required customer experience and app integration
+
+Opening an authorized customer reference from Customers, Pay, Teams, retail,
+Subscriptions, a mobile app or another customer-touching branch must resolve the
+same canonical customer ID in that business. Surfaces may show only data the
+current actor can access; shared identity does not grant financial, marketing or
+customer-account permissions.
+
+The shared profile brings together:
+
+- Confirmed online and in-person purchases, recorded products/scents/sizes,
+  purchase frequency and rewards. Distinguish an explicitly saved preference from
+  a most-purchased candle; missing item or refund coverage stays visible.
+- Exact reviewed event purchase/capture relationships with original event IDs,
+  plus separate recorded purchase-area evidence. A city/tax label can support an
+  area audience without proving attendance at a particular event or a home move.
+- Current subscriptions and original dated membership evidence from the active
+  subscription source. A billing migration is not a new membership join.
+- Behavior-based marketing groups and saved audience definitions, with their
+  qualifying evidence and dates. Group membership and possession of an address or
+  phone are separate from channel permissions and send admission.
+- Source coverage, refresh times, unresolved identity conflicts and reconciliation
+  provenance, so staff can tell what is known and what remains incomplete.
+
+Use `MarketingProfile`, `CanonicalMarketingProfileResolver`, explicit
+`MarketingProfileLink` / external source associations and the shared
+`CustomerCommerceSnapshotService`, `ConfirmedCustomerPurchaseProjection`,
+`CustomerBehaviorProfile`, `CustomerEventValueService` and audience services.
+Extend these versioned contracts when a required domain is missing. Do not create
+an app-local customer master, duplicate purchase/rewards ledger, inferred merge or
+independent behavior calculation. Original provider/domain records remain the
+authoritative evidence behind the shared read model.
+
+Customer discovery and reviewed reconciliation belong permanently in Customers
+and its existing source/audit records. Future imports and app adapters must reuse
+those results. A one-time campaign export is not the customer source of truth.
+
+Every new app or customer-related change must document its canonical customer
+reference, authoritative source and refresh/cutover behavior, shared read contract,
+and actor/tenant permissions. Before release, prove cross-surface identity,
+current permissions, replay/refund correctness, ambiguity handling and tenant
+isolation with relevant tests. Unadapted coverage must be labeled incomplete;
+that app cannot claim the universal customer experience is finished. Apply this
+review requirement to existing branches when changing them, and to every future
+customer-touching app before launch.
 
 For inventory-owned Pay registers, guest collection precedes optional audited customer association. See [finished-goods stock](finished-goods-stock.md). Financial snapshots stay immutable; receipt contact alone does not verify account identity.
 

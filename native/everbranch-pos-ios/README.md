@@ -1,5 +1,13 @@
 # Everbranch POS for iPhone
 
+Pay uses the same tenant-owned canonical customer as Customers, retail, Teams,
+Subscriptions and all future customer-touching apps. Reuse the shared customer,
+purchase, behavior and rewards contracts; no native customer master or second
+ledger. This included capability applies to every retail business, with its own
+isolated source connections. Modern Forestry currently uses Shopify, Square,
+Asana and Recharge; future source cutovers retain that same identity and history.
+See the [universal customer profile standard](../../docs/architecture/unified-customer-commerce.md).
+
 Dedicated native Square Tap to Pay target; iOS 17.1 minimum. The SwiftPM package
 contains pure recovery contracts. Square's binary SDK is pinned to 2.7.0. It is
 fetched through SwiftPM and is not vendored in this repository.
