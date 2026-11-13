@@ -106,7 +106,9 @@ Checking label. Server quote/payment verification and mutation locks remain.
 
 - Owner expansion, 2026-11-13: every existing and future customer-touching app
   must resolve the same tenant-owned canonical customer and reuse shared purchase,
-  product/preference, event, subscription, rewards and marketing-group evidence.
+  product/preference, event, subscription, Candle Cash/rewards, birthday and
+  marketing-group evidence. Reuse the shared rewards ledger and birthday profile/
+  annual reward cycle; provider refreshes and app cutovers cannot duplicate awards.
   This included capability applies to all future retail businesses, not only
   Modern Forestry. Keep business customer relationships isolated by tenant.
 - Modern Forestry currently uses Shopify for online retail, Square for in-person

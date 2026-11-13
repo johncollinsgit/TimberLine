@@ -32,7 +32,9 @@ contract, verification and remaining hardware/provider acceptance.
 Every retail business using Everbranch has one tenant-owned customer profile
 across its branches. Customer references in every existing and future app must
 reuse that identity and the shared purchase, product/preference, event,
-subscription, rewards and marketing-group history. Modern Forestry is the first
+subscription, Candle Cash/rewards, birthday and marketing-group history. Shared
+rewards balances, transactions and annual birthday benefits retain their original
+ledger/profile records across apps and source cutovers. Modern Forestry is the first
 implementation of this included capability; other businesses keep their own
 isolated profiles and source connections. Read the
 [universal customer profile standard](docs/architecture/unified-customer-commerce.md)

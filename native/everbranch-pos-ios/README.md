@@ -2,8 +2,9 @@
 
 Pay uses the same tenant-owned canonical customer as Customers, retail, Teams,
 Subscriptions and all future customer-touching apps. Reuse the shared customer,
-purchase, behavior and rewards contracts; no native customer master or second
-ledger. This included capability applies to every retail business, with its own
+purchase, behavior, rewards and birthday contracts; no native customer master or
+second ledger. Read the same rewards balance/history and birthday benefits without
+duplicating annual awards. This included capability applies to every retail business, with its own
 isolated source connections. Modern Forestry currently uses Shopify, Square,
 Asana and Recharge; future source cutovers retain that same identity and history.
 See the [universal customer profile standard](../../docs/architecture/unified-customer-commerce.md).

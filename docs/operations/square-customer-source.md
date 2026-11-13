@@ -257,6 +257,12 @@ old work; normal credential renewal may advance generation while retaining the
 same original merchant/location policy, and each actual read freezes its current
 generation. Disabled/disconnected or inactive-reviewer policies stop reads.
 
+Scheduled recent reads retain `request_context.origin=scheduled_source_refresh`
+and select only their own live checkpoints. Manual previews and historical imports
+with the same source policy cannot replace the scheduler's page/date query. At
+this upgrade, older unmarked automatic runs retain their audit and cursor; the
+scheduler starts a new bounded recent window rather than guessing their origin.
+
 External signed Square notifications use the same policy through the separate
 default-off `pos_live.external_sales_ingest_enabled` gate and durable
 `event-sales-history` queue. Webhook admission resolves enabled exact original

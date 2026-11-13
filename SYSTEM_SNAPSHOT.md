@@ -4856,7 +4856,7 @@ the separate draft live POS candidate have not established real cross-channel
 customer/rewards acceptance.
 
 All existing and future customer-touching apps must reuse that canonical profile
-and shared product/preference, event, subscription, rewards and marketing-group
+and shared product/preference, event, subscription, Candle Cash/rewards, birthday and marketing-group
 evidence. This included capability applies to future retail businesses with their
 own tenant-isolated identities and sources. Modern Forestry's current authorities
 are Shopify online retail, Square in-person sales, Asana event operations and
@@ -4865,6 +4865,13 @@ replace those roles only after reviewed cutovers while retaining the original
 canonical customer and historical evidence. Customer discovery/reconciliation
 stays in Customers with source provenance; README/app review requirements link
 the shared integration/acceptance contract.
+
+Candle Cash uses the existing shared rewards ledger; balances, earning,
+redemption, expiry/refund history and tenant program terms follow the canonical
+customer. Birthdays use the existing birthday profile, source/capture evidence,
+club enrollment and annual reward issuance/redemption cycle. Source refreshes,
+alias resolution and app cutovers must not fabricate dates or duplicate awards.
+Channel permissions remain independent of rewards and birthday membership.
 
 ## Explicit household cash balance sources
 

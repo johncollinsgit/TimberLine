@@ -24,6 +24,8 @@ Other businesses configure their own sources without inheriting these connection
 | In-person purchases | Square | Everbranch Pay after reviewed cutover; its processor retains payment evidence |
 | Event operations, dates, booth details | Asana | Everbranch Teams after reviewed cutover |
 | Recurring subscriptions and original membership history | Recharge | Everbranch Subscriptions after reviewed cutover |
+| Candle Cash / rewards | Existing shared Everbranch rewards ledger and tenant program; original imports remain evidence | Same ledger and customer identity across every app |
+| Birthdays and birthday benefits | Existing canonical birthday profile and audited source capture | Same birthday record and annual reward cycle across every app |
 
 Growave/Yotpo imports and historical Square connections remain provenance-bearing
 customer, loyalty and permission evidence. They do not replace current purchase,
@@ -49,6 +51,14 @@ The shared profile brings together:
   area audience without proving attendance at a particular event or a home move.
 - Current subscriptions and original dated membership evidence from the active
   subscription source. A billing migration is not a new membership join.
+- Candle Cash/rewards balance and original earning, redemption, refund, adjustment
+  and expiry history from the shared ledger, together with the tenant's program
+  terms. Refreshing a provider or opening another branch must not copy balances,
+  recalculate historical awards or earn the same reward twice.
+- The saved birthday, its source/capture evidence and any recorded uncertainty,
+  plus birthday-club enrollment and annual reward issuance/redemption history.
+  Reuse `BirthdayProfileService` and the existing birthday reward cycle; never
+  guess a date or create another birthday award when importing or changing apps.
 - Behavior-based marketing groups and saved audience definitions, with their
   qualifying evidence and dates. Group membership and possession of an address or
   phone are separate from channel permissions and send admission.
@@ -59,6 +69,9 @@ Use `MarketingProfile`, `CanonicalMarketingProfileResolver`, explicit
 `MarketingProfileLink` / external source associations and the shared
 `CustomerCommerceSnapshotService`, `ConfirmedCustomerPurchaseProjection`,
 `CustomerBehaviorProfile`, `CustomerEventValueService` and audience services.
+Use the existing Candle Cash ledger/read services and `BirthdayProfileService`
+for their respective domains. Marketing channel permissions remain separate from
+rewards membership, a birthday record and birthday-club enrollment.
 Extend these versioned contracts when a required domain is missing. Do not create
 an app-local customer master, duplicate purchase/rewards ledger, inferred merge or
 independent behavior calculation. Original provider/domain records remain the
@@ -162,6 +175,10 @@ For Modern Forestry and a second tenant with a different business template:
    purchases or separate balances. Broken/cyclic/cross-tenant links fail closed.
 8. Verify an unconfigured tenant can access the included setup/capability without
    inheriting another tenant's merchant account, rewards rules or customer data.
+9. Verify the same rewards balance/history and birthday record across applicable
+   customer surfaces. A refresh, alias resolution or app/source cutover must not
+   issue duplicate earning, redemption or annual birthday rewards; partial dates
+   and uncertain source coverage remain visible.
 
 ## Current evidence and claim boundary
 

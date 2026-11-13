@@ -176,8 +176,10 @@ class SquareSourceRefresh
         $result = [];
         foreach (['customers' => 'syncCustomers', 'orders' => 'syncOrders', 'payments' => 'syncPayments'] as $kind => $method) {
             $options = [...$this->options($tenant, $policy), 'limit' => max(1, min(500, $limit)), 'since' => $anchor->copy()->subDays($policy['lookback_days']),
-                'request_id' => $this->uuid($tenant.':'.$policy['version'].':'.$kind.':'.$anchor->toIso8601String())];
-            $prior = MarketingImportRun::forTenantId($tenant)->where('type', 'square_'.$kind.'_sync')->where('summary->source_refresh_policy_version', $policy['version'])->latest('id')->first();
+                'request_context' => ['origin' => 'scheduled_source_refresh'],
+                'request_id' => $this->uuid($tenant.':'.$policy['version'].':scheduled:'.$kind.':'.$anchor->toIso8601String())];
+            $prior = MarketingImportRun::forTenantId($tenant)->where('type', 'square_'.$kind.'_sync')->where('summary->source_refresh_policy_version', $policy['version'])
+                ->where('summary->mode', 'live-sync')->where('summary->request_context->origin', 'scheduled_source_refresh')->latest('id')->first();
             if ($prior && ($prior->summary['request_id'] ?? null) === $options['request_id']) {
                 $result[$kind] = ['status' => $prior->status, 'run_id' => $prior->id, 'summary' => $prior->summary, 'replayed' => true];
 

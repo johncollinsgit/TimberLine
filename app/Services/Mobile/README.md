@@ -5,7 +5,9 @@
 All current and future customer-touching mobile branches resolve the business's
 canonical `MarketingProfile` through `CanonicalMarketingProfileResolver` and
 reuse the shared customer/commerce/behavior/event contracts. Do not create a mobile
-customer master or calculate separate purchase, rewards or audience truth.
+customer master or calculate separate purchase, rewards, birthday or audience truth.
+Reuse the shared rewards ledger and birthday profile/annual reward cycle so mobile
+activity and source refreshes cannot duplicate balances or birthday awards.
 Customer references must open that same tenant-owned profile, subject to the
 actor's permissions. This included capability serves every retail tenant.
 

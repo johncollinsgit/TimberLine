@@ -15,7 +15,8 @@ require an audit of the whole repository or its release history.
   dependency path, a failing test, or a shared contract calls for it.
 - Every current/future customer-touching app must follow
   [the universal customer profile contract](docs/architecture/unified-customer-commerce.md):
-  one canonical customer per business, shared behavior/history, source provenance
+  one canonical customer per business, shared behavior/history (including rewards
+  and birthdays), source provenance
   and tenant isolation. This is included for all retail tenants. Modern Forestry's
   current sources are Shopify, Square, Asana and Recharge; future Everbranch retail,
   Pay, Teams and Subscriptions join that identity after reviewed cutover. Record

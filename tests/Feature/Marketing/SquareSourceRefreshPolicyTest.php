@@ -59,6 +59,57 @@ function sourcePolicyObjects(): array
             'created_at' => '2026-11-07T12:00:00Z', 'updated_at' => '2026-11-11T12:00:00Z', 'status' => 'COMPLETED', 'amount_money' => ['amount' => 1080, 'currency' => 'USD'], 'refunded_money' => ['amount' => 500, 'currency' => 'USD']]]];
 }
 
+it('keeps scheduled recent cursors separate from manual previews and historical source imports', function (): void {
+    $scheduled = false;
+    Http::fake(function ($request) use (&$scheduled) {
+        $path = parse_url($request->url(), PHP_URL_PATH);
+        if ($path === '/v2/merchants/POLICYMERCHANT') {
+            return Http::response(['merchant' => ['id' => 'POLICYMERCHANT']]);
+        }
+        $key = match ($path) {
+            '/v2/customers/search' => 'customers', '/v2/orders/search' => 'orders', '/v2/payments' => 'payments',
+            default => throw new LogicException('Unexpected scheduled isolation request '.$path),
+        };
+        if ($scheduled) {
+            expect($request['cursor'] ?? null)->toBeNull('An automatic refresh must not consume a manual import cursor.');
+
+            return Http::response([$key => []]);
+        }
+        $row = match ($key) {
+            'customers' => ['id' => 'MANUALCUSTOMER', 'given_name' => 'Manual source'],
+            'orders' => ['id' => 'MANUALORDER', 'location_id' => 'POLICYLOCATION', 'customer_id' => 'MANUALCUSTOMER', 'state' => 'COMPLETED'],
+            'payments' => ['id' => 'MANUALPAYMENT', 'location_id' => 'POLICYLOCATION', 'customer_id' => 'MANUALCUSTOMER', 'status' => 'COMPLETED'],
+        };
+
+        return Http::response([$key => [$row], 'cursor' => 'manual-'.$key.'-next']);
+    });
+    $policy = sourcePolicyEnable($this);
+    $sync = app(\App\Services\Marketing\SquareMarketingSyncService::class);
+    $manual = function (bool $preview) use ($sync, $policy): void {
+        foreach (['syncCustomers', 'syncOrders', 'syncPayments'] as $method) {
+            $result = $sync->{$method}(['tenant_id' => $this->tenant->id, 'created_by' => $this->owner->id, 'manual_refresh' => true,
+                'connection_id' => 'policy-original-reader', 'source_refresh_policy_version' => $policy['version'],
+                'request_id' => (string) Str::uuid(), 'since' => '2019-01-01T00:00:00Z', 'limit' => 100, 'dry_run' => $preview, 'create_unmatched' => true]);
+            expect($result['status'])->toBe('partial');
+        }
+    };
+    $manual(true);
+    $manual(false);
+    $scheduled = true;
+    $recent = $this->policy->runTenant($this->tenant->id, 100);
+    foreach (['customers', 'orders', 'payments'] as $kind) {
+        expect($recent[$kind]['status'])->toBe('completed')
+            ->and($recent[$kind]['summary']['request_context']['origin'])->toBe('scheduled_source_refresh');
+    }
+    $scheduled = false;
+    $manual(false);
+    $scheduled = true;
+    $replayed = $this->policy->runTenant($this->tenant->id, 100);
+    foreach (['customers', 'orders', 'payments'] as $kind) {
+        expect($replayed[$kind]['replayed'])->toBeTrue()->and($replayed[$kind]['run_id'])->toBe($recent[$kind]['run_id']);
+    }
+});
+
 it('requires explicit source refresh enrollment and routes only exact current local original bindings', function (): void {
     expect($this->policy->status($this->tenant->id)['enabled'])->toBeFalse()->and($this->policy->webhookTargets('POLICYMERCHANT', 'sandbox', null))->toBe([]);
     Http::assertNothingSent();
@@ -211,6 +262,7 @@ it('retains a partial old-generation checkpoint and restarts the approved recent
     $prior = MarketingImportRun::create(['tenant_id' => $this->tenant->id, 'type' => 'square_customers_sync', 'status' => 'partial', 'source_label' => 'square_customers',
         'created_by' => $this->owner->id, 'started_at' => now()->subMinute(), 'finished_at' => now()->subMinute(), 'summary' => [
             'source_refresh_policy_version' => $policy['version'], 'request_id' => (string) Str::uuid(), 'source_binding' => [...$policy['binding'], 'connection_generation' => 1],
+            'request_context' => ['origin' => 'scheduled_source_refresh'],
             'checkpoint' => ['cursor' => 'old-generation-source-cursor'], 'create_unmatched' => true, 'mode' => 'live-sync', 'since' => now()->subDays(14)->toIso8601String()]]);
     $value = $this->setting->value;
     $value['generation'] = 2;

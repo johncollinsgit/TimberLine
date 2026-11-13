@@ -118,7 +118,7 @@ class SquareMarketingSyncService
         $sourceOnly = ($config['source_purpose'] ?? null) === 'customer_history' || ! empty($options['manual_refresh']) || (bool) ($options['historical_source_only'] ?? false);
         $options['historical_source_only'] = $sourceOnly;
         if (! empty($options['updated_since'])) {
-            $options['request_context'] = ['date_field' => 'updated_at'];
+            $options['request_context'] = [...($options['request_context'] ?? []), 'date_field' => 'updated_at'];
         }
 
         return $this->runSync(
@@ -198,7 +198,7 @@ class SquareMarketingSyncService
         $fetchClient = $this->clientForConfig($config);
         $options['source_binding'] = app(SquareConnectionContext::class)->publicBinding($config);
         if (! empty($options['updated_since'])) {
-            $options['request_context'] = ['date_field' => 'updated_at'];
+            $options['request_context'] = [...($options['request_context'] ?? []), 'date_field' => 'updated_at'];
         }
 
         return $this->runSync(
