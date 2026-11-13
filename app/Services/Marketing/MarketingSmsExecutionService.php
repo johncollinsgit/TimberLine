@@ -281,13 +281,43 @@ class MarketingSmsExecutionService
         try {
             $mmsMedia = $this->mmsMediaService->forRecipient($campaign, $recipient, $deliveryContext['tenant_id'], $deliveryContext['store_key'], $renderedMessage);
         } catch (ValidationException $exception) {
-            return $this->skipRecipient($recipient, 'mms_media_invalid_or_unapproved', $exception->getMessage());
+            return $this->mmsNotClaimed($recipient, 'mms_media_invalid_or_unapproved', $exception->getMessage(), $dryRun);
         }
 
         $attemptNumber = ((int) $recipient->send_attempt_count) + 1;
         try {
-            [$delivery, $resolvedMessage] = DB::transaction(function () use ($recipient, $campaign, $profile, $toPhone, $renderedMessage, $attemptNumber, $actorId, $deliveryContext, $mmsMedia): array {
-                $recipient->refresh();
+            [$delivery, $resolvedMessage] = DB::transaction(function () use ($recipient, $campaign, $profile, $toPhone, $renderedMessage, $attemptNumber, $actorId, $deliveryContext, $mmsMedia, $allowedStatuses): array {
+                // Lock the absence of media too: a newly required photo must not
+                // slip through a worker that previously resolved plain SMS.
+                $lockedCampaign = MarketingCampaign::query()->whereKey($campaign->id)->lockForUpdate()->first();
+                $lockedRecipient = MarketingCampaignRecipient::query()->where('campaign_id', $campaign->id)
+                    ->whereKey($recipient->id)->lockForUpdate()->first();
+                if ($lockedCampaign === null || $lockedRecipient === null
+                    || $lockedCampaign->tenant_id !== $campaign->tenant_id) {
+                    throw ValidationException::withMessages(['mms_claim' => 'The campaign or recipient changed before the send claim.']);
+                }
+                $hasCurrentMedia = array_key_exists('mms_media', (array) $lockedCampaign->target_snapshot)
+                    || data_get($lockedRecipient->recommendation_snapshot, 'mms_media') !== null
+                    || data_get($lockedRecipient->recommendation_snapshot, 'mms_media_approval') !== null;
+                if ($mmsMedia !== null || $hasCurrentMedia) {
+                    // Every photo worker claims in campaign-then-recipient order. A
+                    // preparation, rejection or other claim that won the race must
+                    // not be overwritten by this worker's earlier loaded models.
+                    if ($mmsMedia === null || $lockedRecipient->channel !== 'sms'
+                        || ! in_array($lockedRecipient->status, $allowedStatuses, true)
+                        || (int) $lockedRecipient->marketing_profile_id !== (int) $profile->id
+                        || (int) $lockedRecipient->send_attempt_count !== $attemptNumber - 1) {
+                        throw ValidationException::withMessages(['mms_claim' => 'The reviewed photo recipient changed or was already claimed.']);
+                    }
+                    $currentMedia = $this->mmsMediaService->forLockedRecipient($lockedCampaign, $lockedRecipient,
+                        $deliveryContext['tenant_id'], $deliveryContext['store_key'], $renderedMessage);
+                    if ($currentMedia !== $mmsMedia) {
+                        throw ValidationException::withMessages(['mms_claim' => 'The reviewed photo or its approval changed before the send claim.']);
+                    }
+                    $recipient->setRawAttributes($lockedRecipient->getAttributes(), true);
+                } else {
+                    $recipient->setRawAttributes($lockedRecipient->getAttributes(), true);
+                }
 
                 $recipient->forceFill([
                     'status' => 'sending',
@@ -340,6 +370,11 @@ class MarketingSmsExecutionService
                 return [$delivery, $resolvedMessage];
             });
         } catch (ValidationException $exception) {
+            if ($mmsMedia !== null || isset($exception->errors()['mms_claim'])) {
+                return $this->mmsNotClaimed($recipient,
+                    isset($exception->errors()['mms_claim']) ? 'mms_claim_changed' : 'mms_media_invalid_or_unapproved',
+                    $exception->getMessage(), $dryRun);
+            }
             $recipient->refresh();
 
             return $this->skipRecipient($recipient, 'mms_media_invalid_or_unapproved', $exception->getMessage());
@@ -424,6 +459,18 @@ class MarketingSmsExecutionService
             'provider_message_id' => $delivery->provider_message_id,
             'status' => $recipient->status,
             'dry_run' => (bool) ($sendResult['dry_run'] ?? false),
+        ];
+    }
+
+    protected function mmsNotClaimed(MarketingCampaignRecipient $recipient, string $reason, string $note, bool $dryRun): array
+    {
+        return [
+            'outcome' => 'skipped',
+            'reason' => $reason,
+            'note' => $note,
+            'recipient_id' => $recipient->id,
+            'status' => $recipient->fresh()?->status,
+            'dry_run' => $dryRun,
         ];
     }
 

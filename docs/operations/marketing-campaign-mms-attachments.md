@@ -53,10 +53,17 @@ the approval-bound selection to match the current image and review revision.
 The public HTTPS URL is derived from the owned public storage path; the saved
 asset URL must agree. The file's size, checksum and MIME must still match.
 
+The send claim locks the campaign then recipient and rechecks the current photo,
+approval, allowed status, profile identity and attempt count before creating a
+delivery. It checks the absence of a photo too, so a photo added during a prior
+plain-SMS preparation cannot silently become a text-only send. A lost claim
+returns without overwriting concurrent preparation, rejection, approval or
+another worker's send state. Provider calls happen after the claim transaction.
+
 A photo request passes `media_url`, `send_as_mms=true` and
 `fallback_to_sms_on_mms_failure=false` through the existing `TwilioSmsService`.
 Photo delivery does not depend on the text-only cost planner choosing MMS. An
-invalid/missing/changed/unapproved image is skipped with
+invalid/missing/changed/unapproved image returns a skipped outcome with
 `mms_media_invalid_or_unapproved` before a provider attempt. A provider MMS error
 is recorded as a failure; the image is never silently dropped for a text-only
 fallback. The delivery's `provider_payload.mms_media` retains the asset ID,
@@ -102,10 +109,14 @@ absolute public HTTPS image URLs; the normal composer removes script/style tags.
 The recipient's subject snapshot takes precedence, followed by the campaign's
 configured subject and legacy campaign-name fallback.
 
-When a reviewed recipient has `recommendation_snapshot.email_design.html_sha256`,
-changing or removing the saved HTML fails closed with `email_design_changed`
-before a provider attempt. Prepare and review the updated design before another
-approval. Delivery metadata records `content_format` and the composed HTML hash
+Normal preparation pins the normalized HTML hash in
+`recommendation_snapshot.email_design.html_sha256`; normal approval binds it as
+`email_design_approval`. Adding, changing or removing HTML requires preparation
+and approval again. Every HTML send requires matching current, prepared and
+approved selections; a missing or changed pin fails closed with
+`email_design_changed` before a provider attempt. Preparation retains existing
+audit metadata and does not replay attempted artwork recipients. Delivery
+metadata records `content_format` and the composed HTML hash
 before provider-boundary unsubscribe preparation. Email campaigns without HTML
 retain their plain-text behavior. No new embedded campaign is needed to deliver
 the reviewed design through the existing approval-based email endpoint.

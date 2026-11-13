@@ -84,21 +84,36 @@ class MarketingCampaignMmsMediaService
         // Read current selections/approval rather than a caller's cached relations.
         $currentCampaign = MarketingCampaign::query()->forTenantId($tenantId)->find($campaign->id);
         $currentRecipient = MarketingCampaignRecipient::query()->where('campaign_id', $campaign->id)->find($recipient->id);
-        $this->require($currentCampaign !== null && $currentRecipient !== null, 'The photo campaign or recipient changed.');
-        $media = $this->snapshotForCampaign($currentCampaign, $tenantId, $storeKey);
-        $recipientSelection = data_get($currentRecipient->recommendation_snapshot, 'mms_media');
-        $approvedSelection = data_get($currentRecipient->recommendation_snapshot, 'mms_media_approval');
+        $this->require($currentCampaign !== null && $currentRecipient !== null
+            && $currentRecipient->marketing_profile_id === $recipient->marketing_profile_id, 'The photo campaign or recipient changed.');
+
+        return $this->mediaForRecipient($currentCampaign, $currentRecipient, $tenantId, $storeKey, $body);
+    }
+
+    /** Caller must hold the campaign and recipient row locks, in that order. */
+    public function forLockedRecipient(MarketingCampaign $campaign, MarketingCampaignRecipient $recipient, ?int $tenantId, ?string $storeKey, string $body): ?array
+    {
+        $this->require((int) $recipient->campaign_id === (int) $campaign->id && $recipient->channel === 'sms', 'The photo campaign or recipient changed.');
+
+        return $this->mediaForRecipient($campaign, $recipient, $tenantId, $storeKey, $body);
+    }
+
+    protected function mediaForRecipient(MarketingCampaign $campaign, MarketingCampaignRecipient $recipient, ?int $tenantId, ?string $storeKey, string $body): ?array
+    {
+        $media = $this->snapshotForCampaign($campaign, $tenantId, $storeKey);
+        $recipientSelection = data_get($recipient->recommendation_snapshot, 'mms_media');
+        $approvedSelection = data_get($recipient->recommendation_snapshot, 'mms_media_approval');
         if ($media === null && $recipientSelection === null && $approvedSelection === null) {
             return null;
         }
 
         $this->require($media !== null && $this->sameSelection($media, $recipientSelection)
             && $this->sameSelection($media, $approvedSelection), 'Prepare and approve the current photo for this recipient again.');
-        $this->require($currentRecipient->profile()->forTenantId($tenantId)->exists(), 'The photo recipient belongs to another workspace.');
+        $this->require($recipient->profile()->forTenantId($tenantId)->exists(), 'The photo recipient belongs to another workspace.');
         // The executor separately permits failed/undelivered only for an explicit retry.
-        $this->require(in_array($currentRecipient->status, ['approved', 'scheduled', 'failed', 'undelivered'], true)
-            && $currentRecipient->approved_by !== null && $currentRecipient->approved_at !== null
-            && $currentRecipient->approved_at->greaterThanOrEqualTo(CarbonImmutable::parse($media['prepared_at'])->startOfSecond()), 'The current photo needs a new send approval.');
+        $this->require(in_array($recipient->status, ['approved', 'scheduled', 'failed', 'undelivered'], true)
+            && $recipient->approved_by !== null && $recipient->approved_at !== null
+            && $recipient->approved_at->greaterThanOrEqualTo(CarbonImmutable::parse($media['prepared_at'])->startOfSecond()), 'The current photo needs a new send approval.');
         $this->assertMessageFits($media, $body);
 
         return $media;

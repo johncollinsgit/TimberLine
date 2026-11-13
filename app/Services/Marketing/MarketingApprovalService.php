@@ -9,17 +9,24 @@ use Illuminate\Support\Facades\DB;
 
 class MarketingApprovalService
 {
-    public function __construct(protected MarketingCampaignMmsMediaService $mmsMediaService) {}
+    public function __construct(
+        protected MarketingCampaignMmsMediaService $mmsMediaService,
+        protected MarketingCampaignEmailDesignService $emailDesignService
+    ) {}
 
     public function approveRecipient(MarketingCampaignRecipient $recipient, int $approverId, ?string $notes = null): MarketingCampaignRecipient
     {
         $recipient->refresh();
         $media = $recipient->channel === 'sms' ? $this->mmsMediaService->forApproval($recipient) : null;
+        $emailDesign = $recipient->channel === 'email' ? $this->emailDesignService->forApproval($recipient) : null;
         $snapshot = (array) $recipient->recommendation_snapshot;
         if ($media !== null) {
             $snapshot['mms_media_approval'] = $media;
         } else {
             unset($snapshot['mms_media_approval']);
+        }
+        if ($emailDesign !== null) {
+            $snapshot['email_design_approval'] = $emailDesign;
         }
 
         return DB::transaction(function () use ($recipient, $approverId, $notes, $snapshot) {

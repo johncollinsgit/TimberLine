@@ -7,6 +7,8 @@ use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Models\TenantEmailSetting;
+use App\Models\User;
+use App\Services\Marketing\MarketingApprovalService;
 use App\Services\Marketing\MarketingEmailExecutionService;
 use Illuminate\Support\Facades\Http;
 
@@ -34,9 +36,11 @@ beforeEach(function (): void {
     ]);
     $this->recipient = MarketingCampaignRecipient::create([
         'campaign_id' => $this->campaign->id, 'marketing_profile_id' => $this->profile->id,
-        'variant_id' => $variant->id, 'channel' => 'email', 'status' => 'approved',
+        'variant_id' => $variant->id, 'channel' => 'email', 'status' => 'queued_for_approval',
         'recommendation_snapshot' => ['email_design' => ['html_sha256' => hash('sha256', $this->html)]],
     ]);
+    $this->approver = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $this->recipient = app(MarketingApprovalService::class)->approveRecipient($this->recipient, $this->approver->id);
 });
 
 test('approved HTML campaign delivers branded HTML and text with a recipient unsubscribe footer', function (): void {
@@ -72,6 +76,7 @@ test('changed or removed reviewed email HTML fails before provider delivery', fu
 test('campaign without HTML retains plain text delivery', function (): void {
     $this->campaign->update(['message_html' => null]);
     $this->recipient->update(['recommendation_snapshot' => []]);
+    $this->recipient = app(MarketingApprovalService::class)->approveRecipient($this->recipient, $this->approver->id);
     $result = app(MarketingEmailExecutionService::class)->sendRecipient($this->recipient, ['tenant_id' => $this->tenant->id]);
 
     expect($result['outcome'])->toBe('sent');

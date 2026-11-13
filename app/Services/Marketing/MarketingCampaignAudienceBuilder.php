@@ -15,7 +15,8 @@ class MarketingCampaignAudienceBuilder
         protected MarketingRecommendationEngine $recommendationEngine,
         protected MarketingTenantOwnershipService $ownershipService,
         protected MarketingSmsEligibilityService $smsEligibilityService,
-        protected MarketingCampaignMmsMediaService $mmsMediaService
+        protected MarketingCampaignMmsMediaService $mmsMediaService,
+        protected MarketingCampaignEmailDesignService $emailDesignService
     ) {}
 
     /**
@@ -46,6 +47,7 @@ class MarketingCampaignAudienceBuilder
         $mmsMedia = $campaign->channel === 'sms'
             ? $this->mmsMediaService->snapshotForCampaign($campaign, $tenantId, $campaign->store_key)
             : null;
+        $emailDesign = $campaign->channel === 'email' ? $this->emailDesignService->snapshotForCampaign($campaign) : null;
 
         $segmentMatches = $this->segmentMatches($campaign, $tenantId);
         $groupMatches = $this->groupMatches($campaign, $tenantId);
@@ -114,15 +116,25 @@ class MarketingCampaignAudienceBuilder
                 ->first();
             $oldMedia = data_get($existing?->recommendation_snapshot, 'mms_media');
             $mediaChanged = $campaign->channel === 'sms' && ! $this->mmsMediaService->sameSelection($mmsMedia, $oldMedia);
-            if (($mmsMedia !== null || $oldMedia !== null) && $existing
+            $oldEmailDesign = data_get($existing?->recommendation_snapshot, 'email_design');
+            $oldEmailApproval = data_get($existing?->recommendation_snapshot, 'email_design_approval');
+            $emailDesignChanged = $emailDesign !== null && (! $this->emailDesignService->sameSelection($emailDesign, $oldEmailDesign)
+                || ($oldEmailApproval !== null && ! $this->emailDesignService->sameSelection($emailDesign, $oldEmailApproval))
+                || ($existing && in_array($existing->status, ['approved', 'scheduled'], true) && $emailDesign['html_sha256'] !== null
+                    && $oldEmailApproval === null));
+            $hasHtmlDesign = $emailDesign !== null && ($emailDesign['html_sha256'] !== null
+                || data_get($oldEmailDesign, 'html_sha256') !== null || data_get($oldEmailApproval, 'html_sha256') !== null);
+            $reviewChanged = $mediaChanged || $emailDesignChanged;
+            if (($mmsMedia !== null || $oldMedia !== null || $hasHtmlDesign) && $existing
                 && ($existing->send_attempt_count > 0 || $existing->sent_at !== null)) {
-                // Preparing a changed photo must never replay an attempted send.
+                // Preparing changed artwork must never replay an attempted send.
                 $summary['skipped']++;
 
                 continue;
             }
 
-            if ($existing && ($existing->status === 'rejected' || (! $mediaChanged && $existing->status === 'approved'))) {
+            if ($existing && ($existing->status === 'rejected' || (! $reviewChanged
+                && ($existing->status === 'approved' || ($emailDesign !== null && $existing->status === 'scheduled'))))) {
                 $status = $existing->status;
             }
 
@@ -144,7 +156,7 @@ class MarketingCampaignAudienceBuilder
             }
 
             $recommendationSnapshot = [
-                ...(($mmsMedia !== null || $oldMedia !== null) ? (array) $existing?->recommendation_snapshot : []),
+                ...(($mmsMedia !== null || $oldMedia !== null || $emailDesign !== null) ? (array) $existing?->recommendation_snapshot : []),
                 'score' => $profile->marketing_score,
                 'segment_reasons' => $segmentReasons,
                 'group_names' => $groupNames,
@@ -155,6 +167,12 @@ class MarketingCampaignAudienceBuilder
                 $recommendationSnapshot['mms_media'] = $mmsMedia;
                 if (! $mediaChanged && data_get($existing?->recommendation_snapshot, 'mms_media_approval') !== null) {
                     $recommendationSnapshot['mms_media_approval'] = data_get($existing->recommendation_snapshot, 'mms_media_approval');
+                }
+            }
+            if ($emailDesign !== null) {
+                $recommendationSnapshot['email_design'] = [...(is_array($oldEmailDesign) ? $oldEmailDesign : []), ...$emailDesign];
+                if ($emailDesignChanged) {
+                    unset($recommendationSnapshot['email_design_approval']);
                 }
             }
 
@@ -183,7 +201,7 @@ class MarketingCampaignAudienceBuilder
                         ...$reasons,
                     ]))),
                     'last_status_note' => null,
-                    ...($mediaChanged ? ['approved_by' => null, 'approved_at' => null] : []),
+                    ...($reviewChanged ? ['approved_by' => null, 'approved_at' => null] : []),
                 ]
             );
 

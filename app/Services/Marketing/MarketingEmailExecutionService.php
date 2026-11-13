@@ -9,6 +9,7 @@ use App\Models\MarketingEmailDelivery;
 use App\Services\Shopify\ShopifyEmbeddedEmailComposerService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class MarketingEmailExecutionService
 {
@@ -17,7 +18,8 @@ class MarketingEmailExecutionService
         protected MarketingTemplateRenderer $templateRenderer,
         protected MarketingEmailReadiness $emailReadiness,
         protected MarketingTenantOwnershipService $ownershipService,
-        protected ShopifyEmbeddedEmailComposerService $emailComposer
+        protected ShopifyEmbeddedEmailComposerService $emailComposer,
+        protected MarketingCampaignEmailDesignService $emailDesignService
     ) {}
 
     /**
@@ -217,14 +219,17 @@ class MarketingEmailExecutionService
             return ['outcome' => 'failed', 'reason' => 'missing_message', 'dry_run' => $dryRun];
         }
 
+        try {
+            $this->emailDesignService->assertApproved($campaign, $recipient);
+        } catch (ValidationException $exception) {
+            return $this->emailNotClaimed($recipient, 'email_design_changed', $exception->getMessage(), $dryRun);
+        }
+        $initialDesign = $this->emailDesignService->snapshotForCampaign($campaign);
+        $initialAttemptCount = (int) $recipient->send_attempt_count;
         $subjectTemplate = trim((string) (data_get($recipient->recommendation_snapshot, 'email_subject') ?: $campaign->message_subject ?: $campaign->name ?: 'Timberline Update'));
         $subject = trim($this->templateRenderer->renderCampaignMessage($campaign, $subjectTemplate, $profile));
         $rendered = $this->templateRenderer->renderCampaignMessage($campaign, $messageText, $profile);
         $htmlTemplate = $this->nullableString($campaign->message_html);
-        $reviewedHtmlHash = $this->nullableString(data_get($recipient->recommendation_snapshot, 'email_design.html_sha256'));
-        if ($reviewedHtmlHash !== null && ($htmlTemplate === null || ! hash_equals($reviewedHtmlHash, hash('sha256', $htmlTemplate)))) {
-            return $this->skipRecipient($recipient, 'email_design_changed', 'Email design changed after audience review. Prepare and approve the current design before sending.');
-        }
         $htmlBody = $htmlTemplate !== null
             ? $this->emailComposer->compose($subject, $rendered, ShopifyEmbeddedEmailComposerService::MODE_LEGACY_HTML, [], $htmlTemplate)['html']
             : null;
@@ -246,50 +251,72 @@ class MarketingEmailExecutionService
             return ['outcome' => 'failed', 'reason' => 'missing_subject', 'dry_run' => $dryRun];
         }
 
-        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext, $dispatchTenantId, $storeKey, $batchId, $sourceLabel, $subject, $htmlBody): MarketingEmailDelivery {
-            $recipient->forceFill([
-                'status' => 'sending',
-                'send_attempt_count' => ((int) $recipient->send_attempt_count) + 1,
-                'last_send_attempt_at' => now(),
-            ])->save();
+        try {
+            $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext, $dispatchTenantId, $storeKey, $batchId, $sourceLabel, $subject, $htmlBody, $initialDesign, $initialAttemptCount, $allowed): MarketingEmailDelivery {
+                // Claim campaign then recipient, including the absence of HTML. A
+                // newly prepared design must not be dropped by an older plain worker.
+                $lockedCampaign = MarketingCampaign::query()->whereKey($campaign->id)->lockForUpdate()->first();
+                $lockedRecipient = MarketingCampaignRecipient::query()->where('campaign_id', $campaign->id)
+                    ->whereKey($recipient->id)->lockForUpdate()->first();
+                if ($lockedCampaign === null || $lockedRecipient === null
+                    || $lockedCampaign->tenant_id !== $campaign->tenant_id
+                    || $lockedRecipient->channel !== 'email'
+                    || ! in_array($lockedRecipient->status, $allowed, true)
+                    || (int) $lockedRecipient->marketing_profile_id !== (int) $profile->id
+                    || (int) $lockedRecipient->send_attempt_count !== $initialAttemptCount
+                    || ! $this->emailDesignService->sameSelection($initialDesign, $this->emailDesignService->snapshotForCampaign($lockedCampaign))) {
+                    throw ValidationException::withMessages(['email_claim' => 'The reviewed email recipient or design changed or was already claimed.']);
+                }
+                $this->emailDesignService->assertLockedApproved($lockedCampaign, $lockedRecipient);
+                $recipient->setRawAttributes($lockedRecipient->getAttributes(), true);
+                $recipient->forceFill([
+                    'status' => 'sending',
+                    'send_attempt_count' => $initialAttemptCount + 1,
+                    'last_send_attempt_at' => now(),
+                ])->save();
 
-            return MarketingEmailDelivery::query()->create([
-                'marketing_campaign_recipient_id' => $recipient->id,
-                'marketing_profile_id' => $profile->id,
-                'tenant_id' => $dispatchTenantId,
-                'store_key' => $storeKey,
-                'batch_id' => $batchId,
-                'source_label' => $sourceLabel,
-                'message_subject' => $subject,
-                'provider' => $resolvedProvider,
-                'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
-                'template_key' => $recipient->variant?->variant_key,
-                'email' => $email,
-                'status' => 'sending',
-                'raw_payload' => [
-                    'actor_id' => $actorId,
-                    'provider_resolution' => $providerContext,
-                ],
-                'metadata' => [
+                return MarketingEmailDelivery::query()->create([
+                    'marketing_campaign_recipient_id' => $recipient->id,
+                    'marketing_profile_id' => $profile->id,
                     'tenant_id' => $dispatchTenantId,
-                    'customer_id' => $profile->id,
                     'store_key' => $storeKey,
                     'batch_id' => $batchId,
                     'source_label' => $sourceLabel,
+                    'message_subject' => $subject,
+                    'provider' => $resolvedProvider,
                     'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
                     'template_key' => $recipient->variant?->variant_key,
-                    'coupon_code' => data_get($recipient->recommendation_snapshot, 'coupon_code'),
-                    'shopify_store_key' => $storeKey,
-                    'provider' => $resolvedProvider,
-                    'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
-                    'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
-                    'provider_config_status' => (string) ($providerContext['config_status'] ?? 'error'),
-                    'provider_using_fallback_config' => (bool) ($providerContext['using_fallback_config'] ?? false),
-                    'content_format' => $htmlBody !== null ? 'html' : 'text',
-                    'html_sha256' => $htmlBody !== null ? hash('sha256', $htmlBody) : null,
-                ],
-            ]);
-        });
+                    'email' => $email,
+                    'status' => 'sending',
+                    'raw_payload' => [
+                        'actor_id' => $actorId,
+                        'provider_resolution' => $providerContext,
+                    ],
+                    'metadata' => [
+                        'tenant_id' => $dispatchTenantId,
+                        'customer_id' => $profile->id,
+                        'store_key' => $storeKey,
+                        'batch_id' => $batchId,
+                        'source_label' => $sourceLabel,
+                        'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
+                        'template_key' => $recipient->variant?->variant_key,
+                        'coupon_code' => data_get($recipient->recommendation_snapshot, 'coupon_code'),
+                        'shopify_store_key' => $storeKey,
+                        'provider' => $resolvedProvider,
+                        'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
+                        'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
+                        'provider_config_status' => (string) ($providerContext['config_status'] ?? 'error'),
+                        'provider_using_fallback_config' => (bool) ($providerContext['using_fallback_config'] ?? false),
+                        'content_format' => $htmlBody !== null ? 'html' : 'text',
+                        'html_sha256' => $htmlBody !== null ? hash('sha256', $htmlBody) : null,
+                    ],
+                ]);
+            });
+        } catch (ValidationException $exception) {
+            return $this->emailNotClaimed($recipient,
+                isset($exception->errors()['email_claim']) ? 'email_claim_changed' : 'email_design_changed',
+                $exception->getMessage(), $dryRun);
+        }
 
         $send = $this->sendGridEmailService->sendEmail($email, $subject, $rendered, [
             'dry_run' => $dryRun,
@@ -374,6 +401,18 @@ class MarketingEmailExecutionService
     /**
      * @return array<string,mixed>
      */
+    protected function emailNotClaimed(MarketingCampaignRecipient $recipient, string $reason, string $note, bool $dryRun): array
+    {
+        return [
+            'outcome' => 'skipped',
+            'reason' => $reason,
+            'note' => $note,
+            'recipient_id' => $recipient->id,
+            'status' => $recipient->fresh()?->status,
+            'dry_run' => $dryRun,
+        ];
+    }
+
     protected function skipRecipient(MarketingCampaignRecipient $recipient, string $reason, string $note): array
     {
         $reasons = collect((array) $recipient->reason_codes)

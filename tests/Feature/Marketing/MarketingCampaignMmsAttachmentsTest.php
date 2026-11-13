@@ -96,6 +96,23 @@ function approveCampaignMmsFixture(array $fixture): MarketingCampaignRecipient
     return app(MarketingApprovalService::class)->approveRecipient($fixture['recipient'], $fixture['actor']->id, 'Reviewed fictional text and photo.');
 }
 
+function interruptCampaignMmsAfterValidation(Closure $interrupt): void
+{
+    $service = app(MarketingCampaignMmsMediaService::class);
+    $interrupted = false;
+    $mock = Mockery::mock(MarketingCampaignMmsMediaService::class)->makePartial();
+    $mock->shouldReceive('forRecipient')->andReturnUsing(function (...$arguments) use ($service, $interrupt, &$interrupted) {
+        $media = $service->forRecipient(...$arguments);
+        if (! $interrupted) {
+            $interrupted = true;
+            $interrupt();
+        }
+
+        return $media;
+    });
+    app()->instance(MarketingCampaignMmsMediaService::class, $mock);
+}
+
 test('normal approval and SMS execution send one owned photo as MMS with an auditable asset snapshot', function () {
     $fixture = campaignMmsFixture();
     $recipient = approveCampaignMmsFixture($fixture);
@@ -124,6 +141,20 @@ test('campaigns without attachments still make the same plain SMS request', func
     Http::assertSentCount(1);
     Http::assertSent(fn ($request) => ! isset($request['MediaUrl']) && ! isset($request['SendAsMms']));
     expect($result['outcome'])->toBe('sent');
+});
+
+test('a changed recipient identity cannot reuse an approved photo recipient', function () {
+    $fixture = campaignMmsFixture();
+    $recipient = approveCampaignMmsFixture($fixture);
+    $otherProfile = MarketingProfile::factory()->create(['tenant_id' => $fixture['tenant']->id]);
+    MarketingCampaignRecipient::whereKey($recipient->id)->update(['marketing_profile_id' => $otherProfile->id]);
+
+    $result = app(MarketingSmsExecutionService::class)->sendRecipient($recipient);
+
+    expect($result['reason'])->toBe('mms_media_invalid_or_unapproved')
+        ->and($recipient->fresh()->marketing_profile_id)->toBe($otherProfile->id)
+        ->and(MarketingMessageDelivery::count())->toBe(0);
+    Http::assertNothingSent();
 });
 
 test('a queued photo recipient is never implicitly approved by execution', function () {
@@ -353,3 +384,78 @@ test('a fractional-second photo revision can be approved normally in that same d
     expect($result['outcome'])->toBe('sent');
     Http::assertSentCount(1);
 });
+
+test('the MMS claim cannot overwrite a concurrent preparation rejection identity change or other claim', function (string $change) {
+    $fixture = campaignMmsFixture();
+    $recipient = approveCampaignMmsFixture($fixture);
+    $expectedState = null;
+    $fields = ['status', 'marketing_profile_id', 'recommendation_snapshot', 'approved_by', 'approved_at', 'send_attempt_count'];
+    interruptCampaignMmsAfterValidation(function () use ($fixture, $recipient, $change, $fields, &$expectedState) {
+        if (in_array($change, ['reprepared', 'reapproved'], true)) {
+            $replacement = campaignMmsAsset($fixture['campaign']);
+            $fixture['campaign']->update(['target_snapshot' => ['mms_media' => campaignMmsSelection($replacement)]]);
+            app(MarketingCampaignAudienceBuilder::class)->prepareRecipients($fixture['campaign']);
+            if ($change === 'reapproved') {
+                app(MarketingApprovalService::class)->approveRecipient($recipient->fresh(), $fixture['actor']->id, 'Reviewed replacement photo.');
+            }
+        } elseif ($change === 'rejected') {
+            app(MarketingApprovalService::class)->rejectRecipient($recipient->fresh(), $fixture['actor']->id, 'Do not send.');
+        } elseif ($change === 'profile') {
+            $otherProfile = MarketingProfile::create(['tenant_id' => $fixture['tenant']->id, 'phone' => '+15553334444', 'normalized_phone' => '+15553334444', 'accepts_sms_marketing' => true]);
+            MarketingCampaignRecipient::whereKey($recipient->id)->update(['marketing_profile_id' => $otherProfile->id]);
+        } else {
+            MarketingCampaignRecipient::whereKey($recipient->id)->update(['status' => $change]);
+        }
+        $expectedState = $recipient->fresh()->only($fields);
+    });
+
+    $result = app(MarketingSmsExecutionService::class)->sendRecipient($recipient);
+
+    Http::assertNothingSent();
+    expect($result['outcome'])->toBe('skipped')
+        ->and($result['reason'])->toBe('mms_claim_changed')
+        ->and($recipient->fresh()->only($fields))->toEqual($expectedState)
+        ->and($recipient->fresh()->send_attempt_count)->toBe(0)
+        ->and(MarketingMessageDelivery::count())->toBe(0);
+})->with(['reprepared', 'reapproved', 'rejected', 'profile', 'sending', 'sent']);
+
+test('a second MMS worker cannot dispatch after another worker claims and completes the reviewed recipient', function () {
+    $fixture = campaignMmsFixture();
+    $recipient = approveCampaignMmsFixture($fixture);
+    $winningResult = null;
+    interruptCampaignMmsAfterValidation(function () use ($recipient, &$winningResult) {
+        $winningResult = app(MarketingSmsExecutionService::class)->sendRecipient($recipient->fresh());
+    });
+
+    $losingResult = app(MarketingSmsExecutionService::class)->sendRecipient($recipient);
+
+    expect($winningResult['outcome'])->toBe('sent')
+        ->and($losingResult['reason'])->toBe('mms_claim_changed')
+        ->and($recipient->fresh()->status)->toBe('sent')
+        ->and($recipient->fresh()->send_attempt_count)->toBe(1)
+        ->and(MarketingMessageDelivery::count())->toBe(1);
+    Http::assertSentCount(1);
+});
+
+test('a photo added before a plain SMS claim cannot be silently dropped', function (bool $reapprove) {
+    $fixture = campaignMmsFixture(false);
+    $recipient = approveCampaignMmsFixture($fixture);
+    $expectedState = null;
+    $fields = ['status', 'recommendation_snapshot', 'approved_by', 'approved_at', 'send_attempt_count'];
+    interruptCampaignMmsAfterValidation(function () use ($fixture, $recipient, $reapprove, $fields, &$expectedState) {
+        $asset = campaignMmsAsset($fixture['campaign']);
+        $fixture['campaign']->update(['target_snapshot' => ['mms_media' => campaignMmsSelection($asset)]]);
+        app(MarketingCampaignAudienceBuilder::class)->prepareRecipients($fixture['campaign']);
+        if ($reapprove) {
+            app(MarketingApprovalService::class)->approveRecipient($recipient->fresh(), $fixture['actor']->id, 'Reviewed new photo.');
+        }
+        $expectedState = $recipient->fresh()->only($fields);
+    });
+
+    $result = app(MarketingSmsExecutionService::class)->sendRecipient($recipient);
+
+    expect($result['reason'])->toBe('mms_claim_changed')
+        ->and($recipient->fresh()->only($fields))->toEqual($expectedState)
+        ->and(MarketingMessageDelivery::count())->toBe(0);
+    Http::assertNothingSent();
+})->with([false, true]);
