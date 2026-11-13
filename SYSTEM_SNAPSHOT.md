@@ -1109,6 +1109,17 @@ No frozen release, runtime, provider or immutable publication was changed. See
 
 # SYSTEM SNAPSHOT
 
+## Reviewed campaign photos and HTML (November 13; source candidate)
+
+Approval-based SMS campaigns can pin one tenant/store-owned public image and
+deliver it as MMS through the existing provider path. Actual bytes, size, MIME,
+and the exact approved image revision are rechecked; invalid or changed media
+cannot silently become a text-only send. Approval-based email campaigns preserve
+their configured branded HTML with a text alternative and existing unsubscribe
+handling. No audience, consent, runtime enablement or sender registration is
+changed by these capabilities. See
+`docs/operations/marketing-campaign-mms-attachments.md`.
+
 ## SMS disclosures and consent evidence (2026-10-26)
 
 Evergrove/Everbranch public privacy and terms now link `/sms-terms` and identify

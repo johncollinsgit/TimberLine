@@ -5,28 +5,50 @@ namespace App\Services\Marketing;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingRecommendation;
 use App\Models\MarketingSendApproval;
+use Illuminate\Support\Facades\DB;
 
 class MarketingApprovalService
 {
+    public function __construct(
+        protected MarketingCampaignMmsMediaService $mmsMediaService,
+        protected MarketingCampaignEmailDesignService $emailDesignService
+    ) {}
+
     public function approveRecipient(MarketingCampaignRecipient $recipient, int $approverId, ?string $notes = null): MarketingCampaignRecipient
     {
-        $recipient->forceFill([
-            'status' => 'approved',
-            'approved_by' => $approverId,
-            'approved_at' => now(),
-            'last_status_note' => $notes,
-        ])->save();
+        $recipient->refresh();
+        $media = $recipient->channel === 'sms' ? $this->mmsMediaService->forApproval($recipient) : null;
+        $emailDesign = $recipient->channel === 'email' ? $this->emailDesignService->forApproval($recipient) : null;
+        $snapshot = (array) $recipient->recommendation_snapshot;
+        if ($media !== null) {
+            $snapshot['mms_media_approval'] = $media;
+        } else {
+            unset($snapshot['mms_media_approval']);
+        }
+        if ($emailDesign !== null) {
+            $snapshot['email_design_approval'] = $emailDesign;
+        }
 
-        MarketingSendApproval::query()->create([
-            'campaign_recipient_id' => $recipient->id,
-            'approval_type' => 'send',
-            'status' => 'approved',
-            'approver_id' => $approverId,
-            'approved_at' => now(),
-            'notes' => $notes,
-        ]);
+        return DB::transaction(function () use ($recipient, $approverId, $notes, $snapshot) {
+            $recipient->forceFill([
+                'status' => 'approved',
+                'approved_by' => $approverId,
+                'approved_at' => now(),
+                'last_status_note' => $notes,
+                'recommendation_snapshot' => $snapshot,
+            ])->save();
 
-        return $recipient->fresh();
+            MarketingSendApproval::query()->create([
+                'campaign_recipient_id' => $recipient->id,
+                'approval_type' => 'send',
+                'status' => 'approved',
+                'approver_id' => $approverId,
+                'approved_at' => now(),
+                'notes' => $notes,
+            ]);
+
+            return $recipient->fresh();
+        });
     }
 
     public function rejectRecipient(MarketingCampaignRecipient $recipient, int $approverId, ?string $notes = null): MarketingCampaignRecipient
