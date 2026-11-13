@@ -99,6 +99,7 @@ test('short link redirects record sms click events and create order attribution 
     $decoratedDestination = (string) data_get($tracking, 'links.0.destination_url', '');
 
     expect($trackedUrl)->not->toBe('')
+        ->and(parse_url($trackedUrl, PHP_URL_QUERY))->toBeNull()
         ->and($decoratedDestination)->not->toBe('')
         ->and($decoratedDestination)->toContain('/products/ember-drop')
         ->and($decoratedDestination)->toContain('utm_source=backstage')
@@ -106,7 +107,9 @@ test('short link redirects record sms click events and create order attribution 
         ->and($decoratedDestination)->toContain('utm_campaign=')
         ->and($decoratedDestination)->toContain('mf_delivery_id='.$delivery->id);
 
-    $this->get($trackedUrl)
+    $compactLink = MarketingShortLink::query()->where('code', basename(parse_url($trackedUrl, PHP_URL_PATH)))->firstOrFail();
+    $this->get($trackedUrl)->assertRedirect($compactLink->destination_url);
+    $this->get($compactLink->destination_url)
         ->assertRedirect($decoratedDestination);
 
     $event = MarketingMessageEngagementEvent::query()
@@ -131,6 +134,65 @@ test('short link redirects record sms click events and create order attribution 
         ->and((int) ($attribution?->marketing_message_engagement_event_id ?? 0))->toBe((int) ($event?->id ?? 0))
         ->and((string) ($attribution?->channel ?? ''))->toBe('sms')
         ->and((int) ($attribution?->revenue_cents ?? 0))->toBe(8745);
+});
+
+test('compact sms links retain their original recipient across tenants and ignore appended tracking claims', function () {
+    $deliveries = collect(['first', 'second'])->map(function (string $key) {
+        $tenant = Tenant::query()->create(['name' => 'Compact '.$key, 'slug' => 'compact-'.$key]);
+        $profile = MarketingProfile::query()->create(['tenant_id' => $tenant->id, 'first_name' => $key]);
+
+        return MarketingMessageDelivery::query()->create([
+            'tenant_id' => $tenant->id, 'store_key' => 'retail', 'marketing_profile_id' => $profile->id,
+            'channel' => 'sms', 'provider' => 'twilio', 'to_phone' => '+15551112222',
+            'rendered_message' => 'Event details', 'send_status' => 'delivered', 'attempt_number' => 1,
+        ]);
+    });
+    $tracker = app(MessageClickTrackingService::class);
+    $messages = $deliveries->map(fn ($delivery) => $tracker->decorateSmsMessageForDelivery(
+        $delivery, 'Event details: https://events.example.com/weekend'
+    ));
+    $firstUrl = $messages[0]['links'][0]['tracked_url'];
+    $secondUrl = $messages[1]['links'][0]['tracked_url'];
+    $firstLink = MarketingShortLink::query()->where('code', basename(parse_url($firstUrl, PHP_URL_PATH)))->firstOrFail();
+
+    expect($firstUrl)->not->toBe($secondUrl)
+        ->and(strlen($firstUrl))->toBeLessThan(strlen($firstLink->destination_url))
+        ->and(parse_url($firstUrl, PHP_URL_QUERY))->toBeNull();
+
+    $this->get($firstUrl.'?mt_md='.$deliveries[1]->id.'&mt_t='.$deliveries[1]->tenant_id.'&mt_sig=forged')
+        ->assertRedirect($firstLink->destination_url);
+    expect(MarketingMessageEngagementEvent::query()->count())->toBe(0);
+    $this->get($firstLink->destination_url)->assertRedirect($messages[0]['links'][0]['destination_url']);
+
+    $click = MarketingMessageEngagementEvent::query()->sole();
+    expect($click->marketing_message_delivery_id)->toBe($deliveries[0]->id)
+        ->and($click->tenant_id)->toBe($deliveries[0]->tenant_id)
+        ->and($click->marketing_profile_id)->toBe($deliveries[0]->marketing_profile_id);
+
+    $signed = $firstLink->destination_url;
+    $parts = parse_url($signed);
+    parse_str($parts['query'], $query);
+    $query['mt_sig'] = str_repeat('0', 64);
+    $tampered = $parts['scheme'].'://'.$parts['host'].$parts['path'].'?'.http_build_query($query);
+    $this->get($tampered)->assertRedirect($messages[0]['links'][0]['destination_url']);
+    expect(MarketingMessageEngagementEvent::query()->count())->toBe(1);
+});
+
+test('repeated event urls share one compact target without changing surrounding message copy', function () {
+    $profile = MarketingProfile::query()->create(['first_name' => 'Compact preview']);
+    $delivery = MarketingMessageDelivery::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'channel' => 'sms', 'provider' => 'twilio', 'to_phone' => '+15551112222',
+        'rendered_message' => 'Event details', 'send_status' => 'delivered', 'attempt_number' => 1,
+    ]);
+    $tracking = app(MessageClickTrackingService::class)->decorateSmsMessageForDelivery(
+        $delivery, 'Event details: https://events.example.com/weekend More: https://events.example.com/weekend.'
+    );
+    $url = $tracking['links'][0]['tracked_url'];
+
+    expect($tracking['links'])->toHaveCount(1)
+        ->and(parse_url($url, PHP_URL_QUERY))->toBeNull()
+        ->and($tracking['message'])->toBe('Event details: '.$url.' More: '.$url.'.');
 });
 
 test('message order attribution service uses latest qualifying sms click as last click', function () {

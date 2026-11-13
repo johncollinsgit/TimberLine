@@ -16,8 +16,7 @@ class MessageClickTrackingService
     public function __construct(
         protected MarketingLinkShortenerService $linkShortenerService,
         protected MessageOrderAttributionService $messageOrderAttributionService
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{
@@ -388,7 +387,14 @@ class MessageClickTrackingService
             return $this->linkShortenerService->shortUrl($code);
         }
 
-        return $this->linkShortenerService->shortUrl($code).'?'.$queryString;
+        // Keep the existing signed click URL behind a compact public redirect.
+        // Both hops use the normal short-link controller; the signed inner hop
+        // still records the original recipient and order attribution exactly once.
+        $signedUrl = $this->linkShortenerService->shortUrl($code).'?'.$queryString;
+
+        return $this->linkShortenerService->shortenUrl(
+            $signedUrl, $this->positiveInt($delivery->created_by)
+        )['short_url'];
     }
 
     /**
