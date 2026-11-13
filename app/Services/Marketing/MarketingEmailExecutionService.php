@@ -6,6 +6,7 @@ use App\Models\CustomerExternalProfile;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingEmailDelivery;
+use App\Services\Shopify\ShopifyEmbeddedEmailComposerService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -15,7 +16,8 @@ class MarketingEmailExecutionService
         protected SendGridEmailService $sendGridEmailService,
         protected MarketingTemplateRenderer $templateRenderer,
         protected MarketingEmailReadiness $emailReadiness,
-        protected MarketingTenantOwnershipService $ownershipService
+        protected MarketingTenantOwnershipService $ownershipService,
+        protected ShopifyEmbeddedEmailComposerService $emailComposer
     ) {}
 
     /**
@@ -215,9 +217,17 @@ class MarketingEmailExecutionService
             return ['outcome' => 'failed', 'reason' => 'missing_message', 'dry_run' => $dryRun];
         }
 
-        $subjectTemplate = trim((string) (data_get($recipient->recommendation_snapshot, 'email_subject') ?: $campaign->name ?: 'Timberline Update'));
+        $subjectTemplate = trim((string) (data_get($recipient->recommendation_snapshot, 'email_subject') ?: $campaign->message_subject ?: $campaign->name ?: 'Timberline Update'));
         $subject = trim($this->templateRenderer->renderCampaignMessage($campaign, $subjectTemplate, $profile));
         $rendered = $this->templateRenderer->renderCampaignMessage($campaign, $messageText, $profile);
+        $htmlTemplate = $this->nullableString($campaign->message_html);
+        $reviewedHtmlHash = $this->nullableString(data_get($recipient->recommendation_snapshot, 'email_design.html_sha256'));
+        if ($reviewedHtmlHash !== null && ($htmlTemplate === null || ! hash_equals($reviewedHtmlHash, hash('sha256', $htmlTemplate)))) {
+            return $this->skipRecipient($recipient, 'email_design_changed', 'Email design changed after audience review. Prepare and approve the current design before sending.');
+        }
+        $htmlBody = $htmlTemplate !== null
+            ? $this->emailComposer->compose($subject, $rendered, ShopifyEmbeddedEmailComposerService::MODE_LEGACY_HTML, [], $htmlTemplate)['html']
+            : null;
         $dispatchContext = is_array($dispatchContext) ? $dispatchContext : $this->resolveProfileDispatchContext($profile);
         $dispatchTenantId = $dispatchContext['tenant_id'];
         $storeKey = $dispatchContext['store_key'];
@@ -236,7 +246,7 @@ class MarketingEmailExecutionService
             return ['outcome' => 'failed', 'reason' => 'missing_subject', 'dry_run' => $dryRun];
         }
 
-        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext, $dispatchTenantId, $storeKey, $batchId, $sourceLabel, $subject): MarketingEmailDelivery {
+        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext, $dispatchTenantId, $storeKey, $batchId, $sourceLabel, $subject, $htmlBody): MarketingEmailDelivery {
             $recipient->forceFill([
                 'status' => 'sending',
                 'send_attempt_count' => ((int) $recipient->send_attempt_count) + 1,
@@ -275,12 +285,15 @@ class MarketingEmailExecutionService
                     'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
                     'provider_config_status' => (string) ($providerContext['config_status'] ?? 'error'),
                     'provider_using_fallback_config' => (bool) ($providerContext['using_fallback_config'] ?? false),
+                    'content_format' => $htmlBody !== null ? 'html' : 'text',
+                    'html_sha256' => $htmlBody !== null ? hash('sha256', $htmlBody) : null,
                 ],
             ]);
         });
 
         $send = $this->sendGridEmailService->sendEmail($email, $subject, $rendered, [
             'dry_run' => $dryRun,
+            'html_body' => $htmlBody,
             'tenant_id' => $dispatchTenantId,
             'delivery_id' => $delivery->id,
             'idempotency_key' => 'marketing-email-delivery:'.$delivery->id,

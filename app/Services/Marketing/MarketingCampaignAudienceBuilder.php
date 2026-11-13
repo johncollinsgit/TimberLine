@@ -14,9 +14,9 @@ class MarketingCampaignAudienceBuilder
         protected MarketingSegmentEvaluator $segmentEvaluator,
         protected MarketingRecommendationEngine $recommendationEngine,
         protected MarketingTenantOwnershipService $ownershipService,
-        protected MarketingSmsEligibilityService $smsEligibilityService
-    ) {
-    }
+        protected MarketingSmsEligibilityService $smsEligibilityService,
+        protected MarketingCampaignMmsMediaService $mmsMediaService
+    ) {}
 
     /**
      * @return array{
@@ -43,6 +43,9 @@ class MarketingCampaignAudienceBuilder
         }
 
         $campaign->loadMissing(['segment', 'groups:id,name']);
+        $mmsMedia = $campaign->channel === 'sms'
+            ? $this->mmsMediaService->snapshotForCampaign($campaign, $tenantId, $campaign->store_key)
+            : null;
 
         $segmentMatches = $this->segmentMatches($campaign, $tenantId);
         $groupMatches = $this->groupMatches($campaign, $tenantId);
@@ -109,8 +112,17 @@ class MarketingCampaignAudienceBuilder
                 ->where('campaign_id', $campaign->id)
                 ->where('marketing_profile_id', $profile->id)
                 ->first();
+            $oldMedia = data_get($existing?->recommendation_snapshot, 'mms_media');
+            $mediaChanged = $campaign->channel === 'sms' && ! $this->mmsMediaService->sameSelection($mmsMedia, $oldMedia);
+            if (($mmsMedia !== null || $oldMedia !== null) && $existing
+                && ($existing->send_attempt_count > 0 || $existing->sent_at !== null)) {
+                // Preparing a changed photo must never replay an attempted send.
+                $summary['skipped']++;
 
-            if ($existing && in_array($existing->status, ['approved', 'rejected'], true)) {
+                continue;
+            }
+
+            if ($existing && ($existing->status === 'rejected' || (! $mediaChanged && $existing->status === 'approved'))) {
                 $status = $existing->status;
             }
 
@@ -123,7 +135,7 @@ class MarketingCampaignAudienceBuilder
             if ($groupIds !== []) {
                 $audienceSources[] = 'group';
                 foreach ($groupIds as $groupId) {
-                    $audienceReasons[] = 'group_' . $groupId;
+                    $audienceReasons[] = 'group_'.$groupId;
                 }
             }
             if ($manual) {
@@ -132,11 +144,19 @@ class MarketingCampaignAudienceBuilder
             }
 
             $recommendationSnapshot = [
+                ...(($mmsMedia !== null || $oldMedia !== null) ? (array) $existing?->recommendation_snapshot : []),
                 'score' => $profile->marketing_score,
                 'segment_reasons' => $segmentReasons,
                 'group_names' => $groupNames,
                 'manual_add' => $manual,
             ];
+            unset($recommendationSnapshot['mms_media'], $recommendationSnapshot['mms_media_approval']);
+            if ($mmsMedia !== null) {
+                $recommendationSnapshot['mms_media'] = $mmsMedia;
+                if (! $mediaChanged && data_get($existing?->recommendation_snapshot, 'mms_media_approval') !== null) {
+                    $recommendationSnapshot['mms_media_approval'] = data_get($existing->recommendation_snapshot, 'mms_media_approval');
+                }
+            }
 
             $recipient = MarketingCampaignRecipient::query()->updateOrCreate(
                 [
@@ -163,6 +183,7 @@ class MarketingCampaignAudienceBuilder
                         ...$reasons,
                     ]))),
                     'last_status_note' => null,
+                    ...($mediaChanged ? ['approved_by' => null, 'approved_at' => null] : []),
                 ]
             );
 
@@ -246,7 +267,7 @@ class MarketingCampaignAudienceBuilder
 
             $existing = $matches[$profileId] ?? ['group_ids' => [], 'group_names' => []];
             $existing['group_ids'][] = $groupId;
-            $existing['group_names'][] = (string) ($groupNames[$groupId] ?? ('group_' . $groupId));
+            $existing['group_names'][] = (string) ($groupNames[$groupId] ?? ('group_'.$groupId));
             $existing['group_ids'] = array_values(array_unique($existing['group_ids']));
             $existing['group_names'] = array_values(array_unique(array_filter($existing['group_names'])));
             $matches[$profileId] = $existing;
