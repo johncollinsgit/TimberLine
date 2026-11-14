@@ -1,3 +1,10 @@
+## 2026-11-14 - Source-backed Everbranch history
+
+The Everbranch and Evergrove marketing footers now link to one detailed public
+history account, with a downloadable press fact sheet. The account distinguishes
+development under the Everbranch name by April 2026 from founding, launch and
+customer-use dates. Dated historical records are preserved.
+
 ## 2026-11-13 — Reusable historical customer discovery
 
 Customers source history adds reviewed active/inactive Square location coverage

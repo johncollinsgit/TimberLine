@@ -7,6 +7,7 @@
 
         <nav aria-label="Footer navigation">
             <a href="/">Home</a>
+            <a href="https://theeverbranch.com/everbranch-history.html">Everbranch history</a>
             <a href="/privacy">Privacy</a>
             <a href="/terms">Terms</a>
             <a href="/sms-terms">SMS terms</a>
