@@ -11,6 +11,8 @@ use App\Services\ManagedWebsite\ManagedWebsiteDomainService;
 use App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsitePilotService;
+use App\Services\Tenancy\PreAuthTenantContextResolver;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
@@ -101,4 +103,100 @@ test('expired paid eligibility pauses editing while retaining the last paid publ
     expect($websites->publicPage($tenant, '/'))->toBeNull();
     TenantAccessProfile::query()->where('tenant_id', $tenant->id)->update(['metadata' => []]);
     expect($websites->publicPage($tenant, '/'))->not->toBeNull();
+});
+
+test('included website child addresses render only their published tenant snapshots', function (): void {
+    [$tenant, $actor] = paidWebsiteFixture();
+    config()->set('testing.paid_website_tenants', [$tenant->id]);
+    config()->set('testing.verified_website_tenants', [$tenant->id]);
+    $websites = app(ManagedWebsiteService::class);
+    $site = $websites->createSite($tenant, $actor);
+    $websites->applyTheme($site, 'collins-electric', $actor);
+    $page = $site->pages()->where('slug', 'about')->firstOrFail();
+    $websites->saveDraft($site, $page, ['title' => 'Our studio', 'blocks' => [['type' => 'text', 'body' => 'Published studio story']]], $actor);
+    $websites->publish($site, $actor);
+    $websites->saveDraft($site, $page->fresh(), ['title' => 'Private changes', 'blocks' => [['type' => 'text', 'body' => 'Unpublished studio changes']]], $actor);
+
+    $this->get('https://paid-photo-studio.theeverbranch.com/about')
+        ->assertOk()->assertSeeText('Published studio story')->assertDontSeeText('Unpublished studio changes');
+    $this->head('https://paid-photo-studio.theeverbranch.com/about')->assertOk();
+    $this->getJson('https://paid-photo-studio.theeverbranch.com/about')->assertNotFound();
+    $this->post('https://paid-photo-studio.theeverbranch.com/about')->assertNotFound();
+    $this->get('https://app.theeverbranch.com/about?tenant=paid-photo-studio')->assertNotFound();
+    $this->get('https://theeverbranch.com/about?tenant=paid-photo-studio')->assertNotFound();
+    $this->get('https://unrelated.example/about')->assertNotFound();
+
+    $this->get('https://paid-photo-studio.theeverbranch.com/login')
+        ->assertOk()->assertDontSeeText('Published studio story');
+    $this->get('https://paid-photo-studio.theeverbranch.com/dashboard')
+        ->assertRedirect()->assertDontSeeText('Published studio story');
+});
+
+test('included website children retain draft paid access and public rendering gates', function (): void {
+    [$tenant, $actor] = paidWebsiteFixture();
+    config()->set('testing.paid_website_tenants', [$tenant->id]);
+    config()->set('testing.verified_website_tenants', [$tenant->id]);
+    $websites = app(ManagedWebsiteService::class);
+    $site = $websites->createSite($tenant, $actor);
+    $websites->applyTheme($site, 'collins-electric', $actor);
+    $this->get('https://paid-photo-studio.theeverbranch.com/about')->assertNotFound();
+    $websites->publish($site, $actor);
+    $this->get('https://paid-photo-studio.theeverbranch.com/about')->assertOk();
+
+    config()->set('managed_website.public_render_enabled', false);
+    $this->get('https://paid-photo-studio.theeverbranch.com/about')->assertNotFound();
+    config()->set('managed_website.public_render_enabled', true);
+    config()->set('testing.verified_website_tenants', []);
+    $this->get('https://paid-photo-studio.theeverbranch.com/about')->assertNotFound();
+    config()->set('testing.verified_website_tenants', [$tenant->id]);
+    TenantModuleState::query()->create(['tenant_id' => $tenant->id, 'module_key' => 'managed_website', 'enabled_override' => false]);
+    $this->get('https://paid-photo-studio.theeverbranch.com/about')->assertNotFound();
+});
+
+test('a flagship website cannot replace the app home through fallback tenant context', function (): void {
+    [$tenant, $actor] = paidWebsiteFixture();
+    config()->set('testing.paid_website_tenants', [$tenant->id]);
+    config()->set('testing.verified_website_tenants', [$tenant->id]);
+    config()->set('tenancy.auth.flagship_tenant_slug', $tenant->slug);
+    config()->set('tenancy.landlord.hosts', []);
+    config()->set('app.url', 'https://app.theeverbranch.com');
+    $site = app(ManagedWebsiteService::class)->createSite($tenant, $actor);
+    app(ManagedWebsiteService::class)->publish($site, $actor);
+
+    $this->get('https://app.theeverbranch.com/')->assertRedirect()->assertDontSee('data-testid="managed-site"', false);
+    $this->get('https://theeverbranch.com/')->assertOk()->assertDontSee('data-testid="managed-site"', false);
+
+    config()->set('app.url', 'https://alias.theeverbranch.com');
+    $alias = app(PreAuthTenantContextResolver::class)->resolveForRequest(Request::create('https://alias.theeverbranch.com/'));
+    expect($alias->tenant?->id)->toBe($tenant->id);
+    $this->get('https://alias.theeverbranch.com/')->assertNotFound();
+    $this->get('https://app.theeverbranch.com/')->assertRedirect()->assertDontSee('data-testid="managed-site"', false);
+});
+
+test('website setup validation errors are visible and preserve the editable contact details', function (): void {
+    [$tenant, $actor] = paidWebsiteFixture();
+    config()->set('testing.paid_website_tenants', [$tenant->id]);
+    $this->actingAs($actor)->withSession(['tenant_id' => $tenant->id])
+        ->from(route('managed-website.index'))
+        ->post(route('managed-website.setup.save'), ['theme_key' => 'collins-electric', 'contact_name' => 'Fictional Photo Studio', 'contact_email' => 'not-an-email'])
+        ->assertRedirect(route('managed-website.index'))->assertSessionHasErrors('contact_email');
+
+    $this->get(route('managed-website.index'))->assertOk()
+        ->assertSee('role="alert"', false)->assertSeeText('The contact email field must be a valid email address.')
+        ->assertSeeText('Edit details')->assertSee('value="not-an-email"', false)->assertSee('data-start-step="3"', false);
+});
+
+test('website offering validation returns to the offering step without losing its text', function (): void {
+    [$tenant, $actor] = paidWebsiteFixture();
+    config()->set('testing.paid_website_tenants', [$tenant->id]);
+    $title = trim(str_repeat('Draft offering ', 15));
+    $description = 'Keep this fictional offering description.';
+    $this->actingAs($actor)->withSession(['tenant_id' => $tenant->id])
+        ->from(route('managed-website.index'))
+        ->post(route('managed-website.setup.save'), ['theme_key' => 'collins-electric', 'service_title' => $title, 'service_description' => $description])
+        ->assertRedirect(route('managed-website.index'))->assertSessionHasErrors('service_title');
+
+    $this->get(route('managed-website.index'))->assertOk()->assertSee('role="alert"', false)
+        ->assertSeeText('Edit details')->assertSee('data-start-step="4"', false)
+        ->assertSee('value="'.$title.'"', false)->assertSeeText($description);
 });

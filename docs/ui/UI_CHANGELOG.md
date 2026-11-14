@@ -3459,3 +3459,11 @@ New customers choose a business template from photo cards before creating an
 account. Included tools are selected on the server; the initial page no longer
 asks customers to assemble a branch checklist. Template choices persist through
 signup and business setup, with branch adjustments available after purchase.
+
+## 2026-11-14 — Published website pages and setup recovery
+
+- Published child pages now resolve on the included Everbranch address with the
+  same exact host and paid/public-render checks as active customer domains.
+- The app Home keeps its normal destination when a flagship Website exists.
+- Website setup displays rejected details, retains the entered values, and opens
+  Edit details at the appropriate wizard step.

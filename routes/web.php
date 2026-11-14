@@ -257,7 +257,10 @@ Route::get('/', function (
     // Website. This keeps a published flagship draft from replacing the
     // platform product page through host-context fallback.
     $isPlatformPublicHost = $requestHost === $normalizeHost((string) config('tenancy.domains.canonical.public_host', ''));
-    if (! $isPlatformPublicHost && $hostTenant instanceof \App\Models\Tenant && $managedWebsites->publicPage($hostTenant, '') !== null) {
+    $isPlatformAppHost = $requestHost === $normalizeHost((string) config('tenancy.domains.canonical.landlord_host', ''));
+    // Only platform Home may bypass Website rendering. A resolved Website
+    // address that fails its exact host check must retain showPublic's 404.
+    if (! $isPlatformPublicHost && ! $isPlatformAppHost && $hostTenant instanceof \App\Models\Tenant && $managedWebsites->publicPage($hostTenant, '') !== null) {
         return app(ManagedWebsiteController::class)->showPublic($request, '', $managedWebsites);
     }
 
@@ -2721,7 +2724,7 @@ require __DIR__.'/team.php';
 // Published customer pages are resolved only after every explicit platform,
 // Shopify, checkout, webhook, and workspace route has had precedence. A
 // Laravel fallback avoids turning unrelated unknown methods into a 405 while
-// keeping custom-domain rendering strictly host-scoped.
+// keeping included-address and custom-domain rendering strictly host-scoped.
 // Laravel's Route::fallback helper is GET-only. Marking this all-method route
 // as a fallback preserves final-route precedence while allowing non-GET/HEAD
 // misses to return the required 404 instead of a framework 405.
@@ -2747,13 +2750,13 @@ Route::any('/{managedWebsiteFallbackPath}', function (Request $request, ManagedW
     $context = $request->attributes->get('host_tenant_context');
     abort_unless(
         $context instanceof HostTenantContext
-        && $context->strategy === 'managed_website_custom_domain'
+        && in_array($context->strategy, ['subdomain_slug', 'managed_website_custom_domain'], true)
         && $context->tenant instanceof \App\Models\Tenant,
         404,
     );
 
     $payload = $managedWebsites->publicPage($context->tenant, $request->path());
-    abort_unless($payload !== null, 404);
+    abort_unless($payload !== null && $managedWebsites->publicHostAllowed($payload['site'], $request->getHost()), 404);
 
     return view('managed-website.public', $payload + ['tenant' => $context->tenant]);
 })->where('managedWebsiteFallbackPath', '.*')
