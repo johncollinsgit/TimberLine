@@ -30,6 +30,13 @@ class HomeRedirect
             return route('workspace.first-login', absolute: false);
         }
 
+        if ($tenant instanceof Tenant && $user->is_active && $user->hasVerifiedEmail()
+            && data_get($tenant->accessProfile?->metadata, 'self_service_registration') === true
+            && $user->tenants()->where('tenants.id', $tenant->id)->wherePivot('role', 'owner')->wherePivot('membership_active', true)->exists()
+            && ! app(\App\Services\Billing\SelfServicePurchaseEligibility::class)->paidForTenant($tenant)) {
+            return route('self-service.purchase', ['tenant' => $tenant->slug], absolute: false);
+        }
+
         if ($tenant instanceof Tenant && self::tenantSetupIsIncomplete($tenant)) {
             return route('app.start', absolute: false);
         }

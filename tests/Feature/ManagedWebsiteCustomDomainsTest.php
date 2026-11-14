@@ -10,6 +10,7 @@ use App\Models\TenantSiteVersion;
 use App\Models\User;
 use App\Services\ManagedWebsite\CloudflareWebsiteDomains;
 use App\Services\ManagedWebsite\ManagedWebsiteDomainService;
+use App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy;
 use App\Services\Tenancy\PreAuthTenantContextResolver;
 use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Http\Request;
@@ -22,6 +23,11 @@ beforeEach(function (): void {
     config()->set('managed_website.custom_domains_enabled', true);
     config()->set('managed_website.custom_domain_activation_enabled', true);
     config()->set('managed_website.custom_domain_target', 'sites.theeverbranch.com');
+    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy->shouldReceive('eligible')->andReturn(false);
+    $policy->shouldReceive('registered')->andReturn(false);
+    $policy->shouldReceive('publicAccessAllowed')->andReturn(true);
+    app()->instance(ManagedWebsiteSelfServicePolicy::class, $policy);
     $edge = Mockery::mock(CloudflareWebsiteDomains::class);
     $edge->shouldReceive('check')->andReturn(['ready' => true, 'message' => 'Ready']);
     app()->instance(CloudflareWebsiteDomains::class, $edge);
@@ -311,4 +317,102 @@ test('the website overview offers guided domain connection and human assistance'
         ->assertSeeText('Handle this for me')
         ->assertSee('www.yourbusiness.com')
         ->assertSee(route('managed-website.products.index'), false);
+});
+
+test('paid domains connect automatically after DNS and TLS are ready without a tenant allowlist', function (): void {
+    [$tenant, $actor, $site] = customDomainPilot();
+    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy->shouldReceive('eligible')->with(Mockery::on(fn ($candidate) => $candidate->id === $tenant->id))->andReturn(true);
+    $policy->shouldReceive('publicAccessAllowed')->andReturn(true);
+    app()->instance(ManagedWebsiteSelfServicePolicy::class, $policy);
+    config()->set('managed_website.custom_domain_tenant_ids', []);
+    $domains = app(ManagedWebsiteDomainService::class);
+    $domain = $domains->request($site, 'www.automatic.example', $actor);
+
+    expect($domains->reconcile($domain)->status)->toBe('active')
+        ->and($domains->publicUrl($site->fresh()))->toBe('https://www.automatic.example');
+});
+
+test('background domain recovery leaves unpaid and frozen connections unactivated', function (): void {
+    [$tenant, $actor, $site] = customDomainPilot();
+    $domains = app(ManagedWebsiteDomainService::class);
+    $domain = $domains->request($site, 'www.unpaid.example', $actor);
+    expect($domains->reconcile($domain)->status)->toBe('pending');
+
+    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy->shouldReceive('eligible')->andReturn(true);
+    app()->instance(ManagedWebsiteSelfServicePolicy::class, $policy);
+    config()->set('managed_website.custom_domain_activation_enabled', false);
+    expect($domains->reconcile($domain)->status)->toBe('verified');
+});
+
+test('a verified domain is not activated before website publication', function (): void {
+    [, $actor, $site] = customDomainPilot();
+    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy->shouldReceive('eligible')->andReturn(true);
+    app()->instance(ManagedWebsiteSelfServicePolicy::class, $policy);
+    $site->forceFill(['status' => 'draft', 'public_enabled' => false])->save();
+    $domains = app(ManagedWebsiteDomainService::class);
+    $domain = $domains->request($site, 'www.draft.example', $actor);
+    expect($domains->reconcile($domain)->status)->toBe('verified');
+});
+
+test('domain status is read-only and cannot reveal another tenant connection', function (): void {
+    [$tenant, $actor, $site] = customDomainPilot();
+    $domain = app(ManagedWebsiteDomainService::class)->request($site, 'www.status.example', $actor);
+    $this->actingAs($actor)->withSession(['tenant_id' => $tenant->id])
+        ->getJson(route('managed-website.domains.status', $domain))->assertOk()->assertJsonPath('status', 'pending')->assertDontSee($domain->verification_token);
+    [$otherTenant, $otherActor] = customDomainPilot('Other Status', 'other-status');
+    config()->set('managed_website.custom_domain_tenant_ids', [$tenant->id, $otherTenant->id]);
+    $this->actingAs($otherActor)->withSession(['tenant_id' => $otherTenant->id])
+        ->getJson(route('managed-website.domains.status', $domain))->assertNotFound();
+});
+
+test('scheduled recovery finishes a paid pending domain without browser actions', function (): void {
+    [, $actor, $site] = customDomainPilot();
+    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy->shouldReceive('eligible')->andReturn(true);
+    app()->instance(ManagedWebsiteSelfServicePolicy::class, $policy);
+    $edge = Mockery::mock(CloudflareWebsiteDomains::class);
+    $edge->shouldReceive('ready')->andReturn(true);
+    $edge->shouldReceive('check')->andReturn(['ready' => true, 'message' => 'Ready']);
+    app()->instance(CloudflareWebsiteDomains::class, $edge);
+    $domain = app(ManagedWebsiteDomainService::class)->request($site, 'www.recover.example', $actor);
+    $this->artisan('website:reconcile-domains', ['--limit' => 20])->assertSuccessful();
+    expect($domain->fresh()->status)->toBe('active')->and($domain->fresh()->is_primary)->toBeTrue();
+    $this->artisan('website:reconcile-domains', ['--limit' => 20])->assertSuccessful();
+    expect($domain->fresh()->status)->toBe('active');
+});
+
+test('automatic paid domain connection honors website operational freezes before provider work', function (string $gate): void {
+    [, $actor, $site] = customDomainPilot();
+    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy->shouldReceive('eligible')->andReturn(true);
+    app()->instance(ManagedWebsiteSelfServicePolicy::class, $policy);
+    $edge = Mockery::mock(CloudflareWebsiteDomains::class);
+    $edge->shouldNotReceive('check');
+    app()->instance(CloudflareWebsiteDomains::class, $edge);
+    $domains = app(ManagedWebsiteDomainService::class);
+    $domain = $domains->request($site, 'www.frozen.example', $actor);
+    config()->set('managed_website.'.$gate, false);
+
+    expect($domains->reconcile($domain)->status)->toBe('pending')
+        ->and($domain->fresh()->verified_at)->toBeNull()
+        ->and($site->fresh()->public_enabled)->toBeTrue();
+})->with(['editor_enabled', 'publishing_enabled', 'public_render_enabled']);
+
+test('operational editor and publication freezes retain already connected domain snapshots', function (): void {
+    [, $actor, $site] = customDomainPilot();
+    $domains = app(ManagedWebsiteDomainService::class);
+    $domain = $domains->request($site, 'www.already-live.example', $actor);
+    $domain->forceFill(['status' => 'verified'])->save();
+    $domain = $domains->activate($domain, $actor);
+    $publishedVersion = $site->published_site_version_id;
+    config()->set('managed_website.editor_enabled', false);
+    config()->set('managed_website.publishing_enabled', false);
+
+    expect($domains->reconcile($domain)->status)->toBe('active')
+        ->and($site->fresh()->public_enabled)->toBeTrue()
+        ->and($site->fresh()->published_site_version_id)->toBe($publishedVersion);
+    $this->get('https://www.already-live.example/')->assertOk()->assertSee('data-testid="managed-site"', false);
 });

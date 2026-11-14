@@ -19,11 +19,11 @@ class BranchSelectionService
 
     public function accountsAvailable(): bool
     {
-        return (bool) config('services.google.enabled')
+        return (bool) config('self_service.registration_enabled') || ((bool) config('services.google.enabled')
             && (bool) config('services.google.auto_provision', true)
             && filled(config('services.google.client_id'))
             && filled(config('services.google.client_secret'))
-            && filled(config('services.google.redirect'));
+            && filled(config('services.google.redirect')));
     }
 
     public function normalize(array $keys, bool $strict = true): array

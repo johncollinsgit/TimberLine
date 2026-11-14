@@ -18,7 +18,7 @@
     <header class="eb-industry-page-header">
         <a class="eb-industry-page-back" href="{{ route('platform.promo') }}#industries"><span aria-hidden="true">←</span> Back to Everbranch</a>
         <a class="eb-industry-page-brand" href="{{ route('platform.promo') }}" aria-label="Everbranch home"><img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="Everbranch" /></a>
-        <a class="eb-industry-page-cta" href="{{ route('platform.start') }}">Get started <span aria-hidden="true">↗</span></a>
+        <a class="eb-industry-page-cta" href="{{ route('platform.start') }}"><x-everbranch.action-leaf />Get started</a>
         <section class="eb-industry-page-controls" aria-label="Example controls">
             <div class="eb-industry-page-control-group">
                 <span>Example business type</span>
@@ -50,7 +50,7 @@
         <section class="eb-industry-page-frame" data-industry-page-frame aria-label="{{ $disciplines[$discipline] }} fictional Everbranch example">
             <section id="industry-page-website" class="eb-industry-page-pane is-active" role="tabpanel" aria-labelledby="industry-page-website-tab" data-industry-page-pane="website">
                 <div class="eb-industry-page-site">
-                    <header><strong data-industry-page-site-brand>Everbranch example</strong><nav aria-label="Fictional website navigation"><button type="button" data-industry-page-site-nav>Services</button><button type="button" data-industry-page-site-nav>Our approach</button><button type="button" data-industry-page-site-nav>Contact</button></nav><button type="button" data-industry-page-admin>Open operations workspace <span aria-hidden="true">↗</span></button></header>
+                    <header><strong data-industry-page-site-brand>Everbranch example</strong><nav aria-label="Fictional website navigation"><button type="button" data-industry-page-site-nav>Services</button><button type="button" data-industry-page-site-nav>Our approach</button><button type="button" data-industry-page-site-nav>Contact</button></nav><button type="button" data-industry-page-admin><x-everbranch.action-leaf />Open operations workspace</button></header>
                     <div class="eb-industry-page-site-hero"><img data-industry-page-site-image alt="" /><div><p data-industry-page-site-kicker>Made for real work</p><h2 data-industry-page-site-title>Your website, built around your business.</h2><p data-industry-page-site-copy>Show the right next step without losing the relationship behind it.</p><div><button type="button" data-industry-page-site-action>Start a request</button><button type="button" data-industry-page-site-nav>See how it works</button></div></div></div>
                     <footer><span data-industry-page-site-proof>A thoughtful public front door, connected to the work behind it.</span><b data-industry-page-site-result>Fictional website example</b></footer>
                 </div>
@@ -66,7 +66,7 @@
             </section>
         </section>
 
-        <aside class="eb-industry-page-note"><strong>Ready to see this for your business?</strong><span>This is a fictional, public-only example. Your workspace setup is agreed with your team before activation.</span><a href="{{ route('platform.start') }}">Get started <span aria-hidden="true">↗</span></a></aside>
+        <aside class="eb-industry-page-note"><strong>Ready to see this for your business?</strong><span>This is a fictional, public-only example. Your workspace setup is agreed with your team before activation.</span><a href="{{ route('platform.start') }}"><x-everbranch.action-leaf />Get started</a></aside>
     </main>
 </body>
 </html>

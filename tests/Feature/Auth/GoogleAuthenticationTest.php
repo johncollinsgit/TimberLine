@@ -34,6 +34,23 @@ test('google redirect route redirects to the provider', function () {
         ->assertRedirect('https://accounts.google.com/o/oauth2/auth?client_id=test-google-client-id');
 });
 
+test('new Google account verification requires an explicit verified provider claim', function (array $claim, bool $verified): void {
+    $googleUser = (new SocialiteUser)->setRaw(['sub' => 'new-self-service-google', ...$claim])->map([
+        'id' => 'new-self-service-google', 'email' => 'new-google-owner@example.test', 'name' => 'Fictional Owner',
+    ]);
+    $provider = \Mockery::mock();
+    $provider->shouldReceive('user')->once()->andReturn($googleUser);
+    Socialite::shouldReceive('driver')->once()->with('google')->andReturn($provider);
+    $this->get(route('auth.google.callback'))->assertRedirect(route('workspace.first-login', absolute: false));
+    $user = User::query()->where('email', 'new-google-owner@example.test')->firstOrFail();
+    expect($user->hasVerifiedEmail())->toBe($verified);
+})->with([
+    'verified' => [['email_verified' => true], true],
+    'legacy verified claim' => [['verified_email' => true], true],
+    'unverified' => [['email_verified' => false], false],
+    'missing claim' => [[], false],
+]);
+
 test('google callback links an existing active user and signs them in', function () {
     $user = User::factory()->create([
         'email' => 'pouring@example.com',
@@ -41,7 +58,7 @@ test('google callback links an existing active user and signs them in', function
         'is_active' => true,
     ]);
 
-    $googleUser = (new SocialiteUser())
+    $googleUser = (new SocialiteUser)
         ->setRaw(['sub' => 'google-user-123'])
         ->map([
             'id' => 'google-user-123',
@@ -71,6 +88,16 @@ test('google callback links an existing active user and signs them in', function
         ->and($user->google_avatar)->toBe('https://example.com/avatar.png');
 });
 
+test('a verified Google claim cannot verify a different stored email', function (): void {
+    $user = User::factory()->create(['google_id' => 'known-google-account', 'email' => 'stored@example.test', 'email_verified_at' => null, 'requested_via' => 'google', 'is_active' => true]);
+    $googleUser = (new SocialiteUser)->setRaw(['email_verified' => true])->map(['id' => 'known-google-account', 'email' => 'changed@example.test', 'name' => 'Owner']);
+    $provider = \Mockery::mock();
+    $provider->shouldReceive('user')->once()->andReturn($googleUser);
+    Socialite::shouldReceive('driver')->once()->with('google')->andReturn($provider);
+    $this->get(route('auth.google.callback'))->assertRedirect(route('workspace.first-login', absolute: false));
+    expect($user->refresh()->hasVerifiedEmail())->toBeFalse();
+});
+
 test('google callback retries stateless when the session state expires', function () {
     $user = User::factory()->create([
         'email' => 'pouring@example.com',
@@ -78,7 +105,7 @@ test('google callback retries stateless when the session state expires', functio
         'is_active' => true,
     ]);
 
-    $googleUser = (new SocialiteUser())
+    $googleUser = (new SocialiteUser)
         ->setRaw(['sub' => 'google-user-123'])
         ->map([
             'id' => 'google-user-123',

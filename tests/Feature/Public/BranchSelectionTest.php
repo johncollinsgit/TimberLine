@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
     $this->withoutVite();
+    config()->set('self_service.registration_enabled', false);
     Http::preventStrayRequests();
     config()->set('services.google.enabled', true);
     config()->set('services.google.auto_provision', true);
@@ -17,10 +18,12 @@ beforeEach(function (): void {
     config()->set('services.google.redirect', 'https://example.test/auth/google/callback');
 });
 
-test('signup presents the server-priced branch basket', function (): void {
+test('signup presents templates with the server-priced offer', function (): void {
     $this->get(route('platform.start'))->assertOk()
-        ->assertSeeText('Make it yours.')
-        ->assertSeeText('Included branches')
+        ->assertSeeText('Choose a template.')
+        ->assertSeeText('Included tools')
+        ->assertSee('name="template"', false)
+        ->assertDontSee('name="branches[]"', false)
         ->assertSeeText('Continue to account')
         ->assertSeeText('$798')
         ->assertSeeText('Before applicable tax.')
@@ -32,7 +35,8 @@ test('branch basket deduplicates choices and resumes without changing access', f
     $this->post(route('platform.build.save'), ['branches' => ['customers', 'messaging', 'customers'], 'monthly_cents' => 1])
         ->assertRedirect(route('platform.build'))
         ->assertSessionHas(BranchSelectionService::SESSION_KEY, ['customers', 'messaging']);
-    $this->get(route('platform.build'))->assertOk()->assertSee('value="messaging" checked', false)->assertSeeText('$299');
+    $this->get(route('platform.build'))->assertOk()->assertSeeText('Choose a template.')->assertSeeText('$299');
+    expect(app(BranchSelectionService::class)->summary(session(BranchSelectionService::SESSION_KEY))['selected'])->toBe(['customers', 'messaging']);
     expect(Tenant::query()->count())->toBe(0)
         ->and(TenantModuleEntitlement::query()->count())->toBe(0);
     Http::assertNothingSent();

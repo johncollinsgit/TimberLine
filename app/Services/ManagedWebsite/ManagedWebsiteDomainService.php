@@ -23,7 +23,8 @@ class ManagedWebsiteDomainService
     public function enabledFor(Tenant $tenant): bool
     {
         return $this->enabled()
-            && in_array((int) $tenant->id, (array) config('managed_website.custom_domain_tenant_ids', []), true);
+            && (in_array((int) $tenant->id, (array) config('managed_website.custom_domain_tenant_ids', []), true)
+                || app(ManagedWebsiteSelfServicePolicy::class)->eligible($tenant));
     }
 
     public function activationEnabledFor(Tenant $tenant): bool
@@ -133,6 +134,7 @@ class ManagedWebsiteDomainService
     {
         $domain->loadMissing('site');
         abort_if(in_array($domain->status, ['active', 'disabled'], true), 422, 'This domain is not waiting for connection.');
+        $before = [$domain->status, $domain->last_error];
         $recordName = $this->verificationRecordName($domain->hostname);
         $expected = $this->verificationValue($domain);
         $records = $this->txtRecords($recordName);
@@ -147,9 +149,11 @@ class ManagedWebsiteDomainService
             'updated_by_user_id' => $actor?->id,
         ])->save();
 
-        app(ManagedWebsiteService::class)->recordEvent($domain->site, null, $actor, $verified ? 'domain.verified' : 'domain.verification_pending', [
-            'hostname' => $domain->hostname,
-        ]);
+        if ($before !== [$domain->status, $domain->last_error]) {
+            app(ManagedWebsiteService::class)->recordEvent($domain->site, null, $actor, $verified ? 'domain.verified' : 'domain.verification_pending', [
+                'hostname' => $domain->hostname,
+            ]);
+        }
 
         return $domain->fresh();
     }
@@ -177,7 +181,11 @@ class ManagedWebsiteDomainService
         }
 
         DB::transaction(function () use ($domain, $actor): void {
+            $current = TenantSiteDomain::query()->whereKey($domain->id)->lockForUpdate()->firstOrFail();
+            abort_unless($current->status === 'verified' && hash_equals((string) $domain->verification_token, (string) $current->verification_token), 409, 'Domain setup changed. Check the connection again.');
+            $domain = $current;
             TenantSiteDomain::query()->where('tenant_site_id', $domain->tenant_site_id)->update(['is_primary' => false]);
+            $domain->refresh();
             $domain->forceFill([
                 'status' => 'active',
                 'is_primary' => true,
@@ -187,6 +195,37 @@ class ManagedWebsiteDomainService
             ])->save();
             app(ManagedWebsiteService::class)->recordEvent($domain->site, null, $actor, 'domain.activated', ['hostname' => $domain->hostname]);
         });
+
+        return $domain->fresh();
+    }
+
+    /** Recover customer-requested connections after DNS/certificate propagation. */
+    public function reconcile(TenantSiteDomain $domain): TenantSiteDomain
+    {
+        $domain->loadMissing('site.tenant');
+        $tenant = $domain->site?->tenant;
+        if (! $tenant || ! in_array($domain->status, ['pending', 'verified'], true)
+            || ! $this->enabledFor($tenant)
+            || ! app(ManagedWebsiteSelfServicePolicy::class)->eligible($tenant)) {
+            return $domain;
+        }
+        $websites = app(ManagedWebsiteService::class);
+        if (! $websites->editorEnabledFor($tenant) || ! $websites->publishingEnabled() || ! $websites->publicRenderingEnabled()) {
+            // Autonomous connection is a new public-host publication. The
+            // scheduler must honor the same operational freezes as the UI.
+            return $domain;
+        }
+
+        $domain = $this->verify($domain, null);
+        if ($domain->status === 'verified' && ! $domain->last_error
+            && $domain->site->status === 'published' && $domain->site->public_enabled
+            && $this->activationEnabledFor($tenant)) {
+            try {
+                return $this->activate($domain, null);
+            } catch (ValidationException $exception) {
+                $domain->forceFill(['last_error' => (string) collect($exception->errors())->flatten()->first()])->save();
+            }
+        }
 
         return $domain->fresh();
     }
@@ -241,7 +280,10 @@ class ManagedWebsiteDomainService
             ->with(['site.tenant'])
             ->first();
 
-        if (! $domain || ! $domain->site || ! $domain->site->public_enabled || $domain->site->status !== 'published') {
+        if (! $domain || ! $domain->site || ! $domain->site->public_enabled || $domain->site->status !== 'published'
+            || ! (in_array((int) $domain->site->tenant_id, (array) config('managed_website.custom_domain_tenant_ids', []), true)
+                || app(ManagedWebsiteSelfServicePolicy::class)->registered($domain->site->tenant))
+            || ! app(ManagedWebsiteSelfServicePolicy::class)->publicAccessAllowed($domain->site->tenant)) {
             return null;
         }
 

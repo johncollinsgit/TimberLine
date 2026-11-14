@@ -1,0 +1,1 @@
+<span {{ $attributes->class('eb-action-leaf') }} style="--eb-action-leaf-image: url('{{ asset((string) config('everbranch.brand_assets.mark', 'brand/everbranch-mark.svg')) }}')" aria-hidden="true"></span>

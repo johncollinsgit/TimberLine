@@ -4,6 +4,10 @@ use App\Models\Tenant;
 use App\Models\TenantOnboardingBlueprint;
 use App\Models\User;
 
+beforeEach(function (): void {
+    config()->set('self_service.registration_enabled', false);
+});
+
 test('first-login workspace flow opens for a verified user with no tenants', function (): void {
     $user = User::factory()->tenantAdmin()->create([
         'name' => 'Nathan Collins',

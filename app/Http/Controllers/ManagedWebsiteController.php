@@ -42,8 +42,11 @@ class ManagedWebsiteController extends Controller
             'isEditorEnabled' => $websites->editorEnabledFor($tenant),
             'isPublishingEnabled' => $websites->publishingEnabled(),
             'isPublicRenderEnabled' => $websites->publicRenderingEnabled(),
+            'isSelfServiceWebsite' => app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->eligible($tenant),
             'themes' => $websites->themes(),
             'domainsEnabled' => $domains->enabledFor($tenant),
+            'automaticDomains' => app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->eligible($tenant)
+                && app(\App\Services\ManagedWebsite\CloudflareWebsiteDomains::class)->ready(),
             'domainTarget' => $domains->connectionTarget(),
             'domainConnectionRecords' => $site?->domains
                 ? $site->domains->mapWithKeys(fn (TenantSiteDomain $domain): array => [$domain->id => $domains->connectionRecords($domain)])
@@ -309,6 +312,20 @@ class ManagedWebsiteController extends Controller
         $domain = $domains->verify($domain, $request->user());
 
         return back()->with('status', $domain->status === 'verified' ? ($domain->last_error ?: 'Ownership and security are ready. Activate the domain when your website is published.') : 'The verification record is not visible yet. Check the record name and try again shortly.')->with('domain_wizard_id', $domain->id);
+    }
+
+    public function domainStatus(Request $request, TenantSiteDomain $domain, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless((int) $domain->tenant_id === (int) $tenant->id, 404);
+        abort_unless($domains->enabledFor($tenant), 423);
+
+        return response()->json([
+            'status' => $domain->status,
+            'message' => $domain->status === 'active' ? 'Connected. Your website is live at this domain.' : ($domain->last_error ?: 'Checking DNS and the security certificate.'),
+            'checked_at' => $domain->verification_checked_at?->toIso8601String(),
+        ])->header('Cache-Control', 'private, no-store');
     }
 
     public function activateDomain(Request $request, TenantSiteDomain $domain, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): RedirectResponse

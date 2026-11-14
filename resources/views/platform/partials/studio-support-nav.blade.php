@@ -14,7 +14,7 @@
             <a href="{{ route('platform.promo') }}#guide-tab-websites">Websites</a>
             <a href="{{ route('platform.plans') }}">Plans</a>
             <a href="{{ route('login') }}">Log in</a>
-            <a class="eb-studio-support-nav__cta" href="{{ route('platform.start') }}">Get started</a>
+            <a class="eb-studio-support-nav__cta" href="{{ route('platform.plans') }}"><x-everbranch.action-leaf />Pricing</a>
         </div>
     </nav>
 </header>

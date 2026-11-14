@@ -19,7 +19,7 @@
                 <div class="eb-studio-section-heading">
                     <h3>{{ $demo['title'] }}</h3>
                     <p>{{ $demo['description'] }}</p>
-                    <a class="eb-studio-button eb-studio-button--dark" href="https://teams-demo.theeverbranch.com/#{{ $key }}">Open the interactive demo <span aria-hidden="true">↗</span></a>
+                    <a class="eb-studio-button eb-studio-button--dark" href="https://teams-demo.theeverbranch.com/#{{ $key }}"><x-everbranch.action-leaf />Open the interactive demo</a>
                     <p class="eb-studio-demo__note">No sign-up. Fictional data and changes saved in your browser. No live bookings, payments or messages.</p>
                 </div>
                 <a class="eb-studio-demo__preview" href="https://teams-demo.theeverbranch.com/#{{ $key }}" aria-label="Open the {{ $demo['label'] }} demo">
