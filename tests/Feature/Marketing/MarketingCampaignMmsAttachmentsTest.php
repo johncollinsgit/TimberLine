@@ -359,7 +359,7 @@ test('tracking cannot expand a photo message beyond the MMS limit or retain a pr
     $recipient = approveCampaignMmsFixture($fixture);
     config()->set('marketing.links.enabled', true);
     config()->set('marketing.links.base_url', 'https://tracking.example.test');
-    $recipient->variant()->update(['message_text' => str_repeat('x', 1500).' https://a.co']);
+    $recipient->variant()->update(['message_text' => str_repeat('x', 1565).' https://a.co']);
 
     $result = app(MarketingSmsExecutionService::class)->sendRecipient($recipient->fresh());
 
