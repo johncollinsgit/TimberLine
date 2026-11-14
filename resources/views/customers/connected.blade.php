@@ -14,7 +14,8 @@
                     @if($detail['customer']['phone'])<a class="min-h-11 py-2 underline" href="tel:{{ $detail['customer']['phone'] }}">{{ $detail['customer']['phone'] }}</a>@endif
                 </div>
             </section>
-            <x-customer-commerce :commerce="$detail['commerce']" />
+            <x-customer-commerce :snapshot="$detail['commerce']" :rewards-label="data_get($detail, 'commerce.rewards.label', 'Rewards')" />
+            <x-customer-birthday :birthday="$detail['birthday'] ?? null" />
             @if($purchasePage > 1 || $purchaseHasMore)<nav class="flex flex-wrap items-center gap-3" aria-label="Customer purchase history"><span class="text-sm text-zinc-500">Linked purchases · page {{ $purchasePage }}</span>@if($purchasePage > 1)<a class="inline-flex min-h-11 items-center rounded-xl border px-4" href="{{ route('customers.profile', [...$query, 'profile'=>$profile->id, 'tenant'=>$tenant->slug, 'purchase_page'=>$purchasePage-1]) }}">Newer purchases</a>@endif@if($purchaseHasMore && $purchasePage < 100)<a class="inline-flex min-h-11 items-center rounded-xl border px-4" href="{{ route('customers.profile', [...$query, 'profile'=>$profile->id, 'tenant'=>$tenant->slug, 'purchase_page'=>$purchasePage+1]) }}">Older purchases</a>@endif</nav>@endif
             @if($squareSource)@include('customers.square-source')@endif
         @else
@@ -22,7 +23,7 @@
                 <input type="hidden" name="tenant" value="{{ $tenant->slug }}">
                 <label class="space-y-2"><span class="block font-medium">Find a customer</span><input class="min-h-11 w-full rounded-lg border px-3 text-base" type="search" name="query" value="{{ $query['query'] ?? '' }}" placeholder="Name, phone or email"></label>
                 @if($canManage)<label class="space-y-2"><span class="block font-medium">Event</span><select name="event_id" class="min-h-11 w-full rounded-lg border px-3 text-base"><option value="">All events</option>@foreach($events as $event)<option value="{{ $event['id'] }}" @selected(($query['event_id'] ?? null) == $event['id'])>{{ $event['name'] }}</option>@endforeach</select></label>@endif
-                <button class="min-h-11 self-end rounded-lg bg-emerald-900 px-5 py-3 font-semibold text-white">Find customers</button>
+                <button class="eb-primary-button min-h-11 self-end rounded-lg px-5 py-3">Find customers</button>
             </form>
             @if($context && $context['review_items'])<p class="rounded-xl bg-amber-50 p-4">{{ implode(' ', $context['review_items']) }}</p>@endif
             @if($results)

@@ -59,7 +59,13 @@ class TenantCustomerLookup
         $profile = $this->identities->byId($tenant, $id);
         abort_unless($profile && $profile->archived_at === null, 404);
 
+        $birthday = app(BirthdayProfileService::class)->birthdayForProfile($profile);
+        $dateAudit = $birthday?->audits()->whereIn('action', ['birthday_captured', 'birthday_updated', 'birthday_cleared'])->latest('id')->first();
+
         return ['customer' => ['id' => $profile->id, 'name' => (trim($profile->first_name.' '.$profile->last_name) ?: ($profile->email ?: $profile->phone ?: 'Customer')), 'email' => $profile->email, 'phone' => $profile->phone],
-            'commerce' => app(CustomerCommerceSnapshotService::class)->forProfile($profile, $tenant)];
+            'commerce' => app(CustomerCommerceSnapshotService::class)->forProfile($profile, $tenant),
+            'birthday' => $birthday ? ['contract_version' => 1, 'month' => $birthday->birth_month, 'day' => $birthday->birth_day,
+                'source' => $birthday->source, 'source_captured_at' => $birthday->source_captured_at?->toIso8601String(),
+                'is_uncertain' => $dateAudit?->is_uncertain, 'last_reward_issued_year' => $birthday->reward_last_issued_year] : null];
     }
 }
