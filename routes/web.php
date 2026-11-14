@@ -603,6 +603,10 @@ Route::post('/platform/demos/green-shield-pest-control/website/reminders', [Plat
 Route::get('/platform/plans', [PlatformProductPagesController::class, 'plans'])->name('platform.plans');
 Route::get('/platform/demo', [PlatformProductPagesController::class, 'demo'])->name('platform.demo');
 Route::get('/platform/start', [PlatformProductPagesController::class, 'start'])->name('platform.start');
+Route::get('/platform/build', [\App\Http\Controllers\Onboarding\BranchSelectionController::class, 'show'])->name('platform.build');
+Route::post('/platform/build', [\App\Http\Controllers\Onboarding\BranchSelectionController::class, 'save'])->middleware('throttle:30,1')->name('platform.build.save');
+Route::post('/platform/build/branch', [\App\Http\Controllers\Onboarding\BranchSelectionController::class, 'add'])->middleware('throttle:30,1')->name('platform.build.add');
+Route::get('/platform/request-access', [PlatformProductPagesController::class, 'requestAccess'])->name('platform.request-access');
 Route::get('/platform/request-submitted', [PlatformProductPagesController::class, 'requestSubmitted'])->name('platform.request-submitted');
 Route::get('/platform/contact', [PlatformProductPagesController::class, 'contact'])->name('platform.contact');
 Route::post('/platform/access-request', [PlatformAccessRequestController::class, 'store'])->name('platform.access-request');
@@ -1029,6 +1033,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('workspace.first-login.store');
 
     // Dashboard
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->get('/workspace/guide', [\App\Http\Controllers\Onboarding\BranchSelectionController::class, 'guide'])->name('workspace.guide');
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])->group(function () {
         Route::get('/dashboard', DashboardLaunchpad::class)->name('dashboard');
     });

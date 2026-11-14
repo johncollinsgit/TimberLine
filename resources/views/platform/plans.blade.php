@@ -10,12 +10,11 @@
     @include('partials.head', ['title' => 'Everbranch pricing'])
 </head>
 <body class="fb-public-body eb-studio-support-body" data-premium-motion="public">
-    @include('platform.partials.premium-motion')
     @include('platform.partials.studio-support-nav')
     <main class="fb-public-shell fb-contact-shell eb-studio-support-shell">
         <section class="fb-contact-overview" aria-label="Plans overview">
             <p class="fb-section-kicker">One simple plan</p>
-            <h1 class="fb-contact-title">The tools you need. Room to grow.</h1>
+            <h1 class="fb-contact-title">One simple plan.</h1>
             <p class="fb-contact-summary">{{ $content['subtitle'] ?? '' }}</p>
         </section>
         <section class="fb-section" aria-label="Everbranch offer">
@@ -39,8 +38,8 @@
         <section class="fb-section" aria-labelledby="included-branches-title">
             <div class="fb-section-header">
                 <p class="fb-section-kicker">Included core branches</p>
-                <h2 id="included-branches-title">Choose what works for your business.</h2>
-                <p>Start with a few branches. Add more included branches as you need them. We help you connect and set them up.</p>
+                <h2 id="included-branches-title">Your branches, included.</h2>
+                <p>Start with what you need. Add more when you are ready.</p>
             </div>
             <div class="fb-grid fb-grid-2">
                 @foreach(array_slice($branches, 0, 6) as $branch)
@@ -56,7 +55,7 @@
         <section class="fb-section" aria-labelledby="premium-software-title">
             <div class="fb-section-header">
                 <p class="fb-section-kicker">Separate premium software</p>
-                <h2 id="premium-software-title">More advanced software, when you need it.</h2>
+                <h2 id="premium-software-title">Room to grow.</h2>
                 <p>These products have separate pricing and an agreement before activation.</p>
             </div>
             <div class="fb-grid fb-grid-3">
@@ -64,22 +63,23 @@
                     <article class="fb-card">
                         <h3>{{ $product['name'] }}</h3>
                         <p class="mt-2">Separate pricing</p>
-                        <a class="fb-btn fb-btn-secondary mt-3" href="{{ route('platform.contact', ['intent' => 'sales']) }}">Talk about pricing</a>
+                        <a class="fb-btn fb-btn-secondary mt-3" href="{{ route('platform.contact', ['intent' => 'sales']) }}">Request pricing</a>
                     </article>
                 @endforeach
             </div>
         </section>
         <section class="fb-section" aria-label="Getting started">
             <div class="fb-card">
-                <h2 class="text-xl font-semibold">A clear next step.</h2>
+                <h2 class="text-xl font-semibold">Make it yours.</h2>
                 <ol class="mt-3 space-y-2">
-                    <li>1. Tell us about your business and choose your branches.</li>
-                    <li>2. Review your setup, usage terms, and any premium software with us.</li>
-                    <li>3. Receive access and follow the setup steps for your workspace.</li>
+                    <li>1. Choose your branches.</li>
+                    <li>2. Review your setup and costs.</li>
+                    <li>3. Set up your workspace.</li>
                 </ol>
                 <p class="mt-4">{{ $content['billing_note'] ?? '' }}</p>
             </div>
         </section>
     </main>
+    @include('platform.partials.ask-everbranch')
 </body>
 </html>

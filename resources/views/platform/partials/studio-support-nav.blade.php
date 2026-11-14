@@ -9,11 +9,13 @@
             <img src="{{ asset($studioBrandLockupPath) }}?v={{ $studioBrandAssetVersion }}" alt="Everbranch" />
         </a>
         <div>
-            <a class="eb-studio-support-nav__demo" href="{{ route('platform.industry-demo', ['discipline' => 'field']) }}">Explore a system</a>
+            <a href="{{ route('platform.promo') }}#explore">Explore</a>
             <a href="{{ route('platform.modules.explore') }}">Branches</a>
+            <a href="{{ route('platform.promo') }}#guide-tab-websites">Websites</a>
             <a href="{{ route('platform.plans') }}">Plans</a>
             <a href="{{ route('login') }}">Log in</a>
             <a class="eb-studio-support-nav__cta" href="{{ route('platform.start') }}">Get started</a>
         </div>
     </nav>
 </header>
+@include('platform.partials.ask-everbranch')

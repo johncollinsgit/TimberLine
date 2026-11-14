@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-for (const path of ['/platform/start', '/platform/demo']) {
+for (const path of ['/platform/request-access', '/platform/demo']) {
     test(`electrician can select the supported industry on ${path}`, async ({ page }) => {
         const posts: string[] = [];
         await page.route('**/*', route => {
@@ -11,7 +11,7 @@ for (const path of ['/platform/start', '/platform/demo']) {
         await page.goto(path);
         await page.getByLabel('Business type', { exact: true }).selectOption('electrician');
         await expect(page.getByLabel('Business type', { exact: true })).toHaveValue('electrician');
-        if (path === '/platform/start') {
+        if (path === '/platform/request-access') {
             await expect(page.locator('[data-public-offer]')).toBeVisible();
             await expect(page.locator('[data-public-offer]')).toContainText('Additional text, email, and AI usage fees may apply.');
         } else {

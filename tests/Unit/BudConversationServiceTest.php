@@ -31,7 +31,7 @@ test('bud answers onboarding and pricing questions with a real next step', funct
 
     expect($response['confidence'])->toBe('high')
         ->and($response['uncertain'])->toBeFalse()
-        ->and($response['reply'])->toContain('Request access')
+        ->and($response['reply'])->toContain('Get started')
         ->and($response['reply'])->toContain('pricing');
 });
 

@@ -20,11 +20,21 @@ class PublicBudConversationController extends Controller
             'page_url' => ['nullable', 'url', 'max:300'],
             'question' => ['required', 'string', 'max:5000'],
             'reply' => ['nullable', 'string', 'max:5000'],
-            'transcript' => ['nullable', 'array'],
+            'transcript' => ['nullable', 'array', 'max:20'],
             'transcript.*.role' => ['nullable', 'string', 'max:40'],
             'transcript.*.text' => ['nullable', 'string', 'max:5000'],
             'context' => ['nullable', 'array'],
+            'context.source' => ['nullable', 'string', 'max:80'],
+            'context.surface' => ['nullable', 'string', 'max:80'],
+            'context.scenario' => ['nullable', 'string', 'max:80'],
+            'context.pane' => ['nullable', 'string', 'max:80'],
+            'context.type' => ['nullable', 'string', 'max:120'],
+            'context.customer' => ['nullable', 'string', 'max:120'],
         ]);
+
+        $validated['context'] = collect($validated['context'] ?? [])->only(['source', 'surface', 'scenario', 'pane', 'type', 'customer'])->all();
+        $validated['context']['offer_summary'] = (string) config('product_surfaces.public_offer.summary', '');
+        $validated['context']['surface'] = 'public';
 
         $conversation = app(BudConversationService::class)->respond(
             (string) ($validated['question'] ?? ''),
@@ -60,7 +70,12 @@ class PublicBudConversationController extends Controller
         $recipient = trim((string) config('everbranch.bud.support_email', ''));
 
         if ($recipient !== '') {
-            Mail::to($recipient)->send(new PublicBudConversationMail($inquiry, $question, $reply, $context, $transcript));
+            try {
+                Mail::to($recipient)->send(new PublicBudConversationMail($inquiry, $question, $reply, $context, $transcript));
+            } catch (\Throwable $exception) {
+                // The inquiry is durable even if the support mailbox is unavailable.
+                report($exception);
+            }
         }
 
         return response()->json([

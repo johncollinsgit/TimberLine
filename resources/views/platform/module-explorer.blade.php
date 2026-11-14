@@ -18,6 +18,7 @@
     ])
 </head>
 <body class="fb-public-body eb-explorer-body eb-studio-support-body">
+    @include('platform.partials.ask-everbranch')
     <a class="eb-skip-link" href="#module-catalog">Skip to module catalog</a>
 
     <header class="eb-explorer-nav">
@@ -160,6 +161,11 @@
                                 </div>
                                 <span class="eb-module-row-arrow" aria-hidden="true">→</span>
                             </a>
+                            <form method="post" action="{{ route('platform.build.add') }}" class="eb-explorer-add">
+                                @csrf
+                                <input type="hidden" name="branch" value="{{ $module['key'] }}">
+                                <button class="fb-btn fb-btn-secondary" type="submit">Add to setup</button>
+                            </form>
                         </article>
                     @endforeach
                 </div>

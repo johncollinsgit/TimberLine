@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 430" fill="none">
+  <defs><filter id="paper" x="-10%" y="-30%" width="120%" height="160%"><feTurbulence type="fractalNoise" baseFrequency=".016 .04" numOctaves="3" seed="8" result="grain"/><feDisplacementMap in="SourceGraphic" in2="grain" scale="22"/><feGaussianBlur stdDeviation="2"/></filter></defs>
+  <g filter="url(#paper)"><path fill="#a9bdc3" opacity=".22" d="M-40 270 104 207 229 232 381 126 506 192 650 116 776 194 904 139 1063 183 1223 95 1480 204V460H-40Z"/><path fill="#9aaa8d" opacity=".28" d="m-40 311 137-33 159 24 178-81 128 57 163-26 146-54 130 53 144-39 143 67 192-25v206H-40Z"/><path fill="#6d8e76" opacity=".19" d="m-40 368 156-33 177 33 162-51 168 29 187-50 185 49 148-34 170 35 167-22v136H-40Z"/><path fill="#d3ba76" opacity=".13" d="m-40 408 230-19 245 13 187-25 234 28 251-17 373 33v39H-40Z"/></g>
+</svg>

@@ -16,6 +16,7 @@ use App\Services\ManagedWebsite\ManagedWebsiteDomainService;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsiteCommerceService;
 use App\Services\ManagedWebsite\WebsitePilotService;
+use App\Services\Mobile\TenantMobileSupportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -279,7 +280,22 @@ class ManagedWebsiteController extends Controller
         $this->requireEditor($tenant, $websites);
         abort_unless($domains->enabledFor($tenant), 423, 'Custom domains are not enabled for this website yet.');
         $site = TenantSite::query()->forTenant($tenant)->firstOrFail();
-        $domain = $domains->request($site, (string) $request->validate(['domain' => ['required', 'string', 'max:300']])['domain'], $request->user());
+        $data = $request->validate(['domain' => ['required', 'string', 'max:300'], 'assistance' => ['nullable', 'boolean']]);
+        $domain = $domains->request($site, (string) $data['domain'], $request->user());
+
+        if ($request->boolean('assistance')) {
+            app(TenantMobileSupportService::class)->create($tenant, $request->user(), [
+                'subject' => 'Connect website domain: '.$domain->hostname,
+                'category' => 'help',
+                'priority' => 'normal',
+                'body' => 'Please help connect '.$domain->hostname.' to this workspace website. The existing Everbranch address is '.$domains->platformUrl($site).'. Do not change email records or request registrar passwords.',
+                'source_type' => 'website_domain_assistance',
+                'dedupe_key' => 'website-domain:'.$tenant->id.':'.$site->id.':'.$domain->hostname,
+                'metadata' => ['tenant_site_id' => $site->id, 'domain_id' => $domain->id, 'hostname' => $domain->hostname],
+            ]);
+
+            return back()->with('status', 'Domain help requested. Follow its progress in Help; your Everbranch address remains available.')->with('domain_wizard_id', $domain->id);
+        }
 
         return back()->with('status', 'Domain saved. Add the records shown below in one DNS visit, then check the connection.')->with('domain_wizard_id', $domain->id);
     }
@@ -292,7 +308,7 @@ class ManagedWebsiteController extends Controller
         abort_unless($domains->enabledFor($tenant), 423, 'Custom domains are not enabled for this website yet.');
         $domain = $domains->verify($domain, $request->user());
 
-        return back()->with('status', $domain->status === 'verified' ? 'Domain ownership verified. You can activate it after the live routing check.' : 'The verification record is not visible yet. Check the record name and try again shortly.')->with('domain_wizard_id', $domain->id);
+        return back()->with('status', $domain->status === 'verified' ? ($domain->last_error ?: 'Ownership and security are ready. Activate the domain when your website is published.') : 'The verification record is not visible yet. Check the record name and try again shortly.')->with('domain_wizard_id', $domain->id);
     }
 
     public function activateDomain(Request $request, TenantSiteDomain $domain, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): RedirectResponse

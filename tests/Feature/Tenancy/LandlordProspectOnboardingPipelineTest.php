@@ -6,7 +6,7 @@ use App\Models\LandlordProspectDiscoveryRun;
 use App\Models\OperatorAlertLog;
 use App\Models\Tenant;
 use App\Models\User;
-use App\Services\Marketing\TwilioSmsService;
+use App\Services\Marketing\TwilioProviderClient;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 
@@ -241,7 +241,7 @@ test('landlord can log an inbound email response and move the prospect to replie
     $prospect = LandlordProspect::query()->where('email', 'ryan@scwired.com')->firstOrFail();
     config()->set('everbranch.operator_alert_sms_enabled', true);
     config()->set('everbranch.operator_alert_phone', '+1 (555) 010-0101');
-    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio = \Mockery::mock(TwilioProviderClient::class);
     $twilio->shouldReceive('sendSms')
         ->once()
         ->with(
@@ -250,7 +250,7 @@ test('landlord can log an inbound email response and move the prospect to replie
             \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
         )
         ->andReturn(['success' => true, 'provider' => 'twilio', 'error_code' => null]);
-    app()->instance(TwilioSmsService::class, $twilio);
+    app()->instance(TwilioProviderClient::class, $twilio);
 
     $this->actingAs($user)
         ->post("http://{$landlordHost}/landlord/onboarding/{$prospect->id}/communications", [
@@ -285,7 +285,7 @@ test('sendgrid inbound replies automatically update a prospect and alert the ope
     $prospect = LandlordProspect::query()->where('email', 'ryan@scwired.com')->firstOrFail();
     config()->set('everbranch.operator_alert_sms_enabled', true);
     config()->set('everbranch.operator_alert_phone', '+1 (555) 010-0101');
-    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio = \Mockery::mock(TwilioProviderClient::class);
     $twilio->shouldReceive('sendSms')
         ->once()
         ->with(
@@ -294,7 +294,7 @@ test('sendgrid inbound replies automatically update a prospect and alert the ope
             \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
         )
         ->andReturn(['success' => true, 'provider' => 'twilio', 'error_code' => null]);
-    app()->instance(TwilioSmsService::class, $twilio);
+    app()->instance(TwilioProviderClient::class, $twilio);
 
     $payload = [
         'from' => 'Ryan <ryan@scwired.com>',

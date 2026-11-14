@@ -45,6 +45,22 @@ class BudConversationService
             );
         }
 
+        if ($this->matches($normalized, ['connect a domain', 'connect my domain', 'custom domain', 'dns', 'domain setup'])) {
+            return $this->reply('Open Website → Domains. Publish to your Everbranch address first, then choose Connect my domain. Add the displayed DNS records and check the connection. Your domain becomes live after ownership, routing, and its security certificate are verified. Choose Handle this for me if you need help.', confidence: 'high', followUp: 'Already connected? Tell me which connection step needs attention.');
+        }
+
+        if ($this->matches($normalized, ['publish my website', 'publish a website', 'build a website', 'website setup', 'create a website'])) {
+            return $this->reply('Start in Website: choose a template, replace the photos and content, then preview on desktop and mobile. Save a draft before publishing. Your Everbranch address is the first publishing option; custom domains and selling need their own completed setup.', confidence: 'high', followUp: 'You can prepare your pages while payment or domain connections are being completed.');
+        }
+
+        if ($this->matches($normalized, ['choose branches', 'which branches', 'branch cost', 'included branches'])) {
+            return $this->reply('Core branches are included with Everbranch Simple. Choose a few that match your work, review their dependencies, and add more as you need them. Teams, Trajectory, and Markets & Makers have separate pricing and agreements. Text, email, and AI usage can have additional charges.', confidence: 'high', followUp: 'Explore Branches to compare each branch and its setup requirements.');
+        }
+
+        if ($this->matches($normalized, ['onboarding', 'setup help', 'getting started', 'set up my business'])) {
+            return $this->reply('Start with your business details, choose your branches, and review the purchase summary. Then complete the setup steps in your workspace. Start with one useful result: a customer record, a job, or a website draft. Optional integrations can be connected when you need them.', confidence: 'high', followUp: 'Tell me whether you are working on branches, your website, a domain, or payments.');
+        }
+
         if ($this->matches($normalized, ['what is everbranch', 'what is this', 'what does everbranch do', 'tell me about everbranch'])) {
             return $this->reply(
                 'Everbranch is a workspace for small businesses that keeps customers, jobs, tasks, files, reminders, and team context together so the next step does not get lost in a text thread, inbox, or notebook.',
@@ -80,6 +96,9 @@ class BudConversationService
         }
 
         if ($this->matches($normalized, ['what needs attention', 'what needs my attention', 'need attention', 'what should i do next', 'whats next', 'what is next'])) {
+            if (($context['surface'] ?? null) === 'public') {
+                return $this->reply('Start by choosing what you want to improve: customers, work, growth, or your website. Explore a branch, try the demo, then use Get started to choose your setup. Sign in to see next steps for an existing workspace.', confidence: 'high', followUp: 'Tell me which part of your business you want to simplify first.');
+            }
             $open = (int) ($workspaceSummary['open_customer_loop_actions'] ?? 0);
             $customerPhrase = $open === 1 ? 'There is 1 open Customer Loop action' : "There are {$open} open Customer Loop actions";
 
@@ -117,7 +136,7 @@ class BudConversationService
         if ($this->matches($normalized, ['how can i get on board', 'get on board', 'sign me up', 'how do i sign up', 'how do i join', 'how do i get access', 'request access', 'want to give you money', 'i want to buy', 'pricing', 'price', 'subscribe'])
             || ($this->matches($normalized, ['cost']) && ! $this->matches($normalized, ['shipping']))) {
             return $this->reply(
-                'That’s kind of you. The cleanest next step is to use the Request access path on the page, and if you already have an account then log in from there. If you’re asking about pricing or fit, I can help translate which plan or workflow you should look at.',
+                trim((string) ($context['offer_summary'] ?? '')).' Core branches are included. Premium products have separate pricing. Get started shows the current purchase or access steps; existing customers keep their agreed terms.',
                 confidence: 'high',
                 followUp: 'Tell me whether you want access, pricing, or a demo walkthrough, and I’ll point you to the right step.',
             );

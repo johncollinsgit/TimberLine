@@ -2,6 +2,7 @@
 
 namespace App\Services\Mobile;
 
+use App\Jobs\SendSupportTicketAlert;
 use App\Models\Tenant;
 use App\Models\TenantSupportTicket;
 use App\Models\TenantSupportTicketMessage;
@@ -41,6 +42,21 @@ class TenantMobileSupportService
     public function create(Tenant $tenant, User $user, array $input): array
     {
         $ticket = DB::transaction(function () use ($tenant, $user, $input): TenantSupportTicket {
+            // Serialize requests for this workspace before checking the unique key.
+            Tenant::query()->whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+            if (! empty($input['dedupe_key'])) {
+                $existing = TenantSupportTicket::withoutGlobalScopes()
+                    ->where('tenant_id', $tenant->id)->where('dedupe_key', $input['dedupe_key'])->first();
+                if ($existing && ! in_array($existing->status, ['resolved', 'closed'], true)) {
+                    return $existing;
+                }
+                if ($existing) {
+                    $existing->forceFill([
+                        'metadata' => [...(array) $existing->metadata, 'closed_dedupe_key' => $existing->dedupe_key],
+                        'dedupe_key' => null,
+                    ])->save();
+                }
+            }
             $ticket = TenantSupportTicket::withoutGlobalScopes()->create([
                 'tenant_id' => (int) $tenant->id,
                 'created_by_user_id' => (int) $user->id,
@@ -57,18 +73,16 @@ class TenantMobileSupportService
 
             return $ticket;
         });
+        if (! $ticket->wasRecentlyCreated) {
+            return $this->show((int) $tenant->id, (int) $ticket->id);
+        }
         $this->audit->record((int) $tenant->id, (int) $user->id, 'tenant.support_ticket.created', targetType: 'tenant_support_ticket', targetId: $ticket->id, context: ['surface' => 'everbranch_mobile'], afterState: ['status' => 'open', 'priority' => $ticket->priority]);
-        $this->alerts->notify('support_ticket.created', sprintf('Everbranch: %s ticket from %s — %s', strtoupper((string) $ticket->priority), $tenant->name, str($ticket->subject)->limit(90)), [
-            'dedupe_key' => 'support-ticket:'.$ticket->id,
-            'tenant_id' => (int) $tenant->id,
-            'tenant_name' => $tenant->name,
-            'tenant_slug' => $tenant->slug,
-            'target_type' => 'tenant_support_ticket',
-            'target_id' => (int) $ticket->id,
-            'ticket_priority' => $ticket->priority,
-            'ticket_subject' => $ticket->subject,
-            'ticket_source_type' => $ticket->source_type,
-        ]);
+        try {
+            SendSupportTicketAlert::dispatch((int) $ticket->id)->afterCommit();
+        } catch (\Throwable $exception) {
+            // A queue or SMS failure cannot undo a customer's durable ticket.
+            report($exception);
+        }
 
         return $this->show((int) $tenant->id, (int) $ticket->id);
     }
@@ -130,7 +144,7 @@ class TenantMobileSupportService
     public function createBudEscalation(Tenant $tenant, User $user, string $question, string $reply, string $confidence, array $transcript = []): array
     {
         $key = 'bud:'.sha1($tenant->id.'|'.$user->id.'|'.mb_strtolower(trim($question)));
-        $existing = TenantSupportTicket::withoutGlobalScopes()->where('dedupe_key', $key)->first();
+        $existing = TenantSupportTicket::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('dedupe_key', $key)->whereNotIn('status', ['resolved', 'closed'])->first();
         if ($existing) {
             return $this->show((int) $tenant->id, (int) $existing->id);
         }

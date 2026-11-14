@@ -1,0 +1,15 @@
+# Onboarding help and escalation
+
+Ask Everbranch uses the existing included Bud Core guidance. It reads public product terms from `product_surfaces.public_offer`, never from visitor-supplied context. Public conversation requests are bounded, persist in Service Inquiries and remain successful when the support email notification fails. The public dialog supports keyboard dismissal, suggested questions, a busy state, timeout recovery and a contact link. It does not expose tenant records or the operator phone.
+
+Signed-in Help accepts a selected setup step. Unknown questions, explicit requests for a person and unavailable Core guidance create a tenant-scoped ticket visible in the existing landlord support console. The ticket includes the question, guide reply and selected setup step. Repeated identical unresolved escalations reuse the durable ticket and its notification key. When an issue recurs after resolution, its previous dedupe key is archived in metadata and a new ticket is opened. Tickets remain available when the queue or SMS transport fails.
+
+`SendSupportTicketAlert` runs after the ticket transaction commits. SMS includes priority, ticket number and the authenticated landlord ticket URL; it omits customer free text and transcripts. The default destination is the owner's requested +1 864 616 5468; `EVERBRANCH_OPERATOR_ALERT_PHONE` can override it. The default fallback number does not enable SMS: set `EVERBRANCH_OPERATOR_ALERT_SMS_ENABLED=true` only with the existing sender/provider readiness. Existing explicit phone configuration preserves its existing enablement default. No actual text is sent by local tests.
+
+Operator notifications call the platform Twilio provider directly, with the platform account credentials and an explicit sender key. They never use a customer messaging gateway or customer usage ledger, including in a fresh queue worker with no tenant context. Configure `EVERBRANCH_OPERATOR_ALERT_SENDER_KEY` if the platform sender is not `legacy_default` (or the configured platform default sender). Provider enablement and sender validation still apply.
+
+The queue retries explicit temporary provider rejections (429/rate limit and service unavailable) with bounded backoff. Sent, suppressed and uncertain deliveries are never automatically replayed. An exhausted retry is retained in the failed-jobs queue, with its ticket and operator alert log intact. A queue worker and operational failed-job review are required in production.
+
+Metered Bud AI still requires its existing global provider, tenant approval and budget controls; this work does not enable an AI provider or change tenant caps. The included guide and human support remain available without those paid capabilities.
+
+Validation: feature coverage checks escalation deduplication, tenant isolation, unavailable-guide fallback, provider rejection recovery, private-text exclusion from SMS, public offer integrity, payload limits and email-failure recovery. Browser acceptance should open the public dialog, ask each suggested question, test an offline request, close with Escape and confirm focus returns to the launcher on desktop and mobile.

@@ -71,7 +71,7 @@ test('every active tenant member can open Branches from the primary sidebar', fu
         ->assertSee('data-sidebar-key="branches"', false);
 });
 
-test('account help uses a readable light support hero', function () {
+test('account help offers included guidance and accessible human support while AI stays gated', function () {
     $tenant = Tenant::query()->create(['name' => 'Support Tenant', 'slug' => 'support-tenant']);
     TenantAccessProfile::query()->create([
         'tenant_id' => $tenant->id,
@@ -86,17 +86,38 @@ test('account help uses a readable light support hero', function () {
     $this->actingAs($user)
         ->get(route('account-help.index'))
         ->assertOk()
-        ->assertSeeText('What do you need help with?')
-        ->assertSeeText('Included')
-        ->assertSeeText('Ask Bud')
+        ->assertSeeText('Included setup guidance.')
+        ->assertSeeText('Ask Everbranch')
+        ->assertSeeText('Talk to a person')
+        ->assertSee('for="help-question"', false)
+        ->assertSee('id="help-question"', false)
+        ->assertSee('for="help-workflow"', false)
+        ->assertSee('id="help-workflow"', false)
+        ->assertSee('name="escalate" value="1"', false)
+        ->assertSee(route('account-help.bud.ask'), false)
+        ->assertSeeText('Model-assisted drafts use an approved monthly cap.')
+        ->assertSeeText('Sending and publishing always need your confirmation.')
+        ->assertSeeText('Request Bud AI')
         ->assertDontSeeText('Request Bud activation')
-        ->assertSee('from-blue-50', false)
-        ->assertDontSee('from-zinc-950', false);
+        ->assertSee('border-zinc-200 bg-white', false)
+        ->assertDontSeeText('Approved cap:');
 
     $this->actingAs($user)
         ->post(route('account-help.bud.ask'), ['question' => 'wat needs my attention'])
         ->assertRedirect()
         ->assertSessionHas('bud_answer', fn (array $answer): bool => str_contains($answer['reply'], 'Customer Loop'));
+
+    config()->set('bud.core_enabled', false);
+    TenantBudSetting::query()->where('tenant_id', $tenant->id)->update(['ai_status' => 'approved', 'ai_monthly_budget_cents' => 1250]);
+
+    $this->actingAs($user)
+        ->get(route('account-help.index'))
+        ->assertOk()
+        ->assertSeeText('The guide is unavailable. Your question will go to the support team.')
+        ->assertSeeText('Talk to a person')
+        ->assertSeeText('Send to Everbranch')
+        ->assertSeeText('Approved cap: $12.50/month. Provider readiness is required.')
+        ->assertDontSeeText('Request Bud AI');
 });
 
 test('tenant settings stays immediately above workspace guide', function () {

@@ -140,6 +140,9 @@ class FirstLoginWorkspaceController extends Controller
 
         $workspaceName = trim((string) $validated['workspace_name']);
         $selectedModuleKeys = $this->normalizeSelectedModules((array) ($validated['module_choices'] ?? []));
+        $selection = app(\App\Services\Onboarding\BranchSelectionService::class);
+        $publicChoices = $selection->normalize((array) $request->session()->get(\App\Services\Onboarding\BranchSelectionService::SESSION_KEY, []), false);
+        $selectedModuleKeys = array_values(array_unique(array_merge($selectedModuleKeys, $publicChoices)));
         $guideAnswers = $this->guideAnswerPayload($validated, $selectedModuleKeys);
 
         try {
