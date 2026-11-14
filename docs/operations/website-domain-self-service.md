@@ -17,6 +17,11 @@ activation gates remain independent and default closed. Configure:
 - `MANAGED_WEBSITE_CLOUDFLARE_ZONE_ID`: the platform SaaS zone's ID.
 - `MANAGED_WEBSITE_CLOUDFLARE_API_TOKEN`: server-only scoped token with SSL and
   Certificates read/edit access to that zone. Never place it in browser payloads.
+- `MANAGED_WEBSITE_RELAY_ENABLED=true` only after the protected application
+  release and the matching Worker configuration have been verified.
+- `MANAGED_WEBSITE_RELAY_SECRET`: a dedicated, randomly generated secret of at
+  least 32 characters, identical to the Worker's `WEBSITE_ORIGIN_RELAY_SECRET`.
+  This is not the Cloudflare API token, `APP_KEY`, or a browser credential.
 
 Cloudflare for SaaS and its fallback origin must first be configured in that
 zone. **Check connection** verifies the tenant's TXT proof before looking up or
@@ -69,10 +74,56 @@ status. It does not create DNS records, change a fallback origin, or create a
 customer hostname. A successful audit still requires owned-domain HTTPS smoke
 to prove the origin's host routing and published content.
 
+## Secure origin relay (source candidate; disabled by default)
+
+The Free-plan SaaS path uses the ordinary Worker in
+`cloudflare/everbranch-domain-relay`. It forwards customer Website traffic to
+the fixed HTTPS app origin with both TLS SNI and HTTP Host set to
+`app.theeverbranch.com`. The existing origin certificate can therefore be
+validated with Full (strict). No customer certificate is installed on Forge,
+no arbitrary customer Host is admitted to the Nginx vhost, and no TLS
+verification is disabled. Deployment and route/DCV exclusions are documented
+in that directory's README. The deployed origin must still be checked with
+real certificate verification, and the zone must retain Full (strict).
+
+The Worker signs these UTF-8 lines, joined with `\n` and no trailing newline:
+`v1`, timestamp, uppercase method, lowercase original hostname, raw forwarded
+path/query, and lowercase hex SHA-256 of the raw body. The signature is lowercase
+hex HMAC-SHA256 using the dedicated relay secret. Header names are
+`X-Everbranch-Website-Host`, `X-Everbranch-Website-Timestamp` and
+`X-Everbranch-Website-Signature`. The origin accepts at most 60 seconds of age
+and five seconds of future clock skew. This window authenticates transport;
+it does not create a single-use customer authorization or replace CSRF.
+
+The global middleware verifies the canonical app HTTPS ingress and signature
+before routing, tenant resolution or sessions. It restores only an exact active
+custom hostname whose published site and current public-access gates pass.
+Unsigned canonical traffic keeps its existing behavior. Disabled/missing-key,
+partial, stale, malformed or tampered relay claims fail closed. Generic
+`Forwarded` and `X-Forwarded-Host` never grant this authority.
+
+Relayed GET/HEAD requests may render published Home/child pages, tenant-owned
+media, and the existing public shop/product/cart views. Only the existing
+numeric `POST /website/forms/{page}` contact form may mutate, with a maximum
+one MiB body, its exact host/site/page boundary and normal CSRF/throttle rules.
+Staff authentication, private app/API/webhook routes, shopper-account routes,
+and commerce writes are not relay surfaces. A Shopify query or session cannot
+replace a verified custom-domain Home page with an embedded app surface.
+Sessions remain host-local, responses are private/no-store, and Worker origin
+fetches bypass cache so customer domains cannot share an app-URL cache entry.
+
+`website:domain-readiness` also reports `relay_enabled` and
+`relay_secret_configured` booleans without printing a key or making a relay
+request. All booleans must pass for exit zero. `--provider` adds only the
+read-only fallback-origin GET; it does not prove Worker routes, shared-key
+agreement, strict TLS, HTTP DCV or published customer content. Live acceptance
+still needs an owned external hostname, TXT/CNAME propagation, active provider
+hostname/certificate, rendering on HTTPS, form/CSRF isolation and rollback.
+
 ## Acceptance
 
 Run `ManagedWebsiteCustomDomainsTest`, `CloudflareWebsiteDomainsTest`,
-`PaidSelfServiceWebsiteTest`, `ManagedWebsiteSafetyTest` and `WebsitePilotTest` using
+`WebsiteDomainRelayTest`, `PaidSelfServiceWebsiteTest`, `ManagedWebsiteSafetyTest` and `WebsitePilotTest` using
 fictional fixtures. They cover tenant isolation, replay, removed proof, incorrect
 routing, pending TLS, failed provider lookup, strict hostname parsing, and
 published page host boundaries, paid-cohort policy, generic publishing, frozen/

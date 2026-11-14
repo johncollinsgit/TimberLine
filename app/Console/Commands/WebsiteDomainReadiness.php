@@ -22,6 +22,8 @@ class WebsiteDomainReadiness extends Command
             'domain_activation_enabled' => (bool) config('managed_website.custom_domain_activation_enabled'),
             'domain_target_configured' => $domains->connectionTarget() !== '',
             'cloudflare_configured' => $cloudflare->ready(),
+            'relay_enabled' => (bool) config('managed_website.relay.enabled', false),
+            'relay_secret_configured' => strlen((string) config('managed_website.relay.secret', '')) >= 32,
         ];
         if ($this->option('provider')) {
             $checks['cloudflare_fallback_active'] = (bool) $cloudflare->infrastructureStatus()['fallback_active'];
