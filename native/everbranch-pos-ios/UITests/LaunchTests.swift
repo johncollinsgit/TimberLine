@@ -374,7 +374,7 @@ final class LaunchTests: XCTestCase {
             app.launch()
             XCTAssertTrue(app.buttons["Account & Tap to Pay"].waitForExistence(timeout: 10)); app.buttons["Account & Tap to Pay"].tap()
             let manage = app.buttons["Manage checkout rules"]; XCTAssertTrue(manage.waitForExistence(timeout: 5)); app.swipeUp(); manage.tap()
-            let legacy = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Legacy add-on'")).firstMatch
+            let legacy = app.descendants(matching: .any).matching(identifier: "checkout-rule-legacy").firstMatch
             XCTAssertTrue(legacy.waitForExistence(timeout: 10)); legacy.tap()
             XCTAssertTrue(app.navigationBars["Edit rule"].waitForExistence(timeout: 5))
             XCTAssertEqual(app.textFields["Name"].value as? String, "Legacy add-on")

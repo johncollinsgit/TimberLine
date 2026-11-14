@@ -156,6 +156,7 @@ struct CheckoutRuleManager: View {
                         Button { edit(rule) } label: {
                             HStack { VStack(alignment: .leading) { Text(rule.name); Text(description(rule)).font(.caption).foregroundStyle(.secondary) }; Spacer(); Text(rule.active ? "On" : "Off").font(.caption) }
                         }
+                        .accessibilityIdentifier("checkout-rule-\(rule.id)")
                         .swipeActions(allowsFullSwipe: false) { Button("Delete", role: .destructive) { remove(rule) } }
                     }
                     Button("Add rule") { error = nil; editor = EditorPresentation(draft: CheckoutRuleDraft(rule: nil)) }
