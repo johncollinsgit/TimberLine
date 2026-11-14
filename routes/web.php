@@ -238,7 +238,8 @@ Route::get('/', function (
     ModernForestryAlphaBootstrapService $alphaBootstrapService,
     ManagedWebsiteService $managedWebsites
 ) use ($evergrovePublicHosts, $normalizeHost) {
-    if ($contextService->hasPageContext($request)) {
+    if ($request->attributes->get('host_tenant_context')?->strategy !== 'managed_website_custom_domain'
+        && $contextService->hasPageContext($request)) {
         return $controller->show($request, $contextService, $tenantResolver, $displayLabelResolver, $experienceService, $alphaBootstrapService);
     }
 

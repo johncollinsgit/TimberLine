@@ -3067,6 +3067,28 @@ requires real provider readiness and acceptance. See
   global GET catch-all, which could shadow later application routes and turn
   unrelated POSTs into 405s.
 
+## Managed Website authenticated origin relay (source candidate, default disabled) (2026-11-14)
+
+- A dedicated ordinary Cloudflare Worker can forward external Website hosts to
+  the fixed canonical app HTTPS origin while retaining Full (strict) and the
+  existing Forge certificate. A dedicated HMAC key authenticates original host,
+  method, exact path/query, body digest and bounded timestamp before routing.
+  Generic forwarded-host headers and registration metadata grant no access.
+- Only an exact active custom-domain mapping with published/public site and
+  current public-access gates may resolve. Relayed routes are explicitly public:
+  published pages, own media and read-only shop/product/cart, plus existing
+  host-scoped contact POST with normal CSRF. Private authentication/app/API,
+  shopper account, provider webhooks and commerce writes fail closed.
+- Platform traffic remains unchanged without relay claims. Custom Home ignores
+  embedded Shopify query/session dispatch. Customer cookies stay host-local;
+  relay fetches and responses cannot share a public app-host cache entry.
+- `MANAGED_WEBSITE_RELAY_ENABLED` defaults false and its dedicated secret is
+  server-only. Readiness prints booleans, never keys; it cannot establish live
+  Worker route/DCV/strict-TLS or owned-domain acceptance. Normal protected
+  GitHub/Forge release, matching Worker deployment and real HTTPS smoke remain
+  required. See `docs/operations/website-domain-self-service.md` and
+  `cloudflare/everbranch-domain-relay/README.md`.
+
 ## Managed Website Safety Contract (approved, not enabled) (2026-07-27)
 
 - **Everbranch Managed Website** is the planned default-disabled,

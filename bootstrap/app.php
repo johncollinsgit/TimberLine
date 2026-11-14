@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->remove(FrameGuard::class);
+        $middleware->prepend(\App\Http\Middleware\WebsiteDomainRelay::class);
         // WebRTC SDP is line-oriented and its final CRLF is significant. Leave
         // other requests on Laravel's normal TrimStrings behavior.
         $middleware->replace(

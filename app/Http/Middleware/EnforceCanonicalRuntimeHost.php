@@ -85,6 +85,31 @@ class EnforceCanonicalRuntimeHost
             if (! $this->isManagedWebsitePublicRequest($request)) {
                 abort(404);
             }
+            if ($request->attributes->get('managed_website_relay')) {
+                abort_unless($request->routeIs(
+                    'home', 'managed-website.public.fallback',
+                    'managed-website.media.show', 'managed-website.catalog.media',
+                    'managed-website.store.index', 'managed-website.store.products.show', 'managed-website.store.cart',
+                    'managed-website.forms.submit',
+                ), 404);
+                if ($request->routeIs('managed-website.forms.submit')) {
+                    // The relay's public form may only target a published page
+                    // belonging to this exact active domain's site.
+                    abort_unless(\App\Models\TenantSitePage::query()
+                        ->whereKey($request->route('page'))
+                        ->where('tenant_id', $context->tenant->id)
+                        ->whereNotNull('published_version_id')
+                        ->whereHas('site.domains', fn ($query) => $query->where('hostname', $host)->where('status', 'active'))
+                        ->exists(), 404);
+                }
+                if ($request->routeIs('managed-website.media.show', 'managed-website.catalog.media')) {
+                    abort_unless(\App\Models\TenantSiteMedia::query()
+                        ->whereKey($request->route('media'))
+                        ->where('tenant_id', $context->tenant->id)
+                        ->whereHas('site.domains', fn ($query) => $query->where('hostname', $host)->where('status', 'active'))
+                        ->exists(), 404);
+                }
+            }
         }
 
         if ($this->allowLocalDevHost($host) || in_array($host, $this->allowedExactHosts(), true)) {

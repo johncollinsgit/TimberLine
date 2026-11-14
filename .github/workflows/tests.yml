@@ -164,6 +164,8 @@ jobs:
       run: |
         python3 tests/Unit/Operations/test_teams_clamav_health.py
         bash -n scripts/ops/install-teams-clamav.sh
+    - name: Verify signed website domain relay contracts
+      run: node --test cloudflare/everbranch-domain-relay/relay.test.mjs
     - name: Build pinned custom-label vector tracer
       run: |
         rustup target add x86_64-unknown-linux-musl
