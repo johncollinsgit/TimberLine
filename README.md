@@ -29,6 +29,15 @@ contract, verification and remaining hardware/provider acceptance.
 
 # Everbranch
 
+## Development and brand history
+
+Everbranch’s development under the Everbranch name dates back to at least April 2026.
+Read the [source-backed history](https://theeverbranch.com/everbranch-history.html)
+and [publication standard](docs/operations/everbranch-history.md). This establishes
+development under the name, not an exact founding, public launch or first
+commercial-use date. March 2026 customer use remains unverified. Older March
+headings received naming updates in April and must not be used as founding evidence.
+
 Every retail business using Everbranch has one tenant-owned customer profile
 across its branches. Customer references in every existing and future app must
 reuse that identity and the shared purchase, product/preference, event,

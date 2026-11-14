@@ -1,0 +1,27 @@
+EVERBRANCH | PRESS FACTS
+Published and reviewed: November 14, 2026
+
+Everbranch is a connected business platform created through Evergrove Software.
+It brings shared business tools, specialized apps and custom development together.
+Capabilities vary by workspace and release; some branches are demos, pilots or
+in development.
+
+APPROVED HISTORY WORDING
+Everbranch’s development under the Everbranch name dates back to at least April 2026.
+
+That is a development and brand-history statement. It does not establish an exact
+founding date, public launch date, first customer use or first commercial use.
+March 2026 customer use remains unverified. Do not derive any of those dates from
+domain registration, commits, integration setup or planning documents alone.
+
+SOURCE-BACKED HISTORY
+https://theeverbranch.com/everbranch-history.html
+
+WEBSITES
+https://theeverbranch.com/
+https://evergrovesoftware.com/
+
+FICTIONAL INTERACTIVE DEMO
+https://teams-demo.theeverbranch.com/
+No sign-up. Demo changes stay in the browser; it creates no real bookings,
+payments or messages.
