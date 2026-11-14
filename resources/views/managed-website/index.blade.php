@@ -1,7 +1,20 @@
 <x-layouts::app.sidebar title="Website">
     <flux:main>
+        @php
+            $setupHasErrors = collect(['theme_key', 'contact_name', 'contact_email', 'contact_phone', 'hours', 'service_area', 'service_title', 'service_description'])->contains(fn ($field) => $errors->has($field));
+            $setupErrorStep = $errors->has('theme_key') ? 2 : (($errors->has('service_title') || $errors->has('service_description')) ? 4 : ($setupHasErrors ? 3 : 1));
+        @endphp
         <div class="mx-auto max-w-6xl space-y-5 pb-12">
             @if(session('status'))<div class="border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-950" role="status">{{ session('status') }}</div>@endif
+            @if($errors->any())
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950" role="alert">
+                    <p class="font-semibold">Check your details.</p>
+                    <ul class="mt-2 list-inside list-disc">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+                    @if($setupHasErrors)
+                        <button class="mt-3 font-semibold underline" type="button" onclick="document.getElementById('website-setup').showModal()">Edit details</button>
+                    @endif
+                </div>
+            @endif
             <header class="eb-admin-page-header">
                 <div class="eb-admin-page-title">
                     <span class="eb-admin-page-icon" aria-hidden="true"><flux:icon.globe-alt class="size-5" /></span>
@@ -73,7 +86,7 @@
         </div>
     </flux:main>
     <dialog id="website-setup" class="w-[min(92vw,620px)] border border-zinc-200 bg-white p-0 shadow-2xl backdrop:bg-zinc-950/40">
-        <form method="POST" action="{{ route('managed-website.setup.save') }}" class="p-6" data-wizard>@csrf
+        <form method="POST" action="{{ route('managed-website.setup.save') }}" class="p-6" data-wizard data-start-step="{{ $setupErrorStep }}">@csrf
             <div class="flex items-center justify-between border-b border-zinc-200 pb-4"><div><p class="text-xs font-bold uppercase tracking-[.15em] text-emerald-800">Website setup</p><h2 class="mt-1 text-xl font-bold text-zinc-950">A few quick choices</h2></div><button type="button" class="text-xl text-zinc-500" onclick="this.closest('dialog').close()" aria-label="Close">×</button></div>
             <section data-step="1" class="space-y-4 pt-5"><h3 class="text-lg font-bold">1. Your website</h3><p class="text-sm leading-6 text-zinc-600">Create a clear online home where customers can understand what you offer and take the right next step.</p><div class="border border-zinc-200 bg-zinc-50 p-4 text-sm"><strong>Private draft first</strong><br>Review the pages and mobile preview before anything can be published.</div></section>
             <section data-step="2" class="hidden space-y-4 pt-5">
@@ -88,9 +101,9 @@
                 </div>
             </section>
             <section data-step="3" class="hidden space-y-4 pt-5"><h3 class="text-lg font-bold">3. Business details</h3><div class="grid gap-3 sm:grid-cols-2"><label class="text-sm font-semibold">Business name<input name="contact_name" value="{{ old('contact_name', $setup?->contact_name ?: $tenant->name) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Email<input name="contact_email" type="email" value="{{ old('contact_email', $setup?->contact_email) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Phone<input name="contact_phone" value="{{ old('contact_phone', $setup?->contact_phone) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Hours<input name="hours" value="{{ old('hours', $setup?->hours) }}" placeholder="Mon–Fri, 8am–5pm" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold sm:col-span-2">Service area<input name="service_area" value="{{ old('service_area', $setup?->service_area) }}" placeholder="Towns, counties, or neighborhoods you serve" class="mt-1 block w-full rounded border-zinc-300"></label></div></section>
-            <section data-step="4" class="hidden space-y-4 pt-5"><h3 class="text-lg font-bold">4. Add an offering <span class="font-normal text-zinc-500">(optional)</span></h3><p class="text-sm leading-6 text-zinc-600">Add an offering customers can ask about, or leave this blank and build the catalog later. No checkout, deposits, or billing are enabled here.</p><label class="block text-sm font-semibold">Offering name<input name="service_title" placeholder="Custom project consultation" class="mt-1 block w-full rounded border-zinc-300"></label><label class="block text-sm font-semibold">Clear description<textarea name="service_description" rows="3" placeholder="Tell customers what this offering includes and how to get started." class="mt-1 block w-full rounded border-zinc-300"></textarea></label></section>
+            <section data-step="4" class="hidden space-y-4 pt-5"><h3 class="text-lg font-bold">4. Add an offering <span class="font-normal text-zinc-500">(optional)</span></h3><p class="text-sm leading-6 text-zinc-600">Add an offering customers can ask about, or leave this blank and build the catalog later. No checkout, deposits, or billing are enabled here.</p><label class="block text-sm font-semibold">Offering name<input name="service_title" value="{{ old('service_title') }}" placeholder="Custom project consultation" class="mt-1 block w-full rounded border-zinc-300"></label><label class="block text-sm font-semibold">Clear description<textarea name="service_description" rows="3" placeholder="Tell customers what this offering includes and how to get started." class="mt-1 block w-full rounded border-zinc-300">{{ old('service_description') }}</textarea></label></section>
             <div class="mt-6 flex justify-between border-t border-zinc-200 pt-4"><button class="fb-btn fb-btn-secondary invisible" type="button" data-back>Back</button><div class="flex gap-2"><button class="fb-btn fb-btn-secondary" type="button" onclick="this.closest('dialog').close()">Close</button><button class="fb-btn fb-btn-primary" type="button" data-next>Continue</button><button class="fb-btn fb-btn-primary hidden" type="submit" data-finish>Save setup</button></div></div>
         </form>
     </dialog>
-    <script>document.querySelectorAll('[data-wizard]').forEach(function(w){let n=1;const render=()=>{w.querySelectorAll('[data-step]').forEach(s=>s.classList.toggle('hidden',Number(s.dataset.step)!==n));w.querySelector('[data-back]').classList.toggle('invisible',n===1);w.querySelector('[data-next]').classList.toggle('hidden',n===4);w.querySelector('[data-finish]').classList.toggle('hidden',n!==4)};w.querySelector('[data-next]').onclick=()=>{n=Math.min(4,n+1);render()};w.querySelector('[data-back]').onclick=()=>{n=Math.max(1,n-1);render()};render()})</script>
+    <script>document.querySelectorAll('[data-wizard]').forEach(function(w){let n=Number(w.dataset.startStep)||1;const render=()=>{w.querySelectorAll('[data-step]').forEach(s=>s.classList.toggle('hidden',Number(s.dataset.step)!==n));w.querySelector('[data-back]').classList.toggle('invisible',n===1);w.querySelector('[data-next]').classList.toggle('hidden',n===4);w.querySelector('[data-finish]').classList.toggle('hidden',n!==4)};w.querySelector('[data-next]').onclick=()=>{n=Math.min(4,n+1);render()};w.querySelector('[data-back]').onclick=()=>{n=Math.max(1,n-1);render()};render()})</script>
 </x-layouts::app.sidebar>

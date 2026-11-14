@@ -122,6 +122,29 @@ hostname/certificate, rendering on HTTPS, form/CSRF isolation and rollback.
 
 ## Acceptance
 
+Included Everbranch addresses render published child pages through the final
+Website fallback as well as Home. Both included addresses and active custom
+domains must pass the site's exact `publicHostAllowed` check; tenant resolution,
+a query parameter or a staff session alone cannot publish content on another
+host. Explicit platform, authentication, Shopify, checkout and webhook routes
+retain precedence. Drafts, unknown/foreign hosts, JSON requests and unknown writes
+do not become public Website pages. A flagship site resolved on the app host
+cannot replace the app's normal Home redirect.
+
+When checking a paid website, publish a Home and a child page, then change the
+child draft without republishing. Anonymous requests to the included child
+address must show the published snapshot, never the new draft. Repeat after a
+public-render freeze or explicit Website access revocation and confirm the
+snapshot is unavailable while its stored published pointers remain intact.
+Existing custom-domain and relay boundary coverage must remain green.
+
+Website setup validates the contact email using its syntax and DNS records.
+Rejected details are shown in an alert with an Edit details action; the saved
+input remains available and the wizard reopens at the relevant step. Use a
+fictional recipient at a domain with valid mail DNS for local acceptance; a
+reserved domain with null MX records can be correctly rejected. Setup itself
+does not send a message or enable customer checkout.
+
 Run `ManagedWebsiteCustomDomainsTest`, `CloudflareWebsiteDomainsTest`,
 `WebsiteDomainRelayTest`, `PaidSelfServiceWebsiteTest`, `ManagedWebsiteSafetyTest` and `WebsitePilotTest` using
 fictional fixtures. They cover tenant isolation, replay, removed proof, incorrect
