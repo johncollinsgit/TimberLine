@@ -6,7 +6,7 @@
         <div class="grid gap-6 lg:grid-cols-2">
             <section class="rounded-[20px] border border-zinc-200 bg-white p-6">
                 <h2 class="text-lg font-semibold">Ask Everbranch</h2>
-                <p class="mt-2 text-sm text-zinc-600">Setup guidance, with a person ready when you need one.</p>
+                <p class="mt-2 text-sm text-zinc-600">Included setup guidance. A person ready when you need one.</p>
                 <form method="post" action="{{ route('account-help.bud.ask') }}" class="mt-5 space-y-4">
                     @csrf
                     <label class="block text-sm font-medium" for="help-workflow">Working on</label>

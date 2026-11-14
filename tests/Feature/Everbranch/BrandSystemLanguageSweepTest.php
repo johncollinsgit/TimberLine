@@ -53,7 +53,7 @@ test('Everbranch brand configuration includes product ecosystem assets tokens an
 });
 
 test('public access request uses human workspace language instead of tenant slug copy', function (): void {
-    $this->get(route('platform.start'))
+    $this->get(route('platform.request-access'))
         ->assertOk()
         ->assertSeeText('Workspace address')
         ->assertSeeText('This becomes your team’s workspace URL after approval')
