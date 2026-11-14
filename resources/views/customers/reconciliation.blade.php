@@ -20,6 +20,17 @@
             </section>
         </div>
         <section class="space-y-4 rounded-2xl border bg-white p-5 dark:bg-zinc-900">
+            <h2 class="text-xl font-semibold">Recognized purchase places</h2>
+            <p class="text-sm text-zinc-500">{{ count($purchasePlaces['labels'] ?? []) }} original tax-place labels are recognized for geographic audiences. They describe where a confirmed purchase happened, separately from the customer's saved home address or attendance at a specific show.</p>
+            <form method="POST" action="{{ route('customers.reconciliation.purchase-place', ['tenant'=>$tenant->slug]) }}" class="grid gap-3 sm:grid-cols-2">@csrf
+                <input type="hidden" name="expected_version" value="{{ $purchasePlaces['version'] }}">
+                <label class="space-y-2"><span class="block">Original tax place label</span><input name="label" required maxlength="500" class="min-h-11 w-full rounded-lg border px-3" placeholder="City, county or venue name"></label>
+                <label class="space-y-2"><span class="block">Purchase-place ZIPs</span><input name="postal_codes" required maxlength="100" class="min-h-11 w-full rounded-lg border px-3" placeholder="29201 or comma-separated ZIPs"></label>
+                <button class="min-h-11 rounded-xl border px-4 py-3 sm:col-span-2">Recognize purchase place</button>
+            </form>
+            <details><summary class="min-h-11 cursor-pointer py-3">Review recognized tax labels and place ZIPs</summary><dl class="max-h-72 space-y-2 overflow-y-auto">@foreach($purchasePlaces['labels'] ?? [] as $place)<div class="flex flex-wrap justify-between gap-3"><dt>{{ $place['source_label'] }}</dt><dd>{{ implode(', ', $place['postal_codes']) }}</dd></div>@endforeach</dl></details>
+        </section>
+        <section class="space-y-4 rounded-2xl border bg-white p-5 dark:bg-zinc-900">
             <h2 class="text-xl font-semibold">Older starter audiences</h2><p class="text-sm text-zinc-500">These unchanged published starter definitions can be copied into this workspace as drafts. Original legacy definitions and saved group memberships are retained. Custom definitions without proven ownership need a separate review.</p>
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">@forelse($templates as $template)<form method="POST" action="{{ route('customers.reconciliation.template', ['tenant'=>$tenant->slug]) }}" class="rounded-xl border p-4">@csrf<input type="hidden" name="source_id" value="{{ $template['id'] }}"><input type="hidden" name="fingerprint" value="{{ $template['fingerprint'] }}"><p class="font-semibold">{{ $template['name'] }}</p><button class="mt-2 min-h-11 underline">Copy as a workspace draft</button></form>@empty<p class="text-sm text-zinc-500">No unchanged starter definitions are available to copy.</p>@endforelse</div>
         </section>

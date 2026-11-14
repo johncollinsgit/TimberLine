@@ -59,7 +59,7 @@ class ConnectedCustomersController extends Controller
             'events' => $canManage ? app(EventCustomerCohort::class)->options($tenant->id) : [], 'context' => $cohort];
 
         return ($request->expectsJson() ? response()->json(['tenant' => ['id' => $tenant->id, 'name' => $tenant->name, 'slug' => $tenant->slug],
-            'customer' => $detail['customer'] ?? null, 'commerce' => $detail['commerce'] ?? null, 'results' => $results,
+            'customer' => $detail['customer'] ?? null, 'commerce' => $detail['commerce'] ?? null, 'birthday' => $detail['birthday'] ?? null, 'results' => $results,
             'event_context' => $cohort ? array_diff_key($cohort, ['profile_ids' => true, 'relations' => true]) : null,
             'purchase_page' => $purchasePage, 'purchase_has_more' => $purchaseHasMore])
             : response()->view('customers.connected', $data))->header('Cache-Control', 'private, no-store');

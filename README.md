@@ -29,6 +29,24 @@ contract, verification and remaining hardware/provider acceptance.
 
 # Everbranch
 
+Every retail business using Everbranch has one tenant-owned customer profile
+across its branches. Customer references in every existing and future app must
+reuse that identity and the shared purchase, product/preference, event,
+subscription, Candle Cash/rewards, birthday and marketing-group history. Shared
+rewards balances, transactions and annual birthday benefits retain their original
+ledger/profile records across apps and source cutovers. Modern Forestry is the first
+implementation of this included capability; other businesses keep their own
+isolated profiles and source connections. Read the
+[universal customer profile standard](docs/architecture/unified-customer-commerce.md)
+before building or changing a customer-touching app.
+
+Modern Forestry currently uses **Shopify** for online retail, **Square** for
+in-person sales, **Asana** for event operations and **Recharge** for subscriptions.
+Future Everbranch retail, Pay, Teams and Subscriptions replace those respective
+roles only after reviewed cutovers, while retaining the same canonical customer
+and original historical evidence. Customer discovery and reconciliation live in
+Customers and feed these apps through shared services.
+
 Ask Everbranch has a separate default-off, source-only voice prototype with
 permission-scoped job grounding, replaceable generation, bounded history/cost
 reservations, cancellation and exact manual email/SMS draft previews. Fake tests

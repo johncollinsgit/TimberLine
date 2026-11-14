@@ -4843,7 +4843,7 @@ The old native-WebKit wizard gate failed on hidden Next after a click. Two exact
 local unchanged runs passed; an assumed catalog race was not reproduced. No
 speculative product/test workaround is added. The repaired-head WebKit gate must
 pass. No runtime, provider, publication, merge or deployment action occurred.
-## Unified customer commerce direction (October 30, 2026)
+## Unified customer commerce direction (October 30; expanded November 13, 2026)
 
 Every tenant should have one canonical customer entry connecting its confirmed
 online/in-person purchases and the existing rewards history. This is included
@@ -4854,6 +4854,24 @@ surface inventory, acceptance matrix and truthful launch boundary are in
 `docs/architecture/unified-customer-commerce.md`. The phone catalog build and
 the separate draft live POS candidate have not established real cross-channel
 customer/rewards acceptance.
+
+All existing and future customer-touching apps must reuse that canonical profile
+and shared product/preference, event, subscription, Candle Cash/rewards, birthday and marketing-group
+evidence. This included capability applies to future retail businesses with their
+own tenant-isolated identities and sources. Modern Forestry's current authorities
+are Shopify online retail, Square in-person sales, Asana event operations and
+Recharge subscriptions. Future Everbranch retail, Pay, Teams and Subscriptions
+replace those roles only after reviewed cutovers while retaining the original
+canonical customer and historical evidence. Customer discovery/reconciliation
+stays in Customers with source provenance; README/app review requirements link
+the shared integration/acceptance contract.
+
+Candle Cash uses the existing shared rewards ledger; balances, earning,
+redemption, expiry/refund history and tenant program terms follow the canonical
+customer. Birthdays use the existing birthday profile, source/capture evidence,
+club enrollment and annual reward issuance/redemption cycle. Source refreshes,
+alias resolution and app cutovers must not fabricate dates or duplicate awards.
+Channel permissions remain independent of rewards and birthday membership.
 
 ## Explicit household cash balance sources
 

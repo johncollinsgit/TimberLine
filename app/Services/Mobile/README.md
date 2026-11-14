@@ -1,5 +1,23 @@
 # Mobile Catalog Services
 
+## Universal customer profile standard
+
+All current and future customer-touching mobile branches resolve the business's
+canonical `MarketingProfile` through `CanonicalMarketingProfileResolver` and
+reuse the shared customer/commerce/behavior/event contracts. Do not create a mobile
+customer master or calculate separate purchase, rewards, birthday or audience truth.
+Reuse the shared rewards ledger and birthday profile/annual reward cycle so mobile
+activity and source refreshes cannot duplicate balances or birthday awards.
+Customer references must open that same tenant-owned profile, subject to the
+actor's permissions. This included capability serves every retail tenant.
+
+Modern Forestry currently uses Shopify (online), Square (in person), Asana
+(events) and Recharge (subscriptions). Future Everbranch retail, Pay, Teams and
+Subscriptions adapters retain that identity after reviewed source cutover.
+New mobile contracts must document source authority and demonstrate cross-surface
+identity and tenant isolation before launch. See the
+[shared standard](../../../docs/architecture/unified-customer-commerce.md).
+
 ## Class Scheduling Contract (2026-07-15)
 
 `TenantMobileClassSchedulingController` exposes the tenant calendar, class detail/attendees, customer/message destinations, and consent-gated reminder scheduling. Every request is protected by mobile authentication and workspace membership, then explicitly validates tenant ownership and the canonical `class_scheduling` Branch manifest. The native client must not infer tenant or resource access from identifiers supplied by the device.

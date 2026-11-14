@@ -1,7 +1,7 @@
 <x-layouts::app :title="'Square customer sources'">
 @once
 <style>
-    .eb-square-connection { max-width: 1152px; margin: 0 auto; padding: 28px; color: var(--eb-text-primary, #0f1c1f); font: 400 14px/1.6 var(--eb-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); }
+    .eb-square-connection { background: var(--eb-page-background, #fff); max-width: 1152px; margin: 0 auto; padding: 28px; color: var(--eb-text-primary, #0f1c1f); font: 400 14px/1.6 var(--eb-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); }
     .eb-square-connection, .eb-square-connection * { box-sizing: border-box; min-width: 0; }
     .eb-square-connection h1, .eb-square-connection h2, .eb-square-connection h3 { margin: 0; color: inherit; font-family: inherit; font-weight: 650; letter-spacing: -.025em; line-height: 1.3; }
     .eb-square-connection h1 { font-size: clamp(24px, 3vw, 30px); }
@@ -16,7 +16,7 @@
     .eb-square-connection .eb-square-status { display: inline-block; padding: 3px 10px; border: 1px solid var(--eb-border, #dbe4e3); border-radius: 999px; background: var(--eb-surface, #fff); color: var(--eb-text-primary, #0f1c1f); font-weight: 600; overflow-wrap: anywhere; }
     .eb-square-connection .eb-square-id { display: block; margin-top: 4px; color: var(--eb-text-primary, #0f1c1f); font-size: 14px; font-weight: 400; line-height: 1.6; overflow-wrap: anywhere; }
     .eb-square-connection .eb-square-details { padding-top: 4px; border-top: 1px solid var(--eb-border, #dbe4e3); }
-    .eb-square-connection .eb-square-details summary { min-height: 44px; padding: 10px 0; color: var(--eb-brand, #123c43); font-weight: 600; cursor: pointer; }
+    .eb-square-connection .eb-square-details summary { min-height: 44px; padding: 10px 0; color: var(--eb-link, #123c43); font-weight: 600; cursor: pointer; }
     .eb-square-connection .eb-square-details dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; margin: 8px 0 0; }
     .eb-square-connection .eb-square-details dt { color: var(--eb-text-muted, #5d6b6a); }
     .eb-square-connection .eb-square-details dd { margin: 3px 0 0; color: var(--eb-text-secondary, #32464b); overflow-wrap: anywhere; }
@@ -29,7 +29,7 @@
     .eb-square-connection .eb-square-check { display: flex; align-items: flex-start; gap: 12px; min-height: 44px; padding: 16px; border: 1px solid var(--eb-border, #dbe4e3); border-radius: 10px; background: var(--eb-surface-subtle, #f8fbfa); font-weight: 400; }
     .eb-square-connection input[type=checkbox] { flex: 0 0 18px; width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--eb-brand, #123c43); }
     .eb-square-connection .eb-square-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-    .eb-square-connection .eb-square-clear { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 12px; color: var(--eb-brand, #123c43); font-weight: 600; }
+    .eb-square-connection .eb-square-clear { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 12px; color: var(--eb-link, #123c43); font-weight: 600; }
     .eb-square-connection button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; max-width: 100%; padding: 11px 18px; border: 1px solid var(--eb-brand, #123c43); border-radius: 9px; background: var(--eb-brand, #123c43); color: #fff; font: 600 14px/1.5 var(--eb-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); text-align: center; white-space: normal; cursor: pointer; }
     .eb-square-connection .eb-square-secondary { border-color: var(--eb-border, #dbe4e3); background: var(--eb-surface, #fff); color: var(--eb-text-primary, #0f1c1f); }
     .eb-square-connection button:disabled { opacity: .5; cursor: not-allowed; }
@@ -53,7 +53,7 @@
         catch (\Throwable) { return 'date unknown'; }
     };
 @endphp
-<main class="eb-square-connection">
+<main class="eb-square-connection eb-themed-panel">
     <header>
         <h1>Square customers and source refresh</h1>
         <p class="eb-square-copy">Keep Square as checkout, or use another reviewed checkout later. This connection reads original Square customers, card references, purchases and locations into the existing source records. It does not activate Everbranch Pay, change historical amounts or grant rewards.</p>
@@ -69,6 +69,8 @@
                 <label class="eb-square-field">Original Square reader<select name="connection_id">@foreach($connections as $connection)<option value="{{ $connection['id'] }}" @selected(($sourceRefresh['binding']['connection_id'] ?? '') === $connection['id'])>{{ $connection['kind'] }} · {{ $connection['environment'] }} · {{ $connection['location_label'] ?? implode(', ', $connection['location_ids'] ?? array_filter([$connection['location_id'] ?? null])) }}</option>@endforeach</select></label>
                 <label class="eb-square-field">Recent history window in days<input name="lookback_days" type="number" min="1" max="90" value="{{ $sourceRefresh['lookback_days'] }}"></label>
                 <label class="eb-square-check eb-square-wide"><input type="checkbox" name="enabled" value="1" @checked($sourceRefresh['enabled'])><span>Automatically refresh this reviewed original reader. Customer and purchase source reads only; no campaigns or historical reward awards.</span></label>
+                <label class="eb-square-check eb-square-wide"><input type="checkbox" name="all_locations" value="1" @checked($sourceRefresh['all_locations'] ?? false)><span>Discover and include all current Square locations for this merchant, including inactive locations with older sales. Keep each location's original purchase history.</span></label>
+                @if($sourceRefresh['all_locations'] ?? false)<p class="eb-square-wide">{{ count($sourceRefresh['discovered_locations'] ?? []) }} merchant locations discovered at the last review. Save again to discover locations added later.</p>@endif
                 <label class="eb-square-check eb-square-wide"><input type="checkbox" name="create_unmatched" value="1" @checked($sourceRefresh['create_unmatched'])><span>Create contact-only customer records for genuinely unmatched original Square customer IDs. Conflicting identities stay in review; marketing permission is not inferred.</span></label>
                 <div class="eb-square-actions eb-square-wide"><button>Save source refresh settings</button><span class="eb-square-status">{{ $sourceRefresh['enabled'] ? 'Reviewed refresh enabled' : 'Automatic source refresh off' }}</span></div>
             </form>
@@ -137,6 +139,7 @@
                     <input type="hidden" name="request_id" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
                     <input type="hidden" name="connection_id" value="{{ $connection['id'] }}">
                     <input type="hidden" name="expected_connection_generation" value="{{ $connection['connection_generation'] ?? '' }}">
+                    @if(($sourceRefresh['enabled'] ?? false) && ($sourceRefresh['binding']['connection_id'] ?? null) === $connection['id'])<input type="hidden" name="source_refresh_policy_version" value="{{ $sourceRefresh['version'] }}">@endif
                     <label class="eb-square-field">Source <select name="sync_type"><option value="customers">Customers and declared provider preferences</option><option value="cards">Card references only</option><option value="orders">Historical order sources</option><option value="payments">Historical payment sources and recorded locations</option></select></label>
                     <label class="eb-square-field">Action <select name="mode"><option value="preview">Preview source changes</option><option value="import">Import source batch and stage identity review</option></select></label>
                     <label class="eb-square-field">Batch target <input name="limit" type="number" min="1" max="500" value="100"></label>
@@ -148,6 +151,18 @@
             </article>
         @empty<p>No tenant-owned Square source connection is recorded yet. Connect one above; no global company token is substituted.</p>@endforelse
     </section>
+    @if($sourceRefresh['enabled'] ?? false)
+        <section class="eb-square-card" aria-label="Original customer reconciliation">
+            <h2>Reconnect older purchases to their current customers</h2>
+            <p>Square sometimes replaces a customer ID after merging profiles. Check those original references and retain both IDs on the same proven customer. Conflicting customers remain in identity review.</p>
+            <form method="POST" action="{{ route('customers.square.reconcile-references', ['tenant'=>$tenant->slug]) }}" class="eb-square-grid">@csrf
+                <input type="hidden" name="request_id" value="{{ (string) \Illuminate\Support\Str::uuid() }}"><input type="hidden" name="policy_version" value="{{ $sourceRefresh['version'] }}"><input type="hidden" name="after" value="{{ $referenceAfter ?? '' }}">
+                <label class="eb-square-field">Action<select name="apply"><option value="0">Preview next 500 original references</option><option value="1">Reconcile next 500 original references</option></select></label>
+                <div class="eb-square-actions"><button>Check original customer references</button></div>
+            </form>
+            <p>Each batch retains its provider evidence and progress. This does not merge Everbranch customers, create subscriptions, send campaigns, or award historical rewards.</p>
+        </section>
+    @endif
     <section aria-label="Square refresh runs">
         <h2>Progress and original checkpoints</h2>
         @forelse($runs as $run)
@@ -174,6 +189,7 @@
                         <input type="hidden" name="connection_id" value="{{ data_get($run->summary, 'source_binding.connection_id') }}"><input type="hidden" name="expected_connection_generation" value="{{ data_get($run->summary, 'source_binding.connection_generation') }}">
                         <input type="hidden" name="sync_type" value="{{ str_replace(['square_', '_sync'], '', $run->type) }}"><input type="hidden" name="mode" value="{{ data_get($run->summary, 'mode') === 'dry-run' ? 'preview' : 'import' }}"><input type="hidden" name="limit" value="100">
                         <input type="hidden" name="create_unmatched" value="{{ data_get($run->summary, 'create_unmatched') ? '1' : '0' }}">
+                        @if(data_get($run->summary, 'source_refresh_policy_version'))<input type="hidden" name="source_refresh_policy_version" value="{{ data_get($run->summary, 'source_refresh_policy_version') }}">@endif
                         <button type="submit">Resume original source batch</button>
                     </form>
                 @endif

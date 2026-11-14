@@ -1,9 +1,94 @@
-# One customer, purchases across channels, one rewards history
+# Universal customer profile across every Everbranch app
 
 Owner direction recorded October 30, 2026: every Everbranch tenant should have
 the capability to connect a payment to one customer entry and track that
 customer's online and in-person purchases and rewards together. Modern Forestry
 is the first pilot, not a tenant-specific implementation or exclusive entitlement.
+
+Owner direction expanded November 13, 2026: every current and future
+customer-facing or staff app that touches a business's customers must use the
+same tenant-owned canonical customer. This included capability applies to future
+retail businesses using these branches as well as Modern Forestry. Each business
+owns its own customer relationships; it is not a shared customer directory across
+unrelated businesses.
+
+## Current sources and future replacements
+
+Modern Forestry's current source assignments are explicit. A future adapter joins
+the same canonical customer; installing an app never performs a source cutover.
+Other businesses configure their own sources without inheriting these connections.
+
+| Domain | Current Modern Forestry authority | Future Everbranch authority |
+| --- | --- | --- |
+| Online retail purchases | Shopify | Everbranch retail / Website commerce after reviewed cutover |
+| In-person purchases | Square | Everbranch Pay after reviewed cutover; its processor retains payment evidence |
+| Event operations, dates, booth details | Asana | Everbranch Teams after reviewed cutover |
+| Recurring subscriptions and original membership history | Recharge | Everbranch Subscriptions after reviewed cutover |
+| Candle Cash / rewards | Existing shared Everbranch rewards ledger and tenant program; original imports remain evidence | Same ledger and customer identity across every app |
+| Birthdays and birthday benefits | Existing canonical birthday profile and audited source capture | Same birthday record and annual reward cycle across every app |
+
+Growave/Yotpo imports and historical Square connections remain provenance-bearing
+customer, loyalty and permission evidence. They do not replace current purchase,
+event or subscription authority. Source-specific cutover requirements still apply;
+especially preserve Recharge billing anchors and avoid duplicate subscription
+collection. The subscription replacement runbook owns that transition.
+
+## Required customer experience and app integration
+
+Opening an authorized customer reference from Customers, Pay, Teams, retail,
+Subscriptions, a mobile app or another customer-touching branch must resolve the
+same canonical customer ID in that business. Surfaces may show only data the
+current actor can access; shared identity does not grant financial, marketing or
+customer-account permissions.
+
+The shared profile brings together:
+
+- Confirmed online and in-person purchases, recorded products/scents/sizes,
+  purchase frequency and rewards. Distinguish an explicitly saved preference from
+  a most-purchased candle; missing item or refund coverage stays visible.
+- Exact reviewed event purchase/capture relationships with original event IDs,
+  plus separate recorded purchase-area evidence. A city/tax label can support an
+  area audience without proving attendance at a particular event or a home move.
+- Current subscriptions and original dated membership evidence from the active
+  subscription source. A billing migration is not a new membership join.
+- Candle Cash/rewards balance and original earning, redemption, refund, adjustment
+  and expiry history from the shared ledger, together with the tenant's program
+  terms. Refreshing a provider or opening another branch must not copy balances,
+  recalculate historical awards or earn the same reward twice.
+- The saved birthday, its source/capture evidence and any recorded uncertainty,
+  plus birthday-club enrollment and annual reward issuance/redemption history.
+  Reuse `BirthdayProfileService` and the existing birthday reward cycle; never
+  guess a date or create another birthday award when importing or changing apps.
+- Behavior-based marketing groups and saved audience definitions, with their
+  qualifying evidence and dates. Group membership and possession of an address or
+  phone are separate from channel permissions and send admission.
+- Source coverage, refresh times, unresolved identity conflicts and reconciliation
+  provenance, so staff can tell what is known and what remains incomplete.
+
+Use `MarketingProfile`, `CanonicalMarketingProfileResolver`, explicit
+`MarketingProfileLink` / external source associations and the shared
+`CustomerCommerceSnapshotService`, `ConfirmedCustomerPurchaseProjection`,
+`CustomerBehaviorProfile`, `CustomerEventValueService` and audience services.
+Use the existing Candle Cash ledger/read services and `BirthdayProfileService`
+for their respective domains. Marketing channel permissions remain separate from
+rewards membership, a birthday record and birthday-club enrollment.
+Extend these versioned contracts when a required domain is missing. Do not create
+an app-local customer master, duplicate purchase/rewards ledger, inferred merge or
+independent behavior calculation. Original provider/domain records remain the
+authoritative evidence behind the shared read model.
+
+Customer discovery and reviewed reconciliation belong permanently in Customers
+and its existing source/audit records. Future imports and app adapters must reuse
+those results. A one-time campaign export is not the customer source of truth.
+
+Every new app or customer-related change must document its canonical customer
+reference, authoritative source and refresh/cutover behavior, shared read contract,
+and actor/tenant permissions. Before release, prove cross-surface identity,
+current permissions, replay/refund correctness, ambiguity handling and tenant
+isolation with relevant tests. Unadapted coverage must be labeled incomplete;
+that app cannot claim the universal customer experience is finished. Apply this
+review requirement to existing branches when changing them, and to every future
+customer-touching app before launch.
 
 For inventory-owned Pay registers, guest collection precedes optional audited customer association. See [finished-goods stock](finished-goods-stock.md). Financial snapshots stay immutable; receipt contact alone does not verify account identity.
 
@@ -90,6 +175,10 @@ For Modern Forestry and a second tenant with a different business template:
    purchases or separate balances. Broken/cyclic/cross-tenant links fail closed.
 8. Verify an unconfigured tenant can access the included setup/capability without
    inheriting another tenant's merchant account, rewards rules or customer data.
+9. Verify the same rewards balance/history and birthday record across applicable
+   customer surfaces. A refresh, alias resolution or app/source cutover must not
+   issue duplicate earning, redemption or annual birthday rewards; partial dates
+   and uncertain source coverage remain visible.
 
 ## Current evidence and claim boundary
 

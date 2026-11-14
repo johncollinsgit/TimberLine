@@ -50,6 +50,20 @@ class SquareClient
         return $this->request()->get($this->url('/v2/locations/'.rawurlencode($id)))->throw()->json('location') ?? [];
     }
 
+    /** Includes inactive original merchant locations because they can retain real history. */
+    public function locations(): array
+    {
+        return $this->request()->get($this->url('/v2/locations'))->throw()->json('locations') ?? [];
+    }
+
+    /** Read-only provider lookup; old customer IDs can resolve to the survivor of a Square merge. */
+    public function bulkRetrieveCustomers(array $ids): array
+    {
+        abort_unless($ids && count($ids) <= 100 && collect($ids)->every(fn ($id) => is_string($id) && $id !== '' && strlen($id) <= 192 && ! preg_match('/[\x00-\x20\x7F]/', $id)), 422);
+
+        return $this->request()->post($this->url('/v2/customers/bulk-retrieve'), ['customer_ids' => array_values($ids)])->throw()->json('responses') ?? [];
+    }
+
     public function fetchCards(?string $cursor = null): array
     {
         $result = $this->request()->get($this->url('/v2/cards'), array_filter(['cursor' => $cursor, 'include_disabled' => 'true']))->throw()->json();
@@ -161,6 +175,46 @@ class SquareClient
         }
         $next = $page['cursor'] !== null || isset($locations[$index])
             ? 'everbranch-locations-v1.'.base64_encode(json_encode(['binding' => $binding, 'index' => $index, 'provider' => $page['cursor']], JSON_THROW_ON_ERROR)) : null;
+
+        return ['items' => $page['items'], 'cursor' => $next];
+    }
+
+    /** SearchOrders accepts at most ten locations; retain each partition's original query. */
+    public function searchLocationOrders(?string $cursor, int $limit, ?CarbonInterface $since, array $locations, string $dateField = 'closed_at'): array
+    {
+        $locations = array_values(array_unique(array_filter($locations, fn ($id) => is_string($id) && $id !== '')));
+        sort($locations);
+        abort_unless($locations, 409, 'Review the original Square locations before importing orders.');
+        if (count($locations) <= 10) {
+            return $this->searchOrders($cursor, $limit, $since, $locations, $dateField);
+        }
+        $partitions = array_chunk($locations, 10);
+        $prefix = 'everbranch-order-locations-v1.';
+        $binding = hash('sha256', json_encode([$locations, $since?->toIso8601String(), $dateField, $limit], JSON_THROW_ON_ERROR));
+        $index = 0;
+        $provider = null;
+        if ($cursor !== null) {
+            try {
+                if (! str_starts_with($cursor, $prefix)) {
+                    throw new \RuntimeException;
+                }
+                $decoded = json_decode(base64_decode(substr($cursor, strlen($prefix)), true) ?: '', true, 16, JSON_THROW_ON_ERROR);
+                if (($decoded['binding'] ?? null) !== $binding || ! is_int($decoded['index'] ?? null) || ! isset($partitions[$decoded['index']])
+                    || (($decoded['provider'] ?? null) !== null && ! is_string($decoded['provider']))) {
+                    throw new \RuntimeException;
+                }
+                $index = $decoded['index'];
+                $provider = $decoded['provider'] ?? null;
+            } catch (\Throwable) {
+                abort(422, 'The order cursor belongs to different original locations or query. Resume its original import run.');
+            }
+        }
+        $page = $this->searchOrders($provider, $limit, $since, $partitions[$index], $dateField);
+        if ($page['cursor'] === null) {
+            $index++;
+        }
+        $next = $page['cursor'] !== null || isset($partitions[$index])
+            ? $prefix.base64_encode(json_encode(['binding' => $binding, 'index' => $index, 'provider' => $page['cursor']], JSON_THROW_ON_ERROR)) : null;
 
         return ['items' => $page['items'], 'cursor' => $next];
     }

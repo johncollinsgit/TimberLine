@@ -257,6 +257,12 @@ old work; normal credential renewal may advance generation while retaining the
 same original merchant/location policy, and each actual read freezes its current
 generation. Disabled/disconnected or inactive-reviewer policies stop reads.
 
+Scheduled recent reads retain `request_context.origin=scheduled_source_refresh`
+and select only their own live checkpoints. Manual previews and historical imports
+with the same source policy cannot replace the scheduler's page/date query. At
+this upgrade, older unmarked automatic runs retain their audit and cursor; the
+scheduler starts a new bounded recent window rather than guessing their origin.
+
 External signed Square notifications use the same policy through the separate
 default-off `pos_live.external_sales_ingest_enabled` gate and durable
 `event-sales-history` queue. Webhook admission resolves enabled exact original
@@ -364,3 +370,81 @@ cyclic or mismatched lineage needs review. Existing request replays and failed-r
 evidence remain unchanged. Count valid persisted rows from a failed read separately
 from successful-unit totals; an empty EOF recovery does not erase those rows or
 the original provider error. Historical reads still award no rewards or campaigns.
+
+## Historical locations and original customer references
+
+An original register connection may list only one current location even when the
+same merchant retains years of sales in inactive locations. Customers → Square
+source history lets the owner select **all original merchant locations**. Saving
+the policy reads active and inactive locations from that same verified merchant,
+records the exact reviewed set and preserves the reader's original location scope
+separately. It does not change Pay/register configuration or other tenants.
+
+```sh
+php artisan customer-sources:configure-square-refresh TENANT_ID --actor=OWNER_ID --connection-id=ORIGINAL_ID --expected-version=POLICY_VERSION --lookback-days=14 --all-locations --apply
+```
+
+This opts into ongoing source-only reads for that recorded set. Save again to
+review newly added locations. A full historical import additionally needs the
+reviewed original start date, the displayed policy version and normal bounded
+source import/resume controls. Recent ongoing sync alone does not recover all
+history. SearchOrders partitions sets larger than ten locations into independent
+provider pages; its opaque cursor freezes the full sorted set, original date query
+and provider page size. ListPayments still reads every reviewed location.
+
+Square can redirect an old customer ID to the survivor of a provider customer
+merge. Original order/payment customer IDs remain immutable. The owner can
+preview/apply bounded original-reference checks from the same Customers screen:
+
+```sh
+php artisan customer-sources:reconcile-square-references TENANT_ID --actor=OWNER_ID --policy-version=POLICY_VERSION --request-id=UUID --limit=500
+php artisan customer-sources:reconcile-square-references TENANT_ID --actor=OWNER_ID --policy-version=POLICY_VERSION --request-id=NEW_UUID --limit=500 --apply
+```
+
+Carry the returned `after` into `--after` for the next batch, with a new request
+UUID. Repeating the same unit reuses its audit. Each read requests at most 100
+original customer IDs from Square. A provider-confirmed redirect is retained on
+explicit source links and can reconnect recorded purchases only when existing
+source claims resolve to one canonical customer. Conflicting roots and ambiguous
+contact/name candidates stay in identity review; no customer merge occurs.
+Current provider explicit unsubscribes may be applied. Missing/default permission
+fields and an `email_unsubscribed=false` response never grant consent.
+
+For an enabled all-locations policy, the existing minute scheduler also advances
+one bounded reference batch. Its tenant-local
+`square_customer_reference_checkpoint` retains the policy version, request and
+cursor separately from policy configuration. Same-minute replay avoids duplicate
+reads; a completed sweep restarts on a later run so new/changed references are
+eventually checked. Disabled policy, revoked owner or changed merchant binding
+blocks further writes, including a response that arrives after revocation.
+
+## Permanent purchase-place discovery and area audiences
+
+Customers → Sources & reconciliation stores reviewed **original tax label → US
+Census ZIP point(s)** mappings in the tenant-owned `customer_purchase_place_map`
+setting, with a version, actor and import audit. Staff can review the original
+label and recognized purchase place in the customer's Square source history.
+Discovery is reusable customer evidence rather than a campaign-only export.
+
+Only a named city, county or venue can support a reviewed mapping. A percentage
+alone cannot establish place. Unrecognized labels, incomplete payments or mixed
+far-away locations remain unresolved. The new **Past purchases in this area or
+nearby customers** audience combines a confirmed, explicitly linked purchase in
+the reviewed radius with the existing saved-home-location rule. All mapped
+points on a qualifying purchase must be inside the radius. Distances are
+approximate ZIP-centroid distances.
+
+Final membership reuses the shared confirmed purchase projection and canonical
+customer resolver; the SQL source prefilter is only a candidate lookup. It never
+changes the customer's home, claims attendance at a specific show, grants channel
+permission, copies revenue, issues rewards or sends a message. Current channel
+permissions and suppressions are evaluated separately at preview/send admission.
+This discovery feeds the same customer identity used by other branches under the
+[universal customer profile standard](../architecture/unified-customer-commerce.md).
+
+Focused coverage: `SquareMarketingDiscoveryTest` (inactive/foreign locations,
+partition replay, provider redirects, identity conflicts, policy revocation and
+scheduled/owner controls) and `CustomerPurchasePlaceDiscoveryTest` (versioned
+mapping, owner route, confirmed original purchases, ambiguous place exclusion,
+home/permission preservation and tenant isolation). Existing history, source
+policy, identity, cohort and Modern Forestry guard suites remain required.

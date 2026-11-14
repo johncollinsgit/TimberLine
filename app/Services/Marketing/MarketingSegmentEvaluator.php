@@ -18,6 +18,9 @@ class MarketingSegmentEvaluator
     {
         $rules = is_array($segment->rules_json) ? $segment->rules_json : [];
         $metrics = $this->analyticsService->metricsForProfile($profile);
+        if ($profile->tenant_id && $this->usesPurchasePlace($rules)) {
+            $metrics['purchase_location_groups'] = app(CustomerPurchasePlaceMap::class)->groupsForConfirmedSources((int) $profile->tenant_id, $metrics['confirmed_source_keys'] ?? []);
+        }
         $reasons = [];
         $matched = $this->evaluateGroup($rules, $metrics, $reasons);
 
@@ -80,6 +83,22 @@ class MarketingSegmentEvaluator
             return ['matched' => false, 'reason' => null];
         }
 
+        if ($field === 'purchased_near_zip') {
+            $postal = is_array($value) ? ($value['postal_code'] ?? null) : null;
+            $radius = is_array($value) ? ($value['radius_miles'] ?? 50) : null;
+            $center = app(CustomerLocationDistance::class)->point($postal);
+            $nearest = null;
+            if ($operator === 'within' && is_numeric($radius) && $radius > 0 && $radius <= 500 && $center) {
+                foreach ($metrics['purchase_location_groups'] ?? [] as $group) {
+                    $distances = array_map(fn ($point) => app(CustomerLocationDistance::class)->miles($point, $center), $group['points'] ?? []);
+                    if ($distances && ! in_array(null, $distances, true) && max($distances) <= $radius) {
+                        $nearest = $nearest === null ? max($distances) : min($nearest, max($distances));
+                    }
+                }
+            }
+
+            return ['matched' => $nearest !== null, 'reason' => $nearest !== null ? 'Past confirmed purchase approximately '.round($nearest, 1).' miles from ZIP '.$postal.' (recorded tax place; Census ZCTA)' : null];
+        }
         if ($field === 'near_event_zip') {
             $postal = is_array($value) ? ($value['postal_code'] ?? null) : null;
             $radius = is_array($value) ? ($value['radius_miles'] ?? 50) : null;
@@ -95,6 +114,22 @@ class MarketingSegmentEvaluator
             'matched' => $matched,
             'reason' => $matched ? "{$field} {$operator} ".$this->displayValue($value) : null,
         ];
+    }
+
+    private function usesPurchasePlace(array $rules): bool
+    {
+        foreach ($rules['conditions'] ?? [] as $condition) {
+            if (($condition['field'] ?? '') === 'purchased_near_zip') {
+                return true;
+            }
+        }
+        foreach ($rules['groups'] ?? [] as $group) {
+            if (is_array($group) && $this->usesPurchasePlace($group)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function match(mixed $actual, string $operator, mixed $expected): bool

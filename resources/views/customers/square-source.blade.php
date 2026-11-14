@@ -15,14 +15,14 @@
     .eb-square-history .eb-square-card-reference { padding-top: 12px; border-top: 1px solid var(--eb-border, #dbe4e3); }
     .eb-square-history .eb-square-amount { color: var(--eb-text-primary, #0f1c1f); font-size: 18px; font-weight: 650; }
     .eb-square-history .eb-square-details { padding-top: 4px; border-top: 1px solid var(--eb-border, #dbe4e3); }
-    .eb-square-history .eb-square-details summary { min-height: 44px; padding: 10px 0; color: var(--eb-brand, #123c43); font-weight: 600; cursor: pointer; }
+    .eb-square-history .eb-square-details summary { min-height: 44px; padding: 10px 0; color: var(--eb-link, #123c43); font-weight: 600; cursor: pointer; }
     .eb-square-history .eb-square-details dl { display: grid; gap: 12px; margin: 8px 0 0; }
     .eb-square-history .eb-square-details dt { color: var(--eb-text-muted, #5d6b6a); font-size: 14px; }
     .eb-square-history .eb-square-details dd { margin: 3px 0 0; color: var(--eb-text-secondary, #32464b); overflow-wrap: anywhere; }
     .eb-square-history ul { display: grid; gap: 8px; margin: 0; padding-left: 20px; color: var(--eb-text-secondary, #32464b); }
     .eb-square-history li { padding-left: 2px; font-size: 15px; overflow-wrap: anywhere; }
-    .eb-square-history .eb-square-link { display: inline-flex; align-items: center; justify-content: center; justify-self: start; min-height: 44px; padding: 10px 14px; border: 1px solid var(--eb-border, #dbe4e3); border-radius: 9px; color: var(--eb-brand, #123c43); background: var(--eb-surface, #fff); font-weight: 600; text-align: center; text-decoration: none; }
-    .eb-square-history :is(.eb-square-link, summary):focus-visible { outline: 3px solid var(--eb-accent, #1e5a63); outline-offset: 3px; }
+    .eb-square-history .eb-square-link { display: inline-flex; align-items: center; justify-content: center; justify-self: start; min-height: 44px; padding: 10px 14px; border: 1px solid var(--eb-border, #dbe4e3); border-radius: 9px; color: var(--eb-link, #123c43); background: var(--eb-surface, #fff); font-weight: 600; text-align: center; text-decoration: none; }
+    .eb-square-history :is(.eb-square-link, summary):focus-visible { outline: 3px solid var(--eb-link, #1e5a63); outline-offset: 3px; }
     .eb-square-history .eb-square-notice { padding: 12px 14px; border: 1px solid #ead7ad; border-radius: 10px; background: #fffbef; color: #714f16; }
     .eb-square-history .eb-square-coverage { padding-top: 14px; border-top: 1px solid var(--eb-border, #dbe4e3); }
     @media (max-width: 639px) {
@@ -40,7 +40,7 @@
         catch (\Throwable) { return 'date unknown'; }
     };
 @endphp
-<section class="eb-square-history" aria-label="Private Square source history">
+<section class="eb-square-history eb-themed-panel" aria-label="Private Square source history">
     <h2>{{ empty($squareHistoryOnly) ? 'Original Square customer and purchase sources' : 'Original Square purchase history' }}</h2>
     <a class="eb-square-link" href="{{ route('customers.square.index', ['tenant' => $tenant->slug]) }}">Square connection, refresh and identity review</a>
     <p>Recorded source history is bounded by imported coverage. A recorded location is not an event. Historical imports do not earn or consume rewards.</p>
@@ -76,6 +76,8 @@
         <article class="eb-square-record">
             <p class="eb-square-record-title"><strong>Square order</strong><span class="eb-square-status">{{ $order['state'] ?? 'state unknown' }}</span></p>
             <p>{{ $squareSourceDate($order['closed_at'] ?? null) }}</p>
+            @if(!empty($order['tax_names']))<p>Original tax place: {{ implode(' · ', $order['tax_names']) }}</p>@endif
+            @if(!empty($order['purchase_place']))<p>Recognized purchase-area ZIPs: {{ implode(', ', $order['purchase_place']['postal_codes']) }}. Customer home address is separate.</p>@endif
             <p class="eb-square-amount">{{ $order['total_amount'] === null ? 'amount unknown' : ($order['currency'] === 'USD' ? number_format($order['total_amount'] / 100, 2) : $order['total_amount'].' minor units') }} {{ $order['currency'] }}</p>
             <ul>@foreach($order['items'] as $item)<li>{{ $item['quantity'] ?? 'quantity unknown' }} × {{ $item['label'] ?? 'original item label unavailable' }} @if($item['variation'])· {{ $item['variation'] }}@endif</li>@endforeach</ul>
             @if(!$order['items'])<p>Original line items are not present in this cached source.</p>@endif
