@@ -416,3 +416,36 @@ test('operational editor and publication freezes retain already connected domain
         ->and($site->fresh()->published_site_version_id)->toBe($publishedVersion);
     $this->get('https://www.already-live.example/')->assertOk()->assertSee('data-testid="managed-site"', false);
 });
+
+test('scheduled verification cannot resurrect a canceled or restarted domain connection', function (bool $restart): void {
+    [$tenant, $actor, $site] = customDomainPilot();
+    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy->shouldReceive('eligible')->andReturn(true);
+    app()->instance(ManagedWebsiteSelfServicePolicy::class, $policy);
+    $service = null;
+    $domain = null;
+    $edge = Mockery::mock(CloudflareWebsiteDomains::class);
+    $edge->shouldReceive('ready')->andReturn(true);
+    $edge->shouldReceive('check')->once()->with('www.cancel-race.example', true)->andReturnUsing(function () use (&$service, &$domain, $actor, $site, $restart): array {
+        // Simulate the owner changing setup while the DNS/provider request is in flight.
+        $service->cancel($domain->fresh(), $actor);
+        if ($restart) {
+            $service->request($site, $domain->hostname, $actor);
+        }
+
+        return ['ready' => true, 'message' => 'Ready'];
+    });
+    app()->instance(CloudflareWebsiteDomains::class, $edge);
+    $service = app(ManagedWebsiteDomainService::class);
+    $domain = $service->request($site, 'www.cancel-race.example', $actor);
+    $originalToken = $domain->verification_token;
+    $this->artisan('website:reconcile-domains')->assertSuccessful();
+    $current = $domain->fresh();
+    expect($current->status)->toBe($restart ? 'pending' : 'disabled')
+        ->and($current->activated_at)->toBeNull()
+        ->and($current->verified_at)->toBeNull()
+        ->and(TenantSiteDomain::withoutGlobalScopes()->where('status', 'active')->count())->toBe(0);
+    if ($restart) {
+        expect($current->verification_token)->not->toBe($originalToken);
+    }
+})->with([false, true]);

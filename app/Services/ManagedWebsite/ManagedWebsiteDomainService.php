@@ -134,26 +134,37 @@ class ManagedWebsiteDomainService
     {
         $domain->loadMissing('site');
         abort_if(in_array($domain->status, ['active', 'disabled'], true), 422, 'This domain is not waiting for connection.');
-        $before = [$domain->status, $domain->last_error];
+        $verificationToken = (string) $domain->verification_token;
         $recordName = $this->verificationRecordName($domain->hostname);
         $expected = $this->verificationValue($domain);
         $records = $this->txtRecords($recordName);
         $verified = in_array($expected, $records, true);
         $edge = $verified ? $this->cloudflare->check($domain->hostname, true) : null;
 
-        $domain->forceFill([
-            'verification_checked_at' => now(),
-            'status' => $verified ? 'verified' : 'pending',
-            'verified_at' => $verified ? now() : null,
-            'last_error' => $verified ? ($edge['ready'] ? null : $edge['message']) : 'We could not find the Everbranch verification TXT record yet. DNS changes can take a few minutes.',
-            'updated_by_user_id' => $actor?->id,
-        ])->save();
+        // DNS and provider calls stay outside the transaction. Their result may
+        // only update the same still-pending proof, never a canceled/restarted setup.
+        $domain = DB::transaction(function () use ($domain, $verificationToken, $verified, $edge, $actor): TenantSiteDomain {
+            $current = TenantSiteDomain::query()->where('tenant_id', $domain->tenant_id)->whereKey($domain->id)->lockForUpdate()->firstOrFail();
+            if (! in_array($current->status, ['pending', 'verified'], true)
+                || ! hash_equals($verificationToken, (string) $current->verification_token)) {
+                return $current;
+            }
+            $before = [$current->status, $current->last_error];
+            $current->forceFill([
+                'verification_checked_at' => now(),
+                'status' => $verified ? 'verified' : 'pending',
+                'verified_at' => $verified ? now() : null,
+                'last_error' => $verified ? ($edge['ready'] ? null : $edge['message']) : 'We could not find the Everbranch verification TXT record yet. DNS changes can take a few minutes.',
+                'updated_by_user_id' => $actor?->id,
+            ])->save();
+            if ($before !== [$current->status, $current->last_error]) {
+                app(ManagedWebsiteService::class)->recordEvent($current->site, null, $actor, $verified ? 'domain.verified' : 'domain.verification_pending', [
+                    'hostname' => $current->hostname,
+                ]);
+            }
 
-        if ($before !== [$domain->status, $domain->last_error]) {
-            app(ManagedWebsiteService::class)->recordEvent($domain->site, null, $actor, $verified ? 'domain.verified' : 'domain.verification_pending', [
-                'hostname' => $domain->hostname,
-            ]);
-        }
+            return $current;
+        });
 
         return $domain->fresh();
     }

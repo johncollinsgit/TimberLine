@@ -72,12 +72,20 @@ function standardProvider(Tenant $tenant, array $overrides = []): void
         }
         if ($path === '/v1/invoices/in_renewal') {
             return Http::response([
-                'id' => 'in_renewal', 'status' => 'paid', 'paid' => true, 'currency' => 'usd', 'customer' => 'cus_standard', 'subscription' => 'sub_standard',
+                'id' => 'in_renewal', 'object' => 'invoice', 'livemode' => false, 'status' => 'paid', 'paid' => true, 'currency' => 'usd', 'customer' => 'cus_standard', 'subscription' => 'sub_standard',
                 'subtotal' => 29900, 'total' => 29900, 'amount_paid' => 29900, 'payment_intent' => 'pi_renewal',
+                ...($overrides['renewal_invoice'] ?? []),
+            ]);
+        }
+        if ($path === '/v1/charges/ch_renewal') {
+            return Http::response([
+                'id' => 'ch_renewal', 'object' => 'charge', 'livemode' => false, 'customer' => 'cus_standard',
+                'invoice' => 'in_renewal', 'payment_intent' => 'pi_renewal', 'amount_refunded' => 0, 'disputed' => false,
+                ...($overrides['renewal_charge'] ?? []),
             ]);
         }
         if ($path === '/v1/payment_intents/pi_renewal') {
-            return Http::response(['id' => 'pi_renewal', 'status' => 'succeeded', 'amount_received' => 29900, 'currency' => 'usd', 'customer' => 'cus_standard', 'livemode' => false, 'latest_charge' => ['id' => 'ch_renewal', 'amount_refunded' => 0, 'disputed' => false]]);
+            return Http::response(['id' => 'pi_renewal', 'status' => 'succeeded', 'amount_received' => 29900, 'currency' => 'usd', 'customer' => 'cus_standard', 'livemode' => false, 'latest_charge' => ['id' => 'ch_renewal', 'amount_refunded' => 0, 'disputed' => false, ...($overrides['renewal_charge'] ?? [])]]);
         }
         if ($path === '/v1/payment_intents/pi_standard') {
             return Http::response([
@@ -199,6 +207,66 @@ test('renewal refreshes paid coverage without duplicating the setup or receipt',
     expect(app(SelfServicePurchaseEligibility::class)->paidForTenant($tenant))->toBeTrue()
         ->and(TenantBillingReceipt::withoutGlobalScopes()->count())->toBe(1);
 });
+
+test('renewal refunds and disputes without copied metadata promptly suspend new paid access', function (string $type, array $chargeChanges): void {
+    [$tenant, $actor] = standardBuyer();
+    standardProvider($tenant);
+    startStandard($tenant, $actor);
+    confirmStandard($tenant);
+    standardProvider($tenant, ['latest_invoice' => 'in_renewal']);
+    confirmStandard($tenant, 'invoice.paid', 'evt_paid_renewal', ['data' => ['object' => ['id' => 'in_renewal', 'object' => 'invoice', 'subscription' => 'sub_standard', 'customer' => 'cus_standard']]]);
+    expect(app(SelfServicePurchaseEligibility::class)->paidForTenant($tenant))->toBeTrue();
+
+    standardProvider($tenant, ['latest_invoice' => 'in_renewal', 'renewal_charge' => $chargeChanges]);
+    $object = $type === 'charge.refunded'
+        ? ['id' => 'ch_renewal', 'object' => 'charge', 'invoice' => 'in_renewal', 'payment_intent' => 'pi_renewal', 'customer' => 'cus_standard']
+        : ['id' => 'dp_renewal', 'object' => 'dispute', 'charge' => 'ch_renewal', 'payment_intent' => 'pi_renewal'];
+    expect(confirmStandard($tenant, $type, 'evt_renewal_reversed', ['data' => ['object' => $object]])['ok'])->toBeTrue()
+        ->and(app(SelfServicePurchaseEligibility::class)->paidForTenant($tenant))->toBeFalse()
+        ->and(app(SelfServicePurchaseEligibility::class)->hasVerifiedPurchase($tenant))->toBeTrue()
+        ->and(standardIntent($tenant)['status'])->toBe('suspended')
+        ->and(TenantBillingReceipt::withoutGlobalScopes()->count())->toBe(1);
+    Http::assertNotSent(fn ($request): bool => $request->method() !== 'GET');
+})->with([
+    ['charge.refunded', ['amount_refunded' => 29900]],
+    ['charge.dispute.created', ['disputed' => true]],
+]);
+
+test('renewal charge routing cannot cross the authenticated customer and subscription relationship', function (): void {
+    [$tenant, $actor] = standardBuyer();
+    standardProvider($tenant);
+    startStandard($tenant, $actor);
+    confirmStandard($tenant);
+    $other = Tenant::query()->create(['name' => 'Unrelated Customer', 'slug' => 'unrelated-renewal']);
+    $otherIntent = [...standardIntent($tenant), 'id' => 'unrelated-purchase', 'subscription_id' => 'sub_other', 'customer_id' => 'cus_other'];
+    TenantCommercialOverride::withoutGlobalScopes()->create(['tenant_id' => $other->id, 'billing_mapping' => ['self_service_purchase' => $otherIntent]]);
+    standardProvider($tenant, ['renewal_invoice' => ['subscription' => 'sub_other']]);
+    $result = confirmStandard($tenant, 'charge.refunded', 'evt_mismatched_renewal', ['data' => ['object' => [
+        'id' => 'ch_renewal', 'object' => 'charge', 'invoice' => 'in_renewal', 'payment_intent' => 'pi_renewal', 'customer' => 'cus_standard',
+    ]]]);
+    expect($result['ok'])->toBeFalse()
+        ->and(app(SelfServicePurchaseEligibility::class)->paidForTenant($tenant))->toBeTrue()
+        ->and(standardIntent($other))->toBe($otherIntent)
+        ->and(StripeWebhookEvent::query()->where('event_id', 'evt_mismatched_renewal')->exists())->toBeFalse();
+    Http::assertNotSent(fn ($request): bool => $request->method() !== 'GET');
+});
+
+test('renewal charge lookup never uses connected events or the wrong platform account', function (string $mismatch): void {
+    [$tenant, $actor] = standardBuyer();
+    standardProvider($tenant);
+    startStandard($tenant, $actor);
+    confirmStandard($tenant);
+    standardProvider($tenant, $mismatch === 'account' ? ['account' => 'acct_other'] : []);
+    $changes = ['data' => ['object' => ['id' => 'ch_renewal', 'object' => 'charge', 'invoice' => 'in_renewal', 'customer' => 'cus_standard', 'payment_intent' => 'pi_renewal']]];
+    if ($mismatch === 'connected') {
+        $changes['account'] = 'acct_connected';
+    } elseif ($mismatch === 'mode') {
+        $changes['livemode'] = true;
+    }
+    confirmStandard($tenant, 'charge.refunded', 'evt_untrusted_renewal', $changes);
+    expect(app(SelfServicePurchaseEligibility::class)->paidForTenant($tenant))->toBeTrue();
+    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/v1/charges/'));
+})->with(['account', 'connected', 'mode']);
 
 test('paid owners add included branches without a second checkout', function (): void {
     [$tenant, $actor] = standardBuyer();

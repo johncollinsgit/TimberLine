@@ -285,14 +285,21 @@ class SelfServiceStandardPurchaseService
                 $override = TenantCommercialOverride::withoutGlobalScopes()->where('billing_mapping->self_service_purchase->'.$field, $object['id'])->first();
             }
         }
-        if (! $override && ($object['object'] ?? '') === 'charge' && ! empty($object['invoice'])) {
-            $override = TenantCommercialOverride::withoutGlobalScopes()->where('billing_mapping->self_service_purchase->invoice_id', $object['invoice'])->first();
-        }
         if (! $override && ($object['object'] ?? '') === 'invoice' && ! empty($object['subscription'])) {
             $override = TenantCommercialOverride::withoutGlobalScopes()->where('billing_mapping->self_service_purchase->subscription_id', $object['subscription'])->first();
         }
-        if (! $override && ($object['object'] ?? '') === 'dispute' && ! empty($object['payment_intent'])) {
-            $override = TenantCommercialOverride::withoutGlobalScopes()->where('billing_mapping->self_service_purchase->payment_intent_id', $object['payment_intent'])->first();
+        if (in_array((string) ($event['type'] ?? ''), ['charge.refunded', 'charge.dispute.created', 'charge.dispute.closed'], true)) {
+            try {
+                $verified = $this->purchaseForChargeEvent($event, $object);
+                if ($override && (! $verified || $verified->id !== $override->id)) {
+                    return ['ok' => false, 'status_code' => 400, 'message' => 'Charge does not belong to this purchase.'];
+                }
+                $override = $verified;
+            } catch (\Throwable $exception) {
+                report($exception);
+
+                return ['ok' => false, 'status_code' => 503, 'message' => 'Charge confirmation will retry.'];
+            }
         }
         if (! $override) {
             return ($metadata['purpose'] ?? '') === self::PURPOSE ? ['ok' => false, 'status_code' => 400, 'message' => 'Unknown purchase.'] : null;
@@ -574,6 +581,55 @@ class SelfServiceStandardPurchaseService
         if (($tax['status'] ?? '') !== 'active') {
             throw new \RuntimeException('Stripe automatic tax settings are not active.');
         }
+    }
+
+    /** Resolve renewals through authenticated provider relationships, never copied metadata. */
+    private function purchaseForChargeEvent(array $event, array $object): ?TenantCommercialOverride
+    {
+        if (! empty($event['account']) || (bool) ($event['livemode'] ?? false) !== $this->live()) {
+            return null;
+        }
+        $chargeId = ($object['object'] ?? '') === 'charge' ? ($object['id'] ?? '') : ($object['charge'] ?? '');
+        if (! is_string($chargeId) || preg_match('/^ch_[A-Za-z0-9_]+$/D', $chargeId) !== 1) {
+            return null;
+        }
+        $this->verifyAccount(['account_id' => (string) config('services.stripe.account_id'), 'livemode' => $this->live()]);
+        $charge = $this->get('/v1/charges/'.$chargeId);
+        if (($charge['object'] ?? '') !== 'charge' || ($charge['id'] ?? '') !== $chargeId
+            || ($charge['livemode'] ?? null) !== $this->live()) {
+            throw new \RuntimeException('The provider charge context does not match.');
+        }
+        $customer = (string) ($charge['customer'] ?? '');
+        $paymentIntent = (string) ($charge['payment_intent'] ?? '');
+        $invoiceId = (string) ($charge['invoice'] ?? '');
+        if (preg_match('/^in_[A-Za-z0-9_]+$/D', $invoiceId) !== 1 || ! str_starts_with($customer, 'cus_')) {
+            return null; // Unrelated one-time charges keep their existing handling.
+        }
+        if ((! empty($object['customer']) && $object['customer'] !== $customer)
+            || (! empty($object['payment_intent']) && $object['payment_intent'] !== $paymentIntent)
+            || (! empty($object['invoice']) && $object['invoice'] !== $invoiceId)) {
+            throw new \RuntimeException('The signed charge relationship does not match its provider record.');
+        }
+        $invoice = $this->get('/v1/invoices/'.$invoiceId);
+        if (($invoice['object'] ?? '') !== 'invoice' || ($invoice['id'] ?? '') !== $invoiceId
+            || ($invoice['livemode'] ?? null) !== $this->live() || ($invoice['customer'] ?? '') !== $customer
+            || ($invoice['payment_intent'] ?? '') !== $paymentIntent) {
+            throw new \RuntimeException('The provider renewal invoice does not match its charge.');
+        }
+        $subscriptionId = $invoice['subscription'] ?? null;
+        if (! is_string($subscriptionId) || ! str_starts_with($subscriptionId, 'sub_')) {
+            return null;
+        }
+        $override = TenantCommercialOverride::withoutGlobalScopes()->where('billing_mapping->self_service_purchase->subscription_id', $subscriptionId)->first();
+        if (! $override) {
+            return null;
+        }
+        $intent = (array) data_get($override->billing_mapping, 'self_service_purchase', []);
+        if (! $this->sameAccount($intent) || ($intent['customer_id'] ?? '') !== $customer) {
+            throw new \RuntimeException('The renewal does not belong to the original platform purchase.');
+        }
+
+        return $override;
     }
 
     private function verifiedPayment(array $invoice, array $session, array $intent): array

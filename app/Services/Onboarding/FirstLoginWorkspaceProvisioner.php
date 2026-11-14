@@ -164,12 +164,29 @@ class FirstLoginWorkspaceProvisioner
 
     public function uniqueTenantSlug(string $name): string
     {
-        $base = Str::slug($name);
+        // Keep an included address within DNS label limits and away from the
+        // platform's own hosts before creating a customer's workspace.
+        $base = rtrim(Str::limit(Str::slug($name), 48, ''), '-');
         $base = $base !== '' ? $base : 'workspace';
+        $hosts = app(\App\Support\Tenancy\TenantHostBuilder::class);
+        $platformHosts = array_filter([
+            $hosts->canonicalLandlordHost(), $hosts->canonicalPublicHost(),
+            ...(array) config('tenancy.landlord.hosts', []),
+            ...(array) config('tenancy.domains.legacy.public_hosts', []),
+            ...(array) config('tenancy.domains.legacy.landlord_hosts', []),
+            ...array_keys((array) config('tenancy.auth.host_map', [])),
+        ]);
+        $reserved = ['www', 'app', 'landlord', 'backstage'];
+        foreach ($platformHosts as $host) {
+            $suffix = '.'.$hosts->baseDomain();
+            if (str_ends_with((string) $host, $suffix)) {
+                $reserved[] = substr((string) $host, 0, -strlen($suffix));
+            }
+        }
         $slug = $base;
         $index = 2;
 
-        while (Tenant::query()->where('slug', $slug)->exists()) {
+        while (in_array($slug, $reserved, true) || Tenant::query()->where('slug', $slug)->exists()) {
             $slug = $base.'-'.$index;
             $index++;
         }

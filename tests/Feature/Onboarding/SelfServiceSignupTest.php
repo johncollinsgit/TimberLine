@@ -102,3 +102,12 @@ test('production signup cannot pretend a log-only verification email was deliver
     expect(User::query()->count())->toBe(0);
     Notification::assertNothingSent();
 });
+
+test('new workspace addresses avoid platform hosts and fit a DNS label', function (): void {
+    config()->set('tenancy.domains.canonical.landlord_host', 'control.theeverbranch.com');
+    $workspaces = app(\App\Services\Onboarding\FirstLoginWorkspaceProvisioner::class);
+    expect($workspaces->uniqueTenantSlug('App'))->toBe('app-2')
+        ->and($workspaces->uniqueTenantSlug('WWW'))->toBe('www-2')
+        ->and($workspaces->uniqueTenantSlug('Control'))->toBe('control-2')
+        ->and(strlen($workspaces->uniqueTenantSlug(str_repeat('a', 120))))->toBeLessThanOrEqual(63);
+});
