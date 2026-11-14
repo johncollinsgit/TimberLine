@@ -67,6 +67,7 @@ class SquareMarketingSyncService
                     ...app(SquareConnectionContext::class)->publicBinding($config), 'source_label' => 'square_customer_sync',
                     'source_id' => (string) ($payload['id'] ?? ''),
                     'create_unmatched' => $createUnmatched, 'actor_id' => $options['created_by'] ?? null, 'request_id' => $options['request_id'] ?? null,
+                    'source_refresh_policy_version' => $options['source_refresh_policy_version'] ?? null,
                 ]);
                 $this->mergeProfileSummary($summary, $result);
 
@@ -368,7 +369,8 @@ class SquareMarketingSyncService
                 };
                 $result = app(SquareCustomerIdentityService::class)->sync($identity, $tenant, $dryRun, [...app(SquareConnectionContext::class)->publicBinding($config),
                     'source_label' => 'square_'.$kind.'_sync', 'source_id' => $payload['id'], 'create_unmatched' => $kind === 'customer' && ! empty($options['create_unmatched']),
-                    'actor_id' => $options['created_by'], 'request_id' => $options['request_id']]);
+                    'actor_id' => $options['created_by'], 'request_id' => $options['request_id'],
+                    'source_refresh_policy_version' => $options['source_refresh_policy_version'] ?? null]);
                 $this->mergeProfileSummary($summary, $result);
                 if ($kind === 'customer' && ! $dryRun && ($result['profile_id'] ?? null)) {
                     app(SquareCustomerSource::class)->applyConsent(\App\Models\MarketingProfile::forTenantId($tenant)->findOrFail($result['profile_id']), $payload,
@@ -468,6 +470,7 @@ class SquareMarketingSyncService
             'links_created' => 0,
             'links_reused' => 0,
             'reviews_created' => 0,
+            'automatic_associations' => 0,
             'records_skipped' => 0,
             'errors' => 0,
             'source_binding' => $options['source_binding'] ?? [],
@@ -1090,6 +1093,7 @@ class SquareMarketingSyncService
         foreach (['profiles_created', 'profiles_updated', 'links_created', 'links_reused', 'reviews_created', 'records_skipped'] as $key) {
             $summary[$key] += (int) ($result[$key] ?? 0);
         }
+        $summary['automatic_associations'] = (int) ($summary['automatic_associations'] ?? 0) + (int) ($result['automatic_associations'] ?? 0);
     }
 
     /**
