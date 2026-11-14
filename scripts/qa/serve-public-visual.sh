@@ -11,7 +11,10 @@ export APP_ENV=testing
 export APP_KEY="base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI="
 export DB_CONNECTION=sqlite
 export DB_DATABASE="$visual_db"
-export SESSION_DRIVER=array
+# Browser forms make multiple HTTP requests. Array sessions lose the basket
+# and CSRF token at the end of each request; keep isolated test cookies durable.
+export SESSION_DRIVER=file
+export SESSION_COOKIE=everbranch_public_visual_session
 export CACHE_STORE=array
 
 php artisan migrate --force --no-interaction >/dev/null

@@ -117,6 +117,8 @@ test("the current offer and conditional fees are visible before requesting acces
     const choice = page.locator('input[name="branches[]"][value="customers"]');
     await choice.check();
     await page.getByRole("button", { name: "Save choices", exact: true }).click();
+    await expect(page).toHaveURL(/\/platform\/build$/);
+    await expect(page.getByRole("status").filter({ hasText: "Your branches are saved." })).toBeVisible();
     await page.reload();
     await expect(choice).toBeChecked();
 });
