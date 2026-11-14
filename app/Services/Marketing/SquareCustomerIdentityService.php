@@ -94,7 +94,13 @@ class SquareCustomerIdentityService
             if (empty($primary['source_id'])) {
                 return $this->result('skipped', 'missing_square_source_id', null, 0, 0);
             }
-            $candidates = array_values(array_unique([...$this->candidates($tenantId, $identity), ...$this->cardCandidates($tenantId, $identity, $context)]));
+            $contactCandidates = $this->candidates($tenantId, $identity);
+            $cardCandidates = $this->cardCandidates($tenantId, $identity, $context);
+            $candidates = array_values(array_unique([...$contactCandidates, ...$cardCandidates]));
+            if (! $conflict && $profiles->isEmpty() && ! $cardCandidates
+                && ($automatic = $this->automaticAssociation($tenantId, $identity, $contactCandidates, $links, $context, $dryRun))) {
+                return $automatic;
+            }
             if (! $conflict && $profiles->isEmpty() && ! $candidates && ($primary['source_type'] ?? '') === 'square_customer') {
                 if (! empty($context['create_unmatched'])) {
                     $actor = User::findOrFail((int) ($context['actor_id'] ?? 0));
@@ -250,7 +256,83 @@ class SquareCustomerIdentityService
             if ($name !== '') {
                 $query->orWhere(fn ($names) => $names->whereRaw("LOWER(TRIM(COALESCE(first_name, ''))) = ?", [$first])->whereRaw("LOWER(TRIM(COALESCE(last_name, ''))) = ?", [$last]));
             }
-        })->limit(25)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        })->limit(26)->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    private function automaticAssociation(int $tenant, array $identity, array $candidates, array $links, array $context, bool $dryRun): ?array
+    {
+        if (empty($context['create_unmatched']) || ($context['source_label'] ?? '') !== 'square_customer_sync'
+            || count($links) !== 1 || ($links[0]['source_type'] ?? '') !== 'square_customer'
+            || data_get($identity, 'primary_source.source_type') !== 'square_customer'
+            || data_get($identity, 'primary_source.source_id') !== $links[0]['source_id']) {
+            return null;
+        }
+        $proof = app(SquareCustomerCandidateResolution::class)->resolve($tenant, $identity, $candidates);
+        if (! $proof) {
+            return null;
+        }
+        $actor = User::findOrFail((int) ($context['actor_id'] ?? 0));
+        $this->authorize($tenant, $actor);
+        if (! empty($context['source_refresh_policy_version'])) {
+            app(SquareSourceRefresh::class)->assertPolicyCurrent($tenant, $context['source_refresh_policy_version']);
+        }
+        if (isset($context['connection_id'], $context['connection_generation'])) {
+            app(SquareConnectionContext::class)->assertCurrent($tenant, $context);
+        }
+        $sourceId = $links[0]['source_id'];
+        $customer = SquareCustomer::forTenantId($tenant)->where('square_customer_id', $sourceId)->first();
+        foreach (['merchant_id', 'environment'] as $field) {
+            if (empty($context[$field]) || data_get($customer?->raw_payload, '_source_binding.'.$field) !== $context[$field]) {
+                return null;
+            }
+        }
+        foreach (['email', 'phone'] as $field) {
+            $method = $field === 'email' ? 'normalizeEmail' : 'normalizePhone';
+            if ($this->normalizer->$method($identity['raw_'.$field] ?? null) !== $this->normalizer->$method($customer->$field)) {
+                return null;
+            }
+        }
+        $pending = MarketingIdentityReview::where('source_type', 'square_customer')->where('source_id', $sourceId)
+            ->where('payload->source_context->tenant_id', $tenant)->where('status', 'pending')->get();
+        foreach ($pending as $review) {
+            if ($review->conflict_reasons !== ['square_contact_candidates_require_review']) {
+                return null;
+            }
+            foreach (['merchant_id', 'environment'] as $field) {
+                if (data_get($review->payload, 'source_context.'.$field) !== $context[$field]) {
+                    return null;
+                }
+            }
+        }
+        if (! $dryRun) {
+            $profile = $this->identities->lockedById($tenant, $proof['profile_id']);
+            abort_unless($profile && ! $profile->archived_at, 409);
+            $evidence = ['version' => 1, 'mode' => 'automatic_source_association', 'proof' => $proof,
+                'source_context' => ['tenant_id' => $tenant] + $this->binding($context),
+                'source_snapshot_hash' => $this->sourceHash($tenant, 'square_customer', $sourceId),
+                'source_refresh_policy_version' => $context['source_refresh_policy_version'] ?? null,
+                'request_id' => $context['request_id'] ?? null, 'authorized_by' => $actor->id,
+                'profile_merge' => false, 'account_access_granted' => false, 'marketing_permission_granted' => false, 'rewards_replayed' => false];
+            MarketingProfileLink::create(['tenant_id' => $tenant, 'marketing_profile_id' => $profile->id,
+                'source_type' => 'square_customer', 'source_id' => $sourceId, 'match_method' => 'automatic_equivalent_customer_sources',
+                'source_meta' => ['automatic_resolution' => $evidence] + $this->binding($context)]);
+            $reviews = $pending->isEmpty() ? [new MarketingIdentityReview] : $pending;
+            foreach ($reviews as $review) {
+                $payload = (array) $review->payload;
+                $payload['source_context'] ??= ['tenant_id' => $tenant] + $this->binding($context);
+                $payload['automatic_resolution'] = $evidence;
+                $review->fill(['status' => 'resolved', 'source_type' => 'square_customer', 'source_id' => $sourceId,
+                    'proposed_marketing_profile_id' => $profile->id, 'reviewed_by' => $actor->id, 'reviewed_at' => now(),
+                    'resolution_notes' => 'Automatically associated equivalent customer sources under the owner-authorized refresh policy: '.$proof['basis'].'. Original profiles, consent and rewards retained.',
+                    'payload' => $payload])->save();
+            }
+            $this->source->applySavedLocation($profile, $sourceId);
+            if (! empty($context['reconcile_recorded_history'])) {
+                $this->linkRecordedHistory($tenant, $profile, $sourceId, $context);
+            }
+        }
+
+        return $this->result('updated', 'automatic_'.$proof['basis'], $proof['profile_id'], 1, 0) + ['automatic_associations' => 1];
     }
 
     private function linkRecordedHistory(int $tenantId, MarketingProfile $profile, string $customerId, array $binding): int

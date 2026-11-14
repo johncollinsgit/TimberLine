@@ -81,6 +81,25 @@ Customer discovery and reviewed reconciliation belong permanently in Customers
 and its existing source/audit records. Future imports and app adapters must reuse
 those results. A one-time campaign export is not the customer source of truth.
 
+Owner direction, November 14, 2026: owner-authorized Square refreshes may associate
+an original customer automatically when all contact candidates resolve through
+existing aliases to one active canonical customer, or when every candidate refers
+to the same exact original Shopify customer within one store and the current
+tenant-owned Shopify external mapping selects one active destination. The latter
+also requires agreeing saved contacts/names and a matching current external contact.
+`SquareCustomerCandidateResolution` supplies this evidence to the existing fenced
+`SquareCustomerIdentityService`; each decision retains its original source, candidate
+IDs, mapping evidence and policy/request context in the customer link and resolved
+identity review. Existing pending contact-only reviews are resolved in place.
+
+This applies to tenants that authorize unmatched customer creation/source refresh,
+including scheduled and verified webhook customer reads through that same service.
+Other imports remain on their established policy. A lone phone/email/name match,
+different source IDs/store namespaces, card collisions, conflicting contacts,
+incomplete candidate sets, archived/broken roots or conflicting original claims
+remain in review. The rule never merges the retained profiles, selects by recency,
+attests account ownership, grants marketing permission or replays rewards.
+
 Every new app or customer-related change must document its canonical customer
 reference, authoritative source and refresh/cutover behavior, shared read contract,
 and actor/tenant permissions. Before release, prove cross-surface identity,

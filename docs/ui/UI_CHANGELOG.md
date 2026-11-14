@@ -1,3 +1,10 @@
+## 2026-11-14 - Clear Square customer matches
+
+Square source settings explain automatic association of existing aliases and
+duplicate imports for one verified original customer. Unclear matches remain in
+review; automatic decisions retain their evidence in Customers. The existing
+owner-authorized source refresh setting controls this behavior.
+
 ## 2026-11-14 - Light public website redesign
 
 Theeverbranch.com now uses a white canvas, subtle watercolor accents, rounded
