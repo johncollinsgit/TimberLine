@@ -50,6 +50,7 @@ try {
         [`/workspace/customers/reconciliation?tenant=${fixture.tenant}`, 'reconciliation'],
         [`/workspace/customers?tenant=${fixture.tenant}`, 'directory'],
         [`/marketing/desk?tenant=${fixture.tenant}`, 'marketing-desk'],
+        [`/subscriptions/recharge?tenant=${fixture.tenant}`, 'recharge-setup'],
       ]) {
         const response = await page.goto(origin + path);
         assert.equal(response.status(), 200, path);
@@ -59,6 +60,15 @@ try {
           await page.locator('.customer-commerce-balance').getByText('7.25 reward credits', { exact: true }).waitFor();
           await page.getByRole('heading', { name: 'Birthday', exact: true }).waitFor();
           await page.getByText('02/29', { exact: true }).waitFor();
+        }
+        if (label === 'recharge-setup') {
+          const fields = page.locator('.eb-recharge-setup input:not([type="hidden"]):not([type="checkbox"])');
+          assert.equal(await fields.count(), 3);
+          for (const field of await fields.all()) {
+            const box = await field.boundingBox();
+            assert.ok(box.width > 100 && box.height >= 44, 'Private setup fields must have usable visible dimensions');
+            assert.equal(await field.evaluate(el => getComputedStyle(el).borderTopStyle), 'solid');
+          }
         }
         const colors = await page.locator('#app-main').evaluate(main => {
           const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;

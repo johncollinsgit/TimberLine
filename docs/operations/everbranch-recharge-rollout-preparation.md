@@ -231,3 +231,14 @@ source/candidate comparisons require synthetic browser verification as well.
 - [Subscription semantics and limitations](https://docs.getrecharge.com/docs/subscriptions)
 - [Merchant API credential access](https://support.getrecharge.com/hc/en-us/articles/360008829993-Recharge-API)
 - [Payment-update flow and vault ownership](https://support.getrecharge.com/hc/en-us/articles/40830660708759-How-to-add-Shopify-s-payment-update-flow-to-your-custom-Customer-Portal)
+
+## API token compatibility and private setup (November 14, 2026)
+
+The importer accepts Recharge's documented `read_store` or `store_info` store-read
+grant while retaining the exact original scopes. Customer, subscription and payment
+method read grants remain independently required. Token information may use the
+current top-level `scopes` response or the retained `token_information` envelope;
+malformed scope evidence is still rejected. This was checked against the merchant's
+read-only response and [Recharge's store reference](https://developer.rechargepayments.com/v2/store).
+The private form takes the API key, not the separate webhook client secret. Missing
+identity fields produce specific safe messages without saving or flashing credentials.

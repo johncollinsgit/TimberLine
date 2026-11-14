@@ -61,7 +61,18 @@ class SubscriptionRechargeController extends Controller
         // Avoid Laravel's automatic validation redirect: it flashes every input
         // except standard passwords, which would expose a new API-token field.
         if ($validator->fails()) {
-            return $this->back($tenant)->withErrors(['setup' => 'Review the expected Recharge store identity and private API credential.']);
+            $messages = ['setup' => 'Review the fields below. The API key has not been saved.'];
+            foreach (['provider_store_id' => 'Enter the Recharge store ID from the original store.',
+                'identifier' => 'Enter the exact Recharge platform identifier.',
+                'platform' => 'Choose the original Shopify source.',
+                'recharge_access_token' => 'Enter the Recharge API key, not the API client secret.',
+                'request_uuid' => 'This setup form expired. Reload it before saving.'] as $field => $message) {
+                if ($validator->errors()->has($field)) {
+                    $messages[$field] = $message;
+                }
+            }
+
+            return $this->back($tenant)->withErrors($messages);
         }
         $data = $validator->validated();
         $identity = ['provider_store_id' => $data['provider_store_id'], 'identifier' => $data['identifier'], 'platform' => $data['platform']];
