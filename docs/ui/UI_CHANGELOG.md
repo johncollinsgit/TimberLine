@@ -3380,3 +3380,17 @@ Projects and Requests use the full work canvas. Sort headers for fields present 
   current recipient checks, missing-field protection and retained drafts.
 - Internal reminder options include schedules, quiet hours, previews and paused
   state. External sequences and real provider acceptance remain separate gates.
+
+## 2026-11-13 - Shared customer details and source readability
+
+- Customer details render the existing shared purchase/rewards component and
+  tenant program label. The page and shared detail JSON also expose the canonical
+  saved birthday, capture source and recorded annual reward year without issuing
+  rewards or exposing the birth year.
+- Customer panels opt into aliases that resolve with their light/dark tenant
+  colors. Source headings, links, native fields and purchase tables retain
+  readable foreground/background pairs. Existing light pages keep their palette.
+- Chromium and WebKit cover profile, Square connection, reconciliation, customer
+  directory and Marketing Desk pages in both themes at desktop and phone widths,
+  checking rendered contrast and horizontal overflow. These checks are retained
+  in protected workspace CI.

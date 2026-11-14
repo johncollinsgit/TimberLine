@@ -410,6 +410,9 @@ jobs:
     - name: Verify connected event Sales and Customers
       run: node tests/e2e/team-event-commerce.browser.mjs
       if: matrix.group == 'teams'
+    - name: Verify shared customer profile and source panel contrast
+      run: node tests/e2e/customer-profile-theme.browser.mjs
+      if: matrix.group == 'workspace'
     - name: Verify Birthday Club desktop and mobile states
       run: node tests/e2e/birthday-club-browser.mjs
       if: matrix.group == 'commerce'

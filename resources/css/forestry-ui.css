@@ -10,6 +10,8 @@
   --eb-text-muted: #5d6b6a;
   --eb-accent: #1e5a63;
   --eb-brand: #123c43;
+  --eb-link: var(--eb-brand);
+  --eb-link-hover: var(--eb-accent);
   --eb-success: #157347;
   --eb-warning: #9a670f;
   --eb-danger: #b42318;
@@ -6081,20 +6083,24 @@ body.mf-app-shell {
   background: var(--fb-surface-muted) !important;
 }
 
+.mf-app-card :where(.bg-white) {
+  background: var(--fb-surface) !important;
+}
+
 .mf-app-card :where([class*='border-white/'], [class*='border-zinc-'], [class*='border-emerald-200/'], [class*='border-emerald-300/']) {
   border-color: var(--fb-border) !important;
 }
 
 .mf-app-card :where(a[href]) {
-  color: var(--fb-brand-2);
+  color: var(--eb-link, var(--fb-brand-2));
 }
 
 .mf-app-card :where(a[href]:hover) {
-  color: var(--fb-brand);
+  color: var(--eb-link-hover, var(--fb-brand));
 }
 
 .mf-app-card :where(input, textarea, select) {
-  background: #ffffff !important;
+  background: var(--fb-surface) !important;
   border-color: var(--fb-border) !important;
   color: var(--fb-text-primary) !important;
 }
@@ -10957,12 +10963,49 @@ body.fb-public-body--splash[data-premium-motion="public"].has-premium-motion .fb
   --eb-border: color-mix(in srgb, var(--tenant-primary) 16%, var(--tenant-surface));
   --eb-text-primary: var(--tenant-text);
   --eb-text-secondary: color-mix(in srgb, var(--tenant-text) 78%, var(--tenant-surface));
-  --eb-text-muted: color-mix(in srgb, var(--tenant-text) 60%, var(--tenant-surface));
+  --eb-text-muted: color-mix(in srgb, var(--tenant-text) 78%, var(--tenant-surface));
   --eb-accent: var(--tenant-accent);
   --eb-brand: var(--tenant-primary);
   --eb-focus-ring: color-mix(in srgb, var(--tenant-accent) 30%, transparent);
   --eb-shadow-sm: 0 10px 26px -20px color-mix(in srgb, var(--tenant-primary) 24%, transparent);
   --eb-shadow-md: 0 16px 36px -26px color-mix(in srgb, var(--tenant-primary) 28%, transparent);
+}
+
+/* Opt-in panels share the current tenant palette. Legacy light pages retain
+   their existing aliases until their surfaces and foregrounds migrate together. */
+.mf-tenant-themed .eb-themed-panel {
+  --eb-link: var(--eb-text-primary);
+  --eb-link-hover: var(--eb-text-primary);
+
+  /* Aliases must resolve where tenant/dark tokens change, rather than retaining
+     the light values already computed on :root. */
+  --fb-page-background: var(--eb-page-background);
+  --fb-surface: var(--eb-surface);
+  --fb-surface-subtle: var(--eb-surface-subtle);
+  --fb-surface-muted: var(--eb-surface-muted);
+  --fb-surface-strong: var(--eb-surface-strong);
+  --fb-border: var(--eb-border);
+  --fb-text-primary: var(--eb-text-primary);
+  --fb-text-secondary: var(--eb-text-secondary);
+  --fb-text-muted: var(--eb-text-muted);
+  --fb-accent: var(--eb-accent);
+  --fb-focus-ring: var(--eb-focus-ring);
+  --fb-shadow-sm: var(--eb-shadow-sm);
+  --fb-shadow-md: var(--eb-shadow-md);
+  --fb-bg: var(--eb-page-background);
+  --fb-text: var(--eb-text-primary);
+  --fb-brand: var(--eb-brand);
+  --fb-brand-2: var(--eb-accent);
+  --fb-muted: var(--eb-text-muted);
+  --fb-ring: var(--eb-focus-ring);
+  --fb-shadow-soft: var(--eb-shadow-sm);
+  --fb-shadow-card: var(--eb-shadow-md);
+  --fb-radius-lg: var(--eb-radius-lg);
+  --fb-radius-md: var(--eb-radius-md);
+  --fb-radius-sm: var(--eb-radius-sm);
+  --fb-font-display: var(--eb-font-display);
+  --fb-font-ui: var(--eb-font-ui);
+  color-scheme: light;
 }
 
 .dark .mf-tenant-themed {
@@ -10975,6 +11018,10 @@ body.fb-public-body--splash[data-premium-motion="public"].has-premium-motion .fb
   --eb-text-primary: #f6f9ff;
   --eb-text-secondary: #d3deee;
   --eb-text-muted: #a8b8cf;
+}
+
+.dark .mf-tenant-themed:not([data-eb-workspace]) .eb-themed-panel {
+  color-scheme: dark;
 }
 
 .mf-tenant-themed[data-tenant-corners="standard"] {

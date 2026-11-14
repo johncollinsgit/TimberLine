@@ -2,27 +2,27 @@
 @if(is_array($snapshot))
     @once
         <style>
-            .customer-commerce{border:1px solid #dedfe2;border-radius:16px;padding:20px;background:#fff;color:#18181b;font:14px/1.5 system-ui,sans-serif;margin:16px 0}
+            .customer-commerce{border:1px solid var(--eb-border, #dedfe2);border-radius:16px;padding:20px;background:var(--eb-surface, #fff);color:var(--eb-text-primary, #18181b);font:14px/1.5 system-ui,sans-serif;margin:16px 0}
             .customer-commerce h2{font:600 18px/1.4 system-ui,sans-serif;margin:0}
             .customer-commerce h3{font:600 15px/1.4 system-ui,sans-serif;margin:0}
-            .customer-commerce p{margin:6px 0 0;color:#52525b}
+            .customer-commerce p{margin:6px 0 0;color:var(--eb-text-secondary, #52525b)}
             .customer-commerce-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
             .customer-commerce-balance{font-weight:600;margin-top:4px}
-            .customer-commerce-muted{color:#71717a}
+            .customer-commerce-muted{color:var(--eb-text-muted, #71717a)}
             .customer-commerce-warning{background:#fffbeb;color:#78350f!important;padding:12px;border-radius:8px;margin-top:16px!important}
             .customer-commerce-table{overflow-x:auto;margin-top:20px}
             .customer-commerce table{width:100%;border-collapse:collapse;text-align:left;font:inherit}
-            .customer-commerce th{font-weight:500;color:#71717a;border-bottom:1px solid #dedfe2;padding:8px 12px 8px 0}
-            .customer-commerce td{padding:12px 12px 12px 0;border-bottom:1px solid #f0f0f1;vertical-align:top}
+            .customer-commerce th{font-weight:500;color:var(--eb-text-muted, #71717a);border-bottom:1px solid var(--eb-border, #dedfe2);padding:8px 12px 8px 0}
+            .customer-commerce td{padding:12px 12px 12px 0;border-bottom:1px solid var(--eb-border, #f0f0f1);vertical-align:top}
             .customer-commerce th:last-child,.customer-commerce td:last-child{text-align:right;padding-right:0}
-            .customer-commerce-refund,.customer-commerce-coverage{font-size:12px;color:#71717a}
-            .customer-commerce-rewards{margin-top:20px;padding-top:16px;border-top:1px solid #dedfe2}
+            .customer-commerce-refund,.customer-commerce-coverage{font-size:12px;color:var(--eb-text-muted, #71717a)}
+            .customer-commerce-rewards{margin-top:20px;padding-top:16px;border-top:1px solid var(--eb-border, #dedfe2)}
             .customer-commerce ul{list-style:none;margin:8px 0 0;padding:0}
-            .customer-commerce li{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #f0f0f1}
+            .customer-commerce li{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--eb-border, #f0f0f1)}
             .customer-commerce .customer-commerce-coverage{margin-top:12px}
         </style>
     @endonce
-    <section class="customer-commerce" aria-label="Purchases and rewards">
+    <section class="customer-commerce eb-themed-panel" aria-label="Purchases and rewards">
         <div class="customer-commerce-header">
             <div>
                 <h2 >Purchases &amp; {{ $rewardsLabel }}</h2>

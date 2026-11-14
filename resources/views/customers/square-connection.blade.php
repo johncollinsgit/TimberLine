@@ -1,7 +1,7 @@
 <x-layouts::app :title="'Square customer sources'">
 @once
 <style>
-    .eb-square-connection { max-width: 1152px; margin: 0 auto; padding: 28px; color: var(--eb-text-primary, #0f1c1f); font: 400 14px/1.6 var(--eb-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); }
+    .eb-square-connection { background: var(--eb-page-background, #fff); max-width: 1152px; margin: 0 auto; padding: 28px; color: var(--eb-text-primary, #0f1c1f); font: 400 14px/1.6 var(--eb-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); }
     .eb-square-connection, .eb-square-connection * { box-sizing: border-box; min-width: 0; }
     .eb-square-connection h1, .eb-square-connection h2, .eb-square-connection h3 { margin: 0; color: inherit; font-family: inherit; font-weight: 650; letter-spacing: -.025em; line-height: 1.3; }
     .eb-square-connection h1 { font-size: clamp(24px, 3vw, 30px); }
@@ -16,7 +16,7 @@
     .eb-square-connection .eb-square-status { display: inline-block; padding: 3px 10px; border: 1px solid var(--eb-border, #dbe4e3); border-radius: 999px; background: var(--eb-surface, #fff); color: var(--eb-text-primary, #0f1c1f); font-weight: 600; overflow-wrap: anywhere; }
     .eb-square-connection .eb-square-id { display: block; margin-top: 4px; color: var(--eb-text-primary, #0f1c1f); font-size: 14px; font-weight: 400; line-height: 1.6; overflow-wrap: anywhere; }
     .eb-square-connection .eb-square-details { padding-top: 4px; border-top: 1px solid var(--eb-border, #dbe4e3); }
-    .eb-square-connection .eb-square-details summary { min-height: 44px; padding: 10px 0; color: var(--eb-brand, #123c43); font-weight: 600; cursor: pointer; }
+    .eb-square-connection .eb-square-details summary { min-height: 44px; padding: 10px 0; color: var(--eb-link, #123c43); font-weight: 600; cursor: pointer; }
     .eb-square-connection .eb-square-details dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; margin: 8px 0 0; }
     .eb-square-connection .eb-square-details dt { color: var(--eb-text-muted, #5d6b6a); }
     .eb-square-connection .eb-square-details dd { margin: 3px 0 0; color: var(--eb-text-secondary, #32464b); overflow-wrap: anywhere; }
@@ -29,7 +29,7 @@
     .eb-square-connection .eb-square-check { display: flex; align-items: flex-start; gap: 12px; min-height: 44px; padding: 16px; border: 1px solid var(--eb-border, #dbe4e3); border-radius: 10px; background: var(--eb-surface-subtle, #f8fbfa); font-weight: 400; }
     .eb-square-connection input[type=checkbox] { flex: 0 0 18px; width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--eb-brand, #123c43); }
     .eb-square-connection .eb-square-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-    .eb-square-connection .eb-square-clear { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 12px; color: var(--eb-brand, #123c43); font-weight: 600; }
+    .eb-square-connection .eb-square-clear { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 12px; color: var(--eb-link, #123c43); font-weight: 600; }
     .eb-square-connection button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; max-width: 100%; padding: 11px 18px; border: 1px solid var(--eb-brand, #123c43); border-radius: 9px; background: var(--eb-brand, #123c43); color: #fff; font: 600 14px/1.5 var(--eb-font-ui, Inter, ui-sans-serif, system-ui, sans-serif); text-align: center; white-space: normal; cursor: pointer; }
     .eb-square-connection .eb-square-secondary { border-color: var(--eb-border, #dbe4e3); background: var(--eb-surface, #fff); color: var(--eb-text-primary, #0f1c1f); }
     .eb-square-connection button:disabled { opacity: .5; cursor: not-allowed; }
@@ -53,7 +53,7 @@
         catch (\Throwable) { return 'date unknown'; }
     };
 @endphp
-<main class="eb-square-connection">
+<main class="eb-square-connection eb-themed-panel">
     <header>
         <h1>Square customers and source refresh</h1>
         <p class="eb-square-copy">Keep Square as checkout, or use another reviewed checkout later. This connection reads original Square customers, card references, purchases and locations into the existing source records. It does not activate Everbranch Pay, change historical amounts or grant rewards.</p>
