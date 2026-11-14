@@ -2789,6 +2789,19 @@ Trajectory now opens with Personal, Business, and, when both authorized spaces e
 - Everbranch has a default-disabled, rate-limited server-to-server transcription bridge for the separately hosted Level Foundations editor. It validates an integration bearer token and a 25 MB audio upload, makes one provider request with Everbranch's configured AI credential, and returns text only. It creates no Everbranch tenant/user records and retains or logs neither audio nor transcript content.
 - Activation requires the dedicated `LEVEL_FOUNDATIONS_TRANSCRIPTION_ENABLED` and `LEVEL_FOUNDATIONS_TRANSCRIPTION_TOKEN` runtime values plus the existing Bud provider credential. The Level Foundations runtime receives only its own endpoint URL and shared integration token. See `docs/operations/level-foundations-transcription-runbook.md`.
 
+## Self service platform purchase (2026-11-14)
+
+Public branch selection now continues through email/Google verification, one
+provisional owner workspace, canonical standard-offer Stripe checkout, signed
+provider confirmation and audited paid fulfillment. Paid first-time owners can
+publish Managed Website and connect domains without per-tenant manual rollout;
+global availability, editor/publish/public freezes and explicit restrictions
+remain authoritative. Registration grants no paid access. Scheduled recovery
+retries signed payment evidence and verifies pending domains. Live activation
+requires real provider readiness and acceptance. See
+`docs/operations/self-service-standard-purchase.md` and
+`docs/operations/website-domain-self-service.md`.
+
 ## Managed Website first-time setup (2026-09-06)
 
 - An entitled, allowlisted tenant may open Website before a site record exists,

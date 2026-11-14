@@ -1,0 +1,20 @@
+/* Decorative action mark. The official silhouette follows the label's ink. */
+.eb-action-leaf {
+    display: inline-block;
+    width: 17px;
+    height: 19px;
+    flex: 0 0 17px;
+    margin-inline-end: 5px;
+    vertical-align: -.2em;
+    background-color: currentColor;
+    mask: var(--eb-action-leaf-image) center / contain no-repeat;
+    -webkit-mask: var(--eb-action-leaf-image) center / contain no-repeat;
+    pointer-events: none;
+}
+.eb-ask-launch .eb-action-leaf,
+.eb-guide-ask .eb-action-leaf,
+.eb-ask-form .eb-action-leaf { margin-inline-end: 0; }
+.eb-guide__action:has(> .eb-action-leaf) { justify-content: flex-start; align-items: center; gap: 4px; }
+.eb-guide__heading > a:has(> .eb-action-leaf),
+.eb-motion-preview summary:has(> .eb-action-leaf),
+.eb-studio-industry-card b:has(> .eb-action-leaf) { display: inline-flex; align-items: center; }

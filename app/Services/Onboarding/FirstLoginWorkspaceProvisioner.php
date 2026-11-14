@@ -59,6 +59,9 @@ class FirstLoginWorkspaceProvisioner
         ): void {
             // Serialize repeated submissions for the same account before creating anything.
             $user = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            if (in_array((string) $user->requested_via, ['self_service_registration', 'google'], true) && (! $user->is_active || ! $user->hasVerifiedEmail())) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['email' => 'Verify your email before creating a workspace.']);
+            }
             $existing = $user->tenants()->orderBy('tenants.id')->first();
             if ($existing) {
                 $tenantId = (int) $existing->id;
@@ -120,6 +123,25 @@ class FirstLoginWorkspaceProvisioner
             $setupStatus = $this->setupStatusService->forTenant($tenant);
             $this->blueprintService->applyBlueprint($tenant, $profile->refresh(), $setupStatus, $blueprint, 'production', true);
 
+            // Only this fresh-workspace path can enroll a new self-service buyer.
+            // Existing workspaces and signed agreements never acquire this marker.
+            if (config('self_service.registration_enabled')
+                && in_array((string) $user->requested_via, ['self_service_registration', 'google'], true)
+                && $user->is_active && $user->hasVerifiedEmail()) {
+                $tenant->users()->updateExistingPivot((int) $user->id, ['role' => 'owner']);
+                $profile->refresh()->forceFill(['metadata' => [
+                    ...(array) $profile->metadata,
+                    'self_service_registration' => true,
+                    'self_service_owner_id' => (int) $user->id,
+                    'self_service_registered_at' => now()->toIso8601String(),
+                ]])->save();
+                app(\App\Services\Tenancy\LandlordOperatorActionAuditService::class)->record(
+                    (int) $tenant->id, (int) $user->id, 'self_service.workspace_created',
+                    targetType: 'tenant_access_profile', targetId: $profile->id,
+                    afterState: ['plan_key' => 'base', 'self_service_registration' => true]
+                );
+            }
+
             // Module picks are INTENT ONLY — recorded as interests, never enabled.
             if ($selectedModuleKeys !== []) {
                 $setupStatus->refresh();
@@ -142,12 +164,29 @@ class FirstLoginWorkspaceProvisioner
 
     public function uniqueTenantSlug(string $name): string
     {
-        $base = Str::slug($name);
+        // Keep an included address within DNS label limits and away from the
+        // platform's own hosts before creating a customer's workspace.
+        $base = rtrim(Str::limit(Str::slug($name), 48, ''), '-');
         $base = $base !== '' ? $base : 'workspace';
+        $hosts = app(\App\Support\Tenancy\TenantHostBuilder::class);
+        $platformHosts = array_filter([
+            $hosts->canonicalLandlordHost(), $hosts->canonicalPublicHost(),
+            ...(array) config('tenancy.landlord.hosts', []),
+            ...(array) config('tenancy.domains.legacy.public_hosts', []),
+            ...(array) config('tenancy.domains.legacy.landlord_hosts', []),
+            ...array_keys((array) config('tenancy.auth.host_map', [])),
+        ]);
+        $reserved = ['www', 'app', 'landlord', 'backstage'];
+        foreach ($platformHosts as $host) {
+            $suffix = '.'.$hosts->baseDomain();
+            if (str_ends_with((string) $host, $suffix)) {
+                $reserved[] = substr((string) $host, 0, -strlen($suffix));
+            }
+        }
         $slug = $base;
         $index = 2;
 
-        while (Tenant::query()->where('slug', $slug)->exists()) {
+        while (in_array($slug, $reserved, true) || Tenant::query()->where('slug', $slug)->exists()) {
             $slug = $base.'-'.$index;
             $index++;
         }
@@ -180,7 +219,13 @@ class FirstLoginWorkspaceProvisioner
         return [
             'rail' => 'direct',
             'account_mode' => 'production',
-            'template_key' => $templateKey,
+            // Final snapshots retain their established commercial template keys;
+            // the selected business preset remains in the first-login answers.
+            'template_key' => match ($templateKey) {
+                'candle_maker' => 'candle',
+                'custom' => 'generic',
+                default => $templateKey,
+            },
             'desired_outcome_first' => (string) ($blueprint['primary_outcome'] ?? 'Launch the workspace'),
             'selected_modules' => $selectedModules,
             'data_source' => 'manual',

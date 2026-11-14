@@ -38,13 +38,13 @@
             </div>
             <div class="eb-studio-nav__actions">
                 <a class="eb-studio-text-link" href="{{ route('login') }}">Log in</a>
-                <a class="eb-studio-button eb-studio-button--dark" href="{{ $startClientCta['href'] }}">{{ $startClientCta['label'] }}</a>
+                <a class="eb-studio-button eb-studio-button--dark" href="{{ route('platform.plans') }}"><x-everbranch.action-leaf />Pricing</a>
             </div>
         </nav>
     </header>
 
     <main id="main-content">
-        <section id="top" class="eb-studio-hero" aria-labelledby="hero-title" data-studio-hero>
+        <section id="top" class="eb-studio-hero" aria-label="Everbranch" data-studio-hero>
             <div class="eb-studio-hero__media" aria-hidden="true">
                 <img class="eb-studio-hero__slide is-active" data-studio-hero-slide src="{{ asset('images/public-site/everbranch-residential-electrical-hero.jpg') }}" alt="" fetchpriority="high" decoding="async" />
                 <img class="eb-studio-hero__slide eb-studio-hero__slide--field" data-studio-hero-slide src="{{ asset('images/public-site/everbranch-hvac-electrical-field.jpg') }}" alt="" loading="lazy" decoding="async" />
@@ -52,20 +52,17 @@
             </div>
             <div class="eb-studio-hero__shade"></div>
             <div class="eb-studio-container eb-studio-hero__content" data-studio-reveal>
-                <p class="eb-studio-eyebrow eb-studio-eyebrow--light">A little more room to grow</p>
-                <h1 id="hero-title">Your business,<br>connected.</h1>
-                <p class="eb-studio-hero__lede">Your customers, your work, and your website. One place to keep them moving.</p>
+                <h1 class="sr-only">Everbranch</h1>
                 <div class="eb-studio-hero__actions">
-                    <a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}">Get started <span aria-hidden="true">↗</span></a>
-                    <a class="eb-studio-button eb-studio-button--light" href="https://teams-demo.theeverbranch.com/#property">Try the demo <span aria-hidden="true">↗</span></a>
+                    <a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}"><x-everbranch.action-leaf />Get started</a>
+                    <a class="eb-studio-button eb-studio-button--light" href="https://teams-demo.theeverbranch.com/#property"><x-everbranch.action-leaf />Try the demo</a>
                     <button class="eb-studio-play" type="button" data-studio-film-open aria-haspopup="dialog">
                         <span class="eb-studio-play__icon" aria-hidden="true">▶</span>
                         <span>See the Everbranch story</span>
                     </button>
+                    <button class="eb-studio-button eb-studio-button--light eb-guide-ask" type="button" data-ask-everbranch-open><x-everbranch.action-leaf />Ask Everbranch</button>
                 </div>
-                <button class="eb-studio-button eb-studio-button--light eb-guide-ask" type="button" data-ask-everbranch-open>Ask Everbranch</button>
                 <p class="eb-studio-hero__note">{{ config('product_surfaces.public_offer.summary') }}</p>
-                <p class="eb-studio-hero__note">{{ config('product_surfaces.public_offer.included_note') }}</p>
             </div>
         </section>
 
@@ -81,12 +78,12 @@
                     <p>Open a fictional website and operations-workspace example for a business like yours. Every person, request, message, and campaign is demo content.</p>
                 </div>
                 <div class="eb-studio-industry-grid" data-industry-options>
-                    <a class="eb-studio-industry-card" href="{{ route('platform.industry-demo', ['discipline' => 'retail']) }}" data-industry-option="retail"><img src="{{ asset('images/public-site/everbranch-industry-retail.jpg') }}" alt="" loading="lazy" decoding="async" /><div class="eb-collection-lockup" aria-hidden="true"><img src="{{ asset($brandMarkPath) }}" alt="" /> everbranch <small>Retail</small></div><span><small>01 · Wholesale · loyalty · follow-ups</small><strong>Retail &amp; product brands</strong><em>Keep buyer questions, customer context, events, and reorders moving.</em><b>Explore the example <i aria-hidden="true">↗</i></b></span></a>
-                    <a class="eb-studio-industry-card" href="{{ route('platform.industry-demo', ['discipline' => 'field']) }}" data-industry-option="field"><img src="{{ asset('images/public-site/everbranch-industry-field-service-exterior.jpg') }}" alt="" loading="lazy" decoding="async" /><div class="eb-collection-lockup" aria-hidden="true"><img src="{{ asset($brandMarkPath) }}" alt="" /> everbranch <small>Field</small></div><span><small>02 · Jobs · schedules · customer updates</small><strong>Field &amp; service teams</strong><em>Give office and field teams one living record for every job.</em><b>Explore the example <i aria-hidden="true">↗</i></b></span></a>
-                    <a class="eb-studio-industry-card" href="{{ route('platform.industry-demo', ['discipline' => 'projects']) }}" data-industry-option="projects"><img src="{{ asset('images/public-site/everbranch-industry-projects.jpg') }}" alt="" loading="lazy" decoding="async" /><div class="eb-collection-lockup" aria-hidden="true"><img src="{{ asset($brandMarkPath) }}" alt="" /> everbranch <small>Projects</small></div><span><small>03 · Projects · files · handoffs</small><strong>Project work</strong><em>Bring approvals, materials, notes, and next steps out of the cracks.</em><b>Explore the example <i aria-hidden="true">↗</i></b></span></a>
-                    <a class="eb-studio-industry-card" href="{{ route('platform.industry-demo', ['discipline' => 'studio']) }}" data-industry-option="studio"><img src="{{ asset('images/public-site/everbranch-industry-studios.jpg') }}" alt="" loading="lazy" decoding="async" /><div class="eb-collection-lockup" aria-hidden="true"><img src="{{ asset($brandMarkPath) }}" alt="" /> everbranch <small>Studio</small></div><span><small>04 · Clients · tasks · messages</small><strong>Independent studios</strong><em>Make room for the craft without losing the business behind it.</em><b>Explore the example <i aria-hidden="true">↗</i></b></span></a>
-                    <a class="eb-studio-industry-card" href="{{ route('platform.industry-demo', ['discipline' => 'practice']) }}" data-industry-option="practice"><img src="{{ asset('images/public-site/everbranch-field-owner-office.jpg') }}" alt="" loading="lazy" decoding="async" /><div class="eb-collection-lockup" aria-hidden="true"><img src="{{ asset($brandMarkPath) }}" alt="" /> everbranch <small>Care</small></div><span><small>05 · Consultations · records · guidance</small><strong>Professional practices</strong><em>Make the first conversation, preparation, and follow-up feel considered.</em><b>Explore the example <i aria-hidden="true">↗</i></b></span></a>
-                    <a class="eb-studio-industry-card" href="{{ route('platform.industry-demo', ['discipline' => 'community']) }}" data-industry-option="community"><img src="{{ asset('images/public-site/everbranch-field-team.jpg') }}" alt="" loading="lazy" decoding="async" /><div class="eb-collection-lockup" aria-hidden="true"><img src="{{ asset($brandMarkPath) }}" alt="" /> everbranch <small>Nonprofit</small></div><span><small>06 · Programs · people · invitations</small><strong>Community teams</strong><em>Keep people, gatherings, and the next useful message connected.</em><b>Explore the example <i aria-hidden="true">↗</i></b></span></a>
+                    <a class="eb-studio-industry-card" href="{{ route('platform.industry-demo', ['discipline' => 'retail']) }}" data-industry-option="retail"><img src="{{ asset('images/public-site/everbranch-industry-retail.jpg') }}" alt="" loading="lazy" decoding="async" /><div class="eb-collection-lockup" aria-hidden="true"><img src="{{ asset($brandMarkPath) }}" alt="" /> everbranch <small>Retail</small></div><span><small>01 · Wholesale · loyalty · follow-ups</small><strong>Retail &amp; product brands</strong><em>Keep buyer questions, customer context, events, and reorders moving.</em><b><x-everbranch.action-leaf />Explore the example</b></span></a>
+                    <a class="eb-studio-industry-card" href="{{ route('platform.industry-demo', ['discipline' => 'field']) }}" data-industry-option="field"><img src="{{ asset('images/public-site/everbranch-industry-field-service-exterior.jpg') }}" alt="" loading="lazy" decoding="async" /><div class="eb-collection-lockup" aria-hidden="true"><img src="{{ asset($brandMarkPath) }}" alt="" /> everbranch <small>Field</small></div><span><small>02 · Jobs · schedules · customer updates</small><strong>Field &amp; service teams</strong><em>Give office and field teams one living record for every job.</em><b><x-everbranch.action-leaf />Explore the example</b></span></a>
+                    <a class="eb-studio-industry-card" href="{{ route('platform.industry-demo', ['discipline' => 'projects']) }}" data-industry-option="projects"><img src="{{ asset('images/public-site/everbranch-industry-projects.jpg') }}" alt="" loading="lazy" decoding="async" /><div class="eb-collection-lockup" aria-hidden="true"><img src="{{ asset($brandMarkPath) }}" alt="" /> everbranch <small>Projects</small></div><span><small>03 · Projects · files · handoffs</small><strong>Project work</strong><em>Bring approvals, materials, notes, and next steps out of the cracks.</em><b><x-everbranch.action-leaf />Explore the example</b></span></a>
+                    <a class="eb-studio-industry-card" href="{{ route('platform.industry-demo', ['discipline' => 'studio']) }}" data-industry-option="studio"><img src="{{ asset('images/public-site/everbranch-industry-studios.jpg') }}" alt="" loading="lazy" decoding="async" /><div class="eb-collection-lockup" aria-hidden="true"><img src="{{ asset($brandMarkPath) }}" alt="" /> everbranch <small>Studio</small></div><span><small>04 · Clients · tasks · messages</small><strong>Independent studios</strong><em>Make room for the craft without losing the business behind it.</em><b><x-everbranch.action-leaf />Explore the example</b></span></a>
+                    <a class="eb-studio-industry-card" href="{{ route('platform.industry-demo', ['discipline' => 'practice']) }}" data-industry-option="practice"><img src="{{ asset('images/public-site/everbranch-field-owner-office.jpg') }}" alt="" loading="lazy" decoding="async" /><div class="eb-collection-lockup" aria-hidden="true"><img src="{{ asset($brandMarkPath) }}" alt="" /> everbranch <small>Care</small></div><span><small>05 · Consultations · records · guidance</small><strong>Professional practices</strong><em>Make the first conversation, preparation, and follow-up feel considered.</em><b><x-everbranch.action-leaf />Explore the example</b></span></a>
+                    <a class="eb-studio-industry-card" href="{{ route('platform.industry-demo', ['discipline' => 'community']) }}" data-industry-option="community"><img src="{{ asset('images/public-site/everbranch-field-team.jpg') }}" alt="" loading="lazy" decoding="async" /><div class="eb-collection-lockup" aria-hidden="true"><img src="{{ asset($brandMarkPath) }}" alt="" /> everbranch <small>Nonprofit</small></div><span><small>06 · Programs · people · invitations</small><strong>Community teams</strong><em>Keep people, gatherings, and the next useful message connected.</em><b><x-everbranch.action-leaf />Explore the example</b></span></a>
                 </div>
             </div>
         </section>
@@ -97,7 +94,7 @@
                     <p class="eb-studio-eyebrow eb-studio-eyebrow--light">Customer Loop</p>
                     <h2 id="customer-loop-title">Keep the connection.</h2>
                     <p>Turn finished work into a thoughtful follow-up. You review every message.</p>
-                    <a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}">Plan your Customer Loop <span aria-hidden="true">↗</span></a>
+                    <a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}"><x-everbranch.action-leaf />Plan your Customer Loop</a>
                 </div>
 
             </div>

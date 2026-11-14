@@ -603,6 +603,13 @@ Route::post('/platform/demos/green-shield-pest-control/website/reminders', [Plat
 Route::get('/platform/plans', [PlatformProductPagesController::class, 'plans'])->name('platform.plans');
 Route::get('/platform/demo', [PlatformProductPagesController::class, 'demo'])->name('platform.demo');
 Route::get('/platform/start', [PlatformProductPagesController::class, 'start'])->name('platform.start');
+Route::get('/platform/signup', [\App\Http\Controllers\Onboarding\SelfServiceSignupController::class, 'show'])->name('self-service.signup');
+Route::post('/platform/signup', [\App\Http\Controllers\Onboarding\SelfServiceSignupController::class, 'store'])->middleware('throttle:5,1,self-service-signup:')->name('self-service.signup.store');
+Route::middleware(['auth', 'throttle:10,1,self-service-verification:'])->group(function (): void {
+    Route::get('/platform/signup/check-email', [\App\Http\Controllers\Onboarding\SelfServiceSignupController::class, 'notice'])->name('self-service.verify.notice');
+    Route::post('/platform/signup/verification-email', [\App\Http\Controllers\Onboarding\SelfServiceSignupController::class, 'resend'])->middleware('throttle:3,1,self-service-resend:')->name('self-service.verify.resend');
+    Route::get('/platform/signup/verify/{id}/{hash}', [\App\Http\Controllers\Onboarding\SelfServiceSignupController::class, 'verify'])->middleware('signed')->whereNumber('id')->name('self-service.verify');
+});
 Route::get('/platform/build', [\App\Http\Controllers\Onboarding\BranchSelectionController::class, 'show'])->name('platform.build');
 Route::post('/platform/build', [\App\Http\Controllers\Onboarding\BranchSelectionController::class, 'save'])->middleware('throttle:30,1')->name('platform.build.save');
 Route::post('/platform/build/branch', [\App\Http\Controllers\Onboarding\BranchSelectionController::class, 'add'])->middleware('throttle:30,1')->name('platform.build.add');
@@ -919,6 +926,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/themes', [ManagedWebsiteController::class, 'applyTheme'])->name('themes.apply');
             Route::post('/domains', [ManagedWebsiteController::class, 'requestDomain'])->name('domains.request');
             Route::post('/domains/{domain}/verify', [ManagedWebsiteController::class, 'verifyDomain'])->name('domains.verify');
+            Route::get('/domains/{domain}/status', [ManagedWebsiteController::class, 'domainStatus'])->middleware('throttle:60,1,website-domain-status:')->name('domains.status');
             Route::post('/domains/{domain}/activate', [ManagedWebsiteController::class, 'activateDomain'])->name('domains.activate');
             Route::post('/domains/{domain}/deactivate', [ManagedWebsiteController::class, 'deactivateDomain'])->name('domains.deactivate');
             Route::post('/domains/{domain}/cancel', [ManagedWebsiteController::class, 'cancelDomain'])->name('domains.cancel');
@@ -1033,6 +1041,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('workspace.first-login.store');
 
     // Dashboard
+    Route::middleware(['role:admin', 'tenant.access'])->prefix('workspace/purchase')->name('self-service.purchase')->group(function (): void {
+        Route::get('/', [\App\Http\Controllers\Onboarding\SelfServicePurchaseController::class, 'show']);
+        Route::post('/', [\App\Http\Controllers\Onboarding\SelfServicePurchaseController::class, 'checkout'])->middleware('throttle:5,1,self-service-checkout:')->name('.checkout');
+        Route::get('/status', [\App\Http\Controllers\Onboarding\SelfServicePurchaseController::class, 'status'])->middleware('throttle:30,1,self-service-status:')->name('.status');
+        Route::post('/portal', [\App\Http\Controllers\Onboarding\SelfServicePurchaseController::class, 'portal'])->middleware('throttle:5,1,self-service-portal:')->name('.portal');
+        Route::put('/branches', [\App\Http\Controllers\Onboarding\SelfServicePurchaseController::class, 'branches'])->middleware('throttle:10,1,self-service-branches:')->name('.branches');
+    });
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->get('/workspace/guide', [\App\Http\Controllers\Onboarding\BranchSelectionController::class, 'guide'])->name('workspace.guide');
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])->group(function () {

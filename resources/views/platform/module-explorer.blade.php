@@ -45,7 +45,7 @@
             </div>
             <div class="eb-explorer-hero-actions">
                 <a class="fb-btn fb-btn-primary" href="{{ route('platform.contact', ['intent' => 'walkthrough']) }}">Request a guided walkthrough</a>
-                <a class="fb-btn fb-btn-secondary" href="{{ route('platform.start') }}">Choose your branches</a>
+                <a class="fb-btn fb-btn-secondary" href="{{ route('platform.start') }}">Choose a template</a>
             </div>
         </section>
 
@@ -147,7 +147,7 @@
                                     <div class="eb-module-monogram" aria-hidden="true">{{ strtoupper(substr((string) ($module['display_name'] ?? 'E'), 0, 1)) }}</div>
                                     <div>
                                         <div class="eb-module-row-title">
-                                            <h3>{{ $module['display_name'] }}</h3>
+                                            <h3><x-everbranch.action-leaf />{{ $module['display_name'] }}</h3>
                                             <span>{{ $module['category_label'] }}</span>
                                         </div>
                                         <p>{{ $buyerSetup['outcome'] ?? $module['short_description'] ?? $module['description'] }}</p>
@@ -159,13 +159,8 @@
                                         </div>
                                     </div>
                                 </div>
-                                <span class="eb-module-row-arrow" aria-hidden="true">→</span>
                             </a>
-                            <form method="post" action="{{ route('platform.build.add') }}" class="eb-explorer-add">
-                                @csrf
-                                <input type="hidden" name="branch" value="{{ $module['key'] }}">
-                                <button class="fb-btn fb-btn-secondary" type="submit">Add to setup</button>
-                            </form>
+                            <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-secondary eb-explorer-add">Choose template</a>
                         </article>
                     @endforeach
                 </div>
@@ -223,8 +218,8 @@
                     </section>
 
                     <div class="eb-module-detail-actions">
-                        <a class="fb-btn fb-btn-primary" href="{{ route('platform.start', ['branch' => $selectedModule['key']]) }}">
-                            Choose this branch
+                        <a class="fb-btn fb-btn-primary" href="{{ route('platform.start') }}">
+                            Choose your template
                         </a>
                         <a class="fb-btn fb-btn-secondary" href="{{ route('platform.contact', ['intent' => 'walkthrough', 'module' => $selectedModule['key']]) }}">See it in a guided walkthrough</a>
                         <a class="eb-module-contact" href="{{ route('platform.contact', ['module' => $selectedModule['key']]) }}">Ask Everbranch a question</a>

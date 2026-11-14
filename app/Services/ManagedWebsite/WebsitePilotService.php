@@ -50,6 +50,18 @@ class WebsitePilotService
     /** @return array<int,array{key:string,label:string,complete:bool}> */
     public function checklist(?TenantSite $site, ?TenantSiteSetup $setup): array
     {
+        if ($site && app(ManagedWebsiteSelfServicePolicy::class)->eligible($site->tenant)) {
+            $home = $site->pages()->where('slug', '/')->with('draftVersion')->first();
+
+            return [
+                ['key' => 'details', 'label' => 'Business name and email', 'complete' => filled($setup?->contact_name) && filter_var($setup?->contact_email, FILTER_VALIDATE_EMAIL) !== false],
+                ['key' => 'design', 'label' => 'Design', 'complete' => $site->draftSiteVersion()->exists()],
+                ['key' => 'content', 'label' => 'Home page', 'complete' => filled($home?->draftVersion?->title) && (array) $home?->draftVersion?->blocks !== []],
+                ['key' => 'address', 'label' => 'Everbranch address', 'complete' => filled($site->subdomain)],
+                ['key' => 'publish', 'label' => 'Publish', 'complete' => (bool) $site->public_enabled],
+            ];
+        }
+
         $hasDetails = filled($setup?->contact_name) && filled($setup?->contact_email) && filled($setup?->contact_phone) && filled($setup?->hours) && filled($setup?->service_area);
         $themeKey = strtolower(trim((string) ($setup?->design_key ?? '')));
         $hasTheme = $themeKey !== '' && data_get($site?->settings, 'theme_key') === $themeKey;
@@ -79,6 +91,10 @@ class WebsitePilotService
 
     public function readyToPublish(?TenantSite $site, ?TenantSiteSetup $setup): bool
     {
+        if ($site && app(ManagedWebsiteSelfServicePolicy::class)->eligible($site->tenant)) {
+            return collect($this->checklist($site, $setup))->where('key', '!=', 'publish')->every(fn (array $item): bool => $item['complete']);
+        }
+
         return collect($this->checklist($site, $setup))
             ->whereIn('key', ['details', 'design', 'services', 'quote', 'mobile', 'address'])
             ->every(fn (array $item): bool => $item['complete']);

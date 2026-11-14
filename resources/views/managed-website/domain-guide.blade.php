@@ -15,9 +15,10 @@
                 </form>
             @endif
             @foreach($siteDomains as $domain)
-                <article class="eb-domain-record">
+                <article class="eb-domain-record" @if(($automaticDomains ?? false) && $domain->status !== 'active' && Route::has('managed-website.domains.status')) data-domain-status-url="{{ route('managed-website.domains.status', ['domain' => $domain]) }}" @endif>
                     <div class="eb-domain-record-head"><div><strong>{{ $domain->hostname }}</strong><small>{{ $domain->status === 'active' ? 'Primary address' : ($domain->status === 'verified' ? 'Ownership confirmed' : 'Waiting for DNS') }}</small></div><x-ui.status-badge :tone="$domain->status === 'active' ? 'success' : 'warning'">{{ $domain->status === 'active' ? 'Live' : 'Connecting' }}</x-ui.status-badge></div>
                     @if($domain->status !== 'active')
+                        @if($automaticDomains ?? false)<p class="my-3 text-sm" data-domain-progress role="status">Add the records once. We will check automatically and connect your published site when DNS and security are ready.</p>@endif
                         <ol class="my-4 flex flex-wrap gap-3 text-sm" aria-label="Connection steps"><li>1. Add records</li><li>2. Check connection</li><li>3. Activate</li></ol>
                         <details class="eb-domain-steps" @if($domain->status === 'pending') open @endif><summary class="cursor-pointer font-semibold">Add DNS records</summary>
                             <p>Open DNS settings at your provider. Use DNS-only routing; leave email records unchanged.</p>
@@ -51,4 +52,25 @@ document.querySelectorAll('[data-domain-copy]').forEach(button => button.addEven
     try { await navigator.clipboard.writeText(button.dataset.domainCopy); status.textContent = 'Copied.'; }
     catch { status.textContent = 'Copy unavailable. Select the record text and copy it.'; }
 }));
+document.querySelectorAll('[data-domain-status-url]').forEach(record => {
+    let stopped = false;
+    const poll = async () => {
+        if (stopped || !record.isConnected) return;
+        if (!document.hidden) {
+            try {
+                const response = await fetch(record.dataset.domainStatusUrl, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+                if ([401,403,404,423].includes(response.status)) { stopped = true; return; }
+                if (response.ok) {
+                    const state = await response.json();
+                    const progress = record.querySelector('[data-domain-progress]');
+                    if (progress && typeof state.message === 'string') progress.textContent = state.message;
+                    if (state.status === 'active') { stopped = true; location.reload(); return; }
+                    if (state.status === 'disabled') { stopped = true; return; }
+                }
+            } catch { /* A temporary outage leaves the same connection pending. */ }
+        }
+        setTimeout(poll, 15000);
+    };
+    setTimeout(poll, 15000);
+});
 </script>

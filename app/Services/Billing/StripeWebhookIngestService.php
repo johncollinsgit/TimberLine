@@ -71,6 +71,11 @@ class StripeWebhookIngestService
             $metadata = [...$subscriptionMetadata, ...$metadata];
         }
 
+        $standardPurchase = app(SelfServiceStandardPurchaseService::class)->ingestVerifiedEvent($event);
+        if ($standardPurchase !== null) {
+            return $standardPurchase;
+        }
+
         if (($metadata['purpose'] ?? null) === 'messaging_credit') {
             return $this->fulfillMessagingCredit($eventId, $eventType, $object, $metadata, $livemode);
         }

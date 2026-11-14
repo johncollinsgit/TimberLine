@@ -72,7 +72,7 @@
             <div class="fb-card">
                 <h2 class="text-xl font-semibold">Make it yours.</h2>
                 <ol class="mt-3 space-y-2">
-                    <li>1. Choose your branches.</li>
+                    <li>1. Choose your template.</li>
                     <li>2. Review your setup and costs.</li>
                     <li>3. Set up your workspace.</li>
                 </ol>

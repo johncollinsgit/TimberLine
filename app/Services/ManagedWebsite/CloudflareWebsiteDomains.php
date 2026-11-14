@@ -15,6 +15,25 @@ class CloudflareWebsiteDomains
             && trim((string) config('managed_website.cloudflare.api_token')) !== '';
     }
 
+    /** Read-only deployment check. It never creates DNS or custom hostnames. */
+    public function infrastructureStatus(): array
+    {
+        if (! $this->ready()) {
+            return ['configured' => false, 'fallback_active' => false, 'message' => 'Cloudflare credentials or feature setting are missing.'];
+        }
+        try {
+            $response = Http::withToken((string) config('managed_website.cloudflare.api_token'))
+                ->acceptJson()->connectTimeout(5)->timeout(15)->withoutRedirecting()
+                ->get('https://api.cloudflare.com/client/v4/zones/'.config('managed_website.cloudflare.zone_id').'/custom_hostnames/fallback_origin');
+            $active = $response->successful() && $response->json('success') === true
+                && $response->json('result.status') === 'active' && filled($response->json('result.origin'));
+
+            return ['configured' => true, 'fallback_active' => $active, 'message' => $active ? 'Cloudflare fallback origin is active.' : 'Cloudflare fallback origin is unavailable or not active.'];
+        } catch (\Throwable) {
+            return ['configured' => true, 'fallback_active' => false, 'message' => 'Cloudflare provider check could not complete.'];
+        }
+    }
+
     /** @return array{ready:bool,message:string} */
     public function check(string $hostname, bool $create = false): array
     {

@@ -29,6 +29,22 @@ class FirstLoginWorkspaceController extends Controller
             return redirect()->to(route('landlord.dashboard', absolute: false));
         }
 
+        if (in_array((string) $user->requested_via, ['self_service_registration', 'google'], true) && ! $user->hasVerifiedEmail()) {
+            return redirect()->route('self-service.verify.notice');
+        }
+
+        if (config('self_service.registration_enabled') && in_array((string) $user->requested_via, ['self_service_registration', 'google'], true)) {
+            $template = $this->selfServiceTemplate($user, request());
+            if (! $template) {
+                return redirect()->route('platform.build')->with('status', 'Choose a template to continue.');
+            }
+
+            return response()->view('onboarding.self-service-workspace', [
+                'workspaceName' => $this->defaultWorkspaceName($user),
+                'selectedBusinessTemplate' => $template,
+            ]);
+        }
+
         $user->refresh();
         $savedDraft = (array) data_get($user->onboarding_guide_answers, 'workspace_draft', []);
         $draftFields = array_replace((array) ($savedDraft['fields'] ?? []), array_intersect_key((array) session()->getOldInput(), array_flip(['workspace_name', 'template_key', 'team_size', 'hardest_part', 'start_path', 'module_choices', 'owner_need'])));
@@ -108,6 +124,9 @@ class FirstLoginWorkspaceController extends Controller
     {
         $user = $request->user();
         abort_unless($user instanceof User, 403);
+        if (in_array((string) $user->requested_via, ['self_service_registration', 'google'], true) && ! $user->hasVerifiedEmail()) {
+            return redirect()->route('self-service.verify.notice');
+        }
 
         if ($user->tenants()->exists()) {
             return redirect()->to(route('dashboard', absolute: false));
@@ -115,6 +134,15 @@ class FirstLoginWorkspaceController extends Controller
 
         if (strtolower(trim((string) $user->role)) === 'platform_admin') {
             return redirect()->to(route('landlord.dashboard', absolute: false));
+        }
+
+        $template = null;
+        if (config('self_service.registration_enabled') && in_array((string) $user->requested_via, ['self_service_registration', 'google'], true)) {
+            $template = $this->selfServiceTemplate($user, $request);
+            if (! $template) {
+                return redirect()->route('platform.build')->with('status', 'Choose a template to continue.');
+            }
+            $request->merge(['template_key' => $template['blueprint_template'], 'start_path' => 'self']);
         }
 
         $validated = $request->validate([
@@ -139,11 +167,18 @@ class FirstLoginWorkspaceController extends Controller
         ]);
 
         $workspaceName = trim((string) $validated['workspace_name']);
-        $selectedModuleKeys = $this->normalizeSelectedModules((array) ($validated['module_choices'] ?? []));
+        $selectedModuleKeys = $template ? [] : $this->normalizeSelectedModules((array) ($validated['module_choices'] ?? []));
         $selection = app(\App\Services\Onboarding\BranchSelectionService::class);
-        $publicChoices = $selection->normalize((array) $request->session()->get(\App\Services\Onboarding\BranchSelectionService::SESSION_KEY, []), false);
+        $publicChoices = $template
+            ? app(\App\Services\Onboarding\SelfServiceTemplateSelectionService::class)->branches($template['key'])
+            : $selection->normalize((array) $request->session()->get(\App\Services\Onboarding\BranchSelectionService::SESSION_KEY, data_get($user->onboarding_guide_answers, 'branch_selection', [])), false);
+        if ($template) {
+            $request->session()->put(\App\Services\Onboarding\BranchSelectionService::SESSION_KEY, $publicChoices);
+        }
         $selectedModuleKeys = array_values(array_unique(array_merge($selectedModuleKeys, $publicChoices)));
         $guideAnswers = $this->guideAnswerPayload($validated, $selectedModuleKeys);
+        $guideAnswers['business_template'] = $template['key'] ?? $validated['template_key'];
+        $guideAnswers['branch_selection'] = $publicChoices;
 
         try {
             $result = $provisioner->provision(
@@ -161,9 +196,21 @@ class FirstLoginWorkspaceController extends Controller
 
         $request->session()->put('tenant_id', $result['tenant_id']);
 
+        if (\App\Models\TenantAccessProfile::query()->where('tenant_id', $result['tenant_id'])->where('metadata->self_service_registration', true)->exists()) {
+            return redirect()->route('self-service.purchase', ['tenant' => $result['tenant_slug']])->with('status', 'Workspace created. Review your plan.');
+        }
+
         return redirect()
             ->to(route('dashboard', ['tenant' => $result['tenant_slug']], false))
             ->with('status', 'Workspace created.');
+    }
+
+    private function selfServiceTemplate(User $user, Request $request): ?array
+    {
+        $templates = app(\App\Services\Onboarding\SelfServiceTemplateSelectionService::class);
+        $key = $request->session()->get(\App\Services\Onboarding\SelfServiceTemplateSelectionService::SESSION_KEY, data_get($user->onboarding_guide_answers, 'business_template'));
+
+        return is_string($key) ? collect($templates->templates())->firstWhere('key', $key) : null;
     }
 
     /**

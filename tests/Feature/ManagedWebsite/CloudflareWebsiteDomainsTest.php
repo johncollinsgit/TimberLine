@@ -37,3 +37,11 @@ test('cloudflare is inactive without scoped credentials', function (): void {
     expect(app(CloudflareWebsiteDomains::class)->check('www.customer.example', true)['ready'])->toBeFalse();
     Http::assertNothingSent();
 });
+
+test('infrastructure audit only reads fallback readiness and never reveals credentials', function (): void {
+    Http::fake(['api.cloudflare.com/*' => Http::response(['success' => true, 'result' => ['status' => 'active', 'origin' => 'origin.example']])]);
+    $status = app(CloudflareWebsiteDomains::class)->infrastructureStatus();
+    expect($status['fallback_active'])->toBeTrue()->and(json_encode($status))->not->toContain('fixture-token', str_repeat('a', 32));
+    Http::assertSent(fn ($request) => $request->method() === 'GET' && str_ends_with($request->url(), '/custom_hostnames/fallback_origin'));
+    Http::assertSentCount(1);
+});

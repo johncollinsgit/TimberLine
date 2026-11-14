@@ -79,7 +79,7 @@ for (const width of [390, 820, 1440]) {
             }
             const action = ["/platform/start", "/platform/demo", "/platform/contact"].includes(path)
                 ? page.locator('main button[type="submit"]').first()
-                : page.getByRole("link", { name: /get started|create a workspace|choose your branches/i }).first();
+                : page.getByRole("link", { name: /get started|create a workspace|choose a template/i }).first();
             await action.scrollIntoViewIfNeeded();
             await expect(action).toBeVisible();
             const box = await action.boundingBox();
@@ -114,11 +114,11 @@ test("the current offer and conditional fees are visible before requesting acces
     await expect(summary).toContainText("$299");
     await expect(summary).toContainText("$499");
     await expect(summary).toContainText("$798");
-    const choice = page.locator('input[name="branches[]"][value="customers"]');
+    const choice = page.locator('input[name="template"][value="generic"]');
     await choice.check();
-    await page.getByRole("button", { name: "Save choices", exact: true }).click();
+    await page.getByRole("button", { name: "Save template", exact: true }).click();
     await expect(page).toHaveURL(/\/platform\/build$/);
-    await expect(page.getByRole("status").filter({ hasText: "Your branches are saved." })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "Your template is saved." })).toBeVisible();
     await page.reload();
     await expect(choice).toBeChecked();
 });
@@ -151,12 +151,13 @@ test("the parent site presents the same offer at phone, tablet and desktop width
 });
 
 
-test("choosing an included branch carries the selection into signup", async ({ page }) => {
+test("branch discovery starts with a business template", async ({ page }) => {
     await page.goto("/explore/modules/messaging");
     await expect(page.getByText("Included with Everbranch Simple", { exact: true }).filter({ visible: true }).first()).toBeVisible();
     await expect(page.locator("main")).not.toContainText("$19.99");
-    await page.getByRole("link", { name: "Choose this branch", exact: true }).click();
-    await expect(page).toHaveURL(/branch=messaging/);
-    await expect(page.locator('input[name="branches[]"][value="messaging"]')).toBeChecked();
+    await page.getByRole("link", { name: "Choose your template", exact: true }).click();
+    await expect(page).toHaveURL(/\/platform\/start$/);
+    await expect(page.getByRole("radio", { name: "General business", exact: true })).toBeVisible();
+    await expect(page.locator('input[name="branches[]"]')).toHaveCount(0);
     await expect(page.getByRole("complementary", { name: "Your setup" })).toContainText("Everbranch Simple");
 });

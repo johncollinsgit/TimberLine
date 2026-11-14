@@ -25,14 +25,16 @@ test.describe("Everbranch public studio", () => {
         await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
         await page.goto("/platform/promo");
         await expect(page.locator("body")).toHaveCSS("background-color", "rgb(255, 255, 255)");
-        await expect(page.locator(".eb-studio-hero__lede")).toHaveCSS("color", "rgb(73, 97, 84)");
+        await expect(page.locator(".eb-studio-hero__note")).toHaveCSS("color", "rgb(73, 97, 84)");
         await expect(page.locator(".eb-motion-preview video")).not.toHaveAttribute("autoplay");
         await expect(page.locator(".eb-motion-preview video")).toHaveAttribute("preload", "none");
     });
 
     test("keeps the current offer path and primary navigation available", async ({ page }) => {
         await page.goto("/platform/promo");
-        await expect(page.getByRole("heading", { name: /your business, connected/i })).toBeVisible();
+        await expect(page.locator("[data-studio-hero-slide].is-active")).toBeVisible();
+        await expect(page.locator(".eb-studio-nav__actions").getByRole("link", { name: "Pricing", exact: true })).toHaveAttribute("href", /platform\/plans/);
+        await expect(page.getByText("A little more room to grow", { exact: true })).toHaveCount(0);
         await expect(page.getByRole("link", { name: /get started/i }).first()).toHaveAttribute("href", /start/);
         await expect(page.getByRole("link", { name: "Plans" }).first()).toBeVisible();
         await expect(page.getByRole("link", { name: "Customer Loop", exact: true, includeHidden: true })).toHaveAttribute("href", "#customer-loop");

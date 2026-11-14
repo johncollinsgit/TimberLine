@@ -53,8 +53,13 @@ class ManagedWebsiteService
 
     public function editorEnabledFor(Tenant $tenant): bool
     {
-        if (! ((bool) config('managed_website.editor_enabled', false)
-            && in_array((int) $tenant->id, (array) config('managed_website.editor_tenant_ids', []), true))) {
+        if (! (bool) config('managed_website.editor_enabled', false)) {
+            return false;
+        }
+        if (app(ManagedWebsiteSelfServicePolicy::class)->eligible($tenant)) {
+            return true;
+        }
+        if (! in_array((int) $tenant->id, (array) config('managed_website.editor_tenant_ids', []), true)) {
             return false;
         }
 
@@ -81,10 +86,6 @@ class ManagedWebsiteService
         $host = strtolower(trim(explode(':', $host)[0]));
         $baseDomain = strtolower(trim((string) config('tenancy.domains.canonical.base_domain', 'theeverbranch.com')));
         $includedHost = $site->subdomain.'.'.$baseDomain;
-        $pilot = $site->relationLoaded('setup') ? $site->setup : $site->setup()->first();
-        if ($pilot?->domain_choice === 'everbranch_subdomain') {
-            return $host !== '' && $baseDomain !== '' && hash_equals($includedHost, $host);
-        }
 
         return $host !== '' && ($baseDomain !== '' && hash_equals($includedHost, $host)
             || $site->domains()->where('status', 'active')->where('hostname', $host)->exists());
@@ -223,6 +224,8 @@ class ManagedWebsiteService
         if (! $this->publishingEnabled()) {
             abort(423, 'Website publishing is temporarily frozen. Your draft is safe.');
         }
+        $policy = app(ManagedWebsiteSelfServicePolicy::class);
+        abort_if($policy->registered($site->tenant) && ! $policy->eligible($site->tenant), 423, 'An active paid plan is required to publish. Your saved content is safe.');
 
         DB::transaction(function () use ($site, $actor): void {
             $pages = $site->pages()->with('draftVersion')->get();
@@ -278,6 +281,8 @@ class ManagedWebsiteService
 
     public function rollback(TenantSite $site, TenantSitePage $page, TenantSitePageVersion $source, ?User $actor): void
     {
+        $policy = app(ManagedWebsiteSelfServicePolicy::class);
+        abort_if($policy->registered($site->tenant) && ! $policy->eligible($site->tenant), 423, 'An active paid plan is required to publish. Your saved content is safe.');
         abort_unless($source->tenant_site_page_id === $page->id && $source->status === 'published', 404);
 
         DB::transaction(function () use ($site, $page, $source, $actor): void {
@@ -302,7 +307,7 @@ class ManagedWebsiteService
     /** @return array<string,mixed>|null */
     public function publicPage(Tenant $tenant, string $path): ?array
     {
-        if (! $this->publicRenderingEnabled()) {
+        if (! $this->publicRenderingEnabled() || ! app(ManagedWebsiteSelfServicePolicy::class)->publicAccessAllowed($tenant)) {
             return null;
         }
         $site = TenantSite::query()->forTenant($tenant)->where('status', 'published')->where('public_enabled', true)->with('publishedSiteVersion')->first();

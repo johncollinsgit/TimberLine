@@ -9,8 +9,8 @@ the domain is live. Removing an unfinished setup retains its audit history.
 
 ## Provider configuration
 
-All existing editor, publishing, custom-domain availability, tenant allowlist,
-and activation gates remain independent and default closed. Configure:
+The global editor, publishing, rendering, custom-domain availability and
+activation gates remain independent and default closed. Configure:
 
 - `MANAGED_WEBSITE_CUSTOM_DOMAIN_TARGET`: the provider-reviewed DNS target.
 - `MANAGED_WEBSITE_CLOUDFLARE_ENABLED=true`.
@@ -36,12 +36,47 @@ are automatically supported. No nameserver migration or registrar transfer is
 required. Connection checks are explicit and repeatable; there is no background
 DNS mutation. Disablement retains the hostname and published snapshots.
 
+## Paid self-service cohort
+
+`SelfServicePurchaseEligibility::paidForTenant()` requires the original durable
+verified platform purchase, receipt, applied fulfillment and current paid
+subscription. Together with the canonical `managed_website` access decision it
+replaces manual per-tenant editor/domain allowlists for newly registered paid
+workspaces. Registration metadata alone is never payment evidence. Existing
+pilot/contract tenant allowlists keep their existing behavior; explicit module
+disablement and global kill switches win over a new purchase.
+
+Paid general websites need a business name/email, a saved design, a valid Home
+draft, and their included address before an owner/admin publishes. The old
+service pilot's quote-only catalog, service-area, phone and hours requirements
+are not imposed on a paid general-business site. Published versions remain
+immutable. Expired/canceled coverage pauses new editing, domain activation and
+publishing; a historically verified purchase keeps its last published snapshot
+public unless access is explicitly revoked. No historical content is deleted.
+
+`website:reconcile-domains --limit=20` runs each minute through the existing
+scheduler. It checks pending/verified paid domains after DNS propagation,
+prepares an exact Cloudflare hostname only after customer TXT proof, and
+activates when CNAME, hostname, certificate, publication and all gates pass.
+Failed checks retain the same proof and hostname for retry. A stopped browser
+does not stop recovery. Legacy assisted connections are not autoactivated.
+The Website screen polls a read-only tenant-scoped status endpoint; it never
+passes tokens, triggers provider writes from GET, or runs DNS work in the browser.
+
+Use `php artisan website:domain-readiness --provider` for a read-only deployment
+audit. It prints readiness booleans only, including Cloudflare fallback-origin
+status. It does not create DNS records, change a fallback origin, or create a
+customer hostname. A successful audit still requires owned-domain HTTPS smoke
+to prove the origin's host routing and published content.
+
 ## Acceptance
 
-Run `ManagedWebsiteCustomDomainsTest` and `CloudflareWebsiteDomainsTest` using
+Run `ManagedWebsiteCustomDomainsTest`, `CloudflareWebsiteDomainsTest`,
+`PaidSelfServiceWebsiteTest`, `ManagedWebsiteSafetyTest` and `WebsitePilotTest` using
 fictional fixtures. They cover tenant isolation, replay, removed proof, incorrect
 routing, pending TLS, failed provider lookup, strict hostname parsing, and
-published page host boundaries. HTTP requests are faked. Production activation
+published page host boundaries, paid-cohort policy, generic publishing, frozen/
+revoked access, status isolation and scheduled recovery. HTTP requests are faked. Production activation
 still requires an owned test domain proving TXT, CNAME, certificate issuance,
 HTTPS rendering, and rollback with the exact deployed release.
 

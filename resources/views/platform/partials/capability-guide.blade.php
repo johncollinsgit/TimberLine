@@ -11,14 +11,14 @@
     <div class="eb-studio-container">
         <div class="eb-guide__heading">
             <h2 id="guide-title">Find your next branch.</h2>
-            <a href="{{ route('platform.modules.explore') }}">All branches <span aria-hidden="true">↗</span></a>
+            <a href="{{ route('platform.modules.explore') }}"><x-everbranch.action-leaf />All branches</a>
         </div>
         <nav class="eb-guide__tabs" aria-label="Explore Everbranch">
             @foreach($guideGroups as $key => $group)
                 <a id="guide-tab-{{ $key }}" href="#guide-panel-{{ $key }}" data-guide-tab="{{ $key }}">{{ $group['label'] }}</a>
             @endforeach
         </nav>
-        <details class="eb-motion-preview"><summary>See how it connects <span aria-hidden="true">↗</span></summary><video controls playsinline preload="none" width="960" height="540" poster="{{ asset('media/everbranch-branches-motion-poster.png') }}" aria-label="An animation showing Customers, Work, Growth, and Website branches connected to Everbranch"><source src="{{ asset('media/everbranch-branches-motion.mp4') }}" type="video/mp4">Your browser does not support this video.</video></details>
+        <details class="eb-motion-preview"><summary><x-everbranch.action-leaf />See how it connects</summary><video controls playsinline preload="none" width="960" height="540" poster="{{ asset('media/everbranch-branches-motion-poster.png') }}" aria-label="An animation showing Customers, Work, Growth, and Website branches connected to Everbranch"><source src="{{ asset('media/everbranch-branches-motion.mp4') }}" type="video/mp4">Your browser does not support this video.</video></details>
         @foreach($guideGroups as $key => $group)
             <section id="guide-panel-{{ $key }}" class="eb-guide__panel" aria-labelledby="guide-tab-{{ $key }}" data-guide-panel="{{ $key }}">
                 <div class="eb-guide__photo">
@@ -32,7 +32,7 @@
                                 <span class="eb-guide__included">Included</span>
                                 <h3>{{ $module['display_name'] }}</h3>
                                 <p>{{ $module['short_description'] }}</p>
-                                <span class="eb-guide__action">Explore <span aria-hidden="true">↗</span></span>
+                                <span class="eb-guide__action"><x-everbranch.action-leaf />Explore</span>
                             </a>
                         @endif
                     @endforeach

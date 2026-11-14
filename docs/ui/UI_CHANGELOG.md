@@ -3433,3 +3433,22 @@ Projects and Requests use the full work canvas. Sort headers for fields present 
 Private setup uses clearly outlined fields, visible button labels and keyboard focus.
 Failed saves explain which required fields need attention without echoing or flashing
 the API key. The credential label distinguishes the API key from its webhook secret.
+## 2026-11-14 - Self service purchase and leaf actions
+
+Everbranch public action labels now use the official leaf mark before their text,
+including Ask Everbranch, cards, demos and primary buttons. Directional setup
+instructions retain their meaning. Signup, verification, business details and
+purchase review use short forms with explicit prices, terms and payment states.
+Paid owners continue directly to Website and can add included branches without
+another checkout. Domain status refreshes automatically after ownership, routing
+and TLS checks. Desktop and mobile rendering were checked across seven signup
+and purchase states.
+
+The homepage opens with a rounded photo and compact actions. Its introductory
+slogan, headline and description were removed. Public header buttons now show
+the official leaf before Pricing and link directly to the plans page.
+
+New customers choose a business template from photo cards before creating an
+account. Included tools are selected on the server; the initial page no longer
+asks customers to assemble a branch checklist. Template choices persist through
+signup and business setup, with branch adjustments available after purchase.

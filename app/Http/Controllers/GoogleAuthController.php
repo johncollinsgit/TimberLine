@@ -200,6 +200,15 @@ class GoogleAuthController extends Controller
             'requested_via' => $user->requested_via ?: 'google',
         ])->save();
 
+        // Trust only Google's explicit verified-email claim for new self-service
+        // accounts. Missing/false claims still need the signed email workflow.
+        if (! $user->hasVerifiedEmail() && ! $user->tenants()->exists()
+            && in_array((string) $user->requested_via, ['google', 'self_service_registration'], true)
+            && Str::lower(trim((string) $user->email)) === $email
+            && data_get($googleUser->user, 'email_verified', data_get($googleUser->user, 'verified_email', false)) === true) {
+            $user->markEmailAsVerified();
+        }
+
         Auth::login($user, remember: true);
 
         request()->session()->regenerate();
