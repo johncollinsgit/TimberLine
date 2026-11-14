@@ -280,7 +280,7 @@ class SquareCustomerIdentityService
             app(SquareConnectionContext::class)->assertCurrent($tenant, $context);
         }
         $sourceId = $links[0]['source_id'];
-        $customer = SquareCustomer::forTenantId($tenant)->where('square_customer_id', $sourceId)->first();
+        $customer = SquareCustomer::forTenantId($tenant)->where('square_customer_id', $sourceId)->when(! $dryRun, fn ($query) => $query->lockForUpdate())->first();
         foreach (['merchant_id', 'environment'] as $field) {
             if (empty($context[$field]) || data_get($customer?->raw_payload, '_source_binding.'.$field) !== $context[$field]) {
                 return null;
@@ -293,7 +293,7 @@ class SquareCustomerIdentityService
             }
         }
         $pending = MarketingIdentityReview::where('source_type', 'square_customer')->where('source_id', $sourceId)
-            ->where('payload->source_context->tenant_id', $tenant)->where('status', 'pending')->get();
+            ->where('payload->source_context->tenant_id', $tenant)->where('status', 'pending')->when(! $dryRun, fn ($query) => $query->lockForUpdate())->get();
         foreach ($pending as $review) {
             if ($review->conflict_reasons !== ['square_contact_candidates_require_review']) {
                 return null;

@@ -6,6 +6,7 @@ use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Support\Marketing\MarketingIdentityNormalizer;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /** Read-only evidence for a source association, never a profile merge or account attestation. */
@@ -15,13 +16,15 @@ final class SquareCustomerCandidateResolution
 
     public function resolve(int $tenant, array $identity, array $candidateIds): ?array
     {
+        $candidateIds = array_values(array_unique($candidateIds));
+        sort($candidateIds);
         // A bounded contact lookup must not mistake a truncated result for agreement.
         if (count($candidateIds) < 2 || count($candidateIds) > 25) {
             return null;
         }
         $profiles = [];
         foreach ($candidateIds as $id) {
-            $profile = $this->identities->byId($tenant, $id);
+            $profile = DB::transactionLevel() > 0 ? $this->identities->lockedById($tenant, $id) : $this->identities->byId($tenant, $id);
             if (! $profile || $profile->archived_at || ! $this->contactAgrees($identity, $profile)) {
                 return null;
             }
