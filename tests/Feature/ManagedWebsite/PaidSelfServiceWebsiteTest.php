@@ -11,6 +11,8 @@ use App\Services\ManagedWebsite\ManagedWebsiteDomainService;
 use App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsitePilotService;
+use App\Services\Tenancy\PreAuthTenantContextResolver;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
@@ -163,6 +165,12 @@ test('a flagship website cannot replace the app home through fallback tenant con
 
     $this->get('https://app.theeverbranch.com/')->assertRedirect()->assertDontSee('data-testid="managed-site"', false);
     $this->get('https://theeverbranch.com/')->assertOk()->assertDontSee('data-testid="managed-site"', false);
+
+    config()->set('app.url', 'https://alias.theeverbranch.com');
+    $alias = app(PreAuthTenantContextResolver::class)->resolveForRequest(Request::create('https://alias.theeverbranch.com/'));
+    expect($alias->tenant?->id)->toBe($tenant->id);
+    $this->get('https://alias.theeverbranch.com/')->assertNotFound();
+    $this->get('https://app.theeverbranch.com/')->assertRedirect()->assertDontSee('data-testid="managed-site"', false);
 });
 
 test('website setup validation errors are visible and preserve the editable contact details', function (): void {

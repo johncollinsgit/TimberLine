@@ -257,11 +257,11 @@ Route::get('/', function (
     // Website. This keeps a published flagship draft from replacing the
     // platform product page through host-context fallback.
     $isPlatformPublicHost = $requestHost === $normalizeHost((string) config('tenancy.domains.canonical.public_host', ''));
-    if (! $isPlatformPublicHost && $hostTenant instanceof \App\Models\Tenant) {
-        $home = $managedWebsites->publicPage($hostTenant, '');
-        if ($home !== null && $managedWebsites->publicHostAllowed($home['site'], $requestHost)) {
-            return app(ManagedWebsiteController::class)->showPublic($request, '', $managedWebsites);
-        }
+    $isPlatformAppHost = $requestHost === $normalizeHost((string) config('tenancy.domains.canonical.landlord_host', ''));
+    // Only platform Home may bypass Website rendering. A resolved Website
+    // address that fails its exact host check must retain showPublic's 404.
+    if (! $isPlatformPublicHost && ! $isPlatformAppHost && $hostTenant instanceof \App\Models\Tenant && $managedWebsites->publicPage($hostTenant, '') !== null) {
+        return app(ManagedWebsiteController::class)->showPublic($request, '', $managedWebsites);
     }
 
     if (auth()->check()) {

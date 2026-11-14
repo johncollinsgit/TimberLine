@@ -164,5 +164,7 @@ test('a host may only render the subdomain stored on the published pilot site', 
     app(ManagedWebsiteService::class)->publish($site->fresh('setup'), $actor);
 
     $this->get('https://wrong-host-pilot.theeverbranch.com/')->assertNotFound();
+    $this->get('https://wrong-host-pilot.theeverbranch.com/about')->assertNotFound();
     $this->get('https://verified-pilot.theeverbranch.com/')->assertNotFound();
+    $this->get('https://verified-pilot.theeverbranch.com/about')->assertNotFound();
 });

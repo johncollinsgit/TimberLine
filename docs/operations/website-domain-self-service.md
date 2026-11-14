@@ -129,7 +129,9 @@ a query parameter or a staff session alone cannot publish content on another
 host. Explicit platform, authentication, Shopify, checkout and webhook routes
 retain precedence. Drafts, unknown/foreign hosts, JSON requests and unknown writes
 do not become public Website pages. A flagship site resolved on the app host
-cannot replace the app's normal Home redirect.
+cannot replace the app's normal Home redirect. This exception applies only to
+the canonical app and public Home hosts: a resolved Website address that differs
+from the site's stored subdomain still returns 404 for Home and child pages.
 
 When checking a paid website, publish a Home and a child page, then change the
 child draft without republishing. Anonymous requests to the included child
