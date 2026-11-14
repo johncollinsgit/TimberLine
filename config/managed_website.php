@@ -60,6 +60,12 @@ return [
     'custom_domain_activation_enabled' => $bool('MANAGED_WEBSITE_CUSTOM_DOMAIN_ACTIVATION_ENABLED'),
     'custom_domain_tenant_ids' => $tenantIds('MANAGED_WEBSITE_CUSTOM_DOMAIN_TENANT_IDS'),
     'custom_domain_target' => trim((string) env('MANAGED_WEBSITE_CUSTOM_DOMAIN_TARGET', '')),
+    // A dedicated Worker-to-origin authentication key, never APP_KEY or a
+    // Cloudflare API token. This does not enable a site or trust proxy headers.
+    'relay' => [
+        'enabled' => $bool('MANAGED_WEBSITE_RELAY_ENABLED'),
+        'secret' => env('MANAGED_WEBSITE_RELAY_SECRET', ''),
+    ],
     'cloudflare' => [
         'enabled' => $bool('MANAGED_WEBSITE_CLOUDFLARE_ENABLED'),
         'zone_id' => trim((string) env('MANAGED_WEBSITE_CLOUDFLARE_ZONE_ID', '')),
