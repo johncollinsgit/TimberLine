@@ -445,3 +445,26 @@ test('operator CLI is offline for readiness and captures one slice without enabl
     expect($this->service->readiness($this->tenant->id, $id)['last_complete_counts'])->toBeNull();
     $this->artisan('subscriptions:recharge-shadow', ['action' => 'capture'])->assertFailed();
 });
+
+test('documented store scope aliases and token information envelopes preserve exact grant evidence', function (string $storeScope, bool $wrapped) {
+    $fixtures = rechargeShadowFixtures();
+    $scopes = [$storeScope, 'read_customers', 'read_subscriptions', 'read_payment_methods'];
+    $fixtures['token_information'] = $wrapped ? ['token_information' => ['scopes' => $scopes]] : ['scopes' => $scopes];
+    rechargeFake($fixtures);
+    $result = ($this->verify)();
+    $connection = SubscriptionRechargeConnection::query()->sole();
+    expect($result['readiness']['scopes_ready'])->toBeTrue()
+        ->and($result['readiness']['read_queries_enabled'])->toBeTrue()
+        ->and($connection->scopes)->toEqualCanonicalizing($scopes);
+    $complete = ($this->finish)($connection->id);
+    expect($complete['sync_complete'])->toBeTrue()->and($complete['readiness']['last_complete_counts']['customer'])->toBe(1);
+})->with([['store_info', false], ['store_info', true], ['read_store', false], ['read_store', true]]);
+
+test('store information scope cannot substitute for missing customer subscription or payment access', function (string $missing) {
+    $fixtures = rechargeShadowFixtures();
+    $fixtures['token_information'] = ['scopes' => array_values(array_diff(['store_info', 'read_customers', 'read_subscriptions', 'read_payment_methods'], [$missing]))];
+    rechargeFake($fixtures);
+    $result = ($this->verify)();
+    expect($result['readiness']['scopes_ready'])->toBeFalse()->and($result['readiness']['missing_scopes'])->toBe([$missing]);
+    expect(fn () => ($this->sync)(SubscriptionRechargeConnection::query()->sole()->id))->toThrow(HttpException::class);
+})->with(['read_customers', 'read_subscriptions', 'read_payment_methods']);

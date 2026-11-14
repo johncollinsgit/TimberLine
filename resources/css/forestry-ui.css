@@ -15103,3 +15103,24 @@ body.eb-workflow-picker-open {
   .eg-site-logo img { max-width: 100%; width: 150px; }
 }
 @media (prefers-reduced-motion: reduce) { .eg-hamburger > span { transition: none; } }
+
+/* Private source forms need visible controls independently of legacy resets. */
+.eb-recharge-setup :is(input:not([type="hidden"]):not([type="checkbox"]), select, textarea) {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #81978f !important;
+  border-radius: 10px;
+  background: #fff !important;
+  color: #172d25 !important;
+}
+.eb-recharge-setup .eb-primary-button {
+  min-height: 44px;
+  background: #005b47;
+  color: #fff !important;
+}
+.eb-recharge-setup :is(input, select, textarea, button):focus-visible {
+  outline: 3px solid #126b56;
+  outline-offset: 3px;
+}

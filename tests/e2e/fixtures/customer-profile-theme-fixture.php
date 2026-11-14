@@ -14,6 +14,9 @@ $owner->tenants()->attach($tenant, ['role' => 'owner', 'membership_active' => tr
 App\Models\TenantModuleEntitlement::create(['tenant_id' => $tenant->id, 'module_key' => 'messaging',
     'availability_status' => 'available', 'enabled_status' => 'enabled', 'billing_status' => 'included_in_plan',
     'entitlement_source' => 'test', 'price_source' => 'catalog']);
+App\Models\TenantModuleEntitlement::create(['tenant_id' => $tenant->id, 'module_key' => 'subscriptions',
+    'availability_status' => 'available', 'enabled_status' => 'enabled', 'billing_status' => 'add_on_comped',
+    'entitlement_source' => 'test', 'price_source' => 'test']);
 $profile = App\Models\MarketingProfile::create(['tenant_id' => $tenant->id, 'first_name' => 'Fictional', 'last_name' => 'Customer', 'email' => 'buyer@example.test']);
 App\Models\TenantMarketingSetting::create(['tenant_id' => $tenant->id, 'key' => 'candle_cash_program_config', 'value' => ['label' => 'Candle Cash']]);
 App\Models\CandleCashBalance::create(['marketing_profile_id' => $profile->id, 'balance' => 7.25]);

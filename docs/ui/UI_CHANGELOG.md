@@ -3403,3 +3403,9 @@ Projects and Requests use the full work canvas. Sort headers for fields present 
   directory and Marketing Desk pages in both themes at desktop and phone widths,
   checking rendered contrast and horizontal overflow. These checks are retained
   in protected workspace CI.
+
+## 2026-11-14 — Recharge private source setup
+
+Private setup uses clearly outlined fields, visible button labels and keyboard focus.
+Failed saves explain which required fields need attention without echoing or flashing
+the API key. The credential label distinguishes the API key from its webhook secret.

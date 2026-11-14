@@ -98,7 +98,7 @@ class SubscriptionRechargeReadService
             $connection->forceFill(['status' => 'verified', 'active_credential_revision_id' => $revision->id, 'verified_at' => now(), 'scopes' => $identity['scopes'], 'evidence' => $evidence])->save();
             $operation = $this->operations->record($tenantId, $connection->id, $actor, 'verify_connection', $requestUuid, $verificationRequest, $revision->id);
             $claimed = $this->operations->claim($tenantId, $operation->id, $actor);
-            if ($claimed && ! $this->operations->complete($tenantId, $operation->id, $claimed->lease_token, 'completed', ['identity_verified' => true, 'scopes_ready' => ! array_diff(self::SCOPES, $identity['scopes']), 'scopes' => $identity['scopes'], 'store' => $identity['store']])) {
+            if ($claimed && ! $this->operations->complete($tenantId, $operation->id, $claimed->lease_token, 'completed', ['identity_verified' => true, 'scopes_ready' => ! $this->missingScopes($identity['scopes']), 'scopes' => $identity['scopes'], 'store' => $identity['store']])) {
                 throw new SubscriptionProviderReadException('recharge_lease_lost');
             }
             if ($active && $active->id !== $revision->id) {
@@ -175,7 +175,7 @@ class SubscriptionRechargeReadService
             } else {
                 $credential = $this->credential($tenantId, $connectionId, $claimed->credential_revision_id);
                 $identity = $this->identity($connection, $credential);
-                if (array_diff(self::SCOPES, $identity['scopes'])) {
+                if ($this->missingScopes($identity['scopes'])) {
                     throw new SubscriptionProviderReadException('recharge_missing_scopes');
                 }
                 $stream = array_keys(self::STREAMS)[$progress['stream']];
@@ -311,7 +311,7 @@ class SubscriptionRechargeReadService
         $complete = $state['last_complete'] ?? null;
         $identity = $connection->status === 'verified' && $connection->verified_at !== null;
         $usable = $credential && $credential->status === 'active' && ! $credential->revoked_at && ! $credential->expires_at?->isPast();
-        $missing = array_values(array_diff(self::SCOPES, $connection->scopes ?? []));
+        $missing = $this->missingScopes($connection->scopes ?? []);
         $fresh = $complete && ! ($state['last_failure'] ?? null) && $complete['credential_revision_id'] === $connection->active_credential_revision_id
             && \Illuminate\Support\Carbon::parse($complete['started_at'])->gt(now()->subMinutes((int) config('subscriptions.freshness_minutes', 60)));
 
@@ -328,6 +328,17 @@ class SubscriptionRechargeReadService
                 $connection->read_pause_reason, $state['last_failure']['code'] ?? null, ! $complete ? 'complete_shadow_sync_required' : (! $fresh ? 'shadow_observation_stale' : null)]))];
     }
 
+    private function missingScopes(array $scopes): array
+    {
+        $missing = array_values(array_diff(self::SCOPES, $scopes));
+        // Recharge grants the legacy store_info name for the same store read.
+        if (in_array('store_info', $scopes, true)) {
+            $missing = array_values(array_diff($missing, ['read_store']));
+        }
+
+        return $missing;
+    }
+
     private function identity(SubscriptionRechargeConnection $connection, SubscriptionRechargeCredentialRevision $credential): array
     {
         $store = $this->projection->sanitize('store', $this->object($this->transport->read($connection, $credential, 'store'), 'store'));
@@ -336,7 +347,8 @@ class SubscriptionRechargeReadService
                 throw new SubscriptionProviderReadException('recharge_store_identity_mismatch');
             }
         }
-        $information = $this->object($this->transport->read($connection, $credential, 'token_information'), 'token_information');
+        $response = $this->transport->read($connection, $credential, 'token_information');
+        $information = array_key_exists('token_information', $response) ? $this->object($response, 'token_information') : $response;
         if (! is_array($information['scopes'] ?? null) || ! array_is_list($information['scopes'])) {
             throw new SubscriptionProviderReadException('recharge_missing_scope_evidence');
         }

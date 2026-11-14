@@ -1,5 +1,5 @@
 <x-layouts::app.sidebar title="Recharge rollout preparation">
-    <div class="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6">
+    <div class="eb-recharge-setup mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6">
         <header>
             <a href="{{ route('subscriptions.workspace.index', ['tenant' => $tenant->id]) }}" class="text-sm font-medium text-emerald-900">Subscriptions</a>
             <p class="mt-4 text-sm text-zinc-600">{{ $tenant->name }}</p>
@@ -14,7 +14,7 @@
         </section>
 
         @if(session('recharge_notice'))<div role="status" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">{{ session('recharge_notice') }}</div>@endif
-        @if($errors->any())<div role="alert" class="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-950">The preparation request could not finish. Review the fields, store access and current capture before trying again.</div>@endif
+        @if($errors->any())<div role="alert" class="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-950"><p>The preparation request could not finish.</p><ul class="mt-2 list-disc pl-5">@foreach($errors->all() as $message)<li>{{ $message }}</li>@endforeach</ul></div>@endif
 
         @unless($readsEnabled)
             <section class="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700">
@@ -25,14 +25,14 @@
 
         <details class="rounded-2xl border border-zinc-200 bg-white p-5" @if($connections->isEmpty()) open @endif>
             <summary class="cursor-pointer text-lg font-semibold text-zinc-950">Private source setup</summary>
-            <p class="mt-3 max-w-3xl text-sm leading-6 text-zinc-600">Use a store-specific Recharge API credential with Store, Customers, Subscriptions and Payment Methods read access. Enter the expected Recharge store ID and platform identifier from independently reviewed source settings. The identifier is not assumed to be a Shopify domain. Enter the credential here, never in chat.</p>
+            <p class="mt-3 max-w-3xl text-sm leading-6 text-zinc-600">Use a store-specific Recharge API credential with Store, Customers, Subscriptions and Payment Methods read access. Enter the expected Recharge store ID and platform identifier from independently reviewed source settings. The identifier is not assumed to be a Shopify domain. Paste the API key here, not the separate API client secret. Never enter either in chat.</p>
             <form method="POST" action="{{ route('subscriptions.recharge.source', ['tenant' => $tenant->id]) }}" class="mt-4 grid gap-4 sm:grid-cols-2" autocomplete="off">
                 @csrf
                 <input type="hidden" name="request_uuid" value="{{ $requestUuid }}"><input type="hidden" name="platform" value="shopify">
                 <label class="min-w-0 text-sm font-medium text-zinc-700">Expected Recharge store ID<input required name="provider_store_id" maxlength="100" class="mt-2 w-full rounded-xl border-zinc-300" autocomplete="off"></label>
                 <label class="min-w-0 text-sm font-medium text-zinc-700">Expected platform identifier<input required name="identifier" maxlength="190" class="mt-2 w-full rounded-xl border-zinc-300" autocomplete="off"></label>
-                <label class="min-w-0 text-sm font-medium text-zinc-700 sm:col-span-2">Private Recharge API credential<input required type="password" name="recharge_access_token" minlength="16" maxlength="4096" class="mt-2 w-full rounded-xl border-zinc-300" autocomplete="new-password" spellcheck="false"></label>
-                <div class="sm:col-span-2"><button class="rounded-xl bg-emerald-900 px-5 py-2.5 text-sm font-semibold text-white">Save private credential draft</button><p class="mt-2 text-xs text-zinc-600">Stored encrypted. Saving does not contact Recharge or enable any live action.</p></div>
+                <label class="min-w-0 text-sm font-medium text-zinc-700 sm:col-span-2">Private Recharge API key<input required type="password" name="recharge_access_token" minlength="16" maxlength="4096" class="mt-2 w-full rounded-xl border-zinc-300" autocomplete="new-password" spellcheck="false"></label>
+                <div class="sm:col-span-2"><button class="eb-primary-button rounded-xl px-5 py-2.5 text-sm">Save private credential draft</button><p class="mt-2 text-xs text-zinc-600">Stored encrypted. Saving does not contact Recharge or enable any live action.</p></div>
             </form>
             @if($sources->isNotEmpty())
                 <div class="mt-6 space-y-3 border-t border-zinc-200 pt-4">
@@ -65,7 +65,7 @@
                 <div class="mt-4 flex flex-wrap items-center gap-4">
                     <form method="POST" action="{{ route('subscriptions.recharge.capture', ['tenant' => $tenant->id]) }}" class="space-y-3">
                         @csrf<input type="hidden" name="connection_id" value="{{ $connection->id }}"><input type="hidden" name="request_uuid" value="{{ $requestUuid }}">
-                        <button @disabled(!($readiness['read_queries_enabled'] ?? false)) class="rounded-xl bg-emerald-900 px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{{ ($readiness['sync_progress'] ?? null) ? 'Continue source capture' : 'Start source capture' }}</button>
+                        <button @disabled(!($readiness['read_queries_enabled'] ?? false)) class="eb-primary-button rounded-xl px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50">{{ ($readiness['sync_progress'] ?? null) ? 'Continue source capture' : 'Start source capture' }}</button>
                         <label class="block text-xs text-zinc-600"><input type="checkbox" name="restart" value="1" class="mr-2 rounded">Restart the entire capture after reviewing changed source data</label>
                     </form>
                     @if($summary['generation_id'] ?? null)

@@ -202,3 +202,13 @@ test('manual settings comparison is private offline exact and never live configu
     $this->get(str_replace('payment_vault', 'legal', $path).$this->tenant->slug)->assertNotFound();
     expect(count(Http::recorded()))->toBe($beforeRequests)->and(DB::table('subscription_customers')->count())->toBe(0);
 });
+
+test('private setup explains missing identity fields without flashing or echoing the API key', function () {
+    $token = 'PRIVATE_MISSING_FIELDS_CANARY_1234567890';
+    $this->post(($this->postUrl)('source'), ['recharge_access_token' => $token, 'platform' => 'shopify', 'request_uuid' => (string) Str::uuid()])
+        ->assertRedirect()->assertSessionHasErrors(['setup', 'provider_store_id', 'identifier']);
+    expect(session()->getOldInput('recharge_access_token'))->toBeNull()->and(IntegrationConnection::query()->count())->toBe(0);
+    $this->get($this->url)->assertOk()->assertSeeText('Enter the Recharge store ID from the original store.')
+        ->assertSeeText('Enter the exact Recharge platform identifier.')->assertDontSee($token);
+    Http::assertNothingSent();
+});
