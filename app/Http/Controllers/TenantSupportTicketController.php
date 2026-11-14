@@ -55,8 +55,16 @@ class TenantSupportTicketController extends Controller
 
     public function askBud(Request $request): RedirectResponse
     {
-        $data = $request->validate(['question' => ['required', 'string', 'max:3000']]);
-        $answer = $this->bud->respond($this->tenant($request), $request->user(), $data['question']);
+        $data = $request->validate([
+            'question' => ['required_without:escalate', 'nullable', 'string', 'max:3000'],
+            'escalate' => ['nullable', 'boolean'],
+            'workflow' => ['nullable', 'in:setup,branches,website,domains,payments,integrations'],
+        ]);
+        $question = trim((string) ($data['question'] ?? ''));
+        if ($data['escalate'] ?? false) {
+            $question = 'Human help requested. '.$question;
+        }
+        $answer = $this->bud->respond($this->tenant($request), $request->user(), $question, [], $data['workflow'] ?? null);
 
         return back()->with('bud_answer', $answer);
     }

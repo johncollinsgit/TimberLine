@@ -5,7 +5,7 @@ use App\Models\OperatorAlertLog;
 use App\Models\Tenant;
 use App\Models\TenantSupportTicket;
 use App\Models\User;
-use App\Services\Marketing\TwilioSmsService;
+use App\Services\Marketing\TwilioProviderClient;
 use App\Services\Operations\OperatorAlertService;
 
 beforeEach(function (): void {
@@ -18,7 +18,7 @@ test('operator sms alerts send for a real event once and coalesce repeated same-
     $tenant = Tenant::query()->create(['name' => 'Real Client', 'slug' => 'real-client']);
     $message = 'Everbranch: Real Client accepted Real Client Launch Agreement.';
 
-    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio = \Mockery::mock(TwilioProviderClient::class);
     $twilio->shouldReceive('sendSms')
         ->once()
         ->with(
@@ -27,7 +27,7 @@ test('operator sms alerts send for a real event once and coalesce repeated same-
             \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
         )
         ->andReturn(['success' => true, 'provider' => 'twilio', 'error_code' => null]);
-    app()->instance(TwilioSmsService::class, $twilio);
+    app()->instance(TwilioProviderClient::class, $twilio);
 
     $alerts = app(OperatorAlertService::class);
     $baseContext = [
@@ -58,9 +58,9 @@ test('operator sms alerts suppress sandbox and test mode agreement acceptances',
         'status' => 'sent',
     ]);
 
-    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio = \Mockery::mock(TwilioProviderClient::class);
     $twilio->shouldReceive('sendSms')->never();
-    app()->instance(TwilioSmsService::class, $twilio);
+    app()->instance(TwilioProviderClient::class, $twilio);
 
     app(OperatorAlertService::class)->notify(
         'agreement.accepted',
@@ -84,9 +84,9 @@ test('operator sms alerts suppress sandbox and test mode agreement acceptances',
 });
 
 test('operator sms alerts suppress test signer emails and non production hosts', function (): void {
-    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio = \Mockery::mock(TwilioProviderClient::class);
     $twilio->shouldReceive('sendSms')->never();
-    app()->instance(TwilioSmsService::class, $twilio);
+    app()->instance(TwilioProviderClient::class, $twilio);
 
     app(OperatorAlertService::class)->notify('agreement.accepted', 'Everbranch: Front Yard Foods accepted Launch Agreement.', [
         'dedupe_key' => 'agreement-accepted:fake-email:1',
@@ -117,9 +117,9 @@ test('operator sms alerts suppress known fake support ticket tenants', function 
         'last_activity_at' => now(),
     ]);
 
-    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio = \Mockery::mock(TwilioProviderClient::class);
     $twilio->shouldReceive('sendSms')->never();
-    app()->instance(TwilioSmsService::class, $twilio);
+    app()->instance(TwilioProviderClient::class, $twilio);
 
     app(OperatorAlertService::class)->notify('support_ticket.created', 'Everbranch: HIGH ticket from Needs Help — Cannot invite a crew member', [
         'dedupe_key' => 'support-ticket:'.$ticket->id,

@@ -10,7 +10,8 @@
     $branchCards = is_array($branch_cards ?? null) ? $branch_cards : [];
     $recommendedPlanKey = (string) ($recommended_plan_key ?? 'growth');
     $selectedPlanKey = old('preferred_plan_key', $recommendedPlanKey);
-    $selectedBranches = (array) old('branches_interest', array_filter([(string) request()->query('branch', '')], static fn (string $key): bool => in_array($key, array_column($branchCards, 'key'), true)));
+    $savedBranches = array_intersect((array) session(\App\Services\Onboarding\BranchSelectionService::SESSION_KEY, []), array_column($branchCards, 'key'));
+    $selectedBranches = (array) old('branches_interest', array_values(array_unique(array_merge($savedBranches, array_filter([(string) request()->query('branch', '')], static fn (string $key): bool => in_array($key, array_column($branchCards, 'key'), true))))));
     $formOptions = is_array($form_options ?? null) ? $form_options : [];
     $businessTypes = is_array($formOptions['business_types'] ?? null) ? $formOptions['business_types'] : [];
     $teamSizes = is_array($formOptions['team_sizes'] ?? null) ? $formOptions['team_sizes'] : [];

@@ -31,13 +31,9 @@
                 <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" />
             </a>
             <div class="eb-studio-nav__links" aria-label="Explore Everbranch">
-                <a href="#how-it-works">How it works</a>
-                <a href="#industries">Who it helps</a>
-                <a href="#interactive-demo">Try the demo</a>
-                <a href="#customer-loop">Customer Loop</a>
-                <a class="eb-studio-nav__demo-link" href="{{ route('platform.industry-demo', ['discipline' => 'field']) }}">Explore a system</a>
-                <a href="{{ route('platform.pest-control-fleet-demo') }}">Fleet demo</a>
-                <a href="#modules">Branches</a>
+                <a href="#explore">Explore</a>
+                <a href="{{ route('platform.modules.explore') }}">Branches</a>
+                <a href="#guide-tab-websites">Websites</a>
                 <a href="{{ route('platform.plans') }}">Plans</a>
             </div>
             <div class="eb-studio-nav__actions">
@@ -51,14 +47,14 @@
         <section id="top" class="eb-studio-hero" aria-labelledby="hero-title" data-studio-hero>
             <div class="eb-studio-hero__media" aria-hidden="true">
                 <img class="eb-studio-hero__slide is-active" data-studio-hero-slide src="{{ asset('images/public-site/everbranch-residential-electrical-hero.jpg') }}" alt="" fetchpriority="high" decoding="async" />
-                <img class="eb-studio-hero__slide eb-studio-hero__slide--field" data-studio-hero-slide src="{{ asset('images/public-site/everbranch-hvac-electrical-field.jpg') }}" alt="" fetchpriority="low" decoding="async" />
+                <img class="eb-studio-hero__slide eb-studio-hero__slide--field" data-studio-hero-slide src="{{ asset('images/public-site/everbranch-hvac-electrical-field.jpg') }}" alt="" loading="lazy" decoding="async" />
                 <img class="eb-studio-hero__slide eb-studio-hero__slide--owner" data-studio-hero-slide src="{{ asset('images/public-site/everbranch-field-owner-office.jpg') }}" alt="" fetchpriority="low" decoding="async" />
             </div>
             <div class="eb-studio-hero__shade"></div>
             <div class="eb-studio-container eb-studio-hero__content" data-studio-reveal>
-                <p class="eb-studio-eyebrow eb-studio-eyebrow--light">A calmer way to run the work</p>
-                <h1 id="hero-title">Your business has a rhythm.<br>Everbranch helps you keep it.</h1>
-                <p class="eb-studio-hero__lede">Customers, work, messages, files, and the next thing that needs attention, connected in one place that feels like it was made for how your team actually operates.</p>
+                <p class="eb-studio-eyebrow eb-studio-eyebrow--light">A little more room to grow</p>
+                <h1 id="hero-title">Your business,<br>connected.</h1>
+                <p class="eb-studio-hero__lede">Your customers, your work, and your website. One place to keep them moving.</p>
                 <div class="eb-studio-hero__actions">
                     <a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}">Get started <span aria-hidden="true">↗</span></a>
                     <a class="eb-studio-button eb-studio-button--light" href="https://teams-demo.theeverbranch.com/#property">Try the demo <span aria-hidden="true">↗</span></a>
@@ -67,37 +63,21 @@
                         <span>See the Everbranch story</span>
                     </button>
                 </div>
+                <button class="eb-studio-button eb-studio-button--light eb-guide-ask" type="button" data-ask-everbranch-open>Ask Everbranch</button>
                 <p class="eb-studio-hero__note">{{ config('product_surfaces.public_offer.summary') }}</p>
                 <p class="eb-studio-hero__note">{{ config('product_surfaces.public_offer.included_note') }}</p>
             </div>
         </section>
 
-        <section id="interactive-demo" class="eb-studio-demo" aria-labelledby="interactive-demo-title">
-            <div class="eb-studio-container eb-studio-demo__grid">
-                <div class="eb-studio-section-heading">
-                    <p class="eb-studio-eyebrow">Interactive demo</p>
-                    <h2 id="interactive-demo-title">Try Everbranch with a business like yours.</h2>
-                    <p>Choose a property, assign a repair and follow it to the dashboard. Or try a service job, a retail order or a campus maintenance request.</p>
-                    <a class="eb-studio-button eb-studio-button--dark" href="https://teams-demo.theeverbranch.com/#property">Open the interactive demo <span aria-hidden="true">↗</span></a>
-                    <nav class="eb-studio-demo__types" aria-label="Choose an interactive demo">
-                        <a href="https://teams-demo.theeverbranch.com/#property">Property management</a>
-                        <a href="https://teams-demo.theeverbranch.com/#trades">Service crews</a>
-                        <a href="https://teams-demo.theeverbranch.com/#makers">Retail &amp; makers</a>
-                        <a href="https://teams-demo.theeverbranch.com/#campus">Campus facilities</a>
-                    </nav>
-                    <p class="eb-studio-demo__note">No sign-up. Fictional data and changes saved in your browser. No live bookings, payments or messages.</p>
-                </div>
-                <a class="eb-studio-demo__preview" href="https://teams-demo.theeverbranch.com/#property" aria-label="Open the Everbranch property management demo">
-                    <img src="{{ asset('images/public-site/everbranch-interactive-demo.png') }}" width="1440" height="900" alt="Everbranch property management demo with three fictional properties, photos and a portfolio overview." loading="lazy" decoding="async" />
-                </a>
-            </div>
-        </section>
+        @include('platform.partials.demo-guide')
+
+        @include('platform.partials.capability-guide')
 
         <section id="industries" class="eb-studio-industries" aria-labelledby="industries-title">
             <div class="eb-studio-container">
                 <div class="eb-studio-section-heading">
                     <p class="eb-studio-eyebrow">Built around real work</p>
-                    <h2 id="industries-title">A system that can meet your business where it is.</h2>
+                    <h2 id="industries-title">Made for your day.</h2>
                     <p>Open a fictional website and operations-workspace example for a business like yours. Every person, request, message, and campaign is demo content.</p>
                 </div>
                 <div class="eb-studio-industry-grid" data-industry-options>
@@ -112,18 +92,14 @@
         </section>
 
         <section id="customer-loop" class="eb-studio-loop" aria-labelledby="customer-loop-title">
-            <div class="eb-studio-container eb-studio-loop__grid">
+            <div class="eb-studio-container eb-studio-loop__grid eb-studio-loop__compact">
                 <div>
                     <p class="eb-studio-eyebrow eb-studio-eyebrow--light">Customer Loop</p>
-                    <h2 id="customer-loop-title">Good work should make the next relationship easier.</h2>
-                    <p>Everbranch turns a real customer moment into a clear human next step: a follow-up, review request, text, email, or social draft. Your team reviews every message before it goes out.</p>
+                    <h2 id="customer-loop-title">Keep the connection.</h2>
+                    <p>Turn finished work into a thoughtful follow-up. You review every message.</p>
                     <a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}">Plan your Customer Loop <span aria-hidden="true">↗</span></a>
                 </div>
-                <ol class="eb-studio-loop__steps">
-                    <li><span>01</span><div><strong>Something real happens</strong><p>A job wraps, an order arrives, a customer asks, or a great result is worth sharing.</p></div></li>
-                    <li><span>02</span><div><strong>Everbranch prepares the next step</strong><p>Start from useful templates or shape your own if/then flow in Workflow Studio.</p></div></li>
-                    <li><span>03</span><div><strong>A person stays in control</strong><p>Review the draft, adjust it, and decide whether to send or publish. Nothing leaves on autopilot.</p></div></li>
-                </ol>
+
             </div>
         </section>
 
@@ -131,8 +107,8 @@
             <div class="eb-studio-container eb-studio-story__grid">
                 <div class="eb-studio-story__copy">
                     <p class="eb-studio-eyebrow">One clear picture</p>
-                    <h2 id="story-title">From a new question to a finished job, nothing has to disappear between people.</h2>
-                    <p>Choose a moment in the day to see how Everbranch holds the customer, the work, and the follow-up together.</p>
+                    <h2 id="story-title">See the next step.</h2>
+                    <p>Follow a customer from first question to finished work.</p>
                     <div class="eb-studio-story__steps" aria-label="Everbranch workflow moments">
                         <button class="is-active" type="button" aria-pressed="true" data-studio-step="inbox">01 <span>A customer asks</span></button>
                         <button type="button" aria-pressed="false" data-studio-step="work">02 <span>Your team moves</span></button>
@@ -147,32 +123,14 @@
             </div>
         </section>
 
-        <section id="modules" class="eb-studio-modules" aria-labelledby="modules-title">
-            <div class="eb-studio-container eb-studio-modules__grid">
-                <figure class="eb-studio-photo-card">
-                    <img src="{{ asset('images/public-site/everbranch-hvac-electrical-field.jpg') }}" alt="An HVAC and electrical technician documenting a service visit" loading="lazy" />
-                    <figcaption>Work follows the team, not the other way around.</figcaption>
-                </figure>
-                <div class="eb-studio-modules__copy">
-                    <p class="eb-studio-eyebrow">A platform that expands with you</p>
-                    <h2 id="modules-title">Start with a steadier day. Add what makes it stronger.</h2>
-                    <p>Everbranch is intentionally modular. Your workspace can become more capable without becoming harder to understand.</p>
-                    <div class="eb-studio-module-list">
-                        <a href="{{ route('platform.modules.explore') }}#customers"><span>Customers</span><small>Keep every relationship in context</small><b>↗</b></a>
-                        <a href="{{ route('platform.modules.explore') }}#work"><span>Work</span><small>Turn the next step into shared action</small><b>↗</b></a>
-                        <a href="{{ route('platform.modules.explore') }}#marketing"><span>Growth</span><small>Keep the right customers close</small><b>↗</b></a>
-                    </div>
-                    <a class="eb-studio-inline-link" href="{{ route('platform.modules.explore') }}">Explore the module library <span aria-hidden="true">↗</span></a>
-                </div>
-            </div>
-        </section>
+
 
     </main>
 
     <footer class="eb-studio-footer">
         <div class="eb-studio-container eb-studio-footer__grid">
             <div><img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" /><p>One place to run the work that matters.</p><p>Everbranch is operated by <a href="https://evergrovesoftware.com">Evergrove Software LLC</a>.</p></div>
-            <div><a href="#how-it-works">How it works</a><a href="{{ route('platform.modules.explore') }}">Branches</a><a href="{{ route('platform.plans') }}">Plans</a><a href="/everbranch-history.html">Everbranch history</a></div>
+            <div><a href="#how-it-works">How it works</a><a href="#industries">Who it helps</a><a href="#customer-loop">Customer Loop</a><a class="eb-studio-nav__demo-link" href="{{ route('platform.industry-demo', ['discipline' => 'field']) }}">Explore a system</a><a href="{{ route('platform.modules.explore') }}">Branches</a><a href="{{ route('platform.plans') }}">Plans</a><a href="/everbranch-history.html">Everbranch history</a></div>
             <div><a href="{{ route('platform.contact') }}">Contact</a><a href="{{ route('legal.privacy') }}">Privacy</a><a href="{{ route('legal.terms') }}">Terms</a><a href="{{ route('legal.sms') }}">SMS terms</a></div>
         </div>
     </footer>
@@ -186,7 +144,8 @@
                 Your browser does not support the Everbranch story video.
             </video>
         </div>
-        <div class="eb-studio-film__caption"><p class="eb-studio-eyebrow">The Everbranch story · 90 seconds</p><h2 id="film-title">Grow with the whole story.</h2><p id="film-description">A visual overview of how Everbranch connects the systems behind retail, wholesale, and field service so teams can care for every customer. A narration script is available in the transcript below; this first edition is designed to work without sound.</p><details><summary>Read the transcript</summary><p>After eleven years in small business, our founder saw a simple truth: being in business is about caring for people. But the relationship can be spread across retail counters, wholesale orders, websites, email, phone calls, and texts. Everbranch connects those everyday systems around one customer, so your team can care for people at every step — without the headache.</p></details></div>
+        <div class="eb-studio-film__caption"><p class="eb-studio-eyebrow">The Everbranch story · 90 seconds</p><h2 id="film-title">The Everbranch story.</h2><p id="film-description">A visual overview of how Everbranch connects the systems behind retail, wholesale, and field service so teams can care for every customer. A narration script is available in the transcript below; this first edition is designed to work without sound.</p><details><summary>Read the transcript</summary><p>After eleven years in small business, our founder saw a simple truth: being in business is about caring for people. But the relationship can be spread across retail counters, wholesale orders, websites, email, phone calls, and texts. Everbranch connects those everyday systems around one customer, so your team can care for people at every step — without the headache.</p></details></div>
     </dialog>
+    @include('platform.partials.ask-everbranch')
 </body>
 </html>

@@ -4,7 +4,7 @@ use App\Models\CustomerAccessRequest;
 use App\Models\OperatorAlertLog;
 use App\Models\User;
 use App\Notifications\WholesaleApplicationReviewNotification;
-use App\Services\Marketing\TwilioSmsService;
+use App\Services\Marketing\TwilioProviderClient;
 use App\Support\Wholesale\WholesaleApplicationInboxUrl;
 use Illuminate\Support\Facades\Notification;
 
@@ -43,8 +43,8 @@ test('public demo request page renders access request form', function (): void {
         ->assertDontSeeText('Need a different path?');
 });
 
-test('public start as a client page renders plan interest inputs', function (): void {
-    $this->get(route('platform.start'))
+test('assisted access remains available behind the branch builder', function (): void {
+    $this->get(route('platform.request-access'))
         ->assertOk()
         ->assertSee('name="intent" value="production"', false)
         ->assertSeeText('Simplify your life,')
@@ -114,7 +114,7 @@ test('a real guided walkthrough request sends one production safe operator text'
     config()->set('everbranch.operator_alert_sms_enabled', true);
     config()->set('everbranch.operator_alert_phone', '+1 (555) 010-0101');
 
-    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio = \Mockery::mock(TwilioProviderClient::class);
     $twilio->shouldReceive('sendSms')
         ->once()
         ->with(
@@ -123,7 +123,7 @@ test('a real guided walkthrough request sends one production safe operator text'
             \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
         )
         ->andReturn(['success' => true, 'provider' => 'twilio', 'error_code' => null]);
-    app()->instance(TwilioSmsService::class, $twilio);
+    app()->instance(TwilioProviderClient::class, $twilio);
 
     $url = 'https://theeverbranch.com/platform/access-request';
     $payload = [

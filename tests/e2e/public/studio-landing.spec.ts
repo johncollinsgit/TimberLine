@@ -1,9 +1,38 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Everbranch public studio", () => {
+    test("guides visitors through capabilities and demo use cases with the keyboard", async ({ page }) => {
+        await page.goto("/platform/promo");
+        const customers = page.getByRole("tab", { name: "Customers", exact: true });
+        await expect(customers).toHaveAttribute("aria-selected", "true");
+        await customers.focus();
+        await page.keyboard.press("End");
+        const websites = page.getByRole("tab", { name: "Websites", exact: true });
+        await expect(websites).toBeFocused();
+        await expect(websites).toHaveAttribute("aria-selected", "true");
+        await expect(page.locator("#guide-panel-websites")).toBeVisible();
+        await expect(page.locator("#guide-panel-customers")).toBeHidden();
+        await expect(page.locator("#guide-panel-websites").getByRole("link").first()).toHaveAttribute("href", /modules\/managed_website/);
+
+        const property = page.getByRole("tab", { name: "Properties", exact: true });
+        await property.focus();
+        await page.keyboard.press("ArrowRight");
+        await expect(page.locator("#demo-panel-trades")).toBeVisible();
+        await expect(page.locator("#demo-panel-trades").getByRole("link").first()).toHaveAttribute("href", "https://teams-demo.theeverbranch.com/#trades");
+    });
+
+    test("retains the light brand and readable hero under a dark system preference", async ({ page }) => {
+        await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+        await page.goto("/platform/promo");
+        await expect(page.locator("body")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+        await expect(page.locator(".eb-studio-hero__lede")).toHaveCSS("color", "rgb(73, 97, 84)");
+        await expect(page.locator(".eb-motion-preview video")).not.toHaveAttribute("autoplay");
+        await expect(page.locator(".eb-motion-preview video")).toHaveAttribute("preload", "none");
+    });
+
     test("keeps the current offer path and primary navigation available", async ({ page }) => {
         await page.goto("/platform/promo");
-        await expect(page.getByRole("heading", { name: /your business has a rhythm/i })).toBeVisible();
+        await expect(page.getByRole("heading", { name: /your business, connected/i })).toBeVisible();
         await expect(page.getByRole("link", { name: /get started/i }).first()).toHaveAttribute("href", /start/);
         await expect(page.getByRole("link", { name: "Plans" }).first()).toBeVisible();
         await expect(page.getByRole("link", { name: "Customer Loop", exact: true, includeHidden: true })).toHaveAttribute("href", "#customer-loop");
@@ -111,8 +140,8 @@ test.describe("Everbranch public studio", () => {
                 return image.decode().catch(() => {});
             }));
         });
-        await page.locator(".eb-studio-photo-card").scrollIntoViewIfNeeded();
-        await expect(page.locator(".eb-studio-photo-card img")).toBeVisible();
+        await page.locator(".eb-guide__panel:not([hidden]) .eb-guide__photo").scrollIntoViewIfNeeded();
+        await expect(page.locator(".eb-guide__panel:not([hidden]) .eb-guide__photo img")).toBeVisible();
         await expect(page).toHaveScreenshot("studio-landing.png", { fullPage: true, animations: "disabled" });
     });
 

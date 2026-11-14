@@ -6,7 +6,7 @@ use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
-use App\Services\Marketing\TwilioSmsService;
+use App\Services\Marketing\TwilioProviderClient;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 
@@ -80,7 +80,7 @@ test('tenant can submit a custom module request without module or billing activa
     config()->set('everbranch.operator_alert_sms_enabled', true);
     config()->set('everbranch.operator_alert_phone', '+1 (555) 010-0101');
 
-    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio = \Mockery::mock(TwilioProviderClient::class);
     $twilio->shouldReceive('sendSms')
         ->once()
         ->with(
@@ -89,7 +89,7 @@ test('tenant can submit a custom module request without module or billing activa
             \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
         )
         ->andReturn(['success' => true, 'provider' => 'twilio', 'error_code' => null]);
-    app()->instance(TwilioSmsService::class, $twilio);
+    app()->instance(TwilioProviderClient::class, $twilio);
 
     $this->actingAs($user)
         ->post('http://acme.theeverbranch.com/custom-module-requests?tenant=acme', customRequestPayload([

@@ -82,17 +82,27 @@ class TenantBudService
     }
 
     /** @param array<int,array<string,mixed>> $transcript */
-    public function respond(Tenant $tenant, User $user, string $question, array $transcript = []): array
+    public function respond(Tenant $tenant, User $user, string $question, array $transcript = [], ?string $workflow = null): array
     {
-        abort_unless((bool) config('bud.core_enabled', true), 503, 'Bud is temporarily unavailable.');
-        $answer = $this->bud->respond($question, array_merge([
+        $humanRequested = preg_match('/\b(human|real person|talk to someone|contact support|open a ticket|create a ticket|still stuck|did not work|didn.t work)\b/i', $question) === 1;
+        $unavailable = ! (bool) config('bud.core_enabled', true);
+        $answer = $humanRequested || $unavailable ? [
+            'reply' => $unavailable ? 'The workspace guide is unavailable. Everbranch support can help with your next step.' : 'The Everbranch team will help you from here.',
+            'confidence' => 'low', 'uncertain' => true, 'follow_up' => null,
+        ] : $this->bud->respond($question, array_merge([
             'tenant' => $tenant->name,
             'surface' => 'account_help',
+            'workflow' => $workflow,
             'bud_tier' => 'Bud Core',
+            'offer_summary' => (string) config('product_surfaces.public_offer.summary', ''),
         ], $this->workspaceContext->forTenant($tenant)), $transcript);
         if (($answer['uncertain'] ?? false) === true) {
-            $ticket = $this->support->createBudEscalation($tenant, $user, $question, (string) $answer['reply'], (string) $answer['confidence'], $transcript);
-            $answer['reply'] = "I’m not sure that I’ve been programmed to answer that. I’ll create a ticket so the Everbranch team can follow up.\n\n".$answer['reply'];
+            $context = array_slice($transcript, -12);
+            if ($workflow !== null) {
+                $context[] = ['role' => 'context', 'text' => 'Setup step: '.$workflow];
+            }
+            $ticket = $this->support->createBudEscalation($tenant, $user, $question, (string) $answer['reply'], (string) $answer['confidence'], $context);
+            $answer['reply'] .= "\n\nYour support ticket is ready. You can follow its progress below.";
             $answer['ticket_id'] = $ticket['ticket']['id'] ?? null;
         }
 

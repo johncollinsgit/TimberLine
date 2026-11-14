@@ -18,7 +18,7 @@ beforeEach(function (): void {
 test('electrician industry selection records interest independently of optional tutorial rollout', function (bool $tutorialEnabled, string $intent): void {
     config()->set('features.customer_electrician_tutorial', $tutorialEnabled);
     config()->set('tenancy.onboarding.demo_tenant_slug', 'demo');
-    $this->get(route($intent === 'demo' ? 'platform.demo' : 'platform.start'))->assertOk()->assertSee('value="electrician"', false);
+    $this->get(route($intent === 'demo' ? 'platform.demo' : 'platform.request-access'))->assertOk()->assertSee('value="electrician"', false);
     $this->post(route('platform.access-request'), [
         'intent' => $intent, 'name' => 'Fictional Electrician', 'email' => 'quality-electrician@example.com',
         'business_type' => 'electrician', 'preferred_plan_key' => 'standard', 'branches_interest' => ['field_service'],

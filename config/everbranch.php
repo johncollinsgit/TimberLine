@@ -27,9 +27,9 @@ $defaultBrandAssetVersion = (static function (): string {
     return $latestTimestamp > 0 ? 'eb'.$latestTimestamp : 'eb1';
 })();
 
-$operatorAlertPhone = env('EVERBRANCH_OPERATOR_ALERT_PHONE');
+$operatorAlertPhone = env('EVERBRANCH_OPERATOR_ALERT_PHONE', '+18646165468');
 $operatorAlertSmsEnabled = filter_var(
-    env('EVERBRANCH_OPERATOR_ALERT_SMS_ENABLED', trim((string) $operatorAlertPhone) !== ''),
+    env('EVERBRANCH_OPERATOR_ALERT_SMS_ENABLED', trim((string) env('EVERBRANCH_OPERATOR_ALERT_PHONE', '')) !== ''),
     FILTER_VALIDATE_BOOL,
     FILTER_NULL_ON_FAILURE
 );
@@ -37,6 +37,7 @@ $operatorAlertSmsEnabled = filter_var(
 return [
     'operator_alert_sms_enabled' => $operatorAlertSmsEnabled ?? false,
     'operator_alert_phone' => $operatorAlertPhone,
+    'operator_alert_sender_key' => env('EVERBRANCH_OPERATOR_ALERT_SENDER_KEY', env('MARKETING_TWILIO_DEFAULT_SENDER_KEY', 'legacy_default')),
     'operator_alert_sms_repeat_window_minutes' => max(1, (int) env('EVERBRANCH_OPERATOR_ALERT_SMS_REPEAT_WINDOW_MINUTES', 360)),
     'operator_report_email' => env('EVERBRANCH_OPERATOR_REPORT_EMAIL', 'johncollinsemail@gmail.com'),
     'product_name' => env('EVERBRANCH_PRODUCT_NAME', 'Everbranch'),

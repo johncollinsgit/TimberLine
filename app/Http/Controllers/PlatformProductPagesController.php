@@ -154,7 +154,12 @@ class PlatformProductPagesController extends Controller
         ]);
     }
 
-    public function start(TenantCommercialExperienceService $experienceService): Response
+    public function start(Request $request, \App\Services\Onboarding\BranchSelectionService $selection): Response
+    {
+        return app(\App\Http\Controllers\Onboarding\BranchSelectionController::class)->show($request, $selection);
+    }
+
+    public function requestAccess(TenantCommercialExperienceService $experienceService): Response
     {
         $plansPayload = $experienceService->publicPlansPayload();
 

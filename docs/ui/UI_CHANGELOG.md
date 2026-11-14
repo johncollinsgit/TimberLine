@@ -1,3 +1,20 @@
+## 2026-11-14 - Light public website redesign
+
+Theeverbranch.com now uses a white canvas, subtle watercolor accents, rounded
+photography, Inter typography and a shorter navigation. The LinkedIn interactive
+business demo is directly below the introduction, with four business views.
+Customers, Work, Growth and Websites tabs guide visitors through canonical safe
+branches. Ask Everbranch provides public product guidance and contact fallback.
+A small Figma-authored branch animation is optional and never autoplays.
+
+The public setup basket saves branch choices and displays catalog-owned setup,
+monthly and first-month totals. It records setup intent, not payment or access.
+Assisted onboarding remains available when account provisioning is unavailable.
+Workspace Today/Setup/Explore navigation reuses permission-aware catalog actions.
+Domain activation now rechecks ownership, routing and TLS; support tickets retain
+their existing tenant boundaries. See the redesign workflow audit and domain/help
+runbooks for provider readiness and live acceptance requirements.
+
 ## 2026-11-14 - Source-backed Everbranch history
 
 The Everbranch and Evergrove marketing footers now link to one detailed public

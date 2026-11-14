@@ -7,7 +7,7 @@ use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleAccessRequest;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
-use App\Services\Marketing\TwilioSmsService;
+use App\Services\Marketing\TwilioProviderClient;
 
 beforeEach(function (): void {
     $this->withoutVite();
@@ -70,7 +70,7 @@ test('marketing modules page can activate and request module access', function (
     config()->set('tenancy.domains.canonical.base_domain', 'theeverbranch.com');
     config()->set('tenancy.domains.canonical.public_host', 'theeverbranch.com');
 
-    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio = \Mockery::mock(TwilioProviderClient::class);
     $twilio->shouldReceive('sendSms')
         ->once()
         ->with(
@@ -79,7 +79,7 @@ test('marketing modules page can activate and request module access', function (
             \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
         )
         ->andReturn(['success' => true, 'provider' => 'twilio', 'error_code' => null]);
-    app()->instance(TwilioSmsService::class, $twilio);
+    app()->instance(TwilioProviderClient::class, $twilio);
 
     $this->actingAs($user)
         ->post(route('marketing.modules.activate', ['moduleKey' => 'sms']))

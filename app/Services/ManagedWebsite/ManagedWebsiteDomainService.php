@@ -13,7 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class ManagedWebsiteDomainService
 {
-    public function __construct(private readonly TenantHostBuilder $hosts) {}
+    public function __construct(private readonly TenantHostBuilder $hosts, private readonly CloudflareWebsiteDomains $cloudflare) {}
 
     public function enabled(): bool
     {
@@ -94,6 +94,12 @@ class ManagedWebsiteDomainService
             throw ValidationException::withMessages(['domain' => 'That domain is already connected to another website.']);
         }
 
+        // Retrying an in-progress request must not invalidate the DNS proof the
+        // customer just entered or disconnect a currently published domain.
+        if ($existing && $existing->status !== 'disabled') {
+            return $existing;
+        }
+
         return DB::transaction(function () use ($site, $hostname, $actor, $existing): TenantSiteDomain {
             $domain = $existing ?: new TenantSiteDomain([
                 'tenant_id' => $site->tenant_id,
@@ -126,16 +132,18 @@ class ManagedWebsiteDomainService
     public function verify(TenantSiteDomain $domain, ?User $actor): TenantSiteDomain
     {
         $domain->loadMissing('site');
+        abort_if(in_array($domain->status, ['active', 'disabled'], true), 422, 'This domain is not waiting for connection.');
         $recordName = $this->verificationRecordName($domain->hostname);
         $expected = $this->verificationValue($domain);
         $records = $this->txtRecords($recordName);
         $verified = in_array($expected, $records, true);
+        $edge = $verified ? $this->cloudflare->check($domain->hostname, true) : null;
 
         $domain->forceFill([
             'verification_checked_at' => now(),
             'status' => $verified ? 'verified' : 'pending',
             'verified_at' => $verified ? now() : null,
-            'last_error' => $verified ? null : 'We could not find the Everbranch verification TXT record yet. DNS changes can take a few minutes.',
+            'last_error' => $verified ? ($edge['ready'] ? null : $edge['message']) : 'We could not find the Everbranch verification TXT record yet. DNS changes can take a few minutes.',
             'updated_by_user_id' => $actor?->id,
         ])->save();
 
@@ -154,6 +162,19 @@ class ManagedWebsiteDomainService
         }
         abort_unless($domain->status === 'verified', 422, 'Verify ownership before activating this domain.');
         abort_unless($domain->site->status === 'published' && $domain->site->public_enabled, 422, 'Publish the website before activating a custom domain.');
+        // Recheck proof and provider readiness now. A stale "verified" row cannot
+        // activate a hostname whose DNS or certificate is no longer valid.
+        if (! in_array($this->verificationValue($domain), $this->txtRecords($this->verificationRecordName($domain->hostname)), true)) {
+            throw ValidationException::withMessages(['domain' => 'The ownership record is missing. Restore it and check the connection again.']);
+        }
+        if ($this->connectionTarget() === '' || ! in_array(strtolower(rtrim($this->connectionTarget(), '.')), $this->cnameRecords($domain->hostname), true)) {
+            throw ValidationException::withMessages(['domain' => 'The website record does not point to Everbranch yet. Check the CNAME record, or ask us to handle the connection.']);
+        }
+        $edge = $this->cloudflare->check($domain->hostname);
+        if (! $edge['ready']) {
+            $domain->forceFill(['last_error' => $edge['message'], 'verification_checked_at' => now()])->save();
+            throw ValidationException::withMessages(['domain' => $edge['message']]);
+        }
 
         DB::transaction(function () use ($domain, $actor): void {
             TenantSiteDomain::query()->where('tenant_site_id', $domain->tenant_site_id)->update(['is_primary' => false]);
@@ -250,7 +271,7 @@ class ManagedWebsiteDomainService
         if (str_contains($value, '://')) {
             $parts = parse_url($value);
             $path = trim((string) ($parts['path'] ?? ''), '/');
-            if (! is_array($parts) || $path !== '' || isset($parts['query'], $parts['fragment'], $parts['port'], $parts['user'], $parts['pass'])) {
+            if (! is_array($parts) || $path !== '' || array_intersect(['query', 'fragment', 'port', 'user', 'pass'], array_keys($parts)) !== []) {
                 return $this->invalid($throw);
             }
             $value = (string) ($parts['host'] ?? '');
@@ -276,6 +297,16 @@ class ManagedWebsiteDomainService
             ->filter()
             ->values()
             ->all();
+    }
+
+    /** @return array<int,string> */
+    protected function cnameRecords(string $name): array
+    {
+        $records = @dns_get_record($name, DNS_CNAME);
+
+        return collect(is_array($records) ? $records : [])
+            ->map(static fn (array $record): string => strtolower(rtrim((string) ($record['target'] ?? ''), '.')))
+            ->filter()->values()->all();
     }
 
     protected function isReservedHost(string $hostname): bool

@@ -3,12 +3,15 @@
 use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantSite;
+use App\Models\TenantSiteDomain;
 use App\Models\TenantSitePage;
 use App\Models\TenantSitePageVersion;
 use App\Models\TenantSiteVersion;
 use App\Models\User;
+use App\Services\ManagedWebsite\CloudflareWebsiteDomains;
 use App\Services\ManagedWebsite\ManagedWebsiteDomainService;
 use App\Services\Tenancy\PreAuthTenantContextResolver;
+use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
@@ -18,6 +21,28 @@ beforeEach(function (): void {
     config()->set('managed_website.public_render_enabled', true);
     config()->set('managed_website.custom_domains_enabled', true);
     config()->set('managed_website.custom_domain_activation_enabled', true);
+    config()->set('managed_website.custom_domain_target', 'sites.theeverbranch.com');
+    $edge = Mockery::mock(CloudflareWebsiteDomains::class);
+    $edge->shouldReceive('check')->andReturn(['ready' => true, 'message' => 'Ready']);
+    app()->instance(CloudflareWebsiteDomains::class, $edge);
+    app()->bind(ManagedWebsiteDomainService::class, fn () => new class(app(TenantHostBuilder::class), app(CloudflareWebsiteDomains::class)) extends ManagedWebsiteDomainService
+    {
+        protected function txtRecords(string $name): array
+        {
+            if (config('managed_website.test_missing_proof')) {
+                return [];
+            }
+            $hostname = substr($name, strlen('_everbranch-verify.'));
+            $domain = TenantSiteDomain::withoutGlobalScopes()->where('hostname', $hostname)->first();
+
+            return $domain ? [$this->verificationValue($domain)] : [];
+        }
+
+        protected function cnameRecords(string $name): array
+        {
+            return config('managed_website.test_wrong_routing') ? ['unrelated.example'] : ['sites.theeverbranch.com'];
+        }
+    });
 
     // The legacy test bootstrap schema predates the additive Website pilot
     // migrations. Load this small chain explicitly so this regression remains
@@ -232,4 +257,58 @@ test('a tenant cannot cancel another tenant’s attempted domain', function (): 
         ->assertNotFound();
 
     expect($domain->fresh()->status)->toBe('pending');
+});
+
+test('domain retries retain the proof and never reset a live connection', function (): void {
+    [, $actor, $site] = customDomainPilot();
+    $service = app(ManagedWebsiteDomainService::class);
+    $domain = $service->request($site, 'www.retry.example', $actor);
+    $token = $domain->verification_token;
+    expect($service->request($site, $domain->hostname, $actor)->verification_token)->toBe($token);
+    $domain->forceFill(['status' => 'verified'])->save();
+    $service->activate($domain, $actor);
+    expect($service->request($site, $domain->hostname, $actor)->status)->toBe('active');
+});
+
+test('activation rechecks ownership and rejects a removed record', function (): void {
+    [, $actor, $site] = customDomainPilot();
+    $service = app(ManagedWebsiteDomainService::class);
+    $domain = $service->request($site, 'www.proof.example', $actor);
+    $domain->forceFill(['status' => 'verified'])->save();
+    config()->set('managed_website.test_missing_proof', true);
+    expect(fn () => $service->activate($domain, $actor))->toThrow(Illuminate\Validation\ValidationException::class);
+    expect($domain->fresh()->status)->toBe('verified');
+});
+
+test('activation rejects incorrect routing and pending certificates', function (): void {
+    [, $actor, $site] = customDomainPilot();
+    $service = app(ManagedWebsiteDomainService::class);
+    $domain = $service->request($site, 'www.routing.example', $actor);
+    $domain->forceFill(['status' => 'verified'])->save();
+    config()->set('managed_website.test_wrong_routing', true);
+    expect(fn () => $service->activate($domain, $actor))->toThrow(Illuminate\Validation\ValidationException::class);
+    config()->set('managed_website.test_wrong_routing', false);
+    $edge = Mockery::mock(CloudflareWebsiteDomains::class);
+    $edge->shouldReceive('check')->once()->andReturn(['ready' => false, 'message' => 'Certificate pending.']);
+    app()->instance(CloudflareWebsiteDomains::class, $edge);
+    expect(fn () => app(ManagedWebsiteDomainService::class)->activate($domain, $actor))->toThrow(Illuminate\Validation\ValidationException::class);
+    expect($domain->fresh()->status)->toBe('verified')->and($domain->fresh()->last_error)->toBe('Certificate pending.');
+});
+
+test('domain URLs cannot contain a port login fragment or query', function (): void {
+    $service = app(ManagedWebsiteDomainService::class);
+    foreach (['https://example.com:8443', 'https://example.com?token=secret', 'https://example.com#fragment', 'https://user@example.com'] as $value) {
+        expect($service->normalizeHostname($value, false))->toBeNull();
+    }
+});
+
+test('the website overview offers guided domain connection and human assistance', function (): void {
+    [$tenant, $actor] = customDomainPilot();
+    $this->actingAs($actor)->withSession(['tenant_id' => $tenant->id])
+        ->get(route('managed-website.index'))
+        ->assertOk()
+        ->assertSeeText('Connect my domain')
+        ->assertSeeText('Handle this for me')
+        ->assertSee('www.yourbusiness.com')
+        ->assertSee(route('managed-website.products.index'), false);
 });

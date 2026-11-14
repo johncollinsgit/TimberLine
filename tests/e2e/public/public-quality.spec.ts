@@ -34,9 +34,9 @@ test("public header and workflow steps retain readable default, hover and focus 
     const results: Record<string, number> = {};
     for (const [name, locator] of [
         ["plans", page.locator(".eb-studio-nav__links").getByRole("link", { name: "Plans", exact: true })],
-        ["example", page.locator(".eb-studio-nav__demo-link")],
-        ["module", page.locator(".eb-studio-module-list a").first()],
-        ["module-description", page.locator(".eb-studio-module-list small").first()],
+        ["example", page.locator(".eb-studio-demo__grid:not([hidden]) .eb-studio-button")],
+        ["module", page.locator(".eb-guide__panel:not([hidden]) .eb-guide__card").first()],
+        ["module-description", page.locator(".eb-guide__panel:not([hidden]) .eb-guide__card p").first()],
         ["step", page.getByRole("button", { name: /your team moves/i })],
     ] as const) {
         await expect(locator).toBeVisible();
@@ -78,7 +78,7 @@ for (const width of [390, 820, 1440]) {
                 await testInfo.attach(`${path}-${width}`, { path: screenshot, contentType: "image/png" });
             }
             const action = ["/platform/start", "/platform/demo", "/platform/contact"].includes(path)
-                ? page.locator('button[type="submit"]').first()
+                ? page.locator('main button[type="submit"]').first()
                 : page.getByRole("link", { name: /get started|create a workspace|choose your branches/i }).first();
             await action.scrollIntoViewIfNeeded();
             await expect(action).toBeVisible();
@@ -110,15 +110,15 @@ test("the current offer and conditional fees are visible before requesting acces
         await expect(page.getByText(offer, { exact: true }).filter({ visible: true }).first()).toBeVisible();
     }
     await page.goto("/platform/start");
-    const pricing = page.getByRole("tab", { name: "Pricing", exact: true });
-    await pricing.focus();
-    await page.keyboard.press("Enter");
-    await expect(pricing).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("tabpanel", { name: "Pricing" })).toContainText("$299/month");
-    await expect(page.getByRole("tabpanel", { name: "Pricing" })).toContainText("$499 one-time");
-    await page.locator("details summary").click();
-    await expect(page.getByLabel("Preferred offer")).toHaveValue("standard");
-    expect(await page.getByLabel("Preferred offer").locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))).toEqual(["", "standard"]);
+    const summary = page.getByRole("complementary", { name: "Your setup" });
+    await expect(summary).toContainText("$299");
+    await expect(summary).toContainText("$499");
+    await expect(summary).toContainText("$798");
+    const choice = page.locator('input[name="branches[]"][value="customers"]');
+    await choice.check();
+    await page.getByRole("button", { name: "Save choices", exact: true }).click();
+    await page.reload();
+    await expect(choice).toBeChecked();
 });
 
 test("the parent site presents the same offer at phone, tablet and desktop widths", async ({ page }, testInfo) => {
@@ -155,7 +155,6 @@ test("choosing an included branch carries the selection into signup", async ({ p
     await expect(page.locator("main")).not.toContainText("$19.99");
     await page.getByRole("link", { name: "Choose this branch", exact: true }).click();
     await expect(page).toHaveURL(/branch=messaging/);
-    await expect(page.getByLabel("Messaging", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("Messaging", { exact: true })).toBeChecked();
-    await expect(page.getByLabel("Preferred offer")).toHaveValue("standard");
+    await expect(page.locator('input[name="branches[]"][value="messaging"]')).toBeChecked();
+    await expect(page.getByRole("complementary", { name: "Your setup" })).toContainText("Everbranch Simple");
 });

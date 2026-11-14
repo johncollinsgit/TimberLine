@@ -12,27 +12,19 @@
     @include('partials.head', ['title' => 'Contact '.config('everbranch.product_name', 'Everbranch')])
 </head>
 <body class="fb-public-body eb-studio-support-body" data-premium-motion="public">
-    @include('platform.partials.premium-motion')
+    @include('platform.partials.studio-support-nav')
 
     <main class="fb-public-shell fb-contact-shell eb-studio-support-shell">
-        <nav class="fb-site-nav fb-site-nav--premium" aria-label="Everbranch contact navigation">
-            <a href="{{ route('platform.promo') }}" class="fb-site-brand fb-site-brand--lockup">
-                <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ config('everbranch.product_name', 'Everbranch') }}" />
-            </a>
-            <div class="fb-hero-cta fb-hero-cta--nav">
-                <a href="{{ route('platform.promo') }}" class="fb-btn fb-btn-secondary">Home</a>
-                <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
-            </div>
-        </nav>
+
 
         <section class="fb-contact-panel fb-contact-panel--page" aria-label="Contact Everbranch" data-reveal data-premium-surface>
             <div>
                 <p class="fb-section-kicker">Contact</p>
-                <h1 class="fb-contact-title">{{ $isWalkthrough ? 'Book a working session with Everbranch.' : 'Tell Everbranch what keeps getting lost.' }}</h1>
+                <h1 class="fb-contact-title">{{ $isWalkthrough ? 'Let’s take a look.' : 'Let’s talk.' }}</h1>
                 <p class="fb-contact-summary">
                     {{ $isWalkthrough
-                        ? 'Tell us what your business needs to connect or simplify. We will follow up to schedule a focused walkthrough.'
-                        : 'Send the messy version. We will help you find the clean starting point for your business.' }}
+                        ? 'Choose what you would like to explore. We will arrange a walkthrough.'
+                        : 'Tell us what you need. We will help with the next step.' }}
                 </p>
             </div>
 

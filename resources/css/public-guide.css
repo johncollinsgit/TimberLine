@@ -1,0 +1,189 @@
+/* Everbranch's white canvas, photography and a quiet watercolor edge. */
+.eb-studio-body {
+    --eb-ink: #183e32;
+    --eb-ink-deep: #102e26;
+    --eb-paper: #fff;
+    --eb-paper-bright: #fafbf8;
+    --eb-sand: #f2f5ef;
+    --eb-clay: #766025;
+    background: #fff;
+}
+.eb-studio-body :is(h1, h2, h3, h4),
+.eb-studio-body .eb-studio-module-list span,
+.eb-studio-body .eb-studio-story__steps button span,
+.eb-studio-body .eb-studio-film__caption h2,
+.eb-studio-support-body :is(h1, h2, h3) {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    letter-spacing: -.045em;
+}
+.eb-studio-nav-wrap { position: relative; padding: 18px 24px; background: #fff; }
+.eb-studio-nav { max-width: 1180px; min-height: 56px; padding: 0; border: 0; border-radius: 0; background: #fff; color: var(--eb-ink); backdrop-filter: none; }
+.eb-studio-brand img { width: 151px; filter: none; }
+.eb-studio-nav a:hover { color: #3d6754; }
+.eb-studio-nav__links { gap: 30px; font-size: 14px; }
+.eb-studio-nav__actions { margin-left: 22px; }
+.eb-studio-nav .eb-studio-button { color: #fff; border-radius: 12px; background: var(--eb-ink); }
+.eb-studio-button { border-radius: 12px; min-height: 46px; font-size: 14px; }
+.eb-studio-button:hover { transform: translateY(-1px); }
+.eb-studio-hero { width: min(1280px, calc(100% - 40px)); min-height: 620px; margin: 5px auto 0; border-radius: 24px; background: #f5f7f1; color: var(--eb-ink); }
+.eb-studio-hero::after { position: absolute; inset: auto 0 0; height: 250px; z-index: 0; background: url('/brand/everbranch-watercolor-wash.svg') center bottom / cover no-repeat; opacity: .7; content: ''; pointer-events: none; }
+.eb-studio-hero__media { inset: 28px 28px 28px auto; width: 46%; height: calc(100% - 56px); border-radius: 20px; overflow: hidden; }
+.eb-studio-hero__media img { object-position: 63% center; }
+.eb-studio-hero__shade { display: none; }
+.eb-studio-hero__content { width: calc(100% - 96px); margin: auto; padding: 88px 0; max-width: none; }
+.eb-studio-hero h1 { max-width: 52%; color: var(--eb-ink); font-size: clamp(3.1rem, 5.2vw, 5rem); line-height: 1.05; font-weight: 600; }
+.eb-studio-hero .eb-studio-eyebrow { max-width: 44%; color: #556b59; font-size: 12px; letter-spacing: .05em; text-transform: none; }
+.eb-studio-hero__lede { max-width: 41%; color: #496154; font-size: 17px; line-height: 1.65; margin-top: 24px; }
+.eb-studio-hero__actions { max-width: 45%; gap: 12px; margin-top: 26px; }
+.eb-studio-hero__actions .eb-studio-button:first-child { background: var(--eb-ink); color: #fff; }
+.eb-studio-hero__actions .eb-studio-button:not(:first-child) { background: #fff; color: var(--eb-ink); border-color: #d6dfd2; }
+.eb-studio-play { color: #3a594a; font-size: 13px; }
+.eb-studio-play__icon { color: var(--eb-ink); border-color: #a6b5a4; }
+.eb-studio-hero__note { max-width: 43%; color: #526858; font-size: 12px; line-height: 1.65; }
+.eb-studio-hero__note + .eb-studio-hero__note { display: none; }
+.eb-studio-body :is(.eb-studio-hero, .eb-studio-nav) :is(a, button):focus-visible { outline-color: #8e6d20; }
+.eb-guide { padding: 85px 0 38px; scroll-margin-top: 30px; }
+.eb-guide__heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 26px; }
+.eb-guide__heading h2 { margin: 0; font-size: clamp(26px, 3.2vw, 38px); line-height: 1.2; }
+.eb-guide__heading > a { color: #305942; text-decoration: none; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.eb-guide__tabs { display: flex; width: max-content; max-width: 100%; gap: 5px; margin: 0 0 24px; padding: 5px; border-radius: 14px; background: #f0f3ed; overflow-x: auto; }
+.eb-guide__tabs a { display: inline-flex; justify-content: center; align-items: center; min-height: 44px; padding: 10px 25px; border-radius: 10px; color: #49604e; text-decoration: none; font-size: 14px; font-weight: 600; scroll-margin-top: 30px; }
+.eb-guide__tabs [aria-selected='true'] { color: #173e32; background: #fff; box-shadow: 0 2px 6px #173e320c; }
+.eb-guide__panel { display: grid; grid-template-columns: 1fr 1.1fr; gap: 24px; margin-bottom: 24px; }
+.eb-guide__panel[hidden] { display: none; }
+.eb-guide__photo { position: relative; min-height: 440px; overflow: hidden; border-radius: 20px; background: #264b39; }
+.eb-guide__photo > img { width: 100%; height: 100%; position: absolute; object-fit: cover; }
+.eb-guide__photo::after { position: absolute; inset: 0; background: linear-gradient(0deg, #10291fed, transparent 78%); content: ''; }
+.eb-guide__photo > div { position: absolute; inset: auto 30px 30px; z-index: 1; color: #fff; }
+.eb-guide__photo h3 { font-size: 30px; margin: 0 0 12px; line-height: 1.2; }
+.eb-guide__photo p { max-width: 320px; margin: 0; font-size: 15px; line-height: 1.6; color: #edf2e8; }
+.eb-guide__cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.eb-guide__card { display: flex; flex-direction: column; align-items: start; padding: 24px; color: var(--eb-ink); text-decoration: none; border: 1px solid #dde5d9; border-radius: 20px; background: #fff; transition: border-color .2s, background .2s, transform .2s; }
+.eb-guide__card:hover { border-color: #91ab92; background: #fafcf8; transform: translateY(-2px); }
+.eb-guide__included { color: #45654d; font-size: 11px; padding: 4px 8px; border-radius: 6px; background: #eff4eb; font-weight: 500; }
+.eb-guide__card h3 { margin: 20px 0 10px; font-size: 19px; line-height: 1.25; }
+.eb-guide__card p { margin: 0 0 20px; color: #55685b; font-size: 13px; line-height: 1.6; }
+.eb-guide__action { display: flex; justify-content: space-between; width: 100%; margin-top: auto; color: #31583e; font-size: 13px; font-weight: 600; }
+.eb-guide__panel.is-entering { animation: eb-guide-enter .2s ease both; }
+@keyframes eb-guide-enter { from { opacity: .45; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.eb-studio-body .eb-studio-demo h2,
+.eb-studio-body :is(.eb-studio-industries, .eb-studio-story, .eb-studio-modules, .eb-studio-loop) h2 { max-width: 680px; font-size: clamp(28px, 3.5vw, 40px); line-height: 1.18; }
+.eb-studio-body :is(.eb-studio-industries, .eb-studio-story, .eb-studio-modules) { padding: 75px 0; }
+.eb-studio-body .eb-studio-industries { background: #fafbf8; }
+.eb-studio-industry-card { border-radius: 20px; min-height: 315px; }
+.eb-studio-industry-card em { display: none; }
+.eb-studio-industry-card strong { font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-weight: 600; font-size: 24px; letter-spacing: -.035em; }
+.eb-studio-industry-card span b { margin-top: 12px; }
+.eb-studio-loop { padding: 70px 0; background: #173e32; }
+.eb-studio-loop h2 { color: #fff; }
+.eb-studio-photo-card { border-radius: 20px; }
+.eb-studio-photo-card figcaption { font-size: 16px; }
+.eb-studio-support-body { background: #fff; }
+.eb-studio-support-body .fb-card { border-radius: 20px; }
+.eb-studio-support-body .fb-contact-title { font-size: clamp(30px, 4vw, 48px); }
+.eb-studio-support-nav-wrap { background: #fff; }
+.eb-studio-support-nav { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+.eb-studio-support-body .fb-contact-overview { position: relative; padding: 30px 0; background: url('/brand/everbranch-watercolor-wash.svg') right bottom / auto 100% no-repeat; }
+@media (max-width: 1000px) {
+    .eb-studio-nav__links { gap: 18px; }
+    .eb-studio-nav__actions { margin-left: 8px; }
+    .eb-studio-hero__content { width: calc(100% - 64px); }
+    .eb-studio-hero__media { width: 44%; }
+    .eb-guide__card { padding: 19px; }
+}
+@media (max-width: 840px) {
+    .eb-studio-nav-wrap { padding: 14px 20px; }
+    .eb-studio-nav__links { display: flex; margin-left: auto; }
+    .eb-studio-nav__links a:not(:first-child) { display: none; }
+    .eb-studio-nav__actions { margin-left: 4px; }
+    .eb-studio-nav .eb-studio-button { min-height: 42px; font-size: 13px; padding: 10px 15px; }
+    .eb-studio-hero { width: calc(100% - 24px); min-height: auto; padding-bottom: 300px; }
+    .eb-studio-hero__content { width: calc(100% - 48px); padding: 42px 0 36px; }
+    .eb-studio-hero h1 { max-width: 100%; font-size: clamp(42px, 8vw, 66px); }
+    .eb-studio-hero .eb-studio-eyebrow, .eb-studio-hero__lede, .eb-studio-hero__note, .eb-studio-hero__actions { max-width: 100%; }
+    .eb-studio-hero__lede { max-width: 420px; font-size: 16px; margin-top: 18px; }
+    .eb-studio-hero__actions { flex-direction: row; align-items: center; gap: 12px; }
+    .eb-studio-hero__media { inset: auto 18px 18px; width: calc(100% - 36px); height: 282px; }
+    .eb-studio-hero__media img { object-position: center 57%; }
+    .eb-guide { padding-top: 58px; }
+    .eb-guide__panel { grid-template-columns: 1fr; gap: 18px; }
+    .eb-guide__photo { min-height: 310px; }
+    .eb-guide__cards { grid-template-columns: 1fr 1fr; }
+    .eb-guide__card h3 { margin-top: 15px; }
+    .eb-guide__tabs { width: 100%; }
+    .eb-guide__tabs a { flex: 1; padding: 10px 17px; }
+    .eb-studio-body :is(.eb-studio-industries, .eb-studio-story, .eb-studio-modules) { padding: 58px 0; }
+}
+@media (max-width: 480px) {
+    .eb-studio-brand img { width: 125px; }
+    .eb-studio-nav__links { font-size: 13px; }
+    .eb-studio-nav { gap: 12px; }
+    .eb-guide__heading { gap: 12px; align-items: start; }
+    .eb-guide__heading > a { font-size: 12px; margin-top: 6px; }
+    .eb-guide__cards { gap: 10px; }
+    .eb-guide__card { padding: 16px; border-radius: 16px; }
+    .eb-guide__card h3 { font-size: 17px; }
+    .eb-guide__card p { font-size: 12px; }
+    .eb-guide__tabs a { padding: 10px 12px; font-size: 13px; }
+    .eb-guide__photo > div { inset: auto 24px 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .eb-guide__panel.is-entering { animation: none; }
+    .eb-guide__card, .eb-studio-button { transition: none; }
+    .eb-guide__card:hover, .eb-studio-button:hover { transform: none; }
+}
+
+.eb-guide-ask { position: relative; z-index: 2; margin-top: 18px; background: transparent; border-color: #acbca6; color: #183e32; }
+.eb-studio-loop { color: #183e32; background: #f3f6ef; }
+.eb-studio-loop h2 { color: #183e32; }
+.eb-studio-loop p, .eb-studio-loop__steps strong, .eb-studio-loop__steps p { color: #49604e; }
+.eb-studio-loop__steps li { border-color: #dce4d5; }
+.eb-studio-loop__steps > li > span { color: #476147; border-color: #cad6c3; background: #fff; }
+.eb-studio-loop .eb-studio-button { background: #183e32; color: #fff; }
+.eb-studio-footer { color: #183e32; background: #f6f8f2; }
+.eb-studio-footer img { filter: none; }
+.eb-studio-footer p, .eb-studio-footer a { color: #4d6352; }
+.eb-studio-footer a:hover { color: #183e32; text-decoration: underline; }
+
+.eb-demo-label { font-size: 12px; color: #526858; }
+.eb-studio-demo__grid[hidden] { display: none; }
+.eb-studio-demo__grid h3 { font-size: 28px; margin: 0 0 16px; line-height: 1.2; }
+.eb-studio-demo__grid .eb-studio-section-heading > p:not(.eb-studio-demo__note) { font-size: 16px; line-height: 1.65; margin-bottom: 24px; }
+.eb-studio-demo__preview { border-radius: 20px; background: #f3f6ef; }
+.eb-studio-demo__preview img { width: 100%; max-height: 390px; object-fit: cover; }
+
+/* Branch discovery shares the public white canvas and quiet typography. */
+.eb-explorer-body { background: #fff; color: #183e32; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+.eb-explorer-body h1, .eb-explorer-body h2, .eb-explorer-body h3 { font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-weight: 600; letter-spacing: -.035em; }
+.eb-explorer-body .eb-explorer-hero { background: #f4f7ef url('/brand/everbranch-watercolor-wash.svg') center bottom / cover no-repeat; border-radius: 22px; padding: 32px; }
+.eb-explorer-body .eb-explorer-hero h1 { font-size: clamp(28px, 4vw, 42px); line-height: 1.15; max-width: 650px; }
+.eb-explorer-body .eb-explorer-hero p { max-width: 720px; color: #50644f; font-size: 14px; line-height: 1.6; }
+.eb-explorer-body .eb-explorer-kicker { display: none; }
+.eb-explorer-body .eb-module-card { border-radius: 20px; background: #fff; box-shadow: none; }
+.eb-explorer-body .eb-explorer-controls { border-radius: 16px; background: #f7f9f4; }
+.eb-explorer-body .eb-module-detail { border-radius: 20px; }
+.eb-explorer-body .eb-explorer-nav { border: 0; background: #fff; }
+@media (max-width: 640px) { .eb-explorer-body .eb-explorer-hero { padding: 24px; } }
+
+html:has(.eb-studio-body), html:has(.eb-studio-support-body), .eb-studio-body, .eb-studio-support-body { color-scheme: light; }
+
+.eb-studio-body :is(.eb-studio-hero__lede, .eb-studio-hero__note) { color: #496154; }
+.eb-studio-body .eb-guide__photo h3 { color: #fff; }
+.eb-studio-body .eb-studio-loop .eb-studio-loop__grid > div > p:not(.eb-studio-eyebrow) { color: #49604e; }
+.eb-studio-body .eb-studio-loop__steps strong { font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 18px; font-weight: 600; }
+.eb-studio-body .eb-studio-hero::after { z-index: 0; opacity: .38; }
+.eb-studio-body .eb-studio-hero__media { z-index: 1; }
+.eb-studio-body { background: #fff; }
+.eb-studio-body .eb-studio-modules { background: #f2f5ef; }
+
+.eb-studio-body .eb-studio-loop__compact { display: block; max-width: 1180px; }
+.eb-studio-body .eb-studio-loop__compact > div { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px 35px; }
+.eb-studio-body .eb-studio-loop__compact h2 { grid-column: 1; margin: 0; font-size: 30px; }
+.eb-studio-body .eb-studio-loop__compact .eb-studio-eyebrow { display: none; }
+.eb-studio-body .eb-studio-loop__compact p { grid-column: 1; margin: 0; max-width: 600px; }
+.eb-studio-body .eb-studio-loop__compact a { grid-column: 2; grid-row: 1 / 3; align-self: center; }
+.eb-motion-preview { margin: -3px 0 23px; }
+.eb-motion-preview summary { width: max-content; max-width: 100%; min-height: 40px; display: flex; align-items: center; gap: 15px; cursor: pointer; color: #3d6046; font-size: 13px; font-weight: 600; list-style: none; }
+.eb-motion-preview video { width: min(100%, 700px); height: auto; border-radius: 20px; background: #f5f7f1; margin: 12px 0; }
+@media(max-width:640px){ .eb-studio-body .eb-studio-loop__compact > div { display: block; } .eb-studio-body .eb-studio-loop__compact p { margin: 16px 0 22px; } }

@@ -60,6 +60,11 @@ return [
     'custom_domain_activation_enabled' => $bool('MANAGED_WEBSITE_CUSTOM_DOMAIN_ACTIVATION_ENABLED'),
     'custom_domain_tenant_ids' => $tenantIds('MANAGED_WEBSITE_CUSTOM_DOMAIN_TENANT_IDS'),
     'custom_domain_target' => trim((string) env('MANAGED_WEBSITE_CUSTOM_DOMAIN_TARGET', '')),
+    'cloudflare' => [
+        'enabled' => $bool('MANAGED_WEBSITE_CLOUDFLARE_ENABLED'),
+        'zone_id' => trim((string) env('MANAGED_WEBSITE_CLOUDFLARE_ZONE_ID', '')),
+        'api_token' => env('MANAGED_WEBSITE_CLOUDFLARE_API_TOKEN'),
+    ],
     // Commerce is a distinct, tenant-owned lane. Its webhooks and checkout
     // fail closed until the global gate, tenant entitlement, Connect readiness,
     // tax decision, and dedicated endpoint secret are all present.

@@ -62,10 +62,95 @@ function mountHeroSceneRotation(reducedMotion) {
     });
 }
 
+function mountCapabilityGuide() {
+    document.querySelectorAll('[data-capability-guide]').forEach((root) => {
+        if (root.dataset.guideMounted === 'true') return;
+        const tabs = [...root.querySelectorAll('[data-guide-tab]')];
+        const panels = [...root.querySelectorAll('[data-guide-panel]')];
+        if (!tabs.length || !panels.length) return;
+        root.dataset.guideMounted = 'true';
+        root.querySelector('.eb-guide__tabs')?.setAttribute('role', 'tablist');
+        const activate = (key, updateHash = false) => {
+            const selected = tabs.find((tab) => tab.dataset.guideTab === key) || tabs[0];
+            tabs.forEach((tab) => {
+                const active = tab === selected;
+                tab.setAttribute('role', 'tab');
+                tab.setAttribute('aria-controls', `guide-panel-${tab.dataset.guideTab}`);
+                tab.setAttribute('aria-selected', String(active));
+                tab.tabIndex = active ? 0 : -1;
+            });
+            panels.forEach((panel) => {
+                const active = panel.dataset.guidePanel === selected.dataset.guideTab;
+                panel.setAttribute('role', 'tabpanel');
+                panel.tabIndex = 0;
+                panel.hidden = !active;
+                panel.classList.toggle('is-entering', active);
+            });
+            if (updateHash) window.history.replaceState(null, '', `#${selected.id}`);
+        };
+        const fromHash = () => tabs.find((tab) => [`#${tab.id}`, `#guide-panel-${tab.dataset.guideTab}`].includes(window.location.hash));
+        tabs.forEach((tab, index) => {
+            tab.addEventListener('click', (event) => {
+                event.preventDefault();
+                activate(tab.dataset.guideTab, true);
+            });
+            tab.addEventListener('keydown', (event) => {
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                event.preventDefault();
+                let next = index;
+                if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+                if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+                if (event.key === 'Home') next = 0;
+                if (event.key === 'End') next = tabs.length - 1;
+                activate(tabs[next].dataset.guideTab, true);
+                tabs[next].focus();
+            });
+        });
+        window.addEventListener('hashchange', () => { const tab = fromHash(); if (tab) activate(tab.dataset.guideTab); });
+        activate(fromHash()?.dataset.guideTab || tabs[0].dataset.guideTab);
+    });
+}
+
+function mountDemoGuide() {
+    const root = document.querySelector('[data-demo-guide]');
+    if (!root || root.dataset.demoMounted === 'true') return;
+    const tabs = [...root.querySelectorAll('[data-demo-tab]')];
+    const panels = [...root.querySelectorAll('[data-demo-panel]')];
+    root.dataset.demoMounted = 'true';
+    root.querySelector('.eb-guide__tabs')?.setAttribute('role', 'tablist');
+    const select = (tab) => {
+        tabs.forEach((item) => {
+            item.setAttribute('role', 'tab');
+            item.setAttribute('aria-controls', `demo-panel-${item.dataset.demoTab}`);
+            item.setAttribute('aria-selected', String(item === tab));
+            item.tabIndex = item === tab ? 0 : -1;
+        });
+        panels.forEach((panel) => {
+            panel.setAttribute('role', 'tabpanel');
+            panel.tabIndex = 0;
+            panel.hidden = panel.dataset.demoPanel !== tab.dataset.demoTab;
+        });
+    };
+    tabs.forEach((tab, index) => {
+        tab.addEventListener('click', (event) => { event.preventDefault(); select(tab); });
+        tab.addEventListener('keydown', (event) => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowLeft' ? -1 : 1) + tabs.length) % tabs.length;
+            select(tabs[next]);
+            tabs[next].focus();
+        });
+    });
+    if (tabs[0]) select(tabs[0]);
+}
+
 export async function mountPublicStudioNow() {
     const root = document.querySelector("[data-studio-story]");
     if (!root || root.dataset.studioMounted === "true") return;
     root.dataset.studioMounted = "true";
+
+    mountCapabilityGuide();
+    mountDemoGuide();
 
     const frame = root.querySelector("[data-studio-frame]");
     const triggers = [...root.querySelectorAll("[data-studio-step]")];

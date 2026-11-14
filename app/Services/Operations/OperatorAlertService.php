@@ -10,13 +10,14 @@ use App\Models\ServiceInquiry;
 use App\Models\Tenant;
 use App\Models\TenantModuleAccessRequest;
 use App\Models\TenantSupportTicket;
-use App\Services\Marketing\TwilioSmsService;
+use App\Services\Marketing\TwilioProviderClient;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 
 class OperatorAlertService
 {
-    public function __construct(private TwilioSmsService $sms) {}
+    // Operational notices use Everbranch's provider account, never tenant messaging or usage.
+    public function __construct(private TwilioProviderClient $sms) {}
 
     /** @param array<string,mixed> $context */
     public function notify(string $eventKey, string $message, array $context = []): void
@@ -30,6 +31,34 @@ class OperatorAlertService
             return;
         }
 
+        $this->deliver($log, $eventKey, $message, $destination, $context);
+    }
+
+    /** Retry a provider rejection; never replay a sent or uncertain delivery. */
+    public function retryFailed(int $alertId): void
+    {
+        $log = OperatorAlertLog::query()->find($alertId);
+        if (! $log || $log->status !== 'failed' || ! ($log->metadata['retryable'] ?? false)) {
+            return;
+        }
+
+        Cache::lock('operator-alert-retry:'.$alertId, 120)->get(function () use ($log): void {
+            $log->refresh();
+            if ($log->status !== 'failed') {
+                return;
+            }
+            $context = $this->hydratedContext((array) ($log->metadata['context'] ?? []));
+            $context['dedupe_key'] = $log->dedupe_key;
+            Cache::forget('operator-alert:'.$log->dedupe_key);
+            $log->forceFill(['status' => 'reserved'])->save();
+            $this->deliver($log, $log->event_key, $log->message, $log->destination, $context);
+        });
+    }
+
+    /** @param array<string,mixed> $context */
+    private function deliver(OperatorAlertLog $log, string $eventKey, string $message, string $destination, array $context): void
+    {
+        $dedupe = (string) $log->dedupe_key;
         $suppressionReasons = $this->nonRealEventReasons($eventKey, $message, $context);
         if ($suppressionReasons !== []) {
             $this->markAlert($log, 'suppressed', [
@@ -64,15 +93,23 @@ class OperatorAlertService
             return;
         }
 
-        $result = $this->sms->sendSms($destination, $message, [
-            'source_type' => 'operator_alert',
-            'source_id' => $context['target_id'] ?? null,
-            'idempotency_key' => 'operator-alert:'.$dedupe,
-        ]);
+        try {
+            $result = $this->sms->sendSms($destination, $message, [
+                'source_type' => 'operator_alert',
+                'source_id' => $context['target_id'] ?? null,
+                'idempotency_key' => 'operator-alert:'.$dedupe,
+                'sender_key' => (string) config('everbranch.operator_alert_sender_key', 'legacy_default'),
+            ]);
+        } catch (\Throwable) {
+            $this->markAlert($log, 'unknown', ['error' => 'transport_exception', 'retryable' => false]);
+
+            return;
+        }
 
         $this->markAlert($log, ($result['success'] ?? false) ? 'sent' : 'failed', [
             'provider' => $result['provider'] ?? null,
             'error' => $result['error_code'] ?? null,
+            'retryable' => in_array((string) ($result['error_code'] ?? ''), ['429', '20429', 'rate_limited', '503', 'service_unavailable'], true),
         ]);
     }
 

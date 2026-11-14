@@ -32,13 +32,13 @@ test('promo page renders the public studio story and preserves conversion paths'
         ->assertSee('everbranch-hvac-electrical-field.jpg', false)
         ->assertSee('everbranch-field-owner-office.jpg', false)
         ->assertSee('data-studio-hero-slide', false)
-        ->assertSeeText('Your business has a rhythm.')
-        ->assertSeeText('Everbranch helps you keep it.')
+        ->assertSeeText('Your business,')
+        ->assertSeeText('connected.')
         ->assertSeeText('A customer asks')
         ->assertSeeText('Your team moves')
         ->assertSeeText('The relationship continues')
         ->assertSeeText('Who it helps')
-        ->assertSeeText('A platform that expands with you')
+        ->assertSeeText('Find your next branch.')
         ->assertSeeText('Open a fictional website and operations-workspace example')
         ->assertSeeText('Get started')
         ->assertSee(route('platform.plans'), false)
@@ -64,9 +64,9 @@ test('contact placeholder page renders configured channels', function () {
     $this->get(route('platform.contact'))
         ->assertOk()
         ->assertSee('data-premium-motion="public"', false)
-        ->assertSeeText('Tell Everbranch what keeps getting lost.')
-        ->assertSeeText('Send the messy version. We will help you find the clean starting point for your business.')
-        ->assertSeeText('Login');
+        ->assertSeeText('Let’s talk.')
+        ->assertSeeText('Tell us what you need. We will help with the next step.')
+        ->assertSeeText('Log in');
 });
 
 test('embedded start-here page renders onboarding checklist surface', function () {

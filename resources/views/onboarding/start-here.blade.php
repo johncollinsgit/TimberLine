@@ -54,6 +54,7 @@
     <div class="mx-auto my-5 max-w-5xl px-4"><a class="inline-flex min-h-11 items-center rounded-lg bg-emerald-900 px-5 py-3 font-semibold text-white" href="{{ route('workspace-settings.setup', ['tenant' => $tenant->slug]) }}">Open your tailored setup guide →</a></div>
     <flux:main>
         <div class="fb-workflow-shell">
+            @include('onboarding.partials.guide-nav', ['active' => 'setup'])
             @if($showGuidedFirstLogin)
                 <section class="mb-6 grid gap-6 xl:grid-cols-[minmax(0,_0.82fr)_minmax(0,_1.18fr)]" data-first-login-welcome="true">
                     <article class="overflow-hidden rounded-[32px] border border-zinc-200 bg-[radial-gradient(circle_at_top_left,_rgba(236,247,244,0.98),_rgba(255,255,255,1)_48%,_rgba(247,249,250,1))] p-6 shadow-[0_36px_80px_-54px_rgba(15,23,42,0.28)] md:p-8">

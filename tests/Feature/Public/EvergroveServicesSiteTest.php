@@ -3,7 +3,7 @@
 use App\Models\OperatorAlertLog;
 use App\Models\ServiceInquiry;
 use App\Models\User;
-use App\Services\Marketing\TwilioSmsService;
+use App\Services\Marketing\TwilioProviderClient;
 
 beforeEach(function (): void {
     $this->withoutVite();
@@ -56,8 +56,8 @@ test('everbranch public host keeps the everbranch product surface', function ():
     $this->get('http://theeverbranch.com/')
         ->assertOk()
         ->assertSee('class="fb-public-body eb-studio-body"', false)
-        ->assertSeeText('Your business has a rhythm.')
-        ->assertSeeText('Everbranch helps you keep it.')
+        ->assertSeeText('Your business,')
+        ->assertSeeText('connected.')
         ->assertSeeText('Get started')
         ->assertSeeText('Who it helps')
         ->assertSeeText('Contact')
@@ -83,7 +83,7 @@ test('everbranch public host keeps the everbranch product surface', function ():
 test('everbranch contact page stores messages in the landlord queue', function (): void {
     $this->get('http://theeverbranch.com/platform/contact')
         ->assertOk()
-        ->assertSeeText('Tell Everbranch what keeps getting lost.')
+        ->assertSeeText('Let’s talk.')
         ->assertSee('name="source_page" value="everbranch_contact"', false)
         ->assertSeeText('Send message');
 
@@ -109,7 +109,7 @@ test('everbranch walkthrough requests send one production safe operator text wit
     config()->set('everbranch.operator_alert_sms_enabled', true);
     config()->set('everbranch.operator_alert_phone', '+1 (555) 010-0101');
 
-    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio = \Mockery::mock(TwilioProviderClient::class);
     $twilio->shouldReceive('sendSms')
         ->once()
         ->with(
@@ -118,11 +118,11 @@ test('everbranch walkthrough requests send one production safe operator text wit
             \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
         )
         ->andReturn(['success' => true, 'provider' => 'twilio', 'error_code' => null]);
-    app()->instance(TwilioSmsService::class, $twilio);
+    app()->instance(TwilioProviderClient::class, $twilio);
 
     $this->get('http://theeverbranch.com/platform/contact?intent=walkthrough')
         ->assertOk()
-        ->assertSeeText('Book a working session with Everbranch.')
+        ->assertSeeText('Let’s take a look.')
         ->assertSee('name="source_page" value="everbranch_walkthrough"', false)
         ->assertSeeText('Request a meeting');
 

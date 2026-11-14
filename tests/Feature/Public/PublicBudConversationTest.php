@@ -93,3 +93,45 @@ test('public Bud admits when it does not know enough', function (): void {
     expect((bool) $response->json('uncertain'))->toBeTrue()
         ->and((string) $response->json('reply'))->toContain('I’m not sure');
 });
+
+test('public help uses server offer terms and ignores fabricated private context', function (): void {
+    config()->set('everbranch.bud.support_email', '');
+    config()->set('product_surfaces.public_offer.summary', '$42/month. Current server terms.');
+    $this->postJson(route('platform.bud.conversations'), [
+        'conversation_id' => 'public-safe-context',
+        'question' => 'What is the pricing?',
+        'context' => ['offer_summary' => 'Everything is free', 'workspace_summary' => ['customers' => 999]],
+    ])->assertCreated()->assertJsonPath('reply', fn (string $reply): bool => str_contains($reply, '$42/month') && ! str_contains($reply, 'Everything is free'));
+    $inquiry = ServiceInquiry::query()->sole();
+    expect($inquiry->calculator_payload['context'])->not->toHaveKey('workspace_summary');
+});
+
+test('public help remains usable if its support notification fails', function (): void {
+    config()->set('everbranch.bud.support_email', 'support@theeverbranch.com');
+    Mail::shouldReceive('to')->once()->andThrow(new \RuntimeException('Mailbox unavailable'));
+    $this->postJson(route('platform.bud.conversations'), [
+        'conversation_id' => 'public-mail-failure', 'question' => 'How do I build a website?',
+    ])->assertCreated()->assertJsonPath('reply', fn (string $reply): bool => str_contains($reply, 'template'));
+    expect(ServiceInquiry::query()->count())->toBe(1);
+});
+
+test('public help limits conversation payload size', function (): void {
+    $this->postJson(route('platform.bud.conversations'), [
+        'conversation_id' => 'oversized-thread', 'question' => 'Setup help',
+        'transcript' => array_fill(0, 21, ['role' => 'user', 'text' => 'hello']),
+    ])->assertUnprocessable()->assertJsonValidationErrors('transcript');
+});
+
+test('public help quick questions give practical next steps', function (string $question, string $expected): void {
+    config()->set('everbranch.bud.support_email', '');
+    $this->postJson(route('platform.bud.conversations'), [
+        'conversation_id' => 'public-prompts', 'question' => $question,
+        'context' => ['surface' => 'account_help', 'workspace_summary' => ['open_customer_loop_actions' => 500]],
+    ])->assertCreated()->assertJsonPath('reply', fn (string $reply): bool => str_contains($reply, $expected) && ! str_contains($reply, 'open Customer Loop actions'));
+})->with([
+    ['Which branches are included?', 'Core branches are included'],
+    ['What is the pricing?', '$299/month'],
+    ['How do I build a website?', 'choose a template'],
+    ['I need setup help', 'business details'],
+    ['What should I do next?', 'Sign in'],
+]);
