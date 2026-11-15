@@ -1,5 +1,8 @@
 import '../../css/team-operations.css';
 import '../../css/team-events.css';
+import '../../css/team-event-reporting.css';
+import { installEventPerformance } from './event-performance';
+import { installEventSalesHistory } from './event-sales-history';
 import { installEventTasks } from './event-tasks';
 import { installEventDetail, eventDetailTitle, hasEventTravelDrafts } from './event-detail';
 import { installEventUpdates, hasEventUpdateDrafts } from './event-updates';
@@ -26,17 +29,17 @@ export function installOperations(nativeRoot) {
   const originalPosition = document.createComment('Teams work area position');
   root.before(originalPosition);
   const eventTasks = installEventTasks({ api, el, button, field, dialog, section, note, area: () => area, content: $('content'), navigate });
-  let eventDetail, eventUpdates;
+  let eventDetail, eventUpdates, eventPerformance, selectedDetailId;
   const detailFooter = el('footer', '', 'event-detail-footer'); $('detail').append(detailFooter);
   function retireDetail(seal = false) { eventDetail?.dispose(); eventUpdates?.dispose({ seal }); eventDetail = eventUpdates = null; detailFooter.replaceChildren(); }
-  document.addEventListener('team:access-lost', () => { identityLost = true; serial++; personalTicket++; keepDraft(); retireDetail(true); $('content').replaceChildren(); $('personal').replaceChildren(); $('personal').hidden = true; $('detail-body').replaceChildren(); $('detail').close(); $('editor').close(); });
+  document.addEventListener('team:access-lost', () => { eventPerformance?.dispose(); eventPerformance = null; identityLost = true; serial++; personalTicket++; keepDraft(); retireDetail(true); $('content').replaceChildren(); $('personal').replaceChildren(); $('personal').hidden = true; $('detail-body').replaceChildren(); $('detail').close(); $('editor').close(); });
   async function api(path, options = {}) {
     if (identityLost && !options.verify) throw new Error('Verify the original account before continuing. Area drafts are retained in this page.');
     const url = new URL(root.dataset.url + path, location.origin);
     url.searchParams.set('tenant', root.dataset.tenant);
     if (area) url.searchParams.set('area', area.id);
     Object.entries(options.query || {}).forEach(([key, value]) => { if (value !== null && value !== undefined && value !== '') url.searchParams.set(key, value); });
-    const response = await fetch(url, { credentials: 'same-origin', method: options.method || 'GET', headers: { Accept: 'application/json', 'Content-Type': options.raw ? 'application/octet-stream' : 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '', 'X-Team-Viewer': root.dataset.user, 'X-Team-Workspace': nativeRoot.dataset.workspaceId }, body: options.body !== undefined ? (options.raw ? options.body : JSON.stringify(options.body)) : undefined });
+    const response = await fetch(url, { signal: options.signal, credentials: 'same-origin', method: options.method || 'GET', headers: { Accept: 'application/json', 'Content-Type': options.raw ? 'application/octet-stream' : 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '', 'X-Team-Viewer': root.dataset.user, 'X-Team-Workspace': nativeRoot.dataset.workspaceId }, body: options.body !== undefined ? (options.raw ? options.body : JSON.stringify(options.body)) : undefined });
     let data;
     try { data = await response.json(); } catch { throw new Error('The server did not return a valid response. Your draft remains available.'); }
     if ([401, 419].includes(response.status) || data.error === 'page_identity_changed' || (response.ok && (response.headers.get('X-Team-Viewer') !== root.dataset.user || response.headers.get('X-Team-Workspace') !== nativeRoot.dataset.workspaceId))) {
@@ -67,10 +70,12 @@ export function installOperations(nativeRoot) {
     wrap.append(input); form.append(wrap); return input;
   }
   function dialog(title) { detailSequence++; retireDetail(); $('detail').classList.remove('event-detail-dialog'); $('detail-close').textContent = 'Close details'; $('detail-close').removeAttribute('aria-label'); if (!$('detail').open) returnFocus = document.activeElement; $('detail-title').textContent = title; const body = el('div'); $('detail-body').replaceChildren(body); if (!$('detail').open) $('detail').showModal(); return body; }
-  function closeDetail() { retireDetail(); $('detail').close(); returnFocus?.focus(); }
+  function closeDetail() { selectedDetailId = null; retireDetail(); $('detail').close(); const url = new URL(location.href); if (url.searchParams.has('event_id')) { url.searchParams.delete('event_id'); history.replaceState(history.state, '', url); } returnFocus?.focus(); }
   $('detail-close').onclick = closeDetail;
+  window.addEventListener('popstate', () => { const selected = new URL(location.href).searchParams.get('event_id'); if ($('detail').open && !selected) closeDetail(); else if (selected && /^[0-9a-f-]{36}$/i.test(selected) && view === 'performance' && area?.profile === 'events' && (!$('detail').open || selectedDetailId !== selected)) details({ id: selected, title: 'Event details' }).catch(report); });
   $('detail').addEventListener('close', () => {
     if ($('detail').open) return;
+    selectedDetailId = null; const closedURL = new URL(location.href); if (closedURL.searchParams.has('event_id')) { closedURL.searchParams.delete('event_id'); history.replaceState(history.state, '', closedURL); }
     retireDetail();
     detailSequence++;
     // A queued native close event must not steal focus from a new user action.
@@ -83,21 +88,21 @@ export function installOperations(nativeRoot) {
     $('heading').textContent = area.name;
     $('tabs').replaceChildren(); $('groups').replaceChildren();
     const groups = Object.entries(area.groups || {}), currentGroup = groups.find(([, tabs]) => tabs.includes(view));
-    for (const [name, tabs] of groups) { const visible = tabs.filter(v => admin || !['statistics', 'staffing', 'orders', 'automations', 'campaigns'].includes(v)); if (!visible.length) continue; const b = button(name, () => { view = visible[0]; page = 1; controls(); return load(); }); b.setAttribute('aria-current', currentGroup?.[0] === name ? 'step' : 'false'); $('groups').append(b); }
-    for (const tab of (currentGroup?.[1] || area.views).filter(v => admin || !['statistics', 'staffing', 'orders', 'automations', 'campaigns'].includes(v))) {
+    for (const [name, tabs] of groups) { const visible = tabs.filter(v => admin || !['statistics', 'performance', 'staffing', 'orders', 'automations', 'campaigns'].includes(v)); if (!visible.length) continue; const b = button(name, () => { view = visible[0]; page = 1; controls(); return load(); }); b.setAttribute('aria-current', currentGroup?.[0] === name ? 'step' : 'false'); $('groups').append(b); }
+    for (const tab of (currentGroup?.[1] || area.views).filter(v => admin || !['statistics', 'performance', 'staffing', 'orders', 'automations', 'campaigns'].includes(v))) {
       const b = button(label(tab), () => { view = tab; page = 1; controls(); return load(); }); b.setAttribute('aria-current', view === tab ? 'page' : 'false'); $('tabs').append(b);
     }
     $('settings').hidden = !admin;
-    $('new').hidden = !area.capabilities?.write || ['my_tasks', 'statistics', 'documents', 'connections', 'communications', 'orders', 'staffing'].includes(view) || (!admin && ['automations', 'campaigns', 'templates'].includes(view));
+    $('new').hidden = !area.capabilities?.write || ['my_tasks', 'statistics', 'performance', 'documents', 'connections', 'communications', 'orders', 'staffing'].includes(view) || (!admin && ['automations', 'campaigns', 'templates'].includes(view));
     $('new').textContent = 'New ' + ({ pipeline: 'opportunity', followups: 'follow-up', prospects: 'prospect', campaigns: 'campaign', templates: 'template', automations: 'rule' }[view] || (area.profile === 'events' ? 'event' : 'account'));
     $('prev').hidden = $('next').hidden = true;
-    $('search').closest('label').hidden = ['my_tasks', 'connections', 'statistics', 'communications', 'orders', 'prospects', 'followups', 'templates'].includes(view);
+    $('search').closest('label').hidden = ['my_tasks', 'connections', 'statistics', 'performance', 'communications', 'orders', 'prospects', 'followups', 'templates'].includes(view);
   }
   async function openArea(item, initialView = 'overview', inline = false) {
     if (!inline && root.classList.contains('tops-inline-calendar')) restoreInline();
     if (window.TeamPremium?.context && !window.TeamPremium.context.ready()) return;
     if (area) keepDraft();
-    eventTasks.reset();
+    eventTasks.reset(); eventPerformance?.dispose(); eventPerformance = null;
     area = item; setEventCalendarTimezone(root.dataset.tenant + '|' + area.id, area.timezone); view = item.views.includes(initialView) ? initialView : 'overview'; page = 1; serial++;
     root.classList.toggle('tops-active', !inline); root.classList.toggle('tops-inline-calendar', inline); $('panel').hidden = false;
     document.querySelectorAll('#tops-areas button').forEach(b => b.setAttribute('aria-current', b.dataset.area === area.id ? 'page' : 'false'));
@@ -118,6 +123,7 @@ export function installOperations(nativeRoot) {
     entry.onclick = () => { if (!identityLost && window.TeamPremium?.context?.ready()) { $('search').value = ''; openArea(target, 'calendar').catch(report); } };
   }
   function restoreInline() {
+    eventPerformance?.dispose(); eventPerformance = null;
     inlineEpoch++; serial++; calendarPages = null; inlineOptions = null; document.getElementById('tops-inline-options')?.remove(); document.getElementById('tops-event-window-options')?.remove(); $('content').replaceChildren();
     if ($('detail').open) $('detail').close();
     root.classList.remove('tops-inline-calendar'); originalPosition.after(root);
@@ -125,7 +131,7 @@ export function installOperations(nativeRoot) {
   }
   function isEventSurface() { return !identityLost && area?.profile === 'events' && root.classList.contains('tops-inline-calendar') && !$('panel').hidden; }
   function syncMainCreate() { const active = isEventSurface(), primary = document.getElementById('tw-new-task'), sidebar = document.getElementById('teams-create'); if (primary) { primary.dataset.eventCreate = active ? '1' : '0'; primary.textContent = active ? '+ Create event' : '+ Create task'; primary.setAttribute('aria-label', active ? 'Create event' : 'Create task'); primary.disabled = active ? !area.capabilities?.write : !window.TeamPremium?.context?.data?.can_create_task; } if (sidebar) { sidebar.textContent = active ? 'Create event' : 'Create task'; sidebar.disabled = primary?.disabled ?? false; } }
-  function native() { keepDraft(); if (root.classList.contains('tops-inline-calendar')) restoreInline(); serial++; $('panel').hidden = true; root.classList.remove('tops-active'); const url = new URL(location.href); url.searchParams.delete('area'); url.searchParams.delete('area_view'); history.replaceState(null, '', url); }
+  function native() { eventPerformance?.dispose(); eventPerformance = null; keepDraft(); if (root.classList.contains('tops-inline-calendar')) restoreInline(); serial++; $('panel').hidden = true; root.classList.remove('tops-active'); const url = new URL(location.href); url.searchParams.delete('area'); url.searchParams.delete('area_view'); history.replaceState(null, '', url); }
   $('menu').onclick = () => document.querySelector('[data-teams-menu]')?.click();
   $('native').onclick = () => { native(); document.querySelector('#tw-search')?.focus(); };
   document.querySelector('.teams-sidebar')?.addEventListener('click', event => { if (event.target.closest('#teams-create') && isEventSurface()) return; if (event.target.closest('[data-team-mode],#teams-create,#teams-project-list button,#teams-favorite-list button')) native(); });
@@ -238,6 +244,16 @@ export function installOperations(nativeRoot) {
     if (!area || $('panel').hidden) return;
     // Keep the admitted view visible during the periodic check. It remains inert
     // until fresh admission succeeds; failures below still retire its records.
+    if (view === 'performance' && area.profile === 'events') {
+      if (!eventPerformance) {
+        $('content').inert = false; $('content').removeAttribute('aria-busy'); $('notice').textContent = ''; $('scope').textContent = '';
+        const selectedArea = area.id;
+        eventPerformance = installEventPerformance($('content'), { api, area, tenant: root.dataset.tenant, current: () => !identityLost && view === 'performance' && area?.id === selectedArea && !$('panel').hidden, openEvent: (id, title) => details({ id, title }).catch(report) });
+        await eventPerformance.ready;
+      } else if (!background) await eventPerformance.refresh();
+      return;
+    }
+    eventPerformance?.dispose(); eventPerformance = null;
     if (view === 'calendar' && !appendCalendar) { page = 1; calendarPages = null; if (!background) { $('content').replaceChildren(); $('scope').textContent = 'Checking selected dates…'; } }
     const ticket = ++serial, current = area.id, collectionWindow = inlineEventSurface() ? selectedEventWindow() : null;
     if (!background) $('notice').textContent = 'Loading ' + label(view).toLowerCase() + '…';
@@ -422,7 +438,7 @@ export function installOperations(nativeRoot) {
     }), label(item.status), [item.city, item.state, item.due_at ? date(item.due_at) : '', item.amount !== undefined ? '$' + item.amount : ''].filter(Boolean).join(' · ')]));
   }
   async function details(item, returnTo = null) {
-    const captured = area.id, body = dialog(item.title), sequence = detailSequence; note('Checking current access…', body);
+    const captured = area.id, body = dialog(item.title), sequence = detailSequence; selectedDetailId = item.id; note('Checking current access…', body);
     if (item.kind === 'event' || (area.profile === 'events' && view === 'calendar')) { $('detail').classList.add('event-detail-dialog'); $('detail-title').textContent = eventDetailTitle(item.title); $('detail-close').textContent = '×'; $('detail-close').setAttribute('aria-label', 'Close details'); }
     if (returnTo?.isConnected) returnFocus = returnTo;
     const current = () => sequence === detailSequence && captured === area?.id && !identityLost && $('detail').open && body.isConnected && $('detail-body').firstElementChild === body;
@@ -452,6 +468,11 @@ export function installOperations(nativeRoot) {
     if (record.data.source_url) { const a = el('a', 'Open in Asana'); a.href = record.data.source_url; a.target = '_blank'; a.rel = 'noopener noreferrer'; if (a.href.startsWith('https://app.asana.com/')) body.append(a); }
     const data = Object.entries(record.data).filter(([key, value]) => !key.startsWith('_') && !['source_url', 'fields', 'original_notes', 'source_values', 'costs', 'schedule_complete', 'calendar_color'].includes(key) && value !== null && typeof value !== 'object');
     table(['Property', 'Value'], [['Starts', date(record.starts_on)], ['Ends', date(record.ends_on)], ...data.map(([key, value]) => [label(key), String(value)])], body);
+    if (record.kind === 'financial' && area.profile === 'events' && admin) {
+      eventDetail = installEventSalesHistory(body, { record, api, current });
+      await eventDetail.ready;
+      if (!current()) return;
+    }
     if (record.kind === 'event') renderScheduleSummary(body, record, root.dataset.tenant);
     if (record.data.original_notes) { const notes = section('Original source notes', body); notes.append(el('p', record.data.original_notes, 'tops-notes')); }
     if (record.assignments) { const assignments = section('Recorded assignments and compensation', body); note(record.identity_notice, assignments); table(['Event', 'Date', 'Hours', 'Payroll', 'Pay week', 'Sheet source'], record.assignments.map(a => [a.title, date(a.starts_on), a.hours ?? 'Unknown', money(a.payroll_cents), a.pay_week ?? '—', a.source_tab + ' · row ' + a.source_row]), assignments); }
@@ -681,6 +702,6 @@ export function installOperations(nativeRoot) {
     load(false, true);
   }, 60000); } });
   document.dispatchEvent(new Event('visibilitychange'));
-  areasReady = api('/areas').then(async data => { areas = data.items; renderAreas(); const url = new URL(location.href), eventApp = url.searchParams.get('app') === 'events', initial = areas.find(a => a.id === url.searchParams.get('area')) || (eventApp ? areas.find(a => a.profile === 'events') : null); if (initial) await openArea(initial, url.searchParams.get('area_view') || (eventApp ? 'my_tasks' : 'overview')); }).catch(report);
+  areasReady = api('/areas').then(async data => { areas = data.items; renderAreas(); const url = new URL(location.href), eventApp = url.searchParams.get('app') === 'events', initial = areas.find(a => a.id === url.searchParams.get('area')) || (eventApp ? areas.find(a => a.profile === 'events') : null); if (initial) { await openArea(initial, url.searchParams.get('area_view') || (eventApp ? 'my_tasks' : 'overview')); const selectedEvent = url.searchParams.get('event_id'); if (selectedEvent && /^[0-9a-f-]{36}$/i.test(selectedEvent)) await details({ id: selectedEvent, title: 'Event details' }); } }).catch(report);
   areasReady.then(() => setup?.inspect()).catch(report);
 }

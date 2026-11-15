@@ -29,6 +29,8 @@ class PosEventSales
         $refunds = 0;
         $refundsComplete = true;
         $operators = [];
+        $operatorNet = [];
+        $operatorComplete = [];
         $locations = [];
         $daily = [];
         $tenders = [];
@@ -104,14 +106,17 @@ class PosEventSales
                 $paid += (int) $sale->amount_minor;
                 $refunds += $refund;
                 $day = \Carbon\CarbonImmutable::parse($sale->created_at, 'UTC')->setTimezone($timezone)->toDateString();
-                $daily[$day] ??= ['date' => $day, 'sale_count' => 0, 'net_sales_minor' => 0, 'complete' => true];
+                $daily[$day] ??= ['date' => $day, 'sale_count' => 0, 'net_sales_minor' => 0, 'minute_sales' => [], 'complete' => true];
                 $daily[$day]['sale_count']++;
                 $operators[(string) $sale->actor_id] = ($operators[(string) $sale->actor_id] ?? 0) + 1;
+                $operatorNet[(string) $sale->actor_id] ??= 0;
+                $operatorComplete[(string) $sale->actor_id] ??= true;
                 $key = Contract::hash([$snapshot['location_name'], $snapshot['configuration']['shopify']['tax_address'] ?? null]);
                 $locations[$key] = ['name' => $snapshot['location_name'], 'tax_address' => $snapshot['configuration']['shopify']['tax_address'] ?? null];
                 if ($netRefund === null) {
                     $issues[] = 'A partial refund needs its reviewed item/tax allocation before net revenue can be calculated.';
                     $daily[$day]['complete'] = false;
+                    $operatorComplete[(string) $sale->actor_id] = false;
 
                     continue;
                 }
@@ -119,6 +124,9 @@ class PosEventSales
                 $net += $saleNet;
                 $tax += $terms['tax_minor'] - ($refund - $netRefund);
                 $daily[$day]['net_sales_minor'] += $saleNet;
+                $minute = \Carbon\CarbonImmutable::parse($sale->created_at, 'UTC')->setTimezone($timezone)->format('H:i');
+                $daily[$day]['minute_sales'][$minute] = ($daily[$day]['minute_sales'][$minute] ?? 0) + $saleNet;
+                $operatorNet[(string) $sale->actor_id] += $saleNet;
             } catch (\Throwable) {
                 $issues[] = 'Some retained Pay receipt evidence is unavailable; totals remain incomplete.';
             }
@@ -136,7 +144,7 @@ class PosEventSales
                 $customers[$purchase['customer_id']] = true;
             }
             $day = \Carbon\CarbonImmutable::parse($purchase['occurred_at'])->setTimezone($timezone)->toDateString();
-            $daily[$day] ??= ['date' => $day, 'sale_count' => 0, 'net_sales_minor' => 0, 'complete' => true];
+            $daily[$day] ??= ['date' => $day, 'sale_count' => 0, 'net_sales_minor' => 0, 'minute_sales' => [], 'complete' => true];
             $daily[$day]['sale_count']++;
             if ($purchase['net_sales_minor'] === null) {
                 $daily[$day]['complete'] = false;
@@ -144,6 +152,8 @@ class PosEventSales
                 $net += $purchase['net_sales_minor'];
                 $tax += $purchase['net_tax_minor'];
                 $daily[$day]['net_sales_minor'] += $purchase['net_sales_minor'];
+                $minute = \Carbon\CarbonImmutable::parse($purchase['occurred_at'])->setTimezone($timezone)->format('H:i');
+                $daily[$day]['minute_sales'][$minute] = ($daily[$day]['minute_sales'][$minute] ?? 0) + $purchase['net_sales_minor'];
             }
             foreach ($purchase['tenders'] as $tender) {
                 $key = $tender['tender'];
@@ -177,7 +187,9 @@ class PosEventSales
             'customer_counts' => ['unique_buyers' => count($customers), 'attributed_orders' => $attributed, 'unattributed_orders' => $count - $attributed, 'complete' => ! $customerIssues],
             'customer_review_items' => array_values(array_unique($customerIssues)),
             'net_sales_minor' => $issues ? null : $net, 'known_net_sales_minor' => $net, 'sales_tax_minor' => $issues ? null : $tax,
-            'operators' => array_map(fn ($id, $sales) => ['user_id' => (string) $id, 'sale_count' => $sales], array_keys($operators), array_values($operators)),
+            'operators' => array_map(fn ($id, $sales) => ['user_id' => (string) $id, 'sale_count' => $sales,
+                'net_sales_minor' => ($operatorComplete[$id] ?? false) ? $operatorNet[$id] : null,
+                'known_net_sales_minor' => $operatorNet[$id] ?? 0, 'complete' => $operatorComplete[$id] ?? false], array_keys($operators), array_values($operators)),
             'locations' => array_values($locations), 'daily' => array_values($daily), 'review_items' => array_values(array_unique($issues)), 'as_of' => now()->toIso8601String()];
     }
 }

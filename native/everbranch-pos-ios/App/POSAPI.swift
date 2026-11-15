@@ -12,6 +12,7 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
 
 struct StockCountRejected: Error { let code: String }
 struct CustomerCreationRejected: Error { let code: String }
+struct EventHistoryUnavailable: Error {}
 
 @MainActor final class POSAPI {
     let origin: URL
@@ -71,6 +72,7 @@ struct CustomerCreationRejected: Error { let code: String }
         guard let http = response as? HTTPURLResponse else { throw POSError.unavailable("No server response.") }
         if http.statusCode == 401 { throw POSError.signInRequired }
         guard (200...299).contains(http.statusCode) else {
+            if path.hasSuffix("/event-history") && [403, 404, 422].contains(http.statusCode) { throw EventHistoryUnavailable() }
             let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let code = (value?["error"] as? [String: Any])?["code"] as? String ?? "request_\(http.statusCode)"
             if method == "POST" && path.hasSuffix("/customers") && (http.statusCode == 422 || code == "select_existing_customer") {
@@ -410,7 +412,7 @@ final class POSCheckoutFixtureProtocol: URLProtocol {
             else if url.path == "/api/mobile/v1/workspaces/fixture/pos/registers" {
                 let blocked = ProcessInfo.processInfo.arguments.contains("--pos-readiness-delayed-ui-tests") && !Self.isReadinessEnabled()
                 let blockers = blocked ? ["old_setup"] : []
-                data = try JSONSerialization.data(withJSONObject: ["runtime_id": "fixture", "registers": [["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": blockers, "setup_blockers": blockers, "guest_checkout": true, "rewards_redemption_available": ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests"), "can_manage_inventory": ProcessInfo.processInfo.arguments.contains("--pos-stock-count-ui-tests"), "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests"), "cash_available": ProcessInfo.processInfo.arguments.contains("--pos-connected-ui-tests"), "staff_rewards_available": ProcessInfo.processInfo.arguments.contains("--pos-connected-ui-tests"), "can_view_event_stats": ProcessInfo.processInfo.arguments.contains("--pos-connected-ui-tests")]]])
+                data = try JSONSerialization.data(withJSONObject: ["runtime_id": "fixture", "registers": [["id": "fixture", "name": "Fictional register", "location": "Fixture", "catalog_source": "shopify", "environment": "sandbox", "blockers": blockers, "setup_blockers": blockers, "guest_checkout": true, "rewards_redemption_available": ProcessInfo.processInfo.arguments.contains("--pos-rewards-ui-tests"), "can_manage_inventory": ProcessInfo.processInfo.arguments.contains("--pos-stock-count-ui-tests"), "can_manage_checkout_rules": ProcessInfo.processInfo.arguments.contains("--pos-online-rules-ui-tests") || ProcessInfo.processInfo.arguments.contains("--pos-addon-rules-ui-tests"), "cash_available": ProcessInfo.processInfo.arguments.contains("--pos-connected-ui-tests"), "staff_rewards_available": ProcessInfo.processInfo.arguments.contains("--pos-connected-ui-tests"), "can_view_event_history": ProcessInfo.processInfo.arguments.contains("--pos-connected-history-tests"), "can_view_event_stats": ProcessInfo.processInfo.arguments.contains("--pos-connected-ui-tests")]]])
             }
             else if ProcessInfo.processInfo.arguments.contains("--pos-readiness-ui-tests") && url.path.hasSuffix("/authorize-device") {
                 data = Data(#"{"application_id":"fixture","access_token":"fixture","location_id":"fixture","merchant_id":"fixture","environment":"sandbox","can_link_apple_account":false}"#.utf8)

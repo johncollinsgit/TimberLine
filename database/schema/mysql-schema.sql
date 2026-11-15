@@ -8495,12 +8495,12 @@ DROP TABLE IF EXISTS `rental_events`;
 CREATE TABLE `rental_events` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
-  `property_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `property_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `actor_id` bigint unsigned NOT NULL,
-  `request_key` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `request_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_key` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_hash` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `version` bigint unsigned NOT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `revent_request` (`tenant_id`,`property_id`,`actor_id`,`request_key`),
@@ -8511,10 +8511,10 @@ DROP TABLE IF EXISTS `rental_properties`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `rental_properties` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
   `version` bigint unsigned NOT NULL DEFAULT '0',
-  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -10688,6 +10688,37 @@ CREATE TABLE `team_channels` (
   CONSTRAINT `team_channel_actor_fk` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `team_channel_job_fk` FOREIGN KEY (`field_service_job_id`) REFERENCES `field_service_jobs` (`id`) ON DELETE CASCADE,
   CONSTRAINT `team_channel_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_event_performance_facts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_event_performance_facts` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `area_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `generation` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `group_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `customer_id` bigint unsigned DEFAULT NULL,
+  `local_date` date NOT NULL,
+  `ends_on` date NOT NULL,
+  `net_sales_minor` bigint DEFAULT NULL,
+  `known_net_sales_minor` bigint NOT NULL DEFAULT '0',
+  `paid_total_minor` bigint DEFAULT NULL,
+  `sale_count` int unsigned NOT NULL DEFAULT '0',
+  `selling_days` int unsigned NOT NULL DEFAULT '0',
+  `complete` tinyint(1) NOT NULL DEFAULT '0',
+  `search_tokens` json NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `tepf_source` (`tenant_id`,`generation`,`kind`,`source_key`),
+  KEY `tepf_date` (`tenant_id`,`area_id`,`generation`,`kind`,`local_date`),
+  KEY `tepf_group` (`tenant_id`,`generation`,`kind`,`group_key`),
+  KEY `tepf_event` (`tenant_id`,`generation`,`event_id`),
+  KEY `tepf_customer` (`tenant_id`,`generation`,`customer_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `team_file_chunks`;
@@ -14630,3 +14661,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (334,'2026_11_05_14
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (335,'2026_11_06_220000_create_customer_account_fences',51);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (336,'2026_11_08_190000_add_team_file_event_targets',52);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (337,'2026_11_11_190000_create_rental_workspaces',53);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (338,'2026_11_15_160000_create_team_event_performance_facts',54);

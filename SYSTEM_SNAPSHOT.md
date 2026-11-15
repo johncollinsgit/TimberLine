@@ -1,3 +1,16 @@
+## Shared Events reporting (November 15; source candidate)
+
+Browser Everbranch Events reuses Teams event identities and canonical customer
+commerce evidence for linked event, team-member, customer and weekend views.
+Reviewed historical occurrence/source scopes include inactive Square locations;
+sales-only assignment access remains distinct from payroll and customer access.
+Background indexed reporting separates whole-cohort totals from paginated rows.
+Original Pay/Square IDs deduplicate revenue; missing coverage stays unknown.
+The Pay history surface consumes the same occurrence report. See
+`docs/operations/events-central.md` for metrics, source mapping, performance targets
+and protected-release/live-source acceptance. Source installation alone does not
+prove completed Modern Forestry history or an installed signed Pay update.
+
 ## Shared property workspace (November 11; source candidate, disabled)
 
 The tenant-owned `/rentals` application uses encrypted property aggregates,

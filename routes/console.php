@@ -325,6 +325,9 @@ Schedule::command('website:dispatch-order-notifications')->everyMinute()->withou
 
 // Retention also applies while the paid AI runtime is disabled.
 Schedule::command('team:sync-operations')->everyMinute()->when(fn () => (bool) config('team_operations.enabled'))->withoutOverlapping(5);
+Schedule::command('team:refresh-event-performance')->everyMinute()->when(fn () => (bool) config('team_operations.enabled'))->withoutOverlapping(5);
+Schedule::command('queue:work', ['event_performance', '--queue' => 'event-performance', '--stop-when-empty' => true, '--tries' => 2, '--sleep' => 1, '--timeout' => 600])
+    ->everyMinute()->when(fn () => (bool) config('team_operations.enabled'))->withoutOverlapping(15)->runInBackground();
 Schedule::command('team:remind-operations')->everyMinute()->when(fn () => (bool) config('team_operations.enabled'))->withoutOverlapping(5);
 
 Schedule::command('ai-branch:prune --apply')->dailyAt('03:40')->withoutOverlapping(20);

@@ -8,6 +8,7 @@ Route::prefix('mobile/v1/workspaces/{tenant}/team-work')->name('mobile.v1.team-w
     ->middleware(['auth:sanctum', 'mobile.tenant', EnsureTeamWorkMobileEnabled::class, \App\Http\Middleware\EnsureTeamWorkViewer::class, 'throttle:120,1'])
     ->group(function (): void {
         Route::middleware('abilities:mobile:read')->group(function (): void {
+            Route::get('/event-performance', \App\Http\Controllers\TeamEventPerformanceController::class)->name('event-performance');
             Route::get('/setup', \App\Http\Controllers\TeamSetupController::class)->defaults('action', 'status')->name('setup');
             Route::get('/customers/events', \App\Http\Controllers\TeamCustomerLookupController::class)->defaults('action', 'events')->name('customers.events');
             Route::get('/customers/{profile}', \App\Http\Controllers\TeamCustomerLookupController::class)->whereNumber('profile')->defaults('action', 'detail')->name('customers.detail');

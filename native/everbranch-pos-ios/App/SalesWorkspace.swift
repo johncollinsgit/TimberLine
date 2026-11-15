@@ -24,6 +24,7 @@ private struct EventSalesSummary: Decodable {
         struct Freshness: Decodable { let squareOldestSelectedSync: String? }
         let saleCount: Int
         let netSalesMinor: Int?
+        let knownNetSalesMinor: Int?
         let paidTotalMinor: Int
         let confirmedRefundsMinor: Int
         let refundsComplete: Bool?
@@ -46,6 +47,7 @@ struct SalesWorkspaceView: View {
     let api: POSAPI
     let base: String
     let canViewSummary: Bool
+    var canViewHistory: Bool = false
     @Environment(\.dismiss) private var dismiss
     @State private var rows: [ServerSale] = []
     @State private var nextCursor: String?
@@ -63,7 +65,7 @@ struct SalesWorkspaceView: View {
                     if let summary {
                         Text(summary.eventName).font(.title2.weight(.semibold))
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                            stat("Net sales", summary.sales.netSalesMinor.map(POSMoney.display) ?? "Needs review")
+                            stat(summary.sales.netSalesMinor == nil ? "Known net sales" : "Net sales", (summary.sales.netSalesMinor ?? (summary.sales.saleCount > 0 ? summary.sales.knownNetSalesMinor : nil)).map(POSMoney.display) ?? "Needs review")
                             stat("Orders", String(summary.sales.saleCount))
                             stat("Sales tax", summary.sales.salesTaxMinor.map(POSMoney.display) ?? "Needs review")
                             stat("Collected", summary.sales.refundsComplete == false ? "Needs review" : POSMoney.display(summary.sales.collectedTotalMinor ?? (summary.sales.paidTotalMinor - summary.sales.confirmedRefundsMinor)))
@@ -87,6 +89,7 @@ struct SalesWorkspaceView: View {
                             }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 10)
                         }
                     }
+                    if canViewHistory { EventHistoryPanel(api: api, base: base) }
                     Toggle("Needs customer attribution", isOn: $unattributed).padding(14).background(PayTheme.cream, in: RoundedRectangle(cornerRadius: 14))
                     Text("Register receipts").font(.headline)
                     Text("Pay and cash receipts from this register, across sessions. Event totals can also include reviewed Square purchases.").font(.caption).foregroundStyle(PayTheme.muted)
@@ -157,6 +160,81 @@ struct SalesWorkspaceView: View {
     private func clearForChangedSession() {
         rows = []; summary = nil; nextCursor = nil; asOf = ""
         notice = "Your sign-in changed. Reopen Sales to continue."
+    }
+}
+
+
+private struct EventHistoryPanel: View {
+    let api: POSAPI
+    let base: String
+    @State private var history: EventSalesHistory?
+    @State private var weekday = false
+    @State private var loading = false
+    @State private var message: String?
+    @State private var originalSession: String?
+    @State private var unavailable = false
+    var body: some View {
+        if !unavailable { VStack(alignment: .leading, spacing: 12) {
+            Text("Event sales history").font(.headline)
+            if let history {
+                historyStat("Confirmed sales so far", history.current.netSalesMinor ?? ((history.current.saleCount ?? 0) > 0 ? history.current.knownNetSalesMinor : nil))
+                HStack(alignment: .top, spacing: 20) {
+                    historyStat("Average per event", history.benchmarks.averageEventNetSalesMinor)
+                    historyStat("Average per selling day", history.benchmarks.averageDayNetSalesMinor)
+                }
+                Text("\(history.benchmarks.occurrenceCount) prior occurrences · \(history.benchmarks.years.map(String.init).joined(separator: ", "))").font(.caption).foregroundStyle(PayTheme.muted)
+                if history.current.partial { Text("Current event in progress. Today's sales are partial.").font(.caption).foregroundStyle(PayTheme.muted) }
+                if let pace = history.comparisons.intraday, pace.available {
+                    Text("Through \(pace.throughLocalTime ?? "now") · event local time").font(.subheadline.weight(.medium))
+                    HStack(alignment: .top, spacing: 20) {
+                        historyStat("Known sales so far", pace.currentNetSalesMinor)
+                        historyStat("Historical day \(pace.eventDay ?? 0) at the same time", pace.historicalAverageNetSalesMinor)
+                    }
+                    if pace.currentSourceCoverageComplete == false { Text("Source coverage may be incomplete.").font(.caption).foregroundStyle(PayTheme.muted) }
+                }
+                DisclosureGroup("Daily comparisons") {
+                    Picker("Compare by", selection: $weekday) { Text("Event day").tag(false); Text("Weekday").tag(true) }.pickerStyle(.segmented)
+                    ForEach(Array((weekday ? history.comparisons.weekday : history.comparisons.eventDay).enumerated()), id: \.offset) { _, row in
+                        HStack { Text(row.label); Spacer(); VStack(alignment: .trailing) { Text(row.currentNetSalesMinor.map(POSMoney.display) ?? "Not available"); Text("Average \(row.historicalAverageNetSalesMinor.map(POSMoney.display) ?? "not available")").font(.caption).foregroundStyle(PayTheme.muted) } }.padding(.vertical, 6)
+                    }
+                }
+                DisclosureGroup("Previous years") {
+                    ForEach(Array(history.history.enumerated()), id: \.offset) { _, event in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack { Text(event.startsOn ?? "Unscheduled"); Spacer(); Text((event.netSalesMinor ?? event.reportedNetSalesMinor).map(POSMoney.display) ?? "Not available") }
+                            Text(event.staff.map(\.name).joined(separator: ", ")).font(.caption).foregroundStyle(PayTheme.muted)
+                            if event.netSalesMinor == nil { Text("Workbook only · unverified").font(.caption).foregroundStyle(PayTheme.muted) }
+                        }.padding(.vertical, 6)
+                    }
+                }
+                if !history.reviewItems.isEmpty { DisclosureGroup("Coverage and review") { Text(history.reviewItems.joined(separator: " ")).font(.caption).foregroundStyle(PayTheme.muted) } }
+                if let url = browserURL(history.eventId) { Link("Open event in Everbranch", destination: url).font(.subheadline.weight(.medium)) }
+                if let asOf = history.asOf { Text("Updated \(asOf)").font(.caption2).foregroundStyle(PayTheme.muted) }
+            } else if loading { ProgressView("Loading comparisons…") }
+            if let message { Text(message).font(.caption).foregroundStyle(PayTheme.muted); Button("Refresh history") { Task { await refresh() } } }
+        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: RoundedRectangle(cornerRadius: 14))
+            .task(id: base) {
+                originalSession = api.token; await refresh()
+                while !Task.isCancelled && !unavailable {
+                    do { try await Task.sleep(for: .seconds(30)) } catch { break }
+                    await refresh()
+                }
+            }
+        }
+    }
+    private func historyStat(_ title: String, _ amount: Int?) -> some View { VStack(alignment: .leading, spacing: 5) { Text(title).font(.caption).foregroundStyle(PayTheme.muted); Text(amount.map(POSMoney.display) ?? "Not available").font(.title3.weight(.semibold)) }.frame(maxWidth: .infinity, alignment: .leading) }
+    private func browserURL(_ event: String) -> URL? {
+        guard let tenant = base.split(separator: "/").firstIndex(of: "workspaces").flatMap({ index in base.split(separator: "/").dropFirst(index + 1).first }) else { return nil }
+        var url = URLComponents(url: api.origin.appendingPathComponent("teams/app"), resolvingAgainstBaseURL: false)
+        url?.queryItems = [URLQueryItem(name: "tenant", value: String(tenant)), URLQueryItem(name: "app", value: "events"), URLQueryItem(name: "area_view", value: "events"), URLQueryItem(name: "event_id", value: event)]
+        return url?.url
+    }
+    private func refresh() async {
+        guard !loading, let token = api.token, token == originalSession else { history = nil; return }
+        loading = true; defer { loading = false }
+        do { let value: EventSalesHistory = try await api.request(base + "/event-history"); guard !Task.isCancelled, api.token == token else { history = nil; return }; history = value; message = nil }
+        catch is EventHistoryUnavailable { history = nil; unavailable = true }
+        catch { if api.token != token || (error as? POSError) == .signInRequired { history = nil; message = "Your sign-in changed. Reopen Sales to continue." } else { message = "Event history couldn't refresh. Your receipts are still available." } }
     }
 }
 

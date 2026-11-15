@@ -19,6 +19,18 @@ final class ConnectedEventTests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
         XCTAssertTrue(app.textFields["Phone"].waitForExistence(timeout: 10))
     }
+    func testHistoricalEventSalesShowsFormerCrewAndDailyModes() {
+        let app = app(["--pos-connected-history-tests"])
+        XCTAssertTrue(app.buttons["Sales"].waitForExistence(timeout: 10)); app.buttons["Sales"].tap()
+        XCTAssertTrue(app.staticTexts["Event sales history"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Average per event"].exists)
+        let daily = app.buttons["Daily comparisons"]; show(daily, in: app); daily.tap()
+        let weekday = app.buttons["Weekday"]; show(weekday, in: app); weekday.tap()
+        XCTAssertTrue(app.staticTexts["Friday"].exists)
+        let previous = app.buttons["Previous years"]; show(previous, in: app); previous.tap()
+        XCTAssertTrue(app.staticTexts["Fictional Previous Crew"].exists)
+        let browser = app.buttons["Open event in Everbranch"]; show(browser, in: app); XCTAssertTrue(browser.exists)
+    }
     func testPhotoCountDraftAllowsManualCRUDAndReplaysOriginalBatchAfterClosing() {
         let app = app(["--pos-stock-count-ui-tests"])
         XCTAssertTrue(app.buttons["Count stock · photo or manual"].waitForExistence(timeout: 10)); app.buttons["Count stock · photo or manual"].tap()

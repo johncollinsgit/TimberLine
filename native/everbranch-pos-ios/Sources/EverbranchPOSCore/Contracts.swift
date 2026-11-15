@@ -26,6 +26,7 @@ public enum POSAuthorization {
 }
 public struct Register: Decodable, Identifiable, Sendable {
     public let canViewEventStats: Bool?
+    public let canViewEventHistory: Bool?
     public let cashAvailable: Bool?
     public let staffRewardsAvailable: Bool?
     public let rewardsRedemptionAvailable: Bool?
@@ -209,4 +210,57 @@ public enum POSMoney {
     public static func display(_ amount: Int) -> String {
         String(format: "$%d.%02d", amount / 100, amount % 100)
     }
+}
+
+
+public struct EventSalesHistory: Decodable, Sendable {
+    public struct Staff: Decodable, Sendable { public let id: String; public let name: String }
+    public struct Day: Decodable, Sendable { public let date: String; public let eventDay: Int?; public let weekday: String?; public let netSalesMinor: Int?; public let complete: Bool? }
+    public struct Occurrence: Decodable, Sendable {
+        public let eventId: String
+        public let title: String
+        public let startsOn: String?
+        public let endsOn: String?
+        public let staff: [Staff]
+        public let netSalesMinor: Int?
+        public let knownNetSalesMinor: Int?
+        public let saleCount: Int?
+        public let reportedNetSalesMinor: Int?
+        public let sellingDays: Int?
+        public let daily: [Day]
+        public let complete: Bool
+        public let partial: Bool
+        public let basis: String
+    }
+    public struct Benchmarks: Decodable, Sendable {
+        public let averageEventNetSalesMinor: Int?
+        public let averageDayNetSalesMinor: Int?
+        public let occurrenceCount: Int
+        public let years: [Int]
+    }
+    public struct Comparison: Decodable, Sendable {
+        public let label: String
+        public let currentNetSalesMinor: Int?
+        public let historicalAverageNetSalesMinor: Int?
+        public let sampleCount: Int
+    }
+    public struct Intraday: Decodable, Sendable {
+        public let available: Bool
+        public let currentNetSalesMinor: Int?
+        public let historicalAverageNetSalesMinor: Int?
+        public let throughLocalTime: String?
+        public let sampleCount: Int?
+        public let eventDay: Int?
+        public let currentSourceCoverageComplete: Bool?
+    }
+    public struct Comparisons: Decodable, Sendable { public let eventDay: [Comparison]; public let weekday: [Comparison]; public let intraday: Intraday? }
+    public let contractVersion: Int
+    public let eventId: String
+    public let eventName: String
+    public let current: Occurrence
+    public let history: [Occurrence]
+    public let benchmarks: Benchmarks
+    public let comparisons: Comparisons
+    public let reviewItems: [String]
+    public let asOf: String?
 }

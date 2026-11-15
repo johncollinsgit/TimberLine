@@ -20,9 +20,20 @@ final class ReviewedSquareEventPurchases
 {
     public function read(int $tenant, int $event): array
     {
-        $result = ['purchases' => [], 'review_items' => [], 'customer_review_items' => [], 'last_synced_at' => null, 'deduplicated_orders' => 0];
         $occurrence = app(EventCommerceReport::class)->candidate($tenant, $event);
-        $review = $occurrence?->data['_teams_enrichment']['square_orders'] ?? [];
+        if (! $occurrence) {
+            return $this->empty();
+        }
+
+        return $this->forOccurrence($tenant, $occurrence, $event);
+    }
+
+    /** A reviewed historical allocation uses the same tender/refund/mirror admission as Pay. */
+    public function forOccurrence(int $tenant, TeamOperationRecord $occurrence, ?int $event = null, ?array $allocation = null): array
+    {
+        abort_unless((int) $occurrence->tenant_id === $tenant, 404);
+        $result = $this->empty();
+        $review = $allocation ?? ($occurrence->data['_teams_enrichment']['square_orders'] ?? []);
         $ids = array_values(array_unique(array_filter($review['ids'] ?? [], 'is_string')));
         if (! $ids || ! isset($review['reviewed_by'], $review['reviewed_at']) || ! Schema::hasTable('square_orders')) {
             return $result;
@@ -37,7 +48,8 @@ final class ReviewedSquareEventPurchases
         $allPayments = SquarePayment::forTenantId($tenant)->whereIn('square_order_id', $ids)->where('status', 'COMPLETED')->get();
         $paymentGroups = $allPayments->groupBy('square_order_id');
         $customerLinks = MarketingProfileLink::forTenantId($tenant)->where('source_type', 'square_order')->whereIn('source_id', $ids)->with('marketingProfile')->get()->groupBy('source_id');
-        $pools = app(StockLedger::class)->rows('pools', $tenant)->where('event_key', 'event:'.$event)->pluck('id')->all();
+        $paymentCustomerLinks = MarketingProfileLink::forTenantId($tenant)->where('source_type', 'square_payment')->whereIn('source_id', $allPayments->pluck('square_payment_id'))->with('marketingProfile')->get()->groupBy('source_id');
+        $pools = $event !== null && Schema::hasTable('commerce_stock_pools') ? app(StockLedger::class)->rows('pools', $tenant)->where('event_key', 'event:'.$event)->pluck('id')->all() : [];
         $mirrors = $this->payMirrors($tenant, $pools, $ids, $allPayments);
         if ($orders->count() !== count($ids)) {
             $result['review_items'][] = 'Some allocated Square orders are unavailable.';
@@ -52,6 +64,15 @@ final class ReviewedSquareEventPurchases
                 continue;
             }
             $payments = $paymentGroups->get($order->square_order_id, collect());
+            if (isset($review['source_binding'])) {
+                $binding = $review['source_binding'];
+                $matches = static fn ($raw) => collect(['merchant_id', 'environment', 'connection_id', 'connection_generation'])->every(fn ($key) => isset($binding[$key]) && (string) data_get($raw, '_source_binding.'.$key) === (string) $binding[$key]);
+                if (! $matches($order->raw_payload) || ! $payments->every(fn ($payment) => $matches($payment->raw_payload))) {
+                    $result['review_items'][] = 'Some historical purchases do not match their reviewed original merchant binding.';
+
+                    continue;
+                }
+            }
             $mirror = $mirrors[$order->square_order_id] ?? ['found' => false, 'conflict' => false];
             if ($mirror['found']) {
                 $result['deduplicated_orders']++;
@@ -84,17 +105,40 @@ final class ReviewedSquareEventPurchases
                     }
                 }
             }
-            if ($netTax === null) {
+            $tip = array_key_exists('total_tip_money', $order->raw_payload ?? [])
+                ? (data_get($order->raw_payload, 'total_tip_money.currency') === 'USD' ? $this->integer(data_get($order->raw_payload, 'total_tip_money.amount')) : null) : 0;
+            $netTip = $tip === 0 ? 0 : ($refunded === 0 ? $tip : ($refunded === $amount ? 0 : (data_get($order->raw_payload, 'net_amounts.tip_money.currency') === 'USD' ? $this->integer(data_get($order->raw_payload, 'net_amounts.tip_money.amount')) : null)));
+            if ($netTip !== null && ($netTip > ($tip ?? -1) || $netTax !== null && $netTax + $netTip > $amount - ($refunded ?? 0))) {
+                $netTip = null;
+            }
+            if ($netTax === null || $netTip === null) {
                 $result['review_items'][] = 'Some Square refunds or tax allocations need reconciliation before net sales are complete.';
             }
             $links = $customerLinks->get($order->square_order_id, collect());
-            $profiles = $links->pluck('marketingProfile');
-            $profile = $profiles->containsStrict(null) ? null : app(CanonicalMarketingProfileResolver::class)->oneCanonical($profiles, $tenant);
+            $identityLinks = $links;
+            foreach ($payments as $payment) {
+                $identityLinks = $identityLinks->concat($paymentCustomerLinks->get($payment->square_payment_id, collect()));
+            }
+            $profiles = $identityLinks->pluck('marketingProfile');
+            // A payment-level customer can contradict an order identity, but cannot assign
+            // the whole order merely because that person paid one of its split tenders.
+            $profile = $links->isEmpty() || $profiles->containsStrict(null) ? null : app(CanonicalMarketingProfileResolver::class)->oneCanonical($profiles, $tenant);
             if ($profile?->archived_at !== null) {
                 $profile = null;
             }
             if ($links->isNotEmpty() && ! $profile) {
                 $result['customer_review_items'][] = 'Some Square customer identities need review.';
+            }
+            $occurredAt = $order->closed_at;
+            $offline = $payments->filter(fn ($payment) => ($payment->raw_payload['is_offline_payment'] ?? false) === true);
+            if ($offline->isNotEmpty()) {
+                $timestamps = $offline->map(fn ($payment) => data_get($payment->raw_payload, 'offline_payment_details.client_created_at'));
+                if ($timestamps->contains(fn ($time) => ! is_string($time) || strtotime($time) === false)) {
+                    $result['review_items'][] = 'An offline Square purchase needs its original selling timestamp.';
+
+                    continue;
+                }
+                $occurredAt = $timestamps->map(fn ($time) => \Carbon\CarbonImmutable::parse($time))->sort()->first();
             }
             $lines = [];
             foreach ($order->raw_payload['line_items'] ?? [] as $line) {
@@ -113,15 +157,15 @@ final class ReviewedSquareEventPurchases
                     $returns = $rows->map(function ($payment): ?int {
                         $refund = data_get($payment->raw_payload, 'refunded_money.currency') === 'USD' ? $this->integer(data_get($payment->raw_payload, 'refunded_money.amount')) : null;
 
-                        return $refund !== null && $refund <= $this->integer($payment->amount_money) ? $refund : null;
+                        return $refund !== null && $refund <= (app(SquarePurchaseEvidence::class)->collectedAmount($payment) ?? -1) ? $refund : null;
                     });
 
-                    return ['tender' => $tender, 'collected_minor' => (int) $rows->sum('amount_money'), 'refunded_minor' => $returns->containsStrict(null) ? null : $returns->sum()];
+                    return ['tender' => $tender, 'collected_minor' => (int) $rows->sum(fn ($payment) => app(SquarePurchaseEvidence::class)->collectedAmount($payment)), 'refunded_minor' => $returns->containsStrict(null) ? null : $returns->sum()];
                 })->values()->all();
             $result['purchases'][] = ['source' => 'square_order', 'source_id' => $order->square_order_id, 'amount_minor' => $amount,
-                'refunded_minor' => $refunded, 'net_tax_minor' => $netTax, 'net_sales_minor' => $netTax === null ? null : $amount - $refunded - $netTax,
+                'refunded_minor' => $refunded, 'net_tax_minor' => $netTax, 'net_tip_minor' => $netTip, 'net_sales_minor' => $netTax === null || $netTip === null ? null : $amount - $refunded - $netTax - $netTip,
                 'customer_id' => $profile?->id, 'customer_review_required' => $links->isNotEmpty() && ! $profile,
-                'occurred_at' => $order->closed_at->toIso8601String(), 'lines' => $lines, 'tenders' => $tenders];
+                'occurred_at' => $occurredAt->toIso8601String(), 'lines' => $lines, 'tenders' => $tenders];
             if ($order->synced_at && ($result['last_synced_at'] === null || $order->synced_at->toIso8601String() < $result['last_synced_at'])) {
                 $result['last_synced_at'] = $order->synced_at->toIso8601String();
             }
@@ -130,6 +174,11 @@ final class ReviewedSquareEventPurchases
         $result['customer_review_items'] = array_values(array_unique($result['customer_review_items']));
 
         return $result;
+    }
+
+    private function empty(): array
+    {
+        return ['purchases' => [], 'review_items' => [], 'customer_review_items' => [], 'last_synced_at' => null, 'deduplicated_orders' => 0];
     }
 
     private function payMirrors(int $tenant, array $pools, array $orders, Collection $payments): array

@@ -209,3 +209,42 @@ test('nearby audiences use approximate Census ZIP points and exclude missing or 
         ->and($distance->point(null))->toBeNull()->and($distance->point('29201', 'CA'))->toBeNull()
         ->and($distance->point('29201', null))->toBeNull()->and($distance->miles(null, $columbia))->toBeNull();
 });
+
+test('Square tipped tenders reconcile collected totals once and retain full refund evidence', function () {
+    $profile = commerceCustomer('fictional-tipped-commerce');
+    $order = SquareOrder::create(['tenant_id' => $profile->tenant_id, 'square_order_id' => 'fixture-tipped-order', 'location_id' => 'fixture-location',
+        'state' => 'COMPLETED', 'closed_at' => now()->subDay(), 'total_money_amount' => 1100, 'total_money_currency' => 'USD',
+        'raw_payload' => ['total_tax_money' => ['amount' => 70, 'currency' => 'USD'], 'total_tip_money' => ['amount' => 30, 'currency' => 'USD']]]);
+    $payment = SquarePayment::create(['tenant_id' => $profile->tenant_id, 'square_payment_id' => 'fixture-tipped-payment', 'square_order_id' => $order->square_order_id,
+        'location_id' => 'fixture-location', 'status' => 'COMPLETED', 'amount_money' => 1070, 'currency' => 'USD', 'created_at_source' => now()->subDay(),
+        'raw_payload' => ['amount_money' => ['amount' => 1070, 'currency' => 'USD'], 'tip_money' => ['amount' => 30, 'currency' => 'USD'],
+            'total_money' => ['amount' => 1100, 'currency' => 'USD'], 'refunded_money' => ['amount' => 1100, 'currency' => 'USD']]]);
+    commerceLink($profile, 'square_order', $order->square_order_id);
+    commerceLink($profile, 'square_payment', $payment->square_payment_id);
+    $evidence = app(\App\Services\Marketing\SquarePurchaseEvidence::class);
+    expect($evidence->confirmedOrder($order, collect([$payment])))->toBeTrue()
+        ->and($evidence->collectedAmount($payment))->toBe(1100)->and($evidence->recordedRefunds($order, collect([$payment])))->toBe(1100);
+    $snapshot = app(CustomerCommerceSnapshotService::class)->forProfile($profile, $profile->tenant_id);
+    expect($snapshot['purchases'])->toHaveCount(1)->and($snapshot['purchases'][0]['amount_minor'])->toBe(1100)
+        ->and($snapshot['purchases'][0]['refunded_minor'])->toBe(1100)->and($snapshot['purchases'][0]['status'])->toBe('refunded');
+    $raw = $payment->raw_payload;
+    $raw['total_money']['amount'] = 1200;
+    $payment->raw_payload = $raw;
+    expect($evidence->confirmedOrder($order, collect([$payment])))->toBeFalse()->and($evidence->recordedRefunds($order, collect([$payment])))->toBeNull();
+    $raw['total_money']['amount'] = 1100;
+    $raw['tip_money']['currency'] = 'EUR';
+    $payment->raw_payload = $raw;
+    expect($evidence->confirmedOrder($order, collect([$payment])))->toBeFalse();
+});
+
+test('standalone customer payment spending includes separately recorded Square tips', function () {
+    $profile = commerceCustomer('fictional-tipped-payment-only');
+    $payment = SquarePayment::create(['tenant_id' => $profile->tenant_id, 'square_payment_id' => 'fixture-tipped-payment-only', 'location_id' => 'fixture-location',
+        'status' => 'COMPLETED', 'amount_money' => 1000, 'currency' => 'USD', 'created_at_source' => now()->subDay(),
+        'raw_payload' => ['tip_money' => ['amount' => 200, 'currency' => 'USD'], 'total_money' => ['amount' => 1200, 'currency' => 'USD'],
+            'refunded_money' => ['amount' => 0, 'currency' => 'USD']]]);
+    commerceLink($profile, 'square_payment', $payment->square_payment_id);
+    $snapshot = app(CustomerCommerceSnapshotService::class)->forProfile($profile, $profile->tenant_id);
+    expect($snapshot['purchases'])->toHaveCount(1)->and($snapshot['purchases'][0]['amount_minor'])->toBe(1200)
+        ->and($snapshot['purchases'][0]['confirmed'])->toBeTrue();
+});

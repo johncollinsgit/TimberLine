@@ -410,7 +410,11 @@ jobs:
         node tests/e2e/team-assistant.browser.mjs
       if: matrix.group == 'teams'
     - name: Verify connected event Sales and Customers
-      run: node tests/e2e/team-event-commerce.browser.mjs
+      run: |
+        node tests/e2e/team-event-commerce.browser.mjs
+        node --test tests/e2e/event-reporting-state.test.mjs
+        node tests/e2e/event-performance.browser.mjs
+        node tests/e2e/event-performance-navigation.browser.mjs
       if: matrix.group == 'teams'
     - name: Verify shared customer profile and source panel contrast
       run: node tests/e2e/customer-profile-theme.browser.mjs

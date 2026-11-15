@@ -8,6 +8,7 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
     $write = ['abilities:mobile:write,payments:write', 'throttle:30,1'];
     Route::get('/registers', [PosController::class, 'registers'])->middleware($read)->name('registers');
     Route::prefix('/registers/{register}')->where(['register' => '[a-f0-9]{32}'])->group(function () use ($read, $write): void {
+        Route::get('/event-performance', \App\Http\Controllers\Mobile\PosEventPerformanceController::class)->middleware($read)->name('event-performance');
         Route::get('/customer-enrollment', [PosController::class, 'customerEnrollmentSettings'])->middleware($read)->name('customer-enrollment.settings');
         Route::get('/wallet-link-reviews/{reference}', [PosController::class, 'walletLinkReview'])->where('reference', '[a-f0-9]{32}')->middleware($read)->name('wallet-link-reviews.show');
         Route::post('/wallet-link-reviews/{reference}', [PosController::class, 'recordWalletLinkReview'])->where('reference', '[a-f0-9]{32}')->middleware($write)->name('wallet-link-reviews.review');
@@ -19,6 +20,7 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
         Route::post('/customers', [PosController::class, 'createCustomer'])->middleware($write)->name('customers.create');
         Route::get('/customer-requests/{requestId}', [PosController::class, 'customerRequest'])->whereUuid('requestId')->middleware($read)->name('customers.request');
         Route::get('/event-stats', [PosController::class, 'eventStats'])->middleware($read)->name('event-stats');
+        Route::get('/event-history', [PosController::class, 'eventHistory'])->middleware($read)->name('event-history');
         Route::get('/sales', [PosController::class, 'sales'])->middleware($read)->name('sales.index');
         Route::get('/catalog', [PosController::class, 'catalog'])->middleware($read)->name('catalog');
         Route::get('/reward-redemption', [PosController::class, 'rewardRedemption'])->middleware($read)->name('reward-redemption.show');

@@ -113,9 +113,23 @@ class UnifiedAppNavigationService
 
         if ($tenant && $user && config('team_work.enabled')) {
             try {
-                app(\App\Services\Team\TeamWorkAccess::class)->context($user, $tenant);
+                $teamActor = app(\App\Services\Team\TeamWorkAccess::class)->context($user, $tenant);
                 $items[] = ['key' => 'team-work', 'icon' => 'clipboard-document-list', 'href' => route('team.app', ['tenant' => $tenant->slug]),
-                    'label' => app(\App\Services\Team\TeamAppPresentation::class)->name($tenant), 'standalone_app' => true, 'current' => request()->routeIs('team.*')];
+                    'label' => app(\App\Services\Team\TeamAppPresentation::class)->name($tenant), 'standalone_app' => true, 'current' => request()->routeIs('team.*') && request()->query('app') !== 'events'];
+                if (config('team_operations.enabled') && config('team_work.premium_enabled') && Schema::hasTable('team_areas')) {
+                    foreach (\App\Models\TeamArea::where(['tenant_id' => $tenant->id, 'profile' => 'events'])->get() as $eventArea) {
+                        try {
+                            app(\App\Services\Team\Operations\OperationsAccess::class)->area($tenant, $user, $eventArea->id);
+                            $items[] = ['key' => 'events-central', 'icon' => 'calendar-days', 'href' => route('team.installed', ['tenant' => $tenant->slug, 'app' => 'events', 'area' => $eventArea->id, 'area_view' => in_array($teamActor['role'], ['owner', 'admin'], true) ? 'performance' : 'events']),
+                                'label' => 'Events', 'standalone_app' => true, 'current' => $request->routeIs('team.*') && $request->query('app') === 'events'];
+                            break;
+                        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+                            if (! in_array($exception->getStatusCode(), [403, 404], true)) {
+                                throw $exception;
+                            }
+                        }
+                    }
+                }
             } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
                 if (! in_array($exception->getStatusCode(), [403, 404], true)) {
                     throw $exception;

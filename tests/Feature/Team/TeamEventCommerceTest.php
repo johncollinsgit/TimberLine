@@ -75,6 +75,8 @@ test('event sales use original paid evidence, operator, pool, location and local
     $report = app(PosEventSales::class)->read($this->tenant->id, 123, 'America/New_York');
     expect($report['complete'])->toBeTrue()->and($report['sale_count'])->toBe(1)->and($report['net_sales_minor'])->toBe(1000)->and($report['sales_tax_minor'])->toBe(70)
         ->and($report['daily'][0]['date'])->toBe('2026-11-06')->and($report['locations'][0]['name'])->toBe('Original venue')->and($report['operators'][0]['user_id'])->toBe((string) $this->owner->id);
+    expect($report['operators'][0]['net_sales_minor'])->toBe(1000)->and($report['operators'][0]['known_net_sales_minor'])->toBe(1000)
+        ->and($report['operators'][0]['complete'])->toBeTrue()->and($report['daily'][0]['minute_sales']['20:00'])->toBe(1000);
     expect(app(PosEventSales::class)->read($this->tenant->id + 1, 123, 'UTC')['sale_count'])->toBe(0);
     // No mutable current register configuration is needed to retain this event identity.
     expect($this->store->rows('sales', $this->tenant->id)->where('id', $sale->id)->value('snapshot_hash'))->toBe($sale->snapshot_hash);
@@ -87,7 +89,8 @@ test('missing payment evidence and partial refund tax allocation stay unknown', 
     expect($read()['net_sales_minor'])->toBeNull();
     $this->evidence[$sale->attempt_id]['amount_minor'] = 1070;
     $this->store->rows('events', $this->tenant->id)->insert($this->store->values($this->tenant->id, ['sale_id' => $sale->id, 'code' => 'square_refund_observed', 'details' => $this->store->encrypt(['payment_id' => 'fixture-'.$sale->id, 'refund_id' => 'fixture-refund', 'amount_minor' => 500]), 'created_at' => now()]));
-    expect($read()['net_sales_minor'])->toBeNull()->and($read()['confirmed_refunds_minor'])->toBe(500);
+    expect($read()['net_sales_minor'])->toBeNull()->and($read()['confirmed_refunds_minor'])->toBe(500)
+        ->and($read()['operators'][0]['net_sales_minor'])->toBeNull()->and($read()['operators'][0]['complete'])->toBeFalse();
     $this->store->rows('events', $this->tenant->id)->update(['details' => $this->store->encrypt(['payment_id' => 'fixture-'.$sale->id, 'refund_id' => 'fixture-refund', 'amount_minor' => 1070])]);
     expect($read()['net_sales_minor'])->toBe(0)->and($read()['sales_tax_minor'])->toBe(0);
 });

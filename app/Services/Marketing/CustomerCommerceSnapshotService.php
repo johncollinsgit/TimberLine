@@ -229,12 +229,17 @@ class CustomerCommerceSnapshotService
                 if ($payment->square_order_id && $squareOrders->contains('square_order_id', $payment->square_order_id)) {
                     continue;
                 }
-                $confirmed = strtoupper((string) $payment->status) === 'COMPLETED';
+                $collected = app(SquarePurchaseEvidence::class)->collectedAmount($payment);
+                $confirmed = strtoupper((string) $payment->status) === 'COMPLETED' && $collected !== null;
+                $refunded = data_get($payment->raw_payload, 'refunded_money.currency') === $payment->currency ? $this->integer(data_get($payment->raw_payload, 'refunded_money.amount')) : null;
+                if ($refunded !== null && ($collected === null || $refunded > $collected)) {
+                    $refunded = null;
+                }
                 $entry = strtoupper((string) data_get($payment->raw_payload, 'card_details.entry_method', ''));
                 $channel = in_array($entry, ['CONTACTLESS', 'CHIP', 'SWIPED', 'MAGSTRIPE'], true) ? 'in_person' : 'unknown';
                 $purchases->push($this->row('square_payment', $payment->square_payment_id, 'Square payment '.$payment->square_payment_id,
                     $channel, $confirmed ? 'paid' : 'unverified', $confirmed,
-                    $this->integer($payment->amount_money), $this->integer(data_get($payment->raw_payload, 'refunded_money.amount')),
+                    $collected, $refunded,
                     $payment->currency, $payment->created_at_source?->toIso8601String()));
             }
         }
