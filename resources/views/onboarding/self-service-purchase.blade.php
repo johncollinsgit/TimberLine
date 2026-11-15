@@ -55,6 +55,7 @@
                         <p role="status" data-payment-status>Waiting for payment confirmation.</p>
                         <p class="mt-2 text-sm">Your saved checkout will be reused. Returning here does not create a second charge.</p>
                         <p class="mt-2 text-sm">Add more included branches after payment.</p>
+                        <p hidden data-payment-recovery class="mt-3"><a class="fb-btn fb-btn-secondary" href="{{ route('self-service.purchase', ['tenant' => $tenant->slug]) }}"><x-everbranch.action-leaf /><span data-payment-recovery-label>Check payment</span></a></p>
                     </div>
                 @endif
                 <form method="post" action="{{ route('self-service.purchase.checkout', ['tenant' => $tenant->slug]) }}" class="mt-6 space-y-5">
@@ -72,12 +73,26 @@
     (() => {
         const panel = document.querySelector('[data-purchase-pending]');
         if (!panel) return;
+        const recover = (message, signIn = false) => {
+            panel.querySelector('[data-payment-status]').textContent = message;
+            const action = panel.querySelector('[data-payment-recovery]');
+            if (action) {
+                action.hidden = false;
+                if (signIn) action.querySelector('[data-payment-recovery-label]').textContent = 'Sign in';
+            }
+        };
         let checks = 0;
         const check = async () => {
-            if (++checks > 24) { panel.querySelector('[data-payment-status]').textContent = 'Confirmation is taking longer. Refresh this page to check again; your checkout is saved.'; return; }
+            if (++checks > 24) { recover('Confirmation is taking longer. Refresh this page to check again; your checkout is saved.'); return; }
             try {
                 const response = await fetch(panel.dataset.statusUrl, {headers: {'Accept': 'application/json'}, credentials: 'same-origin', cache: 'no-store'});
-                if (response.ok && (await response.json()).paid === true) { location.reload(); return; }
+                if (response.status === 401 || response.status === 419) { recover('Sign in to check your saved checkout.', true); return; }
+                if (response.ok) {
+                    const status = await response.json();
+                    // Ending a pending attempt is not paid evidence. The same
+                    // owned plan GET decides whether to show billing recovery.
+                    if (status?.paid === true || status?.pending === false) { location.reload(); return; }
+                }
             } catch (_) {}
             setTimeout(check, 5000);
         };

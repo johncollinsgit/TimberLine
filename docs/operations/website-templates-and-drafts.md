@@ -12,6 +12,8 @@ The reusable photo picker supports related starter photographs, the site's exist
 
 ## History and retention
 
+The native editor keeps a blocked publication as a private draft and offers **Review checklist** back to the actual Website overview, where **Edit details** completes missing business name/email. Only recognized checklist messages are shown from a 422 response; other server details stay hidden. Permission, operational/plan freeze and stale-state failures have distinct safe guidance. Recovery saves any newer local edits before navigating and never automatically retries publication. An autosave conflict still keeps local work in the open editor.
+
 Native Website History shows recent page/settings autosaves and up to 30 recent published versions, plus current pointers. The editor saves pending edits before opening history. Page rows on the Website overview also expose History, including for expired owners who can preview but cannot restore. Metadata and actions are private and tenant scoped. Connected website adapters use their existing adapter recovery; native history GET and POST cannot reach their renderer/content.
 
 The Carolina connected editor's image controls select its own saved/baseline approved photographs and keep its complete adapter content and revision/save path. They do not create native uploads, native history or a new public media audience. Native Website uploads/history remain separate from that adapter and from Shopify.

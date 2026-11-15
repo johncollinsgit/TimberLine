@@ -1,3 +1,11 @@
+## 2026-11-15 - Self-service completion recovery (source candidate)
+
+Saved checkout confirmation stops polling when the server reports a terminal
+unpaid outcome and returns to the owned plan's billing recovery. Expired sessions
+receive a sign-in action. Website publishing shows a checklist action for missing
+details and retains newer drafts before navigation. Neither path retries a payment
+or publication automatically; provider and access checks remain authoritative.
+
 ## 2026-11-15 - Stable progressive search results (follow-on source)
 
 An unchanged search result keeps its option and child elements when the slower

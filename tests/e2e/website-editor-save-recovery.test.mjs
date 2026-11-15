@@ -15,7 +15,7 @@ const escape = value => String(value).replaceAll('&', '&amp;').replaceAll("'", '
 // The production-built React editor talks over real loopback HTTP. Only this
 // fictional endpoint server owns persisted state and controls response timing.
 async function fixture(options = {}) {
-    const state = {savedPage: null, savedTheme: null, published: null, pages: [], themes: [], uploads: 0, failPage: false, htmlPage: false, holdPage: null, holdTheme: null, holdUpload: null, uploadStatus: 201, submitted: null, historyReads: [], restores: [], restoreStatus: 200, pageVersion: 3, siteVersion: 3, pageConflict: false};
+    const state = {savedPage: null, savedTheme: null, published: null, pages: [], themes: [], uploads: 0, failPage: false, htmlPage: false, holdPage: null, holdTheme: null, holdUpload: null, uploadStatus: 201, submitted: null, historyReads: [], restores: [], restoreStatus: 200, pageVersion: 3, siteVersion: 3, pageConflict: false, publishStatus: 200, publishMessage: null, publishAttempts: []};
     const manifest = JSON.parse(fs.readFileSync(path.join(build, 'manifest.json'), 'utf8'));
     const entry = manifest['resources/js/managed-website/editor.tsx'];
     assert.ok(entry?.file, 'Build the actual editor before its browser test.');
@@ -83,7 +83,7 @@ async function fixture(options = {}) {
             if (state.uploadStatus !== 201) { json({errors: {image: ['Your private trial includes 10 photos. Activate a plan for more.']}}, state.uploadStatus); return; }
             json({media: {id: 7, name: 'fictional.png', url: origin + '/website-media/7', catalog_url: origin + '/website-catalog-media/7', alt_text: 'Uploaded graphic', mime_type: 'image/png'}}, 201); return;
         }
-        if (url.pathname === '/publish' && request.method === 'POST') { state.published = structuredClone(state.savedPage); json({status: 'published'}); return; }
+        if (url.pathname === '/publish' && request.method === 'POST') { state.publishAttempts.push(structuredClone(state.savedPage)); if (state.publishStatus !== 200) { json({message: state.publishMessage}, state.publishStatus); return; } state.published = structuredClone(state.savedPage); json({status: 'published'}); return; }
         response.writeHead(404); response.end();
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -163,6 +163,62 @@ test('network save failure preserves dirty work blocks publish and navigation an
         await f.page.getByRole('link', {name: 'Back to Website', exact: true}).click();
         await f.page.waitForURL('**/website');
         assert.equal(f.state.savedPage.blocks[0].body, 'Recover this exact text');
+        assert.deepEqual(f.errors, []);
+    } finally { await f.close(); }
+});
+
+test('a publish checklist failure leads to Website recovery and saves newer edits before leaving on a phone', async () => {
+    const f = await fixture();
+    try {
+        await f.page.setViewportSize({width: 390, height: 844});
+        f.state.publishStatus = 422;
+        f.state.publishMessage = 'Finish the Website checklist before publishing.';
+        await f.page.getByLabel(/^Text/).fill('Private photo story before checklist review');
+        await f.page.getByRole('button', {name: 'Publish', exact: true}).click();
+        await expect(f.page.getByRole('alert')).toContainText(f.state.publishMessage);
+        const recovery = f.page.getByRole('link', {name: 'Review checklist', exact: true});
+        await expect(recovery).toHaveAttribute('href', '/website');
+        assert.equal(f.state.publishAttempts.length, 1);
+        assert.equal(f.state.published, null);
+        assert.equal(f.state.savedPage.blocks[0].body, 'Private photo story before checklist review');
+        await expect(f.page.locator('.eb-editor-title')).toContainText('Draft');
+        assert.equal(await f.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        await f.page.getByLabel(/^Text/).fill('Newer private copy retained on the way to Edit details');
+        await recovery.click();
+        await f.page.waitForURL('**/website');
+        assert.equal(f.state.savedPage.blocks[0].body, 'Newer private copy retained on the way to Edit details');
+        assert.equal(f.state.publishAttempts.length, 1, 'Recovery never retries publication.');
+        assert.equal(f.state.published, null);
+        await f.page.goto(f.origin + '/editor');
+        await expect(f.page.getByLabel(/^Text/)).toHaveValue('Newer private copy retained on the way to Edit details');
+        assert.deepEqual(f.errors, []);
+    } finally { await f.close(); }
+});
+
+test('publish recovery keeps permission freeze conflict and unknown errors safe without exposing server details', async () => {
+    const f = await fixture();
+    try {
+        await f.page.getByLabel(/^Text/).fill('Saved draft remains private for every blocked publication');
+        const cases = [
+            [403, 'Only a website owner or admin can publish.'],
+            [423, 'Publishing is paused or your plan needs attention.'],
+            [409, 'Your website changed elsewhere. Keep your edits here and review the saved draft before publishing.'],
+            [422, 'Complete the Website checklist before publishing.'],
+            [500, 'Publishing was not confirmed. Review your website before trying again.'],
+        ];
+        for (const [status, message] of cases) {
+            f.state.publishStatus = status;
+            f.state.publishMessage = '<img src=x onerror=alert(1)> private-provider-detail';
+            const count = f.state.publishAttempts.length;
+            await f.page.getByRole('button', {name: 'Publish', exact: true}).click();
+            await expect(f.page.getByRole('alert')).toContainText(message);
+            await expect(f.page.getByRole('alert')).not.toContainText('private-provider-detail');
+            await expect(f.page.locator('.eb-editor-title')).toContainText('Draft');
+            assert.equal(f.state.publishAttempts.length, count + 1);
+            assert.equal(f.state.published, null);
+            assert.equal(f.state.savedPage.blocks[0].body, 'Saved draft remains private for every blocked publication');
+            await expect(f.page.getByLabel(/^Text/)).toHaveValue('Saved draft remains private for every blocked publication');
+        }
         assert.deepEqual(f.errors, []);
     } finally { await f.close(); }
 });
