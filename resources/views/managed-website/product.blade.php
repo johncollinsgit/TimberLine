@@ -8,6 +8,20 @@
     $photos = collect($product->media ?? [])->map(fn ($url) => $mediaUrls->forSite($site, $url))->filter()->values();
     $photoAlt = data_get($product->service_details, 'image_alt') ?: $product->title;
 @endphp
-<section class="store-shell store-product"><div class="store-product__photos">@forelse($photos as $photo)<div class="store-product__image"><img src="{{ $photo }}" alt="{{ $photoAlt }}" width="960" height="960" loading="{{ $loop->first ? 'eager' : 'lazy' }}" decoding="async"></div>@empty<div class="store-product__image"><span>Photo coming soon</span></div>@endforelse</div><div><a class="store-back" href="{{ route('managed-website.store.index') }}">← Back to {{ $product->product_type === 'quote' ? 'services' : 'shop' }}</a><p>{{ $product->product_type === 'quote' ? 'Request a quote' : str($product->product_type)->headline() }}</p><h1>{{ $product->title }}</h1>@if($product->product_type !== 'quote')<div class="store-price">${{ number_format(($product->variants->first()?->price_cents ?? 0) / 100, 2) }}</div>@endif<p class="store-copy">{{ $product->description }}</p>@if($product->product_type === 'quote')@if(session('quote_status'))<p class="store-notice">{{ session('quote_status') }}</p>@endif<form class="store-checkout" method="POST" action="{{ route('managed-website.store.products.quote', ['handle' => $product->handle]) }}">@csrf<input class="hidden" name="website" tabindex="-1" autocomplete="off"><label>Name<input required name="name"></label><label>Email<input required type="email" name="email"></label><label>Phone<input required name="phone"></label><label>Service address<input required name="service_address"></label><label>Service needed<input required name="service_needed" value="{{ $product->title }}"></label><label>Message<textarea required name="message"></textarea></label><button class="store-button" type="submit">Request a quote</button></form>@else<form method="POST" action="{{ route('managed-website.store.cart.items.store', ['variant' => $product->variants->first()]) }}">@csrf<label>Quantity<input name="quantity" type="number" min="1" max="20" value="1"></label><button class="store-button" type="submit">Add to cart</button></form>@endif</div></section>
+<section class="store-shell store-product">
+    <div class="store-product__photos">
+        @forelse($photos as $photo)<div class="store-product__image"><img src="{{ $photo }}" alt="{{ $photoAlt }}" width="960" height="960" loading="{{ $loop->first ? 'eager' : 'lazy' }}" decoding="async"></div>@empty<div class="store-product__image"><span>Photo coming soon</span></div>@endforelse
+    </div>
+    <div>
+        <a class="store-back" href="{{ route('managed-website.store.index') }}">Back to {{ $product->product_type === 'quote' ? 'services' : 'shop' }}</a>
+        <p>{{ $product->product_type === 'quote' ? 'Request a quote' : str($product->product_type)->headline() }}</p>
+        <h1>{{ $product->title }}</h1><p class="store-copy">{{ $product->description }}</p>
+        @if($product->product_type === 'quote')
+            @include('managed-website.quote-request')
+        @else
+            @include('managed-website.variant-picker')
+        @endif
+    </div>
+</section>
 @endif
 @endsection

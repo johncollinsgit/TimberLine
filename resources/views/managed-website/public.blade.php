@@ -14,7 +14,11 @@
     $surface = data_get($palette, 'surface') ?: $tenant->brandProfile?->surface_color ?: '#ffffff';
     $soft = data_get($palette, 'soft') ?: '#edf4f1';
     $corner = ['square' => '0', 'rounded' => '1.25rem', 'soft' => '.65rem'][data_get($themeSettings, 'corners', 'soft')] ?? '.65rem';
-    $font = data_get($themeSettings, 'typography') === 'serif' ? 'Georgia, ui-serif, serif' : 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    // Style elements are raw text: Blade's &quot; escaping is not decoded by CSS.
+    // These application-owned, quote-free stacks keep the custom property valid.
+    $neutralStarter = str_starts_with((string) data_get($themeSettings, 'theme_key'), 'starter-');
+    $sans = ($neutralStarter ? 'Inter, ' : '').'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+    $font = data_get($themeSettings, 'typography') === 'serif' ? 'Georgia, ui-serif, serif' : $sans;
     $announcement = (array) data_get($themeSettings, 'announcement', []);
     $footer = (array) data_get($themeSettings, 'footer', []);
     $businessContact = (array) data_get($themeSettings, 'business_contact', []);

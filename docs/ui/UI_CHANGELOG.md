@@ -1,3 +1,26 @@
+## 2026-11-15 - Stable progressive search results (follow-on source)
+
+An unchanged search result keeps its option and child elements when the slower
+apps response arrives during a click. Current server order, keyboard selection,
+fresh reference authorization and tenant boundaries remain in force. Closed or
+retired results cannot activate. Real held-response pointer/keyboard regressions
+join the existing desktop and phone coverage; deployment remains separately gated.
+
+## 2026-11-15 - Native shopper controls and starter typography (follow-on source)
+
+Both native product designs share selectable variants, current server-provided
+price/availability and an accessible no-JavaScript fallback. Active collections
+and bounded product search use existing links; Sawyer category URLs remain.
+Unavailable merchant/host lanes offer truthful contact guidance. Custom-host
+quote pages use an existing published contact destination instead of a blocked
+POST; no commerce, host or provider gate is widened.
+
+Neutral starters use the approved Inter/system-sans token. Quote-free font stacks
+keep escaped Blade style text valid, avoiding browser Times New Roman fallback.
+Explicit serif and Sawyer typography are retained. Computed-font regressions
+render the full actual public/private-preview layout in Chromium and WebKit.
+This entry describes source verification, not a deployed merchant storefront.
+
 ## 2026-11-15 - Private website starters and saved drafts
 
 Self-service Website setup recommends seven neutral business starters with six
