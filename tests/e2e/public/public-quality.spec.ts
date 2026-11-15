@@ -77,9 +77,13 @@ for (const width of [390, 820, 1440]) {
                 await page.screenshot({ path: screenshot });
                 await testInfo.attach(`${path}-${width}`, { path: screenshot, contentType: "image/png" });
             }
-            const action = ["/platform/start", "/platform/demo", "/platform/contact"].includes(path)
-                ? page.locator('main button[type="submit"]').first()
-                : page.getByRole("link", { name: /get started|create a workspace|choose a template/i }).first();
+            const action = path === "/platform/start"
+                ? page.getByRole("button", { name: "Start free trial", exact: true })
+                : ["/platform/demo", "/platform/contact"].includes(path)
+                    ? page.locator('main button[type="submit"]').first()
+                    : ["/platform/promo", "/platform/plans"].includes(path)
+                        ? page.getByRole("link", { name: "Start free trial", exact: true }).first()
+                        : page.getByRole("link", { name: /get started|create a workspace|choose a template/i }).first();
             await action.scrollIntoViewIfNeeded();
             await expect(action).toBeVisible();
             const box = await action.boundingBox();
@@ -107,7 +111,9 @@ test("the current offer and conditional fees are visible before requesting acces
     await page.emulateMedia({ reducedMotion: "reduce" });
     for (const path of ["/platform/promo", "/platform/plans", "/platform/start", "/explore/modules"]) {
         await page.goto(path);
-        await expect(page.getByText(offer, { exact: true }).filter({ visible: true }).first()).toBeVisible();
+        const disclosure = page.getByText(offer, { exact: true })
+            .or(page.getByText(`To activate: ${offer}`, { exact: true }));
+        await expect(disclosure.filter({ visible: true }).first()).toBeVisible();
     }
     await page.goto("/platform/start");
     const summary = page.getByRole("complementary", { name: "Your setup" });
