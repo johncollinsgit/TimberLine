@@ -17,6 +17,9 @@ class TenantPaymentsReadinessService
     public function readinessFor(Tenant $tenant, bool $requireConnectedAccount = true, bool $requireVerifiedLiveWebhooks = true): array
     {
         $blockers = [];
+        if (app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($tenant)) {
+            $blockers[] = 'Activate your Everbranch plan before enabling customer payment collection.';
+        }
         $settings = (array) config('commercial.billing_readiness.tenant_payments', []);
 
         if (! (bool) ($settings['enabled'] ?? false)) {

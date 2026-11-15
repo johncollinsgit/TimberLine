@@ -39,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         // Runs after the response (terminate), throttled — detects a stopped scheduler cron.
         $middleware->web(append: [
+            \App\Http\Middleware\ScopeSelfServiceTrialRequests::class,
             \App\Http\Middleware\PreventSensitiveResponseCaching::class,
             \App\Http\Middleware\EvaluateSchedulerHeartbeat::class,
         ]);
@@ -56,6 +57,8 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $middleware->api(prepend: [\App\Http\Middleware\FieldWebSession::class]);
+        $middleware->api(append: [\App\Http\Middleware\ScopeSelfServiceTrialRequests::class]);
+        $middleware->appendToPriorityList(\Illuminate\Auth\Middleware\Authenticate::class, \App\Http\Middleware\ScopeSelfServiceTrialRequests::class);
 
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureUserRole::class,

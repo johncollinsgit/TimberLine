@@ -3,6 +3,7 @@
 return [
     // Account creation does not grant paid branches or publishing access.
     'registration_enabled' => filter_var(env('EVERBRANCH_SELF_SERVICE_REGISTRATION_ENABLED', true), FILTER_VALIDATE_BOOL),
+    'trial_enabled' => filter_var(env('EVERBRANCH_SELF_SERVICE_TRIAL_ENABLED', true), FILTER_VALIDATE_BOOL),
     // Templates select a starting point only; purchase/provider gates retain authority.
     'templates' => [
         'generic' => [

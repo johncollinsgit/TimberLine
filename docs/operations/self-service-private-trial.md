@@ -1,0 +1,25 @@
+# Private self-service trial
+
+New verified self-service owners receive one 14-day private trial when their first workspace is provisioned. `self_service.trial_enabled` controls enrollment; disabling enrollment does not reset or erase existing clocks. The Standard offer remains $499 setup plus $299/month. Trial enrollment creates no Stripe object, subscription, payment, entitlement grant, or provider usage allowance.
+
+`SelfServiceTrialService` stores the UTC start/end, tenant/profile/owner identity, policy version, module list and limits in the existing access profile. A successful immutable `self_service.trial_started` operator-action record binds the canonical clock hash. Provisioning holds the original user, tenant and profile locks; repeated submissions return the original workspace and clock. Reads never enroll, repair or backfill legacy accounts. Tenant metadata edits cannot produce the matching server audit.
+
+The trial permits one owner, 100 customers, 25 jobs and 20 documents. Website limits are one site, six pages, ten photos and 50 MiB of recorded photo bytes. Private Website drafts, customer/job planning and local file uploads use existing controllers and ownership checks. Reporting, integrations, merchant checkout, mobile sessions, AI, tenant email/SMS and other unknown application actions remain closed. Account verification and recovery emails remain available. Help creates durable tickets and deterministic Bud answers; trial tickets do not queue operator SMS alerts.
+
+`EnforceSelfServiceTrial` is the exact route admission list. `ScopeSelfServiceTrialRequests` applies it to authenticated application/API routes that lack tenant access middleware; routes with `tenant.access` use the same guard after their normal context authorization. The guard never grants a tenant context. Unknown GETs are denied as well as writes. Security/logout and owned token cleanup retain their existing authorization. Token creation and PKCE issuance/exchange also check the trial directly.
+
+Private module access replaces plan/billing admission only. Tenant/channel restrictions, unavailable/future modules, explicit disabled grants, state overrides and dependencies remain authoritative. Historical verified purchases bypass the trial module overlay so canceled coverage cannot involuntarily remove the last paid published snapshot.
+
+Writes serialize on the tenant row and recheck the server clock. Customer/job/document caps are checked before creation and against committed action results. Controller error responses roll back the trial transaction, including earlier batch writes. Document batches use the canonical file validator before their first storage write, stay on a local filesystem, and remove newly generated files/thumbnails on later failure. Website services enforce their own site-row limits and file cleanup.
+
+At the exact end time, private mutations stop. Owned drafts, existing photos/files and private records remain available through guarded read paths. No deletion or automatic renewal job is created. The owner can explicitly activate the existing Standard plan. Only verified provider payment grants paid access; the normal upgrade preserves trial site/draft data and records `self_service.trial_converted`. A converted clock never reopens after cancellation, refund or coverage expiry. Publishing, rollback, custom domains, public rendering and paid provider use retain their paid gates.
+
+## Frozen checkout compatibility
+
+New Standard quotes use `quote_hash_version=2`, recursively sorting object keys while preserving list order and scalar types. This survives native MySQL JSON member ordering. Versionless pending quotes are accepted only with the original exact ten-field content shape and original source-order hash. Unknown versions, missing/extra fields, scalar type changes and altered prices/currency/terms/branch order fail before provider calls. A resumed checkout retains its original intent, provider account/environment, price and terms.
+
+## Verification
+
+`SelfServiceTrialTest`, `SelfServiceSignupTest`, `SelfServicePurchasePublishJourneyTest`, `SelfServiceStandardPurchaseTest` and `SelfServiceWebsiteTrialTest` cover enrollment/replay, exact expiry, forged metadata, module denials, quota/storage failures, mobile/provider restrictions, durable help, draft preservation on upgrade and last-paid-public-site retention. Provider calls in these feature tests are faked; they do not establish a new real Stripe payment.
+
+The protected disposable MySQL concurrency job additionally runs the billing/trial feature suites with `SELF_SERVICE_DISPOSABLE_MYSQL=1`. Three explicit native cases assert the connection, actual JSON column types, native object-member reordering, v2/versionless checkout replay and audited trial-clock stability. That flag makes an accidental SQLite connection fail, rather than silently skipping native proof. Native acceptance must be green before release. A fresh source-bound isolated Stripe TEST journey and live email recovery acceptance are tracked separately; no live charge is needed to test this change.

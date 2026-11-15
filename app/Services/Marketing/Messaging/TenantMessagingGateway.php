@@ -29,6 +29,7 @@ class TenantMessagingGateway
     /** @param array<string,mixed> $options */
     public function sendEmail(int $tenantId, string $to, string $subject, ?string $textBody, array $options = []): array
     {
+        app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertPaidUsageAllowed($tenantId);
         $unsubscribe = app(\App\Services\Marketing\MarketingEmailUnsubscribeService::class);
         if ($unsubscribe->isMarketing($options)) {
             if ($unsubscribe->suppressed($tenantId, $to)) {
@@ -140,6 +141,7 @@ class TenantMessagingGateway
     /** @param array<string,mixed> $options */
     public function sendSms(int $tenantId, string $to, string $body, array $options = []): array
     {
+        app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertPaidUsageAllowed($tenantId);
         try {
             $resolution = $this->accountResolver->resolve($tenantId, 'sms');
             if ($resolution['mode'] === 'legacy') {

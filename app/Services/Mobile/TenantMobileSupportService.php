@@ -77,6 +77,11 @@ class TenantMobileSupportService
             return $this->show((int) $tenant->id, (int) $ticket->id);
         }
         $this->audit->record((int) $tenant->id, (int) $user->id, 'tenant.support_ticket.created', targetType: 'tenant_support_ticket', targetId: $ticket->id, context: ['surface' => 'everbranch_mobile'], afterState: ['status' => 'open', 'priority' => $ticket->priority]);
+        if (app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($tenant)) {
+            $ticket->forceFill(['metadata' => [...(array) $ticket->metadata, 'operator_alert' => 'not_queued_private_trial']])->save();
+
+            return $this->show((int) $tenant->id, (int) $ticket->id);
+        }
         try {
             SendSupportTicketAlert::dispatch((int) $ticket->id)->afterCommit();
         } catch (\Throwable $exception) {

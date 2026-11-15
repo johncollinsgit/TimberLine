@@ -136,7 +136,8 @@ class SelfServiceStandardPurchaseService
             'usage_note' => (string) $offer['usage_fees_note'],
         ];
         $quote['subtotal_cents'] = $quote['setup_cents'] + $quote['monthly_cents'];
-        $quote['quote_hash'] = hash('sha256', json_encode($quote, JSON_THROW_ON_ERROR));
+        $quote['quote_hash_version'] = 2;
+        $quote['quote_hash'] = $this->canonicalQuoteHash($quote);
 
         return $quote;
     }
@@ -151,16 +152,74 @@ class SelfServiceStandardPurchaseService
             return $this->quote($tenant, $actor, $branches);
         }
         $frozen = (array) ($intent['quote'] ?? []);
-        $hash = (string) ($frozen['quote_hash'] ?? '');
-        $content = $frozen;
-        unset($content['quote_hash']);
         abort_unless((int) ($frozen['tenant_id'] ?? 0) === (int) $tenant->id
             && (int) ($frozen['actor_id'] ?? 0) === (int) $actor->id && (int) ($intent['actor_id'] ?? 0) === (int) $actor->id, 403);
-        if ($hash === '' || ! hash_equals($hash, hash('sha256', json_encode($content, JSON_THROW_ON_ERROR)))) {
+        if (! $this->validFrozenQuote($frozen)) {
             throw ValidationException::withMessages(['purchase' => 'The saved purchase needs review before checkout can resume.']);
         }
 
         return $frozen;
+    }
+
+    /** Native MySQL JSON may reorder object members; lists and scalar types are significant. */
+    private function canonicalQuoteHash(array $quote): string
+    {
+        unset($quote['quote_hash']);
+        $canonical = static function (mixed $value) use (&$canonical): mixed {
+            if (! is_array($value)) {
+                return $value;
+            }
+            if (! array_is_list($value)) {
+                ksort($value, SORT_STRING);
+            }
+            foreach ($value as $key => $item) {
+                $value[$key] = $canonical($item);
+            }
+
+            return $value;
+        };
+
+        return hash('sha256', json_encode($canonical($quote), JSON_THROW_ON_ERROR));
+    }
+
+    private function validFrozenQuote(array $quote): bool
+    {
+        $legacyOrder = ['tenant_id', 'actor_id', 'offer_version', 'terms_version', 'currency', 'setup_cents', 'monthly_cents', 'branches', 'usage_note', 'subtotal_cents'];
+        $version = $quote['quote_hash_version'] ?? null;
+        $expected = [...$legacyOrder, 'quote_hash', ...($version === 2 ? ['quote_hash_version'] : [])];
+        $actual = array_keys($quote);
+        sort($actual);
+        sort($expected);
+        if ($actual !== $expected || ($version !== null && $version !== 2)) {
+            return false;
+        }
+        foreach (['tenant_id', 'actor_id', 'setup_cents', 'monthly_cents', 'subtotal_cents'] as $key) {
+            if (! is_int($quote[$key]) || $quote[$key] <= 0) {
+                return false;
+            }
+        }
+        foreach (['offer_version', 'terms_version', 'currency', 'usage_note', 'quote_hash'] as $key) {
+            if (! is_string($quote[$key]) || $quote[$key] === '') {
+                return false;
+            }
+        }
+        if (! preg_match('/^[a-z]{3}$/D', $quote['currency']) || ! preg_match('/^[a-f0-9]{64}$/D', $quote['quote_hash'])
+            || $quote['subtotal_cents'] !== $quote['setup_cents'] + $quote['monthly_cents']
+            || ! is_array($quote['branches']) || ! array_is_list($quote['branches'])
+            || count(array_filter($quote['branches'], fn ($key) => is_string($key) && preg_match('/^[a-z][a-z0-9_]*$/D', $key))) !== count($quote['branches'])
+            || count(array_unique($quote['branches'])) !== count($quote['branches'])) {
+            return false;
+        }
+        if ($version === 2) {
+            return hash_equals($quote['quote_hash'], $this->canonicalQuoteHash($quote));
+        }
+        // Compatibility is exact original source order, never a re-quoted offer.
+        $original = [];
+        foreach ($legacyOrder as $key) {
+            $original[$key] = $quote[$key];
+        }
+
+        return hash_equals($quote['quote_hash'], hash('sha256', json_encode($original, JSON_THROW_ON_ERROR)));
     }
 
     /** @return array{ok:bool,url:?string,session_id:?string,message:?string} */
@@ -384,7 +443,9 @@ class SelfServiceStandardPurchaseService
                         'entitlement_source' => 'self_service_purchase', 'price_source' => 'standard_offer', 'currency' => 'USD',
                         'metadata' => ['fulfillment_id' => $fulfillment->id, 'purchase_id' => $intent['id']],
                     ], $intent['actor_id']);
-                    $this->commercial->setTenantModuleState($tenantId, $module, true, 'not_started', $intent['actor_id']);
+                    if (! \App\Models\TenantModuleState::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('module_key', $module)->exists()) {
+                        $this->commercial->setTenantModuleState($tenantId, $module, true, 'not_started', $intent['actor_id']);
+                    }
                 }
             }
             $paidAt = \Illuminate\Support\Carbon::createFromTimestamp((int) data_get($invoice, 'status_transitions.paid_at'));
@@ -414,6 +475,9 @@ class SelfServiceStandardPurchaseService
             ])->save();
             $this->saveIntent($tenantId, $intent['id'], ['status' => $active ? 'paid' : 'suspended', 'session_id' => $session['id'], 'customer_id' => $session['customer'], 'subscription_id' => $subscription['id'], 'invoice_id' => $invoice['id'], 'payment_intent_id' => $invoice['payment_intent']]);
             $row->forceFill(['status' => 'processed_self_service', 'processed_at' => now()])->save();
+            if ($active) {
+                app(\App\Services\Onboarding\SelfServiceTrialService::class)->convertForVerifiedPurchase($tenantId);
+            }
             $this->audit->record($tenantId, null, 'self_service.purchase_confirmed', targetType: 'tenant_billing_fulfillment', targetId: $fulfillment->id, afterState: ['status' => $fulfillment->status, 'source_event_id' => $event['id']]);
         });
     }

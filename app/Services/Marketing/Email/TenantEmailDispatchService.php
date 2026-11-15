@@ -29,6 +29,9 @@ class TenantEmailDispatchService
         $provider = $resolution['provider'];
         $settings = $resolution['settings'];
         $tenantId = $resolution['tenant_id'];
+        if ($tenantId) {
+            app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertPaidUsageAllowed((int) $tenantId);
+        }
 
         if ($tenantId && ! ($options['dry_run'] ?? false)
             && ($prior = app(SesSendSafety::class)->priorResult($tenantId, $toEmail, $this->positiveInt($options['delivery_id'] ?? null)))) {

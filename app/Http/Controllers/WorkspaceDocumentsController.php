@@ -4,9 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Tenant;
 use App\Models\WorkspaceAsset;
+use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\WorkspaceAssetAuditService;
 use App\Services\FieldService\WorkspaceAssetService;
-use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\Tenancy\TenantFinancialAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -55,16 +55,35 @@ class WorkspaceDocumentsController extends Controller
         if ($visibility === 'owner') {
             abort_unless($financialAccess->allows($request->user(), $tenant), 403);
         }
-        foreach ($request->file('files', []) as $file) {
-            $assets->storeUpload(
-                $tenant,
-                $request->user(),
-                $file,
-                (array) ($validated['job_ids'] ?? []),
-                $visibility,
-                $validated['caption'] ?? null,
-                preg_split('/[,\n]+/', (string) ($validated['tags'] ?? '')) ?: [],
-            );
+        $trial = app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($tenant);
+        if ($trial) {
+            foreach ($request->file('files', []) as $file) {
+                $assets->validateUpload($file);
+            }
+        }
+        $created = [];
+        try {
+            foreach ($request->file('files', []) as $file) {
+                $created[] = $assets->storeUpload(
+                    $tenant,
+                    $request->user(),
+                    $file,
+                    (array) ($validated['job_ids'] ?? []),
+                    $visibility,
+                    $validated['caption'] ?? null,
+                    preg_split('/[,\n]+/', (string) ($validated['tags'] ?? '')) ?: [],
+                );
+            }
+        } catch (\Throwable $exception) {
+            if ($trial) {
+                foreach ($created as $asset) {
+                    Storage::disk($asset->storage_disk)->delete($asset->storage_path);
+                    if ($asset->thumbnail_disk && $asset->thumbnail_path) {
+                        Storage::disk($asset->thumbnail_disk)->delete($asset->thumbnail_path);
+                    }
+                }
+            }
+            throw $exception;
         }
 
         return back()->with('status', 'Documents uploaded.');

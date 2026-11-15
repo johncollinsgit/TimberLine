@@ -85,6 +85,7 @@ class EverbranchMobileAuthorizationController extends Controller
             abort_unless($user->tenants()->wherePivot('membership_active', true)->exists(), 403);
         }
 
+        app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertMobileAccessAllowed($user);
         $plainCode = Str::random(64);
         MobileAuthorizationCode::query()->create([
             'user_id' => (int) $user->id,

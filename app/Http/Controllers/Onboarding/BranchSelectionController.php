@@ -95,6 +95,7 @@ class BranchSelectionController extends Controller
         return response()->view('onboarding.workspace-guide', [
             'catalog' => $catalog->tenantStorePayload((int) $tenant->id, 'direct'),
             'tenant' => $tenant,
+            'trial' => app(\App\Services\Onboarding\SelfServiceTrialService::class)->status($tenant),
         ]);
     }
 

@@ -30,6 +30,7 @@ class EnsureMobileTenantAccess
             ->first();
 
         abort_unless($tenant instanceof Tenant, 404);
+        abort_if(app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($tenant), 423, 'Your private trial is available in the web workspace.');
 
         $request->attributes->set('current_tenant', $tenant);
         $request->attributes->set('current_tenant_id', (int) $tenant->id);

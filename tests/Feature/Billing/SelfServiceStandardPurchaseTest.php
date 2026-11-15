@@ -280,6 +280,23 @@ test('paid owners add included branches without a second checkout', function ():
         ->and(TenantBillingFulfillment::withoutGlobalScopes()->count())->toBe(1);
 });
 
+test('verified upgrade preserves independent module denials while granting the other paid branches', function (): void {
+    [$tenant, $actor] = standardBuyer();
+    \App\Models\TenantModuleState::query()->create(['tenant_id' => $tenant->id, 'module_key' => 'managed_website', 'enabled_override' => false, 'setup_status' => 'blocked']);
+    TenantModuleEntitlement::query()->create(['tenant_id' => $tenant->id, 'module_key' => 'customers', 'enabled_status' => 'disabled', 'availability_status' => 'disabled', 'entitlement_source' => 'landlord_console']);
+    standardProvider($tenant);
+    startStandard($tenant, $actor, ['managed_website', 'field_service', 'customers']);
+    expect(confirmStandard($tenant)['ok'])->toBeTrue()->and(app(SelfServicePurchaseEligibility::class)->paidForTenant($tenant))->toBeTrue();
+    expect(\App\Models\TenantModuleState::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('module_key', 'managed_website')->value('enabled_override'))->toBeFalse()
+        ->and(TenantModuleEntitlement::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('module_key', 'customers')->value('enabled_status'))->toBe('disabled')
+        ->and(TenantModuleEntitlement::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('module_key', 'field_service')->value('enabled_status'))->toBe('enabled');
+    app(SelfServiceStandardPurchaseService::class)->activateIncludedBranches($tenant, $actor, ['customers']);
+    expect(confirmStandard($tenant)['ok'])->toBeTrue();
+    expect(TenantModuleEntitlement::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('module_key', 'customers')->value('enabled_status'))->toBe('disabled');
+    expect(\App\Models\TenantModuleState::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('module_key', 'managed_website')->value('enabled_override'))->toBeFalse()
+        ->and(TenantBillingFulfillment::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count())->toBe(1);
+});
+
 test('legacy accounts retain their existing agreement and mapping', function (): void {
     [$tenant, $actor] = standardBuyer();
     TenantAccessProfile::query()->where('tenant_id', $tenant->id)->update(['metadata' => []]);
@@ -426,6 +443,107 @@ test('pending checkout cannot be rebound to another owner or changed branch choi
     expect(TenantBillingFulfillment::withoutGlobalScopes()->count())->toBe(1);
     Http::assertNothingSent();
 });
+
+test('JSON object key ordering preserves the exact frozen pending checkout without replacing its intent', function (): void {
+    [$tenant, $actor] = standardBuyer();
+    standardProvider($tenant);
+    startStandard($tenant, $actor);
+    $original = standardIntent($tenant);
+    $override = TenantCommercialOverride::withoutGlobalScopes()->where('tenant_id', $tenant->id)->firstOrFail();
+    $mapping = $override->billing_mapping;
+    $mapping['self_service_purchase']['quote'] = array_reverse($original['quote'], true);
+    $override->forceFill(['billing_mapping' => $mapping])->save();
+    // MySQL's native JSON storage reorders object members independently too.
+    $persisted = standardIntent($tenant);
+    $service = app(SelfServiceStandardPurchaseService::class);
+    expect(array_keys($persisted['quote']))->not->toBe(array_keys($service->quote($tenant, $actor, ['managed_website'])));
+    $review = $service->quoteForReview($tenant, $actor, ['managed_website']);
+    expect($review['quote_hash'])->toBe($original['quote']['quote_hash'])->and($review['subtotal_cents'])->toBe(79800);
+    standardProvider($tenant, ['session' => ['status' => 'open', 'payment_status' => 'unpaid', 'subscription' => null, 'invoice' => null]]);
+    expect($service->checkout($tenant, $actor, ['managed_website'], ['terms_accepted' => true, 'quote_hash' => $review['quote_hash']])['ok'])->toBeTrue()
+        ->and(standardIntent($tenant)['id'])->toBe($original['id']);
+    Http::assertNotSent(fn ($request): bool => $request->method() === 'POST');
+});
+
+test('a versionless original quote resumes after JSON ordering changes without rewriting its accepted hash', function (): void {
+    [$tenant, $actor] = standardBuyer();
+    standardProvider($tenant);
+    startStandard($tenant, $actor);
+    $override = TenantCommercialOverride::withoutGlobalScopes()->where('tenant_id', $tenant->id)->firstOrFail();
+    $mapping = $override->billing_mapping;
+    $quote = $mapping['self_service_purchase']['quote'];
+    $legacy = [];
+    foreach (['tenant_id', 'actor_id', 'offer_version', 'terms_version', 'currency', 'setup_cents', 'monthly_cents', 'branches', 'usage_note', 'subtotal_cents'] as $key) {
+        $legacy[$key] = $quote[$key];
+    }
+    $legacy['quote_hash'] = hash('sha256', json_encode($legacy, JSON_THROW_ON_ERROR));
+    $mapping['self_service_purchase']['quote'] = array_reverse($legacy, true);
+    $override->forceFill(['billing_mapping' => $mapping])->save();
+    Http::swap(new \Illuminate\Http\Client\Factory);
+    Http::fake();
+    $review = app(SelfServiceStandardPurchaseService::class)->quoteForReview($tenant, $actor, []);
+    expect($review['quote_hash'])->toBe($legacy['quote_hash'])->and($review['subtotal_cents'])->toBe(79800)
+        ->and(standardIntent($tenant)['id'])->toBe($mapping['self_service_purchase']['id']);
+    Http::assertNothingSent();
+});
+
+test('frozen quotes reject altered types shape list order and unknown hash versions before provider calls', function (string $change): void {
+    [$tenant, $actor] = standardBuyer();
+    standardProvider($tenant);
+    startStandard($tenant, $actor, ['managed_website', 'field_service']);
+    $override = TenantCommercialOverride::withoutGlobalScopes()->where('tenant_id', $tenant->id)->firstOrFail();
+    $mapping = $override->billing_mapping;
+    $quote = &$mapping['self_service_purchase']['quote'];
+    match ($change) {
+        'type' => $quote['setup_cents'] = (string) $quote['setup_cents'],
+        'extra' => $quote['injected'] = true,
+        'missing' => $quote = array_diff_key($quote, ['usage_note' => true]),
+        'version' => $quote['quote_hash_version'] = 99,
+        'list_order' => $quote['branches'] = array_reverse($quote['branches']),
+        'currency' => $quote['currency'] = 'eur',
+        'terms' => $quote['terms_version'] = 'other',
+    };
+    $override->forceFill(['billing_mapping' => $mapping])->save();
+    Http::swap(new \Illuminate\Http\Client\Factory);
+    Http::fake();
+    expect(fn () => app(SelfServiceStandardPurchaseService::class)->quoteForReview($tenant, $actor, []))->toThrow(\Illuminate\Validation\ValidationException::class);
+    Http::assertNothingSent();
+})->with(['type', 'extra', 'missing', 'version', 'list_order', 'currency', 'terms']);
+
+test('native MySQL JSON reorders and safely replays both supported frozen quote versions', function (bool $legacy): void {
+    if (\Illuminate\Support\Facades\DB::getDriverName() !== 'mysql') {
+        if (getenv('SELF_SERVICE_DISPOSABLE_MYSQL') === '1') {
+            $this->fail('The protected native JSON acceptance job requires actual MySQL.');
+        }
+        $this->markTestSkipped('Native MySQL JSON proof runs in the protected disposable concurrency job.');
+    }
+    abort_unless(getenv('SELF_SERVICE_DISPOSABLE_MYSQL') === '1' && app()->environment('testing')
+        && \Illuminate\Support\Facades\DB::connection()->getConfig('host') === '127.0.0.1'
+        && \Illuminate\Support\Facades\DB::connection()->getDatabaseName() === 'everbranch_ci', 403);
+    [$tenant, $actor] = standardBuyer();
+    standardProvider($tenant);
+    startStandard($tenant, $actor);
+    $service = app(SelfServiceStandardPurchaseService::class);
+    $source = $service->quote($tenant, $actor, ['managed_website']);
+    if ($legacy) {
+        unset($source['quote_hash'], $source['quote_hash_version']);
+        $source['quote_hash'] = hash('sha256', json_encode($source, JSON_THROW_ON_ERROR));
+    }
+    $override = TenantCommercialOverride::withoutGlobalScopes()->where('tenant_id', $tenant->id)->firstOrFail();
+    $mapping = $override->billing_mapping;
+    $id = $mapping['self_service_purchase']['id'];
+    $mapping['self_service_purchase']['quote'] = $source;
+    $override->forceFill(['billing_mapping' => $mapping])->save();
+    $stored = standardIntent($tenant)['quote'];
+    expect(array_keys($stored))->not->toBe(array_keys($source));
+    expect(\Illuminate\Support\Facades\DB::selectOne('SELECT JSON_TYPE(billing_mapping) AS native_type FROM tenant_commercial_overrides WHERE id = ?', [$override->id])->native_type)->toBe('OBJECT');
+    expect(\Illuminate\Support\Facades\DB::selectOne("SELECT DATA_TYPE AS native_type FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tenant_commercial_overrides' AND COLUMN_NAME = 'billing_mapping'")->native_type)->toBe('json');
+    expect($service->quoteForReview($tenant, $actor, [])['quote_hash'])->toBe($source['quote_hash']);
+    standardProvider($tenant, ['session' => ['status' => 'open', 'payment_status' => 'unpaid', 'subscription' => null, 'invoice' => null]]);
+    expect($service->checkout($tenant, $actor, ['managed_website'], ['terms_accepted' => true, 'quote_hash' => $source['quote_hash']])['ok'])->toBeTrue()
+        ->and(standardIntent($tenant)['id'])->toBe($id);
+    Http::assertNotSent(fn ($request): bool => $request->method() === 'POST');
+})->with([false, true]);
 
 function standardPortalProvider(array $changes = []): void
 {

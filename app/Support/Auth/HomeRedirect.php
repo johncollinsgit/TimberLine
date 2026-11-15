@@ -34,6 +34,10 @@ class HomeRedirect
             && data_get($tenant->accessProfile?->metadata, 'self_service_registration') === true
             && $user->tenants()->where('tenants.id', $tenant->id)->wherePivot('role', 'owner')->wherePivot('membership_active', true)->exists()
             && ! app(\App\Services\Billing\SelfServicePurchaseEligibility::class)->paidForTenant($tenant)) {
+            if (app(\App\Services\Onboarding\SelfServiceTrialService::class)->retainedForTenant($tenant)) {
+                return route('workspace.guide', ['tenant' => $tenant->slug], absolute: false);
+            }
+
             return route('self-service.purchase', ['tenant' => $tenant->slug], absolute: false);
         }
 
