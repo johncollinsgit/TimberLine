@@ -612,8 +612,10 @@ Route::post('/platform/signup', [\App\Http\Controllers\Onboarding\SelfServiceSig
 Route::middleware(['auth', 'throttle:10,1,self-service-verification:'])->group(function (): void {
     Route::get('/platform/signup/check-email', [\App\Http\Controllers\Onboarding\SelfServiceSignupController::class, 'notice'])->name('self-service.verify.notice');
     Route::post('/platform/signup/verification-email', [\App\Http\Controllers\Onboarding\SelfServiceSignupController::class, 'resend'])->middleware('throttle:3,1,self-service-resend:')->name('self-service.verify.resend');
-    Route::get('/platform/signup/verify/{id}/{hash}', [\App\Http\Controllers\Onboarding\SelfServiceSignupController::class, 'verify'])->middleware('signed')->whereNumber('id')->name('self-service.verify');
 });
+Route::get('/platform/signup/verify/{id}/{hash}', [\App\Http\Controllers\Onboarding\SelfServiceSignupController::class, 'verify'])
+    ->middleware(['throttle:10,1,self-service-verification:', 'signed'])
+    ->whereNumber('id')->name('self-service.verify');
 Route::get('/platform/build', [\App\Http\Controllers\Onboarding\BranchSelectionController::class, 'show'])->name('platform.build');
 Route::post('/platform/build', [\App\Http\Controllers\Onboarding\BranchSelectionController::class, 'save'])->middleware('throttle:30,1')->name('platform.build.save');
 Route::post('/platform/build/branch', [\App\Http\Controllers\Onboarding\BranchSelectionController::class, 'add'])->middleware('throttle:30,1')->name('platform.build.add');

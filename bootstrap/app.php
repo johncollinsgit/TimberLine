@@ -7,6 +7,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\FrameGuard;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Exceptions\InvalidSignatureException;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
@@ -70,6 +71,23 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (InvalidSignatureException $exception, Request $request) {
+            if (! $request->routeIs('verification.confirm', 'self-service.verify')) {
+                return null;
+            }
+
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'This verification link has expired or changed.'], 403)
+                    ->header('Cache-Control', 'no-store, private');
+            }
+
+            // An invalid URL cannot identify an account. Recovery uses only
+            // the current session, or asks the visitor to sign in first.
+            return response()->view('onboarding.verification-link-expired', [
+                'canResend' => $request->user()?->is_active && ! $request->user()->hasVerifiedEmail(),
+            ], 403)->header('Cache-Control', 'no-store, private');
+        });
+
         $exceptions->dontFlash(['api_token', 'admin_token', 'storefront_token', 'admin_access_token', 'storefront_access_token', 'webhook_secret', 'payment_method_token', 'braintree_public_key', 'reward_redemption']);
         $exceptions->respond(function (\Symfony\Component\HttpFoundation\Response $response, Throwable $exception, Request $request) {
             if ($response->getStatusCode() !== 419

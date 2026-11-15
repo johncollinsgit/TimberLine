@@ -3467,3 +3467,10 @@ signup and business setup, with branch adjustments available after purchase.
 - The app Home keeps its normal destination when a flagship Website exists.
 - Website setup displays rejected details, retains the entered values, and opens
   Edit details at the appropriate wizard step.
+
+## 2026-11-15 — Signup email recovery
+
+- Verification emails now confirm safely in a fresh browser before sign-in.
+  Existing links remain valid without switching or authenticating an account.
+- Expired or changed links offer a short resend/sign-in recovery page. Requests
+  remain bound to the signed-in account, and invalid links disclose no recipient.

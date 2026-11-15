@@ -41,7 +41,9 @@ test('a verified public buyer purchases once and publishes a general website wit
 
         return true;
     });
-    $this->get($verificationUrl)->assertRedirect(route('workspace.first-login'));
+    $this->get($verificationUrl)->assertRedirect(route('workspace.first-login', absolute: false).'?verified=1');
+    // A new HTTP request reloads the session user after confirmation.
+    $this->actingAs($user->refresh());
     $this->post(route('workspace.first-login.store'), [
         'workspace_name' => 'Fictional Journey Studio', 'template_key' => 'generic', 'start_path' => 'self',
     ])->assertRedirectContains('/workspace/purchase');

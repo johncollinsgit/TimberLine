@@ -16,7 +16,8 @@ class ConfirmEmailController extends Controller
     {
         $user = User::query()->find($id);
         abort_unless($user instanceof User
-            && hash_equals(sha1($user->getEmailForVerification()), $hash), 403);
+            && hash_equals(sha1($user->getEmailForVerification()), $hash)
+            && ($user->requested_via !== 'self_service_registration' || $user->is_active), 403, '', ['Cache-Control' => 'no-store, private']);
 
         if (! $user->hasVerifiedEmail() && $user->markEmailAsVerified()) {
             event(new Verified($user));
@@ -34,12 +35,12 @@ class ConfirmEmailController extends Controller
             // admin-only page such as /dashboard after successful confirmation.
             if ($path === '/mobile/authorize'
                 && ($host === null || strcasecmp((string) $host, $request->getHost()) === 0)) {
-                return redirect()->intended($verifiedHome);
+                return redirect()->intended($verifiedHome)->header('Cache-Control', 'no-store, private');
             }
 
             $request->session()->forget('url.intended');
 
-            return redirect()->to($verifiedHome);
+            return redirect()->to($verifiedHome)->header('Cache-Control', 'no-store, private');
         }
 
         return response()->view('pages::auth.email-confirmed', [
