@@ -3,15 +3,28 @@
 namespace App\Notifications;
 
 use Illuminate\Auth\Notifications\VerifyEmail;
-use Illuminate\Support\Facades\URL;
+use Illuminate\Notifications\Messages\MailMessage;
+use Symfony\Component\Mime\Email;
 
 class SelfServiceVerifyEmail extends VerifyEmail
 {
-    protected function verificationUrl($notifiable): string
+    public function toMail($notifiable): MailMessage
     {
-        return URL::temporarySignedRoute('self-service.verify', now()->addMinutes(60), [
-            'id' => $notifiable->getKey(),
-            'hash' => sha1($notifiable->getEmailForVerification()),
-        ]);
+        // The parent retains the canonical, signed confirmation URL factory.
+        $message = parent::toMail($notifiable);
+
+        return $message->withSymfonyMessage(static function (Email $email) use ($message): void {
+            // Auth links remain direct; marketing/account tracking is untouched.
+            $email->getHeaders()->addTextHeader('X-SMTPAPI', json_encode([
+                'filters' => [
+                    'clicktrack' => ['settings' => ['enable' => 0, 'enable_text' => false]],
+                    'opentrack' => ['settings' => ['enable' => 0]],
+                ],
+            ], JSON_THROW_ON_ERROR));
+            $email->text(view('emails.self-service-verification-text', [
+                'actionUrl' => $message->actionUrl,
+                'expiresInMinutes' => (int) config('auth.verification.expire', 60),
+            ])->render());
+        });
     }
 }

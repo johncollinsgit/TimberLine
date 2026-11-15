@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Onboarding;
 
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
+use App\Http\Controllers\Auth\ConfirmEmailController;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Notifications\SelfServiceVerifyEmail;
@@ -95,17 +96,14 @@ class SelfServiceSignupController extends Controller
         return back()->with('status', 'Verification email sent.');
     }
 
-    public function verify(Request $request, int $id, string $hash): RedirectResponse
+    public function verify(Request $request, int $id, string $hash, ConfirmEmailController $confirmation): Response|RedirectResponse
     {
-        $user = $request->user();
-        abort_unless($user instanceof User && $user->is_active && (int) $user->id === $id, 403);
-        abort_unless(hash_equals(sha1($user->getEmailForVerification()), $hash), 403);
-        if (! $user->hasVerifiedEmail()) {
-            $user->markEmailAsVerified();
-            event(new \Illuminate\Auth\Events\Verified($user));
-        }
+        $user = User::query()->find($id);
+        // Previously issued links retain their active-target and account fence.
+        abort_unless($user instanceof User && $user->is_active
+            && ($request->user() === null || $request->user()->is($user)), 403, '', ['Cache-Control' => 'no-store, private']);
 
-        return redirect()->route('workspace.first-login')->with('status', 'Email verified. Create your workspace.');
+        return $confirmation($request, $id, $hash);
     }
 
     private function verificationDeliveryReady(): bool

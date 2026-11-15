@@ -4,7 +4,24 @@ This is Everbranch's platform subscription lane. It is separate from tenant-owne
 
 ## New account and purchase
 
-The public setup starts with photo cards for business templates. Each template resolves its included tools from the current safe public catalog; client module lists cannot override it. Template selection grants no access and starts no provider connection. The saved template continues to `/platform/signup` for email registration. New accounts are active but have no tenant or paid access until a current-account, signed email verification is completed. Passwords use the existing application rules and hashing. Email delivery failure preserves the account and exposes a throttled resend. Google first-time accounts use the same path; only an explicit verified provider claim for the matching stored address skips email verification. `EVERBRANCH_SELF_SERVICE_REGISTRATION_ENABLED` independently controls enrollment (default true); legacy account-request and existing tenant flows remain available.
+The public setup starts with photo cards for business templates. Each template resolves its included tools from the current safe public catalog; client module lists cannot override it. Template selection grants no access and starts no provider connection. The saved template continues to `/platform/signup` for email registration. New accounts are active but have no tenant or paid access until their addressed account's signed email verification is completed. Passwords use the existing application rules and hashing. Email delivery failure preserves the account and exposes a throttled resend. Google first-time accounts use the same path; only an explicit verified provider claim for the matching stored address skips email verification. `EVERBRANCH_SELF_SERVICE_REGISTRATION_ENABLED` independently controls enrollment (default true); legacy account-request and existing tenant flows remain available.
+
+New verification emails use the canonical app host and existing `/email/confirm`
+flow. A fresh browser confirms the addressed email before asking the owner to
+sign in; it never logs in or switches accounts automatically. Inactive self-service
+accounts cannot confirm. Previously sent `/platform/signup/verify` links remain
+signed, expiring and throttled; a different signed-in account is still rejected.
+Expired or changed signatures stay forbidden and show a private, noncached
+recovery page. Recovery never looks up the URL's target: only the current active
+unverified account can request its own email, or the visitor signs in first.
+Verification grants no workspace, trial, paid branch or publishing capability.
+
+Self-service verification SMTP messages disable click and open tracking through
+their own `X-SMTPAPI` header, keeping HTML and plain-text signed links direct.
+The verification-only plain-text alternative is branded Everbranch. This changes
+no SendGrid account setting, marketing message, suppression or delivery policy.
+See the provider's [SMTP filters](https://www.twilio.com/docs/sendgrid/for-developers/sending-email/smtp-filters)
+and [click-tracking troubleshooting](https://www.twilio.com/docs/sendgrid/for-developers/sending-email/smtp-errors-and-troubleshooting).
 
 After verification, the chosen template is shown once with the business-name form; it is not requested again. A missing template returns to the chooser. The template and business name create one provisional base workspace under a user lock. Included website addresses fit DNS label limits and avoid configured platform hosts. Only this fresh path assigns the owner membership and server cohort marker. The template and safe tool selection survive authentication and provisioning. The purchase page displays the canonical setup/monthly total and acceptance, with tool details collapsed; returning unpaid owners resume this page on login. The workspace guide retains a Your plan link. A URL return displays pending status until the server confirms actual paid evidence.
 

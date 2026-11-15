@@ -43,7 +43,7 @@ test('signed email verification is bound to the current account and cannot be fo
     $this->actingAs($other)->get($url)->assertForbidden();
     $this->actingAs($user)->get($url.'&invalid=1')->assertForbidden();
     expect($user->refresh()->email_verified_at)->toBeNull();
-    $this->get($url)->assertRedirect(route('workspace.first-login'));
+    $this->get($url)->assertRedirect(route('workspace.first-login', absolute: false).'?verified=1');
     expect($user->refresh()->email_verified_at)->not->toBeNull();
 });
 
