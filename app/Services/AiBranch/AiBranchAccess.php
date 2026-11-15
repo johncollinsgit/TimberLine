@@ -14,6 +14,7 @@ class AiBranchAccess
 
     public function authorize(Tenant $tenant, User $user, bool $optedIn = true): array
     {
+        app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertPaidUsageAllowed($tenant);
         $pilot = app(AiFictionalPilot::class);
         if ($pilot->reserved($tenant)) {
             abort_unless($pilot->grant($tenant, $user) && $pilot->current()

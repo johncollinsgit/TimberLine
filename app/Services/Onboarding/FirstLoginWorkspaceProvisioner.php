@@ -140,6 +140,7 @@ class FirstLoginWorkspaceProvisioner
                     targetType: 'tenant_access_profile', targetId: $profile->id,
                     afterState: ['plan_key' => 'base', 'self_service_registration' => true]
                 );
+                app(SelfServiceTrialService::class)->startForFreshWorkspace($tenant, $user);
             }
 
             // Module picks are INTENT ONLY — recorded as interests, never enabled.

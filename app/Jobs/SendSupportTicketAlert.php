@@ -29,6 +29,9 @@ class SendSupportTicketAlert implements ShouldQueue
         if (! $ticket || ! $ticket->tenant) {
             return;
         }
+        if (app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($ticket->tenant)) {
+            return; // Keep the durable help ticket; never send a trial operator SMS.
+        }
 
         $key = 'support-ticket:'.$ticket->id;
         $existing = OperatorAlertLog::query()->where('dedupe_key', $key)->first();

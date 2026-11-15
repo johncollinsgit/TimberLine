@@ -126,6 +126,18 @@ const contextualModules = [
     mountExport: "mountManagedWebsiteEditorNow",
   },
   {
+    key: "websitePhotoFields",
+    selectors: ["[data-website-photo-field]"],
+    load: () => import("./managed-website/catalog-photo-fields"),
+    mountExport: "mountWebsitePhotoFieldsNow",
+  },
+  {
+    key: "websiteVersionHistory",
+    selectors: ["[data-website-version-history]"],
+    load: () => import("./managed-website/VersionHistory"),
+    mountExport: "mountWebsiteVersionHistoryNow",
+  },
+  {
     key: "marketingCustomersGrid",
     selectors: ["#marketing-customers-grid"],
     load: () => import("./marketing/customers-grid"),

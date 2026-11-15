@@ -35,7 +35,7 @@ test.describe("Everbranch public studio", () => {
         await expect(page.locator("[data-studio-hero-slide].is-active")).toBeVisible();
         await expect(page.locator(".eb-studio-nav__actions").getByRole("link", { name: "Pricing", exact: true })).toHaveAttribute("href", /platform\/plans/);
         await expect(page.getByText("A little more room to grow", { exact: true })).toHaveCount(0);
-        await expect(page.getByRole("link", { name: /get started/i }).first()).toHaveAttribute("href", /start/);
+        await expect(page.getByRole("link", { name: "Start free trial", exact: true }).first()).toHaveAttribute("href", /start/);
         await expect(page.getByRole("link", { name: "Plans" }).first()).toBeVisible();
         await expect(page.getByRole("link", { name: "Customer Loop", exact: true, includeHidden: true })).toHaveAttribute("href", "#customer-loop");
         await expect(page.getByRole("link", { name: /plan your customer loop/i })).toHaveAttribute("href", /start/);

@@ -18,18 +18,27 @@ beforeEach(function (): void {
     config()->set('services.google.redirect', 'https://example.test/auth/google/callback');
 });
 
-test('signup presents templates with the server-priced offer', function (): void {
-    $this->get(route('platform.start'))->assertOk()
+test('signup separates the private trial from canonical paid activation', function (bool $trialEnabled): void {
+    config()->set('self_service.trial_enabled', $trialEnabled);
+    $response = $this->get(route('platform.start'))->assertOk()
         ->assertSeeText('Choose a template.')
         ->assertSeeText('Included tools')
         ->assertSee('name="template"', false)
         ->assertDontSee('name="branches[]"', false)
-        ->assertSeeText('Continue to account')
+        ->assertSeeText('$499')
+        ->assertSeeText('$299')
         ->assertSeeText('$798')
         ->assertSeeText('Before applicable tax.')
         ->assertSeeText('Payment and activation are separate steps.')
         ->assertSee(route('platform.request-access'), false);
-});
+    if ($trialEnabled) {
+        $response->assertSeeText('Start free trial')->assertSeeText('Try your private workspace for 14 days.')
+            ->assertSeeText('No card. No automatic charge.')->assertSeeText('To activate');
+    } else {
+        $response->assertSeeText('Continue to account')->assertDontSeeText('Start free trial')
+            ->assertDontSeeText('Try your private workspace for 14 days.');
+    }
+})->with([true, false]);
 
 test('branch basket deduplicates choices and resumes without changing access', function (): void {
     $this->post(route('platform.build.save'), ['branches' => ['customers', 'messaging', 'customers'], 'monthly_cents' => 1])

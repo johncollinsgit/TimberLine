@@ -4,6 +4,9 @@
         && (string) $presentationTenant->slug !== (string) config('tenancy.auth.flagship_tenant_slug');
     $tenantId = request()?->attributes->get('current_tenant_id');
     $resolvedTenantId = is_numeric($tenantId) ? (int) $tenantId : null;
+    $trial = $presentationTenant ? app(\App\Services\Onboarding\SelfServiceTrialService::class)->status($presentationTenant) : [];
+    $privateTrial = $presentationTenant && app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($presentationTenant);
+    $canEditPrivate = ! $privateTrial || (bool) ($trial['can_edit_private'] ?? false);
     $resolvedLabels = app(\App\Services\Tenancy\TenantDisplayLabelResolver::class)->resolve($resolvedTenantId);
     $displayLabels = is_array($resolvedLabels['labels'] ?? null) ? (array) $resolvedLabels['labels'] : [];
     $rewardsLabel = trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards'));
@@ -14,6 +17,7 @@
 
 <x-layouts::app :title="'Customers'">
     <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
+        @include('onboarding.partials.trial-status', ['tenant' => $presentationTenant])
         <section class="grid divide-y divide-zinc-200 border-y border-zinc-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
             <article class="px-4 py-3">
                 <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Total Customers</div>
@@ -48,9 +52,9 @@
             <div
                 id="marketing-customers-grid"
                 data-endpoint="{{ data_get($customerGrid, 'endpoint') }}"
-                data-add-customer-url="{{ route('marketing.customers.create') }}"
-                data-message-customer-url="{{ auth()->user()?->canAccessMarketing() ? route('marketing.messages.send') : '' }}"
-                data-bulk-action-url="{{ data_get($customerGrid, 'bulk_action_url') }}"
+                data-add-customer-url="{{ $canEditPrivate ? route('marketing.customers.create') : '' }}"
+                data-message-customer-url="{{ ! $privateTrial && auth()->user()?->canAccessMarketing() ? route('marketing.messages.send') : '' }}"
+                data-bulk-action-url="{{ $privateTrial ? '' : data_get($customerGrid, 'bulk_action_url') }}"
                 data-operational-directory="{{ data_get($customerGrid, 'operational_directory') ? 'true' : 'false' }}"
                 data-initial-filters='@json(data_get($customerGrid, "filters", []))'
                 data-sort-options='@json(data_get($customerGrid, "sort_options", []))'
@@ -63,7 +67,7 @@
                         <div class="mt-1.5 text-sm text-zinc-600">
                             {{ number_format((int) ($totalProfiles ?? 0)) }} customer profile{{ (int) ($totalProfiles ?? 0) === 1 ? '' : 's' }} indexed.
                             @if($operationalDirectory ?? false)
-                                Search, update service addresses, and archive outdated customers without losing their job history.
+                                {{ $privateTrial ? 'Search contact details, service addresses, and job history.' : 'Search, update service addresses, and archive outdated customers without losing their job history.' }}
                             @elseif($genericWorkspacePresentation)
                                 Search customer history, contact details, and next steps.
                             @else
@@ -71,9 +75,11 @@
                             @endif
                         </div>
                     </div>
-                    <a href="{{ route('marketing.customers.create') }}" wire:navigate class="inline-flex h-10 items-center rounded-lg border border-emerald-700 bg-emerald-700 px-3.5 text-sm font-medium text-white shadow-sm">
+                    @if($canEditPrivate)
+                    <a href="{{ $canEditPrivate ? route('marketing.customers.create') : '' }}" wire:navigate class="inline-flex h-10 items-center rounded-lg border border-emerald-700 bg-emerald-700 px-3.5 text-sm font-medium text-white shadow-sm">
                         Add Customer
                     </a>
+                    @endif
                 </div>
                 <div class="text-sm text-zinc-500">
                     The live grid below loads rows on demand so search and filters stay fast. Use the search bar first, then open advanced filters only when you need them.
@@ -84,7 +90,7 @@
             </div>
         </section>
 
-        @if(($totalProfiles ?? 0) === 0 && !empty($emptyStateDiagnostics))
+        @if(! $privateTrial && ($totalProfiles ?? 0) === 0 && !empty($emptyStateDiagnostics))
             <section class="rounded-3xl border border-amber-300/35 bg-amber-100 p-4 sm:p-5">
                 <h2 class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-900">Unified Profile Index Not Built</h2>
                 <p class="mt-2 text-sm text-amber-800">

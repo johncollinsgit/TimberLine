@@ -5,6 +5,7 @@ import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createServer } from 'node:net';
 import { chromium, webkit } from 'playwright';
+import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 
 const exec = promisify(execFile), base = resolve(), probe = createServer();
@@ -12,13 +13,14 @@ await new Promise(done => probe.listen(0, '127.0.0.1', done)); const port = prob
 const dir = await mkdtemp(join(tmpdir(), 'codex-team-search-')), origin = `http://127.0.0.1:${port}`;
 const evidence = resolve(process.env.TEAM_SEARCH_EVIDENCE || 'test-results/team-universal-search'); await mkdir(evidence, { recursive: true }); await writeFile(join(dir, 'db.sqlite'), '');
 const env = { ...process.env, APP_ENV: 'testing', APP_DEBUG: 'false', APP_URL: origin, APP_KEY: 'base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=', APP_CONFIG_CACHE: join(dir, 'config.php'), DB_CONNECTION: 'sqlite', DB_DATABASE: join(dir, 'db.sqlite'), DB_URL: '', DATABASE_URL: '', CACHE_STORE: 'array', SESSION_DRIVER: 'database', SESSION_SECURE_COOKIE: 'false', SESSION_DOMAIN: '', MAIL_MAILER: 'array', QUEUE_CONNECTION: 'sync', LOG_CHANNEL: 'null', BCRYPT_ROUNDS: '4', TEAM_WORK_ENABLED: 'true', TEAM_WORK_PREMIUM_ENABLED: 'true', TEAM_OPERATIONS_ENABLED: 'true', TEAM_WORK_ASANA_ENABLED: 'false', TEAM_WORK_SEARCH_ENABLED: 'false', TEAM_WORK_SEARCH_INDEX_ENABLED: 'false', EVERBRANCH_AI_STANDARD_ENABLED: 'false', NIGHTWATCH_ENABLED: 'false', TELESCOPE_ENABLED: 'false', PULSE_ENABLED: 'false' };
-let server, browser, page; const checks = [];
+let server, browser, page, activeEngine = null, activeWidth = null, phase = 'setup'; const checks = [];
 try {
   await exec('php', ['artisan', 'migrate', '--force', '--no-interaction'], { cwd: base, env, maxBuffer: 2e6 });
   const fixture = JSON.parse((await exec('php', ['scripts/everbranch-team/universal-search-browser-fixture.php'], { cwd: base, env })).stdout); env.TEAM_WORK_TENANT_ALLOWLIST = fixture.allowlist;
   server = spawn('php', ['artisan', 'serve', '--host=127.0.0.1', `--port=${port}`, '--no-reload'], { cwd: base, env, stdio: 'ignore' });
   let ready = false; for (let i = 0; i < 100; i++) { try { if ((await fetch(origin + '/up')).ok) { ready = true; break; } } catch {} await new Promise(done => setTimeout(done, 100)); } assert.ok(ready);
   for (const [engine, name] of [[chromium, 'chromium'], [webkit, 'webkit']]) {
+    activeEngine = name;
     browser = await engine.launch(); const context = await browser.newContext({ reducedMotion: 'reduce' });
     await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
     const csrf = (await (await context.request.get(origin + '/login')).text()).match(/<meta name="csrf-token" content="([^"]+)"/)?.[1]; assert.ok(csrf);
@@ -26,6 +28,7 @@ try {
     page = await context.newPage(); page.setDefaultTimeout(12000); await page.clock.setFixedTime(new Date('2026-11-07T12:00:00Z')); const errors = [], writes = [], navigationReads = [];
     page.on('pageerror', error => errors.push(error.message)); page.on('request', request => { const url = new URL(request.url()); if (url.pathname.startsWith('/team/') && !['GET', 'HEAD'].includes(request.method())) writes.push(request.url()); if (url.pathname === '/team/operations/records' || /^\/team\/areas\/[^/]+\/members$/.test(url.pathname)) navigationReads.push(request.url()); });
     for (const width of [320, 390, 1440]) {
+      activeWidth = width; phase = 'viewport';
       await page.setViewportSize({ width, height: 900 }); await page.goto(`${origin}/teams?tenant=${fixture.tenant}`);
       await page.waitForFunction(() => window.TeamSearchBridge?.available());
       const input = page.getByRole('combobox', { name: 'Search everything you can access in this workspace' });
@@ -40,7 +43,13 @@ try {
       await page.getByRole('combobox', { name: 'All work', exact: true }).selectOption('active');
       await result.waitFor(); assert.equal(await filterLink.innerText(), 'Filters (1)', 'Hidden active filters remain discoverable');
       await page.getByRole('combobox', { name: 'All work', exact: true }).selectOption(''); await result.waitFor();
-      await filterLink.click(); assert.ok(await filters.isHidden());
+      phase = 'filters_close';
+      await filterLink.click();
+      await Promise.all([
+        expect(filters).toBeHidden({ timeout: 12000 }),
+        expect(filterLink).toHaveAttribute('aria-expanded', 'false', { timeout: 12000 }),
+      ]);
+      phase = 'viewport';
       assert.ok(['rgb(214, 229, 215)', 'rgb(225, 237, 223)'].includes(await input.evaluate(node => getComputedStyle(node).backgroundColor)), 'Search uses a solid green background in focused and resting states');
       if (width === 1440) {
         // At 1440 the sidebar, tabs and controls can leave less than 560px with
@@ -53,6 +62,7 @@ try {
       const panel = await page.locator('[data-team-universal-search] .eb-search-panel').boundingBox(); assert.ok(panel.x >= -1 && panel.x + panel.width <= width + 1, 'Search stays in viewport');
       await page.screenshot({ path: join(evidence, `${name}-${width}-search.png`) });
       await input.press('Escape'); assert.ok(await page.locator('[data-team-universal-search] .eb-search-panel').isHidden());
+      phase = 'workspace_chooser';
       if (!await page.locator('#tw-workspaces').isVisible()) await page.getByRole('button', { name: 'Controls', exact: true }).click();
       await page.locator('#tw-workspaces').click(); const dialog = page.locator('#tw-workspace-dialog'); await dialog.waitFor({ state: 'visible' });
       await dialog.getByRole('button', { name: /Fictional Long Workspace Name/ }).waitFor();
@@ -61,6 +71,7 @@ try {
       await dialog.getByRole('button', { name: 'Stay here' }).focus(); await page.screenshot({ path: join(evidence, `${name}-${width}-chooser.png`) });
       await dialog.getByRole('button', { name: 'Stay here' }).click();
       if (width === 390) {
+        phase = 'calendar_and_progressive_search';
         for (const layout of ['board', 'list', 'calendar']) {
           if (await page.locator('#tw-filter-toggle').getAttribute('aria-expanded') === 'true') await page.locator('#tw-filter-toggle').click();
           await page.locator(`[data-team-layout="${layout}"]`).click();
@@ -183,6 +194,7 @@ try {
         checks.push(`${name}: expired app cursor preserves Teams and asks for a fresh search`);
         await page.unroute('**/team/search/all?**', stagedApps);
 
+        phase = 'cross_area_open';
         await input.fill('aspen');
         const otherResult = page.locator('[data-team-universal-search] .eb-search-option').filter({ hasText: 'Fictional Aspen regional market' }); await otherResult.waitFor();
         const otherOpened = page.waitForResponse(response => new URL(response.url()).pathname === '/team/operations/records/' + fixture.other_event_id && response.ok());
@@ -198,5 +210,17 @@ try {
     assert.deepEqual(errors, []); assert.deepEqual(writes, []); await context.close(); await browser.close(); browser = null;
   }
   await writeFile(join(evidence, 'results.json'), JSON.stringify({ checks, provider_calls: 0, business_writes: 0 }, null, 2)); console.log(JSON.stringify({ passed: checks.length, checks, evidence }));
-} catch (error) { if (page) console.log(JSON.stringify(await page.evaluate(() => ({query:document.querySelector('#teams-universal-query')?.value,focus:document.activeElement?.id,status:document.querySelector('.eb-search-status')?.textContent,panelHidden:document.querySelector('.eb-search-panel')?.hidden,dialogOpen:document.querySelector('#tops-detail')?.open})),null,2)); if (page) await page.screenshot({ path: join(evidence, 'failure.png') }).catch(() => {}); throw error; }
+} catch (error) {
+  if (page) {
+    const state = await page.evaluate(() => {
+      const root = document.querySelector('[data-team-universal-search]'), filters = root?.querySelector('.eb-search-filters'), toggle = root?.querySelector('.eb-search-filter-toggle');
+      return { viewport: { width: innerWidth, height: innerHeight }, query_present: Boolean(document.querySelector('#teams-universal-query')?.value), focus: document.activeElement?.id || null, panel_hidden: root?.querySelector('.eb-search-panel')?.hidden ?? null, filters_hidden: filters?.hidden ?? null, filters_display: filters ? getComputedStyle(filters).display : null, filters_visibility: filters ? getComputedStyle(filters).visibility : null, toggle_expanded: toggle?.getAttribute('aria-expanded') ?? null, dialog_open: document.querySelector('#tops-detail')?.open ?? null };
+    }).catch(() => ({ state: 'unavailable' }));
+    const diagnostic = { engine: activeEngine, width: activeWidth, phase, state };
+    console.log(JSON.stringify(diagnostic, null, 2));
+    await writeFile(join(evidence, 'failure.json'), JSON.stringify(diagnostic, null, 2)).catch(() => {});
+    await page.screenshot({ path: join(evidence, 'failure.png') }).catch(() => {});
+  }
+  throw error;
+}
 finally { await browser?.close(); server?.kill('SIGTERM'); await rm(dir, { recursive: true, force: true }); }

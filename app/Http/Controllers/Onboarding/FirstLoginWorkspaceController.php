@@ -197,6 +197,10 @@ class FirstLoginWorkspaceController extends Controller
         $request->session()->put('tenant_id', $result['tenant_id']);
 
         if (\App\Models\TenantAccessProfile::query()->where('tenant_id', $result['tenant_id'])->where('metadata->self_service_registration', true)->exists()) {
+            if (app(\App\Services\Onboarding\SelfServiceTrialService::class)->activeForTenant((int) $result['tenant_id'])) {
+                return redirect()->route('workspace.guide', ['tenant' => $result['tenant_slug']])->with('status', 'Your private trial is ready.');
+            }
+
             return redirect()->route('self-service.purchase', ['tenant' => $result['tenant_slug']])->with('status', 'Workspace created. Review your plan.');
         }
 

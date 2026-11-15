@@ -50,9 +50,8 @@ class WorkspaceAssetService
     /** @param array<int,int> $jobIds */
     public function storeUpload(Tenant $tenant, User $user, UploadedFile $file, array $jobIds, string $visibility, ?string $caption = null, array $tags = [], array $metadata = []): WorkspaceAsset
     {
+        $this->validateUpload($file);
         $mime = (string) ($file->getMimeType() ?: $file->getClientMimeType());
-        abort_unless(in_array($mime, $this->allowedMimes, true), 422, 'This file type is not supported.');
-        abort_if((int) ($file->getSize() ?: 0) > $this->byteLimitForMime($mime), 422, 'This file exceeds the workspace upload limit.');
         $bytes = (string) file_get_contents($file->getRealPath());
 
         return $this->storeBytes(
@@ -71,9 +70,21 @@ class WorkspaceAssetService
         );
     }
 
+    /** Reused for atomic trial batches before their first filesystem write. */
+    public function validateUpload(UploadedFile $file): void
+    {
+        $mime = (string) ($file->getMimeType() ?: $file->getClientMimeType());
+        abort_unless(in_array($mime, $this->allowedMimes, true), 422, 'This file type is not supported.');
+        abort_if((int) ($file->getSize() ?: 0) > $this->byteLimitForMime($mime), 422, 'This file exceeds the workspace upload limit.');
+        if ($mime === 'application/pdf') {
+            $this->assertValidPdfBytes((string) file_get_contents($file->getRealPath()));
+        }
+    }
+
     /** @param array<string,mixed> $attachable */
     public function importQuickBooksAttachable(Tenant $tenant, QuickBooksOnlineClient $client, array $attachable): ?WorkspaceAsset
     {
+        app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertPaidUsageAllowed($tenant);
         $externalId = trim((string) ($attachable['Id'] ?? ''));
         $fileName = trim((string) ($attachable['FileName'] ?? ''));
         $mime = trim((string) ($attachable['ContentType'] ?? ''));
@@ -134,6 +145,7 @@ class WorkspaceAssetService
         array $tags = [],
         array $metadata = [],
     ): WorkspaceAsset {
+        app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertPaidUsageAllowed($tenant);
         abort_unless(str_starts_with($url, 'https://'), 422, 'Remote images must use HTTPS.');
 
         $existing = WorkspaceAsset::query()
@@ -190,6 +202,38 @@ class WorkspaceAssetService
         array $tags = [],
         array $metadata = [],
     ): WorkspaceAsset {
+        $arguments = [$tenant, $bytes, $fileName, $mime, $source, $externalId, $visibility, $caption, $uploadedBy, $jobIds, $tags, $metadata];
+        $trials = app(\App\Services\Onboarding\SelfServiceTrialService::class);
+        if (! $trials->unpaidTrialForTenant($tenant)) {
+            return $this->persistBytes(...$arguments);
+        }
+
+        return DB::transaction(function () use ($tenant, $trials, $source, $arguments): WorkspaceAsset {
+            Tenant::query()->whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+            $trial = $trials->status($tenant);
+            abort_unless($trial['can_edit_private'] && $source === 'upload', 423, 'Your trial files are read only.');
+            abort_if(WorkspaceAsset::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count() >= $trial['limits']['documents'], 423, 'Your trial file limit is reached.');
+
+            return $this->persistBytes(...[...$arguments, true]);
+        });
+    }
+
+    /** A trial upload always stays on the configured local filesystem. */
+    protected function persistBytes(
+        Tenant $tenant,
+        string $bytes,
+        string $fileName,
+        string $mime,
+        string $source,
+        ?string $externalId,
+        string $visibility,
+        ?string $caption = null,
+        ?int $uploadedBy = null,
+        array $jobIds = [],
+        array $tags = [],
+        array $metadata = [],
+        bool $localOnly = false,
+    ): WorkspaceAsset {
         abort_if($bytes === '' || strlen($bytes) > $this->byteLimitForMime($mime), 422, 'This file exceeds the workspace upload limit.');
         if ($mime === 'application/pdf') {
             $this->assertValidPdfBytes($bytes);
@@ -197,48 +241,63 @@ class WorkspaceAssetService
         $extension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
         $safeName = Str::uuid().($extension !== '' ? '.'.$extension : '');
         $path = 'workspace-assets/'.$tenant->id.'/'.$safeName;
-        $disk = (string) config('filesystems.workspace_asset_disk', 'local');
+        $disk = $localOnly ? 'local' : (string) config('filesystems.workspace_asset_disk', 'local');
+        abort_if($localOnly && config('filesystems.disks.local.driver') !== 'local', 503, 'Private trial storage is unavailable.');
         abort_unless(array_key_exists($disk, (array) config('filesystems.disks')), 500, 'The workspace asset disk is not configured.');
-        abort_unless(Storage::disk($disk)->put($path, $bytes, ['visibility' => 'private']), 503, 'The file could not be stored.');
-        [$thumbnailDisk, $thumbnailPath] = $this->storeThumbnail($disk, $path, $bytes, $mime);
-        $tags = collect($tags)->map(fn (mixed $tag): string => trim((string) $tag))->filter()->unique()->take(30)->values()->all();
-        $extracted = in_array($mime, ['text/plain', 'text/csv'], true)
-            ? trim((string) preg_replace('/[^\P{C}\n\r\t]+/u', '', mb_substr($bytes, 0, 100000)))
-            : '';
-        $asset = WorkspaceAsset::query()->create([
-            'tenant_id' => (int) $tenant->id,
-            'uploaded_by_user_id' => $uploadedBy,
-            'source' => $source,
-            'external_id' => $externalId,
-            'visibility' => $visibility === 'owner' ? 'owner' : 'team',
-            'storage_disk' => $disk,
-            'storage_path' => $path,
-            'thumbnail_disk' => $thumbnailDisk,
-            'thumbnail_path' => $thumbnailPath,
-            'file_name' => Str::limit(basename($fileName), 255, ''),
-            'mime_type' => $mime,
-            'file_size' => strlen($bytes),
-            'checksum' => hash('sha256', $bytes),
-            'caption' => $caption ? Str::limit(trim($caption), 255, '') : null,
-            'tags' => $tags,
-            'search_text' => trim(implode(' ', array_filter([$fileName, $caption, implode(' ', $tags), $extracted]))),
-            'metadata' => $metadata,
-        ]);
-        $validJobIds = $tenant->fieldServiceJobs()->whereIn('id', $jobIds)->pluck('id')->map(fn ($id): int => (int) $id)->all();
-        if ($validJobIds !== []) {
-            $asset->jobs()->sync(collect($validJobIds)->mapWithKeys(fn (int $id): array => [$id => [
+        $completed = false;
+        $thumbnailDisk = null;
+        $thumbnailPath = null;
+        try {
+            abort_unless(Storage::disk($disk)->put($path, $bytes, ['visibility' => 'private']), 503, 'The file could not be stored.');
+            [$thumbnailDisk, $thumbnailPath] = $this->storeThumbnail($disk, $path, $bytes, $mime);
+            $tags = collect($tags)->map(fn (mixed $tag): string => trim((string) $tag))->filter()->unique()->take(30)->values()->all();
+            $extracted = in_array($mime, ['text/plain', 'text/csv'], true)
+                ? trim((string) preg_replace('/[^\P{C}\n\r\t]+/u', '', mb_substr($bytes, 0, 100000)))
+                : '';
+            $asset = WorkspaceAsset::query()->create([
                 'tenant_id' => (int) $tenant->id,
-                'linked_by_user_id' => $uploadedBy,
-            ]])->all());
+                'uploaded_by_user_id' => $uploadedBy,
+                'source' => $source,
+                'external_id' => $externalId,
+                'visibility' => $visibility === 'owner' ? 'owner' : 'team',
+                'storage_disk' => $disk,
+                'storage_path' => $path,
+                'thumbnail_disk' => $thumbnailDisk,
+                'thumbnail_path' => $thumbnailPath,
+                'file_name' => Str::limit(basename($fileName), 255, ''),
+                'mime_type' => $mime,
+                'file_size' => strlen($bytes),
+                'checksum' => hash('sha256', $bytes),
+                'caption' => $caption ? Str::limit(trim($caption), 255, '') : null,
+                'tags' => $tags,
+                'search_text' => trim(implode(' ', array_filter([$fileName, $caption, implode(' ', $tags), $extracted]))),
+                'metadata' => $metadata,
+            ]);
+            $validJobIds = $tenant->fieldServiceJobs()->whereIn('id', $jobIds)->pluck('id')->map(fn ($id): int => (int) $id)->all();
+            if ($validJobIds !== []) {
+                $asset->jobs()->sync(collect($validJobIds)->mapWithKeys(fn (int $id): array => [$id => [
+                    'tenant_id' => (int) $tenant->id,
+                    'linked_by_user_id' => $uploadedBy,
+                ]])->all());
+            }
+
+            $this->audit->record($tenant, $asset, $uploadedBy ? User::query()->find($uploadedBy) : null, $source === 'quickbooks' ? 'quickbooks_imported' : 'uploaded', [
+                'visibility' => $asset->visibility,
+                'job_ids' => $validJobIds,
+                'checksum' => $asset->checksum,
+            ]);
+
+            $completed = true;
+
+            return $asset;
+        } finally {
+            if ($localOnly && ! $completed) {
+                Storage::disk($disk)->delete($path);
+                if ($thumbnailDisk && $thumbnailPath) {
+                    Storage::disk($thumbnailDisk)->delete($thumbnailPath);
+                }
+            }
         }
-
-        $this->audit->record($tenant, $asset, $uploadedBy ? User::query()->find($uploadedBy) : null, $source === 'quickbooks' ? 'quickbooks_imported' : 'uploaded', [
-            'visibility' => $asset->visibility,
-            'job_ids' => $validJobIds,
-            'checksum' => $asset->checksum,
-        ]);
-
-        return $asset;
     }
 
     public function readableDisk(WorkspaceAsset $asset): ?string

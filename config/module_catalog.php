@@ -4,6 +4,11 @@ $catalog = [
     // Prospective public offer only. Existing plans and signed terms remain intact.
     'offers' => [
         'standard' => [
+            'trial' => [
+                'days' => 14, 'card_required' => false, 'public_access' => false,
+                'limits' => ['owner_seats' => 1, 'customers' => 100, 'jobs' => 25, 'documents' => 20,
+                    'website_sites' => 1, 'website_pages' => 6, 'website_photos' => 10, 'website_media_bytes' => 52428800],
+            ],
             'key' => 'standard',
             'version' => 'standard-299-499-v1',
             'name' => 'Everbranch Simple',

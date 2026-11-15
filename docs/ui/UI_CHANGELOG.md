@@ -1,3 +1,20 @@
+## 2026-11-15 - Private website starters and saved drafts
+
+Self-service Website setup recommends seven neutral business starters with six
+photo-led pages and the customer's saved name/contact details. Reopening details
+preserves the chosen design, edited pages and uploaded photographs. Replacing a
+design is a separate confirmed action. A shared picker covers section/card/gallery,
+logo, social, product and collection photos without requiring an image URL.
+
+Native History restores a saved page or website style as a new private draft;
+publishing remains separate. Expired trials can inspect retained history. The
+original audited trial cohort retains 30 recent page and 10 site autosaves, while
+published history, protected pointers, audit rows and media are preserved. Stale
+browser saves receive a recoverable conflict instead of overwriting a restored
+draft. Existing legacy history and connected-site recovery stay with their
+established contracts. See [Website templates and drafts](../operations/website-templates-and-drafts.md) for source verification
+and release acceptance; these controls do not activate payments or domains.
+
 ## 2026-11-14 - Clear Square customer matches
 
 Square source settings explain automatic association of existing aliases and
@@ -3474,3 +3491,17 @@ signup and business setup, with branch adjustments available after purchase.
   Existing links remain valid without switching or authenticating an account.
 - Expired or changed links offer a short resend/sign-in recovery page. Requests
   remain bound to the signed-in account, and invalid links disclose no recipient.
+
+## 2026-11-15 — Private trial workspace
+
+- Pricing, template cards and account setup explain the no-card trial before the
+  business is created. The workspace shows its actual UTC end date and limits.
+- One compact card offers private drafts and explicit paid activation. Expired
+  trials retain previews without writable controls; publishing and domains stay
+  behind activation. No automatic charge, reminder or deletion is promised.
+- Trial navigation follows the server's admitted read routes. Forbidden Shop,
+  provider and invitation destinations disappear; paid and legacy menus retain
+  their existing behavior.
+- Customers, Work and Documents retain private creation and basic editing during
+  the trial. At expiry they show saved details, search and downloads; connected
+  alerts, assignments, archive actions and provider controls stay out of trial UI.

@@ -10,7 +10,9 @@ use App\Models\WebsiteProduct;
 use App\Models\WebsiteProductVariant;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsiteCatalogService;
+use App\Services\ManagedWebsite\WebsiteMediaUrls;
 use App\Services\ManagedWebsite\WebsiteShippingReadinessService;
+use App\Services\ManagedWebsite\WebsiteStarterCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -99,12 +101,24 @@ class WebsiteCatalogController extends Controller
         return WebsiteCollection::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->orderBy('title')->get();
     }
 
+    private function photoFields(TenantSite $site): array
+    {
+        return [
+            'relatedPhotos' => app(WebsiteStarterCatalog::class)->photos($site->tenant),
+            'photoLibrary' => $site->media()->latest()->get()->map(fn (TenantSiteMedia $media): array => [
+                'id' => $media->id, 'name' => $media->file_name, 'alt_text' => $media->alt_text,
+                'url' => route('managed-website.media.show', ['media' => $media]),
+                'catalog_url' => route('managed-website.catalog.media', ['media' => $media]),
+            ])->all(),
+        ];
+    }
+
     public function create(Request $request, WebsiteCatalogService $catalog)
     {
         $site = $this->site($request);
         $catalog->assertEditor($site, $request->user());
 
-        return view('managed-website.catalog.product', ['site' => $site, 'product' => null, 'collections' => $this->collectionsFor($site)]);
+        return view('managed-website.catalog.product', ['site' => $site, 'product' => null, 'collections' => $this->collectionsFor($site)] + $this->photoFields($site));
     }
 
     public function edit(Request $request, WebsiteProduct $product, WebsiteCatalogService $catalog)
@@ -112,7 +126,7 @@ class WebsiteCatalogController extends Controller
         $site = $this->site($request);
         $catalog->assertEditor($site, $request->user());
 
-        return view('managed-website.catalog.product', ['site' => $site, 'product' => $this->product($site, $product), 'collections' => $this->collectionsFor($site)]);
+        return view('managed-website.catalog.product', ['site' => $site, 'product' => $this->product($site, $product), 'collections' => $this->collectionsFor($site)] + $this->photoFields($site));
     }
 
     public function store(Request $request, WebsiteCatalogService $catalog)
@@ -215,7 +229,7 @@ class WebsiteCatalogController extends Controller
         }
         $products = WebsiteProduct::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->orderBy('title')->get();
 
-        return view('managed-website.catalog.collection', compact('site', 'collection', 'products'));
+        return view('managed-website.catalog.collection', compact('site', 'collection', 'products') + $this->photoFields($site));
     }
 
     public function storeCollection(Request $request, WebsiteCatalogService $catalog)
@@ -236,6 +250,9 @@ class WebsiteCatalogController extends Controller
             abort_unless($collection->tenant_id === $site->tenant_id && $collection->tenant_site_id === $site->id, 404);
         }
         $data = $request->validate(['title' => ['required', 'string', 'max:190'], 'handle' => ['required', 'string', 'max:160', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('website_collections', 'handle')->where('tenant_site_id', $site->id)->ignore($collection?->id)], 'description' => ['nullable', 'string', 'max:8000'], 'status' => ['required', Rule::in(['draft', 'active', 'archived'])], 'image_url' => ['nullable', 'url:http,https', 'max:2048'], 'product_ids' => ['nullable', 'array', 'max:500'], 'product_ids.*' => ['integer', 'distinct', Rule::exists('website_products', 'id')->where('tenant_id', $site->tenant_id)->where('tenant_site_id', $site->id)], 'revision' => ['nullable', 'integer', 'min:0']]);
+        $photoDetails = $request->validate(['image_alt' => ['nullable', 'string', 'max:500']]);
+        app(WebsiteMediaUrls::class)->validatedImage($site, (string) ($data['image_url'] ?? ''), 'image_url');
+        $data['image_alt'] = strip_tags(trim((string) ($photoDetails['image_alt'] ?? data_get($collection?->seo, 'image_alt', ''))));
         if (($collection?->status === 'active') || $data['status'] === 'active') {
             abort_unless(app(ManagedWebsiteService::class)->publishingEnabled(), 423);
         }
@@ -248,7 +265,7 @@ class WebsiteCatalogController extends Controller
             $before = $collection?->load('products')->toArray();
             $collection ??= new WebsiteCollection(['tenant_id' => $site->tenant_id, 'tenant_site_id' => $site->id]);
             $collection->fill(collect($data)->only(['title', 'handle', 'description', 'status', 'image_url'])->all());
-            $collection->seo = array_merge($collection->seo ?? [], ['catalog_revision' => (int) data_get($collection->seo, 'catalog_revision', 0) + 1]);
+            $collection->seo = array_merge($collection->seo ?? [], ['catalog_revision' => (int) data_get($collection->seo, 'catalog_revision', 0) + 1, 'image_alt' => $data['image_alt']]);
             $collection->save();
             $previousIds = $collection->products()->pluck('website_products.id')->all();
             $nextIds = $data['product_ids'] ?? [];
@@ -274,16 +291,19 @@ class WebsiteCatalogController extends Controller
         $references = app(\App\Services\ManagedWebsite\WebsiteMediaUrls::class)->catalogReferences($site, $media);
         $public = $tenant instanceof \App\Models\Tenant && (int) $tenant->id === (int) $site->tenant_id
             && $references !== []
-            && in_array((int) $site->tenant_id, (array) config('managed_website.editor_tenant_ids', []), true) && $site->public_enabled && $site->status === 'published' && $websites->publicRenderingEnabled()
+            && (in_array((int) $site->tenant_id, (array) config('managed_website.editor_tenant_ids', []), true)
+                || app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->registered($site->tenant))
+            && $site->public_enabled && $site->status === 'published' && $websites->publicRenderingEnabled()
             && $websites->publicHostAllowed($site, $request->getHost())
             && app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->publicAccessAllowed($site->tenant)
             && app(\App\Services\Tenancy\TenantModuleAccessResolver::class)->canAccess($site->tenant_id, 'managed_website')
-            && WebsiteProduct::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->where('status', 'active')
+            && (WebsiteProduct::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->where('status', 'active')
                 ->where(function ($query) use ($references): void {
                     foreach ($references as $url) {
                         $query->orWhereJsonContains('media', $url);
                     }
-                })->exists();
+                })->exists()
+                || WebsiteCollection::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->where('status', 'active')->whereIn('image_url', $references)->exists());
         abort_unless($member || $public, 404);
         abort_unless(Storage::disk($media->storage_disk)->exists($media->storage_path), 404);
 

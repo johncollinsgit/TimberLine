@@ -142,6 +142,24 @@ test('workspace overview and products show live editor and block legacy mutation
     $this->get(route('managed-website.connected.index'))->assertForbidden();
 });
 
+test('native history cannot strip a connected renderer or mutate its saved content', function (): void {
+    $this->actingAs($this->actor)->withSession(['tenant_id' => $this->tenant->id]);
+    $page = $this->site->pages()->firstOrFail();
+    $version = $this->site->draft_site_version_id;
+    $siteBefore = $this->site->getAttributes();
+    $versionsBefore = $this->site->siteVersions()->orderBy('id')->get()->map->getAttributes()->all();
+    $pagesBefore = $this->site->pages()->orderBy('id')->get()->map->getAttributes()->all();
+    $contentBefore = $this->service->content($this->site, $version);
+    $this->getJson(route('managed-website.history.index', ['page' => $page, 'tenant' => $this->tenant->slug]))->assertConflict();
+    $this->postJson(route('managed-website.history.site.restore', ['version' => $version, 'tenant' => $this->tenant->slug]), ['current_version_id' => $version])->assertConflict();
+    $this->postJson(route('managed-website.history.page.restore', ['page' => $page, 'version' => $page->draft_version_id, 'tenant' => $this->tenant->slug]), ['current_version_id' => $page->draft_version_id])->assertConflict();
+    expect($this->site->fresh()->getAttributes())->toBe($siteBefore)
+        ->and($this->site->siteVersions()->orderBy('id')->get()->map->getAttributes()->all())->toBe($versionsBefore)
+        ->and($this->site->pages()->orderBy('id')->get()->map->getAttributes()->all())->toBe($pagesBefore)
+        ->and($this->service->content($this->site->fresh(), $version))->toBe($contentBefore)
+        ->and(data_get($this->site->fresh()->settings, 'connected_renderer'))->toBe(ConnectedWebsiteService::RENDERER);
+});
+
 test('catalog edits and new products survive page publishing and become browsable request options', function () {
     $this->service->initializeCatalog($this->site, $this->actor);
     $count = \App\Models\WebsiteCollection::query()->count();

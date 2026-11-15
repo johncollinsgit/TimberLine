@@ -1,3 +1,17 @@
+@php
+    $connectedPhotoLibrary = collect($manifest['fields'])->filter(fn ($field) => $field['type'] === 'image')->map(fn ($field, $key) => [
+        'id' => $key,
+        'name' => str(pathinfo((string) $content[$key], PATHINFO_FILENAME))->replace('-', ' ')->headline()->toString(),
+        'url' => $content[$key],
+        'alt_text' => '',
+    ])->unique('url')->values()->all();
+    $connectedRelatedPhotos = collect($manifest['fields'])->filter(fn ($field) => $field['type'] === 'image')->map(fn ($field, $key) => [
+        'id' => 'original-'.$key,
+        'name' => str(pathinfo((string) $manifest['defaults'][$key], PATHINFO_FILENAME))->replace('-', ' ')->headline()->toString(),
+        'url' => $manifest['defaults'][$key],
+        'alt_text' => '',
+    ])->unique('url')->values()->all();
+@endphp
 <x-layouts::app.sidebar title="Website">
     <flux:main>
         <div class="mx-auto max-w-7xl space-y-6 pb-12">
@@ -37,7 +51,7 @@
                     @foreach($manifest['fields'] as $key=>$field) @if($field['group']==='products' || preg_match('/^home_0(1[6-9]|2[0-9]|3[01])$/', $key))<input type="hidden" name="content[{{ $key }}]" value="{{ $content[$key] }}">@endif @endforeach
                     @csrf<input type="hidden" name="version" value="{{ $site->draft_site_version_id }}">
                     <h2 class="text-xl font-bold">Website content</h2><a class="text-sm font-semibold text-emerald-800 underline" href="{{ route('managed-website.products.index') }}">Manage products & collections →</a>
-                    <p class="text-sm text-zinc-600">Changes below stay private until you save and publish. Image fields accept an image URL or an existing /images/ path. Manage product photos, prices, and collections in Products.</p>
+                    <p class="text-sm text-zinc-600">Save a private draft, then preview and publish. Choose from this website’s existing photos below.</p>
                     @foreach($manifest['groups'] as $group => $label)
                     @continue($group === 'products')
                     <details class="rounded-xl border bg-white p-5" @if($group === 'home') open @endif>
@@ -45,15 +59,21 @@
                         <div class="mt-5 grid gap-5 sm:grid-cols-2">
                             @foreach($manifest['fields'] as $key => $field)
                             @continue($field['group'] !== $group || preg_match('/^home_0(1[6-9]|2[0-9]|3[01])$/', $key))
-                            <label class="block text-sm {{ strlen($content[$key]) > 120 || $field['type'] === 'lines' ? 'sm:col-span-2' : '' }}">
-                                <span class="mb-2 block font-semibold">{{ $field['label'] }}</span>
-                                @if($field['type'] === 'money')
-                                <input class="w-full rounded-lg border-zinc-300" type="number" min="0" max="9999999.99" step="0.01" name="content[{{ $key }}]" value="{{ old('content.'.$key, $content[$key]) }}" required>
+                            <div class="block text-sm {{ $field['type'] === 'image' || strlen($content[$key]) > 120 || $field['type'] === 'lines' ? 'sm:col-span-2' : '' }}">
+                                @if($field['type'] === 'image')
+                                    @php $connectedPhotoValue = [['url' => old('content.'.$key, $content[$key]), 'alt' => '']]; @endphp
+                                    <x-website-photo-field :value="$connectedPhotoValue" :name="'content['.$key.']'" label="Website image" :photo-library="$connectedPhotoLibrary" :related-photos="$connectedRelatedPhotos" :connected-origin="$publicUrl" />
                                 @else
-                                <textarea class="w-full rounded-lg border-zinc-300 text-sm" name="content[{{ $key }}]" rows="{{ $field['type'] === 'lines' ? 5 : (strlen($content[$key]) > 120 ? 3 : 2) }}" maxlength="8000">{{ old('content.'.$key, $content[$key]) }}</textarea>
+                                    <label><span class="mb-2 block font-semibold">{{ $field['label'] }}</span>
+                                    @if($field['type'] === 'money')
+                                        <input class="w-full rounded-lg border-zinc-300" type="number" min="0" max="9999999.99" step="0.01" name="content[{{ $key }}]" value="{{ old('content.'.$key, $content[$key]) }}" required>
+                                    @else
+                                        <textarea class="w-full rounded-lg border-zinc-300 text-sm" name="content[{{ $key }}]" rows="{{ $field['type'] === 'lines' ? 5 : (strlen($content[$key]) > 120 ? 3 : 2) }}" maxlength="8000">{{ old('content.'.$key, $content[$key]) }}</textarea>
+                                    @endif
+                                    @if($field['type'] === 'link')<span class="mt-1 block text-xs text-zinc-500">Link destination</span>@elseif($field['type'] === 'lines')<span class="mt-1 block text-xs text-zinc-500">One detail per line</span>@endif
+                                    </label>
                                 @endif
-                                @if($field['type'] === 'image')<span class="mt-1 block text-xs text-zinc-500">Image URL</span>@elseif($field['type'] === 'link')<span class="mt-1 block text-xs text-zinc-500">Link destination</span>@elseif($field['type'] === 'lines')<span class="mt-1 block text-xs text-zinc-500">One detail per line</span>@endif
-                            </label>
+                            </div>
                             @endforeach
                         </div>
                     </details>

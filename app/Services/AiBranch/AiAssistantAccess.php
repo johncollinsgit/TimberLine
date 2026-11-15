@@ -10,6 +10,7 @@ class AiAssistantAccess
 {
     public function authorize(Tenant $tenant, User $user): void
     {
+        app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertPaidUsageAllowed($tenant);
         abort_unless(app(AiBranchOffer::class)->metered($tenant)
             || (config('ai_branch.assistant_enabled') && in_array((int) $tenant->id, config('ai_branch.assistant_tenant_ids', []), true)), 404);
         app(AiBranchAccess::class)->authorize($tenant, $user);

@@ -2,11 +2,13 @@
 
 namespace App\Services\Navigation;
 
+use App\Http\Middleware\EnforceSelfServiceTrial;
 use App\Models\MappingException;
 use App\Models\ShopifyImportRun;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FieldService\FieldServiceAccessService;
+use App\Services\Onboarding\SelfServiceTrialService;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use App\Services\Tenancy\TenantBrandProfileService;
 use App\Services\Tenancy\TenantExperienceProfileService;
@@ -56,11 +58,11 @@ class UnifiedAppNavigationService
                 $shell['items'][] = ['key' => 'ai-branch', 'icon' => 'sparkles', 'href' => app(\App\Services\AiBranch\AiWorkspacePage::class)->launcherUrl($request, $tenant), 'label' => 'AI Branch', 'current' => $request->routeIs('ai-branch.*')];
             }
 
-            return $shell;
+            return $this->trialNavigation($shell, $tenant, $request);
         }
 
         if (($profile['workspace_focus'] ?? null) === 'website_sales' && $tenant && $user) {
-            return $this->buildWebsiteSalesShell($request, $tenant, $user, $profile);
+            return $this->trialNavigation($this->buildWebsiteSalesShell($request, $tenant, $user, $profile), $tenant, $request);
         }
 
         $isAdmin = $user?->isAdmin() ?? true;
@@ -367,7 +369,7 @@ class UnifiedAppNavigationService
         $marketingSubGroups = $canAccessMarketing ? $this->marketingSubGroups() : [];
         $birthdaySubGroups = $canAccessMarketing ? $this->birthdaySubGroups() : [];
 
-        return [
+        return $this->trialNavigation([
             'tenant' => $tenant,
             'tenant_id' => $tenantId,
             'experience_profile' => $profile,
@@ -381,7 +383,79 @@ class UnifiedAppNavigationService
             'current_console' => $this->currentConsolePayload($tenant, $profile),
             'console_switches' => $this->consoleSwitches($user, $tenant, false),
             'shell_context' => 'tenant',
-        ];
+        ], $tenant, $request);
+    }
+
+    /** Resolve a trial destination using the server read policy without dispatching it. */
+    public function trialReadHref(string $href, Tenant $tenant, Request $request): ?string
+    {
+        $parts = parse_url($href);
+        if (! is_array($parts) || ! in_array($parts['scheme'] ?? 'https', ['http', 'https'], true)
+            || (isset($parts['host']) && ! in_array(strtolower($parts['host']), [strtolower($request->getHost()), strtolower((string) $this->tenantHostBuilder->canonicalLandlordHost())], true))) {
+            return null;
+        }
+        if (($parts['path'] ?? '') === '') {
+            return null;
+        }
+        try {
+            $url = isset($parts['host']) ? $href : $request->getSchemeAndHttpHost().'/'.ltrim($href, '/');
+            $name = (string) Route::getRoutes()->match(Request::create($url, 'GET'))->getName();
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException) {
+            return null;
+        }
+        // Home redirects to the guide; the local Customers page is the
+        // admitted alternative to the broader customer-directory surface.
+        $target = match ($name) {
+            'dashboard' => 'workspace.guide',
+            'customers.directory' => 'marketing.customers',
+            default => $name,
+        };
+
+        if (! EnforceSelfServiceTrial::allowsReadRoute($target)) {
+            return null;
+        }
+
+        return $target === $name ? $href : route($target, ['tenant' => $tenant->slug]);
+    }
+
+    /** Keep trial links aligned with the same read admission as the server. */
+    protected function trialNavigation(array $shell, ?Tenant $tenant, Request $request): array
+    {
+        if (! $tenant || ! app(SelfServiceTrialService::class)->unpaidTrialForTenant($tenant)) {
+            return $shell;
+        }
+
+        $allowedHref = fn (string $href): ?string => $this->trialReadHref($href, $tenant, $request);
+        $filter = function (array $items) use (&$filter, $allowedHref): array {
+            $kept = [];
+            foreach ($items as $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
+                $firstChildHref = null;
+                foreach (['children', 'items'] as $key) {
+                    if (isset($item[$key]) && is_array($item[$key])) {
+                        $item[$key] = $filter($item[$key]);
+                        $firstChildHref ??= $item[$key][0]['href'] ?? null;
+                    }
+                }
+                $href = is_string($item['href'] ?? null) ? $allowedHref($item['href']) : null;
+                if ($href !== null || $firstChildHref !== null) {
+                    $item['href'] = $href ?? $firstChildHref;
+                    $kept[] = $item;
+                }
+            }
+
+            return $kept;
+        };
+        foreach (['items', 'admin_sub_items', 'marketing_sub_groups', 'birthday_sub_groups', 'wiki_sections', 'quick_actions', 'console_switches'] as $key) {
+            $shell[$key] = $filter((array) ($shell[$key] ?? []));
+        }
+        $converted = app(SelfServiceTrialService::class)->status($tenant)['state'] === 'converted';
+        $shell['items'][] = ['key' => 'trial-plan', 'label' => $converted ? 'Manage billing' : 'Activate plan', 'icon' => 'credit-card',
+            'href' => route('self-service.purchase', ['tenant' => $tenant->slug]), 'current' => $request->routeIs('self-service.purchase')];
+
+        return $shell;
     }
 
     protected function buildWebsiteSalesShell(Request $request, Tenant $tenant, User $user, array $profile): array

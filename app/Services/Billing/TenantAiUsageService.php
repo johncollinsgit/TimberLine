@@ -14,6 +14,7 @@ class TenantAiUsageService
     /** Text features reserve against the same approved tenant cap as voice and Marketing. */
     public function reserveText(Tenant $tenant, User $user, string $requestId, string $feature, string $contextHash, string $model, array $rates, int $inputLimit = 32000, int $outputLimit = 1200): TenantAiUsageEvent
     {
+        app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertPaidUsageAllowed($tenant);
         abort_unless(config('bud.ai_enabled') && config('bud.provider_configured') && \Illuminate\Support\Str::isUuid($requestId), 503, 'Paid AI is unavailable.');
         abort_unless(in_array($feature, ['teams_briefing', 'trajectory_finance'], true) && strlen($contextHash) === 64 && $model !== '' && count($rates) === 2 && min($rates) > 0 && max($rates) <= 1000000000, 503, 'Verified AI model and rates are required.');
 
@@ -54,6 +55,7 @@ class TenantAiUsageService
 
     public function reserveVoice(Tenant $tenant, User $user, string $clientUuid, string $context, string $model, int $seconds): TenantAiUsageEvent
     {
+        app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertPaidUsageAllowed($tenant);
         abort_unless((bool) config('bud.ai_enabled') && (bool) config('bud.provider_configured'), 503, 'Paid AI is not available yet.');
 
         return DB::transaction(function () use ($tenant, $user, $clientUuid, $context, $model, $seconds): TenantAiUsageEvent {

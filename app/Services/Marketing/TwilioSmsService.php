@@ -21,6 +21,9 @@ class TwilioSmsService
     public function sendSms(string $toPhone, string $message, array $options = []): array
     {
         $tenantId = $this->positiveInt($options['tenant_id'] ?? null) ?: $this->tenantContext->id();
+        if ($tenantId) {
+            app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertPaidUsageAllowed((int) $tenantId);
+        }
         if ($tenantId !== null && (bool) config('features.tenant_messaging_platform')) {
             return $this->gateway->sendSms($tenantId, $toPhone, $message, $options);
         }

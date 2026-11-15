@@ -64,7 +64,8 @@ class EnsureTenantAccess
             abort(403, 'Use the soccer workspace for Wren operations.');
         }
 
-        return app(\App\Services\AiBranch\AiFictionalPilot::class)->during($tenant, $user, fn () => $next($request));
+        return app(EnforceSelfServiceTrial::class)->handle($request,
+            fn ($trialRequest) => app(\App\Services\AiBranch\AiFictionalPilot::class)->during($tenant, $user, fn () => $next($trialRequest)));
     }
 
     protected function assertStoreAccess(Request $request, int $tenantId): void
@@ -113,6 +114,9 @@ class EnsureTenantAccess
 
     protected function shouldRedirectForIncompleteOnboarding(Request $request, Tenant $tenant, mixed $user): bool
     {
+        if (app(\App\Services\Onboarding\SelfServiceTrialService::class)->retainedForTenant($tenant)) {
+            return false;
+        }
         if ($user instanceof \App\Models\User && HomeRedirect::isPlatformOperator($user)) {
             return false;
         }

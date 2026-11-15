@@ -46,13 +46,22 @@ test('a verified public buyer purchases once and publishes a general website wit
     $this->actingAs($user->refresh());
     $this->post(route('workspace.first-login.store'), [
         'workspace_name' => 'Fictional Journey Studio', 'template_key' => 'generic', 'start_path' => 'self',
-    ])->assertRedirectContains('/workspace/purchase');
+    ])->assertRedirectContains('/workspace/guide');
     $tenant = $user->tenants()->firstOrFail();
     expect($tenant->pivot->role)->toBe('owner');
     // Rehydrate the authenticated account as the following real HTTP request
     // does after the provisioner promotes its previously pending role.
     $this->actingAs($user->refresh());
-    $this->get(route('managed-website.index', ['tenant' => $tenant->slug]))->assertStatus(403);
+    $this->get(route('managed-website.index', ['tenant' => $tenant->slug]))->assertOk()->assertViewHas('canPublishSite', false);
+    $trialClock = $tenant->accessProfile->metadata['self_service_trial'];
+    $this->post(route('managed-website.create', ['tenant' => $tenant->slug]))->assertRedirect();
+    $privateSite = TenantSite::query()->where('tenant_id', $tenant->id)->firstOrFail();
+    $privateHome = $privateSite->pages()->where('slug', '/')->firstOrFail();
+    $this->putJson(route('managed-website.editor.save', ['page' => $privateHome->id, 'tenant' => $tenant->slug]), [
+        'current_version_id' => $privateHome->draft_version_id,
+        'title' => 'Trial work survives upgrade', 'blocks' => [['type' => 'hero', 'heading' => 'Trial work survives upgrade']], 'seo' => [],
+    ])->assertOk();
+    $privateDraftId = $privateHome->refresh()->draft_version_id;
     $page = $this->get(route('self-service.purchase', ['tenant' => $tenant->slug]))->assertOk();
     $quote = $page->viewData('quote');
     expect(app(SelfServicePurchaseEligibility::class)->paidForTenant($tenant))->toBeFalse();
@@ -117,6 +126,12 @@ test('a verified public buyer purchases once and publishes a general website wit
     expect(app(SelfServicePurchaseEligibility::class)->paidForTenant($tenant))->toBeTrue()
         ->and(TenantBillingReceipt::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count())->toBe(1)
         ->and(TenantBillingFulfillment::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count())->toBe(1);
+    expect(app(\App\Services\Onboarding\SelfServiceTrialService::class)->status($tenant)['state'])->toBe('paid')
+        ->and($tenant->accessProfile()->first()->metadata['self_service_trial']['converted_at'])->not->toBeNull()
+        ->and($tenant->accessProfile()->first()->metadata['self_service_trial']['ends_at'])->toBe($trialClock['ends_at']);
+    expect(TenantSite::query()->where('tenant_id', $tenant->id)->sole()->id)->toBe($privateSite->id)
+        ->and($privateHome->fresh()->draft_version_id)->toBe($privateDraftId)
+        ->and($privateHome->fresh()->draftVersion->title)->toBe('Trial work survives upgrade');
     $this->get(route('self-service.purchase', ['tenant' => $tenant->slug]))->assertOk()->assertSeeText('Build your website');
     $this->get(route('managed-website.index', ['tenant' => $tenant->slug]))->assertOk();
 
@@ -132,6 +147,8 @@ test('a verified public buyer purchases once and publishes a general website wit
     $this->get('https://'.$tenant->slug.'.theeverbranch.com/')->assertOk()->assertSee('data-testid="managed-site"', false);
     expect(Http::recorded(fn ($request) => $request->method() === 'POST' && parse_url($request->url(), PHP_URL_PATH) === '/v1/checkout/sessions')->count())->toBe(1);
     \App\Models\TenantBillingSubscription::withoutGlobalScopes()->where('tenant_id', $tenant->id)->update(['current_period_ends_at' => now()->subMinute()]);
+    expect(app(\App\Services\Onboarding\SelfServiceTrialService::class)->status($tenant)['state'])->toBe('converted');
+    $this->get('https://'.$tenant->slug.'.theeverbranch.com/')->assertOk()->assertSee('data-testid="managed-site"', false);
     $this->get(route('self-service.purchase', ['tenant' => $tenant->slug]))->assertOk()
         ->assertSeeText('Manage billing')->assertDontSeeText('Continue to payment')->assertDontSeeText('Build your website');
     $this->post(route('self-service.purchase.portal', ['tenant' => $tenant->slug]))->assertRedirect('https://billing.stripe.com/p/session/journey');

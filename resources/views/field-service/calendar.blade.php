@@ -1,4 +1,6 @@
 @php
+    $privateTrial = app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($tenant);
+    $trial = app(\App\Services\Onboarding\SelfServiceTrialService::class)->status($tenant);
     $tenantName = (string) ($tenant->name ?? 'Workspace');
     $jobsByDay = collect($jobsByDay ?? []);
     $unscheduled = collect($unscheduled ?? []);
@@ -20,6 +22,7 @@
 <x-layouts::app.sidebar title="Field Service">
     <flux:main>
         <div class="fb-workflow-shell fb-workflow-shell--wide">
+            @include('onboarding.partials.trial-status')
             <header class="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200 pb-5">
                 <div>
                     <div class="fb-eyebrow">{{ $tenantName }}</div>
@@ -28,8 +31,10 @@
                 <nav class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-1" aria-label="Field Service view">
                     <a href="{{ route('field-service.calendar') }}" class="rounded-md bg-white px-4 py-2 text-sm font-semibold text-zinc-950 shadow-sm">Calendar</a>
                     <a href="{{ route('field-service.index', ['view' => 'list']) }}" class="rounded-md px-4 py-2 text-sm font-semibold text-zinc-600">List</a>
+                    @unless($privateTrial)
                     @if($equipmentMaintenanceEnabled ?? false)<a href="{{ route('field-service.equipment.index') }}" class="rounded-md px-4 py-2 text-sm font-semibold text-zinc-600">Equipment</a>@endif
                     <a href="{{ route('field-service.payroll-hours') }}" class="rounded-md px-4 py-2 text-sm font-semibold text-zinc-600">Payroll hours</a>
+                    @endunless
                 </nav>
             </header>
 

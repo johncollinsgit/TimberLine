@@ -129,7 +129,7 @@ test('only tenant owner or admin can publish while a manager can still save a dr
     $manager = websitePilotUser($tenant, 'manager');
     $page = $site->pages()->where('slug', '/')->firstOrFail();
 
-    $this->actingAs($manager)->putJson('https://publish-pilot.theeverbranch.com/website/editor/'.$page->id, ['title' => 'Manager draft', 'blocks' => [['type' => 'hero', 'heading' => 'Manager draft', 'body' => 'Safe draft only.']]])->assertOk();
+    $this->actingAs($manager)->putJson('https://publish-pilot.theeverbranch.com/website/editor/'.$page->id, ['current_version_id' => $page->draft_version_id, 'title' => 'Manager draft', 'blocks' => [['type' => 'hero', 'heading' => 'Manager draft', 'body' => 'Safe draft only.']]])->assertOk();
     $this->actingAs($manager)->post('https://publish-pilot.theeverbranch.com/website/publish')->assertForbidden();
     $this->actingAs($admin)->post('https://publish-pilot.theeverbranch.com/website/publish')->assertRedirect();
     expect($site->fresh()->public_enabled)->toBeTrue();

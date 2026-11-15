@@ -39,6 +39,27 @@ test('all eligible tenants get separate lists and a product editor with photogra
     $this->get(route('managed-website.collections.create'))->assertOk();
 });
 
+test('public shop and product keep the published design while a different private design is saved', function () {
+    \Illuminate\Support\Facades\Http::preventStrayRequests();
+    $websites = app(ManagedWebsiteService::class);
+    $product = $this->catalog->saveProduct($this->site, null, $this->data, $this->actor);
+    $websites->applyTheme($this->site, 'sawyer-naturals', $this->actor);
+    $websites->publish($this->site->fresh(), $this->actor);
+    $published = $this->site->fresh()->published_site_version_id;
+    auth()->forgetGuards();
+    $this->flushSession();
+    $shop = 'https://'.$this->tenant->slug.'.theeverbranch.com/shop';
+    $item = 'https://'.$this->tenant->slug.'.theeverbranch.com/products/'.$product->handle;
+    $this->get($shop)->assertOk()->assertSee('class="sn-logo"', false)->assertSee('Oak chair');
+    $this->get($item)->assertOk()->assertSee('class="sn-logo"', false);
+    $websites->applyTheme($this->site->fresh(), 'collins-electric', $this->actor);
+    expect(data_get($this->site->fresh()->settings, 'theme_key'))->toBe('collins-electric')
+        ->and($this->site->fresh()->published_site_version_id)->toBe($published);
+    $this->get($shop)->assertOk()->assertSee('class="sn-logo"', false)->assertSee('Oak chair');
+    $this->get($item)->assertOk()->assertSee('class="sn-logo"', false);
+    \Illuminate\Support\Facades\Http::assertNothingSent();
+});
+
 test('product saves preserve variant identities and update collection membership and inventory', function () {
     $collection = WebsiteCollection::query()->create(['tenant_id' => $this->tenant->id, 'tenant_site_id' => $this->site->id, 'title' => 'Seating', 'handle' => 'seating', 'status' => 'active']);
     $this->postJson(route('managed-website.products.store'), $this->data)->assertRedirect();

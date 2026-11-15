@@ -87,6 +87,28 @@ class ParallelReleaseTest(unittest.TestCase):
             self.assertIs(self.jobs[job]['strategy']['fail-fast'], False)
             self.assertNotIn('continue-on-error', self.jobs[job])
 
+    def test_standard_purchase_and_trial_native_json_proof_is_required_on_mysql(self):
+        job = self.jobs['mysql']
+        self.assertEqual(job['env']['DB_CONNECTION'], 'mysql')
+        step = next(step for step in job['steps'] if step.get('name') ==
+                    'Verify frozen Standard quotes and private trial clocks on native MySQL JSON')
+        self.assertEqual(step['if'], "matrix.group == 'concurrency'")
+        self.assertEqual(step['env']['SELF_SERVICE_DISPOSABLE_MYSQL'], '1')
+        for filename in ('tests/Feature/Billing/SelfServiceStandardPurchaseTest.php',
+                         'tests/Feature/Onboarding/SelfServiceTrialTest.php'):
+            self.assertIn(filename, step['run'])
+            source = (ROOT / filename).read_text()
+            self.assertIn('The protected native JSON acceptance job requires actual MySQL.', source)
+            self.assertIn('information_schema.COLUMNS', source)
+            self.assertIn('JSON_TYPE(', source)
+        self.assertNotIn('continue-on-error', step)
+        browser = next(step for step in self.jobs['browser']['steps'] if step.get('name') ==
+                       'Verify Website editor save ordering and recovery')
+        self.assertEqual(browser['if'], "matrix.group == 'workspace'")
+        self.assertIn('node --test tests/e2e/website-editor-save-recovery.test.mjs', browser['run'])
+        self.assertIn('node --test tests/e2e/self-service-trial-controls.test.mjs', browser['run'])
+        self.assertNotIn('continue-on-error', browser)
+
     def test_stable_required_checks_depend_on_all_work_and_always_verify_success(self):
         for job_id, name, dependencies in [('ci', 'ci (8.4)', ['plan', 'build', 'php', 'browser']),
                                             ('mysql-migration', 'mysql migration recovery', ['plan', 'build', 'mysql'])]:

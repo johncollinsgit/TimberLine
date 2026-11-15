@@ -14,6 +14,10 @@ class TenantModuleActionPresenter
             'label' => 'Enabled',
             'description' => 'This module is currently enabled for the tenant.',
         ],
+        'private_trial' => [
+            'label' => 'Private trial',
+            'description' => 'Private workspace access. Public publishing and paid services require activation.',
+        ],
         'setup_required' => [
             'label' => 'Setup required',
             'description' => 'This module is enabled, but setup still needs to be completed.',
@@ -97,6 +101,11 @@ class TenantModuleActionPresenter
     protected static function ctaMeta(string $cta, string $reason, string $label): array
     {
         return match ($cta) {
+            'open' => [
+                'label' => 'Open',
+                'description' => 'Open '.$label.'.',
+                'target' => 'module',
+            ],
             'add' => [
                 'label' => 'Add module',
                 'description' => 'Activate this module for the tenant.',

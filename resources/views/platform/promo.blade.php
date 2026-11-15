@@ -54,7 +54,7 @@
             <div class="eb-studio-container eb-studio-hero__content" data-studio-reveal>
                 <h1 class="sr-only">Everbranch</h1>
                 <div class="eb-studio-hero__actions">
-                    <a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}"><x-everbranch.action-leaf />Get started</a>
+                    <a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}"><x-everbranch.action-leaf />{{ config('self_service.trial_enabled', true) ? 'Start free trial' : 'Get started' }}</a>
                     <a class="eb-studio-button eb-studio-button--light" href="https://teams-demo.theeverbranch.com/#property"><x-everbranch.action-leaf />Try the demo</a>
                     <button class="eb-studio-play" type="button" data-studio-film-open aria-haspopup="dialog">
                         <span class="eb-studio-play__icon" aria-hidden="true">▶</span>
@@ -62,7 +62,7 @@
                     </button>
                     <button class="eb-studio-button eb-studio-button--light eb-guide-ask" type="button" data-ask-everbranch-open><x-everbranch.action-leaf />Ask Everbranch</button>
                 </div>
-                <p class="eb-studio-hero__note">{{ config('product_surfaces.public_offer.summary') }}</p>
+                <p class="eb-studio-hero__note">{{ config('self_service.trial_enabled', true) ? config('module_catalog.offers.standard.trial.days', 14).' days to explore. No card. No automatic charge.' : config('product_surfaces.public_offer.summary') }}@if(config('self_service.trial_enabled', true))<br><span>To activate: {{ config('product_surfaces.public_offer.summary') }}</span>@endif</p>
             </div>
         </section>
 

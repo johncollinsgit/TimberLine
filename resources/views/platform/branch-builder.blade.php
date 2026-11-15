@@ -6,8 +6,8 @@
     <main class="eb-builder">
         <header class="eb-builder-heading">
             <h1>Choose a template.</h1>
-            <p>Start with your business. Make it yours later.</p>
-            <p class="eb-builder-note">{{ config('product_surfaces.public_offer.summary') }}</p>
+            <p>{{ config('self_service.trial_enabled', true) ? 'Try your private workspace for '.config('module_catalog.offers.standard.trial.days', 14).' days.' : 'Start with your business. Make it yours later.' }}</p>
+            <p class="eb-builder-note">@if(config('self_service.trial_enabled', true))To activate: @endif{{ config('product_surfaces.public_offer.summary') }}</p>
         </header>
         @if(session('status'))<p role="status">{{ session('status') }}</p>@endif
         @if($errors->any())<div role="alert">{{ $errors->first() }}</div>@endif
@@ -29,6 +29,7 @@
                 <img src="{{ asset('images/public-site/everbranch-field-owner-office.jpg') }}" width="640" height="400" alt="A business owner planning the day" decoding="async">
                 <div>
                     <h2>{{ $summary['name'] }}</h2>
+                    @if(config('self_service.trial_enabled', true))<p class="eb-builder-note">No card. No automatic charge.</p><p class="mt-4 text-sm font-semibold">To activate</p>@endif
                     <dl>
                         <div><dt>Setup</dt><dd>${{ number_format($summary['setup_cents'] / 100) }}</dd></div>
                         <div><dt>Monthly</dt><dd>${{ number_format($summary['monthly_cents'] / 100) }}</dd></div>
@@ -36,7 +37,7 @@
                         <div class="eb-builder-total"><dt>Setup + first month</dt><dd>${{ number_format($summary['due_before_tax_cents'] / 100) }}</dd></div>
                     </dl>
                     <p class="eb-builder-note">Before applicable tax. {{ $summary['usage_note'] }}</p>
-                    <button class="fb-btn fb-btn-primary" name="continue" value="1">{{ $accountsAvailable ? 'Continue to account' : 'Continue with help' }}</button>
+                    <button class="fb-btn fb-btn-primary" name="continue" value="1"><x-everbranch.action-leaf />{{ $accountsAvailable ? (config('self_service.trial_enabled', true) ? 'Start free trial' : 'Continue to account') : 'Continue with help' }}</button>
                     <button class="fb-btn fb-btn-secondary" type="submit">Save template</button>
                     <p class="eb-builder-note">Payment and activation are separate steps.</p>
                     <details><summary>Need a hand?</summary><p><a href="{{ route('platform.request-access') }}">Request assisted setup</a></p><p>Teams, Trajectory, and Markets &amp; Makers are priced separately. Existing agreements keep their terms.</p></details>

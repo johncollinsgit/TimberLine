@@ -259,6 +259,60 @@ class TenantModuleAccessResolver
             ];
         }
 
+        if ($tenantId && app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($tenantId)
+            && ! app(\App\Services\Billing\SelfServicePurchaseEligibility::class)->hasVerifiedPurchase($tenantId)) {
+            $trial = app(\App\Services\Onboarding\SelfServiceTrialService::class)->status($tenantId);
+            // A private trial replaces plan/billing admission only. Resolve all
+            // dependencies too, retaining tenant, channel and operator fences.
+            $privateAccess = [];
+            $privateReasons = [];
+            $visiting = [];
+            $canUsePrivate = function (string $key) use (&$canUsePrivate, &$privateAccess, &$privateReasons, &$visiting, $trial, $rawModules, $stateRows, $operatingMode): bool {
+                if (array_key_exists($key, $privateAccess)) {
+                    return $privateAccess[$key];
+                }
+                $raw = $rawModules[$key] ?? [];
+                if (isset($visiting[$key]) || ! $trial['can_view_private']
+                    || ! in_array($key, \App\Services\Onboarding\SelfServiceTrialService::PRIVATE_MODULES, true)
+                    || ! ($raw['tenant_allowed'] ?? false)
+                    || ! $this->operatingModeSupportsChannels($operatingMode, (array) ($raw['channels'] ?? []))
+                    || ! in_array($raw['status'] ?? '', ['live', 'beta'], true) || ($raw['coming_soon'] ?? true)
+                    || ($raw['enabled_status'] ?? '') === 'disabled'
+                    || in_array($raw['availability_status'] ?? '', ['disabled', 'unavailable'], true)
+                    || ($stateRows[$key]['enabled_override'] ?? null) === false) {
+                    $privateReasons[$key] = match (true) {
+                        ! ($raw['tenant_allowed'] ?? false) => 'tenant_not_supported',
+                        ! $this->operatingModeSupportsChannels($operatingMode, (array) ($raw['channels'] ?? [])) => 'channel_not_supported',
+                        ! in_array($raw['status'] ?? '', ['live', 'beta'], true), ($raw['coming_soon'] ?? true), in_array($raw['availability_status'] ?? '', ['disabled', 'unavailable'], true) => 'module_unavailable',
+                        ($raw['enabled_status'] ?? '') === 'disabled' => 'disabled_by_entitlement',
+                        ($stateRows[$key]['enabled_override'] ?? null) === false => 'disabled_by_override',
+                        default => 'trial_restricted',
+                    };
+
+                    return $privateAccess[$key] = false;
+                }
+                $visiting[$key] = true;
+                foreach ((array) ($raw['dependencies'] ?? []) as $dependency) {
+                    if (! $canUsePrivate($dependency)) {
+                        unset($visiting[$key]);
+                        $privateReasons[$key] = 'dependency_not_enabled';
+
+                        return $privateAccess[$key] = false;
+                    }
+                }
+                unset($visiting[$key]);
+
+                return $privateAccess[$key] = true;
+            };
+            foreach ($modules as $key => &$module) {
+                $allowed = $canUsePrivate($key);
+                $module = [...$module, 'has_access' => $allowed, 'enabled' => $allowed, 'source' => 'self_service_private_trial',
+                    'reason' => $allowed ? 'private_trial' : (in_array($module['reason'], ['tenant_not_supported', 'channel_not_supported', 'module_unavailable', 'dependency_not_enabled', 'disabled_by_override', 'disabled_by_entitlement'], true) ? $module['reason'] : ($privateReasons[$key] ?? 'trial_restricted')), 'ui_state' => $allowed ? 'active' : 'locked',
+                    'cta' => $allowed ? 'open' : 'none'];
+            }
+            unset($module);
+        }
+
         return [
             'tenant_id' => $tenantId,
             'operating_mode' => $operatingMode,

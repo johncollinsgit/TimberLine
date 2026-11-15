@@ -32,6 +32,7 @@ class SelfServicePurchaseController extends Controller
             'paid' => $eligibility->paidForTenant($tenant),
             'purchased' => $eligibility->hasVerifiedPurchase($tenant),
             'pending' => $pending, 'ready' => $purchases->readiness()['ready'],
+            'trial' => app(\App\Services\Onboarding\SelfServiceTrialService::class)->status($tenant),
         ]);
     }
 

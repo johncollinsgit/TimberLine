@@ -37,6 +37,7 @@ class EverbranchMobileAuthController extends Controller
         if (! $user->hasVerifiedEmail()) {
             throw ValidationException::withMessages(['email' => 'Verify your email address before signing in.']);
         }
+        app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertMobileAccessAllowed($user);
 
         if ($user->hasEnabledTwoFactorAuthentication()) {
             $code = trim((string) ($validated['two_factor_code'] ?? ''));
@@ -100,6 +101,7 @@ class EverbranchMobileAuthController extends Controller
                 throw ValidationException::withMessages(['code' => 'This mobile authorization code is invalid or expired.']);
             }
 
+            app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertMobileAccessAllowed($row->user);
             $row->forceFill(['consumed_at' => now()])->save();
 
             return $row;
@@ -187,6 +189,7 @@ class EverbranchMobileAuthController extends Controller
 
     protected function tokenResponse(User $user, string $deviceName, bool $payments = false, ?array $preservedAbilities = null): JsonResponse
     {
+        app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertMobileAccessAllowed($user);
         $expiresAt = now()->addDays(30);
         $token = $user->createToken(
             'Everbranch mobile:'.mb_substr(trim($deviceName), 0, 120),

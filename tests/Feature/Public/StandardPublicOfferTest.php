@@ -29,6 +29,22 @@ test('public acquisition surfaces agree on the current offer and conditional usa
     'https://evergrovesoftware.com/',
 ]);
 
+test('trial acquisition discloses no-card private access alongside explicit paid pricing', function (string $path): void {
+    config()->set(['self_service.trial_enabled' => true, 'self_service.registration_enabled' => true]);
+    $this->get($path)->assertOk()
+        ->assertSeeText('14 days')
+        ->assertSeeText('No card. No automatic charge.')
+        ->assertSeeText('Start free trial')
+        ->assertSeeText('$499 one-time setup + $299/month. Additional text, email, and AI usage fees may apply.');
+})->with(['/platform/promo', '/platform/plans', '/platform/start']);
+
+test('disabling trial enrollment removes its public promise without changing paid pricing', function (): void {
+    config()->set('self_service.trial_enabled', false);
+    $this->get('/platform/promo')->assertOk()
+        ->assertSeeText('$499 one-time setup + $299/month. Additional text, email, and AI usage fees may apply.')
+        ->assertDontSeeText('Start free trial')->assertDontSeeText('No card. No automatic charge.');
+});
+
 test('requesting the standard offer records interest without activating a workspace or billing', function (): void {
     $this->post(route('platform.access-request'), [
         'intent' => 'production',

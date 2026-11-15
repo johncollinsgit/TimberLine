@@ -47,11 +47,11 @@ test('signed email verification is bound to the current account and cannot be fo
     expect($user->refresh()->email_verified_at)->not->toBeNull();
 });
 
-test('verified signup creates only one provisional workspace and continues to server checkout', function (): void {
+test('verified signup creates only one provisional workspace and continues to a private trial before explicit checkout', function (): void {
     $user = User::factory()->create(['is_active' => true, 'role' => 'self_service_pending', 'requested_via' => 'self_service_registration', 'email_verified_at' => now(), 'onboarding_guide_answers' => ['business_template' => 'generic', 'branch_selection' => ['managed_website']]]);
     $this->actingAs($user)->get(route('workspace.first-login'))->assertOk()->assertSeeText('Your business')->assertSeeText('General business');
     $input = ['workspace_name' => 'Fictional Public Workshop', 'template_key' => 'generic', 'start_path' => 'self'];
-    $this->post(route('workspace.first-login.store'), $input)->assertRedirectContains('/workspace/purchase');
+    $this->post(route('workspace.first-login.store'), $input)->assertRedirectContains('/workspace/guide');
     $tenant = $user->tenants()->firstOrFail();
     $profile = TenantAccessProfile::query()->where('tenant_id', $tenant->id)->firstOrFail();
     expect(data_get($profile->metadata, 'self_service_registration'))->toBeTrue()
@@ -59,9 +59,9 @@ test('verified signup creates only one provisional workspace and continues to se
         ->and($tenant->pivot->role)->toBe('owner')
         ->and($tenant->setupStatus->module_interests)->toContain('managed_website');
     $this->actingAs($user->refresh())->get(route('self-service.purchase', ['tenant' => $tenant->slug]))->assertOk()
-        ->assertSeeText('Review your plan')->assertSeeText('$798.00')
+        ->assertSeeText('Activate plan')->assertSeeText('$798.00')
         ->assertDontSeeText('Build your website');
-    expect(\App\Support\Auth\HomeRedirect::pathFor($user->refresh(), $tenant))->toBe(route('self-service.purchase', ['tenant' => $tenant->slug], false));
+    expect(\App\Support\Auth\HomeRedirect::pathFor($user->refresh(), $tenant))->toBe(route('workspace.guide', ['tenant' => $tenant->slug], false));
     $this->post(route('workspace.first-login.store'), $input);
     expect($user->tenants()->count())->toBe(1);
 });
@@ -73,12 +73,12 @@ test('unverified Google accounts must verify before creating a workspace', funct
     expect(Tenant::query()->count())->toBe(0);
 });
 
-test('new verified Google accounts receive the same purchase path', function (): void {
+test('new verified Google accounts receive the same private trial path', function (): void {
     $user = User::factory()->create(['is_active' => true, 'requested_via' => 'google', 'email_verified_at' => now()]);
     $this->actingAs($user)->get(route('workspace.first-login'))->assertRedirect(route('platform.build'));
     $this->post(route('platform.build.save'), ['template' => 'electrician', 'continue' => 1])->assertRedirect(route('workspace.first-login'));
     $this->get(route('workspace.first-login'))->assertOk()->assertSeeText('Your business')->assertSeeText('Electrical');
-    $this->post(route('workspace.first-login.store'), ['workspace_name' => 'Fictional Google Workshop', 'template_key' => 'generic', 'start_path' => 'self'])->assertRedirectContains('/workspace/purchase');
+    $this->post(route('workspace.first-login.store'), ['workspace_name' => 'Fictional Google Workshop', 'template_key' => 'generic', 'start_path' => 'self'])->assertRedirectContains('/workspace/guide');
     $tenant = $user->tenants()->firstOrFail();
     expect($tenant->pivot->role)->toBe('owner')->and(data_get($tenant->accessProfile->metadata, 'self_service_registration'))->toBeTrue()
         ->and(data_get($user->fresh()->onboarding_guide_answers, 'business_template'))->toBe('electrician');
@@ -128,7 +128,7 @@ test('verified signup provisions an available address without claiming a platfor
     ]);
 
     $this->actingAs($user)->post(route('workspace.first-login.store'), ['workspace_name' => $name, 'template_key' => 'generic', 'start_path' => 'self'])
-        ->assertRedirectContains('/workspace/purchase')->assertSessionHasNoErrors();
+        ->assertRedirectContains('/workspace/guide')->assertSessionHasNoErrors();
     $tenant = $user->tenants()->sole();
     expect($tenant->slug)->toBe($expectedSlug)->and($tenant->pivot->role)->toBe('owner');
     $resolved = app(PreAuthTenantContextResolver::class)->resolveForRequest(Request::create('https://'.$expectedSlug.'.theeverbranch.com/'));

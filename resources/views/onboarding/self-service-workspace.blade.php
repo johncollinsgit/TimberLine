@@ -13,6 +13,7 @@
         </div>
         <flux:input name="workspace_name" label="Business name" :value="old('workspace_name', $workspaceName)" required maxlength="120" autocomplete="organization" />
         @error('template_key')<p role="alert">{{ $message }}</p>@enderror
-        <flux:button type="submit" variant="primary">Review plan</flux:button>
+        @if(config('self_service.trial_enabled', true))<p class="text-sm text-zinc-600">Your {{ config('module_catalog.offers.standard.trial.days', 14) }} days start here. No automatic charge.</p>@endif
+        <flux:button type="submit" variant="primary"><x-everbranch.action-leaf />{{ config('self_service.trial_enabled', true) ? 'Start trial' : 'Review plan' }}</flux:button>
     </form>
 </x-layouts::auth>

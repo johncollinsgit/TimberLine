@@ -19,6 +19,9 @@ class UseConnectedWebsiteEditor
         if (! $service->connected($site)) {
             return $next($request);
         }
+        if ($request->routeIs('managed-website.history.*')) {
+            abort(409, 'Use Website history for this connected site.');
+        }
         if ($request->routeIs('managed-website.index', 'managed-website.editor')) {
             if ($request->route('page')) {
                 $page = $request->route('page');

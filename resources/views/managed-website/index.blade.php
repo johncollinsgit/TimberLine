@@ -3,6 +3,11 @@
         @php
             $setupHasErrors = collect(['theme_key', 'contact_name', 'contact_email', 'contact_phone', 'hours', 'service_area', 'service_title', 'service_description'])->contains(fn ($field) => $errors->has($field));
             $setupErrorStep = $errors->has('theme_key') ? 2 : (($errors->has('service_title') || $errors->has('service_description')) ? 4 : ($setupHasErrors ? 3 : 1));
+            $privateTrial = data_get($trial ?? [], 'registered_trial', false) && data_get($trial ?? [], 'state') !== 'paid';
+            $canViewDrafts = $canViewDrafts ?? $isEditorEnabled;
+            $canPublishSite = $canPublishSite ?? $isPublishingEnabled;
+            $savedThemeKey = data_get($site?->draftSiteVersion?->settings ?? $site?->settings, 'theme_key', 'custom');
+            $selectedThemeKey = old('theme_key', $site ? $savedThemeKey : ($recommendedThemeKey ?? data_get($themes, '0.key')));
         @endphp
         <div class="mx-auto max-w-6xl space-y-5 pb-12">
             @if(session('status'))<div class="border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-950" role="status">{{ session('status') }}</div>@endif
@@ -23,19 +28,24 @@
                 @if($isEditorEnabled)
                     <div class="eb-admin-page-actions">
                         @if($site?->status === 'published' && $isPublicRenderEnabled)<a class="eb-admin-button" target="_blank" rel="noopener" href="{{ $publicUrl }}">View site</a>@endif
-                        <button class="eb-admin-button eb-admin-button--primary" type="button" onclick="document.getElementById('website-setup').showModal()">{{ $site ? 'Continue setup' : 'Set up website' }}</button>
+                        <button class="eb-admin-button eb-admin-button--primary" type="button" data-website-setup-step="{{ $site ? 3 : 1 }}" onclick="document.getElementById('website-setup').showModal()">{{ $site ? 'Edit details' : 'Set up website' }}</button>
                     </div>
                 @endif
             </header>
-            @if(! $isEditorEnabled)
+            @include('onboarding.partials.trial-status')
+            @if(! $isEditorEnabled && ! $canViewDrafts)
                 <section class="border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">Website access is still being approved for this workspace. Nothing public, billable, or connected has been created.</section>
             @elseif(! $site)
+                @if($isEditorEnabled)
                 <section class="eb-admin-panel p-6" aria-labelledby="website-ready-heading">
                     <p class="text-xs font-bold uppercase tracking-[.14em] text-emerald-800">Ready to begin</p>
                     <h2 id="website-ready-heading" class="mt-2 text-2xl font-bold tracking-tight text-zinc-950">Build your first private draft</h2>
                     <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">Choose a starting design and add the business details you want customers to see. Setup creates a private draft only; it does not publish a site, connect a domain, or start billing.</p>
                     <button class="eb-admin-button eb-admin-button--primary mt-5" type="button" onclick="document.getElementById('website-setup').showModal()">Start website setup</button>
                 </section>
+                @else
+                    <section class="eb-admin-panel rounded-[20px] p-6"><p>No website drafts yet. Activate your plan when you are ready to build.</p></section>
+                @endif
             @else
                 @php
                     $draftTheme = $site->draftSiteVersion;
@@ -61,7 +71,7 @@
                     </div>
                     <div class="eb-site-theme-footer">
                         <div><div class="eb-site-theme-name"><h2 id="active-website-heading">{{ data_get($draftTheme?->settings, 'theme_name', data_get($site->settings, 'theme_name', 'Website')) }}</h2><x-ui.status-badge :tone="$site->status === 'published' && $site->public_enabled ? 'success' : 'warning'">{{ $site->status === 'published' && $site->public_enabled ? 'Live' : 'Draft' }}</x-ui.status-badge></div><p>{{ parse_url($platformUrl, PHP_URL_HOST) }} · {{ $pages->count() }} {{ str('page')->plural($pages->count()) }}</p></div>
-                        <div class="eb-admin-page-actions">@if($isEditorEnabled && $isPublishingEnabled)<form method="POST" action="{{ route('managed-website.publish') }}">@csrf<button class="eb-admin-button" type="submit">Publish</button></form>@endif @if($pages->first())<a class="eb-admin-button eb-admin-button--primary" href="{{ route('managed-website.editor', ['page' => $pages->first()]) }}">Edit website</a>@endif</div>
+                        <div class="eb-admin-page-actions">@if($isEditorEnabled && $canPublishSite)<form method="POST" action="{{ route('managed-website.publish') }}">@csrf<button class="eb-admin-button" type="submit">Publish</button></form>@endif @if($pages->first())<a class="eb-admin-button eb-admin-button--primary" href="{{ $isEditorEnabled ? route('managed-website.editor', ['page' => $pages->first()]) : route('managed-website.editor.preview.site', ['page' => $previewPage]) }}">{{ $isEditorEnabled ? 'Edit website' : 'Preview saved draft' }}</a>@endif</div>
                     </div>
                 </section>
 
@@ -69,41 +79,62 @@
                     <section class="eb-admin-panel rounded-[20px] p-4" aria-label="Publishing checklist">
                         <h2 class="mb-3 text-sm font-semibold">Ready to publish</h2>
                         <ol class="flex flex-wrap gap-x-5 gap-y-2 text-sm">@foreach($checklist as $item)@if($item['key'] !== 'publish')<li><span aria-label="{{ $item['complete'] ? 'Ready' : 'Needed' }}">{{ $item['complete'] ? '✓' : '○' }}</span> {{ $item['label'] }}</li>@endif @endforeach</ol>
+                        @unless(collect($checklist)->firstWhere('key', 'details')['complete'] ?? false)<button type="button" class="mt-3 text-sm font-semibold underline" data-website-setup-step="3" onclick="document.getElementById('website-setup').showModal()">Add business name and email</button>@endunless
                     </section>
                 @endif
 
-                <nav class="eb-admin-page-actions" aria-label="Website tools"><a class="eb-admin-button" href="#website-pages">Pages</a><a class="eb-admin-button" href="#theme-library-heading">Design</a><a class="eb-admin-button" href="{{ route('managed-website.products.index') }}">Shop</a><a class="eb-admin-button" href="#website-domains">Domains</a></nav>
+                <nav class="eb-admin-page-actions" aria-label="Website tools"><a class="eb-admin-button" href="#website-pages">Pages</a>@if($isEditorEnabled)<a class="eb-admin-button" href="#theme-library-heading">Design</a>@endif @unless($privateTrial)<a class="eb-admin-button" href="{{ route('managed-website.products.index') }}">Shop</a><a class="eb-admin-button" href="#website-domains">Domains</a>@endunless</nav>
                 <section id="website-pages" class="eb-admin-panel" aria-labelledby="website-pages-heading">
                     <div class="eb-admin-panel-heading"><h2 id="website-pages-heading">Pages</h2><span>{{ $pages->count() }}</span></div>
-                    <div class="eb-admin-rows">@foreach($pages as $websitePage)<div class="eb-admin-row"><a class="eb-admin-row-main" href="{{ route('managed-website.editor', ['page' => $websitePage]) }}"><span class="eb-admin-row-icon"><flux:icon.document-text class="size-4" /></span><span><strong>{{ $websitePage->title }}</strong><small>{{ $websitePage->slug }}</small></span></a><div class="eb-admin-row-actions"><a href="{{ route('managed-website.editor', ['page' => $websitePage]) }}">Edit</a>@if($websitePage->slug !== '/')<form method="POST" action="{{ route('managed-website.pages.destroy', ['page' => $websitePage]) }}" onsubmit="return confirm('Remove this page?')">@csrf @method('DELETE')<button type="submit">Delete</button></form>@endif</div></div>@endforeach</div>
+                    <div class="eb-admin-rows">@foreach($pages as $websitePage)<div class="eb-admin-row"><a class="eb-admin-row-main" href="{{ $isEditorEnabled ? route('managed-website.editor', ['page' => $websitePage]) : route('managed-website.editor.preview.site', ['page' => $websitePage]) }}"><span class="eb-admin-row-icon"><flux:icon.document-text class="size-4" /></span><span><strong>{{ $websitePage->title }}</strong><small>{{ $websitePage->slug }}</small></span></a><div class="eb-admin-row-actions"><span data-website-version-history data-history-url="{{ route('managed-website.history.index', ['page' => $websitePage]) }}" data-label="History for {{ $websitePage->title }}"></span><a href="{{ $isEditorEnabled ? route('managed-website.editor', ['page' => $websitePage]) : route('managed-website.editor.preview.site', ['page' => $websitePage]) }}">{{ $isEditorEnabled ? 'Edit' : 'Preview' }}</a>@if($isEditorEnabled && $websitePage->slug !== '/')<form method="POST" action="{{ route('managed-website.pages.destroy', ['page' => $websitePage]) }}" onsubmit="return confirm('Remove this page?')">@csrf @method('DELETE')<button type="submit">Delete</button></form>@endif</div></div>@endforeach</div>
                     @if($isEditorEnabled)<details class="eb-admin-inline-create"><summary>Add page</summary><form method="POST" action="{{ route('managed-website.pages.store') }}">@csrf<input required name="title" placeholder="Page title"><input required name="slug" placeholder="page-address"><select name="page_type"><option value="landing">Landing page</option><option value="services">Services</option><option value="about">About</option><option value="contact">Contact</option><option value="faq">FAQ</option></select><button class="eb-admin-button eb-admin-button--primary" type="submit">Add page</button></form></details>@endif
                 </section>
 
-                @include('managed-website.domain-guide')
+                @unless($privateTrial)@include('managed-website.domain-guide')@endunless
 
-                <section aria-labelledby="theme-library-heading"><div class="eb-section-heading"><div><h2 id="theme-library-heading">Theme library</h2><p>Apply a design to the draft, review it, then publish when ready.</p></div></div><div class="eb-theme-list">@foreach($themes as $theme)<article class="eb-theme-row"><img src="{{ $theme['thumbnail'] }}" alt="{{ $theme['name'] }} starter theme preview"><div><strong>{{ $theme['name'] }}</strong><small>{{ $theme['description'] }}</small></div><form method="POST" action="{{ route('managed-website.themes.apply') }}">@csrf<input type="hidden" name="theme_key" value="{{ $theme['key'] }}"><button class="eb-admin-button" type="submit">Add to draft</button></form></article>@endforeach</div></section>
+                @if($isEditorEnabled)
+                <section aria-labelledby="theme-library-heading"><div class="eb-section-heading"><div><h2 id="theme-library-heading">Designs</h2><p>Replacing a design replaces matching draft pages. Your live site changes only after publishing.</p></div></div><div class="eb-theme-list">@foreach($themes as $theme)<article class="eb-theme-row"><img src="{{ $theme['thumbnail'] }}" alt="{{ $theme['name'] }} starter theme preview"><div><strong>{{ $theme['name'] }}</strong><small>{{ $theme['description'] }}</small></div><form method="POST" action="{{ route('managed-website.themes.apply') }}" class="space-y-2">@csrf<input type="hidden" name="theme_key" value="{{ $theme['key'] }}"><label class="flex gap-2 text-xs"><input type="checkbox" name="replace_confirmed" value="1" required>Replace draft content</label><button class="eb-admin-button" type="submit">Replace design</button></form></article>@endforeach</div></section>
+                @endif
             @endif
         </div>
     </flux:main>
+    @if($isEditorEnabled)
     <dialog id="website-setup" class="w-[min(92vw,620px)] border border-zinc-200 bg-white p-0 shadow-2xl backdrop:bg-zinc-950/40">
         <form method="POST" action="{{ route('managed-website.setup.save') }}" class="p-6" data-wizard data-start-step="{{ $setupErrorStep }}">@csrf
+            @if($site?->draft_site_version_id)<input type="hidden" name="site_version" value="{{ $site->draft_site_version_id }}">@endif
             <div class="flex items-center justify-between border-b border-zinc-200 pb-4"><div><p class="text-xs font-bold uppercase tracking-[.15em] text-emerald-800">Website setup</p><h2 class="mt-1 text-xl font-bold text-zinc-950">A few quick choices</h2></div><button type="button" class="text-xl text-zinc-500" onclick="this.closest('dialog').close()" aria-label="Close">×</button></div>
             <section data-step="1" class="space-y-4 pt-5"><h3 class="text-lg font-bold">1. Your website</h3><p class="text-sm leading-6 text-zinc-600">Create a clear online home where customers can understand what you offer and take the right next step.</p><div class="border border-zinc-200 bg-zinc-50 p-4 text-sm"><strong>Private draft first</strong><br>Review the pages and mobile preview before anything can be published.</div></section>
             <section data-step="2" class="hidden space-y-4 pt-5">
                 <h3 class="text-lg font-bold">2. Choose a design</h3>
+                @if($site)
+                    <input type="hidden" name="theme_key" value="{{ $savedThemeKey }}">
+                    <p class="text-sm text-zinc-600">Your saved design and pages stay in place. To replace a design, use Designs after saving your details.</p>
+                @else
                 <div class="grid gap-3">
                     @foreach($themes as $theme)
                         <label class="flex cursor-pointer gap-3 border border-zinc-200 p-4 has-[:checked]:border-emerald-700 has-[:checked]:bg-emerald-50/50">
-                            <input type="radio" name="theme_key" value="{{ $theme['key'] }}" class="mt-1" @checked(old('theme_key', data_get($themes, '0.key')) === $theme['key'])>
-                            <img src="{{ $theme['thumbnail'] }}" alt="" loading="lazy" class="h-20 w-28 rounded-xl object-cover"><span><strong class="block text-sm text-zinc-950">{{ $theme['name'] }}</strong><span class="mt-1 block text-sm leading-5 text-zinc-600">{{ $theme['description'] }}</span></span>
+                            <input type="radio" name="theme_key" value="{{ $theme['key'] }}" class="mt-1" @checked($selectedThemeKey === $theme['key'])>
+                            <img src="{{ $theme['thumbnail'] }}" alt="" loading="lazy" class="h-20 w-28 rounded-xl object-cover"><span><strong class="block text-sm text-zinc-950">{{ $theme['name'] }} @if($theme['key'] === ($recommendedThemeKey ?? ''))<span class="font-normal text-emerald-800">· Recommended</span>@endif</strong><span class="mt-1 block text-sm leading-5 text-zinc-600">{{ $theme['description'] }}</span></span>
                         </label>
                     @endforeach
                 </div>
+                @endif
             </section>
-            <section data-step="3" class="hidden space-y-4 pt-5"><h3 class="text-lg font-bold">3. Business details</h3><div class="grid gap-3 sm:grid-cols-2"><label class="text-sm font-semibold">Business name<input name="contact_name" value="{{ old('contact_name', $setup?->contact_name ?: $tenant->name) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Email<input name="contact_email" type="email" value="{{ old('contact_email', $setup?->contact_email) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Phone<input name="contact_phone" value="{{ old('contact_phone', $setup?->contact_phone) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Hours<input name="hours" value="{{ old('hours', $setup?->hours) }}" placeholder="Mon–Fri, 8am–5pm" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold sm:col-span-2">Service area<input name="service_area" value="{{ old('service_area', $setup?->service_area) }}" placeholder="Towns, counties, or neighborhoods you serve" class="mt-1 block w-full rounded border-zinc-300"></label></div></section>
-            <section data-step="4" class="hidden space-y-4 pt-5"><h3 class="text-lg font-bold">4. Add an offering <span class="font-normal text-zinc-500">(optional)</span></h3><p class="text-sm leading-6 text-zinc-600">Add an offering customers can ask about, or leave this blank and build the catalog later. No checkout, deposits, or billing are enabled here.</p><label class="block text-sm font-semibold">Offering name<input name="service_title" value="{{ old('service_title') }}" placeholder="Custom project consultation" class="mt-1 block w-full rounded border-zinc-300"></label><label class="block text-sm font-semibold">Clear description<textarea name="service_description" rows="3" placeholder="Tell customers what this offering includes and how to get started." class="mt-1 block w-full rounded border-zinc-300">{{ old('service_description') }}</textarea></label></section>
+            <section data-step="3" class="hidden space-y-4 pt-5"><h3 class="text-lg font-bold">3. Business details</h3><p class="text-sm text-zinc-600">These details appear on your website after publishing. Business name and email are needed to publish; other fields are optional.</p><div class="grid gap-3 sm:grid-cols-2"><label class="text-sm font-semibold">Business name<input name="contact_name" maxlength="120" value="{{ old('contact_name', $setup?->contact_name ?: $tenant->name) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Email<input name="contact_email" type="email" value="{{ old('contact_email', $setup?->contact_email) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Phone <span class="font-normal">(optional)</span><input name="contact_phone" value="{{ old('contact_phone', $setup?->contact_phone) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Hours <span class="font-normal">(optional)</span><input name="hours" value="{{ old('hours', $setup?->hours) }}" placeholder="Mon–Fri, 8am–5pm" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold sm:col-span-2">Service area <span class="font-normal">(optional)</span><input name="service_area" value="{{ old('service_area', $setup?->service_area) }}" placeholder="Towns, counties, or neighborhoods you serve" class="mt-1 block w-full rounded border-zinc-300"></label></div></section>
+            <section data-step="4" class="hidden space-y-4 pt-5">
+                @if($privateTrial)
+                    <h3 class="text-lg font-bold">4. Private preview</h3>
+                    <p class="text-sm leading-6 text-zinc-600">Save your draft, then try the desktop and mobile previews. Activate your plan to publish or connect a domain.</p>
+                @else
+                    <h3 class="text-lg font-bold">4. Add an offering <span class="font-normal text-zinc-500">(optional)</span></h3>
+                    <p class="text-sm leading-6 text-zinc-600">Add an offering customers can ask about, or leave this blank and build the catalog later. No checkout, deposits, or billing are enabled here.</p>
+                    <label class="block text-sm font-semibold">Offering name<input name="service_title" value="{{ old('service_title') }}" placeholder="Custom project consultation" class="mt-1 block w-full rounded border-zinc-300"></label>
+                    <label class="block text-sm font-semibold">Clear description<textarea name="service_description" rows="3" placeholder="Tell customers what this offering includes and how to get started." class="mt-1 block w-full rounded border-zinc-300">{{ old('service_description') }}</textarea></label>
+                @endif
+            </section>
             <div class="mt-6 flex justify-between border-t border-zinc-200 pt-4"><button class="fb-btn fb-btn-secondary invisible" type="button" data-back>Back</button><div class="flex gap-2"><button class="fb-btn fb-btn-secondary" type="button" onclick="this.closest('dialog').close()">Close</button><button class="fb-btn fb-btn-primary" type="button" data-next>Continue</button><button class="fb-btn fb-btn-primary hidden" type="submit" data-finish>Save setup</button></div></div>
         </form>
     </dialog>
-    <script>document.querySelectorAll('[data-wizard]').forEach(function(w){let n=Number(w.dataset.startStep)||1;const render=()=>{w.querySelectorAll('[data-step]').forEach(s=>s.classList.toggle('hidden',Number(s.dataset.step)!==n));w.querySelector('[data-back]').classList.toggle('invisible',n===1);w.querySelector('[data-next]').classList.toggle('hidden',n===4);w.querySelector('[data-finish]').classList.toggle('hidden',n!==4)};w.querySelector('[data-next]').onclick=()=>{n=Math.min(4,n+1);render()};w.querySelector('[data-back]').onclick=()=>{n=Math.max(1,n-1);render()};render()})</script>
+    <script>document.querySelectorAll('[data-wizard]').forEach(function(w){let n=Number(w.dataset.startStep)||1;const render=()=>{w.querySelectorAll('[data-step]').forEach(s=>s.classList.toggle('hidden',Number(s.dataset.step)!==n));w.querySelector('[data-back]').classList.toggle('invisible',n===1);w.querySelector('[data-next]').classList.toggle('hidden',n===4);w.querySelector('[data-finish]').classList.toggle('hidden',n!==4)};document.querySelectorAll('[data-website-setup-step]').forEach(button=>button.addEventListener('click',()=>{n=Number(button.dataset.websiteSetupStep)||1;render()}));w.querySelector('[data-next]').onclick=()=>{n=Math.min(4,n+1);render()};w.querySelector('[data-back]').onclick=()=>{n=Math.max(1,n-1);render()};render()})</script>
+    @endif
 </x-layouts::app.sidebar>

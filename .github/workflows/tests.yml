@@ -452,6 +452,7 @@ jobs:
       run: |
         npx tsc --noEmit --jsx react-jsx --module ESNext --moduleResolution Bundler --target ES2022 --lib ES2022,DOM --esModuleInterop --skipLibCheck resources/js/managed-website/editor.tsx
         node --test tests/e2e/website-editor-save-recovery.test.mjs
+        node --test tests/e2e/self-service-trial-controls.test.mjs
       if: matrix.group == 'workspace'
     - name: Verify Trajectory mobile household navigation
       run: npm run test:trajectory:mobile
@@ -714,6 +715,12 @@ jobs:
       if: matrix.group == 'concurrency'
     - name: Verify AI chat, briefing replay and approval concurrency on MySQL
       run: php ./vendor/bin/pest tests/Integration/AiBranchMySqlConcurrencyTest.php --compact
+      if: matrix.group == 'concurrency'
+    - name: Verify frozen Standard quotes and private trial clocks on native MySQL JSON
+      env:
+        SELF_SERVICE_DISPOSABLE_MYSQL: '1'
+        LOG_CHANNEL: 'null'
+      run: php ./vendor/bin/pest tests/Feature/Billing/SelfServiceStandardPurchaseTest.php tests/Feature/Onboarding/SelfServiceTrialTest.php tests/Feature/ManagedWebsite/SelfServiceTemplateFlowTest.php tests/Feature/ManagedWebsite/WebsiteDraftHistoryTest.php --compact
       if: matrix.group == 'concurrency'
     if: '!cancelled() && inputs.mysql_mode != ''skip'' && needs.plan.outputs.tier == ''full'''
     strategy:

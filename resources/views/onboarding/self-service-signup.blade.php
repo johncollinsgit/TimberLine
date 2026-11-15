@@ -1,5 +1,6 @@
 <x-layouts::auth :title="__('Create account')">
     <h1 class="fb-auth-title">Create account</h1>
+    @if(config('self_service.trial_enabled', true))<p class="text-sm text-zinc-600">{{ config('module_catalog.offers.standard.trial.days', 14) }}-day private trial. No card. No automatic charge.</p>@endif
     @if(session('status_error'))<p role="alert">{{ session('status_error') }}</p>@endif
     <form method="post" action="{{ route('self-service.signup.store') }}" class="flex flex-col gap-5">
         @csrf
