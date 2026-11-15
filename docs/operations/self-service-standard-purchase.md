@@ -43,6 +43,23 @@ The existing `/webhooks/stripe/events` endpoint verifies the raw body signature 
 
 ## Confirmation and recovery
 
+The pending plan page polls the owned read-only status endpoint with the existing
+24 scheduled-check limit. A confirmed paid status or an explicitly ended pending state reloads
+that same plan GET; an ended attempt is never treated as payment or a reason to
+submit another checkout. The server then chooses the current paid, billing-recovery
+or review screen. An expired 401/419 session stops polling and offers a sign-in GET
+through the saved plan. Network errors, unreadable data, forbidden responses and
+unknown outcomes retain their bounded retry behavior. At the limit, Check payment
+opens the same saved plan. None of these browser recoveries posts, replaces the
+original purchase, resets a trial clock or grants access.
+
+`self-service-purchase-recovery.test.mjs` executes the actual inline production
+script over fictional loopback HTTP. It covers paid/nonpending refresh, explicit
+401/419 recovery and bounded transient/403/invalid-state handling with zero writes.
+The existing trial browser entry point imports it. It is client protocol proof,
+not provider acceptance or a new payment; the normal backend purchase/authorization
+suites remain authoritative.
+
 Manage billing opens Stripe's hosted portal for the original verified customer, account and environment. The server uses historical signed purchase evidence and an active owner membership; browser fields and legacy customer mappings cannot select another customer. New-purchase flags may remain paused while an existing owner reviews invoices or updates a payment method. Stripe portal configuration controls available subscription actions. An expired paid account is shown billing recovery rather than a second setup purchase.
 
 A redirect, signup, arbitrary session ID, or copied paid flag never activates service. The server retrieves the original Checkout session, subscription, invoice and succeeded PaymentIntent in the original account. Purchase UUID, quote hash, tenant, environment, initial subtotal, currency, customer, monthly unit amount/interval/quantity, invoice association and actual received amount must match. Paid-out-of-band invoices, discounts, pending payments, connected-account events and mismatched references fail closed. Refund/dispute evidence prevents new grants. Renewal refunds and disputes resolve through authenticated charge/invoice/subscription/customer relationships; copied metadata cannot rebind another tenant. The signed receipt, immutable original paid receipt, subscription coverage and applied fulfillment jointly establish eligibility.
