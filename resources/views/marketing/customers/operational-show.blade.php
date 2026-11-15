@@ -1,12 +1,17 @@
 @php
     $customerName = trim((string) ($profile->first_name.' '.$profile->last_name));
     $customerName = $customerName !== '' ? $customerName : ($profile->email ?: ($profile->phone ?: 'Customer'));
+    $tenant = request()->attributes->get('current_tenant');
+    $trial = app(\App\Services\Onboarding\SelfServiceTrialService::class)->status($tenant);
+    $privateTrial = app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($tenant);
+    $canEditPrivate = ! $privateTrial || (bool) ($trial['can_edit_private'] ?? false);
     $address = trim(implode(', ', array_filter([$profile->address_line_1, $profile->address_line_2, $profile->city, $profile->state, $profile->postal_code])));
 @endphp
 
 <x-layouts::app.sidebar :title="$customerName">
     <flux:main>
         <div class="fb-workflow-shell fb-workflow-shell--wide space-y-6">
+            @include('onboarding.partials.trial-status')
             <header class="flex flex-wrap items-start justify-between gap-4 border-b border-zinc-200 pb-5">
                 <div>
                     <div class="fb-eyebrow">Customer</div>
@@ -19,8 +24,10 @@
                 <a href="{{ route('marketing.customers') }}" class="fb-btn fb-btn-secondary">Back to customers</a>
             </header>
 
+            @unless($privateTrial)
             <x-customer-commerce :snapshot="$customerCommerce ?? null" :rewards-label="data_get($customerCommerce ?? [], 'rewards.label', 'Rewards')" />
             <x-customer-commerce-link :profile="$profile" />
+            @endunless
 
             @if (session('toast.message'))
                 <div class="fb-state {{ session('toast.style') === 'success' ? 'fb-state-success' : 'fb-state-warning' }}">{{ session('toast.message') }}</div>
@@ -35,6 +42,7 @@
                                 <p class="mt-1 text-sm text-zinc-600">Keep this current so new jobs start with the right customer information.</p>
                             </div>
                         </div>
+                        @if($canEditPrivate)
                         <form method="POST" action="{{ route('marketing.customers.update', $profile) }}" class="mt-5 space-y-4">
                             @csrf
                             @method('PATCH')
@@ -53,6 +61,9 @@
                             <textarea name="notes" rows="3" placeholder="Office notes" class="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-950">{{ old('notes', $profile->notes) }}</textarea>
                             <button type="submit" class="fb-btn fb-btn-primary">Save customer</button>
                         </form>
+                        @else
+                            <dl class="mt-5 space-y-3 text-sm text-zinc-700"><div><dt class="font-semibold">Email</dt><dd>{{ $profile->email ?: 'Not saved' }}</dd></div><div><dt class="font-semibold">Phone</dt><dd>{{ $profile->phone ?: 'Not saved' }}</dd></div><div><dt class="font-semibold">Service address</dt><dd>{{ $address ?: 'Not saved' }}</dd></div>@if($profile->notes)<div><dt class="font-semibold">Notes</dt><dd class="whitespace-pre-wrap">{{ $profile->notes }}</dd></div>@endif</dl>
+                        @endif
                     </section>
 
                     <section class="border border-zinc-200 bg-white p-5">
@@ -84,10 +95,12 @@
                         <div class="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Current address</div>
                         <div class="mt-2 text-sm leading-6 text-zinc-800">{{ $address !== '' ? $address : 'No service address saved' }}</div>
                     </section>
+                    @unless($privateTrial)
                     <section class="border border-zinc-200 bg-zinc-50 p-4">
                         <div class="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Directory controls</div>
                         <p class="mt-2 text-sm leading-6 text-zinc-600">Archiving is available from the customer list. It keeps jobs and history intact and removes the customer from the active directory.</p>
                     </section>
+                    @endunless
                 </aside>
             </div>
         </div>

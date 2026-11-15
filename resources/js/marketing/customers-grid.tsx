@@ -88,7 +88,7 @@ type CustomerSelectCell = CustomCell<{ kind: "customer-select"; selected: boolea
 
 const customerSelectRenderer: CustomRenderer<CustomerSelectCell> = {
     kind: GridCellKind.Custom,
-    isMatch: (cell): cell is CustomerSelectCell => cell.data.kind === "customer-select",
+    isMatch: (cell): cell is CustomerSelectCell => typeof cell.data === "object" && cell.data !== null && "kind" in cell.data && cell.data.kind === "customer-select",
     needsHover: true,
     draw: ({ ctx, rect, hoverAmount, overrideCursor, cell }) => {
         const size = 18;
@@ -281,7 +281,7 @@ function parseRootDataset(root: HTMLElement): RootDataset {
 
     return {
         endpoint: root.dataset.endpoint || "/marketing/customers/data",
-        addCustomerUrl: root.dataset.addCustomerUrl || "/marketing/customers/create",
+        addCustomerUrl: root.dataset.addCustomerUrl ?? "/marketing/customers/create",
         messageCustomerUrl: root.dataset.messageCustomerUrl || "",
         bulkActionUrl: root.dataset.bulkActionUrl || "",
         operationalDirectory: root.dataset.operationalDirectory === "true",
@@ -665,7 +665,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         </div>
                         <h2 className="mt-1 text-xl font-semibold tracking-[-0.01em] text-[#202223]">Manage Customers</h2>
                         <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[#6d7175]">
-                            {props.operationalDirectory
+                            {props.operationalDirectory && props.bulkActionUrl !== ""
                                 ? "Search customers, keep service addresses current, and archive outdated records without losing job history."
                                 : document.body.hasAttribute("data-eb-workspace")
                                     ? "Search customer history, find contact details, and open the full record for your next step."
@@ -678,14 +678,14 @@ function MarketingCustomersGridApp(props: RootDataset) {
                                 Text a customer
                             </a>
                         ) : null}
-                        {props.operationalDirectory && selectedIds.length > 0 ? (
+                        {props.operationalDirectory && props.bulkActionUrl !== "" && selectedIds.length > 0 ? (
                             <button type="button" onClick={() => void archiveSelected()} disabled={bulkWorking} className={buttonClass()}>
                                 {bulkWorking ? "Updating…" : `${status === "archived" ? "Restore" : "Delete"} selected (${selectedIds.length})`}
                             </button>
                         ) : null}
-                        <a href={props.addCustomerUrl} className={primaryButtonClass()}>
+                        {props.addCustomerUrl !== "" ? <a href={props.addCustomerUrl} className={primaryButtonClass()}>
                             Add Customer
-                        </a>
+                        </a> : null}
                         <button
                             type="button"
                             onClick={() => setReloadToken((current) => current + 1)}

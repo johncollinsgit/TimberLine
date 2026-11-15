@@ -1,4 +1,10 @@
 @php
+    $privateTrialCustomerTenant = request()->attributes->get('current_tenant');
+@endphp
+@if($privateTrialCustomerTenant && app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($privateTrialCustomerTenant))
+    @include('marketing.customers.operational-show', ['jobs' => $profile->fieldServiceJobs()->latest()->limit(50)->get(), 'isArchived' => (bool) $profile->archived_at])
+@else
+@php
     $tenantId = request()?->attributes->get('current_tenant_id');
     $resolvedTenantId = is_numeric($tenantId) ? (int) $tenantId : null;
     $resolvedLabels = app(\App\Services\Tenancy\TenantDisplayLabelResolver::class)->resolve($resolvedTenantId);
@@ -1441,3 +1447,5 @@
         </script>
     </div>
 </x-layouts::app>
+
+@endif

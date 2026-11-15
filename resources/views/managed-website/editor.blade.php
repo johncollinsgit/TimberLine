@@ -8,6 +8,9 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="bg-zinc-100 text-zinc-900">
+    @if(data_get($trial ?? [], 'state') === 'active')
+        <div class="px-4 pt-4">@include('onboarding.partials.trial-status')</div>
+    @endif
     @php
         // Keep the structured values outside of @json(). Blade's directive parser
         // cannot safely parse nested array literals and closures in an attribute.
@@ -43,6 +46,7 @@
          data-media-url="{{ route('managed-website.media.index') }}"
          data-media-upload-url="{{ route('managed-website.media.store') }}"
          data-index-url="{{ route('managed-website.index') }}"
-         data-publishing-enabled="{{ $isPublishingEnabled ? 'true' : 'false' }}"></div>
+         data-private-trial="{{ data_get($trial ?? [], 'registered_trial', false) && data_get($trial ?? [], 'state') !== 'paid' ? 'true' : 'false' }}"
+         data-publishing-enabled="{{ ($canPublishSite ?? $isPublishingEnabled) ? 'true' : 'false' }}"></div>
 </body>
 </html>

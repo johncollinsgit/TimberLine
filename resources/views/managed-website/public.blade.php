@@ -80,7 +80,7 @@
     </style>@endif
 </head>
 <body data-testid="managed-site" data-preview-mode="{{ $previewMode }}" data-theme="{{ data_get($themeSettings, 'theme_key') }}">
-@if($isFullPreview)<div class="preview-toolbar"><span>Private draft preview — changes are not public.</span><a href="{{ $editorUrl }}">Back to editor</a></div>@endif
+@if($isFullPreview)<div class="preview-toolbar"><span>Private draft preview — changes are not public.</span><a href="{{ $editorUrl }}">{{ $previewBackLabel ?? 'Back to editor' }}</a></div>@endif
 @if($isEditorPreview)<div class="preview-note">Draft editor canvas — select anything to edit it. Forms and contact links are disabled.</div>@endif
 @if(data_get($announcement, 'enabled') && data_get($announcement, 'text'))
     @php($announcementLink = $link(data_get($announcement, 'url')))

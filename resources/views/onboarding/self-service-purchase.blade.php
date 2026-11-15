@@ -1,9 +1,10 @@
 <x-layouts::app :title="__('Your plan')">
     <main class="mx-auto max-w-4xl space-y-6 p-4 text-zinc-900 md:p-8">
-        <h1 class="text-2xl font-semibold">{{ $paid ? 'You’re ready.' : ($purchased ? 'Your subscription' : 'Review your plan') }}</h1>
+        <h1 class="text-2xl font-semibold">{{ $paid ? 'You’re ready.' : ($purchased ? 'Your subscription' : (data_get($trial ?? [], 'state') === 'active' ? 'Your trial' : 'Review your plan')) }}</h1>
         @if(session('status'))<p role="status">{{ session('status') }}</p>@endif
         @if(session('status_error'))<p role="alert" class="rounded-xl bg-amber-50 p-4">{{ session('status_error') }}</p>@endif
         @if($errors->any())<div role="alert" class="rounded-xl bg-amber-50 p-4">{{ $errors->first() }}</div>@endif
+        @unless($purchased)@include('onboarding.partials.trial-status', ['showTrialAction' => false, 'showTrialPreview' => true])@endunless
         @if($purchased)
             <section class="rounded-[20px] border border-zinc-200 bg-white p-6">
                 @if($paid)
@@ -33,8 +34,9 @@
             </details>
             @endif
         @else
-            <section class="rounded-[20px] border border-zinc-200 bg-white p-6">
-                <h2 class="text-xl font-semibold">Everbranch Simple</h2>
+            <section id="activate-plan" class="rounded-[20px] border border-zinc-200 bg-white p-6">
+                <h2 class="text-xl font-semibold">Activate plan</h2>
+                <p class="mt-2 text-sm text-zinc-600">Pay only when you choose to activate. Publishing and domains require an active plan.</p>
                 <dl class="my-5 space-y-4">
                     <div class="flex justify-between"><dt>Setup</dt><dd>${{ number_format($quote['setup_cents'] / 100, 2) }}</dd></div>
                     <div class="flex justify-between"><dt>Monthly</dt><dd>${{ number_format($quote['monthly_cents'] / 100, 2) }}</dd></div>
@@ -60,7 +62,7 @@
                     <input type="hidden" name="quote_hash" value="{{ $quote['quote_hash'] }}">
                     @foreach($selected as $key)<input type="hidden" name="branches[]" value="{{ $key }}">@endforeach
                     <label class="flex gap-3 text-sm"><input name="terms_accepted" type="checkbox" value="1" required> <span>I accept the <a class="underline" href="{{ route('legal.terms') }}" target="_blank" rel="noopener">service terms</a>, ${{ number_format($quote['setup_cents'] / 100, 2) }} setup, ${{ number_format($quote['monthly_cents'] / 100, 2) }}/month recurring service, applicable tax, and disclosed usage fees.</span></label>
-                    @if($ready)<button class="fb-btn fb-btn-primary" type="submit"><x-everbranch.action-leaf />{{ $pending ? 'Resume checkout' : 'Continue to payment' }}</button>
+                    @if($ready)<button class="fb-btn fb-btn-primary" type="submit"><x-everbranch.action-leaf />{{ $pending ? 'Resume checkout' : 'Activate plan' }}</button>
                     @else<p class="rounded-xl bg-amber-50 p-4" role="status">Payments are temporarily unavailable. Your choices are saved; try again shortly.</p>@endif
                 </form>
             </section>

@@ -22,6 +22,7 @@
                 <article class="fb-card">
                     <h2 class="text-2xl font-semibold">{{ $card['label'] }}</h2>
                     <p class="mt-2 text-xl font-semibold">{{ $card['price_display'] }}</p>
+                    @if(config('self_service.trial_enabled', true))<p class="mt-3 font-semibold">Try it free for {{ config('module_catalog.offers.standard.trial.days', 14) }} days.</p><p class="text-sm">No card. No automatic charge. Private editing and previews.</p>@endif
                     <p class="mt-3">{{ $card['summary'] }}</p>
                     <ul>
                         @foreach($card['highlights'] as $line)
@@ -29,7 +30,7 @@
                         @endforeach
                     </ul>
                     <div class="mt-5 flex flex-wrap gap-3">
-                        <a class="fb-btn fb-btn-primary" href="{{ route('platform.start') }}">Get started</a>
+                        <a class="fb-btn fb-btn-primary" href="{{ route('platform.start') }}"><x-everbranch.action-leaf />{{ config('self_service.trial_enabled', true) ? 'Start free trial' : 'Get started' }}</a>
                         <a class="fb-btn fb-btn-secondary" href="{{ route('platform.contact', ['intent' => 'walkthrough']) }}">Request a walkthrough</a>
                     </div>
                 </article>
@@ -73,8 +74,8 @@
                 <h2 class="text-xl font-semibold">Make it yours.</h2>
                 <ol class="mt-3 space-y-2">
                     <li>1. Choose your template.</li>
-                    <li>2. Review your setup and costs.</li>
-                    <li>3. Set up your workspace.</li>
+                    <li>2. {{ config('self_service.trial_enabled', true) ? 'Try your private workspace.' : 'Review your setup and costs.' }}</li>
+                    <li>3. {{ config('self_service.trial_enabled', true) ? 'Activate when you are ready to publish.' : 'Set up your workspace.' }}</li>
                 </ol>
                 <p class="mt-4">{{ $content['billing_note'] ?? '' }}</p>
             </div>

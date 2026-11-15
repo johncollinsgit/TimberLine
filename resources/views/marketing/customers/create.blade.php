@@ -1,5 +1,14 @@
+@php
+    $tenant = request()->attributes->get('current_tenant');
+    $trial = $tenant ? app(\App\Services\Onboarding\SelfServiceTrialService::class)->status($tenant) : [];
+    $privateTrial = $tenant && app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($tenant);
+@endphp
 <x-layouts::app :title="'Add Customer'">
     <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
+        @if($privateTrial)
+            @include('onboarding.partials.trial-status')
+            <header><a href="{{ route('marketing.customers') }}" class="text-sm font-semibold text-emerald-800">Back to customers</a><h1 class="mt-3 text-2xl font-semibold">Add customer</h1></header>
+        @else
         <x-marketing.partials.section-shell
             :section="$section"
             :sections="$sections"
@@ -8,6 +17,7 @@
             hint-title="Wizard behavior"
             hint-text="This creates/updates canonical marketing profiles first. External provider fields are treated as enrichment, not source-of-truth."
         />
+        @endif
 
         <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6 space-y-4">
             <div class="grid gap-2 sm:grid-cols-5">

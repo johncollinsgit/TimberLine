@@ -3474,3 +3474,17 @@ signup and business setup, with branch adjustments available after purchase.
   Existing links remain valid without switching or authenticating an account.
 - Expired or changed links offer a short resend/sign-in recovery page. Requests
   remain bound to the signed-in account, and invalid links disclose no recipient.
+
+## 2026-11-15 — Private trial workspace
+
+- Pricing, template cards and account setup explain the no-card trial before the
+  business is created. The workspace shows its actual UTC end date and limits.
+- One compact card offers private drafts and explicit paid activation. Expired
+  trials retain previews without writable controls; publishing and domains stay
+  behind activation. No automatic charge, reminder or deletion is promised.
+- Trial navigation follows the server's admitted read routes. Forbidden Shop,
+  provider and invitation destinations disappear; paid and legacy menus retain
+  their existing behavior.
+- Customers, Work and Documents retain private creation and basic editing during
+  the trial. At expiry they show saved details, search and downloads; connected
+  alerts, assignments, archive actions and provider controls stay out of trial UI.

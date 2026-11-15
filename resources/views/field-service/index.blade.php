@@ -1,20 +1,28 @@
+@php
+    $trial = app(\App\Services\Onboarding\SelfServiceTrialService::class)->status($tenant);
+    $privateTrial = app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($tenant);
+    $canEditPrivate = ! $privateTrial || (bool) ($trial['can_edit_private'] ?? false);
+@endphp
 <x-layouts::app.sidebar title="Field Operations">
     <flux:main>
         <div class="mx-auto w-full max-w-[1900px] space-y-5 px-3 py-4 sm:px-5 lg:px-7">
+            @include('onboarding.partials.trial-status')
             <header class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-7">
                 <div class="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <div class="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">{{ $tenant->name }}</div>
                         <h1 class="mt-2 text-3xl font-semibold tracking-tight text-zinc-950">Work</h1>
-                        <p class="mt-2 max-w-2xl text-sm text-zinc-600">Find, sort, assign, and update field work without leaving the grid.</p>
+                        <p class="mt-2 max-w-2xl text-sm text-zinc-600">{{ $privateTrial ? 'Find your jobs, plan a visit, and keep the details together.' : 'Find, sort, assign, and update field work without leaving the grid.' }}</p>
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <a href="{{ route('field-service.calendar') }}" class="fb-btn fb-btn-secondary">Calendar</a>
+                        @unless($privateTrial)
                         <a href="{{ route('field-service.payroll-hours') }}" class="fb-btn fb-btn-secondary">Team hours</a>
                         <a href="{{ route('field-service.resources') }}" class="fb-btn fb-btn-secondary">Inventory & vans</a>
                         @if($fleetTrackingEnabled ?? false)<a href="{{ route('field-service.fleet-tracking.index') }}" class="fb-btn fb-btn-secondary">Location tracking</a>@endif
                         @if($equipmentMaintenanceEnabled ?? false)<a href="{{ route('field-service.equipment.index') }}" class="fb-btn fb-btn-secondary">Equipment</a>@endif
-                        @if(data_get($capabilities ?? [], 'create_jobs'))<a href="#new-job" class="fb-btn fb-btn-primary">Create job</a>@endif
+                        @endunless
+                        @if($canEditPrivate && data_get($capabilities ?? [], 'create_jobs'))<a href="#new-job" class="fb-btn fb-btn-primary">Create job</a>@endif
                     </div>
                 </div>
                 @if($ownerMetrics)
@@ -30,7 +38,7 @@
                 @endif
             </header>
 
-            @if(data_get($capabilities ?? [], 'manage_jobs'))
+            @if(! $privateTrial && data_get($capabilities ?? [], 'manage_jobs'))
                 @php
                     $jobUpdateSms = (array) ($reminderSetting->job_update_sms ?? []);
                     $jobUpdateSmsEnabled = filter_var(old('job_update_sms_enabled', data_get($jobUpdateSms, 'enabled', false)), FILTER_VALIDATE_BOOLEAN);
@@ -88,8 +96,9 @@
                     data-updates-template="{{ route('field-service.jobs.updates', ['job' => 0]) }}"
                     data-note-template="{{ route('field-service.notes.store', ['job' => 0]) }}"
                     data-candidate-template="{{ route('field-service.work-candidates.review', ['candidate' => 0]) }}"
-                    data-can-manage="{{ data_get($capabilities ?? [], 'manage_jobs') ? '1' : '0' }}"
-                    data-can-manage-drafts="{{ ($canManageJobDrafts ?? false) ? '1' : '0' }}"
+                    data-can-post-updates="{{ $privateTrial ? '0' : '1' }}"
+                    data-can-manage="{{ ! $privateTrial && data_get($capabilities ?? [], 'manage_jobs') ? '1' : '0' }}"
+                    data-can-manage-drafts="{{ ! $privateTrial && ($canManageJobDrafts ?? false) ? '1' : '0' }}"
                     class="min-h-[680px]"
                 >
                     <div class="rounded-2xl border border-dashed border-zinc-300 bg-white p-6 text-sm text-zinc-600">Loading the work grid…</div>
@@ -97,7 +106,7 @@
                 <noscript class="mt-3 block rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">JavaScript is required for spreadsheet editing. The Calendar and job detail links remain available above.</noscript>
             </section>
 
-            @if(data_get($capabilities ?? [], 'create_jobs'))
+            @if($canEditPrivate && data_get($capabilities ?? [], 'create_jobs'))
                 <section id="new-job" class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-7">
                     <div class="mb-4">
                         <h2 class="text-xl font-semibold text-zinc-950">Create job</h2>
@@ -120,12 +129,12 @@
                         <input id="field-service-customer-email" name="customer_email" type="email" value="{{ old('customer_email') }}" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm" placeholder="Customer email">
                         <input id="field-service-service-address" name="service_address_line_1" value="{{ old('service_address_line_1') }}" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm xl:col-span-2" placeholder="Service address">
                         <input name="scheduled_for" type="datetime-local" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm">
-                        @if(data_get($capabilities ?? [], 'manage_jobs'))
+                        @if(! $privateTrial && data_get($capabilities ?? [], 'manage_jobs'))
                             <select name="assigned_user_id" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm">
                                 <option value="">Unassigned</option>
                                 @foreach($team as $member)<option value="{{ $member->id }}">{{ $member->name }}</option>@endforeach
                             </select>
-                        @else
+                        @elseif(! $privateTrial)
                             <p class="flex items-center rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-3 text-sm text-zinc-700">This job will be assigned to you.</p>
                         @endif
                         <textarea name="description" rows="2" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm md:col-span-2" placeholder="Scope, access notes, or instructions"></textarea>
