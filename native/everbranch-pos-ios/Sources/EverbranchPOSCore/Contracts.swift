@@ -4,6 +4,14 @@ public enum POSError: Error, Equatable, Sendable {
     case invalidOrigin, invalidDescriptor, recoveryRequired, signInRequired, savedCheckoutUnavailable, unavailable(String), enrollmentRejected(String)
 }
 
+public struct EventHistoryUnavailable: Error, Equatable, Sendable {
+    public let statusCode: Int
+    public init?(statusCode: Int) {
+        guard [403, 404, 409, 422].contains(statusCode) else { return nil }
+        self.statusCode = statusCode
+    }
+}
+
 public struct Workspace: Decodable, Identifiable, Sendable {
     public let id: Int
     public let name: String

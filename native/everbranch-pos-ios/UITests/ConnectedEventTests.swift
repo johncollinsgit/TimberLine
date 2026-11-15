@@ -20,9 +20,13 @@ final class ConnectedEventTests: XCTestCase {
         XCTAssertTrue(app.textFields["Phone"].waitForExistence(timeout: 10))
     }
     func testHistoricalEventSalesShowsFormerCrewAndDailyModes() {
-        let app = app(["--pos-connected-history-tests"])
+        let app = app(["--pos-connected-history-tests", "--pos-connected-partial-sales-tests", "--pos-connected-square-time-tests"])
         XCTAssertTrue(app.buttons["Sales"].waitForExistence(timeout: 10)); app.buttons["Sales"].tap()
         XCTAssertTrue(app.staticTexts["Event sales history"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Known net sales"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["$20.00"].exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Partial total · Square updated '")).firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["Partial total · Square update time unknown"].exists)
         XCTAssertTrue(app.staticTexts["Average per event"].exists)
         let daily = app.buttons["Daily comparisons"]; show(daily, in: app); daily.tap()
         let weekday = app.buttons["Weekday"]; show(weekday, in: app); weekday.tap()
@@ -30,6 +34,29 @@ final class ConnectedEventTests: XCTestCase {
         let previous = app.buttons["Previous years"]; show(previous, in: app); previous.tap()
         XCTAssertTrue(app.staticTexts["Fictional Previous Crew"].exists)
         let browser = app.buttons["Open event in Everbranch"]; show(browser, in: app); XCTAssertTrue(browser.exists)
+    }
+    func testHistorySourceConflictClearsPreviouslyDisplayedComparisonsAndKeepsReceipts() {
+        let app = app(["--pos-connected-history-tests", "--pos-connected-history-revoked-tests", "--pos-connected-partial-sales-tests"])
+        XCTAssertTrue(app.buttons["Sales"].waitForExistence(timeout: 10)); app.buttons["Sales"].tap()
+        let average = app.staticTexts["Average per event"]
+        XCTAssertTrue(average.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Partial total · Square update time unknown"].exists)
+        let cleared = NSPredicate { _, _ in !average.exists && !app.staticTexts["Event sales history"].exists }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: cleared, object: nil)], timeout: 40), .completed)
+        XCTAssertFalse(app.buttons["Refresh history"].exists)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS 'EB-FICTIONAL'")).firstMatch.exists)
+    }
+    func testTransientHistoryFailureKeepsComparisonsAndAllowsRetry() {
+        let app = app(["--pos-connected-history-tests", "--pos-connected-history-retry-tests"])
+        XCTAssertTrue(app.buttons["Sales"].waitForExistence(timeout: 10)); app.buttons["Sales"].tap()
+        XCTAssertTrue(app.staticTexts["Average per event"].waitForExistence(timeout: 10))
+        let retry = app.buttons["Refresh history"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 40))
+        XCTAssertTrue(app.staticTexts["Average per event"].exists)
+        show(retry, in: app); retry.tap()
+        let recovered = NSPredicate { _, _ in !retry.exists && app.staticTexts["Average per event"].exists }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: recovered, object: nil)], timeout: 10), .completed)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS 'EB-FICTIONAL'")).firstMatch.exists)
     }
     func testPhotoCountDraftAllowsManualCRUDAndReplaysOriginalBatchAfterClosing() {
         let app = app(["--pos-stock-count-ui-tests"])

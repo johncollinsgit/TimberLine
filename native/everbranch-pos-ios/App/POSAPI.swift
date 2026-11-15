@@ -12,7 +12,6 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
 
 struct StockCountRejected: Error { let code: String }
 struct CustomerCreationRejected: Error { let code: String }
-struct EventHistoryUnavailable: Error {}
 
 @MainActor final class POSAPI {
     let origin: URL
@@ -72,7 +71,7 @@ struct EventHistoryUnavailable: Error {}
         guard let http = response as? HTTPURLResponse else { throw POSError.unavailable("No server response.") }
         if http.statusCode == 401 { throw POSError.signInRequired }
         guard (200...299).contains(http.statusCode) else {
-            if path.hasSuffix("/event-history") && [403, 404, 422].contains(http.statusCode) { throw EventHistoryUnavailable() }
+            if path.hasSuffix("/event-history"), let unavailable = EventHistoryUnavailable(statusCode: http.statusCode) { throw unavailable }
             let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let code = (value?["error"] as? [String: Any])?["code"] as? String ?? "request_\(http.statusCode)"
             if method == "POST" && path.hasSuffix("/customers") && (http.statusCode == 422 || code == "select_existing_customer") {

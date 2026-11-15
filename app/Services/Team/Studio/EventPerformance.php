@@ -67,7 +67,7 @@ class EventPerformance
         $this->admitSources($tenant, $user, $area, $data);
         // A changed canonical directory invalidates customer dimensions immediately, before refresh.
         // Event totals may still be shown explicitly as stale; private former aliases are withheld.
-        if ($customers && ($data['customer_signature'] ?? '') !== $this->customerSignature($tenant)) {
+        if ($customers && (! ($data['customer_access'] ?? false) || ($data['customer_signature'] ?? '') !== $this->customerSignature($tenant))) {
             $customers = false;
             if ($filters['group_by'] === 'customer' || isset($filters['customer_id'])) {
                 $result['status'] = 'preparing';
@@ -159,6 +159,7 @@ class EventPerformance
             $signature = $this->signature($tenant, $area, true);
             $customerSignature = $this->customerSignature($tenant);
             $customerAccess = $this->mayReadCustomers($tenant, $user, $area);
+            $customerInvalidated = false;
             $current = $this->snapshot($tenant, $user, $area);
             $existing = $current?->data ?? [];
             if (isset($existing['generation']) && ($existing['signature'] ?? '') === $signature
@@ -189,7 +190,7 @@ class EventPerformance
                 $issues = [];
                 $facts = [];
                 $histories = [];
-                $this->access->readCollection($tenant, $user, $area, function () use ($tenant, $user, $area, $events, $linkByEvent, $generation, $customerAccess, &$facts, &$versions, &$issues, &$histories): void {
+                $this->access->readCollection($tenant, $user, $area, function () use ($tenant, $user, $area, $events, $linkByEvent, $generation, &$customerAccess, &$customerInvalidated, &$facts, &$versions, &$issues, &$histories): void {
                     foreach ($events as $event) {
                         $this->access->record($tenant, $user, $event);
                         $versions[$event->id] = $event->version;
@@ -207,7 +208,12 @@ class EventPerformance
                                     continue;
                                 }
                                 $profile = app(CanonicalMarketingProfileResolver::class)->byId($tenant->id, (int) $purchase['customer_id']);
-                                abort_unless($profile && ! $profile->archived_at && (int) $profile->id === (int) $purchase['customer_id'], 409, 'Scoped purchase customer changed during reporting.');
+                                if (! $profile || $profile->archived_at || (int) $profile->id !== (int) $purchase['customer_id']) {
+                                    $customerAccess = false;
+                                    $customerInvalidated = true;
+
+                                    break;
+                                }
                                 $fact = $this->normalizedCustomerFact($tenant->id, $summary, $event->id, $profile, $purchase);
                                 $customerFacts[$fact['source_key']] = $fact;
                             }
@@ -218,12 +224,20 @@ class EventPerformance
                             foreach ($cohort['profile_ids'] as $id) {
                                 $profile = app(CanonicalMarketingProfileResolver::class)->byId($tenant->id, (int) $id);
                                 if (! $profile || $profile->archived_at || (int) $profile->id !== (int) $id) {
-                                    abort(409, 'Customer cohort changed during reporting.');
+                                    $customerAccess = false;
+                                    $customerInvalidated = true;
+
+                                    break;
                                 }
                                 $value = $histories[$id] ??= app(CustomerEventValueService::class)->forProfile($profile, $tenant->id, true);
                                 foreach ($this->customerFacts($tenant->id, $summary, $event->id, $commerce, $profile, $value, $cohort['relations'][$id] ?? []) as $fact) {
                                     if (isset($customerFacts[$fact['source_key']])) {
-                                        abort_unless($customerFacts[$fact['source_key']]['customer_id'] === $fact['customer_id'], 409, 'Original customer purchase associations changed during reporting.');
+                                        if ($customerFacts[$fact['source_key']]['customer_id'] !== $fact['customer_id']) {
+                                            $customerAccess = false;
+                                            $customerInvalidated = true;
+
+                                            break 2;
+                                        }
 
                                         continue;
                                     }
@@ -231,7 +245,7 @@ class EventPerformance
                                 }
                             }
                         }
-                        $facts = [...$facts, ...array_values($customerFacts)];
+                        $facts = [...$facts, ...($customerInvalidated ? [] : array_values($customerFacts))];
                         if (count($facts) >= 1000) {
                             $this->insertFacts($tenant, $area, $generation, $facts);
                             $facts = [];
@@ -240,7 +254,15 @@ class EventPerformance
                 }, true);
                 $this->insertFacts($tenant, $area, $generation, $facts);
                 $this->authorize($tenant, $user, $area);
-                abort_unless($signature === $this->signature($tenant, $area, true) && $customerSignature === $this->customerSignature($tenant), 409, 'Source records changed while reporting was prepared.');
+                abort_unless($signature === $this->signature($tenant, $area, true), 409, 'Source records changed while reporting was prepared.');
+                if ($customerInvalidated || $customerSignature !== $this->customerSignature($tenant)) {
+                    // A concurrent identity import must not block event totals.
+                    // Withhold every customer fact; reads still compare the old
+                    // signature freshly and return preparing for that dimension.
+                    $this->facts($tenant, $area, $generation)->where('kind', 'customer')->delete();
+                    $customerAccess = false;
+                    $issues[] = 'Customer identities changed. Preparing the current customer comparison.';
+                }
                 $snapshot = DB::transaction(function () use ($tenant, $user, $area, $generation, $signature, $customerSignature, $versions, $issues, $customerAccess, $squareBindings): TeamOperationRecord {
                     TeamArea::where('tenant_id', $tenant->id)->whereKey($area->id)->lockForUpdate()->firstOrFail();
                     $this->authorize($tenant, $user, $area);
@@ -343,6 +365,7 @@ class EventPerformance
         $cacheKey = 'event-performance-source-revision:'.hash('sha256', config('pos_live.runtime_id', '').'|'.$tenant->id.'|'.$area->id);
         $revisions = $fresh ? null : Cache::get($cacheKey);
         if (! is_array($revisions)) {
+            $scope = $this->squareSourceScope($tenant, $area, $records);
             $revisions = [];
             foreach (['square_orders', 'square_payments', 'pos_live_sales', 'pos_live_events', 'marketing_import_runs'] as $table) {
                 if (Schema::hasTable($table)) {
@@ -353,13 +376,67 @@ class EventPerformance
                         'pos_live_events' => ['id', 'runtime_id', 'sale_id', 'code', 'details'],
                         default => ['id', 'type', 'status', 'summary', 'finished_at'],
                     };
-                    $revisions[$table] = $this->tableDigest($table, $tenant->id, $columns);
+                    $revisions[$table] = $this->tableDigest($table, $tenant->id, $columns, $scope);
                 }
             }
             Cache::put($cacheKey, $revisions, 30);
         }
 
         return hash('sha256', json_encode([$records, $sources, $revisions, $this->squareContextSignature($tenant)], JSON_THROW_ON_ERROR));
+    }
+
+    /** Only reviewed report inputs can invalidate this reporting generation. */
+    private function squareSourceScope(Tenant $tenant, TeamArea $area, array $versions): array
+    {
+        $key = 'event-performance-square-scope:'.hash('sha256', json_encode([$tenant->id, $area->id, $versions], JSON_THROW_ON_ERROR));
+        $scope = Cache::remember($key, 300, function () use ($tenant, $area): array {
+            $scope = ['windows' => [], 'order_ids' => [], 'run_ids' => []];
+            foreach (TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id])
+                ->whereIn('kind', ['event', 'event_link'])->where('status', '!=', 'withdrawn')->get(['kind', 'status', 'data']) as $record) {
+                if ($record->kind === 'event') {
+                    $scope['order_ids'] = [...$scope['order_ids'], ...($record->data['_teams_enrichment']['square_orders']['ids'] ?? [])];
+
+                    continue;
+                }
+                if ($record->status !== 'accepted') {
+                    continue;
+                }
+                foreach ($record->data['square_scopes'] ?? [] as $window) {
+                    $timezone = $record->data['timezone'] ?? 'UTC';
+                    $scope['windows'][] = ['location_id' => $window['location_id'],
+                        'from' => CarbonImmutable::parse($window['starts_on'], $timezone)->startOfDay()->utc()->toDateTimeString(),
+                        'through' => CarbonImmutable::parse($window['ends_on'], $timezone)->addDay()->startOfDay()->utc()->addHours(72)->toDateTimeString()];
+                    $scope['run_ids'] = [...$scope['run_ids'], $window['orders_run_id'], $window['payments_run_id']];
+                }
+            }
+            $scope['order_ids'] = array_values(array_unique($scope['order_ids']));
+            $scope['run_ids'] = array_values(array_unique($scope['run_ids']));
+
+            return $scope;
+        });
+        // Original receipt ancestry is small and checked freshly. Unrelated
+        // scheduled/backfill runs are not evidence used by this report.
+        $pending = $scope['run_ids'];
+        $seen = [];
+        while ($pending) {
+            $ids = array_values(array_diff($pending, array_keys($seen)));
+            if (! $ids) {
+                break;
+            }
+            abort_if(count($seen) + count($ids) > 10000, 409, 'Original Square pagination needs review.');
+            $pending = [];
+            foreach ($ids as $id) {
+                $seen[$id] = true;
+            }
+            foreach (\App\Models\MarketingImportRun::forTenantId($tenant->id)->whereIn('id', $ids)->get(['summary']) as $run) {
+                if ($parent = (int) ($run->summary['resumed_from_run_id'] ?? 0)) {
+                    $pending[] = $parent;
+                }
+            }
+        }
+        $scope['run_ids'] = array_keys($seen);
+
+        return $scope;
     }
 
     private function squareContextSignature(Tenant $tenant): string
@@ -387,10 +464,22 @@ class EventPerformance
     }
 
     /** Content revisions catch same-second edits and delete/reinsert pairs. Never emit private bytes. */
-    private function tableDigest(string $table, int $tenant, array $columns): string
+    private function tableDigest(string $table, int $tenant, array $columns, ?array $scope = null): string
     {
         $columns = array_values(array_intersect($columns, Schema::getColumnListing($table)));
         $query = DB::table($table)->where('tenant_id', $tenant);
+        if ($scope !== null && in_array($table, ['square_orders', 'square_payments'], true)) {
+            $orders = DB::table('square_orders')->where('tenant_id', $tenant)->where(function (Builder $query) use ($scope): void {
+                $query->whereIn('square_order_id', $scope['order_ids']);
+                foreach ($scope['windows'] as $window) {
+                    $query->orWhere(fn (Builder $q) => $q->where('location_id', $window['location_id'])
+                        ->where('closed_at', '>=', $window['from'])->where('closed_at', '<', $window['through']));
+                }
+            });
+            $table === 'square_orders' ? $query = $orders : $query->whereIn('square_order_id', $orders->select('square_order_id'));
+        } elseif ($scope !== null && $table === 'marketing_import_runs') {
+            $query->whereIn('id', $scope['run_ids']);
+        }
         if (DB::connection()->getDriverName() === 'mysql') {
             // Four independent 64-bit XOR lanes retain the full SHA-256 row digest.
             // Hashing stays inside MySQL; source payloads never cross into web memory.
