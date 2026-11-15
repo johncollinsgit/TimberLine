@@ -9,6 +9,7 @@ use App\Models\IntegrationConnection;
 use App\Models\Tenant;
 use App\Models\TenantForm;
 use App\Models\TenantSite;
+use App\Models\WebsiteCollection;
 use App\Models\WebsiteCustomer;
 use App\Models\WebsiteFulfillmentLocation;
 use App\Models\WebsiteOrder;
@@ -510,17 +511,37 @@ class WebsiteCommerceController extends Controller
         [$tenant, $site] = $this->publicSite($request, $websites);
         $publicSettings = $site->publishedSiteVersion?->settings ?? $site->settings;
         $isSawyer = data_get($publicSettings, 'theme_key') === 'sawyer-naturals';
-        $products = WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('status', 'active')
-            ->when(data_get($publicSettings, 'domain_choice') === 'everbranch_subdomain', fn ($query) => $query->where('product_type', 'quote'))
-            ->with('variants')->get();
-        if ($isSawyer) {
-            $category = (string) $request->query('category', 'all');
-            $search = trim(mb_substr((string) $request->query('q', ''), 0, 100));
-            $products = $products->filter(fn (WebsiteProduct $product) => ($category === 'all' || in_array($category, (array) data_get($product->service_details, 'categories', []), true))
-                && ($search === '' || mb_stripos($product->title, $search) !== false))->values();
+        $filters = $request->validate(['q' => ['nullable', 'string', 'max:100'], 'collection' => ['nullable', 'string', 'max:160', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/'], 'category' => ['nullable', 'string', 'max:160'], 'page' => ['nullable', 'integer', 'min:1', 'max:10000']]);
+        $search = trim((string) ($filters['q'] ?? ''));
+        $category = $isSawyer ? (string) ($filters['category'] ?? 'all') : 'all';
+        $collection = (string) ($filters['collection'] ?? '');
+        $collectionQuery = WebsiteCollection::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('status', 'active');
+        $selectedCollection = $collection !== '' ? (clone $collectionQuery)->where('handle', $collection)->firstOrFail() : null;
+        $collections = $collectionQuery->orderBy('title')->limit(100)->get();
+        if ($selectedCollection && ! $collections->contains('id', $selectedCollection->id)) {
+            $collections->push($selectedCollection);
         }
+        $query = WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('status', 'active')
+            ->when(data_get($publicSettings, 'domain_choice') === 'everbranch_subdomain', fn ($query) => $query->where('product_type', 'quote'))
+            ->with(['variants' => fn ($query) => $query->where('tenant_id', $tenant->id)]);
+        if ($selectedCollection) {
+            $query->whereHas('collections', fn ($query) => $query->where('website_collections.id', $selectedCollection->id)->where('website_collections.tenant_id', $tenant->id)->where('tenant_site_id', $site->id)->where('status', 'active'));
+            $query->orderBy(\Illuminate\Support\Facades\DB::table('website_collection_products')->select('position')
+                ->whereColumn('website_product_id', 'website_products.id')->where('website_collection_id', $selectedCollection->id)->where('tenant_id', $tenant->id)->limit(1));
+        }
+        if ($search !== '') {
+            $like = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $search).'%';
+            $query->where(fn ($query) => $query->whereRaw("title LIKE ? ESCAPE '!'", [$like])->orWhereRaw("description LIKE ? ESCAPE '!'", [$like])
+                ->orWhereHas('variants', fn ($query) => $query->where('tenant_id', $tenant->id)->whereRaw("sku LIKE ? ESCAPE '!'", [$like])));
+        }
+        if ($isSawyer && $category !== 'all') {
+            // Preserve Sawyer's existing category metadata and URLs. Native
+            // collections remain their own explicit membership relationship.
+            $query->whereJsonContains('service_details->categories', $category);
+        }
+        $products = $query->orderBy('id')->paginate(24)->withQueryString();
 
-        return view('managed-website.shop', compact('tenant', 'site', 'products') + ['category' => $category ?? 'all', 'search' => $search ?? '']);
+        return view('managed-website.shop', compact('tenant', 'site', 'products', 'category', 'search', 'collection', 'collections', 'selectedCollection'));
     }
 
     public function showProduct(Request $request, string $handle, ManagedWebsiteService $websites): View
@@ -529,9 +550,32 @@ class WebsiteCommerceController extends Controller
         $publicSettings = $site->publishedSiteVersion?->settings ?? $site->settings;
         $product = WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('handle', $handle)->where('status', 'active')
             ->when(data_get($publicSettings, 'domain_choice') === 'everbranch_subdomain', fn ($query) => $query->where('product_type', 'quote'))
-            ->with('variants')->firstOrFail();
+            ->with(['variants' => fn ($query) => $query->where('tenant_id', $tenant->id)])->firstOrFail();
+        $input = $request->validate(['variant' => ['nullable', 'integer', 'min:1']]);
+        $variantChoices = $product->variants->map(function (WebsiteProductVariant $variant) use ($product): array {
+            $tracked = $product->track_inventory && $variant->inventory_quantity !== null;
+            $available = $variant->is_available && (! $tracked || $variant->inventory_quantity > 0);
 
-        return view('managed-website.product', compact('tenant', 'site', 'product'));
+            return ['id' => $variant->id, 'title' => $variant->title, 'price' => '$'.number_format($variant->price_cents / 100, 2),
+                'compare_price' => $variant->compare_at_price_cents > $variant->price_cents ? '$'.number_format($variant->compare_at_price_cents / 100, 2) : '',
+                'available' => $available, 'availability' => $available ? 'In stock' : 'Currently unavailable',
+                'maximum' => $available ? ($tracked ? min(20, $variant->inventory_quantity) : 20) : 0,
+                'action' => route('managed-website.store.cart.items.store', ['variant' => $variant])];
+        });
+        $selectedVariant = isset($input['variant']) ? $variantChoices->firstWhere('id', (int) $input['variant'])
+            : ($variantChoices->firstWhere('available', true) ?? $variantChoices->first());
+        abort_if(isset($input['variant']) && ! $selectedVariant, 404);
+        $commerce = app(WebsiteCommerceService::class);
+        $quoteRequestAllowed = ! $request->attributes->get('managed_website_relay')
+            && data_get($request->attributes->get('host_tenant_context'), 'strategy') !== 'managed_website_custom_domain';
+        $cartEnabled = $quoteRequestAllowed && data_get($publicSettings, 'domain_choice') !== 'everbranch_subdomain' && $commerce->enabledFor($tenant);
+        $checkoutReady = $cartEnabled && $commerce->checkoutReadiness($tenant)['ready'];
+        $contactPublished = $site->pages()->where('tenant_id', $tenant->id)->where('slug', 'contact')
+            ->whereHas('publishedVersion', fn ($query) => $query->where('tenant_id', $tenant->id)->where('tenant_site_id', $site->id)->where('status', 'published'))->exists();
+        $contactEmail = (string) data_get($publicSettings, 'business_contact.email', '');
+        $contactUrl = $contactPublished ? '/contact' : (filter_var($contactEmail, FILTER_VALIDATE_EMAIL) ? 'mailto:'.$contactEmail : null);
+
+        return view('managed-website.product', compact('tenant', 'site', 'product', 'variantChoices', 'selectedVariant', 'cartEnabled', 'checkoutReady', 'quoteRequestAllowed', 'contactUrl'));
     }
 
     public function cart(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce, WebsiteCommerceShippingService $shipping): View
@@ -575,8 +619,11 @@ class WebsiteCommerceController extends Controller
     public function addCartItem(Request $request, WebsiteProductVariant $variant, ManagedWebsiteService $websites, WebsiteCommerceService $commerce): RedirectResponse
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
+        $this->assertNewRetailOrderAllowed($site);
         $this->requireCommerce($tenant, $commerce);
         abort_unless((int) $variant->tenant_id === (int) $tenant->id && $variant->product?->tenant_site_id === $site->id, 404);
+        $selection = $request->validate(['product_id' => ['nullable', 'integer', 'min:1']]);
+        abort_if(isset($selection['product_id']) && (int) $selection['product_id'] !== (int) $variant->website_product_id, 404);
         $cart = $commerce->cartFor($site, $request->session()->get($this->cartSessionKey($site)));
         $quantity = (int) ($request->validate(['quantity' => ['nullable', 'integer', 'min:1', 'max:20']])['quantity'] ?? 1);
         $cart = $commerce->addToCart($cart, $variant->load('product'), $quantity);
@@ -599,6 +646,7 @@ class WebsiteCommerceController extends Controller
     public function checkout(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce): RedirectResponse
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
+        $this->assertNewRetailOrderAllowed($site);
         $this->requireCommerce($tenant, $commerce);
         $cart = $commerce->cartFor($site, $request->session()->get($this->cartSessionKey($site)));
         $data = $request->validate([
@@ -763,6 +811,13 @@ class WebsiteCommerceController extends Controller
     private function requireCommerce(Tenant $tenant, WebsiteCommerceService $commerce): void
     {
         abort_unless($commerce->enabledFor($tenant), 423, 'Website Commerce is not enabled for this workspace yet.');
+    }
+
+    private function assertNewRetailOrderAllowed(TenantSite $site): void
+    {
+        // Keep the existing quote-only address policy on direct POSTs too.
+        // Retained cart review, checkout recovery and cancellation stay separate.
+        abort_if(data_get($site->publishedSiteVersion?->settings ?? $site->settings, 'domain_choice') === 'everbranch_subdomain', 404);
     }
 
     private function cartSessionKey(TenantSite $site): string
