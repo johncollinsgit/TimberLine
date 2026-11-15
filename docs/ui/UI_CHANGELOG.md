@@ -1,3 +1,11 @@
+## 2026-11-15 - Stable progressive search results (follow-on source)
+
+An unchanged search result keeps its option and child elements when the slower
+apps response arrives during a click. Current server order, keyboard selection,
+fresh reference authorization and tenant boundaries remain in force. Closed or
+retired results cannot activate. Real held-response pointer/keyboard regressions
+join the existing desktop and phone coverage; deployment remains separately gated.
+
 ## 2026-11-15 - Native shopper controls and starter typography (follow-on source)
 
 Both native product designs share selectable variants, current server-provided

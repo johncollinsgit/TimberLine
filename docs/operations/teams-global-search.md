@@ -183,3 +183,23 @@ in a private synthetic test directory on that same host; no live application
 source or business records were changed for the measurement. The shared campus
 copy was regenerated through the existing embed command. Protected release and
 served-artifact verification still precede any live-performance claim.
+
+## Progressive result pointer stability (November 15; source candidate)
+
+Same-query progressive search reuses an unchanged option and all its descendants.
+Result identity includes the current workspace scope, result type and destination
+kind/area/id/URL. Current server order remains authoritative; changed and retired
+options are replaced or removed. Mouse handlers look up the current result by that
+identity and require the same query, generation, open palette and available scope.
+Opening still performs the normal server reference and record authorization reads.
+No action moves to pointerdown, and no new delay or automatic click retry is added.
+
+The existing native universal-search browser entry point retains every earlier
+desktop/mobile scenario. Added Chromium/WebKit checks hold a real authorized apps
+HTTP response, deliver it between pointerdown and pointerup, and require the
+original option/descendants, actual result order and exactly one authorized open.
+Additional controls cover keyboard Enter, closed/retired options and a real
+foreign-tenant record denied by reference revalidation. Shared campus assets are
+regenerated with the existing deterministic embed command and reviewed separately.
+These checks establish source behavior, not a deployed release or a proven cause
+of an earlier CI timeout that lacked interaction diagnostics.

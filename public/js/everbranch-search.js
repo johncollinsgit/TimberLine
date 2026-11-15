@@ -171,6 +171,8 @@
     const footer = element('div', '↑ ↓ Navigate   ↵ Open   Esc Close   > Commands', 'eb-search-footer');
     panel.append(head, filters, status, list, more, footer); panel.hidden = true; host.replaceChildren(form, panel);
     let serial = 0, controller, timer, rows = [], active = -1, cursor = null, expanded = false, scope = '', recent = [], opened = false, composing = false, bodyOverflow;
+    const optionState = new WeakMap();
+    const rowIdentity = row => JSON.stringify([scope, row.id, row.type, row.target?.kind, row.target?.area, row.target?.id, row.target?.url]);
     const selectedFilters = () => Object.fromEntries(Object.entries(selects).map(([key, select]) => [key, select.value]));
     const recentKey = () => 'everbranch-search-v1:' + scope;
     function changeScope(next) {
@@ -188,10 +190,10 @@
     }
     function show() { if (options.available?.() === false) return; options.beforeOpen?.(); expand(); run(); }
     async function activate(index) {
-      const row = rows[index]; if (!row) return;
+      const row = rows[index]; if (!row || !opened || options.available?.() === false) return;
       const currentScope = scope, ticket = serial;
       try {
-        const accepted = await options.open(row, () => scope === currentScope && ticket === serial && options.available?.() !== false);
+        const accepted = await options.open(row, () => opened && scope === currentScope && ticket === serial && options.available?.() !== false);
         if (scope !== currentScope || ticket !== serial || accepted === false) return;
         if (row.type !== 'command') { recent = [row.id, ...recent.filter(id => id !== row.id)].slice(0, 8); try { sessionStorage.setItem(recentKey(), JSON.stringify(recent)); } catch { /* Optional. */ } }
         closePanel(false);
@@ -210,20 +212,37 @@
       updateFilterLabel();
     }
     function paint(result, append, preserveSelection = false) {
-      const previousActive = active, selectedId = preserveSelection ? rows[active]?.id : null;
+      const previousActive = active, selectedKey = preserveSelection && rows[active] ? rowIdentity(rows[active]) : null;
       rows = append ? [...new Map([...rows, ...(result.items || [])].map(row => [row.id, row])).values()] : (result.items || []);
       cursor = result.next_cursor || null; facets(result.facets);
-      list.replaceChildren(); active = -1; input.removeAttribute('aria-activedescendant');
+      // Keep an unchanged result and its descendants connected while the apps
+      // stage arrives between pointerdown and pointerup. Replacing the option
+      // here discards the browser's pending click before it can be revalidated.
+      const existing = new Map([...list.children].map(node => [optionState.get(node)?.key, node])), retained = new Set();
+      const ticket = serial, currentScope = scope, currentQuery = input.value;
+      active = -1; input.removeAttribute('aria-activedescendant');
       for (const [i, row] of rows.entries()) {
-        const option = element('div', null, 'eb-search-option'); option.id = uid + '-result-' + i; option.setAttribute('role', 'option'); option.setAttribute('aria-selected', 'false');
-        const badge = element('span', row.type === 'command' ? '⌘' : ({ task: '✓', project: '▦', file: '▤', person: '◉', request: '◇', job: '⚒' }[row.type] || '◈'), 'eb-search-icon'); badge.setAttribute('aria-hidden', 'true');
-        const text = element('div', null, 'eb-search-copy'), title = element('strong'); highlight(title, row.title, input.value);
-        const context = element('small', [labelFor(row.type), row.context, labelFor(row.status), row.source, row.synced_at ? 'Synced ' + new Date(row.synced_at).toLocaleString() : ''].filter(Boolean).join(' · '));
-        text.append(title, context);
-        if (row.snippet || row.body) { const snippet = element('span', null, 'eb-search-snippet'); highlight(snippet, row.snippet || row.body.slice(0, 180), input.value); text.append(snippet); }
-        option.append(badge, text); option.onpointermove = () => choose(i); option.onmousedown = event => event.preventDefault(); option.onclick = () => activate(i); list.append(option);
+        const key = rowIdentity(row), signature = JSON.stringify([currentQuery, row.type, row.title, row.context, row.status, row.source, row.synced_at, row.snippet, row.body]);
+        let option = existing.get(key);
+        if (!option || optionState.get(option)?.signature !== signature) {
+          option = element('div', null, 'eb-search-option'); option.setAttribute('role', 'option'); option.setAttribute('aria-selected', 'false');
+          const badge = element('span', row.type === 'command' ? '⌘' : ({ task: '✓', project: '▦', file: '▤', person: '◉', request: '◇', job: '⚒' }[row.type] || '◈'), 'eb-search-icon'); badge.setAttribute('aria-hidden', 'true');
+          const text = element('div', null, 'eb-search-copy'), title = element('strong'); highlight(title, row.title, currentQuery);
+          const context = element('small', [labelFor(row.type), row.context, labelFor(row.status), row.source, row.synced_at ? 'Synced ' + new Date(row.synced_at).toLocaleString() : ''].filter(Boolean).join(' · '));
+          text.append(title, context);
+          if (row.snippet || row.body) { const snippet = element('span', null, 'eb-search-snippet'); highlight(snippet, row.snippet || row.body.slice(0, 180), currentQuery); text.append(snippet); }
+          option.append(badge, text); optionState.set(option, { key, signature });
+        }
+        option.id = uid + '-result-' + i;
+        const currentIndex = () => opened && scope === currentScope && serial === ticket && input.value === currentQuery && option.parentNode === list && options.available?.() !== false ? rows.findIndex(item => rowIdentity(item) === key) : -1;
+        option.onpointermove = () => { const index = currentIndex(); if (index >= 0) choose(index); };
+        option.onmousedown = event => event.preventDefault();
+        option.onclick = () => { const index = currentIndex(); if (index >= 0) activate(index); };
+        if (list.children[i] !== option) list.insertBefore(option, list.children[i] || null);
+        retained.add(option);
       }
-      if (rows.length) { const retained = selectedId ? rows.findIndex(row => row.id === selectedId) : -1; choose(retained >= 0 ? retained : append ? Math.max(0, previousActive) : 0); }
+      for (const node of [...list.children]) if (!retained.has(node)) node.remove();
+      if (rows.length) { const selected = selectedKey ? rows.findIndex(row => rowIdentity(row) === selectedKey) : -1; choose(selected >= 0 ? selected : append ? Math.max(0, previousActive) : 0); }
       status.textContent = rows.length ? (input.value.trim() ? rows.length + ' results' : 'Recent items and commands') + (cursor ? ' · More available' : '') : result.partial_notice ? '' : 'No results. Try fewer words or clear a filter.';
       if (result.partial_notice) status.textContent += (status.textContent ? ' · ' : '') + result.partial_notice;
       const returnToInput = document.activeElement === more && !cursor;

@@ -71,6 +71,78 @@ try {
       await dialog.getByRole('button', { name: 'Stay here' }).focus(); await page.screenshot({ path: join(evidence, `${name}-${width}-chooser.png`) });
       await dialog.getByRole('button', { name: 'Stay here' }).click();
       if (width === 390) {
+        phase = 'progressive_pointer_identity';
+        {
+          if (await page.locator('#tw-filter-toggle').getAttribute('aria-expanded') === 'true') await page.locator('#tw-filter-toggle').click();
+          await page.locator('[data-team-layout="board"]').click();
+          await page.locator('#tw-list .teams-event-board').waitFor(); await page.locator('#tops-content:not([aria-busy])').waitFor();
+          const reads = [], capture = request => {
+            const url = new URL(request.url());
+            if (url.pathname === '/team/search/all' && url.searchParams.get('ref') === 'operation:' + fixture.event_id) reads.push('reference');
+            if (url.pathname === '/team/operations/records/' + fixture.event_id) reads.push('record');
+          };
+          let releaseApps, held = false, appsStatus = null, appItems = [];
+          const appsGate = new Promise(done => { releaseApps = done; });
+          const holdActualApps = async route => {
+            const url = new URL(route.request().url());
+            if (held || url.searchParams.get('q') !== 'seasonal' || url.searchParams.get('stage') !== 'apps') return route.continue();
+            held = true;
+            try { const response = await route.fetch({ timeout: 12000 }); appItems = (await response.json()).items || []; appsStatus = response.status(); await appsGate; await route.fulfill({ response }); }
+            catch (error) { appsStatus = 'unavailable'; await route.abort().catch(() => {}); }
+          };
+          page.on('request', capture); await page.route('**/team/search/all?**', holdActualApps);
+          try {
+            await input.fill('seasonal'); await result.waitFor();
+            await expect.poll(() => appsStatus, { timeout: 12000 }).toBe(200);
+            const original = await result.elementHandle(), descendants = await original.evaluateHandle(node => [...node.querySelectorAll('*')]);
+            const originalOrder = await page.locator('.eb-search-list .eb-search-option strong').allTextContents();
+            const box = await result.boundingBox(); assert.ok(box);
+            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); releaseApps();
+            await page.locator('.eb-search-status').filter({ hasText: 'Searching other apps…' }).waitFor({ state: 'hidden' });
+            assert.ok(await original.evaluate((node, children) => node.isConnected && children.length === node.querySelectorAll('*').length && children.every((child, index) => child === node.querySelectorAll('*')[index]), descendants), 'The pressed owned result and every descendant survive the actual apps response');
+            assert.ok(await original.evaluate((node, current) => node === current, await result.elementHandle()));
+            assert.deepEqual(await page.locator('.eb-search-list .eb-search-option strong').allTextContents(), [...originalOrder, ...appItems.map(item => item.title)], 'Progressive results retain the actual Team and apps response order');
+            const admissions = Promise.all([
+              page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/team/search/all' && url.searchParams.get('ref') === 'operation:' + fixture.event_id && response.ok(); }),
+              page.waitForResponse(response => new URL(response.url()).pathname === '/team/operations/records/' + fixture.event_id && response.ok()),
+            ]);
+            await Promise.all([page.mouse.up(), admissions]);
+            await page.locator('#tops-detail').getByRole('heading', { name: 'Fictional seasonal makers and home goods weekend market', exact: true }).waitFor();
+            assert.deepEqual(reads, ['reference', 'record'], 'One pointer action performs exactly one fresh authorized reference and record read');
+            await page.locator('#tops-detail-close').click();
+            checks.push(`${name}: real apps response between pointerdown/up preserves the result and descendants, order and exactly one authorized open`);
+            const closedReads = reads.length;
+            await original.evaluate(node => node.click());
+            await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+            assert.equal(reads.length, closedReads, 'A retained option cannot activate while its palette is closed');
+            await input.fill('aspen'); await page.locator('.eb-search-option').filter({ hasText: 'Fictional Aspen regional market' }).waitFor();
+            assert.equal(await original.evaluate(node => node.isConnected), false);
+            await original.evaluate(node => node.click());
+            await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+            assert.equal(reads.length, closedReads, 'A retired prior-query option cannot activate');
+            assert.ok(await page.locator('#tops-detail').evaluate(node => !node.open));
+            const forbidden = new URL(await page.locator('[data-team-universal-search]').getAttribute('data-search-url'), origin);
+            forbidden.searchParams.set('q', 'seasonal'); forbidden.searchParams.set('ref', 'operation:' + fixture.restricted_event_id);
+            assert.equal((await context.request.get(forbidden.href)).status(), 404, 'Actual reference revalidation still rejects another tenant record');
+            checks.push(`${name}: closed/retired options cannot activate and actual foreign-tenant reference remains denied`);
+            phase = 'progressive_keyboard_control';
+            await input.fill('seasonal'); await result.waitFor();
+            await page.locator('.eb-search-status').filter({ hasText: 'Searching other apps…' }).waitFor({ state: 'hidden' });
+            const resultIndex = await result.evaluate(node => [...node.parentNode.children].indexOf(node));
+            for (let i = 0; i < await page.locator('.eb-search-list .eb-search-option').count(); i++) await input.press('ArrowUp');
+            for (let i = 0; i < resultIndex; i++) await input.press('ArrowDown');
+            assert.equal(await input.getAttribute('aria-activedescendant'), await result.getAttribute('id'), 'Keyboard selection names the current retained result');
+            const keyboardAdmissions = Promise.all([
+              page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/team/search/all' && url.searchParams.get('ref') === 'operation:' + fixture.event_id && response.ok(); }),
+              page.waitForResponse(response => new URL(response.url()).pathname === '/team/operations/records/' + fixture.event_id && response.ok()),
+            ]);
+            await Promise.all([input.press('Enter'), keyboardAdmissions]);
+            await page.locator('#tops-detail').getByRole('heading', { name: 'Fictional seasonal makers and home goods weekend market', exact: true }).waitFor();
+            assert.deepEqual(reads.slice(closedReads), ['reference', 'record'], 'Keyboard Enter also performs exactly one authorized reference and record read');
+            await page.locator('#tops-detail-close').click();
+            checks.push(`${name}: Arrow navigation and Enter preserve aria selection and exactly one authorized open`);
+          } finally { releaseApps(); await page.mouse.up(); page.off('request', capture); await page.unroute('**/team/search/all?**', holdActualApps); }
+        }
         phase = 'calendar_and_progressive_search';
         for (const layout of ['board', 'list', 'calendar']) {
           if (await page.locator('#tw-filter-toggle').getAttribute('aria-expanded') === 'true') await page.locator('#tw-filter-toggle').click();
@@ -87,7 +159,7 @@ try {
           await input.fill('seasonal'); await result.waitFor();
           const revalidated = page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === '/team/search/all' && url.searchParams.get('ref') === 'operation:' + fixture.event_id && response.ok(); });
           const opened = page.waitForResponse(response => new URL(response.url()).pathname === '/team/operations/records/' + fixture.event_id && response.ok());
-          await result.click(); await revalidated; const admitted = await (await opened).json();
+          const [, , admittedResponse] = await Promise.all([result.click(), revalidated, opened]); const admitted = await admittedResponse.json();
           assert.equal(admitted.record?.id || admitted.id, fixture.event_id, 'Selection opens its actual authorized event after revalidation');
           await page.locator('#tops-detail').getByRole('heading', { name: 'Fictional seasonal makers and home goods weekend market', exact: true }).waitFor();
           await page.locator('#tops-detail[open] .event-detail-notes').getByText('Event notes', { exact: true }).click();
