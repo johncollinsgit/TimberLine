@@ -183,7 +183,10 @@ function Editor({ root }: { root: HTMLElement }) {
       if (!["published", "published_safely"].includes(receipt.status || "")) throw new Error("Publish was not confirmed");
       siteRef.current = { ...siteRef.current, status: "published" }; setSite(siteRef.current);
       setSaveState(hasChanges() ? "Unsaved changes" : pageAtPublish !== pageRevision.current || themeAtPublish !== themeRevision.current ? "Saved changes awaiting publish" : "Published");
-    } catch { setSaveState(hasChanges() ? "Could not publish. Unsaved changes remain." : "Could not publish. Your draft is saved. Try again."); }
+    } catch {
+      setPublishIssue({ message: "Publishing was not confirmed. Review your website before trying again.", action: "Review Website" });
+      setSaveState(hasChanges() ? "Unsaved changes remain." : "Your draft is saved.");
+    }
     finally { publishing.current = false; setIsPublishing(false); }
   };
   const loadMedia = async () => { try { const response = await fetch(root.dataset.mediaUrl || "", { headers: { Accept: "application/json" } }); if (response.ok) { const payload = await response.json() as { media: Media[] }; setMedia(payload.media); } } catch { /* Save and upload remain available during a temporary library outage. */ } };

@@ -15,7 +15,7 @@ const escape = value => String(value).replaceAll('&', '&amp;').replaceAll("'", '
 // The production-built React editor talks over real loopback HTTP. Only this
 // fictional endpoint server owns persisted state and controls response timing.
 async function fixture(options = {}) {
-    const state = {savedPage: null, savedTheme: null, published: null, pages: [], themes: [], uploads: 0, failPage: false, htmlPage: false, holdPage: null, holdTheme: null, holdUpload: null, uploadStatus: 201, submitted: null, historyReads: [], restores: [], restoreStatus: 200, pageVersion: 3, siteVersion: 3, pageConflict: false, publishStatus: 200, publishMessage: null, publishAttempts: []};
+    const state = {savedPage: null, savedTheme: null, published: null, pages: [], themes: [], uploads: 0, failPage: false, htmlPage: false, holdPage: null, holdTheme: null, holdUpload: null, uploadStatus: 201, submitted: null, historyReads: [], restores: [], restoreStatus: 200, pageVersion: 3, siteVersion: 3, pageConflict: false, publishStatus: 200, publishMessage: null, publishAttempts: [], publishResponse: 'confirmed', overviewReads: 0};
     const manifest = JSON.parse(fs.readFileSync(path.join(build, 'manifest.json'), 'utf8'));
     const entry = manifest['resources/js/managed-website/editor.tsx'];
     assert.ok(entry?.file, 'Build the actual editor before its browser test.');
@@ -51,7 +51,7 @@ async function fixture(options = {}) {
         if (url.pathname === '/preview') { response.writeHead(200, {'Content-Type': 'text/html'}); response.end(`<p>Fictional private preview</p>${['A', 'B', 'C'].map((name, index) => `<button onclick="parent.postMessage({type:'everbranch.website.editor.select',kind:'section',blockIndex:'1',itemIndex:'${index}',field:'item_heading'},location.origin)">Select ${name}</button>`).join('')}`); return; }
         if (url.pathname === '/media') { json({media: options.library ? Array.from({length: 13}, (_, index) => ({id: index + 20, name: 'Owned photo ' + (index + 1), url: origin + '/website-media/' + (index + 20), alt_text: 'Owned image description ' + (index + 1), mime_type: 'image/png'})) : []}); return; }
         if (/^\/website-(catalog-)?media\/\d+$/.test(url.pathname) || url.pathname === '/starter.png' || url.pathname === '/original.png') { response.writeHead(200, {'Content-Type': 'image/png'}); response.end(png); return; }
-        if (url.pathname === '/second' || url.pathname === '/website') { response.writeHead(200, {'Content-Type': 'text/html'}); response.end('<p>Navigation completed</p>'); return; }
+        if (url.pathname === '/second' || url.pathname === '/website') { if (url.pathname === '/website') state.overviewReads++; response.writeHead(200, {'Content-Type': 'text/html'}); response.end('<p>Navigation completed</p>'); return; }
         const chunks = []; for await (const chunk of request) chunks.push(chunk);
         const raw = Buffer.concat(chunks).toString();
         if (/^\/website\/(editor\/1\/history\/1|history\/site\/2)\/restore$/.test(url.pathname) && request.method === 'POST') {
@@ -83,7 +83,7 @@ async function fixture(options = {}) {
             if (state.uploadStatus !== 201) { json({errors: {image: ['Your private trial includes 10 photos. Activate a plan for more.']}}, state.uploadStatus); return; }
             json({media: {id: 7, name: 'fictional.png', url: origin + '/website-media/7', catalog_url: origin + '/website-catalog-media/7', alt_text: 'Uploaded graphic', mime_type: 'image/png'}}, 201); return;
         }
-        if (url.pathname === '/publish' && request.method === 'POST') { state.publishAttempts.push(structuredClone(state.savedPage)); if (state.publishStatus !== 200) { json({message: state.publishMessage}, state.publishStatus); return; } state.published = structuredClone(state.savedPage); json({status: 'published'}); return; }
+        if (url.pathname === '/publish' && request.method === 'POST') { state.publishAttempts.push(structuredClone(state.savedPage)); if (state.publishStatus !== 200) { json({message: state.publishMessage}, state.publishStatus); return; } state.published = structuredClone(state.savedPage); if (state.publishResponse === 'interrupted') { response.writeHead(200, {'Content-Type': 'application/json', 'Content-Length': '1000'}); response.flushHeaders(); response.write('{"status":'); setTimeout(() => response.destroy(), 50); return; } json({status: state.publishResponse === 'unknown' ? 'unknown' : 'published'}); return; }
         response.writeHead(404); response.end();
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -94,6 +94,15 @@ async function fixture(options = {}) {
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     const failures = []; page.on('requestfailed', request => failures.push(`${request.url()}: ${request.failure()?.errorText}`));
     page.on('console', message => { if (message.type() === 'error') failures.push(message.text()); });
+    if (options.monitorPublish) await page.addInitScript(() => {
+        const original = window.fetch;
+        window.__websitePublishFetches = 0;
+        window.fetch = (input, init) => {
+            const url = new URL(typeof input === 'string' ? input : input.url || String(input), location.href);
+            if (url.pathname === '/publish' && init?.method === 'POST') window.__websitePublishFetches++;
+            return original.call(window, input, init);
+        };
+    });
     await page.goto(origin + (options.catalog ? '/catalog' : '/editor'));
     const close = async () => { await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); };
     try { await (options.catalog ? page.getByRole('button', {name: 'Choose photo', exact: true}).or(page.getByRole('button', {name: 'Replace photo', exact: true})) : page.getByLabel(/^Text/)).first().waitFor({timeout: 10000}); }
@@ -222,6 +231,34 @@ test('publish recovery keeps permission freeze conflict and unknown errors safe 
         assert.deepEqual(f.errors, []);
     } finally { await f.close(); }
 });
+
+for (const receipt of ['unknown', 'interrupted']) {
+    test(`an ${receipt} publish receipt requires explicit Website review and never repeats an accepted attempt`, async () => {
+        const f = await fixture({monitorPublish: true});
+        try {
+            f.state.publishResponse = receipt;
+            await f.page.getByLabel(/^Text/).fill('Original private draft sent once for publication');
+            await f.page.getByRole('button', {name: 'Publish', exact: true}).click();
+            await expect(f.page.getByRole('alert')).toContainText('Publishing was not confirmed. Review your website before trying again.');
+            await expect(f.page.locator('.eb-save')).toHaveText('Your draft is saved.');
+            await expect(f.page.locator('.eb-editor-title')).toContainText('Draft');
+            assert.equal(f.state.publishAttempts.length, 1);
+            assert.equal(f.state.overviewReads, 0, 'Ambiguity does not navigate or retry automatically.');
+            assert.equal(f.state.published.blocks[0].body, 'Original private draft sent once for publication', 'The endpoint accepted the original request despite an unconfirmed receipt.');
+            await f.page.getByLabel(/^Text/).fill('Newer private draft kept while reviewing publication');
+            assert.equal(await f.page.evaluate(() => window.__websitePublishFetches), 1, 'The editor initiates only its original publication fetch.');
+            await f.page.getByRole('link', {name: 'Review Website', exact: true}).click();
+            await f.page.waitForURL('**/website');
+            assert.equal(f.state.overviewReads, 1, 'Review uses the ordinary Website GET.');
+            assert.equal(f.state.publishAttempts.length, 1, 'Review never submits another publication.');
+            assert.equal(f.state.savedPage.blocks[0].body, 'Newer private draft kept while reviewing publication');
+            assert.equal(f.state.published.blocks[0].body, 'Original private draft sent once for publication');
+            await f.page.goto(f.origin + '/editor');
+            await expect(f.page.getByLabel(/^Text/)).toHaveValue('Newer private draft kept while reviewing publication');
+            assert.deepEqual(f.errors, []);
+        } finally { await f.close(); }
+    });
+}
 
 test('a normal section upload preserves URL alt text and edits made during the request', async () => {
     const f = await fixture();
