@@ -2,6 +2,24 @@
 
 Date: 2026-03-26
 
+## Web sign-in after an email link
+
+Canonical confirmation and password-reset links use the separate host-only
+`everbranch-mobile-auth-session` cookie. Opening normal `GET /login` without
+`mobile_email=1` intentionally returns to the web session and expires only that
+host-only cookie at `/`. No session contents or authentication are copied. The
+web cookie remains available to workspace creation, two-factor, Google and
+logout. An abandoned mobile browser handoff must be restarted from its app.
+Explicit mobile sign-in, native authorization and their OAuth/two-factor
+continuations retain their isolated cookie and existing authorization gates.
+
+`FirstPartySessionLaneTest` carries actual encrypted response cookies through
+fresh guards and database-backed session stores on every request. It verifies
+guest confirmation, normal login/workspace/logout, web two-factor/Google and
+native PKCE with and without two-factor. Keep the existing mobile, verification
+and password-reset suites alongside it; cached test guards alone cannot prove
+browser session continuity. These are isolated source tests, not a live login.
+
 ## Manual Validation Checklist (Browser)
 
 Pre-checks:

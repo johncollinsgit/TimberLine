@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Support\Tenancy\HostTenantContext;
 use Closure;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnforceCanonicalRuntimeHost
@@ -48,12 +49,26 @@ class EnforceCanonicalRuntimeHost
             || ($mobileAuthCookiePresent && $request->is(
                 'auth/google/redirect',
                 'auth/google/callback',
-                'login',
                 'logout',
                 'two-factor-challenge',
                 'email/verify*',
                 'email/verification-notification',
             ));
+        // A confirmation/reset link can leave this separate mobile cookie in
+        // a normal browser. Explicit web sign-in must retire it before later
+        // password, OAuth, two-factor and logout requests choose a session.
+        // Do not copy either session or retire it on an explicit mobile form.
+        if ($canonicalAuthHost && $mobileAuthCookiePresent && $request->isMethod('GET')
+            && $request->is('login') && ! $request->boolean('mobile_email')) {
+            $next = static function (Request $request) use ($next): Response {
+                $response = $next($request);
+                $response->headers->setCookie(Cookie::create('everbranch-mobile-auth-session')
+                    ->withExpires(1)->withPath('/')->withSecure($request->isSecure())
+                    ->withHttpOnly(true)->withSameSite(Cookie::SAMESITE_LAX));
+
+                return $response;
+            };
+        }
         if ($canonicalAuthHost && $mobileAuthRoute) {
             config([
                 'session.cookie' => 'everbranch-mobile-auth-session',
