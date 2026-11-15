@@ -21,6 +21,16 @@ Explicit serif and Sawyer typography are retained. Computed-font regressions
 render the full actual public/private-preview layout in Chromium and WebKit.
 This entry describes source verification, not a deployed merchant storefront.
 
+## 2026-11-15 - Connected Events reporting
+
+The browser Events workspace adds linked Events, Team members, Customers and
+Weekends reporting with shared date/filter context and direct event histories.
+Pay reads the same selected-event history. Summary cards stay visible during
+refresh; details load on demand and preserve original selection and permissions.
+Historical staff and inactive Square locations remain source evidence, while
+unverified allocations and missing coverage stay visible. See
+[Events reporting](../operations/events-central.md) for source and release acceptance.
+
 ## 2026-11-15 - Private website starters and saved drafts
 
 Self-service Website setup recommends seven neutral business starters with six

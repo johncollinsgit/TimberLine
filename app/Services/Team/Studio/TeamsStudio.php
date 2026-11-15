@@ -202,6 +202,10 @@ class TeamsStudio
         $i = Validator::make($input, [
             'id' => 'required|uuid', 'request_id' => 'required|uuid', 'expected_version' => 'required|integer|min:0',
             'series_id' => 'required|uuid', 'occurrence_id' => 'required|uuid', 'financial_id' => 'nullable|uuid',
+            'financial_sources' => 'sometimes|array|max:100', 'financial_sources.*.record_id' => 'required|uuid|distinct', 'financial_sources.*.treatment' => 'required|in:add,reference',
+            'square_scopes' => 'sometimes|array|max:100', 'square_scopes.*.location_id' => 'required|string|max:190',
+            'square_scopes.*.starts_on' => 'required|date_format:Y-m-d', 'square_scopes.*.ends_on' => 'required|date_format:Y-m-d',
+            'square_scopes.*.orders_run_id' => 'required|integer|min:1', 'square_scopes.*.payments_run_id' => 'required|integer|min:1',
             'staff_ids' => 'present|array|max:100', 'staff_ids.*' => 'uuid|distinct', 'allocation_reviewed' => 'required|boolean',
             'reason' => 'required|string|min:12|max:3000', 'venue' => 'required|string|max:1000', 'timezone' => 'required|timezone:all',
             'latitude' => 'required_with:longitude|nullable|numeric|between:-90,90', 'longitude' => 'required_with:latitude|nullable|numeric|between:-180,180',
@@ -226,7 +230,7 @@ class TeamsStudio
             $series = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'series'])->findOrFail($i['series_id']);
             $this->access->record($tenant, $user, $series);
             $refs = [];
-            foreach (array_unique([$i['occurrence_id'], ...$i['staff_ids'], ...array_filter([$i['financial_id'] ?? null])]) as $id) {
+            foreach (array_unique([$i['occurrence_id'], ...$i['staff_ids'], ...array_filter([$i['financial_id'] ?? null]), ...array_column($i['financial_sources'] ?? [], 'record_id')]) as $id) {
                 $record = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id])->whereIn('kind', ['event', 'financial', 'staff'])->findOrFail($id);
                 $this->access->record($tenant, $user, $record);
                 $refs[$id] = $record;
@@ -234,8 +238,43 @@ class TeamsStudio
             abort_unless(in_array($refs[$i['occurrence_id']]->kind, ['event', 'financial'], true), 422);
             $primary = isset($i['financial_id']) ? $refs[$i['financial_id']] : null;
             abort_if($primary && $primary->kind !== 'financial', 422);
-            $links = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => 'event_link', 'status' => 'accepted'])->whereKeyNot($i['id'])->get();
+            $sources = $i['financial_sources'] ?? ($primary ? [['record_id' => $primary->id, 'treatment' => 'add']] : []);
+            $adding = [];
+            foreach ($sources as &$source) {
+                $row = $refs[$source['record_id']];
+                abort_unless($row->kind === 'financial', 422);
+                $source['version'] = $row->version;
+                if ($source['treatment'] === 'add') {
+                    foreach ($adding as $other) {
+                        abort_if(! $row->starts_on || ! $row->ends_on || ! $other->starts_on || ! $other->ends_on || ($row->starts_on <= $other->ends_on && $row->ends_on >= $other->starts_on), 422, 'Overlapping payroll rows cannot both add event revenue. Keep repeated totals as references.');
+                    }
+                    $adding[] = $row;
+                }
+            }
+            unset($source);
+            $i['financial_sources'] = $sources;
+            $i['reviewed_source_versions'] = array_map(fn ($row) => $row->version, $refs);
+            foreach ($i['square_scopes'] ?? [] as $scope) {
+                $occurrence = $refs[$i['occurrence_id']];
+                abort_unless($scope['ends_on'] >= $scope['starts_on'] && $occurrence->starts_on && $occurrence->ends_on
+                    && $scope['starts_on'] >= $occurrence->starts_on->toDateString() && $scope['ends_on'] <= $occurrence->ends_on->toDateString(), 422, 'Square source windows must fit this reviewed occurrence.');
+                foreach (['orders_run_id' => 'square_orders_sync', 'payments_run_id' => 'square_payments_sync'] as $field => $type) {
+                    $run = \App\Models\MarketingImportRun::forTenantId($tenant->id)->where('type', $type)->find($scope[$field]);
+                    abort_unless($run && in_array($scope['location_id'], $run->summary['source_binding']['location_ids'] ?? [], true), 422, 'Choose original source runs for this company and exact location.');
+                    app(\App\Services\Marketing\SquareConnectionContext::class)->assertCurrent($tenant->id, $run->summary['source_binding'] ?? []);
+                }
+            }
+            $links = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'kind' => 'event_link', 'status' => 'accepted'])->whereKeyNot($i['id'])->get();
             abort_if($links->contains(fn ($r) => $r->data['occurrence_id'] === $i['occurrence_id'] || ($primary && ($r->data['financial_id'] ?? null) === $primary->id)), 409, 'This occurrence or financial total already has a reviewed mapping. Edit that mapping instead.');
+            foreach ($links as $existing) {
+                $oldSources = $existing->data['financial_sources'] ?? (! empty($existing->data['financial_id']) ? [['record_id' => $existing->data['financial_id'], 'treatment' => 'add']] : []);
+                abort_if(array_intersect(array_map(fn ($row) => $row->id, $adding), array_column(array_filter($oldSources, fn ($source) => ($source['treatment'] ?? 'add') === 'add'), 'record_id')), 409, 'A reported sales segment already belongs to another occurrence.');
+                foreach ($i['square_scopes'] ?? [] as $scope) {
+                    foreach ($existing->data['square_scopes'] ?? [] as $old) {
+                        abort_if($old['location_id'] === $scope['location_id'] && $scope['starts_on'] <= $old['ends_on'] && $scope['ends_on'] >= $old['starts_on'], 409, 'This location and date window already belongs to another occurrence.');
+                    }
+                }
+            }
             $link = $this->editable($tenant, $area, $i['id'], 'event_link', $i['expected_version']);
             $link->fill(['title' => $refs[$i['occurrence_id']]->title, 'status' => 'accepted', 'visibility' => 'admin', 'data' => array_diff_key($i, array_flip(['id', 'request_id', 'expected_version'])) + ['starts_on' => $refs[$i['occurrence_id']]->starts_on?->toDateString(), 'ends_on' => $refs[$i['occurrence_id']]->ends_on?->toDateString(), 'financial_version' => $primary?->version, 'reviewed_by' => (string) $user->id, 'reviewed_at' => now()->toIso8601String()], 'version' => $link->version + 1])->save();
             $this->revision($link, $user);

@@ -44,6 +44,7 @@ final class PosService
                 'rewards_redemption_available' => app(PosRewardRedemptionSettings::class)->availableForRegister($scope),
                 'catalog_source' => $register->catalog_source, 'environment' => $scope['connection']->environment,
                 'can_view_event_stats' => config('pos_live.event_stats_enabled') === true && in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),
+                'can_view_event_history' => config('pos_live.event_stats_enabled') === true,
                 'cash_available' => app(PosCashSale::class)->available($scope),
                 'staff_rewards_available' => app(PosStaffRewardAuthorization::class)->enabled($scope),
                 'can_create_customers' => in_array($scope['role'], ['owner', 'tenant_owner', 'admin'], true),

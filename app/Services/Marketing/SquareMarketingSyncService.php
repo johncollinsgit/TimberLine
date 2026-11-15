@@ -496,6 +496,7 @@ class SquareMarketingSyncService
                 $providerPageLimit = $this->originalProviderPageLimit($prior, $tenantId, $type, $summary['source_binding'], $summary['request_context'], $since);
             }
         }
+        $summary['initial_cursor'] = $cursor;
         if ($fixedPagination) {
             abort_if($limit !== null && $limit < $providerPageLimit, 409, 'The resume budget must allow at least one original Square provider page ('.$providerPageLimit.' records).');
             $summary['provider_page_limit'] = $providerPageLimit;

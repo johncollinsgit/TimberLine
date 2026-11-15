@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_15_160000_create_team_event_performance_facts.php' => [
+        'test' => 'tests/Integration/EventPerformanceMySqlRecoveryTest.php',
+        'scenarios' => ['encrypted dimensional facts survive table creation before named unique/date/group indexes, replay and non-destructive rollback; original keys reject duplicates'],
+    ],
     '2026_11_11_190000_create_rental_workspaces.php' => [
         'test' => 'tests/Integration/RentalWorkspaceMySqlRecoveryTest.php',
         'scenarios' => ['property rows retained before event table creation', 'event rows retained before request/version indexes; replay and competing claims serialize on real MySQL'],

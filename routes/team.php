@@ -17,6 +17,7 @@ Route::middleware(['auth', 'verified', 'tenant.access', \App\Http\Middleware\Ens
     Route::get('/teams', [TeamWorkController::class, 'app'])->name('team.app');
     Route::get('/teams/app', [TeamWorkController::class, 'app'])->name('team.installed');
     Route::prefix('team')->name('team.')->group(function (): void {
+        Route::get('/event-performance', \App\Http\Controllers\TeamEventPerformanceController::class)->name('event-performance');
         Route::get('/setup', \App\Http\Controllers\TeamSetupController::class)->defaults('action', 'status')->name('setup');
         Route::post('/setup/draft', \App\Http\Controllers\TeamSetupController::class)->defaults('action', 'draft')->name('setup.draft');
         Route::post('/setup/finish', \App\Http\Controllers\TeamSetupController::class)->defaults('action', 'finish')->name('setup.finish');
@@ -25,8 +26,10 @@ Route::middleware(['auth', 'verified', 'tenant.access', \App\Http\Middleware\Ens
         Route::get('/customers', \App\Http\Controllers\TeamCustomerLookupController::class)->name('customers.search');
         Route::get('/events/{event}/customer-value', \App\Http\Controllers\TeamCustomerEventValueController::class)->whereUuid('event')->name('events.customer-value');
         Route::get('/events/{id}/confirmed-sales', \App\Http\Controllers\TeamConfirmedEventSalesController::class)->whereUuid('id')->name('events.confirmed-sales');
+        Route::get('/events/{id}/sales-candidates', \App\Http\Controllers\TeamEventSalesCandidatesController::class)->whereUuid('id')->name('events.sales-candidates');
         Route::get('/events/{id}/profitability', \App\Http\Controllers\TeamEventProfitabilityController::class)->whereUuid('id')->name('events.profitability');
         Route::get('/events/{id}/intelligence', \App\Http\Controllers\TeamEventIntelligenceController::class)->whereUuid('id')->name('events.intelligence');
+        Route::get('/events/{id}/sales-history', \App\Http\Controllers\TeamEventSalesHistoryController::class)->whereUuid('id')->name('events.sales-history');
         Route::get('/events/{id}/essentials', \App\Http\Controllers\TeamEventEssentialsController::class)->whereUuid('id')->name('events.essentials');
         Route::post('/events/{id}/travel', \App\Http\Controllers\TeamEventEssentialsController::class)->whereUuid('id')->name('events.travel');
         Route::get('/events/{id}/updates', [\App\Http\Controllers\TeamEventUpdatesController::class, 'index'])->whereUuid('id')->name('events.updates');

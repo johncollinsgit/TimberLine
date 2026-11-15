@@ -75,6 +75,10 @@ enum ConnectedEventFixture {
             var row: [String: Any] = ["id": "connected-sale", "number": "EB-FICTIONAL", "amount_minor": 2180, "refunded_minor": 0, "occurred_at": "2026-11-13T15:00:00Z", "tender": "card"]
             if let id = object("association")?["customer_profile_id"] as? Int { row["customer"] = ["id": id, "name": id == 1 ? "Ada Buyer" : "New customer"] }
             value = ["sales": [row], "review_items": [], "as_of": "2026-11-13T15:00:00Z"]
+        } else if path.hasSuffix("/event-history") {
+            let occurrence: [String: Any] = ["event_id": "00000000-0000-4000-8000-000000000001", "title": "Fictional show", "starts_on": "2025-11-01", "ends_on": "2025-11-03", "staff": [["id": "former-fixture", "name": "Fictional Previous Crew"]], "net_sales_minor": 120000, "reported_net_sales_minor": 120100, "selling_days": 3, "daily": [], "complete": true, "partial": false, "basis": "reviewed_square"]
+            let comparison: [String: Any] = ["label": "Day 1", "current_net_sales_minor": 2000, "historical_average_net_sales_minor": 40000, "sample_count": 1]
+            value = ["contract_version": 1, "event_id": "00000000-0000-4000-8000-000000000001", "event_name": "Fictional show", "current": occurrence, "history": [occurrence], "benchmarks": ["average_event_net_sales_minor": 120000, "average_day_net_sales_minor": 40000, "occurrence_count": 1, "years": [2025]], "comparisons": ["event_day": [comparison], "weekday": [["label": "Friday", "current_net_sales_minor": 2000, "historical_average_net_sales_minor": 40000, "sample_count": 1]]], "review_items": [], "as_of": "2026-11-15T12:00:00Z"]
         } else if path.hasSuffix("/event-stats") {
             value = ["event_name": "Fictional show", "sales": ["sale_count": 1, "net_sales_minor": 2000, "paid_total_minor": 2180, "confirmed_refunds_minor": 0, "refunds_complete": false, "as_of": "2026-11-13T15:00:00Z", "customer_counts": ["unique_buyers": 0, "attributed_orders": 0, "unattributed_orders": 1]]]
         } else if path.hasSuffix("/customers"), !post {

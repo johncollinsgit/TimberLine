@@ -50,6 +50,15 @@ final class PosController extends Controller
         });
     }
 
+    public function eventHistory(Request $r, string $tenant, string $register): JsonResponse
+    {
+        return $this->respond($r, [], function () use ($r, $register): array {
+            abort_unless(config('pos_live.event_stats_enabled'), 404);
+
+            return app(\App\Services\Team\Studio\EventSalesHistory::class)->forRegister(app(\App\Services\Pos\PosAccess::class)->register($register), $r->user());
+        });
+    }
+
     public function sales(Request $r, string $tenant, string $register): JsonResponse
     {
         return $this->respond($r, ['cursor' => ['sometimes', 'nullable', 'string', 'max:4000'], 'unattributed' => ['sometimes', 'boolean']],

@@ -19,6 +19,12 @@ release serving users.
   the authority for automatic releases.
 - Readiness health check: `https://app.theeverbranch.com/ready`.
 
+This is a Laravel-managed VPS (Forge server `1165565`, VPC `Laravel Managed`).
+Laravel owns and bills the underlying DigitalOcean resource; it does not appear
+in John's personal DigitalOcean account. Use Forge for production infrastructure
+and provider support. See `Production Infrastructure Reality` in
+`docs/agents/operating-reference.md` before investigating a different droplet.
+
 Do not create a second production site or cut over DNS unless this site can no
 longer be recovered. The current Forge site already has zero-downtime releases
 enabled, so using it avoids an unnecessary domain cutover.
