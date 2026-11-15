@@ -112,6 +112,31 @@ replace a verified custom-domain Home page with an embedded app surface.
 Sessions remain host-local, responses are private/no-store, and Worker origin
 fetches bypass cache so customer domains cannot share an app-URL cache entry.
 
+Uploaded Website images remain in private tenant storage. Public page and catalog
+renderers translate only recognized numeric media routes on trusted platform or
+that site's included/active custom hosts, after checking the exact media tenant
+and site. They emit relative paths, so an image uploaded in the app editor loads
+on the visitor's included/custom hostname. Existing absolute app-host references
+need no content or snapshot rewrite. Catalog media must also be referenced by an
+active product on that same site; its audience check compares canonical aliases,
+not a URL built from the incoming Host. General Website media must appear in an
+image field of a current immutable published page; a new draft upload cannot be
+made public through an already published site or the alternate media endpoint.
+Anonymous app-host, foreign-tenant,
+unpublished and frozen public-media requests fail closed. An active authorized
+editor can still preview private uploads on the canonical app host with private,
+no-store responses.
+
+For live media acceptance, upload one fictional raster image through the normal
+canary editor and use its returned URL unchanged in both a hero and image/gallery
+section. Preview, then publish through the normal checklist. In a clean browser,
+verify both included and relayed custom hosts render the image; anonymous media
+GETs must return the uploaded bytes and image content type, with no-store on the
+relay. Also exercise a real catalog upload/product image and deny a foreign host
+and draft product. Stock `/images/` assets and third-party fonts use their existing
+public paths and do not replace this private-storage media check. Passing source
+tests does not establish that the production Worker, origin disk or TLS works.
+
 `website:domain-readiness` also reports `relay_enabled` and
 `relay_secret_configured` booleans without printing a key or making a relay
 request. All booleans must pass for exit zero. `--provider` adds only the

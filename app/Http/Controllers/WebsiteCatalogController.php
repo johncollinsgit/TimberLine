@@ -268,11 +268,22 @@ class WebsiteCatalogController extends Controller
     public function media(Request $request, TenantSiteMedia $media, ManagedWebsiteService $websites)
     {
         $site = TenantSite::query()->forTenantId($media->tenant_id)->findOrFail($media->tenant_site_id);
-        $member = $request->user()?->is_active && $websites->editorEnabledFor($site->tenant) && $request->user()->tenants()->whereKey($site->tenant_id)->wherePivot('membership_active', true)->wherePivotIn('role', ['admin', 'owner', 'tenant_owner', 'manager', 'marketing_manager'])->exists();
-        $url = route('managed-website.catalog.media', $media);
-        $public = in_array((int) $site->tenant_id, (array) config('managed_website.editor_tenant_ids', []), true) && $site->public_enabled && $site->status === 'published' && $websites->publicRenderingEnabled()
+        $member = $request->getHost() === config('tenancy.domains.canonical.landlord_host')
+            && $request->user()?->is_active && $websites->editorEnabledFor($site->tenant) && $request->user()->tenants()->whereKey($site->tenant_id)->wherePivot('membership_active', true)->wherePivotIn('role', ['admin', 'owner', 'tenant_owner', 'manager', 'marketing_manager'])->exists();
+        $tenant = $request->attributes->get('current_tenant') ?? $request->attributes->get('host_tenant');
+        $references = app(\App\Services\ManagedWebsite\WebsiteMediaUrls::class)->catalogReferences($site, $media);
+        $public = $tenant instanceof \App\Models\Tenant && (int) $tenant->id === (int) $site->tenant_id
+            && $references !== []
+            && in_array((int) $site->tenant_id, (array) config('managed_website.editor_tenant_ids', []), true) && $site->public_enabled && $site->status === 'published' && $websites->publicRenderingEnabled()
+            && $websites->publicHostAllowed($site, $request->getHost())
+            && app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->publicAccessAllowed($site->tenant)
             && app(\App\Services\Tenancy\TenantModuleAccessResolver::class)->canAccess($site->tenant_id, 'managed_website')
-            && WebsiteProduct::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->where('status', 'active')->whereJsonContains('media', $url)->exists();
+            && WebsiteProduct::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->where('status', 'active')
+                ->where(function ($query) use ($references): void {
+                    foreach ($references as $url) {
+                        $query->orWhereJsonContains('media', $url);
+                    }
+                })->exists();
         abort_unless($member || $public, 404);
         abort_unless(Storage::disk($media->storage_disk)->exists($media->storage_path), 404);
 

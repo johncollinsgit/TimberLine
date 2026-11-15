@@ -91,6 +91,7 @@ test('tenant media stays on its own relayed host and is never publicly cached', 
     Storage::disk('local')->put('relay-picture.txt', 'public image fixture');
     $media = TenantSiteMedia::query()->create(['tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'storage_disk' => 'local', 'storage_path' => 'relay-picture.txt', 'file_name' => 'picture.txt', 'mime_type' => 'text/plain', 'file_size' => 20, 'checksum' => hash('sha256', 'public image fixture')]);
     $uri = '/website-media/'.$media->id;
+    $site->pages()->firstOrFail()->publishedVersion->update(['blocks' => [['type' => 'hero', 'heading' => 'Published media', 'image_url' => $uri]]]);
     $response = $this->call('GET', 'https://app.theeverbranch.com'.$uri, [], [], [], domainRelayHeaders('www.media.example', 'GET', $uri));
     $response->assertOk();
     expect($response->headers->get('Cache-Control'))->toContain('no-store');
