@@ -16,6 +16,13 @@ recovery page. Recovery never looks up the URL's target: only the current active
 unverified account can request its own email, or the visitor signs in first.
 Verification grants no workspace, trial, paid branch or publishing capability.
 
+Self-service verification SMTP messages disable click and open tracking through
+their own `X-SMTPAPI` header, keeping HTML and plain-text signed links direct.
+The verification-only plain-text alternative is branded Everbranch. This changes
+no SendGrid account setting, marketing message, suppression or delivery policy.
+See the provider's [SMTP filters](https://www.twilio.com/docs/sendgrid/for-developers/sending-email/smtp-filters)
+and [click-tracking troubleshooting](https://www.twilio.com/docs/sendgrid/for-developers/sending-email/smtp-errors-and-troubleshooting).
+
 After verification, the chosen template is shown once with the business-name form; it is not requested again. A missing template returns to the chooser. The template and business name create one provisional base workspace under a user lock. Included website addresses fit DNS label limits and avoid configured platform hosts. Only this fresh path assigns the owner membership and server cohort marker. The template and safe tool selection survive authentication and provisioning. The purchase page displays the canonical setup/monthly total and acceptance, with tool details collapsed; returning unpaid owners resume this page on login. The workspace guide retains a Your plan link. A URL return displays pending status until the server confirms actual paid evidence.
 
 Only a verified active tenant owner in a newly provisioned cohort (`tenant_access_profiles.metadata.self_service_registration`) can buy. That registration marker grants no paid access. The canonical standard offer supplies setup, monthly cost, currency, included branches and usage disclosure. The review page accepts a server quote hash and current terms version before payment. The first charge is $499 setup plus $299 first month before provider-calculated tax; subsequent invoices charge the frozen $299 monthly amount.
