@@ -21,6 +21,7 @@ class EnforceSelfServiceTrial
         'marketing.customers', 'marketing.customers.data', 'marketing.customers.create', 'marketing.customers.show',
         'field-service.index', 'field-service.jobs.data', 'field-service.jobs.show', 'field-service.jobs.updates', 'field-service.calendar',
         'managed-website.index', 'managed-website.editor', 'managed-website.editor.preview', 'managed-website.editor.preview.site',
+        'managed-website.preview.shop', 'managed-website.preview.product',
         'managed-website.media.index', 'managed-website.thumbnails.show', 'managed-website.history.index',
         'account-help.index', 'account-help.show'];
 

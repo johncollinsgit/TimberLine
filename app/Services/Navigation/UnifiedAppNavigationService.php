@@ -363,7 +363,7 @@ class UnifiedAppNavigationService
             $items[] = ['key' => 'ai-branch', 'icon' => 'sparkles', 'href' => app(\App\Services\AiBranch\AiWorkspacePage::class)->launcherUrl($request, $tenant), 'label' => 'AI Branch', 'current' => request()->routeIs('ai-branch.*')];
         }
 
-        if ($tenant && $user && app(\App\Services\Billing\TenantPaymentSetupAccess::class)->enabledFor($tenant)
+        if ($tenant && $user && app(\App\Services\Billing\TenantPaymentSetupAccess::class)->enabledForSetup($tenant)
             && app(\App\Services\Billing\TenantPaymentSetupAccess::class)->allows($tenant, $user)) {
             $items[] = ['key' => 'payments', 'icon' => 'credit-card', 'href' => route('tenant-payments.index', ['tenant' => $tenant->slug]), 'label' => 'Payments', 'current' => request()->routeIs('tenant-payments.*')];
         }
@@ -505,7 +505,7 @@ class UnifiedAppNavigationService
             && app(\App\Services\Subscriptions\SubscriptionAccessService::class)->canManage((int) $tenant->id, $user)) {
             $add('subscriptions', 'Subscriptions', 'subscriptions.workspace.index', 'arrow-path');
         }
-        if (app(\App\Services\Billing\TenantPaymentSetupAccess::class)->enabledFor($tenant)
+        if (app(\App\Services\Billing\TenantPaymentSetupAccess::class)->enabledForSetup($tenant)
             && app(\App\Services\Billing\TenantPaymentSetupAccess::class)->allows($tenant, $user)) {
             $add('payments', 'Payments', 'tenant-payments.index', 'credit-card');
         }

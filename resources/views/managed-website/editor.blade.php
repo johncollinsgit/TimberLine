@@ -41,6 +41,8 @@
     <div id="managed-website-editor-root"
          data-page='@json($editorPage)'
          data-pages='@json($editorPages)'
+         data-retail-shop-available="{{ ($retailShopAvailable ?? false) ? 'true' : 'false' }}"
+         data-shop-preview-url="{{ ($retailShopAvailable ?? false) ? route('managed-website.preview.shop', ['tenant' => $tenant->slug]) : '' }}"
          data-site='@json($editorSite)'
          data-related-photos='@json($relatedPhotos ?? [])'
          data-history-url="{{ route('managed-website.history.index', ['page' => $page]) }}"
@@ -50,6 +52,7 @@
          data-theme-save-url="{{ route('managed-website.editor.theme.save') }}"
          data-publish-url="{{ route('managed-website.editor.publish') }}"
          data-media-url="{{ route('managed-website.media.index') }}"
+         data-catalog-url="{{ app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->unpaidTrial($tenant) ? route('managed-website.index', ['tenant' => $tenant->slug]) : route('managed-website.products.index', ['tenant' => $tenant->slug]) }}"
          data-media-upload-url="{{ route('managed-website.media.store') }}"
          data-index-url="{{ route('managed-website.index') }}"
          data-private-trial="{{ data_get($trial ?? [], 'registered_trial', false) && data_get($trial ?? [], 'state') !== 'paid' ? 'true' : 'false' }}"

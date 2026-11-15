@@ -172,7 +172,7 @@ class TenantPaymentSetupController extends Controller
         $tenant = $request->attributes->get('current_tenant');
         $access = app(TenantPaymentSetupAccess::class);
         abort_unless($tenant instanceof Tenant && $access->allows($tenant, $request->user()), 403);
-        abort_unless($access->enabledFor($tenant), 404);
+        abort_unless($access->enabledForSetup($tenant), 404);
 
         return $tenant;
     }

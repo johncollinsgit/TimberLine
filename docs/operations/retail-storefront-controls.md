@@ -68,12 +68,61 @@ actions are hidden and the page explains how to contact the business. A ready
 catalog does not imply payment readiness. Existing merchant, Connect, dedicated
 signed webhook, tax, wallet, shipping and notification gates retain authority.
 
-Retail starters still have their six contact-led pages. A default Shop entry for
-new included/custom-relayed retail sites remains pending until the product policy
-and those merchant-host acceptance gates explicitly support shopping. Do not add
-a misleading Shop/cart link or widen rollout to clear that task.
+## Retail starter flow (isolated follow-on source)
+
+The maker/apparel starters retain six private pages and relevant owned example
+photographs. Their Home/Collections product sections resolve only the site's real
+catalog. No products, prices, quantities, orders or provider connections are seeded.
+An empty private section points back to **Your shop** on Website; the empty public
+section is omitted. Product photos come from actual catalog records, with a clear
+missing-photo state instead of substituting an industry photograph for an item.
+
+The paid retail guide links products/photos, collection covers, private preview,
+menu editing, payment setup and explicit publication. When an actual active product
+exists, **Add Shop to menu** adds `/shop` to the ordinary versioned draft navigation.
+It uses the existing autosave/CAS path; it never alters published navigation by
+itself. Menu changes and new website content still require an explicit publish.
+Existing saved Shop entries remain editable. Native storefront branding uses its
+chosen snapshot, font and palette; Sawyer keeps its original design and public URLs.
+
+Private catalog GET previews use owned numeric product IDs, draft settings and
+explicit private URLs. They may show owned active/draft products and collection
+status, including physical items hidden by a published quote-only choice. They
+never expose cart, account, quote or payment POSTs, activate the catalog, refresh a
+provider or publish a site. Query/search/collection choices remain tenant/site
+scoped and bounded. Variant selection updates server-provided prices and stock
+text even with no cart action; an enabled cart retains the same-origin action
+fence. Private preview is not merchant acceptance.
+
+`WebsiteStorefrontPresentation` is a config/DB-only projection of existing gates
+and bounded real cards (eight products/eight collections, up to 100 owned variants
+per product). Controllers retain all actual authority checks. The legacy quote-only
+restriction is the exact published `settings.domain_choice` value, **not every
+included hostname**: neutral starters do not currently copy setup.domain_choice
+into that snapshot. Custom-host/relay write restrictions remain separate. This
+source does not change either policy or enable shopper collection. Ordinary
+settings/menu saves preserve an existing trusted `everbranch_subdomain` restriction
+from the current owned draft, published snapshot or compatibility server state.
+Client settings cannot add, remove or replace that restriction; neutral starters
+remain neutral. No historical backfill or broader included-host restriction is added.
+
+New durably paid self-service workspaces may reach owner/admin payment **setup**
+only after the separately default-off `TENANT_PAYMENT_SELF_SERVICE_SETUP_ENABLED`
+and existing setup/global gates are authorized. Legacy lists retain their original
+behavior. Setup does not grant collection: merchant approval, account ownership,
+verified callbacks, tax and existing checkout gates remain independent. Genuine
+isolated Website merchant TEST payment/callback/replay/refund acceptance is still
+required; the earlier Everbranch SaaS TEST purchase proves a different lane.
 
 ## Focused verification
+
+`WebsiteRetailPresentationTest` creates a genuine disposable signed fake-provider
+SaaS purchase through the normal fulfillment service, then checks an empty retail
+starter, real uploaded product/collection photos, owned preview, deliberate draft
+Shop navigation and publication. It checks exact host/quote-only semantics, bounded
+cards and malformed/foreign membership exclusion without provider requests.
+`WebsiteStorePreviewTest` and `SelfServiceMerchantSetupTest` cover private HTTP
+admission, retained trial reading, actor isolation and setup-versus-collection gates.
 
 `WebsiteRetailStorefrontTest` exercises both full rendered designs, non-first and
 unavailable variants, all 100 choices, server-price freshness, quantity rejection,

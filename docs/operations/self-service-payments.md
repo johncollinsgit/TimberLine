@@ -24,11 +24,30 @@ balances/transactions merely to receive payouts. Full Dashboard accounts manage
 their own Stripe information. Existing Wren Express/destination routing and
 immutable pending Express creation attempts are not converted.
 
-Required setup rollout: TENANT_PAYMENT_SETUP_ENABLED and exact
+Legacy setup rollout retains TENANT_PAYMENT_SETUP_ENABLED and exact
 TENANT_PAYMENT_SETUP_TENANTS, plus EVERBRANCH_TENANT_PAYMENTS_ENABLED and exact
 EVERBRANCH_TENANT_PAYMENTS_TENANT_SLUGS. Carolina is the first native-invoice pilot;
 authoring can be prepared before the business completes payment onboarding.
 No transaction markup is introduced.
+
+New registered Website owners with a current, durably verified self-service
+purchase and an enabled canonical Website module may prepare their own merchant
+account without a manual slug insertion. `enabledForSetup()` admits this cohort
+only while setup is globally enabled and the separate default-off
+`TENANT_PAYMENT_SELF_SERVICE_SETUP_ENABLED` flag has been activated after genuine
+merchant TEST acceptance. Shipping this source does not enable that flag. Actual active verified owner/admin
+membership still guards each request. The setup page is a private, no-store GET
+and makes no provider request. Starting Stripe onboarding retains the payments
+global switch, configured platform and tax-decision controls. Private trials,
+copied registration flags, unfulfilled purchases and revoked Website access do
+not qualify.
+
+This is setup admission only. Existing `enabledFor()` consumers and the literal
+collection allowlist are unchanged. Customer collection still requires that
+allowlist, account ownership/readiness, independently verified callbacks, tax
+and all relevant Website commerce/host gates. Preparing an account does not
+prove a live merchant checkout, activate collection, alter a contract or charge
+the owner again.
 
 ## Separate bank feeds
 

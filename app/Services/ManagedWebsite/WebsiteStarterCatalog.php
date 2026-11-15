@@ -66,6 +66,7 @@ class WebsiteStarterCatalog
         $photos = $data['photos'];
         $photo = $photos[0];
         $detail = $photos[1] ?? $photo;
+        $retail = ($data['mode'] ?? '') === 'retail';
         $offers = array_map(fn (string $title): array => ['heading' => $title, 'body' => 'Ask us about the options for your needs.', 'image_url' => $detail['url'], 'image_alt' => $detail['alt']], $data['offers']);
         $gallery = array_map(fn (array $image): array => ['image_url' => $image['url'], 'image_alt' => $image['alt']], $photos);
         $pages = [
@@ -76,6 +77,13 @@ class WebsiteStarterCatalog
             $this->page('faq', 'Questions', 'faq', [$this->hero('Questions', 'A simple place to begin.', $detail), ['type' => 'faq_list', 'heading' => 'Good to know', 'items' => [['heading' => 'How do I get started?', 'body' => 'Send a message with a few details about what you need.'], ['heading' => 'Where can I learn more?', 'body' => 'Explore our offerings or contact us to discuss your questions.']]], $this->contact()]),
             $this->page('contact', 'Contact', 'contact', [$this->hero('Contact '.$name, 'Share a few details so we can discuss the next step.', $photo), $this->contact()]),
         ];
+        if ($retail) {
+            // Catalog cards are resolved from this site's actual products, never
+            // starter records, invented availability or example product photos.
+            $catalog = ['type' => 'product_grid', 'heading' => 'Shop', 'body' => '', 'cta_label' => 'View all', 'cta_url' => '/shop'];
+            $pages[0]['blocks'][1] = $catalog;
+            $pages[1]['blocks'] = [$this->hero('Collections', 'Explore our current catalog.', $detail), $catalog, $this->contact()];
+        }
         foreach ($pages as &$page) {
             $page['seo'] = ['title' => $page['title'].' · '.$name, 'description' => $data['intro']];
         }

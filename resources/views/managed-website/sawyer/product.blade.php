@@ -2,7 +2,7 @@
     $mediaUrls = app(\App\Services\ManagedWebsite\WebsiteMediaUrls::class);
 @endphp
 <div class="sn-wrap">
-    <div class="sn-breadcrumb"><a href="/">Home</a> / <a href="{{ route('managed-website.store.index') }}">Shop</a> / {{ $product->title }}</div>
+    <div class="sn-breadcrumb"><a href="{{ $homeUrl ?? '/' }}">Home</a> / <a href="{{ ($shopUrl ?? route('managed-website.store.index')) }}">Shop</a> / {{ $product->title }}</div>
     <div class="sn-product">
         <div>
             <div class="sn-product-main">
@@ -18,7 +18,7 @@
             @else
                 @include('managed-website.variant-picker', ['design' => 'sawyer'])
             @endif
-            <p class="sn-note">@if((int) data_get($site->publishedSiteVersion?->settings, 'free_shipping_threshold_cents', 0) > 0)Free shipping on orders of ${{ number_format((int) data_get($site->publishedSiteVersion?->settings, 'free_shipping_threshold_cents') / 100, 2) }} or more before tax. @endif Shipping options appear at checkout when the store is ready.</p>
+            <p class="sn-note">@if((int) data_get($storeSettings ?? $site->publishedSiteVersion?->settings, 'free_shipping_threshold_cents', 0) > 0)Free shipping on orders of ${{ number_format((int) data_get($storeSettings ?? $site->publishedSiteVersion?->settings, 'free_shipping_threshold_cents') / 100, 2) }} or more before tax. @endif Shipping options appear at checkout when the store is ready.</p>
             <hr class="sn-divider"><details><summary style="font-weight:700;cursor:pointer">Our ingredient promise</summary><p class="sn-copy">Sawyer Naturals uses essential oils and avoids perfumes or synthetic fragrances.</p></details>
             <hr class="sn-divider"><details><summary style="font-weight:700;cursor:pointer">Returns & exchanges</summary><p class="sn-copy">Unopened and unused full-size products may be returned or exchanged. Contact sawyernaturals@gmail.com within 14 days of delivery.</p></details>
         </div>

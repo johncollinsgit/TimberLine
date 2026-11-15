@@ -6,7 +6,7 @@
     <div class="sn-section-head"><div><span class="sn-eyebrow">The collection</span><h2>{{ $selectedCollection?->title ?: ($category === 'all' ? 'Care for every day.' : str($category)->replace('-', ' ')->title()) }}</h2></div></div>
     <nav class="sn-chips" aria-label="Product categories">
         @foreach(['all' => 'Shop all', 'deodorant' => 'Deodorant', 'face-care' => 'Face care', 'soaps' => 'Soaps', 'beards' => 'Beards', 'scrubs-butters' => 'Scrubs & butters', 'apparel' => 'Apparel', 'gift-cards' => 'Gift cards'] as $key => $label)
-            <a class="sn-chip {{ $category === $key ? 'active' : '' }}" @if($category === $key) aria-current="page" @endif href="{{ route('managed-website.store.index', array_filter(['category' => $key === 'all' ? '' : $key, 'q' => $search, 'collection' => $collection], fn ($value) => $value !== '')) }}">{{ $label }}</a>
+            <a class="sn-chip {{ $category === $key ? 'active' : '' }}" @if($category === $key) aria-current="page" @endif href="{{ (($storePreview ?? false) ? route('managed-website.preview.shop', array_filter(['tenant' => $site->tenant->slug, 'category' => $key === 'all' ? '' : $key, 'q' => $search, 'collection' => $collection], fn ($value) => $value !== '')) : route('managed-website.store.index', array_filter(['category' => $key === 'all' ? '' : $key, 'q' => $search, 'collection' => $collection], fn ($value) => $value !== ''))) }}">{{ $label }}</a>
         @endforeach
     </nav>
     @include('managed-website.storefront-filters')
@@ -17,13 +17,13 @@
                 $variant = ($sellable->isNotEmpty() ? $sellable : $product->variants)->sortBy('price_cents')->first();
             @endphp
             <article class="sn-card">
-                <a class="sn-card-image" href="{{ route('managed-website.store.products.show', ['handle' => $product->handle]) }}">
+                <a class="sn-card-image" href="{{ ($productUrls[$product->id] ?? (($storePreview ?? false) ? route('managed-website.preview.product', ['product' => $product->id, 'tenant' => $tenant->slug]) : route('managed-website.store.products.show', ['handle' => $product->handle]))) }}">
                     @if($mediaUrls->forSite($site, data_get($product->media, '0')))<img loading="lazy" src="{{ $mediaUrls->forSite($site, data_get($product->media, '0')) }}" alt="{{ $product->title }}">@else<span class="sn-gift-art"><span>Sawyer Naturals</span><strong>A little care<br>goes a long way.</strong><small>eGift Card</small></span>@endif
                 </a>
                 @if($sellable->isEmpty())<span class="sn-card-badge">{{ in_array('gift-cards', (array) data_get($product->service_details, 'categories', []), true) ? 'Coming soon' : 'Sold out' }}</span>@elseif($variant?->compare_at_price_cents && $variant->compare_at_price_cents > $variant->price_cents)<span class="sn-card-badge">Sale</span>@endif
                 <div class="sn-card-text">
                     <p>{{ str(data_get($product->service_details, 'categories.0', 'Natural skincare'))->replace('-', ' ')->title() }}</p>
-                    <a href="{{ route('managed-website.store.products.show', ['handle' => $product->handle]) }}"><h3>{{ $product->title }}</h3></a>
+                    <a href="{{ ($productUrls[$product->id] ?? (($storePreview ?? false) ? route('managed-website.preview.product', ['product' => $product->id, 'tenant' => $tenant->slug]) : route('managed-website.store.products.show', ['handle' => $product->handle]))) }}"><h3>{{ $product->title }}</h3></a>
                     @if($product->product_type === 'quote')<strong>Request a quote</strong>@elseif($variant)<strong>{{ $product->variants->count() > 1 ? 'From ' : '' }}${{ number_format($variant->price_cents / 100, 2) }}</strong>@if($variant->compare_at_price_cents > $variant->price_cents)<span class="sn-old">${{ number_format($variant->compare_at_price_cents / 100, 2) }}</span>@endif @endif
                 </div>
             </article>

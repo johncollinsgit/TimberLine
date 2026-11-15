@@ -39,9 +39,9 @@ async function fixture(options = {}) {
         }
         if (url.pathname === '/editor') {
             const page = {id: 1, version_id: state.pageVersion, title: 'Fictional studio', slug: '/', blocks: [{id: 'hero-fixture', type: 'hero', heading: 'Fictional studio', body: 'Initial draft'}, {id: 'gallery-fixture', type: 'gallery', items: [{heading: 'A'}, {heading: 'B'}, {heading: 'C'}]}], seo: {}, ...(state.savedPage || {})};
-            const site = {name: 'Fictional studio', version_id: state.siteVersion, status: 'draft', theme: {theme_name: 'Initial theme', typography: 'sans'}, navigation: [], preview_url: origin + '/preview', preview_site_url: origin + '/preview'};
+            const site = {name: 'Fictional studio', version_id: state.siteVersion, status: 'draft', theme: state.savedTheme?.settings || {theme_name: 'Initial theme', typography: 'sans'}, navigation: state.savedTheme?.navigation || [], preview_url: origin + '/preview', preview_site_url: origin + '/preview'};
             response.writeHead(200, {'Content-Type': 'text/html'});
-            response.end(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="fictional-only">${cssFor(entry).map(file => `<link rel="stylesheet" href="/build/${file}">`).join('')}</head><body><div id="managed-website-editor-root" data-page='${escape(JSON.stringify(page))}' data-pages='${escape(JSON.stringify([{id: 1, title: 'Home', slug: '/', url: '/editor'}, {id: 2, title: 'About', slug: 'about', url: '/second'}]))}' data-site='${escape(JSON.stringify(site))}' data-related-photos='${escape(JSON.stringify(options.related ? [{id:"starter",name:"Related business photo",url:origin + "/starter.png",alt_text:"Original business image"}] : []))}' data-save-url="/save-page" data-theme-save-url="/save-theme" data-publish-url="/publish" data-media-url="/media" data-media-upload-url="/upload" data-index-url="/website" data-history-url="${options.history ? '/website/editor/1/history' : ''}" data-publishing-enabled="true"></div><script type="module" src="/build/${entry.file}"></script></body></html>`); return;
+            response.end(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="fictional-only">${cssFor(entry).map(file => `<link rel="stylesheet" href="/build/${file}">`).join('')}</head><body><div id="managed-website-editor-root" data-page='${escape(JSON.stringify(page))}' data-pages='${escape(JSON.stringify([{id: 1, title: 'Home', slug: '/', url: '/editor'}, {id: 2, title: 'About', slug: 'about', url: '/second'}]))}' data-site='${escape(JSON.stringify(site))}' data-related-photos='${escape(JSON.stringify(options.related ? [{id:"starter",name:"Related business photo",url:origin + "/starter.png",alt_text:"Original business image"}] : []))}' data-save-url="/save-page" data-theme-save-url="/save-theme" data-publish-url="/publish" data-media-url="/media" data-media-upload-url="/upload" data-index-url="/website" data-retail-shop-available="${options.retailShop ? 'true' : 'false'}" data-catalog-url="/catalog" data-history-url="${options.history ? '/website/editor/1/history' : ''}" data-publishing-enabled="true"></div><script type="module" src="/build/${entry.file}"></script></body></html>`); return;
         }
         if (url.pathname === '/website/editor/1/history' && request.method === 'GET') {
             state.historyReads.push(structuredClone(state.savedPage));
@@ -103,12 +103,36 @@ async function fixture(options = {}) {
             return original.call(window, input, init);
         };
     });
-    await page.goto(origin + (options.catalog ? '/catalog' : '/editor'));
+    await page.goto(origin + (options.catalog ? '/catalog' : '/editor' + (options.menu ? '?menu=1' : '')));
     const close = async () => { await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); };
-    try { await (options.catalog ? page.getByRole('button', {name: 'Choose photo', exact: true}).or(page.getByRole('button', {name: 'Replace photo', exact: true})) : page.getByLabel(/^Text/)).first().waitFor({timeout: 10000}); }
+    try { await (options.catalog ? page.getByRole('button', {name: 'Choose photo', exact: true}).or(page.getByRole('button', {name: 'Replace photo', exact: true})) : options.menu ? page.getByRole('button', {name: 'Add a page to menu', exact: true}) : page.getByLabel(/^Text/)).first().waitFor({timeout: 10000}); }
     catch (error) { const labels = await page.locator('label').allTextContents(); const inputs = await page.locator('textarea').count(); await close(); throw new Error(`Editor did not mount: ${errors.join('; ')} ${failures.join('; ')}. Labels ${JSON.stringify(labels)}; textareas ${inputs}. ${error.message}`); }
     return {state, page, origin, errors, close};
 }
+
+test('a retailer deliberately adds Shop to its draft menu and retains it after reload without publication', async () => {
+    const f = await fixture({retailShop:true, menu:true});
+    try {
+        await f.page.getByRole('button', {name:'Add Shop to menu', exact:true}).click();
+        await expect.poll(() => f.state.savedTheme?.navigation).toEqual([{label:'Shop',url:'/shop',type:'link'}]);
+        await expect(f.page.getByLabel('Menu destination 1', {exact:true})).toHaveValue('/shop');
+        assert.equal(f.state.published,null);
+        await f.page.reload();
+        await expect(f.page.getByLabel('Menu destination 1', {exact:true})).toHaveValue('/shop');
+        assert.equal(f.state.publishAttempts.length,0);
+        assert.deepEqual(f.errors,[]);
+    } finally {await f.close();}
+});
+
+test('an empty retail catalog does not offer a new automatic Shop menu link', async () => {
+    const f = await fixture({menu:true});
+    try {
+        await expect(f.page.getByRole('button',{name:'Add Shop to menu',exact:true})).toBeHidden();
+        assert.equal(f.state.themes.length,0);
+        assert.equal(f.state.publishAttempts.length,0);
+        assert.deepEqual(f.errors,[]);
+    } finally {await f.close();}
+});
 
 test('a delayed autosave cannot clear or publish newer page edits', async () => {
     const f = await fixture();

@@ -3,6 +3,8 @@
 return [
     // Connection setup only. Existing collection, tax and webhook gates still apply.
     'setup_enabled' => (bool) env('TENANT_PAYMENT_SETUP_ENABLED', false),
+    // Dynamic paid-owner setup stays off until separate merchant TEST acceptance.
+    'self_service_setup_enabled' => (bool) env('TENANT_PAYMENT_SELF_SERVICE_SETUP_ENABLED', false),
     'tenant_slugs' => array_values(array_filter(array_map('trim', explode(',', (string) env('TENANT_PAYMENT_SETUP_TENANTS', ''))))),
     'stripe_embedded_enabled' => (bool) env('TENANT_STRIPE_EMBEDDED_ENABLED', false),
     'stripe_oauth_client_id' => env('STRIPE_CONNECT_CLIENT_ID'),
