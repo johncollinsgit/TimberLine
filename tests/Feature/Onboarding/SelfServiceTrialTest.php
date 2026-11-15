@@ -108,6 +108,15 @@ test('removing a clock cannot remove the trial fence or allow a second server st
     $this->get('/missing-clock-provider')->assertStatus(423);
 });
 
+test('JSON null clock keys remain fenced without registration or a surviving audit marker', function (): void {
+    $profile = $this->tenant->accessProfile;
+    $profile->forceFill(['metadata' => ['self_service_trial' => null]])->save();
+    \Illuminate\Support\Facades\DB::table('landlord_operator_actions')->where('tenant_id', $this->tenant->id)->where('action_type', 'self_service.trial_started')->delete();
+    expect($this->trials->status($this->tenant)['state'])->toBe('invalid')
+        ->and($this->trials->candidateTenantsForUser($this->owner)->count())->toBe(1);
+    expect(fn () => $this->trials->assertMobileAccessAllowed($this->owner))->toThrow(HttpException::class);
+});
+
 test('private module access retains every hard catalog or operator restriction', function (string $restriction): void {
     if ($restriction === 'tenant') {
         config()->set('module_catalog.modules.customers.tenant_slugs', ['different-tenant']);
@@ -275,3 +284,69 @@ test('a mixed valid and unsupported trial document batch leaves neither rows nor
     $this->postJson(route('documents.store', ['tenant' => $this->tenant->slug]), ['files' => UploadedFile::fake()->image('malformed-single.png', 8, 8)])->assertUnprocessable();
     expect(WorkspaceAsset::withoutGlobalScopes()->count())->toBe(0)->and(Storage::disk('local')->allFiles())->toBe(['existing-private-sentinel.txt']);
 });
+
+test('partial isolated schemas preserve trial denial without querying absent authority', function (bool $profiles, bool $audits, ?bool $clock, bool $registration, bool $auditMarker, bool $restricted): void {
+    $previous = config('database.default');
+    config()->set('database.connections.trial_partial', ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '', 'foreign_key_constraints' => true]);
+    config()->set('database.default', 'trial_partial');
+    $partialOwner = clone $this->owner;
+    $partialOwner->setConnection('trial_partial');
+    try {
+        $schema = \Illuminate\Support\Facades\Schema::connection('trial_partial');
+        $schema->create('tenants', function ($table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('slug');
+        });
+        $schema->create('tenant_user', function ($table): void {
+            $table->unsignedBigInteger('tenant_id');
+            $table->unsignedBigInteger('user_id');
+            $table->string('role');
+            $table->boolean('membership_active');
+            $table->timestamps();
+        });
+        \Illuminate\Support\Facades\DB::table('tenants')->insert(['id' => $this->tenant->id, 'name' => 'Isolated fixture', 'slug' => $this->tenant->slug]);
+        \Illuminate\Support\Facades\DB::table('tenant_user')->insert(['tenant_id' => $this->tenant->id, 'user_id' => $this->owner->id, 'role' => 'owner', 'membership_active' => true]);
+        if ($profiles) {
+            $schema->create('tenant_access_profiles', function ($table): void {
+                $table->id();
+                $table->unsignedBigInteger('tenant_id');
+                $table->json('metadata')->nullable();
+            });
+            $metadata = $clock === null ? ['self_service_trial' => null] : ($clock ? ['self_service_trial' => ['policy' => SelfServiceTrialService::POLICY]] : []);
+            if ($registration) {
+                $metadata['self_service_registration'] = true;
+            }
+            \Illuminate\Support\Facades\DB::table('tenant_access_profiles')->insert(['tenant_id' => $this->tenant->id, 'metadata' => json_encode($metadata)]);
+        }
+        if ($audits) {
+            $schema->create('landlord_operator_actions', function ($table): void {
+                $table->id();
+                $table->unsignedBigInteger('tenant_id');
+                $table->string('action_type');
+            });
+            if ($auditMarker) {
+                \Illuminate\Support\Facades\DB::table('landlord_operator_actions')->insert(['tenant_id' => $this->tenant->id, 'action_type' => 'self_service.trial_started']);
+            }
+        }
+        $status = $this->trials->status($this->tenant);
+        expect($status['state'])->toBe($restricted ? 'invalid' : 'none')->and($status['can_edit_private'])->toBeFalse()
+            ->and($this->trials->candidateTenantsForUser($partialOwner)->count())->toBe($restricted ? 1 : 0);
+        if ($restricted) {
+            expect(fn () => $this->trials->assertMobileAccessAllowed($partialOwner))->toThrow(HttpException::class)
+                ->and(fn () => $this->trials->assertPaidUsageAllowed($this->tenant))->toThrow(HttpException::class);
+        } else {
+            $this->trials->assertMobileAccessAllowed($partialOwner);
+        }
+    } finally {
+        config()->set('database.default', $previous);
+        \Illuminate\Support\Facades\DB::purge('trial_partial');
+    }
+})->with([
+    'profile clock without audit authority' => [true, false, true, true, false, true],
+    'registration survives clock loss without audit authority' => [true, false, false, true, false, true],
+    'null clock key without registration or audit authority' => [true, false, null, false, false, true],
+    'retained audit without profile authority' => [false, true, false, false, true, true],
+    'independent unmarked Enterprise profile' => [true, false, false, false, false, false],
+    'independent runtime without either SaaS authority' => [false, false, false, false, false, false],
+]);

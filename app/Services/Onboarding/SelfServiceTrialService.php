@@ -70,16 +70,23 @@ class SelfServiceTrialService
         $id = $tenant instanceof Tenant ? (int) $tenant->id : $tenant;
         $out = ['registered_trial' => false, 'state' => 'none', 'started_at' => null, 'ends_at' => null,
             'remaining_days' => 0, 'can_edit_private' => false, 'can_view_private' => false, 'upgrade_required' => false, 'limits' => []];
-        if (! Schema::hasTable('tenant_access_profiles') || ! Schema::hasTable('landlord_operator_actions')) {
+        $profilesAvailable = Schema::hasTable('tenant_access_profiles');
+        $auditsAvailable = Schema::hasTable('landlord_operator_actions');
+        if (! $profilesAvailable && ! $auditsAvailable) {
             return $out;
         }
-        $profile = TenantAccessProfile::query()->where('tenant_id', $id)->first();
+        $profile = $profilesAvailable ? TenantAccessProfile::query()->where('tenant_id', $id)->first() : null;
         $metadata = (array) $profile?->metadata;
         $hasClock = array_key_exists('self_service_trial', $metadata);
-        if (! $hasClock && ! LandlordOperatorAction::withoutGlobalScopes()->where('tenant_id', $id)->where('action_type', 'self_service.trial_started')->exists()) {
+        $partialAuthority = ! $profilesAvailable || ! $auditsAvailable;
+        $hasAudit = $auditsAvailable && LandlordOperatorAction::withoutGlobalScopes()->where('tenant_id', $id)->where('action_type', 'self_service.trial_started')->exists();
+        if (! $hasClock && ! $hasAudit && ! ($partialAuthority && ($metadata['self_service_registration'] ?? false) === true)) {
             return $out;
         }
         $out = [...$out, 'registered_trial' => true, 'state' => 'invalid', 'upgrade_required' => true];
+        if ($partialAuthority) {
+            return $out; // A remaining marker cannot grant usage without its authority.
+        }
         if ($this->purchases->paidForTenant($id)) {
             return [...$out, 'state' => 'paid', 'can_edit_private' => true, 'can_view_private' => true, 'upgrade_required' => false];
         }
@@ -167,10 +174,27 @@ class SelfServiceTrialService
 
     public function candidateTenantsForUser(User $user): \Illuminate\Database\Eloquent\Collection
     {
-        return $user->tenants()->wherePivot('membership_active', true)->where(function ($query): void {
-            $query->whereHas('accessProfile', fn ($profile) => $profile->whereNotNull('metadata->self_service_trial'))
-                ->orWhereExists(fn ($audit) => $audit->selectRaw('1')->from('landlord_operator_actions')
+        $profilesAvailable = Schema::hasTable('tenant_access_profiles');
+        $auditsAvailable = Schema::hasTable('landlord_operator_actions');
+        if (! $profilesAvailable && ! $auditsAvailable) {
+            return new \Illuminate\Database\Eloquent\Collection;
+        }
+
+        return $user->tenants()->wherePivot('membership_active', true)->where(function ($query) use ($profilesAvailable, $auditsAvailable): void {
+            if ($profilesAvailable) {
+                $query->whereHas('accessProfile', function ($profile) use ($auditsAvailable): void {
+                    $profile->where(function ($marker) use ($auditsAvailable): void {
+                        $marker->whereJsonContainsKey('metadata->self_service_trial');
+                        if (! $auditsAvailable) {
+                            $marker->orWhere('metadata->self_service_registration', true);
+                        }
+                    });
+                });
+            }
+            if ($auditsAvailable) {
+                $query->orWhereExists(fn ($audit) => $audit->selectRaw('1')->from('landlord_operator_actions')
                     ->whereColumn('landlord_operator_actions.tenant_id', 'tenants.id')->where('action_type', 'self_service.trial_started'));
+            }
         })->get();
     }
 
