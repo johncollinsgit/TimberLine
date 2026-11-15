@@ -5,7 +5,9 @@ use App\Models\TenantModuleEntitlement;
 use App\Models\TenantSiteDomain;
 use App\Models\TenantSiteMedia;
 use App\Models\User;
+use App\Models\WebsiteCollection;
 use App\Models\WebsiteProduct;
+use App\Services\Billing\SelfServicePurchaseEligibility;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsiteMediaUrls;
 use Illuminate\Http\UploadedFile;
@@ -30,6 +32,82 @@ beforeEach(function (): void {
     $this->site = $this->websites->createSite($this->tenant, $this->owner);
     $this->domain = TenantSiteDomain::query()->create(['tenant_id' => $this->tenant->id, 'tenant_site_id' => $this->site->id, 'hostname' => 'www.image-studio.example', 'status' => 'active', 'is_primary' => true, 'verification_token' => 'fictional-proof']);
     $this->actingAs($this->owner)->withSession(['active_tenant_id' => $this->tenant->id]);
+});
+
+test('logo and social photos use only current published site and page snapshots', function (): void {
+    $images = [];
+    for ($index = 0; $index < 4; $index++) {
+        $images[] = $this->postJson('https://app.theeverbranch.com/website/media?tenant='.$this->tenant->slug, ['image' => UploadedFile::fake()->image('slot-'.$index.'.png')])->assertCreated()->json('media');
+    }
+    $home = $this->site->pages()->where('slug', '/')->firstOrFail();
+    $this->websites->publish($this->site, $this->owner);
+    $this->websites->saveSiteDraft($this->site, ['settings' => ['logo_url' => $images[0]['url'], 'logo_alt' => 'Fictional logo'], 'seo' => ['social_image' => $images[2]['url'], 'social_image_alt' => 'Site social photo']], $this->owner);
+    $this->websites->saveDraft($this->site, $home, ['title' => 'Private social image', 'blocks' => [['type' => 'hero', 'heading' => 'Fictional image studio']], 'seo' => ['social_image' => $images[1]['url'], 'social_image_alt' => 'Page social photo']], $this->owner);
+    auth()->forgetGuards();
+    $this->flushSession();
+    foreach ($images as $image) {
+        $this->get('https://image-studio.theeverbranch.com/website-media/'.$image['id'])->assertNotFound();
+    }
+    $this->websites->publish($this->site->fresh(), $this->owner);
+    $this->get('https://image-studio.theeverbranch.com/')->assertOk()->assertSee('alt="Fictional logo"', false)->assertSee('content="Page social photo"', false);
+    foreach (array_slice($images, 0, 3) as $image) {
+        $path = '/website-media/'.$image['id'];
+        $this->get('https://image-studio.theeverbranch.com'.$path)->assertOk();
+        $this->call('GET', 'https://app.theeverbranch.com'.$path, [], [], [], imageRelayHeaders($this->domain->hostname, $path))->assertOk();
+        $this->get('https://app.theeverbranch.com'.$path)->assertNotFound();
+    }
+    $this->get('https://image-studio.theeverbranch.com/website-media/'.$images[3]['id'])->assertNotFound();
+    $this->websites->saveSiteDraft($this->site->fresh(), ['settings' => ['logo_url' => ''], 'seo' => ['social_image' => '']], $this->owner);
+    $this->websites->saveDraft($this->site->fresh(), $home->fresh(), ['title' => 'Photos removed', 'blocks' => [['type' => 'hero', 'heading' => 'Fictional image studio']], 'seo' => []], $this->owner);
+    $this->websites->publish($this->site->fresh(), $this->owner);
+    foreach ($images as $image) {
+        $this->get('https://image-studio.theeverbranch.com/website-media/'.$image['id'])->assertNotFound();
+    }
+    Http::assertNothingSent();
+});
+
+test('paid sites outside pilot allowlists serve only their active collection photo and recover safely', function (): void {
+    \App\Models\TenantAccessProfile::query()->create(['tenant_id' => $this->tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'metadata' => ['self_service_registration' => true]]);
+    $purchases = Mockery::mock(SelfServicePurchaseEligibility::class);
+    $purchases->shouldReceive('paidForTenant')->andReturn(true);
+    $purchases->shouldReceive('hasVerifiedPurchase')->andReturn(true);
+    app()->instance(SelfServicePurchaseEligibility::class, $purchases);
+    config()->set('managed_website.editor_tenant_ids', []);
+    app(\App\Services\ManagedWebsite\WebsitePilotService::class)->saveSetup($this->tenant, $this->site, ['contact_name' => 'Fictional image studio', 'contact_email' => 'fixture@example.test'], $this->owner);
+    $selected = $this->postJson('https://app.theeverbranch.com/website/media?tenant='.$this->tenant->slug, ['image' => UploadedFile::fake()->image('collection.png')])->assertCreated()->json('media');
+    $unused = $this->postJson('https://app.theeverbranch.com/website/media?tenant='.$this->tenant->slug, ['image' => UploadedFile::fake()->image('unused.png')])->assertCreated()->json('media');
+    $this->post('https://app.theeverbranch.com/website/collections?tenant='.$this->tenant->slug, ['title' => 'Fictional collection', 'handle' => 'fictional', 'status' => 'active', 'image_url' => $selected['catalog_url'], 'image_alt' => 'Owned collection photo'])->assertRedirect()->assertSessionHasNoErrors();
+    $collection = WebsiteCollection::query()->where('tenant_id', $this->tenant->id)->sole();
+    expect(data_get($collection->seo, 'image_alt'))->toBe('Owned collection photo');
+    $this->websites->publish($this->site->fresh(), $this->owner);
+    auth()->forgetGuards();
+    $this->flushSession();
+    $path = '/website-catalog-media/'.$selected['id'];
+    $this->get('https://image-studio.theeverbranch.com'.$path)->assertOk();
+    $this->call('GET', 'https://app.theeverbranch.com'.$path, [], [], [], imageRelayHeaders($this->domain->hostname, $path))->assertOk();
+    $this->get('https://image-studio.theeverbranch.com/website-catalog-media/'.$unused['id'])->assertNotFound();
+    $this->get('https://image-studio.theeverbranch.com/website-media/'.$selected['id'])->assertNotFound();
+    $this->get('https://app.theeverbranch.com'.$path)->assertNotFound();
+    $collection->update(['image_url' => 'https://foreign.example'.$path]);
+    $this->get('https://image-studio.theeverbranch.com'.$path)->assertNotFound();
+    $collection->update(['image_url' => $selected['catalog_url'], 'status' => 'draft']);
+    $this->get('https://image-studio.theeverbranch.com'.$path)->assertNotFound();
+    $collection->update(['status' => 'active']);
+    config()->set('managed_website.public_render_enabled', false);
+    $this->get('https://image-studio.theeverbranch.com'.$path)->assertNotFound();
+    Http::assertNothingSent();
+});
+
+test('new logo and social fields cannot reference another website upload', function (): void {
+    $other = Tenant::query()->create(['name' => 'Other photo owner', 'slug' => 'other-photo-owner']);
+    $otherSite = $this->websites->createSite($other, null);
+    $foreign = TenantSiteMedia::query()->create(['tenant_id' => $other->id, 'tenant_site_id' => $otherSite->id, 'storage_disk' => 'local', 'storage_path' => 'foreign.png', 'file_name' => 'foreign.png', 'mime_type' => 'image/png', 'file_size' => 1, 'checksum' => str_repeat('a', 64), 'kind' => 'image', 'source' => 'upload']);
+    $siteVersion = $this->site->fresh()->draft_site_version_id;
+    $this->putJson('https://app.theeverbranch.com/website/editor/theme?tenant='.$this->tenant->slug, ['current_version_id' => $siteVersion, 'settings' => ['logo_url' => '/website-media/'.$foreign->id], 'navigation' => $this->site->fresh()->draftSiteVersion->navigation])->assertUnprocessable()->assertJsonValidationErrors('settings.logo_url');
+    $home = $this->site->pages()->where('slug', '/')->firstOrFail();
+    $pageVersion = $home->draft_version_id;
+    $this->putJson('https://app.theeverbranch.com/website/editor/'.$home->id.'?tenant='.$this->tenant->slug, ['current_version_id' => $pageVersion, 'title' => 'Denied photo', 'blocks' => [['type' => 'hero', 'heading' => 'No foreign photo']], 'seo' => ['social_image' => '/website-media/'.$foreign->id]])->assertUnprocessable()->assertJsonValidationErrors('seo.social_image');
+    expect($this->site->fresh()->draft_site_version_id)->toBe($siteVersion)->and($home->fresh()->draft_version_id)->toBe($pageVersion);
 });
 
 function imageRelayHeaders(string $host, string $path): array

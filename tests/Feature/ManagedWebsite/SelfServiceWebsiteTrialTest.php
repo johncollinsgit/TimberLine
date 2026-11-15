@@ -72,6 +72,7 @@ test('a real no-card trial edits and privately previews without an operator gran
     $this->get(($this->url)('/website/editor/'.$this->home->id))->assertOk()
         ->assertSee('data-publishing-enabled="false"', false)->assertSee('data-private-trial="true"', false);
     $this->putJson(($this->url)('/website/editor/'.$this->home->id), [
+        'current_version_id' => $this->home->draft_version_id,
         'title' => 'Private trial heading', 'blocks' => [['type' => 'hero', 'heading' => 'Private trial heading']], 'seo' => [],
     ])->assertOk()->assertJsonStructure(['saved_at', 'version_number']);
     $this->get(($this->url)('/website/editor/'.$this->home->id.'/preview-site'))->assertOk()->assertSeeText('Private trial heading');
@@ -90,7 +91,7 @@ test('trial page and theme entrypoints stop before exceeding six actual page row
     $versions = $this->home->versions()->count();
     $this->postJson(($this->url)('/website/pages'), ['title' => 'One too many', 'slug' => 'seventh', 'page_type' => 'landing'])
         ->assertUnprocessable()->assertJsonValidationErrors('title');
-    $this->postJson(($this->url)('/website/themes'), ['theme_key' => 'collins-electric'])
+    $this->postJson(($this->url)('/website/themes'), ['theme_key' => 'starter-custom', 'replace_confirmed' => 1])
         ->assertUnprocessable()->assertJsonValidationErrors('title');
     expect($this->site->pages()->count())->toBe(6)
         ->and($this->site->pages()->where('slug', 'seventh')->exists())->toBeFalse()
@@ -199,7 +200,7 @@ test('trial publishing rollback domains and offering side entries require genuin
     $pending = TenantSiteDomain::query()->create(['tenant_id' => $this->tenant->id, 'tenant_site_id' => $this->site->id, 'hostname' => 'www.private-website.example', 'status' => 'pending', 'verification_token' => 'fictional-not-a-proof']);
     expect(fn () => $domains->verify($pending, $this->owner))->toThrow(HttpException::class);
     $this->postJson(($this->url)('/website/domains'), ['domain' => 'www.private-website.example'])->assertStatus(423);
-    $this->postJson(($this->url)('/website/setup'), ['theme_key' => 'collins-electric', 'service_title' => 'Forbidden catalog entry'])
+    $this->postJson(($this->url)('/website/setup'), ['theme_key' => 'starter-custom', 'site_version' => $this->site->fresh()->draft_site_version_id, 'service_title' => 'Forbidden catalog entry'])
         ->assertStatus(423);
     expect(WebsiteProduct::query()->where('tenant_id', $this->tenant->id)->count())->toBe(0)
         ->and($this->site->fresh()->public_enabled)->toBeFalse()

@@ -720,7 +720,7 @@ jobs:
       env:
         SELF_SERVICE_DISPOSABLE_MYSQL: '1'
         LOG_CHANNEL: 'null'
-      run: php ./vendor/bin/pest tests/Feature/Billing/SelfServiceStandardPurchaseTest.php tests/Feature/Onboarding/SelfServiceTrialTest.php --compact
+      run: php ./vendor/bin/pest tests/Feature/Billing/SelfServiceStandardPurchaseTest.php tests/Feature/Onboarding/SelfServiceTrialTest.php tests/Feature/ManagedWebsite/SelfServiceTemplateFlowTest.php tests/Feature/ManagedWebsite/WebsiteDraftHistoryTest.php --compact
       if: matrix.group == 'concurrency'
     if: '!cancelled() && inputs.mysql_mode != ''skip'' && needs.plan.outputs.tier == ''full'''
     strategy:

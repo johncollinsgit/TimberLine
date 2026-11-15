@@ -17,22 +17,35 @@ use Illuminate\Validation\ValidationException;
 
 class ManagedWebsiteService
 {
-    public function __construct(private readonly WebsiteThemeCatalog $themeCatalog) {}
+    public function __construct(private readonly WebsiteThemeCatalog $themeCatalog, private readonly WebsiteStarterCatalog $starters) {}
 
     /** @return array<int,array<string,mixed>> */
-    public function themes(): array
+    public function themes(?Tenant $tenant = null): array
     {
+        if ($tenant && app(ManagedWebsiteSelfServicePolicy::class)->registered($tenant)) {
+            $themes = $this->starters->all($tenant);
+            // An existing customer's explicitly chosen design remains editable.
+            $current = TenantSite::query()->forTenant($tenant)->with('draftSiteVersion')->first();
+            $key = (string) data_get($current?->draftSiteVersion?->settings ?? $current?->settings, 'theme_key');
+            $saved = $this->themeCatalog->find($key);
+            if ($saved) {
+                $themes[] = $saved;
+            }
+
+            return $themes;
+        }
+
         return $this->themeCatalog->all();
     }
 
-    public function applyTheme(TenantSite $site, string $themeKey, ?User $actor): TenantSite
+    public function applyTheme(TenantSite $site, string $themeKey, ?User $actor, ?string $businessName = null): TenantSite
     {
-        return $this->withDraftWriteLock($site, fn (): TenantSite => $this->applyThemeDraft($site, $themeKey, $actor));
+        return $this->withDraftWriteLock($site, fn (): TenantSite => $this->applyThemeDraft($site, $themeKey, $actor, $businessName));
     }
 
-    protected function applyThemeDraft(TenantSite $site, string $themeKey, ?User $actor): TenantSite
+    protected function applyThemeDraft(TenantSite $site, string $themeKey, ?User $actor, ?string $businessName = null): TenantSite
     {
-        $theme = $this->themeCatalog->find($themeKey);
+        $theme = $this->starters->find($site->tenant, $themeKey, $businessName) ?? $this->themeCatalog->find($themeKey);
         abort_unless(is_array($theme), 422, 'That website theme is not available.');
 
         return DB::transaction(function () use ($site, $theme, $actor): TenantSite {
@@ -177,6 +190,7 @@ class ManagedWebsiteService
             );
 
             if (! $site->pages()->exists()) {
+                $photo = $this->starters->photos($tenant)[0];
                 $page = TenantSitePage::query()->create([
                     'tenant_id' => $tenant->id,
                     'tenant_site_id' => $site->id,
@@ -193,6 +207,8 @@ class ManagedWebsiteService
                         'body' => 'A clearer online home for your business.',
                         'cta_label' => 'Get in touch',
                         'cta_url' => '#contact',
+                        'image_url' => $photo['url'],
+                        'image_alt' => $photo['alt_text'],
                     ]],
                     'seo' => ['title' => $tenant->name, 'description' => 'Learn more about '.$tenant->name.'.'],
                 ], $actor);
@@ -222,8 +238,10 @@ class ManagedWebsiteService
     {
         $current = $this->siteVersion($site, true);
         $settings = $this->sanitizeSettings(array_replace((array) ($current?->settings ?? $site->settings ?? []), (array) ($input['settings'] ?? [])));
+        $settings['logo_url'] = app(WebsiteMediaUrls::class)->validatedImage($site, (string) ($settings['logo_url'] ?? ''), 'settings.logo_url');
         $navigation = $this->sanitizeNavigation((array) ($input['navigation'] ?? $current?->navigation ?? []));
         $seo = $this->sanitizeSeo(array_replace((array) ($current?->seo ?? []), (array) ($input['seo'] ?? [])));
+        $seo['social_image'] = app(WebsiteMediaUrls::class)->validatedImage($site, $seo['social_image'], 'seo.social_image');
         $sourceManifest = $this->sanitizeSourceManifest((array) ($input['source_manifest'] ?? $current?->source_manifest ?? []));
 
         $version = TenantSiteVersion::query()->create([
@@ -245,6 +263,7 @@ class ManagedWebsiteService
             'updated_by_user_id' => $actor?->id,
         ])->save();
         $this->event($site, null, $actor, 'site.draft_saved', ['site_version_id' => $version->id]);
+        app(ManagedWebsiteDraftHistory::class)->pruneSite($site);
         if ((bool) config('managed_website.screenshot_enabled', false)) {
             DB::afterCommit(fn () => GenerateTenantSiteThumbnail::dispatch((int) $version->id));
         }
@@ -275,7 +294,10 @@ class ManagedWebsiteService
             throw ValidationException::withMessages(['blocks' => 'Add at least one approved website section.']);
         }
 
-        return DB::transaction(function () use ($site, $page, $input, $actor, $blocks): TenantSitePageVersion {
+        $seo = $this->sanitizeSeo((array) ($input['seo'] ?? []));
+        $seo['social_image'] = app(WebsiteMediaUrls::class)->validatedImage($site, $seo['social_image'], 'seo.social_image');
+
+        return DB::transaction(function () use ($site, $page, $input, $actor, $blocks, $seo): TenantSitePageVersion {
             $next = ((int) $page->versions()->max('version_number')) + 1;
             $version = TenantSitePageVersion::query()->create([
                 'tenant_id' => $site->tenant_id,
@@ -285,7 +307,7 @@ class ManagedWebsiteService
                 'status' => 'draft',
                 'title' => trim((string) ($input['title'] ?? $page->title)),
                 'blocks' => $blocks,
-                'seo' => $this->sanitizeSeo((array) ($input['seo'] ?? [])),
+                'seo' => $seo,
                 'created_by_user_id' => $actor?->id,
             ]);
             $page->forceFill([
@@ -294,6 +316,7 @@ class ManagedWebsiteService
             ])->save();
             $site->forceFill(['updated_by_user_id' => $actor?->id])->save();
             $this->event($site, $page, $actor, 'page.draft_saved', ['version_id' => $version->id]);
+            app(ManagedWebsiteDraftHistory::class)->prunePage($site, $page);
 
             return $version;
         });
@@ -308,6 +331,10 @@ class ManagedWebsiteService
         abort_if($policy->registered($site->tenant) && ! $policy->eligible($site->tenant), 423, 'An active paid plan is required to publish. Your saved content is safe.');
 
         DB::transaction(function () use ($site, $actor): void {
+            if (app(ManagedWebsiteSelfServicePolicy::class)->registered($site->tenant)) {
+                $site = TenantSite::query()->whereKey($site->id)->where('tenant_id', $site->tenant_id)->lockForUpdate()->firstOrFail();
+                abort_unless(app(WebsitePilotService::class)->readyToPublish($site, $site->setup), 422, 'Add your business name and email before publishing.');
+            }
             $pages = $site->pages()->with('draftVersion')->get();
             abort_if($pages->isEmpty() || $pages->firstWhere('slug', '/') === null, 422, 'A Home page is required before publishing.');
             $siteDraft = $this->siteVersion($site, true);
@@ -482,6 +509,7 @@ class ManagedWebsiteService
             'title' => strip_tags(mb_substr(trim((string) ($seo['title'] ?? '')), 0, 190)),
             'description' => strip_tags(mb_substr(trim((string) ($seo['description'] ?? '')), 0, 320)),
             'social_image' => $this->safeUrl((string) ($seo['social_image'] ?? '')) ? trim((string) $seo['social_image']) : '',
+            'social_image_alt' => strip_tags(mb_substr(trim((string) ($seo['social_image_alt'] ?? '')), 0, 500)),
         ];
     }
 
@@ -509,10 +537,21 @@ class ManagedWebsiteService
         }
         $announcement = (array) ($settings['announcement'] ?? []);
         $footer = (array) ($settings['footer'] ?? []);
+        $contact = (array) ($settings['business_contact'] ?? []);
+        $email = trim((string) ($contact['email'] ?? ''));
 
         return [
             'theme_key' => preg_replace('/[^a-z0-9_-]/i', '', (string) ($settings['theme_key'] ?? 'custom')) ?: 'custom',
             'theme_name' => strip_tags(mb_substr(trim((string) ($settings['theme_name'] ?? 'Website')), 0, 120)),
+            'logo_url' => $this->safeUrl((string) ($settings['logo_url'] ?? '')) ? trim((string) $settings['logo_url']) : '',
+            'logo_alt' => strip_tags(mb_substr(trim((string) ($settings['logo_alt'] ?? '')), 0, 500)),
+            'business_contact' => [
+                'name' => strip_tags(mb_substr(trim((string) ($contact['name'] ?? '')), 0, 120)),
+                'email' => filter_var($email, FILTER_VALIDATE_EMAIL) ? strtolower($email) : '',
+                'phone' => strip_tags(mb_substr(trim((string) ($contact['phone'] ?? '')), 0, 80)),
+                'hours' => strip_tags(mb_substr(trim((string) ($contact['hours'] ?? '')), 0, 500)),
+                'service_area' => strip_tags(mb_substr(trim((string) ($contact['service_area'] ?? '')), 0, 500)),
+            ],
             'theme_palette' => $safePalette,
             'typography' => in_array((string) ($settings['typography'] ?? 'sans'), ['sans', 'serif', 'system'], true) ? (string) ($settings['typography'] ?? 'sans') : 'sans',
             'corners' => in_array((string) ($settings['corners'] ?? 'soft'), ['square', 'soft', 'rounded'], true) ? (string) ($settings['corners'] ?? 'soft') : 'soft',

@@ -13,36 +13,57 @@ class WebsitePilotService
     /** @param array<string,mixed> $input */
     public function saveSetup(Tenant $tenant, TenantSite $site, array $input, ?User $actor): TenantSiteSetup
     {
-        $themeKey = strtolower(trim((string) ($input['theme_key'] ?? 'collins-electric'))) ?: 'collins-electric';
+        abort_unless((int) $site->tenant_id === (int) $tenant->id, 404);
+
+        return app(ManagedWebsiteService::class)->withDraftWriteLock($site, function () use ($tenant, $site, $input, $actor): TenantSiteSetup {
+            $locked = TenantSite::query()->whereKey($site->id)->where('tenant_id', $tenant->id)->lockForUpdate()->firstOrFail();
+            if (isset($input['site_version'])) {
+                abort_unless((int) $locked->draft_site_version_id === (int) $input['site_version'], 409, 'Your website changed. Reload before saving business details.');
+            }
+
+            return $this->saveSetupDraft($tenant, $locked, $input, $actor);
+        });
+    }
+
+    private function saveSetupDraft(Tenant $tenant, TenantSite $site, array $input, ?User $actor): TenantSiteSetup
+    {
+        $themeKey = (string) data_get($site->draftSiteVersion?->settings ?? $site->settings, 'theme_key', $input['theme_key'] ?? 'custom');
         $setup = TenantSiteSetup::query()->forTenant($tenant)->firstOrNew(['tenant_id' => $tenant->id]);
+        $modes = app(ManagedWebsiteSelfServicePolicy::class)->registered($tenant)
+            ? app(WebsiteStarterCatalog::class)->modes($tenant)
+            : ['business_mode' => 'trades', 'offering_mode' => 'services', 'visitor_actions' => ['request_quote', 'call_business']];
         $setup->fill([
             'tenant_site_id' => $site->id,
-            'business_mode' => 'trades',
-            'offering_mode' => 'services',
-            'visitor_actions' => ['request_quote', 'call_business'],
+            ...$modes,
             'design_key' => $themeKey,
-            'domain_choice' => 'everbranch_subdomain',
-            'contact_name' => trim((string) ($input['contact_name'] ?? '')) ?: null,
+            'domain_choice' => $setup->domain_choice ?: 'everbranch_subdomain',
+            'contact_name' => strip_tags(trim((string) ($input['contact_name'] ?? ''))) ?: null,
             'contact_email' => strtolower(trim((string) ($input['contact_email'] ?? ''))) ?: null,
-            'contact_phone' => trim((string) ($input['contact_phone'] ?? '')) ?: null,
-            'hours' => trim((string) ($input['hours'] ?? '')) ?: null,
-            'service_area' => trim((string) ($input['service_area'] ?? '')) ?: null,
-            'completed_steps' => $this->completedSteps($input),
+            'contact_phone' => strip_tags(trim((string) ($input['contact_phone'] ?? ''))) ?: null,
+            'hours' => strip_tags(trim((string) ($input['hours'] ?? ''))) ?: null,
+            'service_area' => strip_tags(trim((string) ($input['service_area'] ?? ''))) ?: null,
+            'completed_steps' => array_values(array_unique([...(array) $setup->completed_steps, ...$this->completedSteps($input)])),
             'created_by_user_id' => $setup->created_by_user_id ?: $actor?->id,
             'updated_by_user_id' => $actor?->id,
         ]);
         $setup->save();
 
-        $settings = (array) $site->settings;
-        $settings['pilot_contact'] = [
+        $settings = (array) ($site->draftSiteVersion?->settings ?? $site->settings);
+        $oldName = (string) ($settings['theme_name'] ?? '');
+        if (filled($setup->contact_name)) {
+            $settings['theme_name'] = $setup->contact_name;
+            if (! filled(data_get($settings, 'footer.copyright')) || data_get($settings, 'footer.copyright') === '© '.now()->year.' '.$oldName) {
+                data_set($settings, 'footer.copyright', '© '.now()->year.' '.$setup->contact_name);
+            }
+        }
+        $settings['business_contact'] = [
             'name' => $setup->contact_name,
             'email' => $setup->contact_email,
             'phone' => $setup->contact_phone,
             'hours' => $setup->hours,
             'service_area' => $setup->service_area,
         ];
-        $settings['domain_choice'] = 'everbranch_subdomain';
-        $site->forceFill(['settings' => $settings, 'updated_by_user_id' => $actor?->id])->save();
+        app(ManagedWebsiteService::class)->saveSiteDraft($site, ['settings' => $settings], $actor);
 
         return $setup->fresh();
     }
@@ -52,9 +73,12 @@ class WebsitePilotService
     {
         if ($site && app(ManagedWebsiteSelfServicePolicy::class)->eligible($site->tenant)) {
             $home = $site->pages()->where('slug', '/')->with('draftVersion')->first();
+            $contact = data_get($site->fresh()->draftSiteVersion?->settings, 'business_contact');
+            $name = is_array($contact) ? ($contact['name'] ?? '') : $setup?->contact_name;
+            $email = is_array($contact) ? ($contact['email'] ?? '') : $setup?->contact_email;
 
             return [
-                ['key' => 'details', 'label' => 'Business name and email', 'complete' => filled($setup?->contact_name) && filter_var($setup?->contact_email, FILTER_VALIDATE_EMAIL) !== false],
+                ['key' => 'details', 'label' => 'Business name and email', 'complete' => filled($name) && filter_var($email, FILTER_VALIDATE_EMAIL) !== false],
                 ['key' => 'design', 'label' => 'Design', 'complete' => $site->draftSiteVersion()->exists()],
                 ['key' => 'content', 'label' => 'Home page', 'complete' => filled($home?->draftVersion?->title) && (array) $home?->draftVersion?->blocks !== []],
                 ['key' => 'address', 'label' => 'Everbranch address', 'complete' => filled($site->subdomain)],

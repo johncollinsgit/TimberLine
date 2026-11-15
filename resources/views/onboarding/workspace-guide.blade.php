@@ -3,11 +3,13 @@
         @include('onboarding.partials.guide-nav', ['active' => 'explore'])
         @include('onboarding.partials.trial-status', ['showTrialPreview' => true])
         <h1>Explore Everbranch</h1>
+        @php
+            $privateTrialGuide = ($trial['registered_trial'] ?? false) && ($trial['state'] ?? '') !== 'paid';
+        @endphp
         <div class="eb-builder-branches">
             @foreach(($catalog['modules'] ?? []) as $module)
                 @php
                     $state = (array) ($module['module_state'] ?? []);
-                    $privateTrialGuide = app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($tenant);
                     $moduleHref = $privateTrialGuide
                         ? app(\App\Services\Navigation\UnifiedAppNavigationService::class)->trialReadHref((string) ($state['cta_href'] ?? ''), $tenant, request())
                         : ($state['cta_href'] ?? null);

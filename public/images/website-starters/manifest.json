@@ -1,0 +1,43 @@
+{
+  "assets": [
+    {
+      "path": "/images/website-starters/landscaping-hero.png",
+      "preset": "landscaping",
+      "alt": "A gardener pruning a green residential garden.",
+      "source": "Everbranch original generated example photography",
+      "generator": "image_gen",
+      "generated_on": "2026-11-15",
+      "example_only": true,
+      "sha256": "5f4a8ef5cc94d7f2a41269a937df3e4a8a0517ef1da69ddb02cfaafff42bd03b",
+      "width": 1672,
+      "height": 941,
+      "bytes": 3071263
+    },
+    {
+      "path": "/images/website-starters/law-practice-hero.png",
+      "preset": "law",
+      "alt": "An adviser and client reviewing a plain folder in a calm office.",
+      "source": "Everbranch original generated example photography",
+      "generator": "image_gen",
+      "generated_on": "2026-11-15",
+      "example_only": true,
+      "sha256": "5b33e668cf7333d6e0756adf420b12aa004fd651299e11436f9b3852e308183a",
+      "width": 1672,
+      "height": 941,
+      "bytes": 2177163
+    },
+    {
+      "path": "/images/website-starters/apparel-studio-hero.png",
+      "preset": "apparel",
+      "alt": "A designer arranging linen and cotton garments in a studio.",
+      "source": "Everbranch original generated example photography",
+      "generator": "image_gen",
+      "generated_on": "2026-11-15",
+      "example_only": true,
+      "sha256": "1073171d40a345e767e1e7974940b249efc61d9ce24f8d374c5518f5cf215389",
+      "width": 1672,
+      "height": 941,
+      "bytes": 2262476
+    }
+  ]
+}

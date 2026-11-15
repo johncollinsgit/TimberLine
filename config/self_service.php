@@ -18,22 +18,22 @@ return [
         ],
         'landscaping' => [
             'label' => 'Landscaping', 'description' => 'Jobs & crews',
-            'image' => 'images/website-themes/outdoor-elements-hero.png', 'blueprint_template' => 'landscaping',
+            'image' => 'images/website-starters/landscaping-hero.png', 'blueprint_template' => 'landscaping',
             'branches' => ['customers', 'field_service', 'documents', 'managed_website'],
         ],
         'electrician' => [
             'label' => 'Electrical', 'description' => 'Jobs & billing',
-            'image' => 'images/public-site/everbranch-hvac-electrical-field.jpg', 'blueprint_template' => 'electrician',
+            'image' => 'images/website-themes/collins-electric-panel-service.png', 'blueprint_template' => 'electrician',
             'branches' => ['customers', 'field_service', 'everbranch_billing', 'documents', 'managed_website'],
         ],
         'law' => [
             'label' => 'Professional practice', 'description' => 'Clients & files',
-            'image' => 'images/public-site/guide-projects.webp', 'blueprint_template' => 'law',
+            'image' => 'images/website-starters/law-practice-hero.png', 'blueprint_template' => 'law',
             'branches' => ['customers', 'lead_capture', 'documents', 'managed_website'],
         ],
         'apparel' => [
             'label' => 'Retail & apparel', 'description' => 'Products & customers',
-            'image' => 'images/public-site/everbranch-industry-retail.jpg', 'blueprint_template' => 'apparel',
+            'image' => 'images/website-starters/apparel-studio-hero.png', 'blueprint_template' => 'apparel',
             'branches' => ['customers', 'rewards', 'wishlist', 'reporting', 'managed_website'],
         ],
         'custom' => [

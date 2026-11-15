@@ -1,3 +1,20 @@
+## 2026-11-15 - Private website starters and saved drafts
+
+Self-service Website setup recommends seven neutral business starters with six
+photo-led pages and the customer's saved name/contact details. Reopening details
+preserves the chosen design, edited pages and uploaded photographs. Replacing a
+design is a separate confirmed action. A shared picker covers section/card/gallery,
+logo, social, product and collection photos without requiring an image URL.
+
+Native History restores a saved page or website style as a new private draft;
+publishing remains separate. Expired trials can inspect retained history. The
+original audited trial cohort retains 30 recent page and 10 site autosaves, while
+published history, protected pointers, audit rows and media are preserved. Stale
+browser saves receive a recoverable conflict instead of overwriting a restored
+draft. Existing legacy history and connected-site recovery stay with their
+established contracts. See [Website templates and drafts](../operations/website-templates-and-drafts.md) for source verification
+and release acceptance; these controls do not activate payments or domains.
+
 ## 2026-11-14 - Clear Square customer matches
 
 Square source settings explain automatic association of existing aliases and

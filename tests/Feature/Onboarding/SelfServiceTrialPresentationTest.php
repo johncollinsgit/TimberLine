@@ -61,11 +61,39 @@ test('trial customer work and file screens retain useful controls without advert
     Http::assertNothingSent();
 })->with([false, true]);
 
-test('the trial guide uses admitted private destinations and never sends the owner to forbidden setup', function (): void {
-    $this->get(route('workspace.guide', ['tenant' => $this->tenant->slug]))->assertOk()
+test('active and expired trial guide cards open admitted private work and keep paid actions closed', function (bool $expired): void {
+    if ($expired) {
+        $this->travelTo(\Carbon\CarbonImmutable::parse(app(SelfServiceTrialService::class)->status($this->tenant)['ends_at']));
+    }
+    $response = $this->get(route('workspace.guide', ['tenant' => $this->tenant->slug]))->assertOk()
         ->assertDontSee('href="'.route('app.start').'"', false)
         ->assertSee(route('managed-website.index', ['tenant' => $this->tenant->slug]), false)
         ->assertSee(route('self-service.purchase', ['tenant' => $this->tenant->slug]), false)
         ->assertSee('After activation');
+    $cards = collect($response->viewData('catalog')['modules'])->keyBy('module_key');
+    foreach (['field_service' => 'field-service.index',
+        'documents' => 'documents.index', 'managed_website' => 'managed-website.index'] as $key => $route) {
+        $state = $cards[$key]['module_state'];
+        expect($state['cta_href'])->toBe(route($route, ['tenant' => $this->tenant->slug], false))
+            ->and($state['cta_label'])->toBe($expired ? 'View' : 'Open')
+            ->and($state['reason_label'])->toBe($expired ? 'Trial ended' : 'Private trial');
+        $this->get($state['cta_href'])->assertOk();
+    }
+    foreach (['ai', 'reporting', 'email', 'sms'] as $key) {
+        if (isset($cards[$key])) {
+            expect($cards[$key]['module_state']['cta_href'])->toBeNull();
+        }
+    }
+    Http::assertNothingSent();
+})->with([false, true]);
+
+test('trial guide cards respect a disabled module and do not advertise a private destination', function (): void {
+    \App\Models\TenantModuleState::query()->create(['tenant_id' => $this->tenant->id,
+        'module_key' => 'documents', 'enabled_override' => false]);
+    $response = $this->get(route('workspace.guide', ['tenant' => $this->tenant->slug]))->assertOk();
+    $cards = collect($response->viewData('catalog')['modules'])->keyBy('module_key');
+    expect($cards['documents']['module_state']['reason'])->toBe('disabled_by_override')
+        ->and($cards['documents']['module_state']['cta_href'])->toBeNull()
+        ->and($cards['managed_website']['module_state']['cta_href'])->toBe(route('managed-website.index', ['tenant' => $this->tenant->slug], false));
     Http::assertNothingSent();
 });

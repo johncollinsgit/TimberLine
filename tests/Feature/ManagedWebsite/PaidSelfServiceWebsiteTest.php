@@ -91,6 +91,7 @@ test('expired paid eligibility pauses editing while retaining the last paid publ
     config()->set('testing.verified_website_tenants', [$tenant->id]);
     $websites = app(ManagedWebsiteService::class);
     $site = $websites->createSite($tenant, $actor);
+    app(WebsitePilotService::class)->saveSetup($tenant, $site, ['contact_name' => $tenant->name, 'contact_email' => 'fixture@example.test'], $actor);
     $websites->publish($site, $actor);
     expect($websites->publicPage($tenant, '/'))->not->toBeNull();
     config()->set('testing.paid_website_tenants', []);
@@ -114,6 +115,7 @@ test('included website child addresses render only their published tenant snapsh
     $websites->applyTheme($site, 'collins-electric', $actor);
     $page = $site->pages()->where('slug', 'about')->firstOrFail();
     $websites->saveDraft($site, $page, ['title' => 'Our studio', 'blocks' => [['type' => 'text', 'body' => 'Published studio story']]], $actor);
+    app(WebsitePilotService::class)->saveSetup($tenant, $site, ['contact_name' => $tenant->name, 'contact_email' => 'fixture@example.test'], $actor);
     $websites->publish($site, $actor);
     $websites->saveDraft($site, $page->fresh(), ['title' => 'Private changes', 'blocks' => [['type' => 'text', 'body' => 'Unpublished studio changes']]], $actor);
 
@@ -140,6 +142,7 @@ test('included website children retain draft paid access and public rendering ga
     $site = $websites->createSite($tenant, $actor);
     $websites->applyTheme($site, 'collins-electric', $actor);
     $this->get('https://paid-photo-studio.theeverbranch.com/about')->assertNotFound();
+    app(WebsitePilotService::class)->saveSetup($tenant, $site, ['contact_name' => $tenant->name, 'contact_email' => 'fixture@example.test'], $actor);
     $websites->publish($site, $actor);
     $this->get('https://paid-photo-studio.theeverbranch.com/about')->assertOk();
 
@@ -161,6 +164,7 @@ test('a flagship website cannot replace the app home through fallback tenant con
     config()->set('tenancy.landlord.hosts', []);
     config()->set('app.url', 'https://app.theeverbranch.com');
     $site = app(ManagedWebsiteService::class)->createSite($tenant, $actor);
+    app(WebsitePilotService::class)->saveSetup($tenant, $site, ['contact_name' => $tenant->name, 'contact_email' => 'fixture@example.test'], $actor);
     app(ManagedWebsiteService::class)->publish($site, $actor);
 
     $this->get('https://app.theeverbranch.com/')->assertRedirect()->assertDontSee('data-testid="managed-site"', false);

@@ -912,7 +912,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->get('/sales-channels', [SalesChannelController::class, 'index'])
         ->name('sales-channels.index');
 
-    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', 'module:managed_website', \App\Http\Middleware\UseConnectedWebsiteEditor::class])
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', \App\Http\Middleware\EnsureManagedWebsiteEditorMembership::class, 'module:managed_website', \App\Http\Middleware\UseConnectedWebsiteEditor::class])
         ->prefix('website')
         ->name('managed-website.')
         ->group(function (): void {
@@ -941,6 +941,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::put('/editor/{page}', [ManagedWebsiteController::class, 'saveEditor'])->name('editor.save');
             Route::get('/editor/{page}/preview', [ManagedWebsiteController::class, 'preview'])->name('editor.preview');
             Route::get('/editor/{page}/preview-site', [ManagedWebsiteController::class, 'previewSite'])->name('editor.preview.site');
+            Route::get('/editor/{page}/history', [\App\Http\Controllers\ManagedWebsiteHistoryController::class, 'index'])->name('history.index');
+            Route::post('/editor/{page}/history/{version}/restore', [\App\Http\Controllers\ManagedWebsiteHistoryController::class, 'restorePage'])->whereNumber('version')->name('history.page.restore');
+            Route::post('/history/site/{version}/restore', [\App\Http\Controllers\ManagedWebsiteHistoryController::class, 'restoreSite'])->whereNumber('version')->name('history.site.restore');
             Route::post('/editor/publish', [ManagedWebsiteController::class, 'publishEditor'])->name('editor.publish');
             Route::get('/media', [ManagedWebsiteController::class, 'media'])->name('media.index');
             Route::post('/media', [ManagedWebsiteController::class, 'storeMedia'])->name('media.store');

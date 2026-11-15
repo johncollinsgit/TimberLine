@@ -92,10 +92,33 @@ class BranchSelectionController extends Controller
         $tenant = $request->attributes->get('current_tenant');
         abort_unless($tenant instanceof Tenant, 403);
 
+        $trial = app(\App\Services\Onboarding\SelfServiceTrialService::class)->status($tenant);
+        $payload = $catalog->tenantStorePayload((int) $tenant->id, 'direct');
+        if ($trial['registered_trial'] && $trial['state'] !== 'paid') {
+            $destinations = ['customers' => 'marketing.customers', 'field_service' => 'field-service.index',
+                'documents' => 'documents.index', 'managed_website' => 'managed-website.index'];
+            foreach ($payload['modules'] as &$module) {
+                $state = (array) ($module['module_state'] ?? []);
+                $destination = $destinations[$module['module_key']] ?? null;
+                // Navigation projects the resolver's admission; it never grants access.
+                if (($state['reason'] ?? '') !== 'private_trial' || ! ($state['has_access'] ?? false)
+                    || ! ($state['enabled'] ?? false) || $destination === null) {
+                    continue;
+                }
+                $href = app(\App\Services\Navigation\UnifiedAppNavigationService::class)->trialReadHref(
+                    route($destination, ['tenant' => $tenant->slug], false), $tenant, $request
+                );
+                $module['module_state'] = [...$state, 'cta_href' => $href,
+                    'cta_label' => $trial['can_edit_private'] ? 'Open' : 'View',
+                    'reason_label' => $trial['can_edit_private'] ? 'Private trial' : 'Trial ended'];
+            }
+            unset($module);
+        }
+
         return response()->view('onboarding.workspace-guide', [
-            'catalog' => $catalog->tenantStorePayload((int) $tenant->id, 'direct'),
+            'catalog' => $payload,
             'tenant' => $tenant,
-            'trial' => app(\App\Services\Onboarding\SelfServiceTrialService::class)->status($tenant),
+            'trial' => $trial,
         ]);
     }
 

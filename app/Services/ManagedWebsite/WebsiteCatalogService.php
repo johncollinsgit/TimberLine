@@ -67,12 +67,18 @@ class WebsiteCatalogService
                 'seo_title' => ['nullable', 'string', 'max:190'], 'seo_description' => ['nullable', 'string', 'max:320'],
             ];
             $data = Validator::make($data, $rules)->validate();
+            foreach ($data['media'] as $index => $image) {
+                app(WebsiteMediaUrls::class)->validatedImage($site, $image, 'media.'.$index);
+            }
             if ($product->status === 'active' || $data['status'] === 'active') {
                 abort_unless(app(ManagedWebsiteService::class)->publishingEnabled(), 423, 'Publishing is paused. Active products cannot change right now.');
             }
             $existingIds = $product->exists ? $product->variants()->pluck('id')->all() : [];
             abort_if(array_diff($existingIds, array_filter(array_column($data['variants'], 'id'))), 422, 'Keep existing variants in the editor; turn availability off to retire a variant.');
             $details = array_merge($product->service_details ?? [], array_intersect_key($data, array_flip(['image_alt', 'details', 'vendor', 'category', 'tags'])));
+            if (isset($details['image_alt'])) {
+                $details['image_alt'] = strip_tags($details['image_alt']);
+            }
             $details['catalog_revision'] = (int) ($details['catalog_revision'] ?? 0) + 1;
             $product->fill(array_intersect_key($data, array_flip(['title', 'handle', 'description', 'status', 'product_type', 'track_inventory', 'media'])));
             $product->service_details = $details;
@@ -200,6 +206,9 @@ class WebsiteCatalogService
 
     public function publicCollections(TenantSite $site): array
     {
-        return WebsiteCollection::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->where('status', 'active')->orderBy('title')->get(['title', 'handle', 'description', 'image_url'])->toArray();
+        return WebsiteCollection::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->where('status', 'active')->orderBy('title')->get(['title', 'handle', 'description', 'image_url', 'seo'])->map(function (WebsiteCollection $collection) use ($site): array {
+            return ['title' => $collection->title, 'handle' => $collection->handle, 'description' => $collection->description,
+                'image_url' => app(WebsiteMediaUrls::class)->forSite($site, $collection->image_url), 'image_alt' => data_get($collection->seo, 'image_alt') ?: $collection->title];
+        })->all();
     }
 }

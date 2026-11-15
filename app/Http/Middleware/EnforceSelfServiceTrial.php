@@ -21,7 +21,7 @@ class EnforceSelfServiceTrial
         'marketing.customers', 'marketing.customers.data', 'marketing.customers.create', 'marketing.customers.show',
         'field-service.index', 'field-service.jobs.data', 'field-service.jobs.show', 'field-service.jobs.updates', 'field-service.calendar',
         'managed-website.index', 'managed-website.editor', 'managed-website.editor.preview', 'managed-website.editor.preview.site',
-        'managed-website.media.index', 'managed-website.thumbnails.show',
+        'managed-website.media.index', 'managed-website.thumbnails.show', 'managed-website.history.index',
         'account-help.index', 'account-help.show'];
 
     private const WRITE = ['documents.store', 'documents.links', 'documents.destroy',
@@ -29,6 +29,7 @@ class EnforceSelfServiceTrial
         'field-service.jobs.store', 'field-service.jobs.update', 'field-service.jobs.details.update',
         'managed-website.create', 'managed-website.setup.save', 'managed-website.themes.apply',
         'managed-website.editor.theme.save', 'managed-website.editor.save', 'managed-website.media.store',
+        'managed-website.history.page.restore', 'managed-website.history.site.restore',
         'managed-website.pages.store', 'managed-website.pages.update', 'managed-website.pages.reorder', 'managed-website.pages.destroy'];
 
     public function __construct(private readonly SelfServiceTrialService $trials, private readonly SelfServicePurchaseEligibility $purchases) {}

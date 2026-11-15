@@ -2,6 +2,17 @@
 
 use App\Support\Tenancy\TenantModuleActionPresenter;
 
+test('private trial module presentation describes admitted work without inventing an activation link', function () {
+    $presented = TenantModuleActionPresenter::present(['module_key' => 'documents', 'label' => 'Documents',
+        'enabled' => true, 'has_access' => true, 'ui_state' => 'active', 'reason' => 'private_trial', 'cta' => 'open']);
+
+    expect($presented['reason_label'])->toBe('Private trial')
+        ->and($presented['cta_label'])->toBe('Open')
+        ->and($presented['cta_target'])->toBe('module')
+        ->and($presented['cta_href'])->toBeNull()
+        ->and($presented['self_serve_eligible'])->toBeFalse();
+});
+
 test('tenant module action presenter maps locked add-on modules to add-module CTA state', function () {
     $presented = TenantModuleActionPresenter::present([
         'module_key' => 'sms',

@@ -58,6 +58,7 @@ test('a verified public buyer purchases once and publishes a general website wit
     $privateSite = TenantSite::query()->where('tenant_id', $tenant->id)->firstOrFail();
     $privateHome = $privateSite->pages()->where('slug', '/')->firstOrFail();
     $this->putJson(route('managed-website.editor.save', ['page' => $privateHome->id, 'tenant' => $tenant->slug]), [
+        'current_version_id' => $privateHome->draft_version_id,
         'title' => 'Trial work survives upgrade', 'blocks' => [['type' => 'hero', 'heading' => 'Trial work survives upgrade']], 'seo' => [],
     ])->assertOk();
     $privateDraftId = $privateHome->refresh()->draft_version_id;

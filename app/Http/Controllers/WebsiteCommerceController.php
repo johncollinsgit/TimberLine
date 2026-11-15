@@ -508,9 +508,10 @@ class WebsiteCommerceController extends Controller
     public function shop(Request $request, ManagedWebsiteService $websites): View
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
-        $isSawyer = data_get($site->settings, 'theme_key') === 'sawyer-naturals';
+        $publicSettings = $site->publishedSiteVersion?->settings ?? $site->settings;
+        $isSawyer = data_get($publicSettings, 'theme_key') === 'sawyer-naturals';
         $products = WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('status', 'active')
-            ->when(data_get($site->settings, 'domain_choice') === 'everbranch_subdomain', fn ($query) => $query->where('product_type', 'quote'))
+            ->when(data_get($publicSettings, 'domain_choice') === 'everbranch_subdomain', fn ($query) => $query->where('product_type', 'quote'))
             ->with('variants')->get();
         if ($isSawyer) {
             $category = (string) $request->query('category', 'all');
@@ -525,8 +526,9 @@ class WebsiteCommerceController extends Controller
     public function showProduct(Request $request, string $handle, ManagedWebsiteService $websites): View
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
+        $publicSettings = $site->publishedSiteVersion?->settings ?? $site->settings;
         $product = WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('handle', $handle)->where('status', 'active')
-            ->when(data_get($site->settings, 'domain_choice') === 'everbranch_subdomain', fn ($query) => $query->where('product_type', 'quote'))
+            ->when(data_get($publicSettings, 'domain_choice') === 'everbranch_subdomain', fn ($query) => $query->where('product_type', 'quote'))
             ->with('variants')->firstOrFail();
 
         return view('managed-website.product', compact('tenant', 'site', 'product'));
