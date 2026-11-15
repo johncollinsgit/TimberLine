@@ -345,3 +345,170 @@ test('warm reads reuse only financial content digests while source admission and
     expect($queries->filter(fn ($query) => str_contains($query['query'], 'raw_payload')))->toBeEmpty()
         ->and($queries->filter(fn ($query) => str_contains($query['query'], 'team_provider_connections')))->toHaveCount(2);
 });
+
+function scopedPerformanceAccess(?Closure $afterRecord = null): \App\Services\Team\Operations\OperationsAccess
+{
+    return new class($afterRecord) extends \App\Services\Team\Operations\OperationsAccess
+    {
+        public array $admitted = [];
+
+        public array $inventoryModes = [];
+
+        public function __construct(private ?Closure $afterRecord) {}
+
+        public function record(\App\Models\Tenant $tenant, \App\Models\User $user, TeamOperationRecord $record, bool $write = false): void
+        {
+            parent::record($tenant, $user, $record, $write);
+            $this->admitted[] = $record->id;
+            if ($this->afterRecord !== null) {
+                ($this->afterRecord)($tenant, $user, $record);
+            }
+        }
+
+        public function readCollection(\App\Models\Tenant $tenant, \App\Models\User $user, \App\Models\TeamArea $area, callable $read, bool $collectionAsana = false): mixed
+        {
+            $this->inventoryModes[] = $collectionAsana;
+
+            return parent::readCollection($tenant, $user, $area, $read, $collectionAsana);
+        }
+    };
+}
+
+function scopedPerformanceCustomers($test, array $events): MarketingProfile
+{
+    $profile = MarketingProfile::create(['tenant_id' => $test->tenant->id, 'first_name' => 'Target buyer']);
+    $ids = [];
+    $journey = [];
+    foreach ($events as $index => $event) {
+        $ids[$event->id] = 100 + $index;
+        $journey[] = ['purchase_id' => 'cohort-'.$index, 'confirmed_purchase' => true,
+            'purchase_event' => ['event' => ['id' => 100 + $index]], 'currency' => 'usd',
+            'amount_minor' => 1070, 'refunded_minor' => 0, 'occurred_at' => '2025-11-07T15:00:00Z'];
+    }
+    $commerce = Mockery::mock(EventCommerceReport::class);
+    $commerce->shouldReceive('commerceId')->andReturnUsing(fn ($event) => $ids[$event->id]);
+    app()->instance(EventCommerceReport::class, $commerce);
+    $cohort = Mockery::mock(EventCustomerCohort::class);
+    $cohort->shouldReceive('read')->andReturn(['profile_ids' => [$profile->id], 'relations' => [], 'review_items' => []]);
+    app()->instance(EventCustomerCohort::class, $cohort);
+    $values = Mockery::mock(CustomerEventValueService::class);
+    $values->shouldReceive('forProfile')->andReturn(['purchase_journey' => $journey]);
+    app()->instance(CustomerEventValueService::class, $values);
+
+    return $profile;
+}
+
+function scopedPerformanceAsana($test, TeamOperationRecord $event, ?Closure $taskResponse = null): \App\Models\TeamProviderConnection
+{
+    $connection = \App\Models\TeamProviderConnection::create(['id' => (string) Str::uuid(), 'tenant_id' => $test->tenant->id,
+        'area_id' => $test->area->id, 'user_id' => $test->owner->id, 'provider' => 'asana', 'account_key' => hash('sha256', Str::uuid()),
+        'status' => 'connected', 'generation' => 1, 'expires_at' => now()->addHour(), 'credentials' => ['access_token' => 'fictional'],
+        'settings' => ['source' => ['asana_workspace' => '100', 'asana_project' => '200']]]);
+    $event->update(['connection_id' => $connection->id, 'data' => ['_generation' => 1, 'source_workspace' => '100', 'source_project' => '200', 'source_id' => '300']]);
+    $task = ['gid' => '300', 'workspace' => ['gid' => '100'], 'memberships' => [['project' => ['gid' => '200']]]];
+    Http::fake(['*projects/200/tasks*' => Http::response(['data' => [$task], 'next_page' => null]),
+        '*tasks/300*' => fn () => $taskResponse !== null ? $taskResponse($task) : Http::response(['data' => $task])]);
+
+    return $connection;
+}
+
+test('one filtered event freshly admits its own source rather than unrelated retained events', function () {
+    $selected = performanceEvent($this, 'Selected fair');
+    $outside = performanceEvent($this, 'Unrelated retained fair', '2024-11-07');
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    $outside->update(['status' => 'withdrawn']);
+    $access = scopedPerformanceAccess();
+    app()->instance(\App\Services\Team\Operations\OperationsAccess::class, $access);
+    $this->actingAs($this->owner)->getJson($this->url.'&event_id='.$selected->id)->assertOk()
+        ->assertJsonPath('summary.event_count', 1)->assertJsonPath('summary.net_sales_minor', 6000);
+    expect($access->admitted)->toBe([$selected->id])->and($access->inventoryModes)->toBe([false]);
+});
+
+test('pagination freshly admits all summary contributors including off-page events', function () {
+    $events = collect(range(1, 53))->map(fn ($n) => performanceEvent($this, 'In-period fair '.$n));
+    performanceEvent($this, 'Outside the date filter', '2024-11-07');
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    $access = scopedPerformanceAccess();
+    app()->instance(\App\Services\Team\Operations\OperationsAccess::class, $access);
+    $this->actingAs($this->owner)->getJson($this->url.'&page=2')->assertOk()->assertJsonCount(3, 'rows')
+        ->assertJsonPath('summary.event_count', 53)->assertJsonPath('summary.net_sales_minor', 318000);
+    expect(collect($access->admitted)->sort()->values()->all())->toBe($events->pluck('id')->sort()->values()->all())
+        ->and($access->inventoryModes)->toBe([true]);
+});
+
+test('fresh exact task admission is repeated on the next small-cohort request and revocation clears data', function () {
+    $event = performanceEvent($this);
+    $reads = 0;
+    scopedPerformanceAsana($this, $event, function ($task) use (&$reads) {
+        return ++$reads === 1 ? Http::response(['data' => $task]) : Http::response([], 403);
+    });
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    $this->actingAs($this->owner)->getJson($this->url.'&event_id='.$event->id)->assertOk();
+    $this->getJson($this->url.'&event_id='.$event->id)->assertForbidden()->assertDontSee('Fictional fair');
+    expect($reads)->toBe(2);
+    Http::assertSentCount(3);
+});
+
+test('operator-only contributions are admitted when historical staff and current operator labels differ', function () {
+    $visible = performanceEvent($this, 'First event', changes: ['staff' => [['id' => 'user:1', 'name' => 'Visible person']],
+        'operators' => [['user_id' => '1', 'name' => 'Visible person', 'sale_count' => 1, 'net_sales_minor' => 2000, 'known_net_sales_minor' => 2000, 'complete' => true]]]);
+    $operatorOnly = performanceEvent($this, 'Historical event', changes: ['staff' => [['id' => 'user:1', 'name' => 'Historical label']],
+        'operators' => [['user_id' => '1', 'name' => 'Visible person', 'sale_count' => 1, 'net_sales_minor' => 1000, 'known_net_sales_minor' => 1000, 'complete' => true]]]);
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    $access = scopedPerformanceAccess();
+    app()->instance(\App\Services\Team\Operations\OperationsAccess::class, $access);
+    $url = $this->url.'&group_by=team_member&q=Visible';
+    $this->actingAs($this->owner)->getJson($url)->assertOk()->assertJsonPath('rows.0.direct_net_sales_minor', 3000);
+    expect(collect($access->admitted)->sort()->values()->all())->toBe(collect([$visible->id, $operatorOnly->id])->sort()->values()->all());
+    $operatorOnly->update(['status' => 'withdrawn']);
+    $this->getJson($url)->assertConflict()->assertDontSee('Visible person');
+});
+
+test('customer-total contributors are admitted even when their event titles do not match the row search', function () {
+    $selected = performanceEvent($this, 'Target fair');
+    $customerTotal = performanceEvent($this, 'Another fair');
+    scopedPerformanceCustomers($this, [$selected, $customerTotal]);
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    $access = scopedPerformanceAccess();
+    app()->instance(\App\Services\Team\Operations\OperationsAccess::class, $access);
+    $this->actingAs($this->owner)->getJson($this->url.'&q=Target')->assertOk()->assertJsonPath('summary.event_count', 1)
+        ->assertJsonPath('summary.customer_purchase_count', 2);
+    expect(collect($access->admitted)->sort()->values()->all())->toBe(collect([$selected->id, $customerTotal->id])->sort()->values()->all());
+    $customerTotal->update(['status' => 'withdrawn']);
+    $this->getJson($this->url.'&q=Target')->assertConflict();
+});
+
+test('a same-request canonical association change during source admission cannot return old customer facts', function () {
+    $event = performanceEvent($this);
+    $profile = scopedPerformanceCustomers($this, [$event]);
+    $replacement = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Replacement buyer']);
+    $link = MarketingProfileLink::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $profile->id,
+        'source_type' => 'square_order', 'source_id' => 'original-cohort-order', 'source_meta' => []]);
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    $access = scopedPerformanceAccess(fn () => $link->update(['marketing_profile_id' => $replacement->id]));
+    app()->instance(\App\Services\Team\Operations\OperationsAccess::class, $access);
+    $this->actingAs($this->owner)->getJson($this->url.'&group_by=customer')->assertConflict()->assertDontSee('Target buyer');
+});
+
+test('withdrawal or membership loss during admission fails before private rows are returned', function (string $change, int $status) {
+    $event = performanceEvent($this);
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    $access = scopedPerformanceAccess(function ($tenant, $user, $record) use ($change) {
+        if ($change === 'withdrawal') {
+            $record->update(['status' => 'withdrawn']);
+        } else {
+            $tenant->users()->updateExistingPivot($user->id, ['membership_active' => false]);
+        }
+    });
+    app()->instance(\App\Services\Team\Operations\OperationsAccess::class, $access);
+    $this->actingAs($this->owner)->getJson($this->url.'&event_id='.$event->id)->assertStatus($status)->assertDontSee('Fictional fair');
+})->with([['withdrawal', 409], ['membership', 403]]);
+
+test('same-generation source selection changes during exact admission are detected despite hidden model settings', function () {
+    $event = performanceEvent($this);
+    $connection = scopedPerformanceAsana($this, $event);
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    $access = scopedPerformanceAccess(fn () => $connection->update(['settings' => ['source' => ['asana_workspace' => '100', 'asana_project' => '999']]]));
+    app()->instance(\App\Services\Team\Operations\OperationsAccess::class, $access);
+    $this->actingAs($this->owner)->getJson($this->url.'&event_id='.$event->id)->assertConflict()->assertDontSee('Fictional fair');
+});

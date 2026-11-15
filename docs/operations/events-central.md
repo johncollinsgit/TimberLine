@@ -74,6 +74,16 @@ allocations and original receipt ancestry. Unrelated historical imports must not
 restart a coherent event report. If customer identities change during a build,
 publish unchanged event totals while withholding customer facts until their next
 verified generation. Source admission and customer identity checks remain fresh.
+Filtered reads admit the full set of events contributing rows, off-page totals,
+customer totals and original operator metrics. Small selections use fresh exact
+source checks; broader cohorts use fresh project inventories. Final membership,
+source and customer-identity checks run after provider requests and before the
+response. This is not a shared authorization cache.
+
+Pay's current Sales summary reuses the same register/event/source gates and
+confirmed-sales reader without rebuilding unused budget and history details.
+Teams' full event report retains those details. A blank reviewed workbook total
+stays unknown without being mislabeled as a changed source row.
 
 The first permitted comparison requests an issuer-scoped snapshot. The existing
 scheduler queues `team:refresh-event-performance` and drains the dedicated

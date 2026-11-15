@@ -277,9 +277,15 @@ class EventSalesHistory
             if (($source['treatment'] ?? 'add') !== 'add') {
                 continue;
             }
-            if (! $record || ! $this->access->exported($record, $link) || ($source['version'] ?? null) !== $record->version || ! is_int($record->data['net_sales_cents'] ?? null)) {
+            if (! $record || ! $this->access->exported($record, $link) || ($source['version'] ?? null) !== $record->version) {
                 $known = false;
                 $issues[] = 'A reported sales row changed after mapping review.';
+
+                continue;
+            }
+            if (! is_int($record->data['net_sales_cents'] ?? null)) {
+                $known = false;
+                $issues[] = 'A reviewed workbook row has no reported sales total yet.';
 
                 continue;
             }

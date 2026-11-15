@@ -74,6 +74,21 @@ test('sales history uses verified inactive location windows and merchandise net 
     expect(json_encode($report))->not->toContain('payroll_cents')->not->toContain('private');
 });
 
+test('a blank reviewed workbook total remains unknown without falsely reporting a source change', function () {
+    $series = salesHistoryRecord($this, 'series');
+    $event = salesHistoryRecord($this, 'event');
+    $finance = salesHistoryRecord($this, 'financial', ['data' => ['net_sales_cents' => null]]);
+    salesHistoryOrder($this, '2025-11-01', 1000);
+    salesHistoryMap($this, $event, $series, ['financial_id' => $finance->id]);
+    $current = app(EventSalesHistory::class)->read($this->tenant, $this->owner, $event)['current'];
+    expect($current['reported_net_sales_minor'])->toBeNull()->and($current['known_net_sales_minor'])->toBe(1000)
+        ->and($current['review_items'])->toContain('A reviewed workbook row has no reported sales total yet.')
+        ->not->toContain('A reported sales row changed after mapping review.');
+    $finance->update(['version' => 2, 'data' => ['net_sales_cents' => 1200]]);
+    expect(app(EventSalesHistory::class)->read($this->tenant, $this->owner, $event)['current']['review_items'])
+        ->toContain('A reported sales row changed after mapping review.');
+});
+
 test('assigned staff see narrow exports while unassigned and foreign actors cannot see event history', function () {
     $member = teamMember($this->tenant, 'member');
     DB::table('team_area_members')->insert(['id' => Str::uuid(), 'tenant_id' => $this->tenant->id, 'area_id' => $this->area->id, 'user_id' => $member->id, 'role' => 'editor']);

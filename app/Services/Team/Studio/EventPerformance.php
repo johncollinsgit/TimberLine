@@ -64,12 +64,12 @@ class EventPerformance
 
             return $result;
         }
-        $this->admitSources($tenant, $user, $area, $data);
         // A changed canonical directory invalidates customer dimensions immediately, before refresh.
         // Event totals may still be shown explicitly as stale; private former aliases are withheld.
         if ($customers && (! ($data['customer_access'] ?? false) || ($data['customer_signature'] ?? '') !== $this->customerSignature($tenant))) {
             $customers = false;
             if ($filters['group_by'] === 'customer' || isset($filters['customer_id'])) {
+                $this->assertSourceContext($tenant, $data);
                 $result['status'] = 'preparing';
                 $result['review_items'][] = 'Customer identities changed. Preparing the current customer comparison.';
 
@@ -86,13 +86,29 @@ class EventPerformance
         if ($kind === 'day') {
             $base = $this->weekendQuery(clone $matching, $filters);
         }
+        $customerFacts = $customers ? $this->filtered($tenant, $area, $generation, $filters, 'customer') : null;
+        if ($customerFacts !== null && $kind === 'day') {
+            $customerFacts = $this->weekendQuery($customerFacts, $filters);
+        }
+        // Authorize the full contributing cohort before reading any totals or labels.
+        // Pagination never narrows admission: later pages contribute to the summary.
+        $matchingSources = $kind === 'day' ? $this->weekendQuery(clone $matching, $filters) : clone $matching;
+        $operatorFacts = $kind === 'team_member' ? $this->filtered($tenant, $area, $generation, $filters, 'operator')
+            ->whereIn('group_key', (clone $matching)->select('group_key')) : null;
+        $sourceQueries = [$matchingSources, $base];
+        if ($operatorFacts !== null) {
+            $sourceQueries[] = $operatorFacts;
+        }
+        if ($customerFacts !== null) {
+            $sourceQueries[] = $customerFacts;
+        }
+        $admission = $this->admitSources($tenant, $user, $area, $data, $this->contributingEventIds($sourceQueries));
+        if ($customerFacts !== null) {
+            $this->assertCustomerAdmission($tenant, $user, $area, $data);
+        }
         $summary = (clone $base)->selectRaw('COUNT(DISTINCT event_id) as event_count, COALESCE(SUM(sale_count),0) as sale_count, SUM(net_sales_minor) as net_sales_minor, COALESCE(SUM(known_net_sales_minor),0) as known_net_sales_minor, COALESCE(SUM(selling_days),0) as selling_days, MIN(complete) as complete')->first();
         $result['summary'] = $this->summary($summary);
-        if ($customers) {
-            $customerFacts = $this->filtered($tenant, $area, $generation, $filters, 'customer');
-            if ($kind === 'day') {
-                $customerFacts = $this->weekendQuery($customerFacts, $filters);
-            }
+        if ($customerFacts !== null) {
             $customerTotals = (clone $customerFacts)->selectRaw('COUNT(DISTINCT customer_id) as customer_count, COALESCE(SUM(sale_count),0) as purchase_count, CASE WHEN COUNT(paid_total_minor) = COUNT(*) THEN SUM(paid_total_minor) ELSE NULL END as paid_total_minor')->first();
             $result['summary']['customer_count'] = (int) $customerTotals->customer_count;
             $result['summary']['customer_purchase_count'] = (int) $customerTotals->purchase_count;
@@ -128,7 +144,7 @@ class EventPerformance
             $metrics = $this->summary($row);
             $direct = ['direct_net_sales_minor' => null, 'direct_known_net_sales_minor' => 0, 'direct_sale_count' => 0, 'direct_complete' => false];
             if ($kind === 'team_member') {
-                $operator = $this->filtered($tenant, $area, $generation, $filters, 'operator')->where('group_key', $row->dimension_key)
+                $operator = (clone $operatorFacts)->where('group_key', $row->dimension_key)
                     ->selectRaw('COUNT(*) as n, SUM(net_sales_minor) as net_sales_minor, SUM(known_net_sales_minor) as known_net_sales_minor, SUM(sale_count) as sale_count, MIN(complete) as complete')->first();
                 if ($operator->n > 0) {
                     $direct = ['direct_net_sales_minor' => $operator->complete ? (int) $operator->net_sales_minor : null,
@@ -144,6 +160,10 @@ class EventPerformance
                 ...$direct];
         }
         $result['has_more'] = $result['total_rows'] > $filters['page'] * 50;
+        $this->finishAdmission($tenant, $user, $area, $data, $admission);
+        if ($customerFacts !== null) {
+            $this->assertCustomerAdmission($tenant, $user, $area, $data);
+        }
 
         return $result;
     }
@@ -331,21 +351,90 @@ class EventPerformance
         return $this->access->mayWrite($tenant, $user, $area->id) && app(TenantModuleAccessResolver::class)->canAccess($tenant->id, 'customers');
     }
 
-    private function admitSources(Tenant $tenant, User $user, TeamArea $area, array $snapshot): void
+    /** Union every source affecting rows, financial totals or customer totals. */
+    private function contributingEventIds(array $queries): array
+    {
+        $sources = null;
+        foreach ($queries as $query) {
+            $ids = (clone $query)->reorder()->select('event_id')->distinct();
+            $sources = $sources === null ? $ids : $sources->union($ids);
+        }
+
+        return $sources === null ? [] : DB::query()->fromSub($sources, 'contributing_events')->distinct()->orderBy('event_id')->pluck('event_id')->all();
+    }
+
+    private function assertSourceContext(Tenant $tenant, array $snapshot): void
     {
         abort_unless(hash_equals((string) ($snapshot['runtime'] ?? ''), (string) config('pos_live.runtime_id', '')), 409);
         abort_unless(hash_equals((string) ($snapshot['square_context_signature'] ?? ''), $this->squareContextSignature($tenant)), 409, 'Original Square access changed. Refresh the report after reviewing its source connection.');
         foreach ($snapshot['square_bindings'] ?? [] as $binding) {
             app(\App\Services\Marketing\SquareConnectionContext::class)->assertCurrent($tenant->id, $binding);
         }
+    }
+
+    private function connectionRevision(Tenant $tenant, TeamArea $area): string
+    {
+        $rows = \App\Models\TeamProviderConnection::where(['tenant_id' => $tenant->id, 'area_id' => $area->id])->orderBy('id')
+            ->get(['id', 'user_id', 'provider', 'generation', 'status', 'settings'])->map(fn ($connection) => [
+                'id' => $connection->id, 'user_id' => $connection->user_id, 'provider' => $connection->provider,
+                'generation' => $connection->generation, 'status' => $connection->status, 'settings' => $connection->settings,
+            ])->all();
+
+        return hash('sha256', json_encode($rows, JSON_THROW_ON_ERROR));
+    }
+
+    private function eventRevisions(iterable $events): array
+    {
+        $revisions = [];
+        foreach ($events as $event) {
+            $revisions[(string) $event->id] = [$event->kind, $event->version, $event->status, $event->assigned_user_id, $event->connection_id];
+        }
+        ksort($revisions);
+
+        return $revisions;
+    }
+
+    /** A checkpoint exists only in this request; it is not a reusable access grant. */
+    private function admitSources(Tenant $tenant, User $user, TeamArea $area, array $snapshot, ?array $eventIds = null): array
+    {
+        $this->assertSourceContext($tenant, $snapshot);
         $versions = $snapshot['source_versions'] ?? [];
-        $events = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id])->whereIn('id', array_keys($versions))->where('status', '!=', 'withdrawn')->get();
-        abort_unless($events->count() === count($versions), 409, 'Event sources changed. Refresh the comparison.');
-        $this->access->readCollection($tenant, $user, $area, function () use ($tenant, $user, $events): void {
+        $ids = $eventIds === null ? array_keys($versions) : array_values(array_unique($eventIds));
+        abort_unless(count(array_diff($ids, array_keys($versions))) === 0, 409, 'Report sources changed. Refresh the comparison.');
+        $events = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id])->whereIn('id', $ids)->where('status', '!=', 'withdrawn')->get();
+        abort_unless($events->count() === count($ids), 409, 'Event sources changed. Refresh the comparison.');
+        $checkpoint = ['events' => $this->eventRevisions($events), 'connections' => $this->connectionRevision($tenant, $area)];
+        // A few exact task reads avoid loading an entire project for one event.
+        // Broad cohorts still verify a fresh project inventory, including off-page sources.
+        $available = $this->access->readCollection($tenant, $user, $area, function () use ($tenant, $user, $events): bool {
             foreach ($events as $event) {
                 $this->access->record($tenant, $user, $event);
             }
-        }, true);
+
+            return $this->access->collectionSourcesAvailable();
+        }, count($ids) > 8);
+        $this->finishAdmission($tenant, $user, $area, $snapshot, $checkpoint);
+        abort_unless($available, 503, 'Event sources could not be checked. Try again.');
+
+        return $checkpoint;
+    }
+
+    private function assertCustomerAdmission(Tenant $tenant, User $user, TeamArea $area, array $snapshot): void
+    {
+        abort_unless($this->mayReadCustomers($tenant, $user, $area)
+            && ($snapshot['customer_access'] ?? false)
+            && hash_equals((string) ($snapshot['customer_signature'] ?? ''), $this->customerSignature($tenant)),
+            409, 'Customer identities or access changed while reporting was read.');
+    }
+
+    private function finishAdmission(Tenant $tenant, User $user, TeamArea $area, array $snapshot, array $checkpoint): void
+    {
+        $this->authorize($tenant, $user, $area);
+        $this->assertSourceContext($tenant, $snapshot);
+        abort_unless(hash_equals($checkpoint['connections'], $this->connectionRevision($tenant, $area)), 409, 'Source access changed while reporting was read.');
+        $events = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id])->whereIn('id', array_keys($checkpoint['events']))
+            ->where('status', '!=', 'withdrawn')->get(['id', 'kind', 'version', 'status', 'assigned_user_id', 'connection_id']);
+        abort_unless($checkpoint['events'] === $this->eventRevisions($events), 409, 'Event sources changed while reporting was read.');
     }
 
     private function snapshot(Tenant $tenant, User $user, TeamArea $area): ?TeamOperationRecord
