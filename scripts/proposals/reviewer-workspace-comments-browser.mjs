@@ -26,6 +26,7 @@ const env={PATH:process.env.PATH,APP_ENV:'testing',ENTERPRISE_RUNTIME_ROOT:runti
 const fixture=(...args)=>{const result=spawnSync(php,['tests/Support/proposal-reviewer-workspace-comments-browser-fixture.php',...args],{env,encoding:'utf8',windowsHide:true});assert.equal(result.status,0,result.stdout+result.stderr);try{return JSON.parse(result.stdout);}catch{throw Error('Fictional local fixture did not return JSON: '+result.stdout.slice(0,4000));}};
 let server,proxy,browser,serverLog='',currentPage,serial=Promise.resolve(),lastDispatch=0;
 const external=[],errors=[],results=[],posts=[],blockers=[],responses=[],commentRequests=[],commentResponses=[];
+const startup=[];
 const record=value=>{results.push(value);console.log(JSON.stringify({progress:value.scenario,status:value.status}));};
 try{
  const seed=fixture('seed');assert.equal(seed.seed_projects,20);
@@ -51,16 +52,28 @@ try{
   const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:1000}});
   await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==origin){external.push(new URL(route.request().url()).origin);return route.abort();}return route.continue();});
   const page=await context.newPage();currentPage=page;const item={context,page,projection:null};clients.push(item);
+  const access={client:clients.length,phase:'proposal_gate',unlock_request_seen:false,unlock_status:null,unlocked_ui:false};startup.push(access);
+  const proposalPath=`/enterprise-owner/service-proposals/${seed.token}`,unlockPath=proposalPath+'/unlock';
+  page.on('request',request=>{const url=new URL(request.url());if(url.origin===origin&&url.pathname===unlockPath&&request.method()==='POST')access.unlock_request_seen=true;});
+  page.on('response',response=>{const url=new URL(response.url());if(url.origin===origin&&url.pathname===unlockPath&&response.request().method()==='POST')access.unlock_status=response.status();});
   page.on('pageerror',error=>errors.push(error.message));
   page.on('response',async response=>{if(response.url().endsWith('/collaboration/comment')){try{commentResponses.push({status:response.status(),body:await response.json()});}catch{commentResponses.push({status:response.status(),json:false});}}if(response.request().method()==='POST'&&response.url().endsWith('/workspace/commands')){try{const body=await response.json();responses.push({status:response.status(),keys:Object.keys(body),error:body.error||null,receipt:body.receipt||null,selection:body.projection?.selection||null});}catch{responses.push({status:response.status(),json:false});}}});
   page.on('request',request=>{if(request.method()==='POST'&&new URL(request.url()).pathname.includes('/workspace/')){const body=request.postDataJSON();if(request.url().endsWith('/collaboration/comment'))commentRequests.push({url:request.url(),body,csrf:request.headers()['x-csrf-token']});posts.push({action:new URL(request.url()).pathname.split('/').at(-1),request_id:body?.request_id||null});if(request.url().endsWith('/projection'))item.projection={url:request.url(),body,csrf:request.headers()['x-csrf-token']};}});
   await page.goto(`${origin}/enterprise-owner/service-proposals/${seed.token}`);
-  await page.getByLabel('Proposal password').fill(seed.password);await page.getByRole('button',{name:'Open proposal',exact:true}).click();
+  await page.getByLabel('Proposal password').fill(seed.password);
+  access.phase='unlock';const unlockDeadline=performance.now()+30000,remainingUnlock=()=>Math.max(1,Math.floor(unlockDeadline-performance.now()));
+  const unlocked=page.waitForResponse(response=>{const url=new URL(response.url());return url.origin===origin&&url.pathname===unlockPath&&response.request().method()==='POST';},{timeout:remainingUnlock()});
+  await page.getByRole('button',{name:'Open proposal',exact:true}).click({timeout:remainingUnlock()});
+  const unlockedResponse=await unlocked;assert.equal(unlockedResponse.status(),302,'The actual password unlock must complete successfully');
+  const unlockedDestination=new URL(unlockedResponse.headers().location||'',origin);assert.ok(unlockedDestination.origin===origin&&unlockedDestination.pathname===proposalPath,'Unlock must return to this proposal');
+  access.phase='unlocked_server_ui';await page.locator('.proposal-hero').waitFor({state:'visible',timeout:remainingUnlock()});
+  assert.equal(await page.getByLabel('Proposal password').count(),0,'The server must render the unlocked recipient before campus navigation');access.unlocked_ui=true;
+  access.phase='campus_navigation';
   await page.goto(`${origin}/enterprise-owner/service-proposals/${seed.token}/campus/requests`);
   await page.locator('#create-request').waitFor({state:'visible'});await page.waitForFunction(()=>!document.getElementById('status')?.textContent.includes('Loading'));
   try{assert.equal(await page.getByText('Shared fictional work is saved on the server.',{exact:false}).count(),1);}catch{blockers.push({scenario:'truthful_shared_ribbon',actual:await page.locator('.reviewer-boundary').innerText(),expected:'Shared fictional work is saved on the server.'});}
   assert.equal(await page.locator('#reviewer-reset-open').isVisible(),false);
-  assert.ok(item.projection,'Real server projection request must be observed');return item;
+  assert.ok(item.projection,'Real server projection request must be observed');access.phase='campus_ready';return item;
  }
  const one=await client(),two=await client();
  assert.notDeepEqual(await one.context.cookies(),await two.context.cookies());
@@ -296,7 +309,7 @@ try{
 }catch(error){
  let state=null;try{const value=fixture('inspect');state={revision:value.revision,ledger_rows:value.ledger_rows,projects:value.graph.projects.length,tickets:value.graph.tickets.filter(row=>row.title==='FICTIONAL browser ticket '+engine).map(row=>({id:row.id,title:row.title,status:row.status,task_id:row.task_id}))};}catch{}
  await currentPage?.screenshot({path:resolve(evidence,'failure.png'),fullPage:true}).catch(()=>{});
- await writeFile(resolve(evidence,'result.json'),JSON.stringify({engine,status:'failed',results,posts,responses,state,errors,external,blockers,message:error.message,ui_status:await currentPage?.locator('#status').innerText().catch(()=>null),ribbon:await currentPage?.locator('.reviewer-boundary').innerText().catch(()=>null)},null,2));
+ await writeFile(resolve(evidence,'result.json'),JSON.stringify({engine,status:'failed',startup,results,posts,responses,state,errors,external,blockers,message:error.message,ui_status:await currentPage?.locator('#status').innerText().catch(()=>null),ribbon:await currentPage?.locator('.reviewer-boundary').innerText().catch(()=>null)},null,2));
  throw error;
  }finally{
  try{await browser?.close();}
