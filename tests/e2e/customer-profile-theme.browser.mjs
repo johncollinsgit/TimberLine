@@ -76,8 +76,13 @@ try {
     await page.getByRole('textbox', { name: /email/i }).fill('customer-profile@example.test');
     await page.getByLabel('Password', { exact: true }).fill('Fictional-profile-2026!');
     phase.step = 'login-submit';
-    await page.getByRole('button', { name: /log in|sign in/i }).click();
+    await Promise.all([
+      page.waitForURL(url => url.origin === origin && url.pathname === '/dashboard', { waitUntil: 'domcontentloaded' }),
+      page.getByRole('button', { name: /log in|sign in/i }).click(),
+    ]);
     await page.waitForLoadState('networkidle');
+    await page.locator('#app-main').waitFor();
+    assert.equal(await page.locator('form input[type="password"]').count(), 0, `${name}: fixture login must complete before customer navigation`);
     loginOutcomes.push({ engine: name, settled_url: safeUrl(page.url()), ...await pageState(page), navigation: [...navigation] });
     await writeFile(join(evidence, 'login-outcomes.json'), JSON.stringify(loginOutcomes, null, 2));
     for (const theme of ['light', 'dark']) for (const width of [1440, 390]) {
