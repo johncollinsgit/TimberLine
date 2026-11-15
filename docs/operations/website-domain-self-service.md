@@ -147,6 +147,21 @@ hostname/certificate, rendering on HTTPS, form/CSRF isolation and rollback.
 
 ## Acceptance
 
+The Website editor serializes page and design saves and drains newer edits
+before reporting Saved. Preview, Publish, the page picker and Back wait for the
+latest draft and any pending image upload; a failed save keeps changes in the
+editor and blocks that action until Save succeeds. Browser refresh/close warns
+when changes or an upload remain. Uploads apply the returned image URL and
+description together to the original section without replacing newer copy.
+The ordinary customer rollback action honors the publishing freeze and leaves
+the current immutable published snapshot unchanged while frozen.
+
+Run `node --test tests/e2e/website-editor-save-recovery.test.mjs` after building
+the frontend. It runs the actual built editor against a fictional loopback
+HTTP server with delayed writes, network failure, navigation and image upload.
+This verifies client save behavior; it does not establish production provider
+or custom-domain readiness.
+
 Included Everbranch addresses render published child pages through the final
 Website fallback as well as Home. Both included addresses and active custom
 domains must pass the site's exact `publicHostAllowed` check; tenant resolution,

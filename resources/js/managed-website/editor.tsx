@@ -21,11 +21,10 @@ function newBlock(type: string): Block { return { id: crypto.randomUUID(), type,
 function asIndex(value: string | null | undefined): number | null { const index = Number(value); return Number.isInteger(index) && index >= 0 ? index : null; }
 
 function Editor({ root }: { root: HTMLElement }) {
-  const initial = parse<Page>(root.dataset.page, { id: 0, title: "", slug: "", blocks: [], seo: {} });
   const pages = parse<PageLink[]>(root.dataset.pages, []);
   const initialSite = parse<{ name: string; status: string; theme: Theme; navigation: NavigationItem[]; preview_url: string; preview_site_url: string }>(root.dataset.site, { name: "Website", status: "draft", theme: {}, navigation: [], preview_url: "", preview_site_url: "" });
   const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || "";
-  const [page, setPage] = useState<Page>(initial);
+  const [page, setPage] = useState<Page>(() => { const initial = parse<Page>(root.dataset.page, { id: 0, title: "", slug: "", blocks: [], seo: {} }); return { ...initial, blocks: initial.blocks.map((block) => ({ ...block, id: block.id || crypto.randomUUID(), items: block.items?.map((item) => ({ ...item, id: crypto.randomUUID() })) })) }; });
   const [site, setSite] = useState(initialSite);
   const [selected, setSelected] = useState(0);
   const [selectedItem, setSelectedItem] = useState<number | null>(null);
@@ -42,45 +41,142 @@ function Editor({ root }: { root: HTMLElement }) {
   const [future, setFuture] = useState<Page[]>([]);
   const [sectionLibraryOpen, setSectionLibraryOpen] = useState(false);
   const [sectionSearch, setSectionSearch] = useState("");
-  const pageDirty = useRef(false);
-  const themeDirty = useRef(false);
+  const pageRef = useRef(page);
+  const siteRef = useRef(site);
+  const pageRevision = useRef(0);
+  const savedPageRevision = useRef(0);
+  const themeRevision = useRef(0);
+  const savedThemeRevision = useRef(0);
+  const pageSave = useRef<Promise<boolean> | null>(null);
+  const themeSave = useRef<Promise<boolean> | null>(null);
+  const imageUpload = useRef<Promise<boolean> | null>(null);
+  const saveErrors = useRef<{ page?: string; theme?: string }>({});
+  const publishing = useRef(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const previewFrame = useRef<HTMLIFrameElement>(null);
   const selectedBlock = page.blocks[selected];
   const mediaByUrl = useMemo(() => new Map(media.map((item) => [item.url, item])), [media]);
 
   const selectBlock = (index: number, itemIndex: number | null = null, field: string | null = null) => { if (!page.blocks[index]) return; setMode("sections"); setSelected(index); setSelectedItem(itemIndex); setSelectedField(field); setSelectedThemeField(null); };
   const selectTheme = (target: ThemeTarget, navigationIndex: number | null = null, field: string | null = null) => { setMode("theme"); setThemeTarget(target); setSelectedNavigation(navigationIndex); setSelectedThemeField(field); setSelectedField(null); setSelectedItem(null); };
-  const commit = (next: Page) => { pageDirty.current = true; setHistory((items) => [...items.slice(-29), page]); setFuture([]); setPage(next); setSaveState("Unsaved changes"); };
-  const updateBlock = (key: string, value: string) => { if (!selectedBlock) return; commit({ ...page, blocks: page.blocks.map((block, index) => index === selected ? { ...block, [key]: value } : block) }); };
-  const updateItems = (items: Item[]) => { if (!selectedBlock) return; commit({ ...page, blocks: page.blocks.map((block, index) => index === selected ? { ...block, items } : block) }); };
-  const move = (from: number, to: number) => { if (from === to) return; const blocks = [...page.blocks]; const [block] = blocks.splice(from, 1); blocks.splice(to, 0, block); commit({ ...page, blocks }); selectBlock(to); };
-  const insertSection = (type: string) => { commit({ ...page, blocks: [...page.blocks, newBlock(type)] }); selectBlock(page.blocks.length); setSectionLibraryOpen(false); setSectionSearch(""); };
-  const savePage = async (): Promise<boolean> => {
-    if (!pageDirty.current) return true;
-    setSaveState("Saving page…");
-    const response = await fetch(root.dataset.saveUrl || "", { method: "PUT", headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRF-TOKEN": csrf }, body: JSON.stringify({ title: page.title, blocks: page.blocks, seo: page.seo }) });
-    if (!response.ok) { setSaveState("Could not save page"); return false; }
-    pageDirty.current = false; setSaveState("Saved"); setIframeKey((key) => key + 1); return true;
+  const hasChanges = () => pageRevision.current !== savedPageRevision.current || themeRevision.current !== savedThemeRevision.current;
+  const refreshSaveState = () => {
+    const error = saveErrors.current.page || saveErrors.current.theme;
+    setSaveState(error || (imageUpload.current ? "Uploading image…" : pageSave.current || themeSave.current ? "Saving…" : hasChanges() ? "Unsaved changes" : publishing.current ? "Publishing…" : "Saved"));
   };
-  const saveTheme = async (): Promise<boolean> => {
-    if (!themeDirty.current) return true;
-    setSaveState("Saving theme…");
-    const response = await fetch(root.dataset.themeSaveUrl || "", { method: "PUT", headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRF-TOKEN": csrf }, body: JSON.stringify({ settings: site.theme, navigation: site.navigation, seo: {} }) });
-    if (!response.ok) { setSaveState("Could not save theme"); return false; }
-    themeDirty.current = false; setSaveState("Saved"); setIframeKey((key) => key + 1); return true;
+  const commit = (next: Page) => { const current = pageRef.current; pageRef.current = next; pageRevision.current++; delete saveErrors.current.page; setHistory((items) => [...items.slice(-29), current]); setFuture([]); setPage(next); refreshSaveState(); };
+  const updateBlock = (key: string, value: string) => { const current = pageRef.current; if (!current.blocks[selected]) return; commit({ ...current, blocks: current.blocks.map((block, index) => index === selected ? { ...block, [key]: value } : block) }); };
+  const updateItems = (items: Item[]) => { const current = pageRef.current; if (!current.blocks[selected]) return; commit({ ...current, blocks: current.blocks.map((block, index) => index === selected ? { ...block, items: items.map((item) => ({ ...item, id: item.id || crypto.randomUUID() })) } : block) }); };
+  const move = (from: number, to: number) => { if (from === to) return; const current = pageRef.current; const blocks = [...current.blocks]; const [block] = blocks.splice(from, 1); blocks.splice(to, 0, block); commit({ ...current, blocks }); selectBlock(to); };
+  const insertSection = (type: string) => { const current = pageRef.current; commit({ ...current, blocks: [...current.blocks, newBlock(type)] }); setMode("sections"); setSelected(current.blocks.length); setSelectedItem(null); setSelectedField(null); setSectionLibraryOpen(false); setSectionSearch(""); };
+  const savePage = (): Promise<boolean> => {
+    if (pageSave.current) return pageSave.current;
+    if (pageRevision.current === savedPageRevision.current) return Promise.resolve(true);
+    delete saveErrors.current.page;
+    const pending = (async () => {
+      while (savedPageRevision.current !== pageRevision.current) {
+        const revision = pageRevision.current;
+        const current = pageRef.current;
+        try {
+          const response = await fetch(root.dataset.saveUrl || "", { method: "PUT", headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRF-TOKEN": csrf }, body: JSON.stringify({ title: current.title, blocks: current.blocks, seo: current.seo }) });
+          if (!response.ok) throw new Error("Page save failed");
+          const receipt = await response.json() as { saved_at?: unknown };
+          if (typeof receipt.saved_at !== "string" || !receipt.saved_at) throw new Error("Page save was not confirmed");
+          savedPageRevision.current = revision;
+          setIframeKey((key) => key + 1);
+        } catch { saveErrors.current.page = "Could not save page. Try Save again."; return false; }
+      }
+      return true;
+    })().finally(() => { pageSave.current = null; refreshSaveState(); });
+    pageSave.current = pending;
+    refreshSaveState();
+    return pending;
   };
-  const updateTheme = (next: Theme) => { themeDirty.current = true; setSite((current) => ({ ...current, theme: next })); setSaveState("Unsaved changes"); };
-  const updateNavigation = (next: NavigationItem[]) => { themeDirty.current = true; setSite((current) => ({ ...current, navigation: next })); setSaveState("Unsaved changes"); };
-  const saveAll = async (): Promise<boolean> => (await savePage()) && (await saveTheme());
-  const previewSite = async () => { const tab = window.open("about:blank", "_blank"); if (!await saveAll()) { tab?.close(); return; } if (!site.preview_site_url) { tab?.close(); return; } if (tab) { tab.opener = null; tab.location.replace(site.preview_site_url); } else window.open(site.preview_site_url, "_blank", "noopener,noreferrer"); };
-  const publish = async () => { if (root.dataset.publishingEnabled !== "true" || !await saveAll()) return; setSaveState("Publishing…"); const response = await fetch(root.dataset.publishUrl || "", { method: "POST", headers: { Accept: "application/json", "X-CSRF-TOKEN": csrf } }); setSaveState(response.ok ? "Published" : "Could not publish"); };
-  const loadMedia = async () => { const response = await fetch(root.dataset.mediaUrl || "", { headers: { Accept: "application/json" } }); if (response.ok) { const payload = await response.json() as { media: Media[] }; setMedia(payload.media); } };
-  const upload = async (event: ChangeEvent<HTMLInputElement>) => { const file = event.currentTarget.files?.[0]; if (!file) return; const data = new FormData(); data.append("image", file); data.append("alt_text", ""); setSaveState("Uploading image…"); const response = await fetch(root.dataset.mediaUploadUrl || "", { method: "POST", headers: { Accept: "application/json", "X-CSRF-TOKEN": csrf }, body: data }); if (response.ok) { const payload = await response.json() as { media: Media }; setMedia((items) => [payload.media, ...items]); if (selectedItem !== null && selectedField === "item_image" && selectedBlock) { updateItems((selectedBlock.items || []).map((item, index) => index === selectedItem ? { ...item, image_url: payload.media.url, image_alt: payload.media.alt_text || "" } : item)); } else { updateBlock("image_url", payload.media.url); updateBlock("image_alt", payload.media.alt_text || ""); } } else setSaveState("Could not upload image"); event.currentTarget.value = ""; };
+  const saveTheme = (): Promise<boolean> => {
+    if (themeSave.current) return themeSave.current;
+    if (themeRevision.current === savedThemeRevision.current) return Promise.resolve(true);
+    delete saveErrors.current.theme;
+    const pending = (async () => {
+      while (savedThemeRevision.current !== themeRevision.current) {
+        const revision = themeRevision.current;
+        const current = siteRef.current;
+        try {
+          const response = await fetch(root.dataset.themeSaveUrl || "", { method: "PUT", headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRF-TOKEN": csrf }, body: JSON.stringify({ settings: current.theme, navigation: current.navigation, seo: {} }) });
+          if (!response.ok) throw new Error("Theme save failed");
+          const receipt = await response.json() as { saved_at?: unknown };
+          if (typeof receipt.saved_at !== "string" || !receipt.saved_at) throw new Error("Theme save was not confirmed");
+          savedThemeRevision.current = revision;
+          setIframeKey((key) => key + 1);
+        } catch { saveErrors.current.theme = "Could not save theme. Try Save again."; return false; }
+      }
+      return true;
+    })().finally(() => { themeSave.current = null; refreshSaveState(); });
+    themeSave.current = pending;
+    refreshSaveState();
+    return pending;
+  };
+  const updateTheme = (next: Theme) => { themeRevision.current++; delete saveErrors.current.theme; siteRef.current = { ...siteRef.current, theme: next }; setSite(siteRef.current); refreshSaveState(); };
+  const updateNavigation = (next: NavigationItem[]) => { themeRevision.current++; delete saveErrors.current.theme; siteRef.current = { ...siteRef.current, navigation: next }; setSite(siteRef.current); refreshSaveState(); };
+  const saveAll = async (): Promise<boolean> => {
+    if (imageUpload.current && !await imageUpload.current) return false;
+    while (hasChanges()) {
+      if (!await savePage() || !await saveTheme()) return false;
+    }
+    refreshSaveState();
+    return true;
+  };
+  const navigate = async (url: string) => { if (await saveAll()) window.location.assign(url); };
+  const previewSite = async () => { const tab = window.open("about:blank", "_blank"); if (!await saveAll()) { tab?.close(); return; } const url = siteRef.current.preview_site_url; if (!url) { tab?.close(); return; } if (tab) { tab.opener = null; tab.location.replace(url); } else window.open(url, "_blank", "noopener,noreferrer"); };
+  const publish = async () => {
+    if (publishing.current || root.dataset.publishingEnabled !== "true") return;
+    publishing.current = true; setIsPublishing(true);
+    try {
+      if (!await saveAll()) return;
+      const pageAtPublish = pageRevision.current; const themeAtPublish = themeRevision.current;
+      setSaveState("Publishing…");
+      const response = await fetch(root.dataset.publishUrl || "", { method: "POST", headers: { Accept: "application/json", "X-CSRF-TOKEN": csrf } });
+      if (!response.ok) throw new Error("Publish failed");
+      const receipt = await response.json() as { status?: string };
+      if (!["published", "published_safely"].includes(receipt.status || "")) throw new Error("Publish was not confirmed");
+      siteRef.current = { ...siteRef.current, status: "published" }; setSite(siteRef.current);
+      setSaveState(hasChanges() ? "Unsaved changes" : pageAtPublish !== pageRevision.current || themeAtPublish !== themeRevision.current ? "Saved changes awaiting publish" : "Published");
+    } catch { setSaveState(hasChanges() ? "Could not publish. Unsaved changes remain." : "Could not publish. Your draft is saved. Try again."); }
+    finally { publishing.current = false; setIsPublishing(false); }
+  };
+  const loadMedia = async () => { try { const response = await fetch(root.dataset.mediaUrl || "", { headers: { Accept: "application/json" } }); if (response.ok) { const payload = await response.json() as { media: Media[] }; setMedia(payload.media); } } catch { /* Save and upload remain available during a temporary library outage. */ } };
+  const upload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0]; if (!file || imageUpload.current) return;
+    const blockId = pageRef.current.blocks[selected]?.id;
+    const itemIndex = selectedItem;
+    const itemId = itemIndex === null ? null : pageRef.current.blocks[selected]?.items?.[itemIndex]?.id;
+    const pending = (async () => {
+      try {
+        const data = new FormData(); data.append("image", file); data.append("alt_text", "");
+        const response = await fetch(root.dataset.mediaUploadUrl || "", { method: "POST", headers: { Accept: "application/json", "X-CSRF-TOKEN": csrf }, body: data });
+        if (!response.ok) throw new Error("Upload failed");
+        const payload = await response.json() as { media: Media };
+        if (typeof payload.media?.url !== "string" || typeof payload.media?.id !== "number" || typeof payload.media?.mime_type !== "string") throw new Error("Upload was not confirmed");
+        setMedia((items) => [payload.media, ...items]);
+        const current = pageRef.current;
+        const index = current.blocks.findIndex((block) => block.id === blockId);
+        if (index >= 0) commit({ ...current, blocks: current.blocks.map((block, i) => i !== index ? block : itemIndex !== null
+          ? { ...block, items: (block.items || []).map((item) => item.id === itemId ? { ...item, image_url: payload.media.url, image_alt: payload.media.alt_text || "" } : item) }
+          : { ...block, image_url: payload.media.url, image_alt: payload.media.alt_text || "" }) });
+        return true;
+      } catch { setSaveState("Could not upload image. Try again."); return false; }
+      finally { input.value = ""; }
+    })();
+    imageUpload.current = pending; refreshSaveState();
+    const uploaded = await pending;
+    imageUpload.current = null;
+    if (uploaded) refreshSaveState();
+  };
 
   useEffect(() => { void loadMedia(); }, []);
-  useEffect(() => { if (!pageDirty.current) return; const timer = window.setTimeout(() => void savePage(), 900); return () => window.clearTimeout(timer); }, [page]);
-  useEffect(() => { if (!themeDirty.current) return; const timer = window.setTimeout(() => void saveTheme(), 900); return () => window.clearTimeout(timer); }, [site.theme, site.navigation]);
+  useEffect(() => { if (!hasChanges()) return; const timer = window.setTimeout(() => void saveAll(), 900); return () => window.clearTimeout(timer); }, [page, site.theme, site.navigation]);
   useEffect(() => { const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void saveAll(); } }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); });
+  useEffect(() => { const warn = (event: BeforeUnloadEvent) => { if (hasChanges() || imageUpload.current) { event.preventDefault(); event.returnValue = ""; } }; window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, []);
   useEffect(() => {
     const field = mode === "sections" ? selectedField : selectedThemeField;
     if (!field) return;
@@ -106,7 +202,7 @@ function Editor({ root }: { root: HTMLElement }) {
   }, [page.blocks, site.navigation]);
 
   return <div className="eb-editor">
-    <header className="eb-editor-top"><div className="eb-editor-top__left"><a className="eb-icon" href={root.dataset.indexUrl} aria-label="Back to Website">←</a><div className="eb-editor-title"><strong>{site.name}</strong><span className={site.status === "published" ? "is-live" : ""}>{site.status === "published" ? "Live" : "Draft"}</span></div><label className="eb-page-picker"><span className="sr-only">Page</span><select value={page.id} onChange={(event) => { const next = pages.find((item) => item.id === Number(event.target.value)); if (next) window.location.assign(next.url); }}>{pages.map((item) => <option key={item.id} value={item.id}>{item.slug === "/" ? "Home" : item.title}</option>)}</select></label></div><div className="eb-editor-top__right"><span className="eb-save" aria-live="polite">{saveState}</span><button className="eb-icon" onClick={() => { const previous = history.at(-1); if (!previous) return; setFuture((items) => [page, ...items]); setHistory((items) => items.slice(0, -1)); setPage(previous); pageDirty.current = true; }} disabled={!history.length} aria-label="Undo">↶</button><button className="eb-icon" onClick={() => { const next = future[0]; if (!next) return; setHistory((items) => [...items, page]); setFuture((items) => items.slice(1)); setPage(next); pageDirty.current = true; }} disabled={!future.length} aria-label="Redo">↷</button><button className="eb-button eb-button--quiet" onClick={() => void previewSite()}>Preview site</button><button className="eb-button eb-button--quiet" onClick={() => void saveAll()}>Save</button><button className="eb-button eb-button--primary" disabled={root.dataset.publishingEnabled !== "true"} onClick={() => void publish()}>Publish</button></div></header>
+    <header className="eb-editor-top"><div className="eb-editor-top__left"><a className="eb-icon" href={root.dataset.indexUrl} onClick={(event) => { event.preventDefault(); if (root.dataset.indexUrl) void navigate(root.dataset.indexUrl); }} aria-label="Back to Website">←</a><div className="eb-editor-title"><strong>{site.name}</strong><span className={site.status === "published" ? "is-live" : ""}>{site.status === "published" ? "Live" : "Draft"}</span></div><label className="eb-page-picker"><span className="sr-only">Page</span><select value={page.id} onChange={(event) => { const next = pages.find((item) => item.id === Number(event.target.value)); if (next) void navigate(next.url); }}>{pages.map((item) => <option key={item.id} value={item.id}>{item.slug === "/" ? "Home" : item.title}</option>)}</select></label></div><div className="eb-editor-top__right"><span className="eb-save" aria-live="polite">{saveState}</span><button className="eb-icon" onClick={() => { const previous = history.at(-1); if (!previous) return; setFuture((items) => [page, ...items]); setHistory((items) => items.slice(0, -1)); pageRef.current = previous; pageRevision.current++; delete saveErrors.current.page; setPage(previous); refreshSaveState(); }} disabled={!history.length} aria-label="Undo">↶</button><button className="eb-icon" onClick={() => { const next = future[0]; if (!next) return; setHistory((items) => [...items, page]); setFuture((items) => items.slice(1)); pageRef.current = next; pageRevision.current++; delete saveErrors.current.page; setPage(next); refreshSaveState(); }} disabled={!future.length} aria-label="Redo">↷</button><button className="eb-button eb-button--quiet" onClick={() => void previewSite()}>Preview site</button><button className="eb-button eb-button--quiet" onClick={() => void saveAll()}>Save</button><button className="eb-button eb-button--primary" disabled={isPublishing || root.dataset.publishingEnabled !== "true"} onClick={() => void publish()}>Publish</button></div></header>
     <div className="eb-editor-layout"><aside className="eb-tree"><div className="eb-tabs"><button className={mode === "sections" ? "active" : ""} onClick={() => setMode("sections")}>Sections</button><button className={mode === "theme" ? "active" : ""} onClick={() => selectTheme("global")}>Theme</button></div>{mode === "sections" ? <><div className="eb-tree__heading">{page.title}</div><button className="eb-tree__fixed" onClick={() => selectTheme("announcement")}>Announcement</button><button className="eb-tree__fixed" onClick={() => selectTheme("header")}>Header & menu</button><div className="eb-tree__sections">{page.blocks.map((block, index) => <button key={block.id || `${block.type}-${index}`} draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", String(index))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { const from = Number(event.dataTransfer.getData("text/plain")); if (Number.isFinite(from)) move(from, index); }} className={selected === index ? "is-selected" : ""} onClick={() => selectBlock(index)}><span className="eb-grip">⋮⋮</span><span>{labels[block.type] || block.type}</span><small>{block.hidden === "true" ? "Hidden" : ""}</small></button>)}</div><button className="eb-add-section" onClick={() => setSectionLibraryOpen(true)}><span aria-hidden="true">＋</span> Add section</button><button className="eb-tree__fixed" onClick={() => selectTheme("footer")}>Footer</button></> : <ThemeTree site={site} pages={pages} updateTheme={updateTheme} updateNavigation={updateNavigation} />}</aside><main className="eb-canvas"><div className="eb-device-toggle"><button className={device === "desktop" ? "active" : ""} onClick={() => setDevice("desktop")}>Desktop</button><button className={device === "mobile" ? "active" : ""} onClick={() => setDevice("mobile")}>Mobile</button></div><div className={`eb-preview-frame ${device}`}><iframe ref={previewFrame} key={iframeKey} title="Draft website editor canvas" src={site.preview_url} /></div><p className="eb-canvas__hint">Select a sentence, button, image, card, or menu item to edit that exact element. Use Preview site to test customer navigation.</p></main><aside className="eb-inspector">{mode === "sections" ? <SectionInspector block={selectedBlock} media={media} selectedMedia={selectedBlock?.image_url ? mediaByUrl.get(String(selectedBlock.image_url)) : undefined} selectedItem={selectedItem} selectedField={selectedField} update={updateBlock} updateItems={updateItems} upload={upload} remove={() => { if (page.blocks.length <= 1) return; commit({ ...page, blocks: page.blocks.filter((_, index) => index !== selected) }); selectBlock(Math.max(0, selected - 1)); }} /> : <ThemeInspector theme={site.theme} navigation={site.navigation} pages={pages} target={themeTarget} selectedNavigation={selectedNavigation} updateTheme={updateTheme} updateNavigation={updateNavigation} />}</aside></div>
     {sectionLibraryOpen && <SectionLibrary search={sectionSearch} updateSearch={setSectionSearch} add={insertSection} close={() => setSectionLibraryOpen(false)} />}
   </div>;

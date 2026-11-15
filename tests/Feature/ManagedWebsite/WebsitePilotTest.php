@@ -137,6 +137,29 @@ test('only tenant owner or admin can publish while a manager can still save a dr
     $this->actingAs($manager)->post('https://publish-pilot.theeverbranch.com/website/pages/'.$page->id.'/versions/'.$published->id.'/rollback')->assertForbidden();
 });
 
+test('customer rollback honors a publishing freeze and preserves the live snapshot until reopened', function (): void {
+    $tenant = websitePilotTenant('rollback-freeze');
+    $owner = websitePilotUser($tenant, 'owner');
+    [$site] = completedWebsitePilot($tenant, $owner);
+    $websites = app(ManagedWebsiteService::class);
+    $page = $site->pages()->where('slug', '/')->firstOrFail();
+    $websites->publish($site, $owner);
+    $original = $page->fresh()->publishedVersion;
+    $websites->saveDraft($site, $page, ['title' => 'Second live version', 'blocks' => [['type' => 'hero', 'heading' => 'Second live version']]], $owner);
+    $websites->publish($site, $owner);
+    $current = $page->fresh()->published_version_id;
+    $count = $page->versions()->count();
+    config()->set('managed_website.publishing_enabled', false);
+    $url = 'https://rollback-freeze.theeverbranch.com/website/pages/'.$page->id.'/versions/'.$original->id.'/rollback';
+    $this->actingAs($owner)->post($url)->assertStatus(423);
+    expect($page->fresh()->published_version_id)->toBe($current)->and($page->versions()->count())->toBe($count);
+    config()->set('managed_website.publishing_enabled', true);
+    $this->post($url)->assertRedirect();
+    expect($page->fresh()->publishedVersion->title)->toBe($original->title)
+        ->and($page->fresh()->published_version_id)->not->toBe($original->id)
+        ->and($page->versions()->count())->toBe($count + 1);
+});
+
 test('public quote validates all six fields, scopes the lead, and never writes legacy systems', function (): void {
     $tenant = websitePilotTenant('quote-pilot');
     $actor = websitePilotUser($tenant);
