@@ -97,7 +97,16 @@ class EventSalesMappingCandidates
                 }
             }
             $runs = [];
-            foreach (MarketingImportRun::forTenantId($tenant->id)->whereIn('type', ['square_orders_sync', 'square_payments_sync'])->where('status', 'completed')->orderByDesc('id')->limit(100)->get() as $run) {
+            // Recurring updated-at refreshes must not displace the older original
+            // historical receipts before this bounded candidate page is selected.
+            $eligibleRuns = MarketingImportRun::forTenantId($tenant->id)->whereIn('type', ['square_orders_sync', 'square_payments_sync'])
+                ->where('status', 'completed')->where('summary->mode', 'live-sync')->whereNotNull('summary->since')->where('summary->since', '!=', '')
+                ->where(fn ($query) => $query->whereNull('summary->errors')->orWhere('summary->errors', 0)->orWhere('summary->errors', '0'))
+                ->where(fn ($query) => $query->whereNull('summary->checkpoint->errors')->orWhere('summary->checkpoint->errors', 0)->orWhere('summary->checkpoint->errors', '0'))
+                ->where(fn ($query) => $query->whereNull('summary->checkpoint->cursor')->orWhere('summary->checkpoint->cursor', ''))
+                ->where(fn ($query) => $query->whereNull('summary->request_context->date_field')->orWhere('summary->request_context->date_field', '!=', 'updated_at'))
+                ->orderByDesc('id')->limit(100)->get();
+            foreach ($eligibleRuns as $run) {
                 $summary = $run->summary ?? [];
                 if (($summary['mode'] ?? null) !== 'live-sync' || (int) ($summary['errors'] ?? 0) !== 0 || data_get($summary, 'checkpoint.cursor')) {
                     continue;

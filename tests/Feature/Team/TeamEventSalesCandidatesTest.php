@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\MarketingImportRun;
 use App\Models\TeamOperationRecord;
 use App\Models\TenantMarketingSetting;
 use Illuminate\Support\Facades\DB;
@@ -54,4 +55,23 @@ test('source candidate reconciliation requires a manager even for an assigned st
     $this->actingAs($member)->getJson('/team/events/'.$event->id.'/sales-candidates?tenant='.$this->tenant->slug)->assertForbidden();
     [$other, $owner] = teamWorkspace();
     $this->actingAs($owner)->getJson('/team/events/'.$event->id.'/sales-candidates?tenant='.$other->slug)->assertNotFound();
+});
+
+test('historical source receipts remain selectable beneath more than one page of recurring updated-at refreshes', function (): void {
+    $event = salesCandidateRecord($this->tenant, $this->area, 'Fictional Fall Show');
+    $base = ['mode' => 'live-sync', 'errors' => 0, 'since' => '2020-01-01T00:00:00Z', 'checkpoint' => ['cursor' => null, 'errors' => 0], 'request_context' => ['date_field' => 'created_at']];
+    $create = fn (array $summary, string $type = 'square_orders_sync') => MarketingImportRun::create(['tenant_id' => $this->tenant->id, 'created_by' => $this->owner->id,
+        'type' => $type, 'status' => 'completed', 'started_at' => '2026-01-01', 'finished_at' => '2026-01-01', 'summary' => $summary]);
+    $orders = $create($base);
+    $legacyPayments = $create(array_replace($base, ['errors' => null, 'checkpoint' => ['cursor' => null, 'errors' => null], 'request_context' => ['date_field' => null]]), 'square_payments_sync');
+    foreach (range(1, 120) as $number) {
+        $create(array_replace($base, ['request_context' => ['date_field' => 'updated_at'], 'since' => '2026-10-01T00:00:00Z']));
+    }
+    foreach ([['mode' => 'preview'], ['errors' => 2], ['checkpoint' => ['errors' => 1, 'cursor' => null]], ['checkpoint' => ['errors' => 0, 'cursor' => 'remaining-page']], ['since' => null], ['since' => '']] as $change) {
+        $create(array_replace($base, $change));
+    }
+    $create(array_diff_key($base, ['since' => true]));
+    $runs = $this->actingAs($this->owner)->getJson('/team/events/'.$event->id.'/sales-candidates?tenant='.$this->tenant->slug)->assertOk()->json('source_runs');
+    expect(array_column($runs, 'id'))->toBe([$legacyPayments->id, $orders->id])
+        ->and(array_column($runs, 'coverage_complete'))->toBe([false, false]);
 });
