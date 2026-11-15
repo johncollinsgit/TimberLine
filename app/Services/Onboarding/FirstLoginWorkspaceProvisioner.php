@@ -171,16 +171,21 @@ class FirstLoginWorkspaceProvisioner
         $hosts = app(\App\Support\Tenancy\TenantHostBuilder::class);
         $platformHosts = array_filter([
             $hosts->canonicalLandlordHost(), $hosts->canonicalPublicHost(),
+            (string) config('managed_website.custom_domain_target', ''),
             ...(array) config('tenancy.landlord.hosts', []),
             ...(array) config('tenancy.domains.legacy.public_hosts', []),
             ...(array) config('tenancy.domains.legacy.landlord_hosts', []),
             ...array_keys((array) config('tenancy.auth.host_map', [])),
         ]);
-        $reserved = ['www', 'app', 'landlord', 'backstage'];
+        $reserved = ['www', 'app', 'admin', 'landlord', 'backstage', 'sites'];
         foreach ($platformHosts as $host) {
+            $host = strtolower(rtrim(trim((string) $host), '.'));
             $suffix = '.'.$hosts->baseDomain();
-            if (str_ends_with((string) $host, $suffix)) {
-                $reserved[] = substr((string) $host, 0, -strlen($suffix));
+            if (str_ends_with($host, $suffix)) {
+                $label = substr($host, 0, -strlen($suffix));
+                if ($label !== '' && ! str_contains($label, '.')) {
+                    $reserved[] = $label;
+                }
             }
         }
         $slug = $base;

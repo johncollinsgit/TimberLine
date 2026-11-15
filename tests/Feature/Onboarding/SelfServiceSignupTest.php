@@ -6,7 +6,10 @@ use App\Models\User;
 use App\Notifications\SelfServiceVerifyEmail;
 use App\Services\Onboarding\BranchSelectionService;
 use App\Services\Onboarding\SelfServiceTemplateSelectionService;
+use App\Services\Tenancy\PreAuthTenantContextResolver;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
 
@@ -111,3 +114,33 @@ test('new workspace addresses avoid platform hosts and fit a DNS label', functio
         ->and($workspaces->uniqueTenantSlug('Control'))->toBe('control-2')
         ->and(strlen($workspaces->uniqueTenantSlug(str_repeat('a', 120))))->toBeLessThanOrEqual(63);
 });
+
+test('verified signup provisions an available address without claiming a platform host', function (string $name, string $target, ?string $existingSlug, string $expectedSlug): void {
+    Http::preventStrayRequests();
+    config()->set('tenancy.domains.canonical.base_domain', 'theeverbranch.com');
+    config()->set('managed_website.custom_domain_target', $target);
+    if ($existingSlug !== null) {
+        Tenant::query()->create(['name' => 'Fictional existing workspace', 'slug' => $existingSlug]);
+    }
+    $user = User::factory()->create([
+        'is_active' => true, 'role' => 'self_service_pending', 'requested_via' => 'self_service_registration', 'email_verified_at' => now(),
+        'onboarding_guide_answers' => ['business_template' => 'generic', 'branch_selection' => ['managed_website']],
+    ]);
+
+    $this->actingAs($user)->post(route('workspace.first-login.store'), ['workspace_name' => $name, 'template_key' => 'generic', 'start_path' => 'self'])
+        ->assertRedirectContains('/workspace/purchase')->assertSessionHasNoErrors();
+    $tenant = $user->tenants()->sole();
+    expect($tenant->slug)->toBe($expectedSlug)->and($tenant->pivot->role)->toBe('owner');
+    $resolved = app(PreAuthTenantContextResolver::class)->resolveForRequest(Request::create('https://'.$expectedSlug.'.theeverbranch.com/'));
+    expect($resolved->tenant?->id)->toBe($tenant->id);
+})->with([
+    'admin namespace' => ['Admin', '', null, 'admin-2'],
+    'sites relay namespace' => ['Sites', '', null, 'sites-2'],
+    'configured same-base target' => ['Origin', 'origin.theeverbranch.com', null, 'origin-2'],
+    'configured target plus occupied suffix' => ['Origin', 'origin.theeverbranch.com', 'origin-2', 'origin-3'],
+    'normalized configured target' => ['Relay', 'RELAY.theeverbranch.com.', null, 'relay-2'],
+    'unrelated external target' => ['Origin', 'origin.provider.example', null, 'origin'],
+    'nested target does not reserve another address' => ['Assets', 'assets.origin.theeverbranch.com', null, 'assets'],
+    'existing reserved address suffix' => ['App', '', 'app-2', 'app-3'],
+    'existing workspace address' => ['Fictional Studio', '', 'fictional-studio', 'fictional-studio-2'],
+]);

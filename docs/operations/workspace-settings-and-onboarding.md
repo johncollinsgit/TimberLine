@@ -48,6 +48,14 @@ accepted, not passwords, appointment contacts, arbitrary tenant IDs or secrets.
 The existing creation transaction now serializes repeated submissions per user;
 invitees with an existing membership keep that workspace instead of creating one.
 
+Workspace address selection reserves the platform namespaces `www`, `app`,
+`admin`, `landlord`, `backstage` and `sites`, along with direct labels used by
+configured platform hosts and the Managed Website domain target under the same
+base domain. An unrelated external target or a nested hostname does not reserve
+another customer's single-label address. Reserved names and existing tenant
+collisions keep choosing the next available suffix (`sites-2`, `sites-3`, etc.)
+before provisioning; this does not change existing workspace addresses.
+
 ## Progress, optional steps and permissions
 
 The guide offers actions supported by effective branches and viewer permissions:
