@@ -244,15 +244,26 @@ class ManagedWebsiteController extends Controller
         return response()->json(['media' => $this->mediaPayload($media)], 201);
     }
 
-    public function showMedia(Request $request, TenantSiteMedia $media)
+    public function showMedia(Request $request, TenantSiteMedia $media, ManagedWebsiteService $websites)
     {
         $tenant = $request->attributes->get('current_tenant') ?? $request->attributes->get('host_tenant');
-        abort_unless($tenant instanceof Tenant && (int) $tenant->id === (int) $media->tenant_id, 404);
-        $site = TenantSite::query()->forTenant($tenant)->findOrFail($media->tenant_site_id);
-        abort_unless($request->user() || ($site->public_enabled && $site->status === 'published'), 404);
+        $site = TenantSite::query()->forTenantId($media->tenant_id)->findOrFail($media->tenant_site_id);
+        $member = $request->getHost() === config('tenancy.domains.canonical.landlord_host')
+            && $request->user()?->is_active && $websites->editorEnabledFor($site->tenant)
+            && $request->user()->tenants()->whereKey($site->tenant_id)->wherePivot('membership_active', true)
+                ->wherePivotIn('role', ['admin', 'owner', 'tenant_owner', 'manager', 'marketing_manager'])->exists();
+        $public = $tenant instanceof Tenant && (int) $tenant->id === (int) $media->tenant_id
+            && $site->public_enabled && $site->status === 'published' && $websites->publicRenderingEnabled()
+            && $websites->publicHostAllowed($site, $request->getHost())
+            && app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->publicAccessAllowed($site->tenant)
+            && app(\App\Services\ManagedWebsite\WebsiteMediaUrls::class)->publishedPageReferences($site, $media);
+        abort_unless($member || $public, 404);
         abort_unless(Storage::disk($media->storage_disk)->exists($media->storage_path), 404);
 
-        return Storage::disk($media->storage_disk)->response($media->storage_path, $media->file_name, ['Content-Type' => $media->mime_type, 'Cache-Control' => 'public, max-age=86400']);
+        return Storage::disk($media->storage_disk)->response($media->storage_path, $media->file_name, [
+            'Content-Type' => $media->mime_type, 'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => $public ? 'public, max-age=86400' : 'private, no-store',
+        ]);
     }
 
     public function saveEditor(Request $request, TenantSitePage $page, ManagedWebsiteService $websites): JsonResponse
