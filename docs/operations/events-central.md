@@ -37,6 +37,12 @@ Keep unknown refunds, unknown coverage and unassigned sales visible. No rows is
 not proof of zero sales. Do not manufacture daily figures by dividing a workbook
 total evenly across dates.
 
+Pay's Sales screen includes imported purchases within the same reviewed Square
+location/date scopes as event history. New arrivals in those scopes do not need
+another per-order selection. Original Pay mirrors and explicit order selections
+are counted once. An incomplete import may show known sales with partial coverage
+and the actual Square refresh time; it cannot establish a complete benchmark.
+
 Historical defaults include verified completed occurrences in prior years.
 Average event sales divides eligible sales by occurrences. Average daily sales
 divides eligible sales by verified selling days. Display denominators and years.
@@ -63,6 +69,11 @@ historical imports or walk every customer's lifetime purchases. Publish a cohere
 reporting generation, retain its freshness/coverage, and invalidate or rebuild
 after refunds, identity associations, allocation or source changes. Page-level
 rows have separate pagination; totals always cover the entire permitted cohort.
+Financial revisions cover the report's reviewed Square windows, explicit order
+allocations and original receipt ancestry. Unrelated historical imports must not
+restart a coherent event report. If customer identities change during a build,
+publish unchanged event totals while withholding customer facts until their next
+verified generation. Source admission and customer identity checks remain fresh.
 
 The first permitted comparison requests an issuer-scoped snapshot. The existing
 scheduler queues `team:refresh-event-performance` and drains the dedicated

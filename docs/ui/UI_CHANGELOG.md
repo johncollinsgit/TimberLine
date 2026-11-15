@@ -31,6 +31,11 @@ Historical staff and inactive Square locations remain source evidence, while
 unverified allocations and missing coverage stay visible. See
 [Events reporting](../operations/events-central.md) for source and release acceptance.
 
+Follow-up: Pay's Sales screen includes imported purchases in the reviewed event
+scope and shows the actual Square refresh date/time beside partial known totals.
+Unknown refresh time stays explicit. Source-access conflicts clear an already
+displayed history, while temporary server errors keep the comparison retryable.
+
 ## 2026-11-15 - Private website starters and saved drafts
 
 Self-service Website setup recommends seven neutral business starters with six

@@ -76,11 +76,22 @@ enum ConnectedEventFixture {
             if let id = object("association")?["customer_profile_id"] as? Int { row["customer"] = ["id": id, "name": id == 1 ? "Ada Buyer" : "New customer"] }
             value = ["sales": [row], "review_items": [], "as_of": "2026-11-13T15:00:00Z"]
         } else if path.hasSuffix("/event-history") {
+            let reads = object("history-reads")?["count"] as? Int ?? 0
+            try put("history-reads", ["count": reads + 1])
+            if reads > 0 && ProcessInfo.processInfo.arguments.contains("--pos-connected-history-revoked-tests") {
+                throw ConnectedFixtureHTTPError(status: 409, code: "provider_source_changed")
+            }
+            if reads == 1 && ProcessInfo.processInfo.arguments.contains("--pos-connected-history-retry-tests") {
+                throw ConnectedFixtureHTTPError(status: 503, code: "provider_unavailable")
+            }
             let occurrence: [String: Any] = ["event_id": "00000000-0000-4000-8000-000000000001", "title": "Fictional show", "starts_on": "2025-11-01", "ends_on": "2025-11-03", "staff": [["id": "former-fixture", "name": "Fictional Previous Crew"]], "net_sales_minor": 120000, "reported_net_sales_minor": 120100, "selling_days": 3, "daily": [], "complete": true, "partial": false, "basis": "reviewed_square"]
             let comparison: [String: Any] = ["label": "Day 1", "current_net_sales_minor": 2000, "historical_average_net_sales_minor": 40000, "sample_count": 1]
             value = ["contract_version": 1, "event_id": "00000000-0000-4000-8000-000000000001", "event_name": "Fictional show", "current": occurrence, "history": [occurrence], "benchmarks": ["average_event_net_sales_minor": 120000, "average_day_net_sales_minor": 40000, "occurrence_count": 1, "years": [2025]], "comparisons": ["event_day": [comparison], "weekday": [["label": "Friday", "current_net_sales_minor": 2000, "historical_average_net_sales_minor": 40000, "sample_count": 1]]], "review_items": [], "as_of": "2026-11-15T12:00:00Z"]
         } else if path.hasSuffix("/event-stats") {
-            value = ["event_name": "Fictional show", "sales": ["sale_count": 1, "net_sales_minor": 2000, "paid_total_minor": 2180, "confirmed_refunds_minor": 0, "refunds_complete": false, "as_of": "2026-11-13T15:00:00Z", "customer_counts": ["unique_buyers": 0, "attributed_orders": 0, "unattributed_orders": 1]]]
+            var sales: [String: Any] = ["sale_count": 1, "net_sales_minor": 2000, "paid_total_minor": 2180, "confirmed_refunds_minor": 0, "refunds_complete": false, "as_of": "2026-11-13T15:00:00Z", "customer_counts": ["unique_buyers": 0, "attributed_orders": 0, "unattributed_orders": 1]]
+            if ProcessInfo.processInfo.arguments.contains("--pos-connected-partial-sales-tests") { sales["net_sales_minor"] = NSNull(); sales["known_net_sales_minor"] = 2000 }
+            if ProcessInfo.processInfo.arguments.contains("--pos-connected-square-time-tests") { sales["source_freshness"] = ["square_oldest_selected_sync": "2026-11-15T17:20:00Z"] }
+            value = ["event_name": "Fictional show", "sales": sales]
         } else if path.hasSuffix("/customers"), !post {
             value = ["customers": [ada], "has_more": false]
         } else if path.hasSuffix("/customers"), post {

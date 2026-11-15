@@ -1,8 +1,10 @@
 <?php
 
 use App\Jobs\Team\RefreshEventPerformance;
+use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\SquareOrder;
 use App\Models\SquarePayment;
 use App\Models\TeamOperationRecord;
 use App\Services\Marketing\CustomerEventValueService;
@@ -226,6 +228,45 @@ test('highest customer spending sorts whole customer totals after refunds while 
         ->and(array_column($rows, 'net_sales_minor'))->toBe([null, null, null]);
 });
 
+test('concurrent identity imports withhold customer facts without blocking unchanged event sales', function () {
+    performanceEvent($this);
+    performanceEvent($this, 'Another event sharing the customer');
+    $profile = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Before review']);
+    $commerce = Mockery::mock(EventCommerceReport::class);
+    $commerce->shouldReceive('commerceId')->andReturn(123);
+    app()->instance(EventCommerceReport::class, $commerce);
+    $cohort = Mockery::mock(EventCustomerCohort::class);
+    $cohort->shouldReceive('read')->andReturn(['profile_ids' => [$profile->id], 'relations' => [], 'review_items' => []]);
+    app()->instance(EventCustomerCohort::class, $cohort);
+    $values = Mockery::mock(CustomerEventValueService::class);
+    $values->shouldReceive('forProfile')->andReturnUsing(function ($readProfile) {
+        $readProfile->update(['archived_at' => now()]);
+
+        return ['purchase_journey' => [['purchase_id' => 'original:'.$readProfile->id, 'confirmed_purchase' => true,
+            'purchase_event' => ['event' => ['id' => 123]], 'currency' => 'usd', 'amount_minor' => 1070,
+            'refunded_minor' => 0, 'occurred_at' => '2025-11-07T15:00:00Z']]];
+    });
+    app()->instance(CustomerEventValueService::class, $values);
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    expect(DB::table(EventPerformance::TABLE)->where('kind', 'customer')->count())->toBe(0);
+    $this->actingAs($this->owner)->getJson($this->url)->assertOk()->assertJsonPath('summary.net_sales_minor', 12000)
+        ->assertJsonPath('summary.customer_count', null)->assertDontSee('Before review');
+    $this->getJson($this->url.'&group_by=customer')->assertOk()->assertJsonPath('status', 'preparing')->assertJsonCount(0, 'rows');
+});
+
+test('an unavailable canonical cohort stays preparing rather than presenting an empty customer total', function () {
+    performanceEvent($this);
+    $commerce = Mockery::mock(EventCommerceReport::class);
+    $commerce->shouldReceive('commerceId')->andReturn(123);
+    app()->instance(EventCommerceReport::class, $commerce);
+    $cohort = Mockery::mock(EventCustomerCohort::class);
+    $cohort->shouldReceive('read')->andReturn(['profile_ids' => [999999], 'relations' => [], 'review_items' => []]);
+    app()->instance(EventCustomerCohort::class, $cohort);
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    $this->actingAs($this->owner)->getJson($this->url)->assertOk()->assertJsonPath('summary.net_sales_minor', 6000)->assertJsonPath('summary.customer_count', null);
+    $this->getJson($this->url.'&group_by=customer')->assertOk()->assertJsonPath('status', 'preparing')->assertJsonCount(0, 'rows');
+});
+
 test('warm indexed filtering remains bounded with twice a large event workload', function () {
     foreach (range(1, 400) as $number) {
         performanceEvent($this, 'Fictional fair '.$number);
@@ -258,10 +299,37 @@ test('same-second original customer-link reassignment invalidates private projec
 });
 
 test('same-second original payment revisions mark financial snapshots stale', function () {
-    $payment = SquarePayment::create(['tenant_id' => $this->tenant->id, 'square_payment_id' => 'fictional-original', 'amount_money' => 1070, 'currency' => 'USD', 'status' => 'COMPLETED', 'raw_payload' => ['refunded_money' => ['amount' => 0, 'currency' => 'USD']]]);
+    $event = performanceEvent($this);
+    $event->update(['data' => ['_teams_enrichment' => ['square_orders' => ['ids' => ['original-order']]]]]);
+    SquareOrder::create(['tenant_id' => $this->tenant->id, 'square_order_id' => 'original-order', 'raw_payload' => []]);
+    $payment = SquarePayment::create(['tenant_id' => $this->tenant->id, 'square_payment_id' => 'fictional-original', 'square_order_id' => 'original-order', 'amount_money' => 1070, 'currency' => 'USD', 'status' => 'COMPLETED', 'raw_payload' => ['refunded_money' => ['amount' => 0, 'currency' => 'USD']]]);
     $reports = app(EventPerformance::class);
     $signature = $reports->signature($this->tenant, $this->area, true);
     DB::table('square_payments')->where('id', $payment->id)->update(['raw_payload' => json_encode(['refunded_money' => ['amount' => 1070, 'currency' => 'USD']])]);
+    expect($reports->signature($this->tenant, $this->area, true))->not->toBe($signature);
+});
+
+test('unrelated source backfills do not invalidate a reviewed report while its exact scope and receipt ancestry remain fresh', function () {
+    performanceEvent($this);
+    $parent = MarketingImportRun::create(['tenant_id' => $this->tenant->id, 'type' => 'square_orders_sync', 'status' => 'partial', 'summary' => []]);
+    $receipt = MarketingImportRun::create(['tenant_id' => $this->tenant->id, 'type' => 'square_orders_sync', 'status' => 'completed', 'summary' => ['resumed_from_run_id' => $parent->id]]);
+    TeamOperationRecord::create(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenant->id, 'area_id' => $this->area->id,
+        'kind' => 'event_link', 'title' => 'Reviewed scope', 'source_key' => hash('sha256', Str::uuid()), 'status' => 'accepted', 'version' => 1,
+        'data' => ['timezone' => 'America/New_York', 'square_scopes' => [['location_id' => 'reviewed-location', 'starts_on' => '2025-11-07', 'ends_on' => '2025-11-09', 'orders_run_id' => $receipt->id, 'payments_run_id' => $receipt->id]]]]);
+    $reports = app(EventPerformance::class);
+    $signature = $reports->signature($this->tenant, $this->area, true);
+    $unrelated = SquareOrder::create(['tenant_id' => $this->tenant->id, 'square_order_id' => 'unrelated', 'location_id' => 'another-location', 'closed_at' => '2025-11-07 18:00:00', 'raw_payload' => []]);
+    SquarePayment::create(['tenant_id' => $this->tenant->id, 'square_payment_id' => 'unrelated-payment', 'square_order_id' => 'unrelated', 'raw_payload' => []]);
+    MarketingImportRun::create(['tenant_id' => $this->tenant->id, 'type' => 'square_payments_sync', 'status' => 'partial', 'summary' => ['processed' => 500]]);
+    expect($reports->signature($this->tenant, $this->area, true))->toBe($signature);
+    // A late offline order inside the reviewed allowance changes this report.
+    $unrelated->update(['location_id' => 'reviewed-location', 'closed_at' => '2025-11-12 18:00:00']);
+    expect($reports->signature($this->tenant, $this->area, true))->not->toBe($signature);
+    $signature = $reports->signature($this->tenant, $this->area, true);
+    DB::table('square_payments')->where('square_order_id', 'unrelated')->update(['raw_payload' => json_encode(['refunded_money' => ['amount' => 100, 'currency' => 'USD']])]);
+    expect($reports->signature($this->tenant, $this->area, true))->not->toBe($signature);
+    $signature = $reports->signature($this->tenant, $this->area, true);
+    $parent->update(['summary' => ['errors' => 1]]);
     expect($reports->signature($this->tenant, $this->area, true))->not->toBe($signature);
 });
 

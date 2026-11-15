@@ -2,6 +2,7 @@
 
 namespace App\Services\Reporting;
 
+use App\Models\MarketingImportRun;
 use App\Models\MarketingProfileLink;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
@@ -12,6 +13,9 @@ use App\Services\Marketing\SquarePurchaseEvidence;
 use App\Services\Pos\PosService;
 use App\Services\Pos\PosStore;
 use App\Services\Team\Studio\EventCommerceReport;
+use App\Services\Team\Studio\EventSalesAccess;
+use App\Services\Team\Studio\EventSquareCoverage;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 
@@ -25,7 +29,129 @@ final class ReviewedSquareEventPurchases
             return $this->empty();
         }
 
-        return $this->forOccurrence($tenant, $occurrence, $event);
+        $result = $this->forOccurrence($tenant, $occurrence, $event);
+        $links = TeamOperationRecord::where(['tenant_id' => $tenant, 'area_id' => $occurrence->area_id, 'kind' => 'event_link', 'status' => 'accepted'])->get()
+            ->filter(fn ($link) => ($link->data['occurrence_id'] ?? null) === $occurrence->id);
+        if ($links->count() > 1) {
+            $result['review_items'][] = 'More than one reviewed Square scope mapping names this occurrence.';
+
+            return $result;
+        }
+        if (! $link = $links->first()) {
+            return $result;
+        }
+        $timezone = $link->data['timezone'] ?? 'UTC';
+        $resolved = $this->forScopes($tenant, $occurrence, $link, $timezone, $event);
+        $seen = array_fill_keys(array_column($result['purchases'], 'source_id'), true);
+        $result['review_items'] = [...$result['review_items'], ...$resolved['review_items']];
+        foreach ($resolved['chunks'] as $chunk) {
+            foreach ($chunk['purchases'] as $purchase) {
+                if (isset($seen[$purchase['source_id']])) {
+                    $result['deduplicated_orders']++;
+
+                    continue;
+                }
+                $seen[$purchase['source_id']] = true;
+                $result['purchases'][] = $purchase;
+            }
+            $result['customer_review_items'] = [...$result['customer_review_items'], ...$chunk['customer_review_items']];
+            $result['deduplicated_orders'] += $chunk['deduplicated_orders'];
+            if ($chunk['last_synced_at'] !== null && ($result['last_synced_at'] === null || $chunk['last_synced_at'] < $result['last_synced_at'])) {
+                $result['last_synced_at'] = $chunk['last_synced_at'];
+            }
+        }
+        $result['review_items'] = array_values(array_unique($result['review_items']));
+        $result['customer_review_items'] = array_values(array_unique($result['customer_review_items']));
+
+        return $result;
+    }
+
+    /** One reviewed source-window resolver shared by Pay, history and customer facts. */
+    public function forScopes(int $tenant, TeamOperationRecord $occurrence, ?TeamOperationRecord $link, string $timezone, ?int $event = null): array
+    {
+        $result = ['coverage' => false, 'chunks' => [], 'review_items' => []];
+        if (! $link || $link->kind !== 'event_link' || $link->status !== 'accepted'
+            || (int) $occurrence->tenant_id !== $tenant || (int) $link->tenant_id !== $tenant
+            || (string) $link->area_id !== (string) $occurrence->area_id || ($link->data['occurrence_id'] ?? null) !== $occurrence->id
+            || ! app(EventSalesAccess::class)->exported($occurrence, $link)
+            || ($link->data['starts_on'] ?? null) !== $occurrence->starts_on?->toDateString()
+            || ($link->data['ends_on'] ?? null) !== $occurrence->ends_on?->toDateString()
+            || ! in_array($timezone, timezone_identifiers_list(), true)) {
+            $result['review_items'][] = 'Review this occurrence before reading its linked Square purchases.';
+
+            return $result;
+        }
+        $scopes = $link->data['square_scopes'] ?? [];
+        $result['coverage'] = $scopes !== [];
+        $seen = [];
+        foreach ($scopes as $scope) {
+            $proven = app(EventSquareCoverage::class)->proven($tenant, $scope, $timezone);
+            $result['coverage'] = $result['coverage'] && $proven;
+            if (! $proven) {
+                $result['review_items'][] = 'Square source coverage is incomplete or its original connection changed.';
+            }
+            if (! Schema::hasTable('square_orders') || ! Schema::hasTable('square_payments')) {
+                $result['coverage'] = false;
+
+                continue;
+            }
+            $binding = MarketingImportRun::forTenantId($tenant)->find($scope['orders_run_id'] ?? 0)?->summary['source_binding'] ?? null;
+            if (! $binding) {
+                $result['coverage'] = false;
+
+                continue;
+            }
+            // A partial import can show known purchases. Original source revocation cannot.
+            try {
+                app(\App\Services\Marketing\SquareConnectionContext::class)->assertCurrent($tenant, $binding);
+            } catch (\Throwable) {
+                $result['coverage'] = false;
+
+                continue;
+            }
+            $from = CarbonImmutable::parse($scope['starts_on'], $timezone)->startOfDay()->utc();
+            $through = CarbonImmutable::parse($scope['ends_on'], $timezone)->addDay()->startOfDay()->utc();
+            $orders = SquareOrder::forTenantId($tenant)->where('location_id', $scope['location_id'])->where('closed_at', '>=', $from)->where('closed_at', '<', $through->addHours(72))->get();
+            $payments = SquarePayment::forTenantId($tenant)->whereIn('square_order_id', $orders->pluck('square_order_id'))->where('status', 'COMPLETED')->get()->groupBy('square_order_id');
+            $timestamps = [];
+            foreach ($orders as $order) {
+                $offline = $payments->get($order->square_order_id, collect())->filter(fn ($payment) => ($payment->raw_payload['is_offline_payment'] ?? false) === true);
+                $timestamp = $order->closed_at ? CarbonImmutable::instance($order->closed_at) : null;
+                if ($offline->isNotEmpty()) {
+                    $times = $offline->map(fn ($payment) => data_get($payment->raw_payload, 'offline_payment_details.client_created_at'));
+                    $timestamp = $times->contains(fn ($time) => ! is_string($time) || strtotime($time) === false)
+                        ? null : $times->map(fn ($time) => CarbonImmutable::parse($time)->utc())->sort()->first();
+                }
+                if ($timestamp === null) {
+                    $result['review_items'][] = 'An offline purchase needs its original selling timestamp.';
+                    $result['coverage'] = false;
+
+                    continue;
+                }
+                if ($timestamp->lt($from) || $timestamp->gte($through)) {
+                    continue;
+                }
+                if (isset($seen[$order->square_order_id])) {
+                    $result['review_items'][] = 'Overlapping source scopes repeat a Square order.';
+                    $result['coverage'] = false;
+
+                    continue;
+                }
+                $seen[$order->square_order_id] = true;
+                $timestamps[$order->square_order_id] = $timestamp;
+            }
+            $map = $link->data;
+            $chunk = $this->forOccurrence($tenant, $occurrence, $event, ['ids' => array_keys($timestamps), 'reviewed_by' => $map['reviewed_by'], 'reviewed_at' => $map['reviewed_at'], 'source_binding' => $binding]);
+            foreach ($chunk['purchases'] as &$purchase) {
+                $purchase['occurred_at'] = $timestamps[$purchase['source_id']]->toIso8601String();
+            }
+            unset($purchase);
+            $result['review_items'] = [...$result['review_items'], ...$chunk['review_items']];
+            $result['chunks'][] = $chunk;
+        }
+        $result['review_items'] = array_values(array_unique($result['review_items']));
+
+        return $result;
     }
 
     /** A reviewed historical allocation uses the same tender/refund/mirror admission as Pay. */
@@ -153,12 +279,8 @@ final class ReviewedSquareEventPurchases
                     'subtotal_minor' => $lineTotal !== null && $lineTax !== null && $lineTotal >= $lineTax ? $lineTotal - $lineTax : null];
             }
             $tenders = $payments->groupBy(fn ($p) => strtoupper((string) $p->source_type) === 'CASH' ? 'cash' : (strtoupper((string) $p->source_type) === 'CARD' ? 'card' : 'other'))
-                ->map(function ($rows, $tender): array {
-                    $returns = $rows->map(function ($payment): ?int {
-                        $refund = data_get($payment->raw_payload, 'refunded_money.currency') === 'USD' ? $this->integer(data_get($payment->raw_payload, 'refunded_money.amount')) : null;
-
-                        return $refund !== null && $refund <= (app(SquarePurchaseEvidence::class)->collectedAmount($payment) ?? -1) ? $refund : null;
-                    });
+                ->map(function ($rows, $tender) use ($order): array {
+                    $returns = $rows->map(fn ($payment) => app(SquarePurchaseEvidence::class)->recordedPaymentRefund($payment, $order));
 
                     return ['tender' => $tender, 'collected_minor' => (int) $rows->sum(fn ($payment) => app(SquarePurchaseEvidence::class)->collectedAmount($payment)), 'refunded_minor' => $returns->containsStrict(null) ? null : $returns->sum()];
                 })->values()->all();

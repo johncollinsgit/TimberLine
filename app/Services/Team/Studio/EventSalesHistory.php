@@ -2,9 +2,6 @@
 
 namespace App\Services\Team\Studio;
 
-use App\Models\MarketingImportRun;
-use App\Models\SquareOrder;
-use App\Models\SquarePayment;
 use App\Models\TeamOperationRecord;
 use App\Models\Tenant;
 use App\Models\User;
@@ -93,10 +90,10 @@ class EventSalesHistory
         if ($event->kind === 'event' && Schema::hasTable('commerce_stock_event_links')) {
             $commerce = app(EventCommerceReport::class)->commerceId($event);
             if ($commerce && Schema::hasTable('pos_live_sales')) {
-                $sales = app(PosEventSales::class)->read($tenant->id, $commerce, $timezone);
+                $sales = app(PosEventSales::class)->read($tenant->id, $commerce, $timezone, true);
             }
         }
-        $selected = $event->data['_teams_enrichment']['square_orders'] ?? [];
+        $selected = $sales['square_order_ids'] ?? [];
         $scopes = $valid ? ($map['square_scopes'] ?? []) : [];
         $resolved = $this->resolveScopes($tenant, $event, $link, $timezone, $scopes, $commerce);
         $coverage = $resolved['coverage'];
@@ -112,7 +109,7 @@ class EventSalesHistory
                     $squareKnown = false;
                 }
                 // The current Pay report already includes its selected external orders.
-                if ($commerce !== null && in_array($purchase['source_id'], $selected['ids'] ?? [], true)) {
+                if ($commerce !== null && in_array($purchase['source_id'], $selected, true)) {
                     continue;
                 }
                 $sales['sale_count']++;
@@ -229,70 +226,11 @@ class EventSalesHistory
     /** One reviewed rule resolver for event money and worker customer facts. */
     private function resolveScopes(Tenant $tenant, TeamOperationRecord $event, ?TeamOperationRecord $link, string $timezone, array $scopes, ?int $commerce): array
     {
-        $result = ['coverage' => $scopes !== [], 'chunks' => [], 'review_items' => []];
-        $seen = [];
-        foreach ($scopes as $scope) {
-            $proven = app(EventSquareCoverage::class)->proven($tenant->id, $scope, $timezone);
-            $result['coverage'] = $result['coverage'] && $proven;
-            if (! $proven) {
-                $result['review_items'][] = 'Square source coverage is incomplete or its original connection changed.';
-            }
-            if (! Schema::hasTable('square_orders') || ! Schema::hasTable('square_payments')) {
-                $result['coverage'] = false;
-
-                continue;
-            }
-            $binding = MarketingImportRun::forTenantId($tenant->id)->find($scope['orders_run_id'] ?? 0)?->summary['source_binding'] ?? null;
-            if (! $binding) {
-                $result['coverage'] = false;
-
-                continue;
-            }
-            // Incomplete retrieval may show known purchases; revoked original ownership may not.
-            try {
-                app(\App\Services\Marketing\SquareConnectionContext::class)->assertCurrent($tenant->id, $binding);
-            } catch (\Throwable) {
-                $result['coverage'] = false;
-
-                continue;
-            }
-            $from = CarbonImmutable::parse($scope['starts_on'], $timezone)->startOfDay()->utc();
-            $through = CarbonImmutable::parse($scope['ends_on'], $timezone)->addDay()->startOfDay()->utc();
-            $orders = SquareOrder::forTenantId($tenant->id)->where('location_id', $scope['location_id'])->where('closed_at', '>=', $from)->where('closed_at', '<', $through->addHours(72))->get();
-            $payments = SquarePayment::forTenantId($tenant->id)->whereIn('square_order_id', $orders->pluck('square_order_id'))->where('status', 'COMPLETED')->get()->groupBy('square_order_id');
-            $timestamps = [];
-            foreach ($orders as $order) {
-                $timestamp = $this->occurredAt($order, $payments->get($order->square_order_id, collect()));
-                if ($timestamp === null) {
-                    $result['review_items'][] = 'An offline purchase needs its original selling timestamp.';
-                    $result['coverage'] = false;
-
-                    continue;
-                }
-                if ($timestamp->lt($from) || $timestamp->gte($through)) {
-                    continue;
-                }
-                if (isset($seen[$order->square_order_id])) {
-                    $result['review_items'][] = 'Overlapping source scopes repeat a Square order.';
-                    $result['coverage'] = false;
-
-                    continue;
-                }
-                $seen[$order->square_order_id] = true;
-                $timestamps[$order->square_order_id] = $timestamp;
-            }
-            $map = $link->data;
-            $chunk = app(ReviewedSquareEventPurchases::class)->forOccurrence($tenant->id, $event, $commerce, ['ids' => array_keys($timestamps), 'reviewed_by' => $map['reviewed_by'], 'reviewed_at' => $map['reviewed_at'], 'source_binding' => $binding]);
-            foreach ($chunk['purchases'] as &$purchase) {
-                $purchase['occurred_at'] = $timestamps[$purchase['source_id']]->toIso8601String();
-            }
-            unset($purchase);
-            $result['review_items'] = [...$result['review_items'], ...$chunk['review_items']];
-            $result['chunks'][] = $chunk;
+        if (! $scopes) {
+            return ['coverage' => false, 'chunks' => [], 'review_items' => []];
         }
-        $result['review_items'] = array_values(array_unique($result['review_items']));
 
-        return $result;
+        return app(ReviewedSquareEventPurchases::class)->forScopes($tenant->id, $event, $link, $timezone, $commerce);
     }
 
     public function forRegister(array $scope, User $user): array
@@ -356,21 +294,6 @@ class EventSalesHistory
         }
 
         return $known ? $net : null;
-    }
-
-    private function occurredAt(SquareOrder $order, \Illuminate\Support\Collection $payments): ?CarbonImmutable
-    {
-        $offline = $payments->filter(fn ($payment) => ($payment->raw_payload['is_offline_payment'] ?? false) === true);
-        if ($offline->isEmpty()) {
-            return $order->closed_at ? CarbonImmutable::instance($order->closed_at) : null;
-        }
-        $times = $offline->map(fn ($payment) => data_get($payment->raw_payload, 'offline_payment_details.client_created_at'));
-        if ($times->contains(fn ($time) => ! is_string($time) || strtotime($time) === false)) {
-            return null;
-        }
-        $dates = $times->map(fn ($time) => CarbonImmutable::parse($time)->utc());
-
-        return $dates->sort()->first();
     }
 
     private function compare(array $current, array $history, string $key): array

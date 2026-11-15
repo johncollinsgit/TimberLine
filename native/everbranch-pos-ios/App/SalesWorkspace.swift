@@ -65,7 +65,7 @@ struct SalesWorkspaceView: View {
                     if let summary {
                         Text(summary.eventName).font(.title2.weight(.semibold))
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                            stat(summary.sales.netSalesMinor == nil ? "Known net sales" : "Net sales", (summary.sales.netSalesMinor ?? (summary.sales.saleCount > 0 ? summary.sales.knownNetSalesMinor : nil)).map(POSMoney.display) ?? "Needs review")
+                            stat(summary.sales.netSalesMinor == nil ? "Known net sales" : "Net sales", (summary.sales.netSalesMinor ?? (summary.sales.saleCount > 0 ? summary.sales.knownNetSalesMinor : nil)).map(POSMoney.display) ?? "Needs review", note: summary.sales.netSalesMinor == nil ? partialSalesNote(summary.sales.sourceFreshness?.squareOldestSelectedSync) : nil)
                             stat("Orders", String(summary.sales.saleCount))
                             stat("Sales tax", summary.sales.salesTaxMinor.map(POSMoney.display) ?? "Needs review")
                             stat("Collected", summary.sales.refundsComplete == false ? "Needs review" : POSMoney.display(summary.sales.collectedTotalMinor ?? (summary.sales.paidTotalMinor - summary.sales.confirmedRefundsMinor)))
@@ -130,9 +130,18 @@ struct SalesWorkspaceView: View {
                 }
         }
     }
-    private func stat(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) { Text(title).font(.caption).foregroundStyle(PayTheme.muted); Text(value).font(.title3.weight(.semibold)) }
+    private func stat(_ title: String, _ value: String, note: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 6) { Text(title).font(.caption).foregroundStyle(PayTheme.muted); Text(value).font(.title3.weight(.semibold)); if let note { Text(note).font(.caption2).foregroundStyle(PayTheme.muted) } }
             .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading).padding(14).background(.white, in: RoundedRectangle(cornerRadius: 14))
+    }
+    private func partialSalesNote(_ timestamp: String?) -> String {
+        guard let timestamp else { return "Partial total · Square update time unknown" }
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var date = parser.date(from: timestamp)
+        if date == nil { parser.formatOptions = [.withInternetDateTime]; date = parser.date(from: timestamp) }
+        guard let date else { return "Partial total · Square update time unknown" }
+        return "Partial total · Square updated \(date.formatted(date: .abbreviated, time: .shortened))"
     }
     private func refresh(more: Bool = false) async {
         guard !loading else { return }

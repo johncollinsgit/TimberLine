@@ -1,10 +1,15 @@
 <?php
 
+use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\SquareOrder;
+use App\Models\SquarePayment;
 use App\Models\TeamOperationRecord;
+use App\Models\TeamProviderConnection;
 use App\Services\Inventory\StockLedger;
 use App\Services\Marketing\EventCustomerCohort;
+use App\Services\Marketing\SquareConnectionContext;
 use App\Services\Marketing\TenantCustomerLookup;
 use App\Services\PaymentsCore\Contract;
 use App\Services\PaymentsCore\MerchantBinding;
@@ -14,6 +19,8 @@ use App\Services\Pos\PosEventSales;
 use App\Services\Pos\PosStore;
 use App\Services\Pos\StockPosCommerce;
 use App\Services\Team\Studio\EventCommerceReport;
+use App\Services\Team\Studio\EventSalesHistory;
+use App\Services\Team\Studio\TeamsStudio;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -247,3 +254,106 @@ test('canonical attribution counts collapse aliases while a broken association l
     $row = collect($response->json('sales'))->firstWhere('id', $guest->id);
     expect($row['customer'])->toBeNull()->and($row['customer_review_required'])->toBeTrue();
 });
+
+function scopedCommerceMapping($test, TeamOperationRecord $event, bool $partial = false): array
+{
+    $binding = ['connection_id' => 'fixture-original-reader', 'connection_generation' => 1, 'merchant_id' => 'fixture-merchant', 'environment' => 'production', 'location_ids' => ['fixture-location']];
+    $context = Mockery::mock(SquareConnectionContext::class);
+    $context->shouldReceive('assertCurrent')->with($test->tenant->id, $binding)->andReturnNull();
+    app()->instance(SquareConnectionContext::class, $context);
+    $runs = [];
+    foreach (['orders', 'payments'] as $kind) {
+        $isPartial = $partial && $kind === 'payments';
+        $runs[$kind] = MarketingImportRun::create(['tenant_id' => $test->tenant->id, 'type' => 'square_'.$kind.'_sync', 'status' => $isPartial ? 'partial' : 'completed',
+            'started_at' => '2026-11-13', 'finished_at' => '2026-11-13', 'summary' => ['source_binding' => $binding, 'mode' => 'live-sync', 'errors' => 0,
+                'since' => '2020-01-01T00:00:00Z', 'initial_cursor' => null, 'checkpoint' => ['cursor' => $isPartial ? 'remaining-page' : null, 'errors' => 0]]]);
+    }
+    $series = TeamOperationRecord::create(['id' => (string) Str::uuid(), 'tenant_id' => $test->tenant->id, 'area_id' => $test->area->id, 'kind' => 'series', 'title' => 'Fictional annual show',
+        'source_key' => hash('sha256', Str::uuid()), 'status' => 'accepted', 'version' => 1, 'data' => []]);
+    app(TeamsStudio::class)->reviewOccurrence($test->tenant, $test->owner, $test->area, [
+        'id' => (string) Str::uuid(), 'request_id' => (string) Str::uuid(), 'expected_version' => 0, 'series_id' => $series->id, 'occurrence_id' => $event->id,
+        'financial_id' => null, 'staff_ids' => [], 'allocation_reviewed' => true, 'reason' => 'Reviewed original source location and exact annual selling dates.',
+        'venue' => 'Fictional hall', 'timezone' => 'America/New_York', 'verified_selling_days' => 3, 'daily_hours' => [],
+        'square_scopes' => [['location_id' => 'fixture-location', 'starts_on' => '2026-11-06', 'ends_on' => '2026-11-08',
+            'orders_run_id' => $runs['orders']->id, 'payments_run_id' => $runs['payments']->id]],
+    ]);
+
+    return $binding;
+}
+
+function scopedCommerceOrder($test, array $binding, string $id, int $net): void
+{
+    SquareOrder::create(['tenant_id' => $test->tenant->id, 'square_order_id' => $id, 'location_id' => 'fixture-location', 'state' => 'COMPLETED',
+        'total_money_amount' => $net + 70, 'total_money_currency' => 'USD', 'closed_at' => '2026-11-07 16:00:00', 'synced_at' => now(),
+        'raw_payload' => ['_source_binding' => $binding, 'total_tax_money' => ['amount' => 70, 'currency' => 'USD']]]);
+    SquarePayment::create(['tenant_id' => $test->tenant->id, 'square_payment_id' => 'payment-'.$id, 'square_order_id' => $id, 'location_id' => 'fixture-location',
+        'amount_money' => $net + 70, 'currency' => 'USD', 'status' => 'COMPLETED', 'source_type' => 'CARD', 'created_at_source' => '2026-11-07 16:00:00', 'synced_at' => now(),
+        'raw_payload' => ['_source_binding' => $binding, 'refunded_money' => ['amount' => 0, 'currency' => 'USD']]]);
+}
+
+test('reviewed live Square scopes feed Pay and history once alongside static selections and original Pay mirrors', function () {
+    $sale = eventReceipt($this);
+    $this->store->rows('sales', $this->tenant->id)->where('id', $sale->id)->update(['provider_order_id' => 'native-square-mirror']);
+    $event = commerceOccurrence($this, ['_teams_enrichment' => ['commerce_event' => ['id' => 123]]]);
+    $binding = scopedCommerceMapping($this, $event);
+    scopedCommerceOrder($this, $binding, 'external-square-order', 2000);
+    scopedCommerceOrder($this, $binding, 'native-square-mirror', 1000);
+    $data = $event->data;
+    $data['_teams_enrichment']['square_orders'] = ['ids' => ['external-square-order', 'native-square-mirror'], 'reviewed_by' => $this->owner->id, 'reviewed_at' => now()->toIso8601String()];
+    $event->update(['data' => $data]);
+
+    $report = app(PosEventSales::class)->read($this->tenant->id, 123, 'America/New_York', true);
+    expect($report['sale_count'])->toBe(2)->and($report['net_sales_minor'])->toBe(3000)->and($report['paid_total_minor'])->toBe(3140)
+        ->and($report['square_order_ids'])->toBe(['external-square-order'])
+        ->and($report['source_freshness']['square_deduplicated_orders'])->toBeGreaterThanOrEqual(2);
+    $history = app(EventSalesHistory::class)->read($this->tenant, $this->owner, $event)['current'];
+    expect($history['sale_count'])->toBe(2)->and($history['known_net_sales_minor'])->toBe(3000)
+        ->and($history['net_sales_minor'])->toBe(3000)->and(array_sum(array_column($history['daily'], 'sale_count')))->toBe(2)
+        ->and(array_sum(array_column($history['daily'], 'net_sales_minor')))->toBe(3000);
+    expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(1)->and(SquareOrder::forTenantId($this->tenant->id)->count())->toBe(2);
+    Http::assertNothingSent();
+});
+
+test('partially retrieved reviewed Square scopes show known Pay sales without claiming complete event coverage', function () {
+    $event = commerceOccurrence($this, ['_teams_enrichment' => ['commerce_event' => ['id' => 123]]]);
+    $binding = scopedCommerceMapping($this, $event, true);
+    scopedCommerceOrder($this, $binding, 'partial-external-order', 2000);
+    // Full original Square snapshots legitimately omit zero-refund fields.
+    $order = SquareOrder::forTenantId($this->tenant->id)->where('square_order_id', 'partial-external-order')->firstOrFail();
+    $order->update(['raw_payload' => [...$order->raw_payload, 'net_amounts' => ['total_money' => ['amount' => 2070, 'currency' => 'USD']]]]);
+    $payment = SquarePayment::forTenantId($this->tenant->id)->where('square_order_id', $order->square_order_id)->firstOrFail();
+    $payment->update(['raw_payload' => ['_source_binding' => $binding, 'id' => $payment->square_payment_id, 'status' => 'COMPLETED',
+        'order_id' => $order->square_order_id, 'location_id' => 'fixture-location', 'amount_money' => ['amount' => 2070, 'currency' => 'USD'],
+        'total_money' => ['amount' => 2070, 'currency' => 'USD']]]);
+    $report = app(PosEventSales::class)->read($this->tenant->id, 123, 'America/New_York');
+    expect($report['sale_count'])->toBe(1)->and($report['paid_total_minor'])->toBe(2070)->and($report['known_net_sales_minor'])->toBe(2000)
+        ->and($report['source_freshness']['square_oldest_selected_sync'])->toBe($order->synced_at->toIso8601String())
+        ->and($report['source_coverage_complete'])->toBeFalse()->and($report['net_sales_minor'])->toBeNull()
+        ->and($report['review_items'])->toContain('Square source coverage is incomplete or its original connection changed.');
+    $history = app(EventSalesHistory::class)->read($this->tenant, $this->owner, $event);
+    expect($history['current']['sale_count'])->toBe(1)->and($history['current']['known_net_sales_minor'])->toBe(2000)
+        ->and($history['current']['source_coverage_complete'])->toBeFalse()->and($history['current']['net_sales_minor'])->toBeNull()
+        ->and($history['benchmarks']['average_event_net_sales_minor'])->toBeNull();
+});
+
+test('current reviewed scope sales fail closed after original source withdrawal or generation changes', function (string $change) {
+    $event = commerceOccurrence($this, ['_teams_enrichment' => ['commerce_event' => ['id' => 123]]]);
+    $binding = scopedCommerceMapping($this, $event);
+    scopedCommerceOrder($this, $binding, 'source-sensitive-order', 2000);
+    $connection = TeamProviderConnection::create(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenant->id, 'area_id' => $this->area->id,
+        'user_id' => $this->owner->id, 'provider' => 'asana', 'account_key' => hash('sha256', Str::uuid()), 'status' => 'connected', 'generation' => 1, 'settings' => [], 'credentials' => [], 'sync_state' => []]);
+    $event->update(['connection_id' => $connection->id, 'data' => [...$event->data, '_generation' => 1]]);
+    $read = fn () => app(PosEventSales::class)->read($this->tenant->id, 123, 'America/New_York');
+    expect($read()['known_net_sales_minor'])->toBe(2000);
+    if ($change === 'generation') {
+        $connection->update(['generation' => 2]);
+    } elseif ($change === 'withdrawn') {
+        $event->update(['status' => 'withdrawn']);
+    } else {
+        $context = Mockery::mock(SquareConnectionContext::class);
+        $context->shouldReceive('assertCurrent')->andThrow(new Symfony\Component\HttpKernel\Exception\HttpException(409));
+        app()->instance(SquareConnectionContext::class, $context);
+    }
+    $report = $read();
+    expect($report['sale_count'])->toBe(0)->and($report['known_net_sales_minor'])->toBe(0)->and($report['source_coverage_complete'])->toBeFalse();
+})->with(['generation', 'withdrawn', 'square_revoked']);
