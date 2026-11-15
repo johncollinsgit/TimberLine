@@ -83,6 +83,8 @@
                     </section>
                 @endif
 
+                @if($retailGuide ?? null)@include('managed-website.retail-setup')@endif
+
                 <nav class="eb-admin-page-actions" aria-label="Website tools"><a class="eb-admin-button" href="#website-pages">Pages</a>@if($isEditorEnabled)<a class="eb-admin-button" href="#theme-library-heading">Design</a>@endif @unless($privateTrial)<a class="eb-admin-button" href="{{ route('managed-website.products.index') }}">Shop</a><a class="eb-admin-button" href="#website-domains">Domains</a>@endunless</nav>
                 <section id="website-pages" class="eb-admin-panel" aria-labelledby="website-pages-heading">
                     <div class="eb-admin-panel-heading"><h2 id="website-pages-heading">Pages</h2><span>{{ $pages->count() }}</span></div>

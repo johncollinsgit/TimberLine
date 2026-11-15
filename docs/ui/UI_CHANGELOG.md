@@ -1,3 +1,19 @@
+## 2026-11-15 - Guided retail website flow (source candidate)
+
+Retail starters show real product and collection photo cards, with an empty-state
+setup guide instead of invented catalog records. Owners add photos, link active
+products to collections, preview privately, save a draft Shop menu, and explicitly
+publish. A live-site label reminds owners to publish again for saved changes.
+Unpaid trials offer activation instead of blocked catalog-authoring links, while
+retained private previews remain readable. Private storefront options retain
+correct prices while cart/account/quote writes stay disabled. Published pages retain their own branding and existing host gates.
+
+Disposable signed-purchase HTTP tests cover the complete source path and tenant
+boundaries; compiled Chromium/WebKit checks cover phone/desktop photo cards,
+options, menu autosave and recovery. New paid merchant setup stays default-off
+pending separate genuine merchant TEST acceptance. This is source verification,
+not a live retail checkout or a Shopify source cutover.
+
 ## 2026-11-15 - Self-service completion recovery (source candidate)
 
 Saved checkout confirmation stops polling when the server reports a terminal

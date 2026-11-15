@@ -8,6 +8,20 @@ use App\Services\Tenancy\TenantModuleAccessResolver;
 
 class TenantPaymentSetupAccess
 {
+    /** Setup admission is separate from legacy collection consumers of enabledFor. */
+    public function enabledForSetup(Tenant $tenant): bool
+    {
+        return $this->enabledFor($tenant) || $this->selfServiceSetupEnabledFor($tenant);
+    }
+
+    public function selfServiceSetupEnabledFor(Tenant $tenant): bool
+    {
+        return (bool) config('tenant_payments.setup_enabled')
+            && (bool) config('tenant_payments.self_service_setup_enabled', false)
+            && app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->registered($tenant)
+            && app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->eligible($tenant);
+    }
+
     public function enabledFor(Tenant $tenant): bool
     {
         return (bool) config('tenant_payments.setup_enabled')

@@ -11,6 +11,7 @@ use App\Models\TenantSiteMedia;
 use App\Models\TenantSitePage;
 use App\Models\TenantSitePageVersion;
 use App\Models\TenantSiteVersion;
+use App\Models\WebsiteProduct;
 use App\Services\ManagedWebsite\ManagedWebsiteAccessService;
 use App\Services\ManagedWebsite\ManagedWebsiteDomainService;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
@@ -36,6 +37,7 @@ class ManagedWebsiteController extends Controller
         $setup = $site?->setup;
         $checklist = $pilot->checklist($site, $setup);
         $policy = app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class);
+        $presentation = app(\App\Services\ManagedWebsite\WebsiteStorefrontPresentation::class);
 
         return view('managed-website.index', [
             'tenant' => $tenant,
@@ -64,6 +66,10 @@ class ManagedWebsiteController extends Controller
             'setup' => $setup,
             'checklist' => $checklist,
             'nextChecklistItem' => collect($checklist)->firstWhere('complete', false),
+            'storefront' => $site ? $presentation->capabilities($site, $request, true) : [],
+            'retailCards' => $site ? $presentation->cards($site, true) : [],
+            'retailGuide' => $site ? $presentation->guide($site, $request) : null,
+            'previewShopUrl' => $site ? route('managed-website.preview.shop', ['tenant' => $tenant->slug]) : null,
             'canPublish' => $access->canPublish($tenant, $request->user()),
         ]);
     }
@@ -149,6 +155,9 @@ class ManagedWebsiteController extends Controller
                     || app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->eligible($tenant)),
             'trial' => app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->trial($tenant),
             'relatedPhotos' => app(WebsiteStarterCatalog::class)->photos($tenant),
+            'retailShopAvailable' => app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->eligible($tenant)
+                && app(\App\Services\ManagedWebsite\WebsiteStorefrontPresentation::class)->capabilities($site, $request, true)['is_retail_starter']
+                && WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('status', 'active')->exists(),
         ]);
     }
 
@@ -201,6 +210,8 @@ class ManagedWebsiteController extends Controller
                 'tenant' => $tenant,
                 'previewMode' => $previewMode,
                 'previewLinks' => $this->draftPreviewLinks($site),
+                'storefront' => app(\App\Services\ManagedWebsite\WebsiteStorefrontPresentation::class)->capabilities($site, $request, true),
+                'retailCards' => app(\App\Services\ManagedWebsite\WebsiteStorefrontPresentation::class)->cards($site, true),
                 'editorUrl' => $websites->editorEnabledFor($tenant)
                     ? route('managed-website.editor', ['page' => $page])
                     : route('managed-website.index', ['tenant' => $tenant->slug]),
@@ -540,7 +551,12 @@ class ManagedWebsiteController extends Controller
         abort_unless($payload !== null, 404);
         abort_unless($websites->publicHostAllowed($payload['site'], $request->getHost()), 404);
 
-        return view('managed-website.public', $payload + ['tenant' => $tenant]);
+        $presentation = app(\App\Services\ManagedWebsite\WebsiteStorefrontPresentation::class);
+
+        return view('managed-website.public', $payload + ['tenant' => $tenant,
+            'storefront' => $presentation->capabilities($payload['site'], $request),
+            'retailCards' => $presentation->cards($payload['site']),
+        ]);
     }
 
     /** @return array<string,mixed> */
@@ -587,12 +603,13 @@ class ManagedWebsiteController extends Controller
     {
         return $site->pages
             ->filter(fn (TenantSitePage $candidate): bool => (int) $candidate->tenant_id === (int) $site->tenant_id)
-            ->mapWithKeys(function (TenantSitePage $candidate): array {
+            ->mapWithKeys(function (TenantSitePage $candidate) use ($site): array {
                 $path = trim('/'.trim((string) $candidate->slug, '/'), '/');
                 $path = $path === '' ? '/' : '/'.$path;
 
-                return [$path => route('managed-website.editor.preview.site', ['page' => $candidate])];
+                return [$path => route('managed-website.editor.preview.site', ['page' => $candidate, 'tenant' => $site->tenant->slug])];
             })
+            ->put('/shop', route('managed-website.preview.shop', ['tenant' => $site->tenant->slug]))
             ->all();
     }
 

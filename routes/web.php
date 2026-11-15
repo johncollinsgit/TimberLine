@@ -927,6 +927,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/mobile-previewed', [ManagedWebsiteController::class, 'markMobilePreviewed'])->name('mobile-previewed');
             Route::get('/leads', [ManagedWebsiteController::class, 'leads'])->name('leads.index');
             Route::get('/services', [WebsiteCommerceController::class, 'services'])->name('services.index');
+            Route::get('/preview/shop', [\App\Http\Controllers\WebsiteStorePreviewController::class, 'shop'])->name('preview.shop');
+            Route::get('/preview/products/{product}', [\App\Http\Controllers\WebsiteStorePreviewController::class, 'product'])->whereNumber('product')->name('preview.product');
             Route::post('/services', [WebsiteCommerceController::class, 'storeService'])->name('services.store');
             Route::put('/services/{product}', [WebsiteCommerceController::class, 'updateService'])->name('services.update');
             Route::post('/themes', [ManagedWebsiteController::class, 'applyTheme'])->name('themes.apply');

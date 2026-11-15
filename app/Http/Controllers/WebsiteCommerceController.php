@@ -541,7 +541,11 @@ class WebsiteCommerceController extends Controller
         }
         $products = $query->orderBy('id')->paginate(24)->withQueryString();
 
-        return view('managed-website.shop', compact('tenant', 'site', 'products', 'category', 'search', 'collection', 'collections', 'selectedCollection'));
+        return view('managed-website.shop', compact('tenant', 'site', 'products', 'category', 'search', 'collection', 'collections', 'selectedCollection') + [
+            'storeSettings' => $publicSettings,
+            'storefront' => app(\App\Services\ManagedWebsite\WebsiteStorefrontPresentation::class)->capabilities($site, $request),
+            'retailCards' => app(\App\Services\ManagedWebsite\WebsiteStorefrontPresentation::class)->cards($site),
+        ]);
     }
 
     public function showProduct(Request $request, string $handle, ManagedWebsiteService $websites): View
@@ -565,17 +569,16 @@ class WebsiteCommerceController extends Controller
         $selectedVariant = isset($input['variant']) ? $variantChoices->firstWhere('id', (int) $input['variant'])
             : ($variantChoices->firstWhere('available', true) ?? $variantChoices->first());
         abort_if(isset($input['variant']) && ! $selectedVariant, 404);
-        $commerce = app(WebsiteCommerceService::class);
-        $quoteRequestAllowed = ! $request->attributes->get('managed_website_relay')
-            && data_get($request->attributes->get('host_tenant_context'), 'strategy') !== 'managed_website_custom_domain';
-        $cartEnabled = $quoteRequestAllowed && data_get($publicSettings, 'domain_choice') !== 'everbranch_subdomain' && $commerce->enabledFor($tenant);
-        $checkoutReady = $cartEnabled && $commerce->checkoutReadiness($tenant)['ready'];
+        $storefront = app(\App\Services\ManagedWebsite\WebsiteStorefrontPresentation::class)->capabilities($site, $request);
+        $quoteRequestAllowed = ! $storefront['custom_host'];
+        $cartEnabled = $storefront['can_cart'];
+        $checkoutReady = $storefront['checkout_ready'];
         $contactPublished = $site->pages()->where('tenant_id', $tenant->id)->where('slug', 'contact')
             ->whereHas('publishedVersion', fn ($query) => $query->where('tenant_id', $tenant->id)->where('tenant_site_id', $site->id)->where('status', 'published'))->exists();
         $contactEmail = (string) data_get($publicSettings, 'business_contact.email', '');
         $contactUrl = $contactPublished ? '/contact' : (filter_var($contactEmail, FILTER_VALIDATE_EMAIL) ? 'mailto:'.$contactEmail : null);
 
-        return view('managed-website.product', compact('tenant', 'site', 'product', 'variantChoices', 'selectedVariant', 'cartEnabled', 'checkoutReady', 'quoteRequestAllowed', 'contactUrl'));
+        return view('managed-website.product', compact('tenant', 'site', 'product', 'variantChoices', 'selectedVariant', 'cartEnabled', 'checkoutReady', 'quoteRequestAllowed', 'contactUrl', 'storefront') + ['storeSettings' => $publicSettings]);
     }
 
     public function cart(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce, WebsiteCommerceShippingService $shipping): View

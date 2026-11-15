@@ -16,6 +16,11 @@ class TenantPaymentsReadinessService
     /** @return array{ready:bool, blockers:array<int,string>, account:?TenantPaymentAccount} */
     public function readinessFor(Tenant $tenant, bool $requireConnectedAccount = true, bool $requireVerifiedLiveWebhooks = true): array
     {
+        return $this->readiness($tenant, $requireConnectedAccount, $requireVerifiedLiveWebhooks, false);
+    }
+
+    private function readiness(Tenant $tenant, bool $requireConnectedAccount, bool $requireVerifiedLiveWebhooks, bool $setupOnly): array
+    {
         $blockers = [];
         if (app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($tenant)) {
             $blockers[] = 'Activate your Everbranch plan before enabling customer payment collection.';
@@ -27,7 +32,8 @@ class TenantPaymentsReadinessService
         }
 
         $allowed = array_values(array_filter(array_map('strval', (array) ($settings['tenant_slugs'] ?? []))));
-        if (! in_array('*', $allowed, true) && ! in_array((string) $tenant->slug, $allowed, true)) {
+        if (! in_array('*', $allowed, true) && ! in_array((string) $tenant->slug, $allowed, true)
+            && ! ($setupOnly && app(TenantPaymentSetupAccess::class)->selfServiceSetupEnabledFor($tenant))) {
             $blockers[] = 'Everbranch Billing is not approved for this workspace.';
         }
 
@@ -60,7 +66,7 @@ class TenantPaymentsReadinessService
     {
         // An account must exist before a live payment/refund can verify webhooks.
         // Keep collection gated separately by the full readiness check.
-        return $this->readinessFor($tenant, requireConnectedAccount: false, requireVerifiedLiveWebhooks: false)['ready'];
+        return $this->readiness($tenant, requireConnectedAccount: false, requireVerifiedLiveWebhooks: false, setupOnly: true)['ready'];
     }
 
     public function canCollectCustomerPayments(Tenant $tenant): bool

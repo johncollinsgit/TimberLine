@@ -19,7 +19,8 @@ async function retailFixture() {
             response.writeHead(200, {'Content-Type': url.pathname.endsWith('.js') ? 'text/javascript' : 'text/css'});
             response.end(fs.readFileSync(path.join(root, 'public', url.pathname))); return;
         }
-        const design = /^\/product\/(native|sawyer|gated)$/.exec(url.pathname)?.[1]
+        if (request.method === 'GET' && url.pathname === '/fixture-product.png') { response.writeHead(200, {'Content-Type': 'image/png'}); response.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j4s8AAAAASUVORK5CYII=', 'base64')); return; }
+        const design = (url.pathname === '/website/preview/shop' ? 'shop-preview' : /^\/website\/preview\/products\/20$/.test(url.pathname) ? 'preview' : null) || /^\/product\/(native|sawyer|gated)$/.exec(url.pathname)?.[1]
             || (/^\/layout\/(starter|native|serif|sawyer)$/.exec(url.pathname)?.[1] ? 'layout-' + url.pathname.split('/').at(-1) : null);
         if (request.method === 'GET' && design) {
             const selected = url.searchParams.get('variant') || '2';
@@ -43,6 +44,33 @@ async function retailFixture() {
 }
 
 for (const [name, engine] of [['Chromium', chromium], ['WebKit', webkit]]) {
+    test(`retail private preview ${name}: real photo cards and read-only options work on phone and desktop`, async () => {
+        const fixture = await retailFixture(); const browser = await engine.launch({headless: true});
+        try {
+            const context = await browser.newContext();
+            await context.route('**/*', route => new URL(route.request().url()).origin === fixture.origin ? route.continue() : route.abort());
+            const page = await context.newPage();
+            for (const width of [320, 390, 1440]) {
+                await page.setViewportSize({width, height: 900});
+                assert.equal((await page.goto(fixture.origin + '/website/preview/shop?tenant=fictional-retail')).status(), 200);
+                await expect(page.getByText('Private catalog preview. Shopping and payment are disabled.')).toBeVisible();
+                await expect(page.getByRole('heading', {name:'Fictional Linen Studio', exact:true})).toBeVisible();
+                assert.equal(await page.locator('img').evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0)), true);
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+                assert.equal(await page.locator('form[method=POST]').count(), 0);
+                assert.equal(await page.getByRole('link', {name:/^(Cart|Account)$/}).count(), 0);
+                await expect(page.getByRole('link', {name:'View collection', exact:true})).toHaveAttribute('href', fixture.origin + '/website/preview/shop?tenant=fictional-retail&collection=linen');
+                await page.getByRole('link', {name:'View Fictional linen shirt', exact:true}).click();
+                await expect(page.getByLabel('Choose an option')).toHaveCount(1);
+                await page.getByLabel('Choose an option').selectOption('100');
+                await expect(page.locator('[data-variant-price]')).toHaveText('$100.00');
+                await expect(page.locator('[data-variant-availability]')).toHaveText('In stock');
+                assert.equal(await page.locator('form[method=POST]').count(), 0);
+                assert.equal(fixture.submitted.length, 0);
+            }
+            await context.close();
+        } finally { await browser.close(); await fixture.close(); }
+    });
     test(`native layout ${name}: starter sans and explicit legacy typography compute correctly on phone and desktop`, async () => {
         const fixture = await retailFixture(); const browser = await engine.launch({headless: true});
         try {

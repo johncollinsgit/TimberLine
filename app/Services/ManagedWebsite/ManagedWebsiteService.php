@@ -238,6 +238,16 @@ class ManagedWebsiteService
     {
         $current = $this->siteVersion($site, true);
         $settings = $this->sanitizeSettings(array_replace((array) ($current?->settings ?? $site->settings ?? []), (array) ($input['settings'] ?? [])));
+        // This legacy restriction is server-owned. Ordinary theme/menu edits
+        // cannot remove it, and client settings cannot introduce one.
+        $trustedSite = TenantSite::query()->whereKey($site->id)->where('tenant_id', $site->tenant_id)->firstOrFail();
+        $quoteOnly = data_get($trustedSite->settings, 'domain_choice') === 'everbranch_subdomain'
+            || TenantSiteVersion::query()->where('tenant_id', $site->tenant_id)->where('tenant_site_id', $site->id)
+                ->whereIn('id', array_filter([$trustedSite->draft_site_version_id, $trustedSite->published_site_version_id]))
+                ->where('settings->domain_choice', 'everbranch_subdomain')->exists();
+        if ($quoteOnly) {
+            $settings['domain_choice'] = 'everbranch_subdomain';
+        }
         $settings['logo_url'] = app(WebsiteMediaUrls::class)->validatedImage($site, (string) ($settings['logo_url'] ?? ''), 'settings.logo_url');
         $navigation = $this->sanitizeNavigation((array) ($input['navigation'] ?? $current?->navigation ?? []));
         $seo = $this->sanitizeSeo(array_replace((array) ($current?->seo ?? []), (array) ($input['seo'] ?? [])));

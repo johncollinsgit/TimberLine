@@ -6,7 +6,8 @@
     <link rel="stylesheet" href="{{ asset('css/website-retail.css') }}">
     <script src="{{ asset('js/website-retail.js') }}" defer></script>
     @if($variantChoices->isNotEmpty())
-        <form method="GET" action="{{ route('managed-website.store.products.show', ['handle' => $product->handle]) }}" class="retail-option-form" data-variant-choice-form>
+        <form method="GET" action="{{ ($productUrl ?? route('managed-website.store.products.show', ['handle' => $product->handle])) }}" class="retail-option-form" data-variant-choice-form>
+            @if($storePreview ?? false)<input type="hidden" name="tenant" value="{{ $site->tenant->slug }}">@endif
             <label for="retail-variant">{{ $variantChoices->count() > 1 ? 'Choose an option' : 'Option' }}</label>
             <div class="retail-option-row">
                 <select id="retail-variant" name="variant" aria-describedby="retail-availability" data-variant-choice>
