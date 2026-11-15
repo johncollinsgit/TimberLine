@@ -27,10 +27,18 @@ class ManagedWebsiteService
 
     public function applyTheme(TenantSite $site, string $themeKey, ?User $actor): TenantSite
     {
+        return $this->withDraftWriteLock($site, fn (): TenantSite => $this->applyThemeDraft($site, $themeKey, $actor));
+    }
+
+    protected function applyThemeDraft(TenantSite $site, string $themeKey, ?User $actor): TenantSite
+    {
         $theme = $this->themeCatalog->find($themeKey);
         abort_unless(is_array($theme), 422, 'That website theme is not available.');
 
         return DB::transaction(function () use ($site, $theme, $actor): TenantSite {
+            $existing = $site->pages()->pluck('slug')->all();
+            $additional = count(array_diff(array_unique(array_column((array) $theme['pages'], 'slug')), $existing));
+            $this->assertTrialPageCapacity($site, $additional);
             $navigation = [];
             foreach ((array) $theme['pages'] as $definition) {
                 $page = TenantSitePage::query()->firstOrCreate(
@@ -56,7 +64,11 @@ class ManagedWebsiteService
         if (! (bool) config('managed_website.editor_enabled', false)) {
             return false;
         }
-        if (app(ManagedWebsiteSelfServicePolicy::class)->eligible($tenant)) {
+        $policy = app(ManagedWebsiteSelfServicePolicy::class);
+        if ($policy->registered($tenant)) {
+            return $policy->draftEditable($tenant);
+        }
+        if ($policy->eligible($tenant)) {
             return true;
         }
         if (! in_array((int) $tenant->id, (array) config('managed_website.editor_tenant_ids', []), true)) {
@@ -69,6 +81,60 @@ class ManagedWebsiteService
             ->where('enabled_status', 'enabled')
             ->whereIn('billing_status', ['add_on_paid', 'add_on_comped', 'custom_contract', 'trial'])
             ->exists();
+    }
+
+    public function draftViewingEnabledFor(Tenant $tenant): bool
+    {
+        if (! (bool) config('managed_website.editor_enabled', false)) {
+            return false;
+        }
+        $policy = app(ManagedWebsiteSelfServicePolicy::class);
+
+        return $policy->registered($tenant) ? $policy->draftViewable($tenant) : $this->editorEnabledFor($tenant);
+    }
+
+    /** Serialize registered-workspace writes and recheck the clock after waiting. */
+    public function withDraftWriteLock(TenantSite $site, callable $write): mixed
+    {
+        $policy = app(ManagedWebsiteSelfServicePolicy::class);
+        if (! $policy->registered($site->tenant)) {
+            return $write();
+        }
+
+        return DB::transaction(function () use ($site, $write): mixed {
+            TenantSite::query()->whereKey($site->id)->where('tenant_id', $site->tenant_id)->lockForUpdate()->firstOrFail();
+            abort_unless($this->editorEnabledFor($site->tenant), 423, 'Private editing is paused. Your saved draft is available to preview. Activate a plan to continue.');
+
+            return $write();
+        });
+    }
+
+    /** Must run inside withDraftWriteLock before creating any page rows. */
+    public function assertTrialPageCapacity(TenantSite $site, int $additional): void
+    {
+        $policy = app(ManagedWebsiteSelfServicePolicy::class);
+        if (! $policy->unpaidTrial($site->tenant)) {
+            return;
+        }
+        $limit = (int) data_get($policy->trial($site->tenant), 'limits.website_pages', 0);
+        if ($site->pages()->count() + max(0, $additional) > $limit) {
+            throw ValidationException::withMessages(['title' => 'Your private trial includes '.$limit.' pages. Activate a plan to add more.']);
+        }
+    }
+
+    /** Must run inside withDraftWriteLock before writing the uploaded file. */
+    public function assertTrialMediaCapacity(TenantSite $site, int $bytes): void
+    {
+        $policy = app(ManagedWebsiteSelfServicePolicy::class);
+        if (! $policy->unpaidTrial($site->tenant)) {
+            return;
+        }
+        $trial = $policy->trial($site->tenant);
+        $photos = (int) data_get($trial, 'limits.website_photos', 0);
+        $storage = (int) data_get($trial, 'limits.website_media_bytes', 0);
+        if ($site->media()->count() >= $photos || (int) $site->media()->sum('file_size') + max(0, $bytes) > $storage) {
+            throw ValidationException::withMessages(['image' => 'Your private trial includes '.$photos.' photos and 50 MB of uploads. Activate a plan for more.']);
+        }
     }
 
     public function publishingEnabled(): bool
@@ -94,6 +160,10 @@ class ManagedWebsiteService
     public function createSite(Tenant $tenant, ?User $actor): TenantSite
     {
         return DB::transaction(function () use ($tenant, $actor): TenantSite {
+            if (app(ManagedWebsiteSelfServicePolicy::class)->registered($tenant)) {
+                Tenant::query()->whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+                abort_unless($this->editorEnabledFor($tenant), 423, 'Private editing is paused. Your saved draft is safe.');
+            }
             $site = TenantSite::query()->firstOrCreate(
                 ['tenant_id' => (int) $tenant->id],
                 [
@@ -145,6 +215,11 @@ class ManagedWebsiteService
     /** @param array<string,mixed> $input */
     public function saveSiteDraft(TenantSite $site, array $input, ?User $actor): TenantSiteVersion
     {
+        return $this->withDraftWriteLock($site, fn (): TenantSiteVersion => $this->writeSiteDraft($site, $input, $actor));
+    }
+
+    protected function writeSiteDraft(TenantSite $site, array $input, ?User $actor): TenantSiteVersion
+    {
         $current = $this->siteVersion($site, true);
         $settings = $this->sanitizeSettings(array_replace((array) ($current?->settings ?? $site->settings ?? []), (array) ($input['settings'] ?? [])));
         $navigation = $this->sanitizeNavigation((array) ($input['navigation'] ?? $current?->navigation ?? []));
@@ -189,6 +264,11 @@ class ManagedWebsiteService
 
     /** @param array<string,mixed> $input */
     public function saveDraft(TenantSite $site, TenantSitePage $page, array $input, ?User $actor): TenantSitePageVersion
+    {
+        return $this->withDraftWriteLock($site, fn (): TenantSitePageVersion => $this->writeDraft($site, $page, $input, $actor));
+    }
+
+    protected function writeDraft(TenantSite $site, TenantSitePage $page, array $input, ?User $actor): TenantSitePageVersion
     {
         $blocks = $this->sanitizeBlocks((array) ($input['blocks'] ?? []));
         if ($blocks === []) {

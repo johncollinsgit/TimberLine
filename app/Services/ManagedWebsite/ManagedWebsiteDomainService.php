@@ -22,9 +22,14 @@ class ManagedWebsiteDomainService
 
     public function enabledFor(Tenant $tenant): bool
     {
+        $policy = app(ManagedWebsiteSelfServicePolicy::class);
+        if ($policy->registered($tenant) && ! $policy->eligible($tenant)) {
+            return false;
+        }
+
         return $this->enabled()
             && (in_array((int) $tenant->id, (array) config('managed_website.custom_domain_tenant_ids', []), true)
-                || app(ManagedWebsiteSelfServicePolicy::class)->eligible($tenant));
+                || $policy->eligible($tenant));
     }
 
     public function activationEnabledFor(Tenant $tenant): bool
@@ -85,6 +90,7 @@ class ManagedWebsiteDomainService
 
     public function request(TenantSite $site, string $input, ?User $actor): TenantSiteDomain
     {
+        $this->requireSelfServicePurchase($site);
         $hostname = $this->normalizeHostname($input);
         if ($this->isReservedHost($hostname)) {
             throw ValidationException::withMessages(['domain' => 'That address is reserved for Everbranch and cannot be connected to a customer site.']);
@@ -133,6 +139,7 @@ class ManagedWebsiteDomainService
     public function verify(TenantSiteDomain $domain, ?User $actor): TenantSiteDomain
     {
         $domain->loadMissing('site');
+        $this->requireSelfServicePurchase($domain->site);
         abort_if(in_array($domain->status, ['active', 'disabled'], true), 422, 'This domain is not waiting for connection.');
         $verificationToken = (string) $domain->verification_token;
         $recordName = $this->verificationRecordName($domain->hostname);
@@ -167,6 +174,12 @@ class ManagedWebsiteDomainService
         });
 
         return $domain->fresh();
+    }
+
+    protected function requireSelfServicePurchase(TenantSite $site): void
+    {
+        $policy = app(ManagedWebsiteSelfServicePolicy::class);
+        abort_if($policy->registered($site->tenant) && ! $policy->eligible($site->tenant), 423, 'Activate a paid plan before connecting a public domain.');
     }
 
     public function activate(TenantSiteDomain $domain, ?User $actor): TenantSiteDomain

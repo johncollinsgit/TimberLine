@@ -43,6 +43,29 @@ DNS mutation. Disablement retains the hostname and published snapshots.
 
 ## Paid self-service cohort
 
+New verified self-service workspaces receive the canonical 14-day, no-card
+private trial from `SelfServiceTrialService`. Its original server-clock record,
+owner/profile binding and successful enrollment audit are required; a registration
+flag or a legacy pilot allowlist alone cannot create trial access. The trial
+does not create a paid entitlement, subscription, Checkout session or provider
+resource, and does not make an included address public.
+
+While active, the native Website draft may contain one site, six pages, ten
+photos and 50 MiB of uploaded media. Page creation/theme additions and uploads
+serialize on the actual site row; fresh page counts/media byte sums are checked
+before creating rows or storing files. A failed upload transaction removes its
+newly generated file. Explicit module denial and the editor freeze still win.
+Catalog offerings, publishing, rollback and domain preparation remain outside
+the private trial and require the existing genuine paid policies.
+
+After expiry the Website overview, owned full-site preview and private images
+remain readable. Writable editor/setup/upload/page/theme operations are blocked;
+the old pilot allowlist cannot reopen a registered unpaid trial. Saved versions
+are retained. The owner must explicitly activate the current priced plan and
+accept its terms; expiration never starts a payment. A previously purchased
+workspace keeps the existing historical-paid snapshot behavior and cannot
+restart its old private clock after cancellation or refund.
+
 `SelfServicePurchaseEligibility::paidForTenant()` requires the original durable
 verified platform purchase, receipt, applied fulfillment and current paid
 subscription. Together with the canonical `managed_website` access decision it

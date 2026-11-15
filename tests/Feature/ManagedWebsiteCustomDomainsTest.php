@@ -16,6 +16,16 @@ use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
+function customDomainPolicyFixture(): ManagedWebsiteSelfServicePolicy
+{
+    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy->shouldReceive('registered')->byDefault()->andReturn(false);
+    $policy->shouldReceive('trial')->byDefault()->andReturn(['registered_trial' => false, 'state' => 'none']);
+    $policy->shouldReceive('unpaidTrial')->byDefault()->andReturn(false);
+
+    return $policy;
+}
+
 beforeEach(function (): void {
     config()->set('managed_website.editor_enabled', true);
     config()->set('managed_website.publishing_enabled', true);
@@ -23,7 +33,7 @@ beforeEach(function (): void {
     config()->set('managed_website.custom_domains_enabled', true);
     config()->set('managed_website.custom_domain_activation_enabled', true);
     config()->set('managed_website.custom_domain_target', 'sites.theeverbranch.com');
-    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy = customDomainPolicyFixture();
     $policy->shouldReceive('eligible')->andReturn(false);
     $policy->shouldReceive('registered')->andReturn(false);
     $policy->shouldReceive('publicAccessAllowed')->andReturn(true);
@@ -321,7 +331,7 @@ test('the website overview offers guided domain connection and human assistance'
 
 test('paid domains connect automatically after DNS and TLS are ready without a tenant allowlist', function (): void {
     [$tenant, $actor, $site] = customDomainPilot();
-    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy = customDomainPolicyFixture();
     $policy->shouldReceive('eligible')->with(Mockery::on(fn ($candidate) => $candidate->id === $tenant->id))->andReturn(true);
     $policy->shouldReceive('publicAccessAllowed')->andReturn(true);
     app()->instance(ManagedWebsiteSelfServicePolicy::class, $policy);
@@ -339,7 +349,7 @@ test('background domain recovery leaves unpaid and frozen connections unactivate
     $domain = $domains->request($site, 'www.unpaid.example', $actor);
     expect($domains->reconcile($domain)->status)->toBe('pending');
 
-    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy = customDomainPolicyFixture();
     $policy->shouldReceive('eligible')->andReturn(true);
     app()->instance(ManagedWebsiteSelfServicePolicy::class, $policy);
     config()->set('managed_website.custom_domain_activation_enabled', false);
@@ -348,7 +358,7 @@ test('background domain recovery leaves unpaid and frozen connections unactivate
 
 test('a verified domain is not activated before website publication', function (): void {
     [, $actor, $site] = customDomainPilot();
-    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy = customDomainPolicyFixture();
     $policy->shouldReceive('eligible')->andReturn(true);
     app()->instance(ManagedWebsiteSelfServicePolicy::class, $policy);
     $site->forceFill(['status' => 'draft', 'public_enabled' => false])->save();
@@ -370,7 +380,7 @@ test('domain status is read-only and cannot reveal another tenant connection', f
 
 test('scheduled recovery finishes a paid pending domain without browser actions', function (): void {
     [, $actor, $site] = customDomainPilot();
-    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy = customDomainPolicyFixture();
     $policy->shouldReceive('eligible')->andReturn(true);
     app()->instance(ManagedWebsiteSelfServicePolicy::class, $policy);
     $edge = Mockery::mock(CloudflareWebsiteDomains::class);
@@ -386,7 +396,7 @@ test('scheduled recovery finishes a paid pending domain without browser actions'
 
 test('automatic paid domain connection honors website operational freezes before provider work', function (string $gate): void {
     [, $actor, $site] = customDomainPilot();
-    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy = customDomainPolicyFixture();
     $policy->shouldReceive('eligible')->andReturn(true);
     app()->instance(ManagedWebsiteSelfServicePolicy::class, $policy);
     $edge = Mockery::mock(CloudflareWebsiteDomains::class);
@@ -419,7 +429,7 @@ test('operational editor and publication freezes retain already connected domain
 
 test('scheduled verification cannot resurrect a canceled or restarted domain connection', function (bool $restart): void {
     [$tenant, $actor, $site] = customDomainPilot();
-    $policy = Mockery::mock(ManagedWebsiteSelfServicePolicy::class);
+    $policy = customDomainPolicyFixture();
     $policy->shouldReceive('eligible')->andReturn(true);
     app()->instance(ManagedWebsiteSelfServicePolicy::class, $policy);
     $service = null;

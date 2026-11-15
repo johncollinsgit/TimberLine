@@ -20,6 +20,7 @@ use App\Services\Mobile\TenantMobileSupportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -33,6 +34,7 @@ class ManagedWebsiteController extends Controller
         $site = TenantSite::query()->forTenant($tenant)->with(['pages.draftVersion', 'pages.publishedVersion', 'draftSiteVersion', 'publishedSiteVersion', 'domains', 'setup'])->first();
         $setup = $site?->setup;
         $checklist = $pilot->checklist($site, $setup);
+        $policy = app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class);
 
         return view('managed-website.index', [
             'tenant' => $tenant,
@@ -40,6 +42,10 @@ class ManagedWebsiteController extends Controller
             'pages' => $site?->pages ?? collect(),
             'templates' => $this->templates(),
             'isEditorEnabled' => $websites->editorEnabledFor($tenant),
+            'canViewDrafts' => $websites->draftViewingEnabledFor($tenant),
+            'canPublishSite' => $websites->publishingEnabled() && $access->canPublish($tenant, $request->user())
+                && (! $policy->registered($tenant) || $policy->eligible($tenant)),
+            'trial' => $policy->trial($tenant),
             'isPublishingEnabled' => $websites->publishingEnabled(),
             'isPublicRenderEnabled' => $websites->publicRenderingEnabled(),
             'isSelfServiceWebsite' => app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->eligible($tenant),
@@ -74,6 +80,8 @@ class ManagedWebsiteController extends Controller
             'service_title' => ['nullable', 'string', 'max:190'],
             'service_description' => ['nullable', 'string', 'max:8000'],
         ]);
+        abort_if(app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->unpaidTrial($tenant)
+            && filled($data['service_title'] ?? null), 423, 'Activate a plan before adding catalog offerings.');
         $site = $websites->createSite($tenant, $request->user());
         $websites->applyTheme($site, (string) $data['theme_key'], $request->user());
         $pilot->saveSetup($tenant, $site, $data, $request->user());
@@ -120,6 +128,11 @@ class ManagedWebsiteController extends Controller
             'pages' => $site->pages,
             'theme' => $websites->siteVersion($site, true),
             'isPublishingEnabled' => $websites->publishingEnabled(),
+            'canPublishSite' => $websites->publishingEnabled()
+                && app(ManagedWebsiteAccessService::class)->canPublish($tenant, $request->user())
+                && (! app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->registered($tenant)
+                    || app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->eligible($tenant)),
+            'trial' => app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->trial($tenant),
         ]);
     }
 
@@ -151,7 +164,7 @@ class ManagedWebsiteController extends Controller
     protected function draftPreviewResponse(Request $request, TenantSitePage $page, ManagedWebsiteService $websites, bool $interactive)
     {
         $tenant = $this->tenant($request);
-        $this->requireEditor($tenant, $websites);
+        abort_unless($websites->draftViewingEnabledFor($tenant), 423, 'Private preview is not available for this workspace.');
         abort_unless((int) $page->tenant_id === (int) $tenant->id, 404);
         $site = TenantSite::query()->forTenant($tenant)->with(['draftSiteVersion', 'pages'])->findOrFail($page->tenant_site_id);
         $payload = $websites->draftPage($site, $page);
@@ -166,7 +179,10 @@ class ManagedWebsiteController extends Controller
                 'tenant' => $tenant,
                 'previewMode' => $previewMode,
                 'previewLinks' => $this->draftPreviewLinks($site),
-                'editorUrl' => route('managed-website.editor', ['page' => $page]),
+                'editorUrl' => $websites->editorEnabledFor($tenant)
+                    ? route('managed-website.editor', ['page' => $page])
+                    : route('managed-website.index', ['tenant' => $tenant->slug]),
+                'previewBackLabel' => $websites->editorEnabledFor($tenant) ? 'Back to editor' : 'Back to Website',
             ])
             ->header('Cache-Control', 'no-store, private')
             ->header('Referrer-Policy', 'same-origin');
@@ -229,19 +245,32 @@ class ManagedWebsiteController extends Controller
             'alt_text' => ['nullable', 'string', 'max:500'],
         ]);
         $file = $data['image'];
-        $extension = strtolower($file->extension() ?: 'bin');
-        $path = 'tenant-site-media/'.$tenant->id.'/'.Str::uuid().'.'.$extension;
-        $disk = 'local';
-        Storage::disk($disk)->put($path, file_get_contents($file->getRealPath()));
-        $media = TenantSiteMedia::query()->create([
-            'tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'uploaded_by_user_id' => $request->user()?->id,
-            'storage_disk' => $disk, 'storage_path' => $path, 'file_name' => basename($file->getClientOriginalName()),
-            'mime_type' => $file->getMimeType(), 'file_size' => $file->getSize(), 'checksum' => hash_file('sha256', $file->getRealPath()),
-            'kind' => 'image', 'source' => 'upload', 'alt_text' => strip_tags((string) ($data['alt_text'] ?? '')),
-        ]);
-        $websites->recordEvent($site, null, $request->user(), 'site.media_uploaded', ['media_id' => $media->id]);
+        $storedPath = null;
+        try {
+            return DB::transaction(function () use ($site, $tenant, $request, $websites, $file, $data, &$storedPath): JsonResponse {
+                return $websites->withDraftWriteLock($site, function () use ($site, $tenant, $request, $websites, $file, $data, &$storedPath): JsonResponse {
+                    $websites->assertTrialMediaCapacity($site, (int) $file->getSize());
+                    abort_if(app(\App\Services\ManagedWebsite\ManagedWebsiteSelfServicePolicy::class)->unpaidTrial($tenant)
+                        && config('filesystems.disks.local.driver') !== 'local', 503, 'Private trial storage is unavailable.');
+                    $storedPath = 'tenant-site-media/'.$tenant->id.'/'.Str::uuid().'.'.strtolower($file->extension() ?: 'bin');
+                    abort_unless(Storage::disk('local')->put($storedPath, file_get_contents($file->getRealPath())), 500, 'The image could not be stored. Try again.');
+                    $media = TenantSiteMedia::query()->create([
+                        'tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'uploaded_by_user_id' => $request->user()?->id,
+                        'storage_disk' => 'local', 'storage_path' => $storedPath, 'file_name' => basename($file->getClientOriginalName()),
+                        'mime_type' => $file->getMimeType(), 'file_size' => $file->getSize(), 'checksum' => hash_file('sha256', $file->getRealPath()),
+                        'kind' => 'image', 'source' => 'upload', 'alt_text' => strip_tags((string) ($data['alt_text'] ?? '')),
+                    ]);
+                    $websites->recordEvent($site, null, $request->user(), 'site.media_uploaded', ['media_id' => $media->id]);
 
-        return response()->json(['media' => $this->mediaPayload($media)], 201);
+                    return response()->json(['media' => $this->mediaPayload($media)], 201);
+                });
+            });
+        } catch (\Throwable $exception) {
+            if ($storedPath !== null) {
+                Storage::disk('local')->delete($storedPath);
+            }
+            throw $exception;
+        }
     }
 
     public function showMedia(Request $request, TenantSiteMedia $media, ManagedWebsiteService $websites)
@@ -249,7 +278,7 @@ class ManagedWebsiteController extends Controller
         $tenant = $request->attributes->get('current_tenant') ?? $request->attributes->get('host_tenant');
         $site = TenantSite::query()->forTenantId($media->tenant_id)->findOrFail($media->tenant_site_id);
         $member = $request->getHost() === config('tenancy.domains.canonical.landlord_host')
-            && $request->user()?->is_active && $websites->editorEnabledFor($site->tenant)
+            && $request->user()?->is_active && $websites->draftViewingEnabledFor($site->tenant)
             && $request->user()->tenants()->whereKey($site->tenant_id)->wherePivot('membership_active', true)
                 ->wherePivotIn('role', ['admin', 'owner', 'tenant_owner', 'manager', 'marketing_manager'])->exists();
         $public = $tenant instanceof Tenant && (int) $tenant->id === (int) $media->tenant_id
@@ -389,12 +418,15 @@ class ManagedWebsiteController extends Controller
             'slug' => ['required', 'string', 'max:160', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/'],
             'page_type' => ['required', 'in:landing,services,about,contact,faq'],
         ]);
-        abort_if($site->pages()->where('slug', $data['slug'])->exists(), 422, 'That page address is already in use.');
-        $page = TenantSitePage::query()->create([
-            'tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'slug' => $data['slug'],
-            'page_type' => $data['page_type'], 'title' => $data['title'], 'is_navigation_visible' => true,
-        ]);
-        $websites->saveDraft($site, $page, ['title' => $data['title'], 'blocks' => $this->templateBlocks($data['page_type'], $data['title'])], $request->user());
+        $websites->withDraftWriteLock($site, function () use ($site, $tenant, $data, $request, $websites): void {
+            $websites->assertTrialPageCapacity($site, 1);
+            abort_if($site->pages()->where('slug', $data['slug'])->exists(), 422, 'That page address is already in use.');
+            $page = TenantSitePage::query()->create([
+                'tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'slug' => $data['slug'],
+                'page_type' => $data['page_type'], 'title' => $data['title'], 'is_navigation_visible' => true,
+            ]);
+            $websites->saveDraft($site, $page, ['title' => $data['title'], 'blocks' => $this->templateBlocks($data['page_type'], $data['title'])], $request->user());
+        });
 
         return back()->with('status', 'Page draft added.');
     }
@@ -405,7 +437,8 @@ class ManagedWebsiteController extends Controller
         $this->requireEditor($tenant, $websites);
         abort_unless((int) $page->tenant_id === (int) $tenant->id, 404);
         abort_if($page->slug === '/', 422, 'The Home page cannot be deleted.');
-        $page->delete();
+        $site = TenantSite::query()->forTenant($tenant)->findOrFail($page->tenant_site_id);
+        $websites->withDraftWriteLock($site, fn () => $page->delete());
 
         return back()->with('status', 'Page removed.');
     }
