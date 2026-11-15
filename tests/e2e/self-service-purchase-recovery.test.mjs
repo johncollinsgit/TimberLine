@@ -12,7 +12,7 @@ assert.ok(script, 'Execute the production purchase-status script.');
 // status responses, no provider, database, checkout submission or paid grants.
 async function fixture(responses, width = 390, options = {}) {
     const requests = [], writes = [];
-    let origin, checks = 0, planReads = 0;
+    let origin, checks = 0, planReads = 0, heldClosed = 0;
     const plan = '/workspace/purchase?tenant=fictional-retained-owner';
     const server = http.createServer((request, response) => {
         const url = new URL(request.url, origin);
@@ -22,6 +22,10 @@ async function fixture(responses, width = 390, options = {}) {
         if (url.pathname === '/workspace/purchase/status') {
             const result = responses[Math.min(checks++, responses.length - 1)];
             response.writeHead(result.status ?? 200, {'Content-Type': result.html ? 'text/html' : 'application/json'});
+            if (options.holdFirstStatus && checks === 1) {
+                response.flushHeaders(); response.write('{"pending":');
+                response.on('close', () => heldClosed++); return;
+            }
             response.end(result.html ?? JSON.stringify(result.body)); return;
         }
         if (url.pathname === '/workspace/purchase') {
@@ -53,9 +57,9 @@ async function fixture(responses, width = 390, options = {}) {
     await page.goto(origin + plan);
     return {
         page, requests, writes, errors, external,
-        get checks() { return checks; }, get attempts() { return attempts; }, get planReads() { return planReads; },
+        get checks() { return checks; }, get attempts() { return attempts; }, get planReads() { return planReads; }, get heldClosed() { return heldClosed; },
         async tick(milliseconds, count) { await page.clock.runFor(milliseconds); await expect.poll(() => checks).toBe(count); },
-        async close() { await browser.close(); await new Promise(done => server.close(done)); },
+        async close() { await browser.close(); server.closeAllConnections(); await new Promise(done => server.close(done)); },
     };
 }
 
@@ -127,5 +131,22 @@ test('unknown, transient and forbidden results retain the original bounded pendi
         assert.deepEqual(f.writes, []);
         assert.deepEqual(f.errors, []);
         assert.deepEqual(f.external, []);
+    } finally { await f.close(); }
+});
+
+for (const status of [200, 503]) test(`a held ${status} payment response remains unknown and resumes only the same bounded reads`, async () => {
+    const f = await fixture([{status, body: {paid: false, pending: true}}], 390, {holdFirstStatus: true});
+    try {
+        await f.tick(2000, 1);
+        if (status === 200) await f.page.clock.runFor(10000);
+        await expect.poll(() => f.heldClosed).toBe(1);
+        for (let count = 2; count <= 24; count++) await f.tick(5000, count);
+        await f.page.clock.runFor(5000);
+        await expect(f.page.locator('[data-payment-status]')).toContainText('Confirmation is taking longer');
+        await expect(f.page.getByRole('link', {name: 'Check payment', exact: true})).toBeVisible();
+        await f.page.clock.runFor(60000);
+        assert.equal(f.checks, 24, 'A held body cannot escape or extend the original check limit.');
+        assert.equal(f.planReads, 1, 'Unknown payment status does not claim a paid state.');
+        assert.deepEqual(f.writes, []); assert.deepEqual(f.errors, []); assert.deepEqual(f.external, []);
     } finally { await f.close(); }
 });

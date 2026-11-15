@@ -7,7 +7,7 @@
             <p class="eb-admin-notice">Custom domain access needs approval. Your included address is ready for publishing.</p>
         @else
             @if($siteDomains->isEmpty())
-                <form method="POST" action="{{ route('managed-website.domains.request') }}" class="eb-domain-add">@csrf
+                <form method="POST" action="{{ route('managed-website.domains.request', ['tenant' => $tenant->slug]) }}" class="eb-domain-add">@csrf
                     <label for="website-domain">Your domain</label>
                     <div><input id="website-domain" name="domain" value="{{ old('domain') }}" required autocomplete="url" placeholder="www.yourbusiness.com"><button class="eb-admin-button eb-admin-button--primary" type="submit">Connect my domain</button></div>
                     <p class="text-sm text-zinc-600">Start with www for the simplest connection. Keep your domain with its current provider.</p>
@@ -15,10 +15,11 @@
                 </form>
             @endif
             @foreach($siteDomains as $domain)
-                <article class="eb-domain-record" @if(($automaticDomains ?? false) && $domain->status !== 'active' && Route::has('managed-website.domains.status')) data-domain-status-url="{{ route('managed-website.domains.status', ['domain' => $domain]) }}" @endif>
+                <article class="eb-domain-record" @if(($automaticDomains ?? false) && $domain->status !== 'active' && Route::has('managed-website.domains.status')) data-domain-status-url="{{ route('managed-website.domains.status', ['domain' => $domain, 'tenant' => $tenant->slug]) }}" @endif>
                     <div class="eb-domain-record-head"><div><strong>{{ $domain->hostname }}</strong><small>{{ $domain->status === 'active' ? 'Primary address' : ($domain->status === 'verified' ? 'Ownership confirmed' : 'Waiting for DNS') }}</small></div><x-ui.status-badge :tone="$domain->status === 'active' ? 'success' : 'warning'">{{ $domain->status === 'active' ? 'Live' : 'Connecting' }}</x-ui.status-badge></div>
                     @if($domain->status !== 'active')
                         @if($automaticDomains ?? false)<p class="my-3 text-sm" data-domain-progress role="status">Add the records once. We will check automatically and connect your published site when DNS and security are ready.</p>@endif
+                        <p hidden data-domain-recovery class="my-3"><a class="eb-admin-button" href="{{ route('managed-website.index', ['tenant' => $tenant->slug]) }}"><x-everbranch.action-leaf /><span data-domain-recovery-label>Review domains</span></a></p>
                         <ol class="my-4 flex flex-wrap gap-3 text-sm" aria-label="Connection steps"><li>1. Add records</li><li>2. Check connection</li><li>3. Activate</li></ol>
                         <details class="eb-domain-steps" @if($domain->status === 'pending') open @endif><summary class="cursor-pointer font-semibold">Add DNS records</summary>
                             <p>Open DNS settings at your provider. Use DNS-only routing; leave email records unchanged.</p>
@@ -31,13 +32,13 @@
                         </details>
                         @if($domain->last_error)<p class="my-3 text-sm text-amber-900" role="status">{{ $domain->last_error }}</p>@endif
                         <div class="eb-domain-actions">
-                            <form method="POST" action="{{ route('managed-website.domains.verify', ['domain' => $domain]) }}">@csrf<button class="eb-admin-button" type="submit">Check connection</button></form>
-                            @if($domain->status === 'verified')<form method="POST" action="{{ route('managed-website.domains.activate', ['domain' => $domain]) }}">@csrf<button class="eb-admin-button eb-admin-button--primary" type="submit">Activate domain</button></form>@endif
-                            <form method="POST" action="{{ route('managed-website.domains.request') }}">@csrf<input type="hidden" name="domain" value="{{ $domain->hostname }}"><button class="eb-admin-button" name="assistance" value="1" type="submit">Handle this for me</button></form>
-                            <form method="POST" action="{{ route('managed-website.domains.cancel', ['domain' => $domain]) }}" onsubmit="return confirm('Remove this domain setup?')">@csrf<button class="eb-admin-button" type="submit">Remove</button></form>
+                            <form method="POST" action="{{ route('managed-website.domains.verify', ['domain' => $domain, 'tenant' => $tenant->slug]) }}">@csrf<button class="eb-admin-button" type="submit">Check connection</button></form>
+                            @if($domain->status === 'verified')<form method="POST" action="{{ route('managed-website.domains.activate', ['domain' => $domain, 'tenant' => $tenant->slug]) }}">@csrf<button class="eb-admin-button eb-admin-button--primary" type="submit">Activate domain</button></form>@endif
+                            <form method="POST" action="{{ route('managed-website.domains.request', ['tenant' => $tenant->slug]) }}">@csrf<input type="hidden" name="domain" value="{{ $domain->hostname }}"><button class="eb-admin-button" name="assistance" value="1" type="submit">Handle this for me</button></form>
+                            <form method="POST" action="{{ route('managed-website.domains.cancel', ['domain' => $domain, 'tenant' => $tenant->slug]) }}" onsubmit="return confirm('Remove this domain setup?')">@csrf<button class="eb-admin-button" type="submit">Remove</button></form>
                         </div>
                     @else
-                        <form method="POST" action="{{ route('managed-website.domains.deactivate', ['domain' => $domain]) }}" onsubmit="return confirm('Disable this custom domain? Your Everbranch address will still work.')">@csrf<button class="eb-admin-danger" type="submit">Disable domain</button></form>
+                        <form method="POST" action="{{ route('managed-website.domains.deactivate', ['domain' => $domain, 'tenant' => $tenant->slug]) }}" onsubmit="return confirm('Disable this custom domain? Your Everbranch address will still work.')">@csrf<button class="eb-admin-danger" type="submit">Disable domain</button></form>
                     @endif
                 </article>
             @endforeach
@@ -54,20 +55,36 @@ document.querySelectorAll('[data-domain-copy]').forEach(button => button.addEven
 }));
 document.querySelectorAll('[data-domain-status-url]').forEach(record => {
     let stopped = false;
+    const stop = (message, label = 'Review domains') => {
+        stopped = true;
+        const progress = record.querySelector('[data-domain-progress]');
+        if (progress) progress.textContent = message;
+        const recovery = record.querySelector('[data-domain-recovery]');
+        if (recovery) {
+            recovery.hidden = false;
+            recovery.querySelector('[data-domain-recovery-label]').textContent = label;
+        }
+    };
     const poll = async () => {
         if (stopped || !record.isConnected) return;
         if (!document.hidden) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10000);
             try {
-                const response = await fetch(record.dataset.domainStatusUrl, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-                if ([401,403,404,423].includes(response.status)) { stopped = true; return; }
+                const response = await fetch(record.dataset.domainStatusUrl, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' }, signal: controller.signal });
+                if ([401,419].includes(response.status)) { stop('Sign in to check this domain. Your saved setup is unchanged.', 'Sign in'); return; }
+                if (response.status === 403) { stop('Your access changed. Review Website to check this domain.'); return; }
+                if (response.status === 404) { stop('This domain connection is no longer available. Review your domains.'); return; }
+                if (response.status === 423) { stop('Domain setup is paused. Your saved connection is unchanged.'); return; }
                 if (response.ok) {
                     const state = await response.json();
+                    if (state?.status === 'active') { stopped = true; location.reload(); return; }
+                    if (state?.status === 'disabled') { stop('This domain connection is disabled. Review your domains to reconnect.'); return; }
                     const progress = record.querySelector('[data-domain-progress]');
-                    if (progress && typeof state.message === 'string') progress.textContent = state.message;
-                    if (state.status === 'active') { stopped = true; location.reload(); return; }
-                    if (state.status === 'disabled') { stopped = true; return; }
+                    if (progress && typeof state?.message === 'string') progress.textContent = state.message;
                 }
             } catch { /* A temporary outage leaves the same connection pending. */ }
+            finally { clearTimeout(timeout); controller.abort(); }
         }
         setTimeout(poll, 15000);
     };

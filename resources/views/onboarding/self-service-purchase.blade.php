@@ -84,8 +84,10 @@
         let checks = 0;
         const check = async () => {
             if (++checks > 24) { recover('Confirmation is taking longer. Refresh this page to check again; your checkout is saved.'); return; }
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10000);
             try {
-                const response = await fetch(panel.dataset.statusUrl, {headers: {'Accept': 'application/json'}, credentials: 'same-origin', cache: 'no-store'});
+                const response = await fetch(panel.dataset.statusUrl, {headers: {'Accept': 'application/json'}, credentials: 'same-origin', cache: 'no-store', signal: controller.signal});
                 if (response.status === 401 || response.status === 419) { recover('Sign in to check your saved checkout.', true); return; }
                 if (response.ok) {
                     const status = await response.json();
@@ -94,6 +96,7 @@
                     if (status?.paid === true || status?.pending === false) { location.reload(); return; }
                 }
             } catch (_) {}
+            finally { clearTimeout(timeout); controller.abort(); }
             setTimeout(check, 5000);
         };
         setTimeout(check, 2000);

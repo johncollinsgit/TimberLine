@@ -6,6 +6,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {chromium, expect} from '@playwright/test';
 import './website-retail-controls.test.mjs';
+import './website-domain-status-recovery.test.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const build = path.join(root, 'public/build');

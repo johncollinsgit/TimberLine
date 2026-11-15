@@ -53,9 +53,16 @@ unknown outcomes retain their bounded retry behavior. At the limit, Check paymen
 opens the same saved plan. None of these browser recoveries posts, replaces the
 original purchase, resets a trial clock or grants access.
 
+Each status request, including its response body, has a ten-second deadline;
+unused error bodies are closed immediately.
+Aborting a stalled read leaves payment unknown and resumes only the existing
+same-intent read schedule. It cannot escape or extend the 24-check limit, create
+another checkout, or turn an interrupted response into payment evidence.
+
 `self-service-purchase-recovery.test.mjs` executes the actual inline production
 script over fictional loopback HTTP. It covers paid/nonpending refresh, explicit
-401/419 recovery and bounded transient/403/invalid-state handling with zero writes.
+401/419 recovery, held-response deadlines and bounded transient/403/invalid-state
+handling with zero writes.
 The existing trial browser entry point imports it. It is client protocol proof,
 not provider acceptance or a new payment; the normal backend purchase/authorization
 suites remain authoritative.
