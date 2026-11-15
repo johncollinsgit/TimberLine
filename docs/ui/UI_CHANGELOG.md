@@ -14,6 +14,17 @@ options, menu autosave and recovery. New paid merchant setup stays default-off
 pending separate genuine merchant TEST acceptance. This is source verification,
 not a live retail checkout or a Shopify source cutover.
 
+## 2026-11-15 - Domain and status-read recovery (source candidate)
+
+Domain connection checks stop with explicit sign-in or review guidance when the
+session, permission, connection or rollout changes. Recovery makes a fresh owned
+Website GET instead of leaving automatic-checking copy on a stopped poller.
+Payment/domain status reads have a ten-second request/body deadline; a stalled
+read retains the same saved intent/connection and existing retry limits. No
+browser action confirms payment, activates a domain or retries a mutation.
+Unavailable payment-setup guidance respects the trial's separate catalog and
+expiry limits.
+
 ## 2026-11-15 - Self-service completion recovery (source candidate)
 
 Saved checkout confirmation stops polling when the server reports a terminal

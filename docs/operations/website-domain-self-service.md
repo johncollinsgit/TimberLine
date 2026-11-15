@@ -91,6 +91,26 @@ does not stop recovery. Legacy assisted connections are not autoactivated.
 The Website screen polls a read-only tenant-scoped status endpoint; it never
 passes tokens, triggers provider writes from GET, or runs DNS work in the browser.
 
+Status reads have a ten-second deadline, including the response body. Unused
+error bodies are closed immediately. A stalled
+read is aborted before the next ordinary fifteen-second check of the same saved
+connection. Session expiry (401/419), changed access, missing connections, paused
+setup and disabled connections stop browser polling with truthful guidance and an
+explicit owned Website review/sign-in GET. The recovery link has no fragment-only
+navigation: it must make a fresh authorized request. Active status reloads that
+same Website GET. Temporary/unreadable results never activate, replace or cancel
+a domain. The server's scheduled recovery, ownership/certificate checks and
+explicit retry/cancel actions remain authoritative.
+Status URLs, review links and all domain forms explicitly retain the original
+workspace query, so switching another tab cannot retarget the saved screen.
+The server still resolves current active membership and exact domain ownership.
+
+The registered editor browser entry imports
+`website-domain-status-recovery.test.mjs`. It executes the actual guide script
+against fictional loopback responses, including held response bodies, terminal
+states, explicit review and transient retries, with zero writes/provider calls.
+This client protocol coverage is not a live DNS failure/cancellation drill.
+
 Use `php artisan website:domain-readiness --provider` for a read-only deployment
 audit. It prints readiness booleans only, including Cloudflare fallback-origin
 status. It does not create DNS records, change a fallback origin, or create a
