@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\Marketplace\AccountPreviewController;
 use App\Services\Onboarding\SelfServiceTrialService;
 use Closure;
 use Illuminate\Http\Request;
@@ -14,6 +15,15 @@ class ScopeSelfServiceTrialRequests
     {
         $user = $request->user();
         if (! $user || ! $request->route()) {
+            return $next($request);
+        }
+        // This exact account-gated screen renders only in-memory examples.
+        // Preserve its no-tenant-query contract without admitting a merchant
+        // route, a write, or any other action named "preview".
+        if (in_array($request->getRealMethod(), ['GET', 'HEAD'], true)
+            && in_array($request->method(), ['GET', 'HEAD'], true)
+            && $request->routeIs('marketplace.preview')
+            && $request->route()->getAction('uses') === AccountPreviewController::class.'@__invoke') {
             return $next($request);
         }
         // Public media and signed account recovery retain their original checks.
