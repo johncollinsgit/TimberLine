@@ -22,6 +22,8 @@ Website GET instead of leaving automatic-checking copy on a stopped poller.
 Payment/domain status reads have a ten-second request/body deadline; a stalled
 read retains the same saved intent/connection and existing retry limits. No
 browser action confirms payment, activates a domain or retries a mutation.
+Unavailable payment-setup guidance respects the trial's separate catalog and
+expiry limits.
 
 ## 2026-11-15 - Self-service completion recovery (source candidate)
 
