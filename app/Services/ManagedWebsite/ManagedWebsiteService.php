@@ -281,6 +281,7 @@ class ManagedWebsiteService
 
     public function rollback(TenantSite $site, TenantSitePage $page, TenantSitePageVersion $source, ?User $actor): void
     {
+        abort_unless($this->publishingEnabled(), 423, 'Website publishing is temporarily frozen. Your published snapshot is unchanged.');
         $policy = app(ManagedWebsiteSelfServicePolicy::class);
         abort_if($policy->registered($site->tenant) && ! $policy->eligible($site->tenant), 423, 'An active paid plan is required to publish. Your saved content is safe.');
         abort_unless($source->tenant_site_page_id === $page->id && $source->status === 'published', 404);
