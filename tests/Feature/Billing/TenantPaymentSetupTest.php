@@ -33,6 +33,14 @@ function paymentSetupUrl($test, string $path = ''): string
     return '/payments'.$path.'?tenant='.$test->tenant->slug;
 }
 
+function stripeSetupV2Evidence($test, string $id = 'acct_fictional'): array
+{
+    return ['id' => $id, 'object' => 'v2.core.account', 'livemode' => false, 'dashboard' => 'full',
+        'identity' => ['country' => 'US'], 'applied_configurations' => ['merchant', 'recipient'],
+        'defaults' => ['responsibilities' => ['fees_collector' => 'stripe', 'losses_collector' => 'stripe', 'requirements_collector' => 'stripe']],
+        'metadata' => ['tenant_id' => (string) $test->tenant->id, 'tenant_slug' => $test->tenant->slug]];
+}
+
 function paypalSetupSeed($test): IntegrationConnection
 {
     Http::fake(['*/v1/oauth2/token' => Http::response(['access_token' => 'fictional-access']),
@@ -202,11 +210,11 @@ it('lets local PayPal disconnect win over a pending status read', function () {
 it('freezes a Stripe create request so changed emails do not break retries after a timeout', function () {
     $payloads = [];
     $keys = [];
-    Http::fake(['https://api.stripe.com/v1/accounts' => function ($request) use (&$payloads, &$keys) {
+    Http::fake(['https://api.stripe.com/v2/core/accounts' => function ($request) use (&$payloads, &$keys) {
         $payloads[] = $request->data();
         $keys[] = $request->header('Idempotency-Key')[0];
 
-        return count($payloads) === 1 ? Http::failedConnection() : Http::response(['id' => 'acct_fictional']);
+        return count($payloads) === 1 ? Http::failedConnection() : Http::response(stripeSetupV2Evidence($this));
     }, 'https://api.stripe.com/v1/account_links' => Http::response(['url' => 'https://connect.stripe.com/setup/example'])]);
     $this->actingAs($this->owner)->postJson(paymentSetupUrl($this, '/stripe/start'), ['email' => 'first@example.com'])->assertStatus(502);
     config()->set('services.stripe.secret', 'sk_test_rotatedfictional');
@@ -218,14 +226,14 @@ it('freezes a Stripe create request so changed emails do not break retries after
 });
 
 it('explains missing Connect activation without displaying the provider response', function () {
-    Http::fake(['https://api.stripe.com/v1/accounts' => Http::response(['error' => ['message' => 'You can only create new accounts if you have signed up for Connect. secret-debug-detail']], 400)]);
+    Http::fake(['https://api.stripe.com/v2/core/accounts' => Http::response(['error' => ['message' => 'You can only create new accounts if you have signed up for Connect. secret-debug-detail']], 400)]);
     $this->actingAs($this->owner)->postJson(paymentSetupUrl($this, '/stripe/start'), ['email' => 'owner@example.com'])
         ->assertStatus(502)->assertJsonPath('message', 'Everbranch must activate Stripe Connect before your business can connect. Your email address is not the problem.')
         ->assertDontSee('secret-debug-detail');
 });
 
 it('stops old ambiguous Stripe account requests before the idempotency window expires', function () {
-    Http::fake(['https://api.stripe.com/v1/accounts' => Http::failedConnection()]);
+    Http::fake(['https://api.stripe.com/v2/core/accounts' => Http::failedConnection()]);
     $this->actingAs($this->owner)->postJson(paymentSetupUrl($this, '/stripe/start'), ['email' => 'owner@example.com'])->assertStatus(502);
     IntegrationConnection::where('provider', 'tenant_stripe_onboarding')->update(['created_at' => now()->subHours(24)]);
     Http::fake();
@@ -234,14 +242,14 @@ it('stops old ambiguous Stripe account requests before the idempotency window ex
 });
 
 it('explains the platform profile blocker and preserves its immutable Stripe retry', function () {
-    Http::fake(['https://api.stripe.com/v1/accounts' => Http::response(['error' => ['message' => 'You must complete your platform profile to use Connect and create live connected accounts. private-provider-context']], 400)]);
+    Http::fake(['https://api.stripe.com/v2/core/accounts' => Http::response(['error' => ['message' => 'You must complete your platform profile to use Connect and create live connected accounts. private-provider-context']], 400)]);
     $this->actingAs($this->owner)->postJson(paymentSetupUrl($this, '/stripe/start'), ['email' => 'owner@example.com'])
         ->assertStatus(502)->assertJsonPath('message', 'Everbranch must complete its Stripe Connect platform profile before your business can connect. Your email address is not the problem.')
         ->assertDontSee('private-provider-context');
     expect($this->tenant->paymentAccount()->exists())->toBeFalse();
     $attempt = IntegrationConnection::where('provider', 'tenant_stripe_onboarding')->sole();
     $frozen = json_decode($attempt->external_account_secret, true);
-    Http::fake(['https://api.stripe.com/v1/accounts' => Http::response(['id' => 'acct_fictional']),
+    Http::fake(['https://api.stripe.com/v2/core/accounts' => Http::response(stripeSetupV2Evidence($this)),
         'https://api.stripe.com/v1/account_links' => Http::response(['url' => 'https://connect.stripe.com/setup/example'])]);
     $this->post(paymentSetupUrl($this, '/stripe/start'), ['email' => 'changed@example.com'])->assertRedirect();
     Http::assertSent(fn ($request) => str_ends_with($request->url(), '/accounts')
@@ -251,7 +259,7 @@ it('explains the platform profile blocker and preserves its immutable Stripe ret
 it('returns an owner-scoped noncacheable Stripe embedded session without storing the client secret', function () {
     config()->set('tenant_payments.stripe_embedded_enabled', true);
     config()->set('services.stripe.publishable_key', 'pk_test_fictional');
-    Http::fake(['https://api.stripe.com/v1/accounts' => Http::response(['id' => 'acct_fictional']),
+    Http::fake(['https://api.stripe.com/v2/core/accounts' => Http::response(stripeSetupV2Evidence($this)),
         'https://api.stripe.com/v1/account_sessions' => Http::response(['client_secret' => 'fictional-session-secret'])]);
     $this->actingAs($this->owner)->postJson(paymentSetupUrl($this, '/stripe/session'))->assertOk()
         ->assertJsonPath('client_secret', 'fictional-session-secret')->assertHeader('Cache-Control');
@@ -268,12 +276,18 @@ it('verifies Stripe ownership before updating readiness', function () {
 });
 
 it('creates a full-dashboard business account and freezes direct routing for new merchants', function () {
-    Http::fake(['https://api.stripe.com/v1/accounts' => Http::response(['id' => 'acct_newbusiness']),
+    Http::fake(['https://api.stripe.com/v2/core/accounts' => Http::response(stripeSetupV2Evidence($this, 'acct_newbusiness')),
         'https://api.stripe.com/v1/account_links' => Http::response(['url' => 'https://connect.stripe.com/setup/business'])]);
     $this->actingAs($this->owner)->post(paymentSetupUrl($this, '/stripe/start'), ['email' => 'owner@example.com'])->assertRedirect();
-    Http::assertSent(fn ($request) => $request->url() === 'https://api.stripe.com/v1/accounts' && $request['type'] === 'standard'
-        && $request['capabilities'] === ['card_payments' => ['requested' => 'true'], 'transfers' => ['requested' => 'true']]);
-    expect($this->tenant->paymentAccount()->sole()->routingMode())->toBe('direct');
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.stripe.com/v2/core/accounts' && $request['dashboard'] === 'full'
+        && $request['configuration']['merchant']['capabilities']['card_payments']['requested'] === true
+        && $request['configuration']['recipient']['capabilities']['stripe_balance']['stripe_transfers']['requested'] === true
+        && $request['defaults']['responsibilities'] === ['fees_collector' => 'stripe', 'losses_collector' => 'stripe']
+        && $request->header('Stripe-Version') === ['2026-10-28.endive'] && $request->header('Authorization') === ['Bearer sk_test_fictional']
+        && str_contains($request->header('Content-Type')[0], 'application/json'));
+    expect($this->tenant->paymentAccount()->sole()->routingMode())->toBe('direct')
+        ->and($this->tenant->paymentAccount()->sole()->metadata['creation_api'])->toBe('accounts_v2')
+        ->and($this->tenant->paymentAccount()->sole()->isReady())->toBeFalse();
 });
 
 function legacyCardOnlyAttempt($test): IntegrationConnection
@@ -327,6 +341,102 @@ it('does not replace a legacy account request for an uncertain or different reje
     expect(IntegrationConnection::where('provider', 'tenant_stripe_onboarding')->count())->toBe(1)
         ->and($original->fresh()->status)->toBe('pending')->and($this->tenant->paymentAccount()->exists())->toBeFalse();
 })->with([400, 500]);
+
+it('reobserves a specific frozen V1 rejection and recovers one immutable V2 successor', function () {
+    $original = legacyCardOnlyAttempt($this);
+    $old = json_decode($original->external_account_secret, true);
+    $old['payload']['business_profile'] = ['name' => 'Original frozen business'];
+    $old['payload']['capabilities']['transfers'] = ['requested' => 'true'];
+    $original->update(['external_account_secret' => json_encode($old)]);
+    $ciphertext = $original->getRawOriginal('external_account_secret');
+    $sentV2 = [];
+    Http::fake(['https://api.stripe.com/v1/accounts' => Http::response(['error' => ['type' => 'invalid_request_error',
+        'message' => 'Stripe no longer recommends Accounts v1 for new Connect integrations. Create connected accounts with POST /v2/core/accounts instead. See the migration guide.']], 400),
+        'https://api.stripe.com/v2/core/accounts' => function ($request) use (&$sentV2) {
+            $sentV2[] = ['data' => $request->data(), 'key' => $request->header('Idempotency-Key'), 'version' => $request->header('Stripe-Version')];
+
+            return count($sentV2) === 1 ? Http::failedConnection() : Http::response(stripeSetupV2Evidence($this, 'acct_v2recovered'));
+        }, 'https://api.stripe.com/v1/account_links' => Http::response(['url' => 'https://connect.stripe.com/setup/recovered'])]);
+    $this->actingAs($this->owner)->postJson(paymentSetupUrl($this, '/stripe/start'), ['email' => 'changed@example.test'])->assertStatus(502);
+    $successor = IntegrationConnection::where('provider', 'tenant_stripe_onboarding')->whereKeyNot($original->id)->sole();
+    $frozen = json_decode($successor->external_account_secret, true);
+    expect($original->fresh()->getRawOriginal('external_account_secret'))->toBe($ciphertext)
+        ->and($original->fresh()->status)->toBe('rejected')->and($original->fresh()->metadata['rejection'])->toBe('stripe_accounts_v1_create_unsupported')
+        ->and($successor->metadata['replaces_rejected_attempt_id'])->toBe($original->id)
+        ->and($frozen['api_family'])->toBe('accounts_v2')->and($frozen['key'])->not->toBe($old['key'])
+        ->and($frozen['payload']['contact_email'])->toBe('original@example.test')
+        ->and($frozen['payload']['display_name'])->toBe('Original frozen business')
+        ->and($this->tenant->paymentAccount()->exists())->toBeFalse();
+    $this->tenant->update(['name' => 'Renamed after the original attempt']);
+    $this->post(paymentSetupUrl($this, '/stripe/start'), ['email' => 'another@example.test'])->assertRedirect('https://connect.stripe.com/setup/recovered');
+    expect($sentV2[0])->toBe($sentV2[1])->and($sentV2[1]['key'])->toBe([$frozen['key']])
+        ->and($this->tenant->paymentAccount()->sole()->routingMode())->toBe('direct')
+        ->and(IntegrationConnection::where('provider', 'tenant_stripe_onboarding')->count())->toBe(2)
+        ->and(DB::table('landlord_operator_actions')->where('action_type', 'tenant_payments.stripe.account_request_rejected')->count())->toBe(1)
+        ->and(DB::table('landlord_operator_actions')->where('action_type', 'tenant_payments.stripe.account_request_replaced')->count())->toBe(1);
+    Http::assertSentCount(4); // Original V1 once, the same V2 twice, one existing hosted-link rail.
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.stripe.com/v1/accounts'
+        && $request->header('Idempotency-Key') === [$old['key']] && $request->data() === $old['payload']);
+});
+
+it('never converts an unproven V1 outcome into a V2 account request', function (int $status, string $type, string $message) {
+    $original = legacyCardOnlyAttempt($this);
+    Http::fake(['https://api.stripe.com/v1/accounts' => Http::response(['error' => ['type' => $type, 'message' => $message]], $status)]);
+    $this->actingAs($this->owner)->postJson(paymentSetupUrl($this, '/stripe/start'), ['email' => 'changed@example.test'])->assertStatus(502);
+    expect($original->fresh()->status)->toBe('pending')->and(IntegrationConnection::where('provider', 'tenant_stripe_onboarding')->count())->toBe(1)
+        ->and($this->tenant->paymentAccount()->exists())->toBeFalse();
+    Http::assertSentCount(1);
+})->with([
+    [500, 'invalid_request_error', 'Stripe no longer recommends Accounts v1 for new Connect integrations. Create connected accounts with POST /v2/core/accounts instead.'],
+    [400, 'api_error', 'Stripe no longer recommends Accounts v1 for new Connect integrations. Create connected accounts with POST /v2/core/accounts instead.'],
+    [400, 'invalid_request_error', 'Stripe no longer recommends Accounts v1 for new Connect integrations.'],
+    [400, 'invalid_request_error', 'An unrelated validation error'],
+]);
+
+it('retains an unresolved V1 timeout without reserving a V2 successor', function () {
+    $original = legacyCardOnlyAttempt($this);
+    $ciphertext = $original->getRawOriginal('external_account_secret');
+    $calls = 0;
+    Http::fake(['https://api.stripe.com/v1/accounts' => function () use (&$calls) {
+        $calls++;
+
+        return Http::failedConnection();
+    }]);
+    $this->actingAs($this->owner)->postJson(paymentSetupUrl($this, '/stripe/start'), ['email' => 'changed@example.test'])->assertStatus(502);
+    expect($calls)->toBe(1)->and($original->fresh()->status)->toBe('pending')
+        ->and($original->fresh()->getRawOriginal('external_account_secret'))->toBe($ciphertext)
+        ->and(IntegrationConnection::where('provider', 'tenant_stripe_onboarding')->count())->toBe(1);
+});
+
+it('rejects unowned or incompatible V2 responses without creating a payment-account binding', function (string $field, mixed $value) {
+    $response = stripeSetupV2Evidence($this);
+    data_set($response, $field, $value);
+    Http::fake(['https://api.stripe.com/v2/core/accounts' => Http::response($response)]);
+    $this->actingAs($this->owner)->postJson(paymentSetupUrl($this, '/stripe/start'), ['email' => 'owner@example.test'])->assertStatus(502);
+    expect($this->tenant->paymentAccount()->exists())->toBeFalse()->and(IntegrationConnection::where('provider', 'tenant_stripe_onboarding')->sole()->status)->toBe('pending');
+    Http::assertSentCount(1);
+})->with([
+    ['object', 'account'], ['livemode', true], ['dashboard', 'express'],
+    ['defaults.responsibilities.fees_collector', 'application'], ['defaults.responsibilities.losses_collector', 'application'],
+    ['defaults.responsibilities.requirements_collector', 'application'], ['metadata.tenant_id', 'foreign'],
+    ['metadata.tenant_slug', 'foreign'], ['identity.country', 'GB'], ['applied_configurations', ['merchant']],
+    ['object', null], ['livemode', null], ['defaults.responsibilities', null], ['applied_configurations', null],
+]);
+
+it('keeps the new V2 account compatible with original V1 refresh and signed collection gates', function () {
+    config()->set('tenant_payments.stripe_direct_webhooks_verified', false);
+    config()->set('managed_website.commerce_enabled', false);
+    Http::fake(['https://api.stripe.com/v2/core/accounts' => Http::response(stripeSetupV2Evidence($this)),
+        'https://api.stripe.com/v1/account_links' => Http::response(['url' => 'https://connect.stripe.com/setup/native']),
+        'https://api.stripe.com/v1/accounts/acct_fictional' => Http::response(['id' => 'acct_fictional', 'type' => 'standard',
+            'metadata' => ['tenant_id' => (string) $this->tenant->id], 'charges_enabled' => true, 'payouts_enabled' => true, 'details_submitted' => true])]);
+    $this->actingAs($this->owner)->post(paymentSetupUrl($this, '/stripe/start'), ['email' => 'owner@example.test'])->assertRedirect();
+    $this->post(paymentSetupUrl($this, '/stripe/refresh'))->assertRedirect();
+    expect($this->tenant->paymentAccount()->sole()->isReady())->toBeTrue()
+        ->and(config('tenant_payments.stripe_direct_webhooks_verified'))->toBeFalse()
+        ->and(config('managed_website.commerce_enabled'))->toBeFalse();
+    Http::assertSentCount(3);
+});
 
 it('keeps a legacy Express reservation Express even when the default policy changes', function () {
     config()->set('tenant_payments.legacy_express_tenants', [$this->tenant->slug]);

@@ -24,6 +24,34 @@ balances/transactions merely to receive payouts. Full Dashboard accounts manage
 their own Stripe information. Existing Wren Express/destination routing and
 immutable pending Express creation attempts are not converted.
 
+New full-Dashboard accounts use Accounts V2 with an immutable JSON descriptor:
+`POST /v2/core/accounts`, per-request `Stripe-Version: 2026-10-28.endive`,
+Stripe fee/loss collection, merchant card payments and recipient Stripe-balance
+transfers. The tenant's display name/contact email and ownership metadata are
+frozen before HTTP. No legal entity type is inferred. The response must return
+the expected account object, TEST/live mode, tenant ownership, full Dashboard and
+Stripe responsibilities; creation remains onboarding, not collection-ready.
+The API family, endpoint, version, body and idempotency key survive later edits,
+timeouts and key rotation; the existing 23-hour ambiguous-retry limit remains.
+
+Existing accounts, OAuth, Express reservations, V1 hosted links and V1 readiness
+retrieval retain their rails. An unresolved V1 request is never silently changed
+to V2. Only a native HTTP400 `invalid_request_error` with the specific Accounts
+V1-creation-unsupported instruction conclusively retires that request. The source
+audits the rejection without changing its encrypted descriptor, then reserves one
+V2 successor from the **original frozen** contact/name/metadata. Later explicit
+recovery reuses that successor's exact key/body; no automatic HTTP retry occurs.
+Timeouts, ambiguous responses, generic validation failures and other statuses
+cannot authorize a replacement. The older narrowly verified missing-transfers
+correction remains separate. No browser-supplied rejection or console status
+repair is introduced.
+
+Stripe documents [V2 creation](https://docs.stripe.com/api/v2/core/accounts/create),
+[full Dashboard responsibilities](https://docs.stripe.com/connect/accounts-v2/connected-account-configuration)
+and [V1 interoperability](https://docs.stripe.com/connect/accounts-v2/migrate-integration).
+Changing account creation does not enable setup/collection gates, change provider
+defaults or existing contracts, or prove a merchant payment/callback/refund.
+
 Legacy setup rollout retains TENANT_PAYMENT_SETUP_ENABLED and exact
 TENANT_PAYMENT_SETUP_TENANTS, plus EVERBRANCH_TENANT_PAYMENTS_ENABLED and exact
 EVERBRANCH_TENANT_PAYMENTS_TENANT_SLUGS. Carolina is the first native-invoice pilot;
