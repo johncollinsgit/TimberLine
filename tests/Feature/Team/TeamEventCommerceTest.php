@@ -357,3 +357,98 @@ test('current reviewed scope sales fail closed after original source withdrawal 
     $report = $read();
     expect($report['sale_count'])->toBe(0)->and($report['known_net_sales_minor'])->toBe(0)->and($report['source_coverage_complete'])->toBeFalse();
 })->with(['generation', 'withdrawn', 'square_revoked']);
+
+function nativeCommerceScope($test): array
+{
+    $register = str_repeat('a', 32);
+    $connection = str_repeat('c', 32);
+    $test->stock->bind($test->tenant->id, 'native-report-binding', $test->owner->id, 'pos', $test->store->runtime().':'.$register, $test->pool);
+    $test->store->rows('connections', $test->tenant->id)->insert($test->store->values($test->tenant->id, ['id' => $connection,
+        'merchant_id' => 'fixture-merchant', 'provider_location_id' => 'fixture-location', 'environment' => 'sandbox', 'credentials' => $test->store->encrypt([])]));
+    $test->store->rows('registers', $test->tenant->id)->insert($test->store->values($test->tenant->id, ['id' => $register, 'name' => 'Current fictional show',
+        'location_id' => 'fixture-location', 'location_name' => 'Fictional venue', 'connection_id' => $connection, 'catalog_source' => 'native',
+        'configuration' => $test->store->encrypt(['commerce_adapter' => StockPosCommerce::VERSION, 'inventory_pool_id' => $test->pool]), 'active' => true]));
+    $test->store->rows('assignments', $test->tenant->id)->insert($test->store->values($test->tenant->id, ['register_id' => $register,
+        'user_id' => $test->owner->id, 'device_id' => 'fixture-owner-phone', 'role' => 'admin', 'active' => true]));
+
+    return ['tenant_id' => $test->tenant->id, 'actor_id' => $test->owner->id, 'role' => 'owner',
+        'register' => $test->store->rows('registers', $test->tenant->id)->where('id', $register)->firstOrFail()];
+}
+
+test('compact native Sales retains shared totals and source freshness without loading the full Teams context', function () {
+    $this->travelTo(now()->setDate(2026, 11, 15)->startOfDay());
+    eventReceipt($this);
+    $event = commerceOccurrence($this, ['_teams_enrichment' => ['commerce_event' => ['id' => 123]]]);
+    $binding = scopedCommerceMapping($this, $event, true);
+    scopedCommerceOrder($this, $binding, 'compact-external-square', 2000);
+    $scope = nativeCommerceScope($this);
+    $full = app(EventCommerceReport::class)->forEvent($this->tenant, $this->owner, $event);
+    expect($full)->toHaveKeys(['profitability', 'travel', 'budget', 'annual_history', 'history']);
+    $intelligence = Mockery::mock(\App\Services\Team\Studio\EventIntelligence::class);
+    $intelligence->shouldNotReceive('detail');
+    app()->instance(\App\Services\Team\Studio\EventIntelligence::class, $intelligence);
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    $compact = app(EventCommerceReport::class)->forRegister($scope, $this->owner);
+    $bindings = collect(DB::getQueryLog())->flatMap(fn ($query) => $query['bindings']);
+    DB::disableQueryLog();
+    expect($compact['sales'])->toBe($full['sales'])->and($compact['sales']['sale_count'])->toBe(2)
+        ->and($compact['sales']['known_net_sales_minor'])->toBe(3000)->and($compact['sales']['source_coverage_complete'])->toBeFalse()
+        ->and($compact['event_name'])->toBe($event->title)->and($compact['event_id'])->toBe(123)
+        ->and(array_intersect(array_keys($compact), ['profitability', 'travel', 'budget', 'annual_history', 'history']))->toBeEmpty()
+        ->and($bindings)->not->toContain('event_budget', 'financial', 'staff');
+    Http::assertNothingSent();
+});
+
+test('compact native Sales keeps current device role tenant and stock-binding fences', function (string $change, int $status) {
+    config(['pos_live.enabled' => true, 'pos_live.event_stats_enabled' => true]);
+    eventReceipt($this);
+    commerceOccurrence($this, ['_teams_enrichment' => ['commerce_event' => ['id' => 123]]]);
+    $scope = nativeCommerceScope($this);
+    $token = $this->owner->createToken('Fictional native Sales read', ['mobile:read', 'payments:read'], now()->addDay())->plainTextToken;
+    $this->withToken($token)->withHeader('X-Pos-Device', 'fixture-owner-phone');
+    $url = '/api/mobile/v1/workspaces/'.$this->tenant->slug.'/pos/registers/'.$scope['register']->id.'/event-stats';
+    $this->getJson($url)->assertOk()->assertJsonPath('sales.sale_count', 1)->assertJsonMissingPath('annual_history');
+    if ($change === 'device') {
+        $this->withHeader('X-Pos-Device', 'unassigned-phone');
+    } elseif ($change === 'role') {
+        $this->tenant->users()->updateExistingPivot($this->owner->id, ['role' => 'manager']);
+    } elseif ($change === 'membership') {
+        $this->tenant->users()->updateExistingPivot($this->owner->id, ['membership_active' => false]);
+    } elseif ($change === 'stock_binding') {
+        $this->stock->rows('bindings', $this->tenant->id)->update(['active' => false]);
+    } else {
+        [$foreign] = teamWorkspace();
+        $url = str_replace('/'.$this->tenant->slug.'/', '/'.$foreign->slug.'/', $url);
+    }
+    $this->getJson($url)->assertStatus($status)->assertJsonMissingPath('sales');
+})->with([['device', 404], ['role', 403], ['membership', 404], ['stock_binding', 503], ['tenant', 404]]);
+
+test('compact native Sales freshly verifies its source task on every read and keeps canonical occurrence and timezone admission', function () {
+    eventReceipt($this);
+    $event = commerceOccurrence($this, ['_teams_enrichment' => ['commerce_event' => ['id' => 123]]]);
+    $scope = nativeCommerceScope($this);
+    $connection = TeamProviderConnection::create(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenant->id, 'area_id' => $this->area->id,
+        'user_id' => $this->owner->id, 'provider' => 'asana', 'account_key' => hash('sha256', Str::uuid()), 'status' => 'connected', 'generation' => 1,
+        'expires_at' => now()->addHour(), 'credentials' => ['access_token' => 'fictional'], 'settings' => ['source' => ['asana_workspace' => '100', 'asana_project' => '200']]]);
+    $event->update(['connection_id' => $connection->id, 'data' => [...$event->data, '_generation' => 1, 'source_workspace' => '100', 'source_project' => '200', 'source_id' => '300']]);
+    $task = ['gid' => '300', 'workspace' => ['gid' => '100'], 'memberships' => [['project' => ['gid' => '200']]]];
+    Http::fake(['*tasks/300*' => Http::sequence()->push(['data' => $task])->pushStatus(403)->push(['data' => $task])->push(['data' => $task])]);
+    $read = fn () => app(EventCommerceReport::class)->forRegister($scope, $this->owner);
+    expect($read()['sales']['sale_count'])->toBe(1);
+    try {
+        $read();
+        $this->fail('A successful prior read must not authorize a revoked task.');
+    } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+        expect($error->getStatusCode())->toBe(403);
+    }
+    $this->stock->rows('event_links', $this->tenant->id)->where('event_id', 123)->update(['metadata' => json_encode(['timezone' => 'Unreviewed/Invalid'])]);
+    try {
+        $read();
+        $this->fail('The compact report must retain the reviewed timezone gate.');
+    } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+        expect($error->getStatusCode())->toBe(422);
+    }
+    commerceOccurrence($this, ['_teams_enrichment' => ['commerce_event' => ['id' => 123]]]);
+    expect($read)->toThrow(\App\Services\Pos\PosException::class, 'event_cost_mapping_required');
+});
