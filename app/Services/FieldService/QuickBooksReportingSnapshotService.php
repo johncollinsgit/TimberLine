@@ -6,6 +6,7 @@ use App\Models\IntegrationConnection;
 use App\Models\QuickBooksReportingSnapshot;
 use App\Models\Tenant;
 use App\Services\Integrations\QuickBooks\QuickBooksOnlineClient;
+use Brick\Math\BigDecimal;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Str;
 
@@ -20,34 +21,43 @@ class QuickBooksReportingSnapshotService
         CarbonInterface $end,
         string $accountingMethod = 'Accrual',
     ): QuickBooksReportingSnapshot {
+        abort_unless($connection->tenant_id === (int) $tenant->id && $connection->provider === 'quickbooks', 422, 'Use this workspace’s QuickBooks connection.');
+        abort_if($start->gt($end), 422, 'The report period must end on or after its start.');
         $accountingMethod = strcasecmp($accountingMethod, 'cash') === 0 ? 'Cash' : 'Accrual';
         $payload = $client->report('ProfitAndLoss', [
             'accounting_method' => $accountingMethod,
             'start_date' => $start->toDateString(),
             'end_date' => $end->toDateString(),
         ]);
-        $rows = $this->reportRows($payload);
+        $header = (array) ($payload['Header'] ?? []);
+        abort_if(isset($header['StartPeriod']) && $header['StartPeriod'] !== $start->toDateString()
+            || isset($header['EndPeriod']) && $header['EndPeriod'] !== $end->toDateString()
+            || isset($header['ReportName']) && $header['ReportName'] !== 'ProfitAndLoss'
+            || isset($header['ReportBasis']) && strcasecmp((string) $header['ReportBasis'], $accountingMethod) !== 0,
+            422, 'QuickBooks returned a different report period or accounting basis.');
+        $rows = $this->unsupportedColumns($payload) ? [] : $this->reportRows($payload);
+        $totals = $this->reportTotals($payload, $rows);
 
-        return QuickBooksReportingSnapshot::query()->updateOrCreate(
-            [
-                'tenant_id' => (int) $tenant->id,
-                'range_key' => $rangeKey,
-                'period_start' => $start->toDateString(),
-                'period_end' => $end->toDateString(),
-            ],
-            [
-                'integration_connection_id' => (int) $connection->id,
-                'metrics' => [
-                    'accounting_method' => $accountingMethod,
-                    'total_income' => $this->namedTotal($rows, ['total income', 'total revenue']),
-                    'total_expenses' => $this->namedTotal($rows, ['total expenses', 'total expense']),
-                    'net_income' => $this->namedTotal($rows, ['net income']),
-                    'account_lines' => array_values(array_filter($rows, fn (array $row): bool => $row['row_type'] === 'data')),
-                    'mapping_suggestions' => $this->mappingSuggestions($rows),
+        return QuickBooksReportingSnapshot::query()
+            ->whereDate('period_start', $start->toDateString())->whereDate('period_end', $end->toDateString())->updateOrCreate(
+                [
+                    'tenant_id' => (int) $tenant->id,
+                    'range_key' => $rangeKey,
                 ],
-                'observed_at' => now(),
-            ]
-        );
+                [
+                    'period_start' => $start->toDateString(),
+                    'period_end' => $end->toDateString(),
+                    'integration_connection_id' => (int) $connection->id,
+                    'metrics' => [
+                        'accounting_method' => $accountingMethod,
+                        ...$totals,
+                        'source_report' => array_intersect_key($header, array_flip(['Time', 'ReportName', 'ReportBasis', 'StartPeriod', 'EndPeriod', 'Currency', 'SummarizeColumnsBy'])),
+                        'account_lines' => array_values(array_filter($rows, fn (array $row): bool => $row['row_type'] === 'data')),
+                        'mapping_suggestions' => $this->mappingSuggestions($rows),
+                    ],
+                    'observed_at' => now(),
+                ]
+            );
     }
 
     /** @return array<int,array{id:?string,label:string,normalized_label:string,amount:float,row_type:string}> */
@@ -64,7 +74,7 @@ class QuickBooksReportingSnapshotService
                     ? (array) data_get($node, 'Summary.ColData', [])
                     : (array) ($node['ColData'] ?? []);
                 $label = trim((string) data_get($columns, '0.value', ''));
-                $amount = collect($columns)->pluck('value')->last(fn (mixed $value): bool => is_numeric($value));
+                $amount = collect(array_slice($columns, 1))->pluck('value')->last(fn (mixed $value): bool => $this->numeric($value));
                 if ($label !== '' && is_numeric($amount)) {
                     $rows[] = [
                         'id' => trim((string) data_get($columns, '0.id', '')) ?: null,
@@ -93,9 +103,92 @@ class QuickBooksReportingSnapshotService
     /** @param array<int,array{id:?string,label:string,normalized_label:string,amount:float,row_type:string}> $rows */
     protected function namedTotal(array $rows, array $names): ?float
     {
-        $row = collect($rows)->first(fn (array $row): bool => in_array($row['normalized_label'], $names, true));
+        $matches = collect($rows)->filter(fn (array $row): bool => $row['row_type'] === 'summary' && in_array($row['normalized_label'], $names, true));
+        $row = $matches->pluck('amount')->uniqueStrict()->count() === 1 ? $matches->first() : null;
 
         return $row ? (float) $row['amount'] : null;
+    }
+
+    /** Top-level report sections are distinct from account details and subtotals. */
+    protected function reportTotals(array $payload, array $rows): array
+    {
+        if ($this->unsupportedColumns($payload)) {
+            return array_fill_keys(['total_income', 'total_cogs', 'total_expenses', 'total_other_income', 'total_other_expenses', 'total_costs', 'net_operating_income', 'net_income'], null)
+                + ['cost_components_complete' => false];
+        }
+        $groups = collect((array) data_get($payload, 'Rows.Row', []))->filter(fn ($row) => is_array($row) && is_string($row['group'] ?? null))->groupBy('group');
+        $amount = function (string $group, array $names = []) use ($groups, $rows): ?float {
+            if (! $groups->has($group)) {
+                return $names ? $this->namedTotal($rows, $names) : null;
+            }
+            $values = $groups[$group]->map(function ($row): mixed {
+                $columns = (array) data_get($row, 'Summary.ColData', []);
+
+                return collect(array_slice($columns, 1))->pluck('value')->last(fn ($value) => $this->numeric($value));
+            });
+            if ($values->contains(null) || $values->map(fn ($value) => round((float) $value, 2))->uniqueStrict()->count() !== 1) {
+                return null;
+            }
+
+            return round((float) $values->first(), 2);
+        };
+        $net = $amount('NetIncome', ['net income']);
+        $header = (array) ($payload['Header'] ?? []);
+        $singleTotal = ($header['SummarizeColumnsBy'] ?? null) === 'Total';
+        $fullReport = ($header['ReportName'] ?? null) === 'ProfitAndLoss'
+            && isset($header['StartPeriod'], $header['EndPeriod'], $header['ReportBasis'])
+            && $singleTotal && $groups->has('NetIncome') && $net !== null;
+        if ($fullReport) {
+            $expectedNet = BigDecimal::of(0);
+            foreach (['Income' => 1, 'COGS' => -1, 'Expenses' => -1, 'OtherIncome' => 1, 'OtherExpenses' => -1] as $group => $sign) {
+                $value = $groups->has($group) ? $amount($group) : 0.0;
+                if ($value === null) {
+                    $fullReport = false;
+
+                    break;
+                }
+                $expectedNet = $expectedNet->plus(BigDecimal::of((string) $value)->multipliedBy($sign));
+            }
+            $fullReport = $fullReport && $expectedNet->isEqualTo((string) $net);
+        }
+        $optional = function (string $group, array $names) use ($amount, $groups, $fullReport): ?float {
+            if (! $groups->has($group) && $fullReport) {
+                return 0.0;
+            }
+            $value = $amount($group, $names);
+
+            // Only a complete single-total source report establishes that an absent
+            // optional section is zero. A malformed present section remains unknown.
+            return $value;
+        };
+        $cogs = $optional('COGS', ['total cost of goods sold']);
+        $expenses = $optional('Expenses', ['total expenses', 'total expense']);
+        $otherExpenses = $optional('OtherExpenses', ['total other expenses', 'total other expense']);
+        $costsComplete = $cogs !== null && $expenses !== null && $otherExpenses !== null;
+
+        return [
+            'total_income' => $optional('Income', ['total income', 'total revenue']),
+            'total_cogs' => $cogs, 'total_expenses' => $expenses,
+            'total_other_income' => $optional('OtherIncome', ['total other income']),
+            'total_other_expenses' => $otherExpenses,
+            'total_costs' => $costsComplete ? BigDecimal::of((string) $cogs)->plus((string) $expenses)->plus((string) $otherExpenses)->toFloat() : null,
+            'cost_components_complete' => $costsComplete,
+            'net_operating_income' => $amount('NetOperatingIncome', ['net operating income']),
+            'net_income' => $net,
+        ];
+    }
+
+    private function numeric(mixed $value): bool
+    {
+        return (is_string($value) || is_int($value) || is_float($value))
+            && preg_match('/^-?\d+(?:\.\d+)?$/', (string) $value) === 1 && is_finite((float) $value);
+    }
+
+    private function unsupportedColumns(array $payload): bool
+    {
+        $summary = data_get($payload, 'Header.SummarizeColumnsBy');
+
+        return $summary !== null && $summary !== 'Total' || count((array) data_get($payload, 'Columns.Column', [])) > 2;
     }
 
     /** @param array<int,array{id:?string,label:string,normalized_label:string,amount:float,row_type:string}> $rows

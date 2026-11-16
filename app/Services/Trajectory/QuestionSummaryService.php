@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 /** Read-only answers. Recorded subsets, monthly plans and funding capacity stay distinct. */
 class QuestionSummaryService
 {
-    public function build(Space $space, Collection $entries, Collection $records, Collection $accounts, array $planning, CarbonImmutable $from, CarbonImmutable $through, CarbonImmutable $today, ?User $viewer = null, array $decisionSupport = []): array
+    public function build(Space $space, Collection $entries, Collection $records, Collection $accounts, array $planning, CarbonImmutable $from, CarbonImmutable $through, CarbonImmutable $today, ?User $viewer = null, array $decisionSupport = [], array $accounting = []): array
     {
         $records = $records->filter(fn ($r) => $r instanceof Record && $r->space_id === $space->id && $r->active)->values();
         $accounts = $accounts->filter(fn ($a) => $a instanceof Account && $a->space_id === $space->id)->values();
@@ -68,6 +68,17 @@ class QuestionSummaryService
                 'Family cash plan less household income targets and separate extra owner distributions. Income targets must exclude those extra distributions. This is an additional earnings requirement, not projected earnings or verified business payment capacity.',
                 [...$incomeMissing, ...$supportPlan['missing'], ...$cashPlan['missing'], ...$debt['missing'], ...($totalIncome === null ? ['Add household income targets for this month.'] : []), 'Income targets are plans, not verified receipts or proof the business can afford a payment.']);
         } else {
+            $accountingMatches = is_int($accounting['snapshot_id'] ?? null) && $accounting['snapshot_id'] > 0
+                && is_int($space->tenant_id) && $space->tenant_id > 0
+                && ($accounting['tenant_id'] ?? null) === $space->tenant_id
+                && ($accounting['period_start'] ?? null) === $from->toDateString()
+                && ($accounting['period_end'] ?? null) === $through->min($today)->toDateString();
+            $componentsPresent = is_int($accounting['cogs_cents'] ?? null) && is_int($accounting['expenses_cents'] ?? null) && is_int($accounting['other_expenses_cents'] ?? null);
+            $accountingCost = $accountingMatches && $componentsPresent && is_int($accounting['total_costs_cents'] ?? null)
+                && $accounting['total_costs_cents'] === $accounting['cogs_cents'] + $accounting['expenses_cents'] + $accounting['other_expenses_cents'] ? $accounting['total_costs_cents'] : null;
+            $answers[] = $this->answer('accounting_total_costs', 'What total accounting costs does QuickBooks report for this period?', $accountingCost, 'partial',
+                'Exact-period QuickBooks Profit and Loss on '.($accountingMatches ? ($accounting['basis'] ?? 'unspecified') : 'unavailable').' basis: cost of goods sold plus Expenses and OtherExpenses, including recorded interest. This source is separate from bank spending and is not operating cash need or distributable profit.',
+                [...($accountingCost === null ? ['An exact-period report with all cost components is needed; legacy Expenses alone is not total costs.'] : []), 'Fresh report retrieval does not establish that the books have been reconciled to banks, payroll and sales.']);
             $answers[] = $this->answer('monthly_operating_budget', 'How much is the business planning to spend on operations this month?', $spendingPlan,
                 $budget['draft_spending_cents'] !== null ? 'draft' : 'partial',
                 'Latest effective category spending targets for this month. Debt cash, owner support and savings are separate.', $planMissing);

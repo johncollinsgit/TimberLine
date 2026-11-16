@@ -97,21 +97,29 @@ class DecisionSupportService
         foreach ($variable->groupBy('category') as $category => $rows) {
             $categoryMonthly[$category] = Money::ratio(max(0, -(int) $rows->sum('amount_cents')), 365, max(1, $planning['history_days'] ?? 0) * 12);
         }
-        $targets = $records->where('kind', 'budget')->filter(fn ($r) => ($r->data['reviewed'] ?? false)
-            && ($r->data['purpose'] ?? '') === 'spending' && ($r->data['effective_on'] ?? '9999-12-31') <= $today->toDateString())
-            ->sortByDesc(fn ($r) => $r->data['effective_on'].'|'.str_pad((string) $r->id, 20, '0', STR_PAD_LEFT))->unique(fn ($r) => $r->data['category']);
+        $currentRecords = $records->filter(fn ($r) => $r->kind !== 'budget'
+            || ($r->data['effective_on'] ?? '9999-12-31') <= $today->toDateString());
+        $monthly = app(MonthlyBudgetService::class)->build($space, $currentRecords, $today);
+        // Select the latest cohort before review/expiry filters. A new draft or
+        // expired replacement must not revive an older reviewed category target.
+        $targets = $currentRecords->whereIn('id', $monthly['purposes']['spending']['record_ids'])
+            ->groupBy(fn ($r) => $r->data['category'])
+            ->filter(fn ($rows) => $rows->every(fn ($r) => ($r->data['reviewed'] ?? false) === true))
+            ->map(fn ($rows) => $rows->filter(fn ($r) => ! filled($r->data['ends_on'] ?? null)
+                || $r->data['ends_on'] >= $today->toDateString()))
+            ->filter(fn ($rows) => $rows->isNotEmpty());
         $applied = [];
         $replacedHistorical = 0;
         $replacementTargets = 0;
         // An aggregate manual override has no proven category allocation. Preserve
         // it instead of inventing a split that would double-count a reviewed target.
         if (! array_key_exists('flexible_monthly_cents', $space->settings ?? [])) {
-            foreach ($targets as $target) {
-                $category = $target->data['category'];
-                $replacement = max(0, $target->data['monthly_cents'] - ($fixedCategories[$category] ?? 0));
+            foreach ($targets as $category => $cohort) {
+                $replacement = max(0, $cohort->sum(fn ($r) => $r->data['monthly_cents']) - ($fixedCategories[$category] ?? 0));
                 $replacedHistorical += $categoryMonthly[$category] ?? 0;
                 $replacementTargets += $replacement;
-                $applied[] = ['record_id' => $target->id, 'category' => $category, 'flexible_cents' => $replacement, 'effective_on' => $target->data['effective_on']];
+                $applied[] = ['record_id' => $cohort->first()->id, 'record_ids' => $cohort->pluck('id')->values()->all(),
+                    'category' => $category, 'flexible_cents' => $replacement, 'effective_on' => $cohort->first()->data['effective_on']];
             }
             // Refunds in another category can reduce the old aggregate below
             // a replaced category. They must not erase its new reviewed target.

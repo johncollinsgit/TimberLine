@@ -56,8 +56,21 @@ class TaxReviewService
         $revenue = $entries->where('flow', 'income');
         $expense = $entries->filter(fn ($e) => in_array($e['flow'], ['expense', 'refund'], true) || ($e['flow'] === 'owner_wages' && $e['amount_cents'] < 0));
         $lines = $expense->groupBy('category')->map(fn ($rows, $category) => ['category' => $category, 'amount_cents' => -(int) $rows->sum('amount_cents'), 'ids' => $rows->pluck('id')->all()])->values()->all();
-        $ready = $ledger['income_cents'] !== null && $ledger['expenses_cents'] !== null;
+        $ready = isset($ledger['snapshot_id']) || ($ledger['income_cents'] ?? null) !== null || ($ledger['expenses_cents'] ?? null) !== null || ($ledger['net_income_cents'] ?? null) !== null;
 
-        return ['authoritative' => $ready, 'source' => $ready ? 'QuickBooks · selected report period' : 'Provisional transaction activity · incomplete accounting', 'income_cents' => $ready ? $ledger['income_cents'] : (int) $revenue->sum('amount_cents'), 'expenses_cents' => $ready ? $ledger['expenses_cents'] : -(int) $expense->sum('amount_cents'), 'net_cents' => $ready ? $ledger['income_cents'] - $ledger['expenses_cents'] : (int) $revenue->sum('amount_cents') + (int) $expense->sum('amount_cents'), 'observed_at' => $ledger['observed_at'], 'basis' => $ledger['basis'], 'revenue_ids' => $revenue->pluck('id')->all(), 'transaction_expense_lines' => $lines, 'unreviewed_count' => $entries->where('reviewed', false)->count(), 'note' => 'Transaction detail is supporting evidence and may not reconcile to QuickBooks accruals, inventory, depreciation or payroll. Transfers, loan proceeds, owner draws, asset sales and processor evidence are not added to operating revenue.'];
+        return ['authoritative' => $ready, 'complete' => $ready && isset($ledger['income_cents'], $ledger['total_costs_cents'], $ledger['other_income_cents'], $ledger['net_income_cents']),
+            'source' => $ready ? 'QuickBooks · selected report period' : 'Provisional transaction activity · incomplete accounting',
+            'income_cents' => $ready ? ($ledger['income_cents'] ?? null) : (int) $revenue->sum('amount_cents'),
+            'expenses_cents' => $ready ? ($ledger['expenses_cents'] ?? null) : -(int) $expense->sum('amount_cents'),
+            'cogs_cents' => $ready ? ($ledger['cogs_cents'] ?? null) : null,
+            'other_income_cents' => $ready ? ($ledger['other_income_cents'] ?? null) : null,
+            'other_expenses_cents' => $ready ? ($ledger['other_expenses_cents'] ?? null) : null,
+            'total_costs_cents' => $ready ? ($ledger['total_costs_cents'] ?? null) : null,
+            // Source net income includes COGS and other sections. Never replace a
+            // missing source net with Income minus the Expenses component alone.
+            'net_cents' => $ready ? ($ledger['net_income_cents'] ?? null) : (int) $revenue->sum('amount_cents') + (int) $expense->sum('amount_cents'),
+            'observed_at' => $ledger['observed_at'] ?? null, 'basis' => $ledger['basis'] ?? null,
+            'revenue_ids' => $revenue->pluck('id')->all(), 'transaction_expense_lines' => $lines, 'unreviewed_count' => $entries->where('reviewed', false)->count(),
+            'note' => 'QuickBooks Expenses is one component; total accounting costs also include cost of goods sold and other expenses. Net result uses reported QuickBooks net income; missing report totals stay unavailable. Transaction detail is supporting evidence and may not reconcile to accruals, inventory, depreciation or payroll. Accounting costs include recorded interest but exclude debt principal and owner distributions; they are not cash need or distributable profit.'];
     }
 }

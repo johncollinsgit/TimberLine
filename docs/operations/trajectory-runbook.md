@@ -117,7 +117,14 @@ company mappings are excluded. Bank net payroll and draws count once. Accounting
 payroll and financial observations are not added to bank receipts. Day/month/year
 controls change the receipt period. Missing history remains unavailable.
 
-Business operating costs exclude interest, transfers, owner payments and principal.
+Business bank operating costs exclude interest, transfers, owner payments and principal.
+Exact-period QuickBooks accounting costs are shown separately, including COGS,
+Expenses and OtherExpenses. Net income is the reported source net, never Income
+minus the Expenses component alone. Legacy snapshots retain their reported net
+but need a normal report refresh before missing cost sections become available.
+Only a validated single-total report whose group totals reconcile can establish
+zero for an absent optional cost section; malformed or multi-column totals remain
+unavailable. Accounting profit does not establish distributable bank cash.
 New borrowing means reviewed positive loan draws, not a debt balance increase.
 Annual balance change requires a reviewed December 31/January 1
 `debt_balance_observation` for every listed current loan/card and fresh current
