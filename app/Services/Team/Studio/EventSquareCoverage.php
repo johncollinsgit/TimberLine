@@ -60,6 +60,12 @@ class EventSquareCoverage
             $id = (int) ($summary['resumed_from_run_id'] ?? 0);
             if ($id === 0) {
                 // A non-resumed import must have begun at the first provider page.
+                // Earlier locations may have been read before later resumptions;
+                // finishing after the offline window cannot repair that first read.
+                if (! $run->started_at || $run->started_at->lt($end)) {
+                    return null;
+                }
+
                 return $this->firstPageProven($tenant, $type, $summary) ? $binding : null;
             }
         }

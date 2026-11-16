@@ -25,9 +25,11 @@ historical evidence, not an instruction to activate a register.
 Location/date matches are review candidates. Admit only reviewed exact merchant,
 location and date scopes with completed order/payment import coverage. Retain
 checkpoint/run evidence; one completed page or a recent-sync timestamp does not
-prove complete history. Source reconnection, changed source dates or changed
-allocation requires renewed review. Never write stable IDs into the reference
-workbook merely to prepare a report.
+prove complete history. Original first-page queries must begin after the event's
+72-hour offline-delivery allowance. A later terminal resumption cannot establish
+coverage for locations read before that cutoff. Source reconnection, changed
+source dates or changed allocation requires renewed review. Never write stable
+IDs into the reference workbook merely to prepare a report.
 
 Older immutable import intents can predate the recorded `initial_cursor` field.
 Their first page must still be proved by the exact original null-cursor intent
