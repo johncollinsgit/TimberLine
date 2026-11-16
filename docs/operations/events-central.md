@@ -29,6 +29,13 @@ prove complete history. Source reconnection, changed source dates or changed
 allocation requires renewed review. Never write stable IDs into the reference
 workbook merely to prepare a report.
 
+Older immutable import intents can predate the recorded `initial_cursor` field.
+Their first page must still be proved by the exact original null-cursor intent
+hash. MySQL may reorder stored JSON object keys; only a projection reconstructed
+from the known original builder, with equal bound values, may restore that
+serialization. It must still match the original hash and recorded page size.
+Neither an EOF marker nor a manager review substitutes for first-page evidence.
+
 Net sales exclude tax and tips and reflect known returns. Customer spending that
 includes tax must be labeled separately. Workbook amounts are comparison evidence
 and must never be added to current revenue. Once Square evidence is complete,
@@ -91,6 +98,10 @@ scheduler queues `team:refresh-event-performance` and drains the dedicated
 600-second worker timeout stays below the 660-second retry lease. Requests never
 fall back to synchronous historical work. Keep the normal Laravel scheduler
 running; there is no separate manual reporting worker setup.
+The scheduled worker's `--stop-when-empty` is a bare flag. Its generated command
+must parse against the actual queue worker definition; assigning `=1` prevents
+the worker from taking any jobs. Before the first generation is available, the
+browser shows pending totals and dashes rather than zero sales.
 
 Managers review source suggestions in an event's Sales history. Choose the
 recurring series, each occurrence's original dates and selling days, and stable
