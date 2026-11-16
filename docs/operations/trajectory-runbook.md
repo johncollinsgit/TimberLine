@@ -107,6 +107,52 @@ and [Web Link callbacks](https://plaid.com/docs/link/web/). Full non-Hosted-Link
 event retrieval through `/link/token/get` requires separate Plaid Link-events
 enablement; this flow does not assume that extra provider feature is available.
 
+## Question summary and dated monthly plans
+
+The overview answers household and business questions from scoped source evidence.
+Recorded family support uses confirmed exact category/merchant mappings in
+`company_support_source`, with an explicit business link and current financial
+access to both spaces. A more specific merchant mapping takes precedence; conflicting
+company mappings are excluded. Bank net payroll and draws count once. Accounting
+payroll and financial observations are not added to bank receipts. Day/month/year
+controls change the receipt period. Missing history remains unavailable.
+
+Business operating costs exclude interest, transfers, owner payments and principal.
+New borrowing means reviewed positive loan draws, not a debt balance increase.
+Annual balance change requires a reviewed December 31/January 1
+`debt_balance_observation` for every listed current loan/card and fresh current
+balances. Observations never update an account or create transactions. Listed-account
+comparisons still require a refinance/closed/new-account bridge before a full debt claim.
+
+Monthly budgets choose the latest effective cohort per purpose/category and retain
+all line items from that cohort. Optional inclusive `ends_on` stops holiday and
+one-time allowances; expiry cannot revive an older target. Partial-month targets are
+flagged without prorating. The Budget month picker uses those same selected IDs,
+so December and Q1 versions never sum into a single monthly cost.
+
+Business `owner_support` targets mean additional distributions, separate from payroll.
+Household category-based support mappings can explicitly identify business payroll
+income targets; merchant-only receipt mappings cannot classify future budgets.
+Outside-business need and additional-earnings requirements remain conditional on
+planned support, with affordability unverified. Overlapping draw income targets and
+linked owner-support targets block gap calculations. Other income targets are never
+silently treated as business support or won proposals.
+
+Debt cash follows actual calendar occurrences, including biweekly withdrawals.
+A typed `payment_notice` distinguishes a scheduled payment from a minimum due;
+matching notices/schedules count once. The planning debt reserve uses the larger
+of scheduled debt cash and the total debt budget allowance, rather than adding both.
+Extra principal needs a separately reviewed plan. Incomplete terms, medical coverage,
+future statement changes and payoff timing remain explicit limits. Savings reviews
+show source-backed interest and reviewed spending flags; uncategorized costs are not
+called waste and review amounts are not promised savings.
+
+The summary is read-only, omitted for a single-account filter, and performs no
+bank transfer, allocation-rule change or debt payment. Six recorded months and six
+planning months keep actuals, drafts, targets and gaps separate. Future income uses
+explicit dated targets; holiday sales are never annualized. All new records reuse
+existing encrypted storage, authorization, version guards and audit events.
+
 ## Imports and financial semantics
 
 ### Household evidence cards

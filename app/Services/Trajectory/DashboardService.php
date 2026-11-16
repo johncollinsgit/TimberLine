@@ -298,6 +298,9 @@ class DashboardService
             return [...$goal, 'remaining_cents' => $remaining, 'required_monthly_cents' => Money::ratio($remaining, 1, $monthsLeft), 'on_track' => $remaining === 0 || ($goal['target_on'] >= $today->toDateString() && $remaining <= $goal['monthly_cents'] * $monthsLeft)];
         }, $plans('goal'));
 
+        $decisionSupport = $scopeAccount ? null : app(DecisionSupportService::class)->build($space, $entries, $records, $planning, $bills, $this->recurringSuggestions($entries, $schedules), $today, $viewer);
+        $questionSummary = $scopeAccount ? null : app(QuestionSummaryService::class)->build($space, $entries, $records, $accounts, $planning, $start, $end, $today, $viewer, $decisionSupport ?? []);
+
         return [
             'space' => $space->only(['id', 'name', 'kind', 'currency', 'timezone']), 'range' => ['key' => $range, 'start' => $start->toDateString(), 'end' => $end->toDateString()],
             'account_options' => $allAccounts->map(fn ($account) => $account->only(['id', 'name', 'kind']))->values()->all(),
@@ -327,7 +330,9 @@ class DashboardService
             'review_suggestions' => app(ReviewSuggestionService::class)->forEntries($entries),
             'anomalies' => app(AnomalyService::class)->detect($space, $entries),
             'planning' => $planning,
-            'decision_support' => $scopeAccount ? null : app(DecisionSupportService::class)->build($space, $entries, $records, $planning, $bills, $this->recurringSuggestions($entries, $schedules), $today, $viewer),
+            'decision_support' => $decisionSupport,
+            'question_summary' => $questionSummary,
+            'support_business_options' => $questionSummary['business_options'] ?? [],
             'debt_planner' => app(DebtScenarioSourceService::class)->build($space, 0, $accountId),
             'income_runway' => $incomeRunway,
             'tax_review' => app(TaxReviewService::class)->review($space, $selected, $records),

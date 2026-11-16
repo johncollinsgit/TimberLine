@@ -1,10 +1,13 @@
 <?php
 
+use App\Models\Tenant;
+use App\Models\TenantAccessProfile;
 use App\Models\Trajectory\Record;
 use App\Models\User;
 use App\Services\Trajectory\BudgetImportService;
 use App\Services\Trajectory\PilotService;
 use App\Services\Trajectory\RecordService;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(function () {
@@ -185,4 +188,104 @@ test('web confirmation rejects a target changed after preview and retains the us
     app(RecordService::class)->save($this->owner, $this->space, 'budget', $record->name, [...$record->data, 'monthly_cents' => 25000], $record, $record->version);
     $this->postJson($base.'/imports/confirm', ['token' => $stale->json('token')])->assertConflict();
     expect($record->fresh()->data['monthly_cents'])->toBe(25000)->and(Record::where('space_id', $this->space->id)->where('kind', 'budget')->count())->toBe(1);
+});
+
+test('bounded template targets preserve optional end dates and reviewed source identity on replay', function () {
+    $csv = "name,category,monthly_cents,purpose,effective_on,ends_on,source,reviewed,source_id\nFictional winter supplies,groceries,12345,spending,2027-01-01,2027-03-31,Fictional winter plan,1,fictional:winter-supplies\n";
+    withFictionalBudgetCsv($csv, function ($path) {
+        $preview = $this->importer->read($path, $this->space);
+        expect($preview['rows'][0]['ends_on'])->toBe('2027-03-31')
+            ->and($preview['rows'][0]['reviewed'])->toBeTrue()
+            ->and(Record::where('kind', 'budget')->count())->toBe(0);
+        $rows = $this->importer->resolve($this->space, $preview);
+        expect($this->importer->confirm($this->owner, $this->space, $rows)['created'])->toBe(1);
+        $again = $this->importer->resolve($this->space, $this->importer->read($path, $this->space));
+        expect($this->importer->confirm($this->owner, $this->space, $again)['skipped'])->toBe(1);
+        $record = Record::where('kind', 'budget')->firstOrFail();
+        app(RecordService::class)->save($this->owner, $this->space, 'budget', $record->name, [...$record->data, 'ends_on' => '2027-02-28'], $record, $record->version);
+        expect(fn () => $this->importer->confirm($this->owner, $this->space, $again))->toThrow(HttpException::class)
+            ->and($record->fresh()->data['ends_on'])->toBe('2027-02-28')
+            ->and(Record::where('kind', 'budget')->count())->toBe(1);
+    });
+});
+
+test('blank optional end dates preserve open-ended legacy target replay and inclusive same-day dates are allowed', function () {
+    withFictionalBudgetCsv(fictionalBudgetTemplate(), function ($path) {
+        $rows = $this->importer->resolve($this->space, $this->importer->read($path, $this->space));
+        $this->importer->confirm($this->owner, $this->space, $rows);
+    });
+    $blankEnd = "name,category,monthly_cents,purpose,effective_on,source,reviewed,source_id,ends_on\nFictional groceries,groceries,12345,spending,2027-01-01,Fictional plan,0,fictional-budget:groceries:2027-01,\n";
+    withFictionalBudgetCsv($blankEnd, function ($path) {
+        $preview = $this->importer->read($path, $this->space);
+        expect($preview['rows'][0])->not->toHaveKey('ends_on');
+        expect($this->importer->confirm($this->owner, $this->space, $this->importer->resolve($this->space, $preview))['skipped'])->toBe(1);
+    });
+    withFictionalBudgetCsv(str_replace(",\n", ",2027-01-01\n", $blankEnd), function ($path) {
+        expect($this->importer->read($path, $this->space)['rows'][0]['ends_on'])->toBe('2027-01-01');
+    });
+});
+
+test('budget template and default end dates reject reversed or malformed ranges before saving', function () {
+    foreach (['2026-12-31', '2027-02-30', '03/31/2027'] as $endsOn) {
+        $csv = "name,category,monthly_cents,purpose,effective_on,ends_on\nFictional supplies,groceries,10000,spending,2027-01-01,".$endsOn."\n";
+        withFictionalBudgetCsv($csv, fn ($path) => expect(fn () => $this->importer->read($path, $this->space))->toThrow(ValidationException::class));
+        withFictionalBudgetCsv(fictionalBudgetTemplate(), fn ($path) => expect(fn () => $this->importer->read($path, $this->space, defaults: ['ends_on' => $endsOn]))->toThrow(ValidationException::class));
+    }
+    expect(Record::where('kind', 'budget')->count())->toBe(0);
+});
+
+test('mapped exports use explicit end-date columns or defaults and validate against each actual row start', function () {
+    $csv = "Item,Group,Planned,Start,End\nFictional supplies,groceries,125.67,2027-01-01,2027-03-31\n";
+    withFictionalBudgetCsv($csv, function ($path) {
+        $mapping = ['name' => 'Item', 'category' => 'Group', 'amount' => 'Planned', 'effective_on' => 'Start', 'ends_on' => 'End'];
+        $defaults = ['amount_units' => 'dollars', 'amount_basis' => 'planned', 'purpose' => 'spending'];
+        foreach (['mapped', 'everydollar'] as $format) {
+            $preview = $this->importer->read($path, $this->space, $format, $mapping, $defaults);
+            expect($preview['mapping_required'])->toBeFalse()
+                ->and($preview['rows'][0]['effective_on'])->toBe('2027-01-01')
+                ->and($preview['rows'][0]['ends_on'])->toBe('2027-03-31');
+            unset($mapping['ends_on']);
+            $fromDefault = $this->importer->read($path, $this->space, $format, $mapping, [...$defaults, 'ends_on' => '2027-02-28']);
+            expect($fromDefault['rows'][0]['ends_on'])->toBe('2027-02-28');
+            expect(fn () => $this->importer->read($path, $this->space, $format, $mapping, [...$defaults, 'ends_on' => '2026-12-31']))->toThrow(ValidationException::class);
+            $mapping['ends_on'] = 'End';
+        }
+    });
+    withFictionalBudgetCsv(str_replace('2027-03-31', '2026-12-31', $csv), function ($path) {
+        expect(fn () => $this->importer->read($path, $this->space, 'mapped', ['name' => 'Item', 'category' => 'Group', 'amount' => 'Planned', 'effective_on' => 'Start', 'ends_on' => 'End'], ['amount_units' => 'dollars', 'amount_basis' => 'planned', 'purpose' => 'spending']))->toThrow(ValidationException::class);
+    });
+});
+
+test('owner support imports belong only to business spaces at preview and confirmation', function () {
+    $tenant = Tenant::create(['slug' => 'fictional-juniper-budget', 'name' => 'Fictional Juniper Workshop']);
+    TenantAccessProfile::create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct']);
+    $this->owner->tenants()->attach($tenant->id, ['role' => 'owner', 'membership_active' => true]);
+    [, $business] = app(PilotService::class)->prepare($this->owner, $tenant, true);
+    app()->forgetInstance(\App\Services\Tenancy\TenantModuleAccessResolver::class);
+    $csv = str_replace(',spending,', ',owner_support,', fictionalBudgetTemplate());
+    withFictionalBudgetCsv($csv, function ($path) use ($business) {
+        expect(fn () => $this->importer->read($path, $this->space))->toThrow(HttpException::class);
+        $rows = $this->importer->resolve($business, $this->importer->read($path, $business, defaults: ['ends_on' => '2027-03-31']));
+        expect(fn () => $this->importer->confirm($this->owner, $this->space, $rows))->toThrow(HttpException::class);
+        expect($this->importer->confirm($this->owner, $business, $rows)['created'])->toBe(1)
+            ->and(Record::where('space_id', $this->space->id)->where('kind', 'budget')->count())->toBe(0);
+        $record = Record::where('space_id', $business->id)->where('kind', 'budget')->firstOrFail();
+        expect($record->data['purpose'])->toBe('owner_support')->and($record->data['ends_on'])->toBe('2027-03-31');
+    });
+    withFictionalBudgetCsv("Item,Group,Planned\nFictional support,income,123.45\n", function ($path) use ($business) {
+        $mapping = ['name' => 'Item', 'category' => 'Group', 'amount' => 'Planned'];
+        $defaults = ['amount_units' => 'dollars', 'amount_basis' => 'planned', 'purpose' => 'owner_support', 'effective_on' => '2027-01-01'];
+        expect(fn () => $this->importer->read($path, $this->space, 'mapped', $mapping, $defaults))->toThrow(HttpException::class);
+        expect($this->importer->read($path, $business, 'mapped', $mapping, $defaults)['rows'][0]['purpose'])->toBe('owner_support');
+    });
+});
+
+test('bounded web preview stays inert and confirmation uses cached dates rather than client row replacements', function () {
+    $base = '/trajectory/spaces/'.$this->space->id;
+    $csv = "name,category,monthly_cents,purpose,effective_on,ends_on,reviewed\nFictional winter budget,groceries,12345,spending,2027-01-01,2027-03-31,0\n";
+    $preview = $this->actingAs($this->owner)->postJson($base.'/imports/preview', ['kind' => 'budget', 'file' => \Illuminate\Http\UploadedFile::fake()->createWithContent('fictional-bounded.csv', $csv)])->assertOk()->assertJsonPath('preview.0.ends_on', '2027-03-31');
+    expect(Record::where('kind', 'budget')->count())->toBe(0);
+    $this->postJson($base.'/imports/confirm', ['token' => $preview->json('token'), 'rows' => [['ends_on' => '2099-12-31', 'reviewed' => true]]])->assertOk();
+    $record = Record::where('kind', 'budget')->firstOrFail();
+    expect($record->data['ends_on'])->toBe('2027-03-31')->and($record->data['reviewed'])->toBeFalse();
 });

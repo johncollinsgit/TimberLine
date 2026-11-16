@@ -205,12 +205,13 @@ class TrajectoryController extends Controller
             'kind' => ['required', Rule::in(['transactions', 'payroll', 'monarch', 'financial_observation', 'budget'])],
             'account_id' => 'nullable|integer',
             'budget_format' => ['sometimes', Rule::in(['template', 'everydollar', 'mapped'])],
-            'column_mapping' => 'sometimes|array|max:9', 'column_mapping.*' => 'required|string|max:160',
-            'budget_defaults' => 'sometimes|array:amount_units,amount_basis,purpose,effective_on,source,reviewed',
+            'column_mapping' => 'sometimes|array|max:10', 'column_mapping.*' => 'required|string|max:160',
+            'budget_defaults' => 'sometimes|array:amount_units,amount_basis,purpose,effective_on,ends_on,source,reviewed',
             'budget_defaults.amount_units' => ['sometimes', 'nullable', Rule::in(['cents', 'dollars'])],
             'budget_defaults.amount_basis' => ['sometimes', 'nullable', Rule::in(['planned'])],
-            'budget_defaults.purpose' => ['sometimes', 'nullable', Rule::in(['spending', 'savings', 'debt_payment', 'income'])],
+            'budget_defaults.purpose' => ['sometimes', 'nullable', Rule::in(['spending', 'savings', 'debt_payment', 'income', 'owner_support'])],
             'budget_defaults.effective_on' => 'sometimes|nullable|date_format:Y-m-d|after_or_equal:1900-01-01|before:2200-01-01',
+            'budget_defaults.ends_on' => 'sometimes|nullable|date_format:Y-m-d|after_or_equal:1900-01-01|before:2200-01-01',
             'budget_defaults.source' => 'sometimes|nullable|string|max:160', 'budget_defaults.reviewed' => 'sometimes|boolean',
         ]);
         $account = null;
