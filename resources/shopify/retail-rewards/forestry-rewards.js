@@ -88,8 +88,8 @@
   }
 
   function formatBalance(value) {
-    const parsed = Number.parseInt(String(value || 0), 10);
-    return Number.isFinite(parsed) ? parsed.toLocaleString('en-US') : '0';
+    const parsed = Number.parseFloat(String(value || 0));
+    return Number.isFinite(parsed) ? parsed.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '0';
   }
 
   function prefersReducedMotion() {
@@ -595,7 +595,7 @@
       return 'You have reward codes ready';
     }
     if (model.balance > 0) {
-      return 'Your rewards are on standby';
+      return 'Your Candle Cash';
     }
     return 'Rewards live here once they are ready';
   }
@@ -1631,7 +1631,7 @@
       state: normalizeState(data.state || ''),
       consentSms: bool(data.consent && data.consent.sms),
       consentEmail: bool(data.consent && data.consent.email),
-      balance: Number.parseInt(String((data.balance && data.balance.points) || summary.current_balance_points || 0), 10) || 0,
+      balance: balanceAmount,
       balanceAmount: balanceAmount,
       birthdayState: normalizeState(birthday.state || ''),
       birthday: birthday.birthday || null,

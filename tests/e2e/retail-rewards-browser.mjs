@@ -56,7 +56,11 @@ for (const engine of [chromium, webkit]) {
             if (scenario === 'saved') assert.ok(await page.locator('[data-action="apply-reward"][data-reward-kind="candle_cash"]').count() > 0);
           } else {
             assert.equal(await redeem.count(), 1, `${surface}: a funded wallet needs a redeem action`);
-            if (surface === 'page') assert.equal(await page.locator('.ForestryRewardsStatValue').first().innerText(), '$80.50');
+            if (surface === 'page') {
+              assert.equal(await page.locator('.ForestryRewardsStatValue').first().innerText(), '$80.50');
+              assert.equal(await page.locator('.ForestryRewardsSnapshot strong').first().innerText(), '80.5');
+              assert.ok(!(await page.locator('[data-forestry-rewards-root]').innerText()).includes('on standby'));
+            }
             await redeem.click();
             if (scenario === 'retry') {
               await page.waitForFunction(() => document.querySelector('[data-action="redeem-reward"]')?.disabled === false);
