@@ -18,7 +18,14 @@ for (const engine of [chromium, webkit]) {
           let redeemed = 0, attempts = 0, applied = false;
           const errors = [];
           page.on('pageerror', e => errors.push(e.message));
-          page.on('requestfailed', r => errors.push(`${new URL(r.url()).pathname}: ${r.failure()?.errorText}`));
+          page.on('requestfailed', r => {
+            const path = new URL(r.url()).pathname;
+            const error = r.failure()?.errorText || '';
+            // WebKit may cancel the best-effort analytics fetch when the
+            // successful discount response navigates to the cart.
+            if (path.endsWith('/rewards/event') && /cancelled|ERR_ABORTED|NS_BINDING_ABORTED/i.test(error)) return;
+            errors.push(`${path}: ${error}`);
+          });
           const code = { redemption_code: 'FICTIONAL-REWARD-ONLY', discount_title: 'Reward Credit Applied', is_usable: scenario !== 'pending', apply_path: '/discount/FICTIONAL-REWARD-ONLY?redirect=%2Fcart', reward: { name: 'Candle Cash', reward_value: 10 } };
           const server = http.createServer(async (req, res) => {
             const path = new URL(req.url, 'http://localhost').pathname;
