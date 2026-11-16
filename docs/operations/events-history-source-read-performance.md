@@ -8,6 +8,23 @@ more than 10,000 nodes fail closed. Current source/policy admission remains fres
 for every proof. Other engines retain the original bounded traversal. No receipt
 or access result is cached across requests.
 
+Full customer dependency builds keep their cohort's original purchase witnesses
+in one database-enforced MySQL READ ONLY view. The narrowly owned tenant/PDO
+context omits implicit Square configuration and reviewer row locks only within
+that view. Normal source-sync, identity and payment writers retain their locks.
+All attempted authority inputs are compared after commit; successful connection,
+policy and reviewer checks are freshly admitted with fresh permission resolvers.
+Stable inadmissible sources keep their existing conservative exclusion behavior.
+This removes reporting row-lock contention while retaining coherent originals
+and revocation checks. It does not shorten the full witness pass or remove the
+metadata locks held until commit; full build and published endpoint timings must
+still be measured separately from dependency-frame component benchmarks.
+Withheld customer evidence emits a server-side phase and, for a caught 409, a
+SHA-256 message fingerprint. It does not log the exception message, original
+payload, customer identity or source keys. These diagnostics distinguish a
+witness failure from a final dependency/access change without manually running
+a report builder or weakening its publication checks.
+
 The scoped allocation-facts helper keeps derived source IDs and request-local
 copies of original models rather than reloading all event notes for every purchase
 group. Every model reuse first checks fresh complete row metadata (including
@@ -70,8 +87,8 @@ Ordinary or drifted extra fields retain the full-hash fallback. Column-only,
 partially indexed, repeated and incompatible recovery states are covered on
 disposable MySQL; rollback preserves original source rows and derived indexes.
 
-On supported MySQL 8.4, ASCII string source keys use a bound JSON_TABLE input
-relation and covered point lookups after fresh session-encoding and exact
+On supported MySQL 8.4, ASCII string payment and original-order keys use a bound
+JSON_TABLE input relation and covered point lookups after fresh session-encoding and exact
 column/index checks. Other types, Unicode, overlength values, unsupported engines
 and unverified schema retain native IN predicates. Each input branch deduplicates
 physical IDs; the combined union, tenant predicates, global ID order and coverage
@@ -93,6 +110,15 @@ component/fixture checks, not deployed endpoint timing. A separate boundary test
 retains 50,000 distinct rows despite single-lane case/pad duplicate inputs and
 rejects 50,001. Runtime acceptance records fast-path activation as a count without
 printing source values.
+
+Original-order membership uses its separately verified five-column source index
+and a deduplicated physical-ID join before the existing global row bound. This
+avoids large native IN lists choosing tenant-prefix or primary scans for sparse
+order selections. Missing, invisible, prefixed or incompatible indexes and
+unproven inputs retain the original native query. The original body/hash pairing
+and typed source fingerprint formula are unchanged. A just-read column inventory
+also supplies the hash-column existence check; empty provider lanes need no
+table-existence probe. Neither optimization caches source bytes or authority.
 
 Repeated CI workload failures measured about 305–309 ms against the unchanged
 250 ms bound. An isolated query profile showed tenant-only plans for precise
