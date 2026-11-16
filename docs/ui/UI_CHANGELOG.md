@@ -17,6 +17,14 @@ Fictional Chromium/WebKit regressions cover booking states, custom colors,
 cross-timezone dates, click-through and phone/desktop geometry; current source,
 tenant and financial authority are unchanged.
 
+## 2026-11-16 - Manual wholesale custom labels
+
+Wholesale Backstage and Shipping list/table rows identify orders containing a
+manual setup or reuse fee and direct staff to customer/order notes. The indicator
+does not claim artwork approval, create assignments or release existing holds.
+Checkout uses the existing shop/theme switches to remove the required label
+wizard while retaining approved-wholesaler and quantity validation.
+
 ## 2026-11-15 - Guided retail website flow (source candidate)
 
 Retail starters show real product and collection photo cards, with an empty-state

@@ -13,6 +13,30 @@ additional grants; it does not change existing tenant roles.
 
 ## Ordering and private evidence
 
+### Manual checkout (owner direction, November 16, 2026)
+
+The wholesale store uses manual custom-label fee purchasing. Set shop metafield
+`forestry.custom_labels_enabled` to `false` and theme setting
+`mf_custom_labels_enabled` to `false`. Keep the combined wholesale checkout
+validation active: approved-customer access, service quantity one and ordinary
+multiples-of-three checks remain enabled. Never disable the whole validation or
+change `blockOnFailure` as a substitute for disabling label enforcement.
+
+Buyers add the setup/reuse fee as an ordinary product. Staff uses customer/order
+notes to determine the label; draft invoices and Custom Scent orders do not need
+cart choices, a receipt or artwork revision fields. Fee-only orders are marked
+"Manual custom labels" in Backstage, without claiming artwork approval or creating
+production assignments. Existing tracked artwork requests and holds are retained.
+The saved November 2 Order Printer summary remains unchanged.
+
+Before activation, verify draft-invoice and Custom Scent checkouts, setup/reuse
+fees, normal and accelerated checkout, and rejected unauthorized/invalid-quantity
+orders. Use isolated test drafts; never send test invoices or place purchases.
+Record the two prior setting values and keep the current theme backup. Roll back
+the two switches together if needed. Do not delete artwork or order history.
+
+### Retained artwork-library workflow
+
 One design per order is the default. New setup costs $20 once; reuse or locating
 an old staff-held design costs $5 once. Service quantity is one. Candle sizes and
 wax melt scents use multiples of three; products marked `SingleQuantity` retain

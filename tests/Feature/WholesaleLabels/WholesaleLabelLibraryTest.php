@@ -178,6 +178,30 @@ it('does not associate a forged customer receipt or retroactively hold old fee-o
     expect(data_get($order->fresh()->attribution_meta, 'custom_labels.hold'))->toBeNull();
 });
 
+it('identifies manual label fees without inventing artwork approval or losing existing order evidence', function (string $variant, string $mode) {
+    $order = Order::factory()->create(['tenant_id' => $this->tenant->id, 'shopify_store_key' => 'wholesale', 'attribution_meta' => ['buyer_order_request' => 'Use the logo in customer notes.']]);
+    $payload = ['line_items' => [['id' => 1, 'variant_id' => $variant, 'quantity' => 1, 'properties' => []]]];
+    $service = app(WholesaleLabelOrderService::class);
+    $service->capture($order, $payload);
+    $service->capture($order, $payload);
+    expect(data_get($order->fresh()->attribution_meta, 'manual_custom_labels.'.$mode))->toBeTrue()
+        ->and(data_get($order->fresh()->attribution_meta, 'buyer_order_request'))->toBe('Use the logo in customer notes.')
+        ->and(data_get($order->fresh()->attribution_meta, 'custom_labels'))->toBeNull()
+        ->and(WholesaleLabelAssignment::query()->forAllTenants()->count())->toBe(0);
+    $service->capture($order, ['line_items' => []]);
+    expect(data_get($order->fresh()->attribution_meta, 'manual_custom_labels'))->toBeNull();
+})->with(['setup' => ['42044203761745', 'setup'], 'reuse' => ['42044189966417', 'reuse']]);
+
+it('does not apply wholesale manual label indicators to retail orders or erase earlier artwork holds', function () {
+    $payload = ['line_items' => [['id' => 1, 'variant_id' => 42044189966417, 'quantity' => 1, 'properties' => []]]];
+    $retail = Order::factory()->create(['tenant_id' => $this->tenant->id, 'shopify_store_key' => 'retail']);
+    app(WholesaleLabelOrderService::class)->capture($retail, $payload);
+    expect(data_get($retail->fresh()->attribution_meta, 'manual_custom_labels'))->toBeNull();
+    $held = Order::factory()->create(['tenant_id' => $this->tenant->id, 'shopify_store_key' => 'wholesale', 'attribution_meta' => ['custom_labels' => ['hold' => true, 'receipt' => 'original-reference']]]);
+    app(WholesaleLabelOrderService::class)->capture($held, $payload);
+    expect(data_get($held->fresh()->attribution_meta, 'custom_labels'))->toBe(['hold' => true, 'receipt' => 'original-reference']);
+});
+
 it('saves a signed buyer upload without accepting a forged owner from the body', function () {
     $url = '/shopify/marketing/v1/wholesale/labels/uploads?'.http_build_query(labelProxyQuery());
     $response = $this->post($url, ['file' => labelLogoFile(), 'name' => 'Fictional uploaded logo', 'customer_id' => '202', 'tenant_id' => 999], ['Accept' => 'application/json'])->assertCreated();
