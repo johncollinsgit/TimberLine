@@ -58,6 +58,9 @@ class OperationsSync
             $schedule = app(EventSchedule::class)->source($source);
             $nativeCalendar = array_intersect_key($draft->data, array_flip(['sessions', 'schedule_complete', 'calendar_color', 'timezone', 'session_evidence']));
             $data = ['event_schedule' => $schedule, 'source_schedule' => $schedule['source_schedule'], 'source_id' => $gid, 'source_project' => $project, 'source_projects' => [$project], 'source_workspace' => (string) $c->settings['source']['asana_workspace'], 'original_notes' => $notes, 'source_url' => 'https://app.asana.com/0/'.$project.'/'.$gid, 'source_version' => $source['modified_at'] ?? now()->toIso8601String(), 'fields' => $this->extract($notes), 'reviewed_fields' => array_intersect_key($draft->data, array_flip(['venue', 'address', 'city', 'state', 'timezone', 'environment', 'organizer', 'email', 'phone', 'setup_time', 'loadout_time', 'event_hours', 'booth', 'instructions'])), '_teams_enrichment' => array_replace($draft->data['_teams_enrichment'] ?? [], ['created_from_draft' => $draft->id]), '_generation' => $c->generation, 'observed_at' => now()->toIso8601String()];
+            if (($acceptance = app(EventAcceptance::class)->source($c, $project, $source)) !== null) {
+                $data['source_acceptance'] = $acceptance;
+            }
             if ($nativeCalendar) {
                 $data['_teams_enrichment']['calendar'] ??= $nativeCalendar + ['source_version' => $data['source_version'], 'reviewed_by' => (string) $c->user_id, 'reviewed_at' => now()->toIso8601String()];
             }
@@ -146,6 +149,9 @@ class OperationsSync
                             }
                             $schedule = app(EventSchedule::class)->source($task);
                             if ($kind === 'event') {
+                                if (($acceptance = app(EventAcceptance::class)->source($c, $projectId, $task)) !== null) {
+                                    $data['source_acceptance'] = $acceptance;
+                                }
                                 $data['event_schedule'] = $schedule;
                                 $data['source_schedule'] = $schedule['source_schedule'];
                             }
@@ -253,6 +259,11 @@ class OperationsSync
             if (isset($record->data[$field])) {
                 $data[$field] = $record->data[$field];
             }
+        }
+        if ($c->provider === 'asana' && $kind === 'event' && ! array_key_exists('source_acceptance', $data) && array_key_exists('source_acceptance', $record->data ?? [])) {
+            // Preserve prior provenance when tags were not returned. Presentation
+            // still requires current admitted evidence and cannot reuse its yes.
+            $data['source_acceptance'] = $record->data['source_acceptance'];
         }
         if ($c->provider === 'asana' && isset($record->data['reviewed_fields']) && ($record->data['source_version'] ?? null) !== ($data['source_version'] ?? null)) {
             $data['_teams_enrichment']['stale_reviewed_fields'] = $record->data['reviewed_fields'];

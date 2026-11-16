@@ -1,3 +1,14 @@
+## 2026-11-16 - Asana event acceptance tags (source candidate)
+
+Calendar and Applications share current source-backed acceptance. An exact
+Accepted tag confirms booking; removed, conflicting or unavailable structured
+evidence returns it to unconfirmed. Payment, application, person/hotel tags and
+task completion remain separate. Existing task/inventory reads supply the tags,
+and original source provenance and reviewed notes remain intact.
+
+Focused server tests cover full/compact parity and retirement of old Yes values;
+Applications Chromium/WebKit regressions cover source, native and legacy cases.
+
 ## 2026-11-16 - Event loading, calendar acceptance and Today (source candidate)
 
 List, Board and Calendar reuse admitted date windows within a visible visit.

@@ -102,7 +102,7 @@ final class EventSquareAllocationFacts
         $sourceIds = [];
         $explicit = [];
         foreach ($facts as $id => $fact) {
-            if (array_intersect($orders, $fact['order_ids'])) {
+            if ($orders !== [] && $fact['order_ids'] !== [] && array_intersect($orders, $fact['order_ids'])) {
                 $selected[$id] = true;
                 $sourceIds[] = $fact['source']['source_id'] ?? '';
                 $explicit[] = $fact['commerce_id'];
@@ -157,8 +157,33 @@ final class EventSquareAllocationFacts
     private function facts(int $tenant): array
     {
         abort_unless($tenant > 0, 404);
+        $before = $this->metadata($tenant);
+        if ($before === ($this->snapshots[$tenant]['metadata'] ?? [])) {
+            return $this->snapshots[$tenant]['facts'] ?? [];
+        }
+        $db = DB::connection();
+        if ($db->getDriverName() === 'mysql' && $db->transactionLevel() === 0 && ! $db->getPdo()->inTransaction()) {
+            // Only a changed projection needs a coherent read view. Keep every
+            // hot reuse's fresh byte witness, and never carry the pre-frame
+            // metadata into a newer snapshot of the encrypted bodies.
+            $db->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+            try {
+                return $db->transaction(fn () => $this->reloadFacts($tenant));
+            } catch (\Throwable $error) {
+                unset($this->snapshots[$tenant]);
+                throw $error;
+            }
+        }
+
+        // A caller owns its existing transaction and isolation. Preserve the
+        // conservative mixed-read retry boundary rather than changing either.
+        return $this->reloadFacts($tenant, $before);
+    }
+
+    private function reloadFacts(int $tenant, ?array $firstMetadata = null): array
+    {
         for ($attempt = 0; $attempt < 3; $attempt++) {
-            $before = $this->metadata($tenant);
+            $before = $attempt === 0 && $firstMetadata !== null ? $firstMetadata : $this->metadata($tenant);
             $cached = $this->snapshots[$tenant] ?? ['metadata' => [], 'facts' => [], 'models' => []];
             if ($before === $cached['metadata']) {
                 return $cached['facts'];
