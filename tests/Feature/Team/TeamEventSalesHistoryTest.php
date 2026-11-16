@@ -169,6 +169,27 @@ test('same-local-time pace uses confirmed original minute evidence and discloses
         'sample_count' => 1, 'current_source_coverage_complete' => false]);
 });
 
+test('elapsed current selling days retain partial comparison labels until their source coverage is proved', function () {
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-11-15T18:00:00Z'));
+    $series = salesHistoryRecord($this, 'series');
+    $old = salesHistoryRecord($this, 'event');
+    $current = salesHistoryRecord($this, 'event', ['starts_on' => '2026-11-14', 'ends_on' => '2026-11-15']);
+    salesHistoryOrder($this, '2025-11-01', 2000);
+    salesHistoryOrder($this, '2025-11-02', 3000);
+    salesHistoryOrder($this, '2026-11-14', 1000);
+    salesHistoryOrder($this, '2026-11-15', 1500);
+    salesHistoryMap($this, $old, $series);
+    salesHistoryMap($this, $current, $series);
+    $report = app(EventSalesHistory::class)->read($this->tenant, $this->owner, $current);
+    $saturday = collect($report['current']['daily'])->firstWhere('date', '2026-11-14');
+    expect($report['current']['source_coverage_complete'])->toBeFalse()
+        ->and($saturday['net_sales_minor'])->toBe(1000)
+        ->and($saturday['partial'])->toBeTrue()
+        ->and($report['comparisons']['event_day'][0]['partial'])->toBeTrue()
+        ->and(collect($report['comparisons']['weekday'])->firstWhere('label', 'Sat')['partial'])->toBeTrue()
+        ->and(collect($report['history'][0]['daily'])->pluck('partial')->unique()->all())->toBe([false]);
+});
+
 test('reviewed persistent staff identities replace repeated payroll row identities', function () {
     $series = salesHistoryRecord($this, 'series');
     $event = salesHistoryRecord($this, 'event');

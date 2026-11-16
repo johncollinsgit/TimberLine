@@ -26,6 +26,8 @@ class EventPerformance
 {
     public const TABLE = 'team_event_performance_facts';
 
+    private const REPORT_VERSION = 2;
+
     private const DIGEST_VERSION = 'indexed-content-v1';
 
     /** Frozen with the immutable generated-column migration; changed fields use the full digest. */
@@ -498,7 +500,7 @@ class EventPerformance
             Cache::put($cacheKey, $revisions, 30);
         }
 
-        return hash('sha256', json_encode([self::DIGEST_VERSION, $records, $sources, $revisions, $this->squareContextSignature($tenant)], JSON_THROW_ON_ERROR));
+        return hash('sha256', json_encode([self::REPORT_VERSION, self::DIGEST_VERSION, $records, $sources, $revisions, $this->squareContextSignature($tenant)], JSON_THROW_ON_ERROR));
     }
 
     /** Only reviewed report inputs can invalidate this reporting generation. */

@@ -77,3 +77,22 @@ test('legacy first-page proof retains current original reader policy and termina
     }
     expect(app(EventSquareCoverage::class)->proven($this->tenant->id, $this->scope, 'America/New_York'))->toBeFalse();
 })->with(['not_eof', 'policy', 'original_reader']);
+
+test('a later terminal receipt cannot prove locations first read before the offline delivery cutoff', function (string $kind, string $start) {
+    $cutoff = \Carbon\CarbonImmutable::parse($this->scope['ends_on'], 'America/New_York')->addDay()->startOfDay()->utc()->addHours(72);
+    $terminal = MarketingImportRun::findOrFail($this->scope[$kind.'_run_id']);
+    expect($terminal->started_at->gt($cutoff))->toBeTrue();
+    expect(app(EventSquareCoverage::class)->proven($this->tenant->id, $this->scope, 'America/New_York'))->toBeTrue();
+    // Only the original start time changes; binding, original null-cursor
+    // intent, query, source access and completed terminal EOF remain valid.
+    $this->roots[$kind]->update(['started_at' => $start === 'missing' ? null : $cutoff->subSecond()]);
+    expect(app(EventSquareCoverage::class)->proven($this->tenant->id, $this->scope, 'America/New_York'))->toBeFalse();
+    Http::assertNothingSent();
+})->with(['orders', 'payments'])->with(['before_cutoff', 'missing']);
+
+test('an original first-page read exactly at the offline delivery cutoff retains coverage', function (string $kind) {
+    $cutoff = \Carbon\CarbonImmutable::parse($this->scope['ends_on'], 'America/New_York')->addDay()->startOfDay()->utc()->addHours(72);
+    $this->roots[$kind]->update(['started_at' => $cutoff]);
+    expect(app(EventSquareCoverage::class)->proven($this->tenant->id, $this->scope, 'America/New_York'))->toBeTrue();
+    Http::assertNothingSent();
+})->with(['orders', 'payments']);

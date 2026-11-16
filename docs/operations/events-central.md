@@ -25,9 +25,11 @@ historical evidence, not an instruction to activate a register.
 Location/date matches are review candidates. Admit only reviewed exact merchant,
 location and date scopes with completed order/payment import coverage. Retain
 checkpoint/run evidence; one completed page or a recent-sync timestamp does not
-prove complete history. Source reconnection, changed source dates or changed
-allocation requires renewed review. Never write stable IDs into the reference
-workbook merely to prepare a report.
+prove complete history. Original first-page queries must begin after the event's
+72-hour offline-delivery allowance. A later terminal resumption cannot establish
+coverage for locations read before that cutoff. Source reconnection, changed
+source dates or changed allocation requires renewed review. Never write stable
+IDs into the reference workbook merely to prepare a report.
 
 Older immutable import intents can predate the recorded `initial_cursor` field.
 Their first page must still be proved by the exact original null-cursor intent
@@ -44,6 +46,11 @@ Keep unknown refunds, unknown coverage and unassigned sales visible. No rows is
 not proof of zero sales. Do not manufacture daily figures by dividing a workbook
 total evenly across dates.
 
+A separate Square return-only record can be recognized as an already represented
+refund only through its exact original purchase, payment and refund identity,
+with matching money and source evidence. It creates neither another purchase nor
+another subtraction. Unresolved or duplicate return claims remain review items.
+
 Pay's Sales screen includes imported purchases within the same reviewed Square
 location/date scopes as event history. New arrivals in those scopes do not need
 another per-order selection. Original Pay mirrors and explicit order selections
@@ -54,7 +61,8 @@ Historical defaults include verified completed occurrences in prior years.
 Average event sales divides eligible sales by occurrences. Average daily sales
 divides eligible sales by verified selling days. Display denominators and years.
 Event-day and weekday comparisons are separate views. An unfinished selling day
-is partial; a same-time pace comparison requires original historical timestamps.
+is partial; an elapsed day also remains partial while source coverage or its net
+amount is unverified. A same-time pace comparison requires original historical timestamps.
 Weekend defaults are Friday through Sunday, with editable date boundaries; use
 actual local selling dates to split long shows and retain full-event totals.
 
