@@ -168,7 +168,7 @@ class EventSalesHistory
             $position = array_search($date, $sellingDates, true);
             $day['event_day'] = $position === false ? null : $position + 1;
             $day['weekday'] = CarbonImmutable::parse($date, $timezone)->format('D');
-            $day['partial'] = $date >= now($timezone)->toDateString();
+            $day['partial'] = ! $coverage || ! $valid || ! $day['complete'] || $date >= now($timezone)->toDateString();
             if (! $day['complete']) {
                 $day['net_sales_minor'] = null;
             }
