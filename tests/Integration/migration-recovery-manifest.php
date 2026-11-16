@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_16_170000_add_event_customer_anchor_presence_indexes.php' => [
+        'test' => 'tests/Integration/EventCustomerAnchorMySqlRecoveryTest.php',
+        'scenarios' => ['original customer source rows survive column-only and partially indexed DDL, retry and app rollback; exact generated path literals, invisible columns and visible full BTREE definitions reject drift; JSON null and typed residual comparison semantics remain unchanged'],
+    ],
     '2026_11_16_030000_add_indexed_event_content_hashes.php' => [
         'test' => 'tests/Integration/EventContentHashMySqlRecoveryTest.php',
         'scenarios' => ['original Square and canonical identity rows survive virtual-column-only and partially indexed DDL; immutable generated expressions and named index definitions reject incompatible retries; direct content changes, original ids and timestamps remain detectable without reading source JSON'],

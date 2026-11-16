@@ -656,6 +656,11 @@ jobs:
         POS_LIVE_DISPOSABLE_MYSQL: '1'
       run: php ./vendor/bin/pest tests/Stock tests/Integration/StockMySqlRecoveryTest.php tests/Integration/StockMySqlConcurrencyTest.php --compact
       if: matrix.group == 'schema'
+    - name: Verify event customer anchor partial-DDL recovery
+      env:
+        TEAM_WORK_DISPOSABLE_MYSQL: '1'
+      run: php ./vendor/bin/pest tests/Integration/EventCustomerAnchorMySqlRecoveryTest.php --compact
+      if: matrix.group == 'schema'
     - name: Rehearse prior production schema upgrade
       run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"
       if: matrix.group == 'schema'
@@ -705,6 +710,11 @@ jobs:
       env:
         POS_DISPOSABLE_MYSQL: '1'
       run: php ./vendor/bin/pest tests/Integration/PointOfSaleConcurrencyTest.php --compact
+      if: matrix.group == 'concurrency'
+    - name: Verify coherent event reporting reads during source observations
+      env:
+        TEAM_WORK_DISPOSABLE_MYSQL: '1'
+      run: php ./vendor/bin/pest tests/Integration/EventCustomerDependenciesMySqlTest.php tests/Integration/EventSquareAllocationFactsMySqlTest.php tests/Integration/EventCustomerFinancialReadsMySqlTest.php tests/Integration/EventCustomerFrameScaleMySqlTest.php --compact
       if: matrix.group == 'concurrency'
     - name: Verify platform SES durable claims and shared account concurrency
       env:

@@ -35,31 +35,44 @@ class EventCustomerDependencies
     /** Capture original anchors before any result/customer cohort is consumed. */
     public function capture(Tenant $tenant, TeamArea $area, ?array $scope = null, bool $witnesses = false): array
     {
-        $revision = $this->selectorRevision($tenant, $area);
-        if ($scope !== null) {
-            abort_unless(($scope['version'] ?? null) === self::VERSION && hash_equals($scope['selector_revision'] ?? '', $revision), 409, 'Customer event selectors changed. Preparing reporting.');
-        } else {
-            $scope = ['version' => self::VERSION, 'selector_revision' => $revision, 'events' => $this->selectors($tenant, $area), 'seeds' => []];
-        }
         $db = DB::connection();
         if ($db->getDriverName() === 'mysql') {
-            abort_if($db->transactionLevel() !== 0, 409, 'Customer dependency reads need a fresh short transaction.');
+            abort_if($db->transactionLevel() !== 0 || $db->getPdo()->inTransaction(), 409, 'Customer dependency reads need a fresh short transaction.');
             $db->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
         }
 
-        $frame = $db->transaction(function () use ($tenant, $area, $scope, $witnesses, $revision): array {
-            // The selection itself must belong to this same read view, not only the rows it selects.
-            abort_unless(hash_equals($revision, $this->selectorRevision($tenant, $area)), 409, 'Customer event selectors changed before their dependency view.');
+        $frame = $db->transaction(function () use ($tenant, $area, $scope, $witnesses): array {
+            // Selectors and their selected originals belong to one local read view.
+            $revision = $this->selectorRevisionInView($tenant, $area);
+            if ($scope !== null) {
+                abort_unless(($scope['version'] ?? null) === self::VERSION && hash_equals($scope['selector_revision'] ?? '', $revision), 409, 'Customer event selectors changed. Preparing reporting.');
+            } else {
+                $scope = ['version' => self::VERSION, 'selector_revision' => $revision, 'events' => $this->selectors($tenant, $area), 'seeds' => []];
+            }
 
             return $this->frame($tenant, $scope, $witnesses);
         });
-        abort_unless(hash_equals($revision, $this->selectorRevision($tenant, $area)), 409, 'Customer event selectors changed while reporting was read.');
+        abort_unless(hash_equals($frame['scope']['selector_revision'], $this->selectorRevision($tenant, $area)), 409, 'Customer event selectors changed while reporting was read.');
 
         return $frame;
     }
 
     /** Includes the tenant-wide competing allocation boundary used by shared readers. */
     public function selectorRevision(Tenant $tenant, TeamArea $area): string
+    {
+        $db = DB::connection();
+        if ($db->getDriverName() !== 'mysql' || $db->transactionLevel() !== 0 || $db->getPdo()->inTransaction()) {
+            // The caller owns its isolation; retain the conservative reload guards.
+            return $this->selectorRevisionInView($tenant, $area);
+        }
+        // Metadata, ciphertext and competing allocations need the same short view.
+        // SET TRANSACTION applies to this transaction only, preserving the session.
+        $db->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+
+        return $db->transaction(fn () => $this->selectorRevisionInView($tenant, $area));
+    }
+
+    private function selectorRevisionInView(Tenant $tenant, TeamArea $area): string
     {
         abort_unless((int) $area->tenant_id === (int) $tenant->id, 404);
         $selectors = $this->selectors($tenant, $area);
@@ -257,7 +270,7 @@ class EventCustomerDependencies
                 $events['square_order:'.$id][$event] = true;
             }
             if ($ids && $hasPayments) {
-                $payments = $this->bounded(DB::table('square_payments')->where('tenant_id', $tenant->id)->whereIn('square_order_id', $ids)
+                $payments = $this->bounded($this->paymentSources($tenant, $ids)
                     ->select(['id', 'square_payment_id', 'square_order_id', 'square_customer_id', 'status']), self::MAX_ROWS);
                 $revision[$event]['payments'] = $payments->all();
                 foreach ($payments as $payment) {
@@ -291,10 +304,15 @@ class EventCustomerDependencies
             }
         }
         if ($commerce) {
-            $links = $this->bounded(DB::table('marketing_profile_links')->where('tenant_id', $tenant->id)->where(function (Builder $query) use ($commerce): void {
-                $query->where(fn (Builder $query) => $query->where('source_type', 'pos_event_capture')->whereIn('source_meta->event_id', array_keys($commerce)))
-                    ->orWhere(fn (Builder $query) => $query->whereIn('source_type', ['order', 'square_order', 'square_payment', 'website_order'])->whereIn('source_meta->event_attribution->event_id', array_keys($commerce)));
-            }), self::MAX_ROWS);
+            $schema = app(EventCustomerAnchorSchema::class);
+            $captures = $schema->narrow(DB::table('marketing_profile_links')->where('tenant_id', $tenant->id)->where('source_type', 'pos_event_capture')
+                ->whereIn('source_meta->event_id', array_keys($commerce)), '$.event_id')->selectRaw('id AS dependency_event_link_id');
+            $reviewed = $schema->narrow(DB::table('marketing_profile_links')->where('tenant_id', $tenant->id)
+                ->whereIn('source_type', ['order', 'square_order', 'square_payment', 'website_order'])
+                ->whereIn('source_meta->event_attribution->event_id', array_keys($commerce)), '$.event_attribution.event_id')->selectRaw('id AS dependency_event_link_id');
+            $selected = $captures->union($reviewed);
+            $links = $this->bounded(DB::table('marketing_profile_links')->joinSub($selected, 'dependency_event_links', fn ($join) => $join->on('marketing_profile_links.id', '=', 'dependency_event_links.dependency_event_link_id'))
+                ->where('marketing_profile_links.tenant_id', $tenant->id)->select('marketing_profile_links.*'), self::MAX_ROWS);
             foreach ($links as $link) {
                 $keys[$link->source_type][(string) $link->source_id] = true;
                 $profiles[] = (int) $link->marketing_profile_id;
@@ -330,14 +348,55 @@ class EventCustomerDependencies
             ->where('marketing_profile_links.tenant_id', $tenant->id)->select('marketing_profile_links.*'), self::MAX_ROWS);
     }
 
+    /** Exact original membership; all callers retain their whole-population bound. */
+    private function paymentSources(Tenant $tenant, array $orders, array $payments = []): Builder
+    {
+        // Keep the two original membership predicates independent so each
+        // can select covered IDs without reading every tenant payment row.
+        // Deduplication and the original bound apply to their whole union.
+        $selected = null;
+        foreach (['square_order_id' => $orders, 'square_payment_id' => $payments] as $column => $ids) {
+            if ($ids === []) {
+                continue;
+            }
+            $index = $column === 'square_order_id' ? 'epp_order_hash_idx' : 'square_payments_tenant_payment_unique';
+            $ranges = DB::connection()->getDriverName() === 'mysql' ? array_chunk($ids, 128) : [$ids];
+            foreach ($ranges as $range) {
+                $branch = $this->indexed(DB::table('square_payments'), 'square_payments', $index, ['tenant_id', $column])
+                    ->where('tenant_id', $tenant->id)->whereIn($column, $range)->selectRaw('id AS dependency_payment_id');
+                if ($selected === null) {
+                    $selected = $branch;
+                } else {
+                    $selected->union($branch);
+                }
+            }
+        }
+        $query = DB::table('square_payments');
+        if ($selected === null) {
+            return $query->where('tenant_id', $tenant->id)->whereRaw('0 = 1');
+        }
+        $primary = $query->getConnection()->getDriverName() === 'mysql' && collect($this->readIndexes['square_payments'] ?? [])
+            ->contains(fn ($index) => strtolower($index['name']) === 'primary' && ($index['primary'] ?? false) && ($index['unique'] ?? false)
+                && array_map('strtolower', $index['columns']) === ['id']);
+        if ($primary) {
+            // Drive physical row lookup from the deduplicated keys even
+            // when many equality ranges make MySQL overestimate them.
+            $query = DB::query()->fromRaw('('.$selected->toSql().') AS `dependency_payment_keys` STRAIGHT_JOIN `square_payments` FORCE INDEX (`PRIMARY`)'
+                .' ON `square_payments`.`id` = `dependency_payment_keys`.`dependency_payment_id`', $selected->getBindings());
+        } else {
+            $query->joinSub($selected, 'dependency_payment_keys', fn ($join) => $join->on('square_payments.id', '=', 'dependency_payment_keys.dependency_payment_id'));
+        }
+
+        return $query->where('square_payments.tenant_id', $tenant->id);
+    }
+
     /** Original source membership and bytes, including representations suppressed by mirrors. */
     private function financial(Tenant $tenant, array $keys, array $anchors): array
     {
         $state = $orderTenders = $websiteParents = $nativeCustomers = $dates = [];
         $orders = $payments = $shopify = $website = collect();
         if (Schema::hasTable('square_payments') && (! empty($keys['square_order']) || ! empty($keys['square_payment']))) {
-            $payments = $this->sourceRows('square_payments', DB::table('square_payments')->where('tenant_id', $tenant->id)->where(fn (Builder $q) => $q
-                ->whereIn('square_order_id', array_keys($keys['square_order'] ?? []))->orWhereIn('square_payment_id', array_keys($keys['square_payment'] ?? []))),
+            $payments = $this->sourceRows('square_payments', $this->paymentSources($tenant, array_keys($keys['square_order'] ?? []), array_keys($keys['square_payment'] ?? [])),
                 ['id', 'square_payment_id', 'square_order_id', 'square_customer_id', 'status', 'created_at_source']);
             foreach ($payments as $payment) {
                 $keys['square_payment'][(string) $payment->square_payment_id] = true;
@@ -457,11 +516,11 @@ class EventCustomerDependencies
             $index = $table === 'square_orders' ? 'epo_order_hash_idx' : 'epp_order_hash_idx';
             if ($generated && $expected === $actual && Schema::hasColumn($table, 'event_content_hash') && Schema::hasIndex($table, $index)) {
                 $rows = $this->bounded((clone $query)->select(array_values(array_unique([...$identifiers, ...$extras]))), self::MAX_ROWS);
-                $hashes = collect();
-                foreach ($rows->pluck('id')->chunk(1000) as $ids) {
-                    $hashes = $hashes->union(DB::table($table)->forceIndex($index)->where('tenant_id', $rows->first()->tenant_id)->whereIn('id', $ids)
-                        ->select('id')->selectRaw('HEX(`event_content_hash`) AS content_revision')->get()->keyBy('id'));
-                }
+                // The source population is already bounded to MAX_ROWS. Read
+                // its covered hashes together rather than scan the same tenant
+                // prefix again for every physical-ID batch.
+                $hashes = $rows->isEmpty() ? collect() : DB::table($table)->forceIndex($index)->where('tenant_id', $rows->first()->tenant_id)->whereIn('id', $rows->pluck('id'))
+                    ->select('id')->selectRaw('HEX(`event_content_hash`) AS content_revision')->get()->keyBy('id');
                 abort_unless($rows->count() === $hashes->count(), 409, 'Original purchase dependencies changed.');
 
                 return $rows->map(fn ($row) => (object) [...array_intersect_key((array) $row, array_flip($identifiers)),

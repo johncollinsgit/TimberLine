@@ -21,11 +21,29 @@ MySQL returns only the ciphertext hash for unchanged records; SQLite's fallback
 reads ciphertext and hashes it locally. Only the structural schema-column list
 is reused without an additional database read inside this request scope.
 
+On a cold or changed MySQL inventory outside a caller-owned transaction, the
+helper reads its metadata, changed ciphertext bodies and final inventory in one
+short explicit REPEATABLE READ transaction. It starts a new metadata witness
+inside that view; the preceding hot-cache check is never paired with newer
+bodies. This permits a coherent allocation projection during unrelated encrypted
+observation updates, including when the session default is READ COMMITTED.
+The helper performs no provider I/O or locking reads, does not change the
+session default, and ends its own transaction before money/source normalization
+continues. Failed owned frames discard their retained model projection.
+Unchanged reuse still performs exactly one fresh complete byte witness with no
+new transaction. Caller-owned transactions retain their existing isolation and
+conservative retry/failure behavior. The final scoped normalization fence remains
+fresh: allocation, reviewer or membership changes after this short view discard
+the purchase result rather than extending the read transaction over the report.
+
 The audience lookup regression separately counts broad model/body scans and the
 per-purchase fresh metadata witnesses. Its original cold/warm total-query caps and
 one-history-rebuild-per-buyer limits remain in force. Reviewer admission uses a
 fresh combined user/membership existence query, preserving active-user,
 platform-admin and exact owner/admin membership rules without caching authority.
+Empty explicit-order arrays skip only an intersection that is already false;
+commerce mappings, source selection and reviewer evidence remain in the effective
+revision even when an event has no explicit orders.
 
 Customer dependency frames select exact source/type identities through a union
 of ID branches using the existing tenant/source key. The outer read retains its
@@ -35,6 +53,30 @@ an index hint requires the expected name and column prefix and falls back when
 missing or incompatible. No schema addition or authority cache is involved. The
 commerce-event JSON anchor remains unchanged, including its existing coercion
 and competing-claim semantics.
+
+The additive customer-anchor migration installs two MySQL virtual, invisible
+path-presence flags with visible tenant/source-type/presence/ID BTREE indexes.
+These are candidate indexes, not generated event IDs: the original
+JSON_UNQUOTE/IN comparisons remain unchanged. JSON null stays a candidate.
+Runtime use requires the exact generated type, path expression and invisibility,
+plus the complete visible, nonunique, unprefixed index definition. Missing or
+incompatible schema retains the original predicate. SQLite uses verified
+expression indexes with a guarded CASE: SQL null is absent, valid JSON path
+presence is a candidate, and malformed JSON remains a candidate so the original
+comparison still fails closed. Literal path case is significant in verification.
+Only these verified redundant fields may be removed from a requested content
+digest shape; the covering hash still includes every original semantic field.
+Ordinary or drifted extra fields retain the full-hash fallback. Column-only,
+partially indexed, repeated and incompatible recovery states are covered on
+disposable MySQL; rollback preserves original source rows and derived indexes.
+
+Large mixed order/payment membership uses covering ID unions of 128-key MySQL
+ranges, then a derived-first STRAIGHT_JOIN through a verified PRIMARY lookup.
+Original values, tenant predicates, deduplication and the global ID order/coverage
+bound remain unchanged. Covered source hashes are read once for the already
+bounded physical ID set rather than repeatedly scanning the tenant prefix.
+Local 63,000/126,000-payment components measured p95 106.5/186.6 ms over five
+samples at each scale; these are component checks, not deployed endpoint timing.
 
 Repeated CI workload failures measured about 305–309 ms against the unchanged
 250 ms bound. An isolated query profile showed tenant-only plans for precise
