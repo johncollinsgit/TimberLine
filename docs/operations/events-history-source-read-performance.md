@@ -27,6 +27,21 @@ one-history-rebuild-per-buyer limits remain in force. Reviewer admission uses a
 fresh combined user/membership existence query, preserving active-user,
 platform-admin and exact owner/admin membership rules without caching authority.
 
+Customer dependency frames select exact source/type identities through a union
+of ID branches using the existing tenant/source key. The outer read retains its
+tenant predicate, unique rows, ID ordering and single 50,000-row coverage bound.
+Profile links and incoming aliases may use their existing leading-key indexes;
+an index hint requires the expected name and column prefix and falls back when
+missing or incompatible. No schema addition or authority cache is involved. The
+commerce-event JSON anchor remains unchanged, including its existing coercion
+and competing-claim semantics.
+
+Repeated CI workload failures measured about 305–309 ms against the unchanged
+250 ms bound. An isolated query profile showed tenant-only plans for precise
+source/profile lookups. The corrected plans reduced local doubled-directory p95
+from about 115 ms to 59–65 ms, including four concurrent fixture workloads. These
+local measurements are separate from protected CI and deployed endpoint timing.
+
 The normalizer receives its revision and conflict answers from one projection,
 then freshly verifies that revision before returning. Customer dependency callers
 can ask for an effective revision covering relevant across-area allocations,

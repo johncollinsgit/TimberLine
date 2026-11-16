@@ -84,10 +84,11 @@ try {
     });
     console.log(name + ': checking retired window');
     const oldWindow = deferred(); holdWindow = oldWindow;
+    const membersBeforeWindow = calls.filter(call => /\/members$/.test(call.path)).length;
     await page.getByRole('tab', { name: 'Calendar', exact: true }).click(); await oldWindow.ready;
-    const latestMembers = page.waitForResponse(response => /\/team\/areas\/[^/]+\/members$/.test(new URL(response.url()).pathname));
-    await page.getByRole('tab', { name: 'List', exact: true }).click(); await page.locator('.teams-event-list').waitFor(); await (await latestMembers).finished();
+    await page.getByRole('tab', { name: 'List', exact: true }).click(); await page.locator('.teams-event-list').waitFor(); await page.locator('#tops-content:not([aria-busy])').waitFor();
     const membersBefore = calls.filter(call => /\/members$/.test(call.path)).length;
+    assert.equal(membersBefore, membersBeforeWindow, 'Presentation switches retain the admitted area without another members request');
     oldWindow.release(); await page.waitForLoadState('networkidle');
     assert.equal(calls.filter(call => /\/members$/.test(call.path)).length, membersBefore, 'Retired area load does not issue another members request');
     assert.equal(await dialog.isVisible(), false); assert.deepEqual(errors, []);

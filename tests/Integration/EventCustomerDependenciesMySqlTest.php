@@ -10,6 +10,7 @@ use App\Models\Tenant;
 use App\Services\Team\Studio\EventCustomerDependencies;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -118,6 +119,26 @@ test('original source revisions use covering indexed hashes and retain typed and
     expect($after['signature'])->not->toBe($before['signature']);
     DB::table('square_orders')->where('id', $this->order->id)->update(['closed_at' => '2026-11-01 16:00:01']);
     expect($this->dependencies->capture($this->tenant, $this->area, $before['scope'])['signature'])->not->toBe($after['signature']);
+});
+
+test('missing and incompatible optional read indexes retain the exact committed customer dependency signature', function () {
+    $baseline = $this->dependencies->capture($this->tenant, $this->area);
+    $original = Schema::getFacadeRoot();
+    foreach ([[], [['name' => 'mpl_tenant_source_unique_idx', 'columns' => ['tenant_id']],
+        ['name' => 'mpl_profile_source_type_idx', 'columns' => ['tenant_id']],
+        ['name' => 'marketing_profiles_merged_into_profile_id_foreign', 'columns' => ['tenant_id']]]] as $indexes) {
+        $schema = Mockery::mock($original)->makePartial();
+        $schema->shouldReceive('getIndexes')->andReturn($indexes);
+        Schema::swap($schema);
+        try {
+            $fallback = (new EventCustomerDependencies)->capture($this->tenant, $this->area, $baseline['scope']);
+            expect($fallback['signature'])->toBe($baseline['signature'])
+                ->and($fallback['claims'])->toBe($baseline['claims'])->and($fallback['labels'])->toBe($baseline['labels']);
+        } finally {
+            Schema::swap($original);
+        }
+    }
+    Http::assertNothingSent();
 });
 
 test('selector admission and original rows share one read view even across a restored selector ABA', function () {

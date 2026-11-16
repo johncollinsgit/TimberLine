@@ -14,6 +14,7 @@ use App\Services\Team\Studio\EventCustomerDependencies;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -284,6 +285,72 @@ test('fresh witnesses reject a formerly valid purchase after its event review au
         $this->dependencies->assertPurchase($changed, $this->event->id, $this->buyer, dependencyPurchase());
     });
 })->with(['allocation_reviewer', 'commerce_metadata']);
+
+test('exact source branches retain original collation deduplication tenant scope and row ordering', function () {
+    dependencySourceLink($this, $this->buyer, 'square_payment', 'dependency-payment');
+    dependencySourceLink($this, $this->buyer, 'website_order', 'another-original');
+    $foreign = $this->tenant->replicate();
+    $foreign->slug = 'foreign-source-branches';
+    $foreign->save();
+    $foreignBuyer = MarketingProfile::create(['tenant_id' => $foreign->id]);
+    MarketingProfileLink::create(['tenant_id' => $foreign->id, 'marketing_profile_id' => $foreignBuyer->id, 'source_type' => 'square_order', 'source_id' => 'dependency-order']);
+    $keys = ['square_order' => ['dependency-order' => true], 'SQUARE_ORDER' => ['dependency-order' => true],
+        'square_payment' => ['dependency-payment' => true], 'website_order' => ['another-original' => true]];
+    $original = DB::table('marketing_profile_links')->where('tenant_id', $this->tenant->id)->where(function ($query) use ($keys) {
+        foreach ($keys as $type => $ids) {
+            $query->orWhere(fn ($query) => $query->where('source_type', $type)->whereIn('source_id', array_keys($ids)));
+        }
+    })->orderBy('id')->get();
+    $method = new ReflectionMethod(EventCustomerDependencies::class, 'sourceLinks');
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    $actual = $method->invoke($this->dependencies, $this->tenant, $keys);
+    $queries = collect(DB::getQueryLog());
+    DB::disableQueryLog();
+    expect($actual->all())->toEqual($original->all())->and($actual->pluck('id')->unique())->toHaveCount(3);
+    $selection = $queries->first(fn ($query) => str_contains(strtolower($query['query']), ' union ') && str_contains(strtolower($query['query']), 'dependency_source_keys'));
+    expect($selection)->not->toBeNull()->and($selection['query'])->toContain('mpl_tenant_source_unique_idx');
+    $plan = DB::select((DB::getDriverName() === 'mysql' ? 'EXPLAIN ' : 'EXPLAIN QUERY PLAN ').$selection['query'], $selection['bindings']);
+    expect(json_encode($plan))->toContain('mpl_tenant_source_unique_idx');
+    Http::assertNothingSent();
+});
+
+test('optional source read indexes never change signatures or fail legacy missing and incompatible schemas', function (bool $wrongShape) {
+    $baseline = $this->dependencies->capture($this->tenant, $this->area);
+    $indexes = $wrongShape ? [['name' => 'mpl_tenant_source_unique_idx', 'columns' => ['tenant_id']],
+        ['name' => 'mpl_profile_source_type_idx', 'columns' => ['tenant_id']],
+        ['name' => 'marketing_profiles_merged_into_profile_id_foreign', 'columns' => ['tenant_id']]] : [];
+    $schema = Mockery::mock(Schema::getFacadeRoot())->makePartial();
+    $schema->shouldReceive('getIndexes')->andReturn($indexes);
+    Schema::swap($schema);
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    $fallback = (new EventCustomerDependencies)->capture($this->tenant, $this->area, $baseline['scope']);
+    $queries = collect(DB::getQueryLog());
+    DB::disableQueryLog();
+    expect($fallback['signature'])->toBe($baseline['signature'])->and($fallback['claims'])->toBe($baseline['claims'])
+        ->and($fallback['labels'])->toBe($baseline['labels']);
+    foreach ($queries as $query) {
+        expect($query['query'])->not->toContain('mpl_tenant_source_unique_idx', 'mpl_profile_source_type_idx', 'marketing_profiles_merged_into_profile_id_foreign');
+    }
+    Http::assertNothingSent();
+})->with(['missing' => false, 'incompatible' => true]);
+
+test('exact source branches apply the original coverage limit to the combined unique cohort', function () {
+    $keys = ['square_order' => [], 'square_payment' => []];
+    for ($offset = 0; $offset < 50001; $offset += 200) {
+        $rows = [];
+        for ($number = $offset; $number < min($offset + 200, 50001); $number++) {
+            $type = $number % 2 ? 'square_order' : 'square_payment';
+            $id = 'bounded-original-'.$number;
+            $keys[$type][$id] = true;
+            $rows[] = ['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $this->buyer->id, 'source_type' => $type, 'source_id' => $id];
+        }
+        DB::table('marketing_profile_links')->insert($rows);
+    }
+    dependencyRejects(fn () => (new ReflectionMethod(EventCustomerDependencies::class, 'sourceLinks'))->invoke($this->dependencies, $this->tenant, $keys));
+    Http::assertNothingSent();
+});
 
 test('fresh event frames stay bounded with current and doubled unrelated customer directories', function () {
     $baseline = $this->dependencies->capture($this->tenant, $this->area);

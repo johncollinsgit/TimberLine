@@ -30,6 +30,8 @@ class EventCustomerDependencies
 
     private array $selectorCache = [];
 
+    private array $readIndexes = [];
+
     /** Capture original anchors before any result/customer cohort is consumed. */
     public function capture(Tenant $tenant, TeamArea $area, ?array $scope = null, bool $witnesses = false): array
     {
@@ -136,7 +138,8 @@ class EventCustomerDependencies
         $anchorClaims = $links->filter(fn ($link) => isset($anchors['events'][$link->source_type.':'.$link->source_id]) || $link->source_type === 'pos_event_capture');
         $seeds = array_values(array_unique([...($scope['seeds'] ?? []), ...$anchors['profiles'], ...$anchorClaims->pluck('marketing_profile_id')->all()]));
         [$profiles, $canonical] = $this->profiles($tenant, $seeds, true);
-        $aliasLinks = $profiles->isEmpty() ? collect() : $this->bounded(DB::table('marketing_profile_links')->where('tenant_id', $tenant->id)->whereIn('marketing_profile_id', $profiles->keys()), self::MAX_ROWS);
+        $aliasLinks = $profiles->isEmpty() ? collect() : $this->bounded($this->indexed(DB::table('marketing_profile_links'), 'marketing_profile_links', 'mpl_profile_source_type_idx', ['marketing_profile_id', 'source_type'])
+            ->where('tenant_id', $tenant->id)->whereIn('marketing_profile_id', $profiles->keys()), self::MAX_ROWS);
         foreach ($aliasLinks->where('source_type', 'pos_sale')->groupBy(fn ($link) => $canonical[(int) $link->marketing_profile_id]) as $nativeLinks) {
             abort_if($nativeLinks->count() > 5000, 409, 'Native purchase witness coverage needs review.');
         }
@@ -308,13 +311,23 @@ class EventCustomerDependencies
             return collect();
         }
 
-        return $this->bounded(DB::table('marketing_profile_links')->where('tenant_id', $tenant->id)->where(function (Builder $query) use ($keys): void {
-            foreach ($keys as $type => $ids) {
-                if ($ids) {
-                    $query->orWhere(fn (Builder $query) => $query->where('source_type', $type)->whereIn('source_id', array_keys($ids)));
+        $selected = null;
+        foreach ($keys as $type => $ids) {
+            if ($ids) {
+                $branch = $this->indexed(DB::table('marketing_profile_links'), 'marketing_profile_links', 'mpl_tenant_source_unique_idx', ['tenant_id', 'source_type', 'source_id'])
+                    ->where('tenant_id', $tenant->id)->where('source_type', $type)->whereIn('source_id', array_keys($ids))->selectRaw('id AS dependency_source_id');
+                // UNION deduplicates identities even under a case-insensitive
+                // source-type collation; the outer bound applies to all branches.
+                if ($selected === null) {
+                    $selected = $branch;
+                } else {
+                    $selected->union($branch);
                 }
             }
-        }), self::MAX_ROWS);
+        }
+
+        return $this->bounded(DB::table('marketing_profile_links')->joinSub($selected, 'dependency_source_keys', fn ($join) => $join->on('marketing_profile_links.id', '=', 'dependency_source_keys.dependency_source_id'))
+            ->where('marketing_profile_links.tenant_id', $tenant->id)->select('marketing_profile_links.*'), self::MAX_ROWS);
     }
 
     /** Original source membership and bytes, including representations suppressed by mirrors. */
@@ -649,7 +662,8 @@ class EventCustomerDependencies
         if ($incoming) {
             $frontier = $rows->keys()->all();
             for ($depth = 0; $frontier && $depth < 32; $depth++) {
-                $found = DB::table('marketing_profiles')->where('tenant_id', $tenant->id)->whereIn('merged_into_profile_id', $frontier)->whereNotIn('id', $rows->keys())
+                $found = $this->indexed(DB::table('marketing_profiles'), 'marketing_profiles', 'marketing_profiles_merged_into_profile_id_foreign', ['merged_into_profile_id'])
+                    ->where('tenant_id', $tenant->id)->whereIn('merged_into_profile_id', $frontier)->whereNotIn('id', $rows->keys())
                     ->orderBy('id')->limit(self::MAX_PROFILES + 1)->get($columns)->keyBy('id');
                 $rows = $rows->union($found);
                 abort_if($rows->count() > self::MAX_PROFILES, 409, 'Customer alias coverage needs review.');
@@ -677,6 +691,22 @@ class EventCustomerDependencies
         abort_if($rows->count() > $limit, 409, 'Customer dependency coverage needs review.');
 
         return $rows;
+    }
+
+    /** Structural hints only; every row and authority predicate is still freshly read. */
+    private function indexed(Builder $query, string $table, string $name, array $prefix): Builder
+    {
+        if (! in_array($query->getConnection()->getDriverName(), ['mysql', 'sqlite'], true)) {
+            return $query;
+        }
+        $this->readIndexes[$table] ??= Schema::getIndexes($table);
+        foreach ($this->readIndexes[$table] as $index) {
+            if (strtolower($index['name']) === $name && array_slice(array_map('strtolower', $index['columns']), 0, count($prefix)) === $prefix) {
+                return $query->forceIndex($name);
+            }
+        }
+
+        return $query;
     }
 
     private function dateValid(mixed $date): bool

@@ -175,6 +175,8 @@ try {
   const payload = detailPayloads.at(-1); assert.equal(payload.data.event_schedule?.source_schedule?.due_on || payload.data.source_schedule?.due_on, '2026-11-06', 'Task due anchor remains available internally without replacing the full event dates');
   assert.equal(await detail.getByText(fieldRevision, { exact: true }).count(), 0, 'Technical field revision is not printed to the tenant');
   assert.equal(await detail.getByRole('columnheader', { name: 'Property', exact: true }).count(), 0, 'Event essentials use cards instead of the raw source table');
+  assert.equal(await detail.getByRole('textbox', { name: 'Write an update', exact: true }).count(), 0, 'Calendar event opens with Updates collapsed');
+  await detail.locator('summary').filter({ hasText: /^Updates$/ }).click();
   await detail.getByRole('heading', { name: 'Updates', exact: true }).waitFor(); await detail.getByRole('textbox', { name: 'Write an update', exact: true }).waitFor();
   await detail.getByText('More event options', { exact: true }).click();
   assert.ok((await detail.getByRole('link', { name: 'Edit schedule and event settings' }).getAttribute('href')).includes('/teams/studio?tenant=' + fixture.tenant));
