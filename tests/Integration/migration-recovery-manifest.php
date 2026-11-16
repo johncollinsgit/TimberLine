@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_16_030000_add_indexed_event_content_hashes.php' => [
+        'test' => 'tests/Integration/EventContentHashMySqlRecoveryTest.php',
+        'scenarios' => ['original Square and canonical identity rows survive virtual-column-only and partially indexed DDL; immutable generated expressions and named index definitions reject incompatible retries; direct content changes, original ids and timestamps remain detectable without reading source JSON'],
+    ],
     '2026_11_15_160000_create_team_event_performance_facts.php' => [
         'test' => 'tests/Integration/EventPerformanceMySqlRecoveryTest.php',
         'scenarios' => ['encrypted dimensional facts survive table creation before named unique/date/group indexes, replay and non-destructive rollback; original keys reject duplicates'],

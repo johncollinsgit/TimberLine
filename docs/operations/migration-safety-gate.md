@@ -20,6 +20,12 @@ The gate addresses five recurring production risks:
 5. GitHub sees a stale `/ready` release but has no Forge-side status to explain
    whether the candidate is queued, running, failed, or complete.
 
+The canonical schema fingerprint includes each generated column's exact
+expression, including literal case and whitespace. A different expression is
+drift even when its column type and indexes are unchanged. The historical raw
+schema export/hash remains reproducible; expression metadata is checked in the
+canonical gate alongside foreign-key actions.
+
 ## Required CI sequence
 
 Pull requests use MySQL 8.4 and run these checks in order:

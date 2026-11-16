@@ -512,3 +512,181 @@ test('same-generation source selection changes during exact admission are detect
     app()->instance(\App\Services\Team\Operations\OperationsAccess::class, $access);
     $this->actingAs($this->owner)->getJson($this->url.'&event_id='.$event->id)->assertConflict()->assertDontSee('Fictional fair');
 });
+
+test('a changed reviewed scope cannot reuse a warm financial revision from its prior version', function () {
+    $event = performanceEvent($this);
+    $event->update(['data' => ['_teams_enrichment' => ['square_orders' => ['ids' => ['first-order']]]]]);
+    foreach (['first-order', 'second-order'] as $order) {
+        SquareOrder::create(['tenant_id' => $this->tenant->id, 'square_order_id' => $order, 'raw_payload' => []]);
+        SquarePayment::create(['tenant_id' => $this->tenant->id, 'square_payment_id' => $order.'-payment', 'square_order_id' => $order, 'raw_payload' => []]);
+    }
+    $reports = app(EventPerformance::class);
+    $reports->signature($this->tenant, $this->area, true);
+    $event->update(['version' => 2, 'data' => ['_teams_enrichment' => ['square_orders' => ['ids' => ['second-order']]]]]);
+    DB::table('square_payments')->where('square_order_id', 'second-order')->update(['raw_payload' => json_encode(['refund' => 100])]);
+    $warm = $reports->signature($this->tenant, $this->area);
+    expect($warm)->toBe($reports->signature($this->tenant, $this->area, true));
+});
+
+test('a changed original receipt ancestry cannot reuse a warm financial revision', function () {
+    performanceEvent($this);
+    $first = MarketingImportRun::create(['tenant_id' => $this->tenant->id, 'type' => 'square_orders_sync', 'status' => 'partial', 'summary' => []]);
+    $next = MarketingImportRun::create(['tenant_id' => $this->tenant->id, 'type' => 'square_orders_sync', 'status' => 'partial', 'summary' => []]);
+    $receipt = MarketingImportRun::create(['tenant_id' => $this->tenant->id, 'type' => 'square_orders_sync', 'status' => 'completed', 'summary' => ['resumed_from_run_id' => $first->id]]);
+    TeamOperationRecord::create(['id' => Str::uuid(), 'tenant_id' => $this->tenant->id, 'area_id' => $this->area->id,
+        'kind' => 'event_link', 'title' => 'Reviewed scope', 'source_key' => hash('sha256', Str::uuid()), 'status' => 'accepted', 'version' => 1,
+        'data' => ['timezone' => 'UTC', 'square_scopes' => [['location_id' => 'reviewed-location', 'starts_on' => '2025-11-07', 'ends_on' => '2025-11-09', 'orders_run_id' => $receipt->id, 'payments_run_id' => $receipt->id]]]]);
+    $reports = app(EventPerformance::class);
+    $reports->signature($this->tenant, $this->area, true);
+    $receipt->update(['summary' => ['resumed_from_run_id' => $next->id]]);
+    expect($reports->signature($this->tenant, $this->area))->toBe($reports->signature($this->tenant, $this->area, true));
+});
+
+function performanceDigest(string $table, int $tenant, array $columns): string
+{
+    return (new ReflectionMethod(EventPerformance::class, 'tableDigest'))->invoke(app(EventPerformance::class), $table, $tenant, $columns);
+}
+
+test('MySQL indexed digests read only covering hashes and preserve all typed source mutations', function () {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Requires actual MySQL generated columns and binary aggregates.');
+    }
+    $profile = MarketingProfile::create(['tenant_id' => $this->tenant->id]);
+    $replacement = MarketingProfile::create(['tenant_id' => $this->tenant->id]);
+    $definitions = [
+        'square_orders' => [
+            ['id', 'square_order_id', 'square_customer_id', 'location_id', 'state', 'total_money_amount', 'total_money_currency', 'closed_at', 'raw_payload'],
+            ['square_order_id' => 'digest-order', 'square_customer_id' => 'customer-a', 'location_id' => 'location-a', 'state' => 'COMPLETED', 'total_money_amount' => 1000, 'total_money_currency' => 'USD', 'closed_at' => '2025-11-07 18:00:00', 'raw_payload' => '{}'],
+            ['square_order_id' => 'digest-order-b', 'square_customer_id' => 'customer-b', 'location_id' => 'location-b', 'state' => 'CANCELED', 'total_money_amount' => 1001, 'total_money_currency' => 'CAD', 'closed_at' => '2025-11-07 18:00:01', 'raw_payload' => '{"refund":1}'], 'raw_payload',
+        ],
+        'square_payments' => [
+            ['id', 'square_payment_id', 'square_order_id', 'square_customer_id', 'location_id', 'amount_money', 'currency', 'status', 'raw_payload'],
+            ['square_payment_id' => 'digest-payment', 'square_order_id' => 'digest-order', 'square_customer_id' => 'customer-a', 'location_id' => 'location-a', 'amount_money' => 1070, 'currency' => 'USD', 'status' => 'COMPLETED', 'raw_payload' => '{}'],
+            ['square_payment_id' => 'digest-payment-b', 'square_order_id' => 'digest-order-b', 'square_customer_id' => 'customer-b', 'location_id' => 'location-b', 'amount_money' => 1071, 'currency' => 'CAD', 'status' => 'FAILED', 'raw_payload' => '{"refund":1}'], 'raw_payload',
+        ],
+        'marketing_profiles' => [
+            ['id', 'merged_into_profile_id', 'archived_at', 'source_channels'],
+            ['merged_into_profile_id' => null, 'archived_at' => null, 'source_channels' => '{}'],
+            ['merged_into_profile_id' => $profile->id, 'archived_at' => '2025-11-07 18:00:00', 'source_channels' => '["square"]'], 'source_channels',
+        ],
+        'marketing_profile_links' => [
+            ['id', 'marketing_profile_id', 'source_type', 'source_id', 'source_meta', 'match_method', 'confidence'],
+            ['marketing_profile_id' => $profile->id, 'source_type' => 'square_order', 'source_id' => 'digest-order', 'source_meta' => '{}', 'match_method' => 'exact', 'confidence' => 90],
+            ['marketing_profile_id' => $replacement->id, 'source_type' => 'square_payment', 'source_id' => 'digest-payment', 'source_meta' => '{"event":2}', 'match_method' => 'reviewed', 'confidence' => 91], 'source_meta',
+        ],
+    ];
+    foreach ($definitions as $table => [$columns, $original, $changes, $jsonColumn]) {
+        $id = DB::table($table)->insertGetId(['tenant_id' => $this->tenant->id, ...$original]);
+        $digest = performanceDigest($table, $this->tenant->id, $columns);
+        foreach ($changes as $column => $value) {
+            DB::table($table)->where('id', $id)->update([$column => $value]);
+            $changed = performanceDigest($table, $this->tenant->id, $columns);
+            expect($changed, $table.'.'.$column)->not->toBe($digest);
+            $digest = $changed;
+        }
+        $typed = [];
+        foreach ([null, 'null', '0', '"0"', 'false', '[]', '{}', '[0]', '{"value":0}'] as $value) {
+            DB::table($table)->where('id', $id)->update([$jsonColumn => $value]);
+            $typed[] = performanceDigest($table, $this->tenant->id, $columns);
+        }
+        expect(array_unique($typed), $table.' SQL NULL and JSON types')->toHaveCount(9);
+        $copy = (array) DB::table($table)->where('id', $id)->first();
+        unset($copy['id']);
+        $beforeReplace = performanceDigest($table, $this->tenant->id, $columns);
+        DB::table($table)->where('id', $id)->delete();
+        DB::table($table)->insert($copy);
+        expect(performanceDigest($table, $this->tenant->id, $columns), $table.' replacement id')->not->toBe($beforeReplace);
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        performanceDigest($table, $this->tenant->id, $columns);
+        $aggregate = collect(DB::getQueryLog())->first(fn ($query) => str_contains($query['query'], 'BIT_XOR'));
+        DB::disableQueryLog();
+        expect($aggregate)->not->toBeNull()->and($aggregate['query'])->toContain('HEX(`event_content_hash`)')
+            ->not->toContain('raw_payload')->not->toContain('source_meta')->not->toContain('source_channels')->not->toContain('SUBSTRING');
+        $actual = DB::selectOne($aggregate['query'], $aggregate['bindings']);
+        expect($actual->h, $table.' full SHA-256 aggregate')->toHaveLength(64);
+        $plan = DB::select('EXPLAIN '.$aggregate['query'], $aggregate['bindings']);
+        expect(collect($plan)->pluck('Extra')->implode(' '), $table.' covering plan')->toContain('Using index');
+        $empty = performanceDigest($table, PHP_INT_MAX, $columns);
+        expect($empty)->toBeString()->toHaveLength(64)->not->toBe(performanceDigest($table, $this->tenant->id, $columns));
+    }
+});
+
+test('MySQL indexed digests fall back for new fields and incomplete schema', function () {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Requires the actual MySQL indexed digest path.');
+    }
+    $columns = ['id', 'square_payment_id', 'square_order_id', 'square_customer_id', 'location_id', 'amount_money', 'currency', 'status', 'raw_payload'];
+    $payment = SquarePayment::create(['tenant_id' => $this->tenant->id, 'square_payment_id' => 'future-digest', 'raw_payload' => []]);
+    $futureColumns = [...$columns, 'updated_at'];
+    $before = performanceDigest('square_payments', $this->tenant->id, $futureColumns);
+    DB::table('square_payments')->where('id', $payment->id)->update(['updated_at' => '2025-11-07 18:00:00']);
+    expect(performanceDigest('square_payments', $this->tenant->id, $futureColumns))->not->toBe($before);
+    $available = \Illuminate\Support\Facades\Schema::getColumnListing('square_payments');
+    $method = new ReflectionMethod(EventPerformance::class, 'indexedDigest');
+    expect($method->invoke(app(EventPerformance::class), 'square_payments', $columns, array_diff($available, ['event_content_hash'])))->toBeNull()
+        ->and($method->invoke(app(EventPerformance::class), 'square_payments', [...$columns, 'updated_at'], $available))->toBeNull();
+    \Illuminate\Support\Facades\Schema::shouldReceive('getIndexes')->once()->with('square_payments')->andReturn([]);
+    expect($method->invoke(app(EventPerformance::class), 'square_payments', $columns, $available))->toBeNull();
+});
+
+test('receipt ancestry is tenant scoped cycle safe and bounded in one fresh MySQL query', function () {
+    $parent = 999999;
+    $expected = [$parent];
+    foreach (range(1, 60) as $page) {
+        $run = MarketingImportRun::create(['tenant_id' => $this->tenant->id, 'type' => 'square_orders_sync', 'status' => 'partial', 'summary' => ['resumed_from_run_id' => $parent]]);
+        $parent = $run->id;
+        $expected[] = $parent;
+    }
+    $cycle = MarketingImportRun::create(['tenant_id' => $this->tenant->id, 'type' => 'square_orders_sync', 'status' => 'partial', 'summary' => []]);
+    $cycle->update(['summary' => ['resumed_from_run_id' => $cycle->id]]);
+    [$foreign] = teamWorkspace();
+    $foreignRun = MarketingImportRun::create(['tenant_id' => $foreign->id, 'type' => 'square_orders_sync', 'status' => 'partial', 'summary' => ['resumed_from_run_id' => 999998]]);
+    $roots = [$parent, $cycle->id, $foreignRun->id, 999997];
+    $expected = [...$expected, $cycle->id, $foreignRun->id, 999997];
+    sort($expected, SORT_NUMERIC);
+    $method = new ReflectionMethod(EventPerformance::class, 'receiptAncestors');
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    $actual = $method->invoke(app(EventPerformance::class), $this->tenant, $roots);
+    $queries = DB::getQueryLog();
+    DB::disableQueryLog();
+    expect($actual)->toBe($expected)->not->toContain(999998);
+    if (DB::connection()->getDriverName() === 'mysql') {
+        expect($queries)->toHaveCount(1)->and($queries[0]['query'])->toContain('WITH RECURSIVE')->toContain('UNION DISTINCT')->toContain('LIMIT 10001');
+    }
+    expect(fn () => $method->invoke(app(EventPerformance::class), $this->tenant, range(1, 10001)))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class, 'Original Square pagination needs review.');
+});
+
+test('MySQL reviewed window and explicit-order digests cover both original order and payment queries', function () {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Requires actual MySQL covering-index plans.');
+    }
+    $event = performanceEvent($this);
+    $event->update(['data' => ['_teams_enrichment' => ['square_orders' => ['ids' => ['explicit-order']]]]]);
+    $receipt = MarketingImportRun::create(['tenant_id' => $this->tenant->id, 'type' => 'square_orders_sync', 'status' => 'completed', 'summary' => []]);
+    TeamOperationRecord::create(['id' => Str::uuid(), 'tenant_id' => $this->tenant->id, 'area_id' => $this->area->id,
+        'kind' => 'event_link', 'title' => 'Reviewed scope', 'source_key' => hash('sha256', Str::uuid()), 'status' => 'accepted', 'version' => 1,
+        'data' => ['timezone' => 'UTC', 'square_scopes' => [['location_id' => 'reviewed-location', 'starts_on' => '2025-11-07', 'ends_on' => '2025-11-09', 'orders_run_id' => $receipt->id, 'payments_run_id' => $receipt->id]]]]);
+    foreach (['explicit-order', 'window-order', 'outside-order'] as $index => $order) {
+        SquareOrder::create(['tenant_id' => $this->tenant->id, 'square_order_id' => $order,
+            'location_id' => $index === 1 ? 'reviewed-location' : 'other-location', 'closed_at' => '2025-11-07 18:00:00', 'raw_payload' => ['amount' => 100]]);
+        SquarePayment::create(['tenant_id' => $this->tenant->id, 'square_payment_id' => $order.'-payment', 'square_order_id' => $order, 'raw_payload' => ['amount' => 100]]);
+    }
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    app(EventPerformance::class)->signature($this->tenant, $this->area, true);
+    $queries = collect(DB::getQueryLog())->filter(fn ($query) => str_contains($query['query'], 'HEX(`event_content_hash`)'))->values();
+    DB::disableQueryLog();
+    expect($queries)->toHaveCount(2);
+    foreach ($queries as $query) {
+        $plan = DB::select('EXPLAIN '.$query['query'], $query['bindings']);
+        foreach ($plan as $table) {
+            if (in_array($table->table, ['square_orders', 'square_payments'], true)) {
+                expect($table->Extra)->toContain('Using index');
+            }
+        }
+        expect((int) DB::selectOne($query['query'], $query['bindings'])->n)->toBe(2);
+    }
+});

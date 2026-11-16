@@ -5752,10 +5752,12 @@ CREATE TABLE `marketing_profile_links` (
   `confidence` decimal(5,2) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
+  `event_content_hash` binary(32) GENERATED ALWAYS AS (unhex(sha2(json_array(`marketing_profile_id`,`source_type`,`source_id`,sha2(cast(`source_meta` as char charset utf8mb4),256),`match_method`,`confidence`),256))) VIRTUAL /*!80023 INVISIBLE */,
   PRIMARY KEY (`id`),
   UNIQUE KEY `mpl_tenant_source_unique_idx` (`tenant_id`,`source_type`,`source_id`),
   KEY `mpl_profile_source_type_idx` (`marketing_profile_id`,`source_type`),
   KEY `marketing_profile_links_tenant_id_index` (`tenant_id`),
+  KEY `ep_link_hash_idx` (`tenant_id`,`event_content_hash`),
   CONSTRAINT `marketing_profile_links_marketing_profile_id_foreign` FOREIGN KEY (`marketing_profile_id`) REFERENCES `marketing_profiles` (`id`) ON DELETE CASCADE,
   CONSTRAINT `marketing_profile_links_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -5898,6 +5900,7 @@ CREATE TABLE `marketing_profiles` (
   `mobile_avatar_uploaded_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
+  `event_content_hash` binary(32) GENERATED ALWAYS AS (unhex(sha2(json_array(`merged_into_profile_id`,sha2(cast(`source_channels` as char charset utf8mb4),256)),256))) VIRTUAL /*!80023 INVISIBLE */,
   PRIMARY KEY (`id`),
   KEY `marketing_profiles_email_index` (`email`),
   KEY `marketing_profiles_normalized_email_index` (`normalized_email`),
@@ -5913,6 +5916,7 @@ CREATE TABLE `marketing_profiles` (
   KEY `marketing_profiles_first_name_phonetic_index` (`first_name_phonetic`),
   KEY `marketing_profiles_last_name_phonetic_index` (`last_name_phonetic`),
   KEY `marketing_profiles_merged_at_index` (`merged_at`),
+  KEY `ep_profile_hash_idx` (`tenant_id`,`archived_at`,`event_content_hash`),
   CONSTRAINT `marketing_profiles_merge_operation_id_foreign` FOREIGN KEY (`merge_operation_id`) REFERENCES `customer_merge_operations` (`id`) ON DELETE SET NULL,
   CONSTRAINT `marketing_profiles_merged_into_profile_id_foreign` FOREIGN KEY (`merged_into_profile_id`) REFERENCES `marketing_profiles` (`id`) ON DELETE SET NULL,
   CONSTRAINT `marketing_profiles_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE SET NULL
@@ -9409,6 +9413,7 @@ CREATE TABLE `square_orders` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   `tenant_id` bigint unsigned DEFAULT NULL,
+  `event_content_hash` binary(32) GENERATED ALWAYS AS (unhex(sha2(json_array(`square_order_id`,`square_customer_id`,`location_id`,`state`,`total_money_amount`,`total_money_currency`,sha2(cast(`raw_payload` as char charset utf8mb4),256)),256))) VIRTUAL /*!80023 INVISIBLE */,
   PRIMARY KEY (`id`),
   UNIQUE KEY `square_orders_tenant_order_unique` (`tenant_id`,`square_order_id`),
   KEY `square_orders_square_customer_id_index` (`square_customer_id`),
@@ -9418,6 +9423,8 @@ CREATE TABLE `square_orders` (
   KEY `square_orders_source_name_index` (`source_name`),
   KEY `square_orders_synced_at_index` (`synced_at`),
   KEY `square_orders_tenant_id_index` (`tenant_id`),
+  KEY `epo_window_hash_idx` (`tenant_id`,`location_id`,`closed_at`,`square_order_id`,`event_content_hash`),
+  KEY `epo_order_hash_idx` (`tenant_id`,`square_order_id`,`location_id`,`closed_at`,`event_content_hash`),
   CONSTRAINT `square_orders_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -9440,6 +9447,7 @@ CREATE TABLE `square_payments` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   `tenant_id` bigint unsigned DEFAULT NULL,
+  `event_content_hash` binary(32) GENERATED ALWAYS AS (unhex(sha2(json_array(`square_payment_id`,`square_order_id`,`square_customer_id`,`location_id`,`amount_money`,`currency`,`status`,sha2(cast(`raw_payload` as char charset utf8mb4),256)),256))) VIRTUAL /*!80023 INVISIBLE */,
   PRIMARY KEY (`id`),
   UNIQUE KEY `square_payments_tenant_payment_unique` (`tenant_id`,`square_payment_id`),
   KEY `square_payments_square_order_id_index` (`square_order_id`),
@@ -9449,6 +9457,7 @@ CREATE TABLE `square_payments` (
   KEY `square_payments_created_at_source_index` (`created_at_source`),
   KEY `square_payments_synced_at_index` (`synced_at`),
   KEY `square_payments_tenant_id_index` (`tenant_id`),
+  KEY `epp_order_hash_idx` (`tenant_id`,`square_order_id`,`event_content_hash`),
   CONSTRAINT `square_payments_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -10696,12 +10705,12 @@ DROP TABLE IF EXISTS `team_event_performance_facts`;
 CREATE TABLE `team_event_performance_facts` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
-  `area_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `generation` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `kind` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `source_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `group_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `event_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `area_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `generation` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_key` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `group_key` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `customer_id` bigint unsigned DEFAULT NULL,
   `local_date` date NOT NULL,
   `ends_on` date NOT NULL,
@@ -10712,7 +10721,7 @@ CREATE TABLE `team_event_performance_facts` (
   `selling_days` int unsigned NOT NULL DEFAULT '0',
   `complete` tinyint(1) NOT NULL DEFAULT '0',
   `search_tokens` json NOT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `tepf_source` (`tenant_id`,`generation`,`kind`,`source_key`),
   KEY `tepf_date` (`tenant_id`,`area_id`,`generation`,`kind`,`local_date`),
@@ -14662,3 +14671,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (335,'2026_11_06_22
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (336,'2026_11_08_190000_add_team_file_event_targets',52);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (337,'2026_11_11_190000_create_rental_workspaces',53);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (338,'2026_11_15_160000_create_team_event_performance_facts',54);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (339,'2026_11_16_030000_add_indexed_event_content_hashes',55);
