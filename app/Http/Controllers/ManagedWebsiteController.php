@@ -562,7 +562,7 @@ class ManagedWebsiteController extends Controller
     /** @return array<string,mixed> */
     protected function mediaPayload(TenantSiteMedia $media): array
     {
-        return ['id' => $media->id, 'name' => $media->file_name, 'url' => route('managed-website.media.show', ['media' => $media]), 'catalog_url' => route('managed-website.catalog.media', ['media' => $media]), 'alt_text' => $media->alt_text, 'mime_type' => $media->mime_type, 'size' => $media->file_size];
+        return ['id' => $media->id, 'name' => $media->file_name, 'url' => route('managed-website.media.show', ['media' => $media], false), 'catalog_url' => route('managed-website.catalog.media', ['media' => $media], false), 'alt_text' => $media->alt_text, 'mime_type' => $media->mime_type, 'size' => $media->file_size];
     }
 
     public function submitForm(Request $request, TenantSitePage $page): RedirectResponse

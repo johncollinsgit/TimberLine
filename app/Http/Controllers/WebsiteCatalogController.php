@@ -107,8 +107,8 @@ class WebsiteCatalogController extends Controller
             'relatedPhotos' => app(WebsiteStarterCatalog::class)->photos($site->tenant),
             'photoLibrary' => $site->media()->latest()->get()->map(fn (TenantSiteMedia $media): array => [
                 'id' => $media->id, 'name' => $media->file_name, 'alt_text' => $media->alt_text,
-                'url' => route('managed-website.media.show', ['media' => $media]),
-                'catalog_url' => route('managed-website.catalog.media', ['media' => $media]),
+                'url' => route('managed-website.media.show', ['media' => $media], false),
+                'catalog_url' => route('managed-website.catalog.media', ['media' => $media], false),
             ])->all(),
         ];
     }
@@ -146,7 +146,7 @@ class WebsiteCatalogController extends Controller
         if ($product) {
             $this->product($site, $product);
         }
-        $request->validate(['images' => ['nullable', 'array', 'max:12'], 'images.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp,avif', 'max:10240'], 'image_urls' => ['nullable', 'string', 'max:25000'], 'retained_media' => ['nullable', 'array', 'max:12'], 'retained_media.*' => ['url:http,https', 'max:2048']]);
+        $request->validate(['images' => ['nullable', 'array', 'max:12'], 'images.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp,avif', 'max:10240'], 'image_urls' => ['nullable', 'string', 'max:25000'], 'retained_media' => ['nullable', 'array', 'max:12'], 'retained_media.*' => ['string', 'max:2048']]);
         $data = $request->except(['images', '_token', '_method']);
         $data['handle'] = $data['handle'] ?? $product?->handle ?? Str::slug($data['title'] ?? '');
         $data['track_inventory'] = $request->boolean('track_inventory');
@@ -165,7 +165,7 @@ class WebsiteCatalogController extends Controller
                     throw_unless(Storage::disk('local')->put($path, file_get_contents($file->getRealPath())), \RuntimeException::class, 'The product image could not be stored.');
                     $stored[] = $path;
                     $media = TenantSiteMedia::query()->create(['tenant_id' => $site->tenant_id, 'tenant_site_id' => $site->id, 'uploaded_by_user_id' => $request->user()->id, 'storage_disk' => 'local', 'storage_path' => $path, 'file_name' => basename($file->getClientOriginalName()), 'mime_type' => $file->getMimeType(), 'file_size' => $file->getSize(), 'checksum' => hash_file('sha256', $file->getRealPath()), 'kind' => 'image', 'source' => 'upload']);
-                    $data['media'][] = route('managed-website.catalog.media', $media);
+                    $data['media'][] = route('managed-website.catalog.media', $media, false);
                 }
 
                 return $catalog->saveProduct($site, $product, $data, $request->user());
@@ -249,9 +249,11 @@ class WebsiteCatalogController extends Controller
         if ($collection) {
             abort_unless($collection->tenant_id === $site->tenant_id && $collection->tenant_site_id === $site->id, 404);
         }
-        $data = $request->validate(['title' => ['required', 'string', 'max:190'], 'handle' => ['required', 'string', 'max:160', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('website_collections', 'handle')->where('tenant_site_id', $site->id)->ignore($collection?->id)], 'description' => ['nullable', 'string', 'max:8000'], 'status' => ['required', Rule::in(['draft', 'active', 'archived'])], 'image_url' => ['nullable', 'url:http,https', 'max:2048'], 'product_ids' => ['nullable', 'array', 'max:500'], 'product_ids.*' => ['integer', 'distinct', Rule::exists('website_products', 'id')->where('tenant_id', $site->tenant_id)->where('tenant_site_id', $site->id)], 'revision' => ['nullable', 'integer', 'min:0']]);
+        $data = $request->validate(['title' => ['required', 'string', 'max:190'], 'handle' => ['required', 'string', 'max:160', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('website_collections', 'handle')->where('tenant_site_id', $site->id)->ignore($collection?->id)], 'description' => ['nullable', 'string', 'max:8000'], 'status' => ['required', Rule::in(['draft', 'active', 'archived'])], 'image_url' => ['nullable', 'string', 'max:2048'], 'product_ids' => ['nullable', 'array', 'max:500'], 'product_ids.*' => ['integer', 'distinct', Rule::exists('website_products', 'id')->where('tenant_id', $site->tenant_id)->where('tenant_site_id', $site->id)], 'revision' => ['nullable', 'integer', 'min:0']]);
         $photoDetails = $request->validate(['image_alt' => ['nullable', 'string', 'max:500']]);
-        app(WebsiteMediaUrls::class)->validatedImage($site, (string) ($data['image_url'] ?? ''), 'image_url');
+        if (array_key_exists('image_url', $data)) {
+            $data['image_url'] = app(WebsiteMediaUrls::class)->validatedImage($site, (string) ($data['image_url'] ?? ''), 'image_url');
+        }
         $data['image_alt'] = strip_tags(trim((string) ($photoDetails['image_alt'] ?? data_get($collection?->seo, 'image_alt', ''))));
         if (($collection?->status === 'active') || $data['status'] === 'active') {
             abort_unless(app(ManagedWebsiteService::class)->publishingEnabled(), 423);

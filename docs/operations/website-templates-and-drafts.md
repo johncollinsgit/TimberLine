@@ -10,6 +10,16 @@ Customer name/contact details live in `TenantSiteVersion.settings.business_conta
 
 The reusable photo picker supports related starter photographs, the site's existing uploads, a new upload, replacement, removal and descriptions. Hero, image sections, cards/gallery items, logo, social image, product and collection controls share it. Product galleries store one editable cover description; individual page images and collection covers retain their own descriptions. All private uploads retain the native tenant/site ownership and storage limits. Page/SEO/logo slots use `/website-media/{id}`; catalog slots receive the exact server-issued `/website-catalog-media/{id}` alias. New logo/social image references cannot adopt another site's upload. Public admission requires the exact current published site/page reference, or active catalog product/collection reference on that site's permitted published host. A historical or unused upload stays private; no shared workspace-brand disk is opened. No image URL needs to be typed.
 
+Native library/upload responses issue these owned media paths as relative references,
+and catalog controls preserve them when submitting. Browsers resolve previews on
+their current origin, including normal local development ports. Product/collection
+validation still checks the exact media ID, tenant and site before storing the
+canonical path. Owned upload references still reject untrusted hosts, explicit
+ports, queries and foreign-site media. The trusted-host resolver is unchanged. Existing stored URLs
+are not rewritten; reselect an image through the normal picker to save its
+canonical reference. A local port-related picker failure does not by itself
+establish a production failure on the standard HTTPS origin.
+
 ## History and retention
 
 The native editor keeps a blocked publication as a private draft and offers **Review checklist** back to the actual Website overview, where **Edit details** completes missing business name/email. Only recognized checklist messages are shown from a 422 response; other server details stay hidden. Permission, operational/plan freeze and stale-state failures have distinct safe guidance. An interrupted response or unrecognized success receipt leaves publication unconfirmed and offers **Review Website**, even when the server may have accepted the original publish. The editor never claims success from that ambiguous receipt. Recovery saves any newer local edits before navigating and never automatically retries publication. An autosave conflict still keeps local work in the open editor.
