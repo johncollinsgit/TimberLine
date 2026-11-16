@@ -71,6 +71,21 @@ test('embedded wholesale metrics and directories exclude retail orders server si
         ->assertDontSeeText('Private Retail Buyer');
 });
 
+test('manual label orders identify staff follow-up without claiming approved artwork', function (): void {
+    Order::factory()->create([
+        'tenant_id' => $this->tenant->id,
+        'shopify_store_key' => 'wholesale',
+        'source' => 'shopify_wholesale',
+        'order_type' => 'wholesale',
+        'customer_name' => 'Manual Label Stockist',
+        'attribution_meta' => ['manual_custom_labels' => ['setup' => false, 'reuse' => true]],
+    ]);
+    $this->get(route('shopify.app.wholesale.orders', wholesaleEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Manual custom labels — check customer and order notes.')
+        ->assertDontSeeText('Custom label approved');
+});
+
 test('confirmed legacy wholesale orders appear while ambiguous legacy orders remain excluded', function (): void {
     $confirmed = Order::factory()->create([
         'tenant_id' => $this->tenant->id,

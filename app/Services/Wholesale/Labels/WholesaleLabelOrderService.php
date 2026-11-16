@@ -33,7 +33,20 @@ class WholesaleLabelOrderService
         $fees = array_values(array_filter($lines, fn ($line) => in_array((string) ($line['variant_id'] ?? ''), [config('wholesale_labels.setup_variant'), config('wholesale_labels.reuse_variant')], true)));
         $selected = array_values(array_filter($lines, fn ($line) => self::property($line, '_MF label request')));
         $selected = array_values(array_filter($selected, fn ($line) => ! in_array((string) ($line['variant_id'] ?? ''), [config('wholesale_labels.setup_variant'), config('wholesale_labels.reuse_variant')], true)));
-        if (! $selected && ! collect($fees)->contains(fn ($line) => self::property($line, '_MF label request'))) {
+        $tracked = $selected || collect($fees)->contains(fn ($line) => self::property($line, '_MF label request'));
+        $meta = $order->attribution_meta ?? [];
+        if (! $tracked && $fees) {
+            $meta['manual_custom_labels'] = [
+                'setup' => collect($fees)->contains(fn ($line) => (string) $line['variant_id'] === config('wholesale_labels.setup_variant')),
+                'reuse' => collect($fees)->contains(fn ($line) => (string) $line['variant_id'] === config('wholesale_labels.reuse_variant')),
+            ];
+        } else {
+            unset($meta['manual_custom_labels']);
+        }
+        if ($meta !== ($order->attribution_meta ?? [])) {
+            $order->forceFill(['attribution_meta' => $meta])->saveQuietly();
+        }
+        if (! $tracked) {
             return;
         }
         $owner = ['tenant_id' => (int) $order->tenant_id, 'shop_domain' => config('wholesale_labels.shop'), 'customer_id' => (string) ($payload['customer']['id'] ?? '')];

@@ -406,6 +406,7 @@
                       <span class="text-zinc-500">·</span>
                       <div class="text-zinc-700 truncate">{{ $customer }}</div>
                     </div>
+                    @include('partials.manual-custom-labels', ['order' => $order])
 
                     <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
                       <span class="text-emerald-800">{{ $orderNumber }}</span>
@@ -644,6 +645,7 @@
 
                     <td class="px-4 py-3 text-zinc-700" title="{{ $order->display_name ?? $order->order_label ?? $order->container_name ?? '—' }}">
                       <span class="mf-cell-clip">{{ $order->display_name ?? $order->order_label ?? $order->container_name ?? '—' }}</span>
+                      @include('partials.manual-custom-labels', ['order' => $order])
                     </td>
 
                     <td class="px-4 py-3 text-zinc-700" title="{{ $order->customer_name ?? $order->display_name ?? '—' }}">

@@ -1,0 +1,70 @@
+{
+  "payload": {
+    "export": "cart-validations-generate-run",
+    "target": "cart.validations.generate.run",
+    "input": {
+      "cart": {
+        "buyerIdentity": {
+          "customer": {
+            "hasWholesaleAccess": false
+          }
+        },
+        "lines": [
+          {
+            "quantity": 12,
+            "receipt": null,
+            "revision": null,
+            "mode": null,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/101",
+              "title": "16oz Cotton Wick",
+              "product": {
+                "handle": "wholesale-custom-scent",
+                "singleQuantity": false
+              }
+            }
+          },
+          {
+            "quantity": 1,
+            "receipt": null,
+            "revision": null,
+            "mode": null,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/202",
+              "title": "Default Title",
+              "product": {
+                "handle": "use-my-custom-label",
+                "singleQuantity": true
+              }
+            }
+          }
+        ],
+        "labelChoice": null
+      },
+      "shop": {
+        "labelProgram": {
+          "value": "false"
+        }
+      },
+      "buyerJourney": {
+        "step": "CHECKOUT_COMPLETION"
+      }
+    },
+    "output": {
+      "operations": [
+        {
+          "validationAdd": {
+            "errors": [
+              {
+                "message": "Wholesale ordering is available to approved partners. Sign in with your approved wholesale account or apply for wholesale access.",
+                "target": "$.cart"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

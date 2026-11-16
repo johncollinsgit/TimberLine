@@ -1,0 +1,70 @@
+{
+  "payload": {
+    "export": "cart-validations-generate-run",
+    "target": "cart.validations.generate.run",
+    "input": {
+      "cart": {
+        "buyerIdentity": {
+          "customer": {
+            "hasWholesaleAccess": true
+          }
+        },
+        "lines": [
+          {
+            "quantity": 4,
+            "receipt": null,
+            "revision": null,
+            "mode": null,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/101",
+              "title": "16oz Cotton Wick",
+              "product": {
+                "handle": "wholesale-custom-scent",
+                "singleQuantity": false
+              }
+            }
+          },
+          {
+            "quantity": 1,
+            "receipt": null,
+            "revision": null,
+            "mode": null,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/202",
+              "title": "Default Title",
+              "product": {
+                "handle": "use-my-custom-label",
+                "singleQuantity": true
+              }
+            }
+          }
+        ],
+        "labelChoice": null
+      },
+      "shop": {
+        "labelProgram": {
+          "value": "false"
+        }
+      },
+      "buyerJourney": {
+        "step": "CHECKOUT_COMPLETION"
+      }
+    },
+    "output": {
+      "operations": [
+        {
+          "validationAdd": {
+            "errors": [
+              {
+                "message": "Order each candle size and wax melt scent in multiples of 3 (3, 6, 9). Update your cart before checkout.",
+                "target": "$.cart"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
