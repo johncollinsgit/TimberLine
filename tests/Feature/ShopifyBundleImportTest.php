@@ -310,7 +310,7 @@ class ShopifyBundleImportTest extends TestCase
         $this->assertSame(0, MappingException::query()->count());
     }
 
-    public function test_custom_scent_uses_variant_as_scent_source_for_wholesale_import(): void
+    public function test_custom_scent_with_manual_label_fee_imports_without_pouring_the_fee(): void
     {
         $size = Size::query()->firstOrCreate(
             ['code' => '8oz-cotton'],
@@ -338,6 +338,13 @@ class ShopifyBundleImportTest extends TestCase
                     'sku' => null,
                     'product_type' => 'Wholesale',
                 ],
+                [
+                    'id' => 1003,
+                    'variant_id' => 42044189966417,
+                    'title' => 'Use My Custom Label',
+                    'quantity' => 1,
+                    'properties' => [],
+                ],
             ],
         ];
 
@@ -352,5 +359,9 @@ class ShopifyBundleImportTest extends TestCase
         $this->assertSame('Custom Scent', (string) $line->raw_title);
         $this->assertSame('Vintage Amber 8oz', (string) $line->raw_variant);
         $this->assertSame(0, MappingException::query()->count());
+        $this->assertSame(1, OrderLine::query()->count());
+        $order = \App\Models\Order::query()->where('shopify_order_id', 902)->firstOrFail();
+        $this->assertTrue(data_get($order->attribution_meta, 'manual_custom_labels.reuse'));
+        $this->assertNull(data_get($order->attribution_meta, 'custom_labels.hold'));
     }
 }

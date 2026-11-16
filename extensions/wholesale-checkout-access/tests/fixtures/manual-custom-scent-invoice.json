@@ -20,7 +20,7 @@
               "id": "gid://shopify/ProductVariant/101",
               "title": "16oz Cotton Wick",
               "product": {
-                "handle": "custom-scent",
+                "handle": "wholesale-custom-scent",
                 "singleQuantity": false
               }
             }
