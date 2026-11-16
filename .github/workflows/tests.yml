@@ -427,6 +427,10 @@ jobs:
     - name: Verify Birthday Club desktop and mobile states
       run: node tests/e2e/birthday-club-browser.mjs
       if: matrix.group == 'commerce'
+
+    - name: Retail rewards wallet and cart browser
+      if: matrix.group == 'commerce'
+      run: node tests/e2e/retail-rewards-browser.mjs
     - name: Verify wholesale cart and private-label buyer workflows
       run: |
         node tests/e2e/wholesale-quantity-browser.mjs

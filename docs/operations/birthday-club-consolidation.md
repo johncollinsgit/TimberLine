@@ -19,6 +19,29 @@ The tenant setting `birthday_club_config` defaults off. Modern Forestry retains 
 
 ## Compatible interfaces
 
+### Retail rewards companion
+
+The retail FAQ source is `resources/shopify/rewards-program-faq.html`. It replaces
+the obsolete points tiers with the currently enabled earning tasks and the $10
+online code flow. Verify the live task amounts before publishing a later revision;
+the legacy points conversion ratio is not a purchase earn rate.
+
+`resources/shopify/retail-rewards/forestry-rewards.js` retains the current retail
+theme asset and applies the birthday copy replacements plus the rewards-page
+redemption repair. A funded wallet without a saved code receives the same
+server-authorized redeem action used by the cart. The main amount explicitly
+shows the wallet balance; birthday coupons remain separate. Unconfirmed saved
+codes cannot be applied or cause a replacement redemption. Existing usable codes
+are reused. The canonical customer, rewards ledger, app proxy, tenant ownership,
+and server admission rules remain authoritative.
+
+Run `node tests/e2e/retail-rewards-browser.mjs` for Chromium/WebKit desktop/phone
+coverage of page/cart redemption, saved and pending codes, low balances, disabled
+redemption, and failure recovery. The fixture uses a local HTTP server and
+fictional customer/code data; it never calls Shopify or sends a message. Confirm
+the published asset against the current live source before applying the reviewed
+delta to a fresh theme copy, then verify the guest proxy and login return live.
+
 The birthday status/capture/claim routes and scalar issuance fields remain. Status responses add owned `issuances`; payloads add effective expiry and regular/belated presentation. Claim accepts optional `issuance_id` but resolves it only inside the verified customer ownership set. Previous-year usable coupons are included. Theme actions require unexpired, unused, Shopify-confirmed codes and use the server's `apply_path`.
 
 Primary and belated emails share durable annual send reservation; followup remains separately once per cycle. Historical successful/unknown events prevent resend. A failed attempt requires deliberate retry. Future rendered HTML/plaintext links use Birthday Club; delivered content and event history stay intact.
