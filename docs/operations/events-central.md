@@ -181,10 +181,11 @@ broadband with representative Modern Forestry data and twice that volume.
 Record measured results separately from targets; do not remove source or tenant
 admission checks to meet them.
 
-The November 16, 2026 disposable MySQL whole-frame fixture measured five warm
-`witnesses=false` dependency captures at 717 ms p95 for 1,442 canonical customers,
+After the guarded input-key join, the November 16, 2026 disposable MySQL
+whole-frame fixture measured five warm `witnesses=false` dependency captures at
+468 ms p95 for 1,442 canonical customers,
 18 selected events, 1,070 inventory events, 151,000 links, 25,000 original orders
-and 63,000 payments; doubling each population measured 1,184 ms p95. Exact cohort,
+and 63,000 payments; doubling each population measured 1,083 ms p95. Exact cohort,
 original-byte and label invalidation checks passed. A separate one-customer
 `witnesses=true` correctness sample retained the doubled imported directory.
 These are local dependency-frame measurements, not HTTP, browser or full-cohort
@@ -193,6 +194,13 @@ build latency, and do not establish the 500 ms warm-filter target. The existing
 test caps remain unchanged. Retain counts-only timings and query-plan evidence
 with release acceptance artifacts; protected CI and actual endpoint acceptance
 remain separate checks.
+
+The final source/access/collection/statistics/acceptance regression suite passed
+129 tests with 918 assertions; the Modern Forestry guard passed 170 tests with
+910 assertions on PHP 8.4 and SQLite. Focused structured-tag coverage passed
+17 tests with 221 assertions, with Applications rendering checked in Chromium
+and WebKit. These correctness checks, formatting and diff checks do not replace
+protected CI, exact-release readiness or deployed timing acceptance.
 
 The browser event dialog initially requests the admitted record and basic
 `essentials?include_sales=0` only. Updates, Sales, History and Customers load when

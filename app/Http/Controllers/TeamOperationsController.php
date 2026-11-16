@@ -92,7 +92,7 @@ class TeamOperationsController extends Controller
         $saved = app(\App\Services\Team\Operations\OperationsEnrichment::class)->review($t, $r->user(), $record, $i);
         $this->access->record($t, $r->user(), $saved);
 
-        return $this->json($this->workspace->view($saved, $this->access->mayWrite($t, $r->user(), $saved->area_id), $this->access->admin($this->access->actor($t, $r->user()))));
+        return $this->json($this->workspace->view($saved, $this->access->mayWrite($t, $r->user(), $saved->area_id), $this->access->admin($this->access->actor($t, $r->user())), true, $this->access->admittedAsanaAcceptance($t, $r->user(), $saved)));
     }
 
     public function createArea(Request $r)
@@ -150,7 +150,7 @@ class TeamOperationsController extends Controller
         $t = $this->tenant($r);
         $record = TeamOperationRecord::query()->where('tenant_id', $t->id)->findOrFail($id);
         $this->access->record($t, $r->user(), $record);
-        $view = $this->workspace->view($record, $this->access->mayWrite($t, $r->user(), $record->area_id), $this->access->admin($this->access->actor($t, $r->user())));
+        $view = $this->workspace->view($record, $this->access->mayWrite($t, $r->user(), $record->area_id), $this->access->admin($this->access->actor($t, $r->user())), true, $this->access->admittedAsanaAcceptance($t, $r->user(), $record));
         if ($record->kind === 'staff' && $record->connection_id) {
             $rows = [];
             $person = $record->data['person_id'] ?? null;

@@ -22,7 +22,7 @@ class EventEssentials
         $this->access->record($tenant, $user, $event);
         $area = TeamArea::where('tenant_id', $tenant->id)->findOrFail($event->area_id);
         $admin = $this->access->admin($this->access->actor($tenant, $user));
-        $view = $this->workspace->view($event, $this->access->mayWrite($tenant, $user, $area->id), $admin);
+        $view = $this->workspace->view($event, $this->access->mayWrite($tenant, $user, $area->id), $admin, true, $this->access->admittedAsanaAcceptance($tenant, $user, $event));
         $data = $view['data'];
         $sourceCurrent = $this->travel->sourceCurrent($event, $this->access->admittedAsanaVersion($tenant, $user, $event));
         $presentation = $this->fieldPresentation($data);

@@ -395,6 +395,11 @@ jobs:
     - name: Install browsers for Fleet embedding checks
       timeout-minutes: 45
       run: npx playwright install --with-deps chromium webkit
+    - name: Verify event application acceptance labels
+      run: |
+        node --test tests/e2e/team-application-acceptance.test.mjs
+        node tests/e2e/team-application-acceptance.browser.mjs
+      if: matrix.group == 'teams'
     - name: Verify authenticated Teams Studio and sparse event calendars
       run: |
         node tests/e2e/team-studio-live.browser.mjs

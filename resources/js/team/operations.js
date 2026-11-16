@@ -9,6 +9,7 @@ import { installEventUpdates, hasEventUpdateDrafts } from './event-updates';
 import '../../css/team-event-updates.css';
 import { createTeamsSetup, hasTeamsSetupDrafts } from './setup';
 import { eventCalendarWindow, eventToday, setEventCalendarTimezone, renderEventCalendar, renderScheduleSummary } from './event-calendar';
+import { applicationAcceptanceLabel } from './event-acceptance.mjs';
 
 // Business workspaces share the Teams shell and services. Private drafts stay in memory.
 export function installOperations(nativeRoot) {
@@ -393,7 +394,7 @@ export function installOperations(nativeRoot) {
       else if (area.profile === 'wholesale' && view === 'orders') renderCommerce(result.items);
       else {
         if (view === 'overview') renderWorkflow(result);
-        if (view === 'applications') { note('Application, acceptance and payment information for this page. Source notes appear as confirmed fields after review.'); table(['Event', 'Application', 'Acceptance', 'Payment', 'Next action'], result.items.map(i => { const d = i.source ? i.data.reviewed_fields || {} : i.data; return [button(i.title, () => details(i)), d.application_status || 'Needs confirmation', d.acceptance_status || 'Needs confirmation', d.payment_status || 'Needs confirmation', d.next_action || '—']; })); return; }
+        if (view === 'applications') { note('Application, acceptance and payment information for this page. Source notes appear as confirmed fields after review.'); table(['Event', 'Application', 'Acceptance', 'Payment', 'Next action'], result.items.map(i => { const d = i.source ? i.data.reviewed_fields || {} : i.data; return [button(i.title, () => details(i)), d.application_status || 'Needs confirmation', applicationAcceptanceLabel(i), d.payment_status || 'Needs confirmation', d.next_action || '—']; })); return; }
         renderRecords(result.items);
         if (result.commerce) { section('Existing Wholesale service'); note('Source records are shown separately from Teams relationship notes. Review identity links before merging customer context.'); renderCommerce(result.commerce.items); }
         if (result.commerceNotice) note('Existing Wholesale source unavailable: ' + result.commerceNotice);

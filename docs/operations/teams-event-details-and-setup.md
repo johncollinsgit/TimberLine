@@ -16,17 +16,28 @@ fill. A past unconfirmed event stays striped. Date-only task anchors and legacy
 range markers keep their distinct dashed borders and remain clickable, as do all
 session cards and the unknown-date event list.
 
-Acceptance uses only native Teams `data.acceptance_status` or connected-source
-`data.reviewed_fields.acceptance_status`. The exact values `yes`, `accepted` and
-`confirmed` are matched without case or surrounding whitespace. Reviewed connected
-sources also recognize the observed whole affirmative forms `Yes, accepted` with
-an optional numeric date and `Yes (via email [on] numeric date)`. Stored wording
-and its source audit stay intact; unreviewed, negative, pending or contradictory
-values remain unconfirmed. Native values retain their exact token rules. Record lifecycle
-status, completed tasks, payment/application status, unreviewed note candidates
-and `schedule_complete` do not establish booking acceptance. Compact collections
-expose only that authoritative literal as `data.calendar_acceptance_status`; no
-extra notes, financial details or provider requests are needed for this styling.
+Connected Asana events use current structured booking tags when available. An
+exact whole-name Accepted tag confirms acceptance; explicit acceptance negatives,
+Pending or Waitlist conflicts keep it unconfirmed. Paid, payment-pending,
+Applied-only history, person and hotel tags cannot create acceptance or override
+a clear Accepted tag. The projection preserves the original tag GID/name and
+tenant, actor, task, workspace, project and connection-generation provenance.
+It reuses tags from the existing freshly admitted task/inventory request; no
+extra HTTP request per event or access cache is introduced. Removing Accepted
+retires the structured acceptance even over an old reviewed Yes. A previously
+structured snapshot cannot lend acceptance to a current unavailable/malformed
+read; a never-structured legacy response that omits tags retains its reviewed
+notes. Normal sync preserves tag provenance and never rewrites Asana.
+
+Native Teams values still use `data.acceptance_status`; legacy connected values
+use `data.reviewed_fields.acceptance_status`. Exact `yes`, `accepted` and
+`confirmed` tokens and the reviewed source forms `Yes, accepted [on numeric date]`
+and `Yes (via email [on] numeric date)` retain their existing display behavior.
+Calendar, Applications and the source-event forecast confirmation predicate use
+the same `event_acceptance`/`calendar_acceptance_status` projection. Native
+forecast stage eligibility and all financial, source and coverage rules stay
+unchanged. Record lifecycle status, task completion, payment/application status,
+unreviewed note candidates and `schedule_complete` are separate from booking.
 
 Both calendar layouts retain a visible Today action and a local-date caption.
 The current date cell says Today and its `<time>` has `aria-current="date"`.
@@ -40,6 +51,11 @@ Chromium/WebKit checks with fictional records; the existing authenticated calend
 smoke invokes the same checks in protected CI. Collection tests prove the small
 acceptance projection and preserve current source admission. These local checks
 do not claim deployed appearance or alter an event's saved acceptance.
+`TeamEventAcceptanceTest` covers current tag removal/conflicts, compact/full view
+parity, source provenance, cross-record/stale hints, legacy sync transitions and
+source-only forecast eligibility. The Applications Node and real-renderer
+Chromium/WebKit fixtures prove an authoritative unknown clears old acceptance
+without interpreting the task stage.
 
 The main event dialog uses the shared Teams shell and operations APIs. Its wider
 card layout presents dates, venue, assigned team members, permitted current and

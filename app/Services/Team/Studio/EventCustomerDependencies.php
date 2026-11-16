@@ -32,6 +32,10 @@ class EventCustomerDependencies
 
     private array $readIndexes = [];
 
+    private ?array $paymentKeySchema = null;
+
+    private array $sourceHashVisibility = [];
+
     /** Capture original anchors before any result/customer cohort is consumed. */
     public function capture(Tenant $tenant, TeamArea $area, ?array $scope = null, bool $witnesses = false): array
     {
@@ -355,15 +359,37 @@ class EventCustomerDependencies
         // can select covered IDs without reading every tenant payment row.
         // Deduplication and the original bound apply to their whole union.
         $selected = null;
+        $db = DB::connection();
+        $keyJoin = false;
+        if ($db->getDriverName() === 'mysql' && preg_match('/^8\.4\.\d+(?:[-+].*)?$/', $db->getPdo()->getAttribute(\PDO::ATTR_SERVER_VERSION))
+            && stripos($db->getPdo()->getAttribute(\PDO::ATTR_SERVER_VERSION), 'mariadb') === false) {
+            // Session encodings can change independently of configured charset.
+            $session = $db->selectOne('SELECT @@character_set_client AS key_client, @@character_set_connection AS key_connection');
+            $keyJoin = $session->key_client === 'utf8mb4' && $session->key_connection === 'utf8mb4';
+        }
         foreach (['square_order_id' => $orders, 'square_payment_id' => $payments] as $column => $ids) {
             if ($ids === []) {
                 continue;
             }
             $index = $column === 'square_order_id' ? 'epp_order_hash_idx' : 'square_payments_tenant_payment_unique';
+            $branch = $keyJoin ? $this->paymentInputKeys($tenant, $column, $ids, $index) : null;
+            if ($branch !== null) {
+                if ($selected === null) {
+                    $selected = $branch;
+                } else {
+                    $selected->union($branch);
+                }
+                // Retain the ordinary index inventory used by the independently
+                // guarded outer physical-ID lookup below.
+                $this->readIndexes['square_payments'] ??= Schema::getIndexes('square_payments');
+
+                continue;
+            }
             $ranges = DB::connection()->getDriverName() === 'mysql' ? array_chunk($ids, 128) : [$ids];
             foreach ($ranges as $range) {
-                $branch = $this->indexed(DB::table('square_payments'), 'square_payments', $index, ['tenant_id', $column])
-                    ->where('tenant_id', $tenant->id)->whereIn($column, $range)->selectRaw('id AS dependency_payment_id');
+                // Native fallback leaves the optimizer free to ignore missing,
+                // invisible or otherwise unverified optional source indexes.
+                $branch = DB::table('square_payments')->where('tenant_id', $tenant->id)->whereIn($column, $range)->selectRaw('id AS dependency_payment_id');
                 if ($selected === null) {
                     $selected = $branch;
                 } else {
@@ -375,6 +401,7 @@ class EventCustomerDependencies
         if ($selected === null) {
             return $query->where('tenant_id', $tenant->id)->whereRaw('0 = 1');
         }
+        $this->readIndexes['square_payments'] ??= Schema::getIndexes('square_payments');
         $primary = $query->getConnection()->getDriverName() === 'mysql' && collect($this->readIndexes['square_payments'] ?? [])
             ->contains(fn ($index) => strtolower($index['name']) === 'primary' && ($index['primary'] ?? false) && ($index['unique'] ?? false)
                 && array_map('strtolower', $index['columns']) === ['id']);
@@ -388,6 +415,44 @@ class EventCustomerDependencies
         }
 
         return $query->where('square_payments.tenant_id', $tenant->id);
+    }
+
+    /** A bound key relation only when its comparisons match the original IN. */
+    private function paymentInputKeys(Tenant $tenant, string $column, array $ids, string $index): ?Builder
+    {
+        foreach ($ids as $id) {
+            // Numeric values retain native IN coercion. Overlength, Unicode and
+            // invalid UTF-8 use the original branch; JSON_TABLE may truncate with
+            // only a warning, even under ERROR ON ERROR and strict SQL modes.
+            if (! is_string($id) || strlen($id) > 255 || ! preg_match('/^[\x00-\x7f]*$/D', $id)) {
+                return null;
+            }
+        }
+        $this->paymentKeySchema ??= [
+            'columns' => DB::table('information_schema.columns')->whereRaw('TABLE_SCHEMA = DATABASE()')->where('TABLE_NAME', 'square_payments')
+                ->whereIn('COLUMN_NAME', ['square_order_id', 'square_payment_id'])->get(['COLUMN_NAME as name', 'COLUMN_TYPE as type', 'CHARACTER_SET_NAME as charset',
+                    'COLLATION_NAME as collation', 'IS_NULLABLE as nullable', 'GENERATION_EXPRESSION as expression'])->keyBy('name')->all(),
+            'indexes' => DB::table('information_schema.statistics')->whereRaw('TABLE_SCHEMA = DATABASE()')->where('TABLE_NAME', 'square_payments')
+                ->whereIn('INDEX_NAME', ['epp_order_hash_idx', 'square_payments_tenant_payment_unique'])->orderBy('INDEX_NAME')->orderBy('SEQ_IN_INDEX')
+                ->get(['INDEX_NAME as name', 'COLUMN_NAME as column_name', 'SUB_PART as sub_part', 'NON_UNIQUE as non_unique', 'INDEX_TYPE as type',
+                    'IS_VISIBLE as visible', 'COLLATION as collation', 'EXPRESSION as expression'])->groupBy('name')->map->all()->all(),
+        ];
+        $definition = $this->paymentKeySchema['columns'][$column] ?? null;
+        $expected = $column === 'square_order_id' ? ['tenant_id', 'square_order_id', 'event_content_hash'] : ['tenant_id', 'square_payment_id'];
+        $parts = $this->paymentKeySchema['indexes'][$index] ?? [];
+        if (! $definition || strtolower($definition->type) !== 'varchar(255)' || $definition->charset !== 'utf8mb4' || $definition->collation !== 'utf8mb4_unicode_ci'
+            || $definition->nullable !== ($column === 'square_order_id' ? 'YES' : 'NO') || $definition->expression !== ''
+            || array_column($parts, 'column_name') !== $expected
+            || array_filter($parts, fn ($part) => $part->sub_part !== null || (int) $part->non_unique !== ($column === 'square_order_id' ? 1 : 0)
+                || strtoupper($part->type) !== 'BTREE' || strtoupper($part->visible) !== 'YES' || $part->collation !== 'A' || $part->expression !== null)) {
+            return null;
+        }
+
+        // DISTINCT is necessary even with one source lane: differently cased or
+        // padded input strings can identify the same original physical row.
+        return DB::query()->fromRaw("JSON_TABLE(?, '$[*]' COLUMNS (`source_id` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci PATH '$' ERROR ON EMPTY ERROR ON ERROR)) AS dependency_source_ids"
+            .' STRAIGHT_JOIN square_payments FORCE INDEX (`'.$index.'`) ON square_payments.tenant_id = ? AND square_payments.`'.$column.'` = dependency_source_ids.source_id',
+            [json_encode(array_values($ids), JSON_THROW_ON_ERROR), $tenant->id])->distinct()->selectRaw('square_payments.id AS dependency_payment_id');
     }
 
     /** Original source membership and bytes, including representations suppressed by mirrors. */
@@ -519,7 +584,11 @@ class EventCustomerDependencies
                 // The source population is already bounded to MAX_ROWS. Read
                 // its covered hashes together rather than scan the same tenant
                 // prefix again for every physical-ID batch.
-                $hashes = $rows->isEmpty() ? collect() : DB::table($table)->forceIndex($index)->where('tenant_id', $rows->first()->tenant_id)->whereIn('id', $rows->pluck('id'))
+                $hashQuery = DB::table($table);
+                if ($this->sourceHashIndexVisible($table, $index)) {
+                    $hashQuery->forceIndex($index);
+                }
+                $hashes = $rows->isEmpty() ? collect() : $hashQuery->where('tenant_id', $rows->first()->tenant_id)->whereIn('id', $rows->pluck('id'))
                     ->select('id')->selectRaw('HEX(`event_content_hash`) AS content_revision')->get()->keyBy('id');
                 abort_unless($rows->count() === $hashes->count(), 409, 'Original purchase dependencies changed.');
 
@@ -533,6 +602,18 @@ class EventCustomerDependencies
         $rows = $this->bounded($query->select($columns), self::MAX_ROWS);
 
         return $rows->map(fn ($row) => (object) [...array_intersect_key((array) $row, array_flip($identifiers)), 'source_revision' => $this->hash((array) $row)]);
+    }
+
+    private function sourceHashIndexVisible(string $table, string $index): bool
+    {
+        $key = $table.':'.$index;
+        if (! array_key_exists($key, $this->sourceHashVisibility)) {
+            $version = DB::connection()->getPdo()->getAttribute(\PDO::ATTR_SERVER_VERSION);
+            $this->sourceHashVisibility[$key] = preg_match('/^8\.4\.\d+(?:[-+].*)?$/', $version) && stripos($version, 'mariadb') === false
+                && DB::table('information_schema.statistics')->whereRaw('TABLE_SCHEMA = DATABASE()')->where('TABLE_NAME', $table)->where('INDEX_NAME', $index)->value('IS_VISIBLE') === 'YES';
+        }
+
+        return $this->sourceHashVisibility[$key];
     }
 
     private function purchaseWitnesses(Tenant $tenant, array $frame, array $keys, array $financial): array

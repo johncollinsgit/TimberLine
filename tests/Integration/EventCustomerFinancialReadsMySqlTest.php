@@ -65,8 +65,151 @@ test('optimized payment membership preserves original collation null tender and 
     $queries = collect(DB::getQueryLog());
     DB::disableQueryLog();
     expect(json_encode($fallbackResult['revision']['payments']))->toBe(json_encode($expected->all()))
-        ->and($queries->first(fn ($query) => str_contains($query['query'], 'dependency_payment_keys'))['query'])->not->toContain('STRAIGHT_JOIN');
+        ->and($queries->first(fn ($query) => str_contains($query['query'], 'dependency_payment_keys'))['query'])->toContain('inner join (')
+        ->not->toContain(') AS `dependency_payment_keys` STRAIGHT_JOIN');
     Http::assertNothingSent();
+});
+
+test('guarded input keys preserve native IN outcomes without normalizing source identities', function (array $input, array $stored, bool $fast) {
+    foreach ($stored as $i => $value) {
+        DB::table('square_payments')->insert(['tenant_id' => $this->tenant->id, 'square_payment_id' => $this->prefix.'edge-'.$i,
+            'square_order_id' => $value, 'status' => $i % 2 ? 'PENDING' : 'COMPLETED']);
+    }
+    $service = app(EventCustomerDependencies::class);
+    $query = (new ReflectionMethod($service, 'paymentSources'))->invoke($service, $this->tenant, $input, []);
+    expect(str_contains($query->toSql(), 'JSON_TABLE('))->toBe($fast);
+    $reference = DB::table('square_payments')->where('tenant_id', $this->tenant->id)->whereIn('square_order_id', $input);
+    $outcome = function ($read): array {
+        try {
+            return ['ids' => $read->orderBy('id')->pluck('id')->all()];
+        } catch (\Illuminate\Database\QueryException $error) {
+            return ['error' => get_class($error), 'state' => $error->errorInfo[0] ?? null];
+        }
+    };
+    expect($outcome($query))->toBe($outcome($reference));
+    Http::assertNothingSent();
+})->with([
+    'single lane case and pad duplicates' => [['mixed', 'MIXED', 'mixed '], ['MiXeD', 'mixed '], true],
+    'ASCII key keeps accent insensitive source comparison' => [['e'], ['é', 'e'], true],
+    'empty and escaped ASCII' => [['', "nul\0key", 'quote"key', 'back\\key'], ['', ' ', "nul\0key", 'quote"key', 'back\\key'], true],
+    '255 ASCII characters' => [[str_repeat('x', 255)], [str_repeat('x', 255)], true],
+    '256 characters cannot truncate into a source match' => [[str_repeat('x', 255).'z'], [str_repeat('x', 255)], false],
+    'Unicode remains native' => [['é'], ['é', 'e'], false],
+    '255 Unicode characters remain native' => [[str_repeat('é', 255)], [str_repeat('é', 255)], false],
+    '256 Unicode characters remain native' => [[str_repeat('é', 256)], [str_repeat('é', 255)], false],
+    'integer comparison remains native' => [[12], ['12', '012', '12tail'], false],
+    'numeric string comparison stays a string' => [['12'], ['12', '012', '12tail'], true],
+    'SQL NULL input stays native' => [[null], [null, 'null'], false],
+    'invalid UTF8 is not JSON encoded' => [["\xff"], ['ordinary'], false],
+    'sparse list keys do not become JSON object members' => [[4 => 'ordinary', 9 => 'other'], ['ordinary', 'other'], true],
+]);
+
+test('session encoding drift disables the input relation on the same reporting reader', function () {
+    DB::table('square_payments')->insert(['tenant_id' => $this->tenant->id, 'square_payment_id' => $this->prefix.'session', 'square_order_id' => 'ordinary']);
+    $service = app(EventCustomerDependencies::class);
+    $method = new ReflectionMethod($service, 'paymentSources');
+    expect($method->invoke($service, $this->tenant, ['ordinary'], [])->toSql())->toContain('JSON_TABLE(');
+    try {
+        DB::statement('SET NAMES latin1');
+        $query = $method->invoke($service, $this->tenant, ['ordinary'], []);
+        expect($query->toSql())->not->toContain('JSON_TABLE(')
+            ->and($query->pluck('id')->all())->toBe(DB::table('square_payments')->where('tenant_id', $this->tenant->id)->whereIn('square_order_id', ['ordinary'])->pluck('id')->all());
+    } finally {
+        DB::statement('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci');
+    }
+});
+
+test('unverified source column or key metadata retains native membership predicates', function (string $drift) {
+    DB::table('square_payments')->insert(['tenant_id' => $this->tenant->id, 'square_payment_id' => $this->prefix.'schema', 'square_order_id' => 'ordinary']);
+    $service = app(EventCustomerDependencies::class);
+    $method = new ReflectionMethod($service, 'paymentSources');
+    expect($method->invoke($service, $this->tenant, ['ordinary'], [])->toSql())->toContain('JSON_TABLE(');
+    $property = new ReflectionProperty($service, 'paymentKeySchema');
+    $schema = $property->getValue($service);
+    $definition = clone $schema['columns']['square_order_id'];
+    $parts = array_map(fn ($part) => clone $part, $schema['indexes']['epp_order_hash_idx']);
+    match ($drift) {
+        'width' => $definition->type = 'varchar(254)',
+        'type' => $definition->type = 'char(255)',
+        'charset' => $definition->charset = 'latin1',
+        'collation' => $definition->collation = 'utf8mb4_bin',
+        'nullable' => $definition->nullable = 'NO',
+        'generated' => $definition->expression = 'lower(square_payment_id)',
+        'missing' => $parts = [],
+        'prefix' => $parts[1]->sub_part = 16,
+        'invisible' => $parts[0]->visible = 'NO',
+        'wrong key order' => $parts = array_reverse($parts),
+    };
+    $schema['columns']['square_order_id'] = $definition;
+    $schema['indexes']['epp_order_hash_idx'] = $parts;
+    $property->setValue($service, $schema);
+    $query = $method->invoke($service, $this->tenant, ['ordinary'], []);
+    expect($query->toSql())->not->toContain('JSON_TABLE(')
+        ->and($query->pluck('id')->all())->toBe(DB::table('square_payments')->where('tenant_id', $this->tenant->id)->whereIn('square_order_id', ['ordinary'])->pluck('id')->all());
+})->with(['width', 'type', 'charset', 'collation', 'nullable', 'generated', 'missing', 'prefix', 'invisible', 'wrong key order']);
+
+test('unsupported server families retain the native membership builder', function (string $version) {
+    $service = app(EventCustomerDependencies::class);
+    (new ReflectionProperty($service, 'readIndexes'))->setValue($service, ['square_payments' => \Illuminate\Support\Facades\Schema::getIndexes('square_payments')]);
+    $db = DB::connection();
+    $actual = $db->getPdo();
+    $pdo = \Mockery::mock(PDO::class);
+    $pdo->shouldReceive('getAttribute')->with(PDO::ATTR_SERVER_VERSION)->andReturn($version);
+    try {
+        $db->setPdo($pdo);
+        $query = (new ReflectionMethod($service, 'paymentSources'))->invoke($service, $this->tenant, ['ordinary'], []);
+        expect($query->toSql())->not->toContain('JSON_TABLE(')->and($query->getBindings())->toContain('ordinary');
+    } finally {
+        $db->setPdo($actual);
+    }
+})->with(['8.0.36', '10.6.18-MariaDB', '9.0.1']);
+
+test('actual invisible source index falls back without forcing it or changing typed financial fingerprints', function () {
+    DB::table('square_payments')->insert(['tenant_id' => $this->tenant->id, 'square_payment_id' => $this->prefix.'visibility',
+        'square_order_id' => 'ordinary', 'status' => 'COMPLETED', 'raw_payload' => '{"retained":{"refund":null}}']);
+    $keys = ['square_order' => ['ordinary' => true]];
+    $before = DB::transaction(fn () => ($this->captureFinancial)($keys));
+    try {
+        DB::statement('ALTER TABLE square_payments ALTER INDEX epp_order_hash_idx INVISIBLE');
+        $service = app(EventCustomerDependencies::class);
+        $query = (new ReflectionMethod($service, 'paymentSources'))->invoke($service, $this->tenant, ['ordinary'], []);
+        expect($query->toSql())->not->toContain('JSON_TABLE(')->not->toContain('force index (`epp_order_hash_idx`)');
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $after = DB::transaction(fn () => ($this->captureFinancial)($keys));
+        $queries = collect(DB::getQueryLog());
+        DB::disableQueryLog();
+        $hash = $queries->first(fn ($query) => str_contains($query['query'], 'HEX(`event_content_hash`)'));
+        expect(json_encode($after['revision']['payments']))->toBe(json_encode($before['revision']['payments']))
+            ->and($hash)->not->toBeNull()->and(strtolower($hash['query']))->not->toContain('force index');
+    } finally {
+        DB::disableQueryLog();
+        DB::statement('ALTER TABLE square_payments ALTER INDEX epp_order_hash_idx VISIBLE');
+    }
+});
+
+test('single-lane collated input duplicates preserve the actual fifty thousand row boundary', function () {
+    for ($offset = 0; $offset < 50000; $offset += 1000) {
+        $rows = [];
+        for ($i = $offset; $i < $offset + 1000; $i++) {
+            $rows[] = ['tenant_id' => $this->tenant->id, 'square_payment_id' => $this->prefix.'boundary-'.$i,
+                'square_order_id' => 'Boundary-Order', 'status' => 'COMPLETED'];
+        }
+        DB::table('square_payments')->insert($rows);
+    }
+    $keys = ['square_order' => ['boundary-order' => true, 'BOUNDARY-ORDER' => true, 'boundary-order ' => true]];
+    $result = DB::transaction(fn () => ($this->captureFinancial)($keys));
+    expect($result['revision']['payments'])->toHaveCount(50000)
+        ->and($result['order_tenders']['Boundary-Order'])->toHaveCount(50000);
+    unset($result);
+    DB::table('square_payments')->insert(['tenant_id' => $this->tenant->id, 'square_payment_id' => $this->prefix.'boundary-50000',
+        'square_order_id' => 'Boundary-Order', 'status' => 'COMPLETED']);
+    try {
+        DB::transaction(fn () => ($this->captureFinancial)($keys));
+        $this->fail('The original global bound must reject 50,001 distinct source rows.');
+    } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+        expect($error->getStatusCode())->toBe(409)->and($error->getMessage())->toBe('Customer dependency coverage needs review.');
+    }
 });
 
 test('current and doubled original payment populations use bounded indexed source membership with complete financial bytes', function () {
@@ -117,10 +260,11 @@ test('current and doubled original payment populations use bounded indexed sourc
         $p95 = $samples[(int) ceil(count($samples) * .95) - 1];
         fwrite(STDERR, 'Original financial source component: '.json_encode(['scale' => $scale, 'p95_ms' => round($p95, 3), 'last_sample_sql_ms' => $costs,
             'covering_branch_count' => $branches->count(), 'branch_access' => $branches->groupBy('type')->map->count()->all()], JSON_UNESCAPED_SLASHES).PHP_EOL);
-        expect($branches)->toHaveCount((int) ceil(count($orders) / 128) + (int) ceil(count($payments) / 128))
+        expect($body['sql'])->toContain('JSON_TABLE(');
+        expect($branches)->toHaveCount(2)
             ->and($branches->pluck('key')->unique()->sort()->values()->all())->toBe(['epp_order_hash_idx', 'square_payments_tenant_payment_unique']);
         foreach ($branches as $branch) {
-            expect($branch->type)->toBe('range')->and((int) $branch->key_len)->toBeGreaterThan(9);
+            expect($branch->type)->toBeIn(['ref', 'eq_ref'])->and((int) $branch->key_len)->toBeGreaterThan(9);
         }
         $lookup = collect($plan)->first(fn ($row) => $row->select_type === 'PRIMARY' && $row->table === 'square_payments');
         expect($lookup->key)->toBe('PRIMARY')->and($lookup->type)->toBe('eq_ref');

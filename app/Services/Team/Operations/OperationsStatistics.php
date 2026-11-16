@@ -129,7 +129,8 @@ class OperationsStatistics
 
                 continue;
             }
-            $confirmed = $event->connection_id ? in_array($event->data['reviewed_fields']['acceptance_status'] ?? '', ['yes', 'accepted', 'confirmed'], true) : in_array($event->status, ['accepted', 'staffing', 'ready'], true);
+            $acceptance = app(EventAcceptance::class);
+            $confirmed = $event->connection_id ? $acceptance->confirmed($acceptance->project($event, $access->admittedAsanaAcceptance($tenant, $user, $event))) : in_array($event->status, ['accepted', 'staffing', 'ready'], true);
             if (! $confirmed || ! $event->ends_on) {
                 $forecasts[] = ['id' => $event->id, 'title' => $event->title, 'status' => 'schedule_needs_confirmation', 'sample_size' => count($sample)];
                 $unknown++;

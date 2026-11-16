@@ -131,6 +131,9 @@ test('missing partial or incompatible anchor schema returns the original predica
 });
 
 test('verified derived presence fields preserve the covering content digest while semantic field drift falls back', function () {
+    // Earlier interruption suites may leave a historical source schema. This
+    // coexistence case needs its separate, independently optional hash migration.
+    (require database_path('migrations/2026_11_16_030000_add_indexed_event_content_hashes.php'))->up();
     $columns = ['id', 'marketing_profile_id', 'source_type', 'source_id', 'source_meta', 'match_method', 'confidence'];
     $requested = [...$columns, 'event_capture_present', 'event_attribution_present'];
     $method = new ReflectionMethod(EventPerformance::class, 'tableDigest');

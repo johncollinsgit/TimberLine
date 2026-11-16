@@ -70,13 +70,29 @@ Ordinary or drifted extra fields retain the full-hash fallback. Column-only,
 partially indexed, repeated and incompatible recovery states are covered on
 disposable MySQL; rollback preserves original source rows and derived indexes.
 
-Large mixed order/payment membership uses covering ID unions of 128-key MySQL
-ranges, then a derived-first STRAIGHT_JOIN through a verified PRIMARY lookup.
-Original values, tenant predicates, deduplication and the global ID order/coverage
-bound remain unchanged. Covered source hashes are read once for the already
-bounded physical ID set rather than repeatedly scanning the tenant prefix.
-Local 63,000/126,000-payment components measured p95 106.5/186.6 ms over five
-samples at each scale; these are component checks, not deployed endpoint timing.
+On supported MySQL 8.4, ASCII string source keys use a bound JSON_TABLE input
+relation and covered point lookups after fresh session-encoding and exact
+column/index checks. Other types, Unicode, overlength values, unsupported engines
+and unverified schema retain native IN predicates. Each input branch deduplicates
+physical IDs; the combined union, tenant predicates, global ID order and coverage
+bound remain unchanged. The derived-first physical-row lookup requires the exact
+PRIMARY(id) shape. Optional invisible source indexes are never forced by fallback
+queries. Source hashes retain the same formula and row-count fence even when an
+ordinary lookup computes the generated value instead of reading a visible index.
+
+Length checks are independent of strict SQL modes: JSON_TABLE truncation can warn
+without failing even with ERROR ON ERROR. The input relation pins the original
+column collation and does not cast stored source IDs. See the primary MySQL
+[JSON_TABLE documentation](https://dev.mysql.com/doc/refman/8.4/en/json-table-functions.html)
+and [collation rules](https://dev.mysql.com/doc/refman/8.4/en/charset-collation-coercibility.html).
+
+Local 63,000/126,000-payment components measured p95 88.7/142.1 ms over five
+samples at each scale under the unchanged 250 ms bound. Same-command whole-frame
+fixtures measured 468/1,083 ms at 1,442/2,884 canonical roots. These are local
+component/fixture checks, not deployed endpoint timing. A separate boundary test
+retains 50,000 distinct rows despite single-lane case/pad duplicate inputs and
+rejects 50,001. Runtime acceptance records fast-path activation as a count without
+printing source values.
 
 Repeated CI workload failures measured about 305–309 ms against the unchanged
 250 ms bound. An isolated query profile showed tenant-only plans for precise
