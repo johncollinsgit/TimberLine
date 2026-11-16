@@ -6,6 +6,41 @@ checks passed; see `teams-clamav-scanner.md` for the separate live scanner evide
 
 ## Event workspace
 
+### Calendar acceptance and today (November 16; source candidate)
+
+Calendar cards use one forest default color. A valid saved `calendar_color` stays
+visible; the optional team-member color mode remains available. Fill communicates
+booking independently of color: unconfirmed acceptance is striped, accepted is solid,
+and an accepted event with a known ending before its local today has a faded solid
+fill. A past unconfirmed event stays striped. Date-only task anchors and legacy
+range markers keep their distinct dashed borders and remain clickable, as do all
+session cards and the unknown-date event list.
+
+Acceptance uses only native Teams `data.acceptance_status` or connected-source
+`data.reviewed_fields.acceptance_status`. The exact values `yes`, `accepted` and
+`confirmed` are matched without case or surrounding whitespace. Reviewed connected
+sources also recognize the observed whole affirmative forms `Yes, accepted` with
+an optional numeric date and `Yes (via email [on] numeric date)`. Stored wording
+and its source audit stay intact; unreviewed, negative, pending or contradictory
+values remain unconfirmed. Native values retain their exact token rules. Record lifecycle
+status, completed tasks, payment/application status, unreviewed note candidates
+and `schedule_complete` do not establish booking acceptance. Compact collections
+expose only that authoritative literal as `data.calendar_acceptance_status`; no
+extra notes, financial details or provider requests are needed for this styling.
+
+Both calendar layouts retain a visible Today action and a local-date caption.
+The current date cell says Today and its `<time>` has `aria-current="date"`.
+Today follows the work area's business timezone, including when the device is in
+another timezone. Returning to Today recomputes the date rather than retaining an
+old render-time value. A partial schedule without a known ending does not make an
+accepted event look finished.
+
+`node tests/e2e/team-calendar-presentation.browser.mjs` runs focused real-renderer
+Chromium/WebKit checks with fictional records; the existing authenticated calendar
+smoke invokes the same checks in protected CI. Collection tests prove the small
+acceptance projection and preserve current source admission. These local checks
+do not claim deployed appearance or alter an event's saved acceptance.
+
 The main event dialog uses the shared Teams shell and operations APIs. Its wider
 card layout presents dates, venue, assigned team members, permitted current and
 previous-year sales, hotel and coordinator information. Maps, phone and email
@@ -180,3 +215,12 @@ selections and unrelated settings, replaces grants strictly from the new token,
 and requires fresh reconciliation. Native event updates require no connection.
 Enterprise isolated work installs file target identity through the additive pinned
 shared-schema-v2 migration; its version-one manifest remains immutable.
+
+Event List, Board and Calendar rearrange already admitted date windows during a
+visible visit. The page retains at most three windows for 60 monotonic seconds,
+keyed by tenant, actor, workspace, area, search and dates. A new date window loads
+with the existing surface visible. Filters, explicit refresh, mutations, hidden
+pages and failed admission retire retained windows; even a late failed request
+retires reused cards after its rendering ticket was superseded. Opening an event
+always performs a fresh detail read. Partial source-coverage notices survive a
+presentation change and never become a claim of complete coverage.

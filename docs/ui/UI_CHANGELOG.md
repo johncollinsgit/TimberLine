@@ -1,3 +1,22 @@
+## 2026-11-16 - Event loading, calendar acceptance and Today (source candidate)
+
+List, Board and Calendar reuse admitted date windows within a visible visit.
+Event details open with essentials first; Updates, Sales, Customers and History
+load on expansion, with individual transactions behind their own expansion.
+Upcoming occurrences retain access to completed, verified prior-year comparisons.
+
+Calendar cards share one default forest color while retaining saved custom and
+team-member colors. Stripes show acceptance is unconfirmed, solid fill shows
+accepted events, and faded solid fill shows accepted events whose known ending
+has passed. Past unconfirmed events remain striped. Every event session, task-date
+marker, range marker and undated event entry retains its existing open action.
+
+Both calendar layouts show a Today action and business-local date caption. The
+current date has a visible Today badge and accessible current-date semantics.
+Fictional Chromium/WebKit regressions cover booking states, custom colors,
+cross-timezone dates, click-through and phone/desktop geometry; current source,
+tenant and financial authority are unchanged.
+
 ## 2026-11-15 - Guided retail website flow (source candidate)
 
 Retail starters show real product and collection photo cards, with an empty-state

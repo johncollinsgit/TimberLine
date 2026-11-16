@@ -34,6 +34,32 @@ class EventCommerceReport
         return $ids->count() === 1 ? (int) $ids[0] : null;
     }
 
+    /** The same reviewed association rules, with one local inventory per tenant. */
+    public function commerceIds(iterable $events): array
+    {
+        $result = [];
+        foreach (collect($events)->groupBy('tenant_id') as $tenant => $occurrences) {
+            $links = $this->stock->rows('event_links', (int) $tenant)->whereNotNull('reviewed_by')->get(['event_id', 'provider', 'external_id']);
+            $reviewed = $links->pluck('event_id')->mapWithKeys(fn ($id) => [(int) $id => true]);
+            $asana = $links->where('provider', 'asana')->groupBy('external_id');
+            $providers = \App\Models\TeamProviderConnection::where('tenant_id', $tenant)->whereIn('id', $occurrences->pluck('connection_id')->filter())->pluck('provider', 'id');
+            foreach ($occurrences as $event) {
+                $data = $event->data;
+                if ($explicit = ($data['_teams_enrichment']['commerce_event']['id'] ?? null)) {
+                    $valid = is_int($explicit) || is_string($explicit) && ctype_digit($explicit);
+                    $id = $valid && isset($reviewed[(int) $explicit]) ? (int) $explicit : null;
+                } else {
+                    $ids = $event->connection_id && ($providers[$event->connection_id] ?? null) === 'asana' && isset($data['source_id'])
+                        ? ($asana->get($data['source_id']) ?? collect())->pluck('event_id')->unique()->values() : collect();
+                    $id = $ids->count() === 1 ? (int) $ids[0] : null;
+                }
+                $result[(string) $event->id] = $id;
+            }
+        }
+
+        return $result;
+    }
+
     public function forEvent(Tenant $tenant, User $user, TeamOperationRecord $event, bool $includeReceipts = false): array
     {
         $report = $this->admittedSales($tenant, $user, $event, $includeReceipts);
@@ -60,6 +86,13 @@ class EventCommerceReport
             'annual_history' => $history['annual_history'], 'history' => $history['history'],
             'review_items' => $budget ? [] : ['Save an event budget to calculate estimated profitability and break-even.'],
             'basis' => 'Confirmed event-linked Pay, cash and reviewed Square revenue with saved event cost estimates. Recorded workbook comparisons remain separate; they are not added to current sales. Tax uses the register’s reviewed location, not cost settings.'];
+    }
+
+    /** Browser summary and explicit receipt expansion share the current-source financial gates. */
+    public function forEventSales(Tenant $tenant, User $user, TeamOperationRecord $event, bool $includeReceipts = false): array
+    {
+        return [...$this->admittedSales($tenant, $user, $event, $includeReceipts),
+            'basis' => 'Confirmed event-linked Pay, cash and reviewed Square revenue. Recorded workbook comparisons remain separate; they are not added to current sales.'];
     }
 
     public function forRegister(array $scope, User $user): array
@@ -126,12 +159,7 @@ class EventCommerceReport
     /** Candidate IDs only; fresh source review, actor and event ownership remain the caller's authority. */
     public function squareOccurrences(int $tenantId, string $orderId): \Illuminate\Support\Collection
     {
-        $ids = $this->lookup($tenantId)['square'][$orderId] ?? [];
-        if (! $ids) {
-            return collect();
-        }
-
-        return TeamOperationRecord::where(['tenant_id' => $tenantId, 'kind' => 'event'])->where('status', '!=', 'withdrawn')->whereIn('id', $ids)->get()
+        return app(EventSquareAllocationFacts::class)->occurrencesFor($tenantId, $orderId)
             ->filter(fn ($event) => in_array($orderId, $event->data['_teams_enrichment']['square_orders']['ids'] ?? [], true));
     }
 

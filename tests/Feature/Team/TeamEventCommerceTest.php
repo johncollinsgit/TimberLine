@@ -452,3 +452,69 @@ test('compact native Sales freshly verifies its source task on every read and ke
     commerceOccurrence($this, ['_teams_enrichment' => ['commerce_event' => ['id' => 123]]]);
     expect($read)->toThrow(\App\Services\Pos\PosException::class, 'event_cost_mapping_required');
 });
+
+test('bulk commerce associations retain explicit precedence, reviewed unique Asana links and tenant isolation', function () {
+    $connection = TeamProviderConnection::create(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenant->id, 'area_id' => $this->area->id,
+        'user_id' => $this->owner->id, 'provider' => 'asana', 'account_key' => hash('sha256', Str::uuid()), 'status' => 'connected', 'generation' => 1]);
+    $source = 'reviewed-asana-source';
+    $this->stock->rows('event_links', $this->tenant->id)->insert(['tenant_id' => $this->tenant->id, 'event_id' => 456, 'provider' => 'asana', 'external_id' => $source,
+        'metadata' => '{}', 'reviewed_by' => $this->owner->id, 'created_at' => now(), 'updated_at' => now()]);
+    $explicit = commerceOccurrence($this, ['source_id' => $source, '_teams_enrichment' => ['commerce_event' => ['id' => 123]]]);
+    $asana = commerceOccurrence($this, ['source_id' => $source]);
+    $unreviewed = commerceOccurrence($this, ['source_id' => 'unreviewed', '_teams_enrichment' => ['commerce_event' => ['id' => 999]]]);
+    $malformed = commerceOccurrence($this, ['source_id' => $source, '_teams_enrichment' => ['commerce_event' => ['id' => ['unreviewed']]]]);
+    foreach ([$explicit, $asana, $unreviewed, $malformed] as $event) {
+        $event->update(['connection_id' => $connection->id]);
+    }
+    $service = app(EventCommerceReport::class);
+    DB::enableQueryLog();
+    $ids = $service->commerceIds([$explicit, $asana, $unreviewed, $malformed]);
+    $queries = collect(DB::getQueryLog());
+    DB::disableQueryLog();
+    expect($ids)->toBe([$explicit->id => 123, $asana->id => 456, $unreviewed->id => null, $malformed->id => null])
+        ->and($queries)->toHaveCount(2);
+    $this->stock->rows('event_links', $this->tenant->id)->where('provider', 'asana')->where('external_id', $source)->delete();
+    expect($service->commerceIds([$explicit, $asana]))->toBe([$explicit->id => 123, $asana->id => null]);
+    [$foreign] = teamWorkspace();
+    $foreignArea = studioArea($foreign);
+    $foreignEvent = TeamOperationRecord::create(['id' => (string) Str::uuid(), 'tenant_id' => $foreign->id, 'area_id' => $foreignArea->id,
+        'kind' => 'event', 'status' => 'accepted', 'source_key' => hash('sha256', Str::uuid()), 'title' => 'Foreign event',
+        'data' => ['_teams_enrichment' => ['commerce_event' => ['id' => 123]]]]);
+    expect($service->commerceIds([$explicit, $foreignEvent]))->toBe([$explicit->id => 123, $foreignEvent->id => null]);
+    Http::assertNothingSent();
+});
+
+test('browser compact sales load only admitted summary and transactions expand separately without unused history or budget reads', function () {
+    $sale = eventReceipt($this);
+    $event = commerceOccurrence($this, ['_teams_enrichment' => ['commerce_event' => ['id' => 123]]]);
+    app()->instance(\App\Services\Team\Studio\EventIntelligence::class, Mockery::mock(\App\Services\Team\Studio\EventIntelligence::class)->shouldNotReceive('detail')->getMock());
+    app()->instance(\App\Services\Team\Studio\EventProfitability::class, Mockery::mock(\App\Services\Team\Studio\EventProfitability::class)->shouldNotReceive('calculate')->getMock());
+    $url = '/team/events/'.$event->id.'/confirmed-sales?tenant='.$this->tenant->slug;
+    $summary = $this->actingAs($this->owner)->getJson($url.'&summary=1')->assertOk()->assertJsonPath('details_loaded', false)
+        ->assertJsonCount(0, 'sales')->assertJsonPath('report.sales.sale_count', 1)->assertJsonPath('report.sales.net_sales_minor', 1000)
+        ->assertJsonMissingPath('report.sales.receipt_ids')->assertJsonMissingPath('report.sales.square_order_ids')
+        ->assertJsonMissingPath('report.history')->assertJsonMissingPath('report.annual_history')->assertJsonMissingPath('report.budget')->json();
+    $expanded = $this->getJson($url.'&summary=0')->assertOk()->assertJsonPath('details_loaded', true)->assertJsonPath('sales.0.id', $sale->id)->json();
+    expect(\Illuminate\Support\Arr::except($expanded['report']['sales'], ['as_of', 'source_freshness']))
+        ->toBe(\Illuminate\Support\Arr::except($summary['report']['sales'], ['as_of', 'source_freshness']));
+    $member = teamMember($this->tenant, 'member');
+    $this->actingAs($member)->getJson($url.'&summary=1')->assertForbidden()->assertJsonMissingPath('report.sales');
+    $this->actingAs($this->owner)->getJson($url.'&summary=unexpected')->assertUnprocessable();
+});
+
+test('browser summary retains known reviewed Square sales under partial coverage and fresh source task withdrawal', function () {
+    $event = commerceOccurrence($this, ['_teams_enrichment' => ['commerce_event' => ['id' => 123]]]);
+    $binding = scopedCommerceMapping($this, $event, true);
+    scopedCommerceOrder($this, $binding, 'partial-summary-original', 2000);
+    $connection = TeamProviderConnection::create(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenant->id, 'area_id' => $this->area->id,
+        'user_id' => $this->owner->id, 'provider' => 'asana', 'account_key' => hash('sha256', Str::uuid()), 'status' => 'connected', 'generation' => 1,
+        'expires_at' => now()->addHour(), 'credentials' => ['access_token' => 'fictional'], 'settings' => ['source' => ['asana_workspace' => '100', 'asana_project' => '200']]]);
+    $event->update(['connection_id' => $connection->id, 'data' => [...$event->data, '_generation' => 1, 'source_workspace' => '100', 'source_project' => '200', 'source_id' => '300']]);
+    $task = ['gid' => '300', 'workspace' => ['gid' => '100'], 'memberships' => [['project' => ['gid' => '200']]]];
+    Http::fake(['*tasks/300*' => Http::sequence()->push(['data' => $task])->pushStatus(403)]);
+    $url = '/team/events/'.$event->id.'/confirmed-sales?tenant='.$this->tenant->slug.'&summary=1';
+    $this->actingAs($this->owner)->getJson($url)->assertOk()->assertJsonPath('report.sales.sale_count', 1)
+        ->assertJsonPath('report.sales.known_net_sales_minor', 2000)->assertJsonCount(0, 'sales')->assertJsonPath('details_loaded', false);
+    $this->getJson($url)->assertForbidden()->assertJsonMissingPath('report.sales');
+    Http::assertSentCount(2);
+});

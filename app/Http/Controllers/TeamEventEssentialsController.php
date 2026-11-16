@@ -21,7 +21,8 @@ class TeamEventEssentialsController extends Controller
             }
             $result = $travel->save($tenant, $request->user(), $event, $request->all());
         } else {
-            $result = $essentials->read($tenant, $request->user(), $event);
+            $input = $request->validate(['include_sales' => 'sometimes|boolean']);
+            $result = $essentials->read($tenant, $request->user(), $event, (bool) ($input['include_sales'] ?? true));
         }
 
         return response()->json($result)->header('Cache-Control', 'private, no-store');

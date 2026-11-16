@@ -53,6 +53,8 @@ class AppServiceProvider extends ServiceProvider
         // Holds the tenant the current request/job acts for, read by the enforced
         // TenantScope. `scoped` so it is flushed between requests/jobs.
         $this->app->scoped(TenantContext::class);
+        $this->app->scoped(\App\Services\Team\Operations\OperationsReadTransport::class);
+        $this->app->scoped(\App\Services\Team\Studio\EventSquareAllocationFacts::class);
         $this->app->scoped(\App\Services\Marketing\Desk\MarketingReplyContext::class);
     }
 

@@ -26,7 +26,7 @@ class EventPerformance
 {
     public const TABLE = 'team_event_performance_facts';
 
-    private const REPORT_VERSION = 2;
+    private const REPORT_VERSION = 3;
 
     private const DIGEST_VERSION = 'indexed-content-v1';
 
@@ -54,7 +54,7 @@ class EventPerformance
         ],
     ];
 
-    public function __construct(private OperationsAccess $access) {}
+    public function __construct(private OperationsAccess $access, private EventCustomerDependencies $customerDependencies) {}
 
     public static function rules(): array
     {
@@ -94,8 +94,9 @@ class EventPerformance
         }
         // A changed canonical directory invalidates customer dimensions immediately, before refresh.
         // Event totals may still be shown explicitly as stale; private former aliases are withheld.
-        if ($customers && (! ($data['customer_access'] ?? false) || ($data['customer_signature'] ?? '') !== $this->customerSignature($tenant))) {
+        if ($customers && (! ($data['customer_access'] ?? false) || ($data['customer_signature'] ?? '') !== $this->snapshotCustomerSignature($tenant, $area, $data))) {
             $customers = false;
+            $this->requestRefresh($tenant, $user, $area, $snapshot);
             if ($filters['group_by'] === 'customer' || isset($filters['customer_id'])) {
                 $this->assertSourceContext($tenant, $data);
                 $result['status'] = 'preparing';
@@ -160,7 +161,9 @@ class EventPerformance
             if ($kind === 'customer') {
                 $profile = app(CanonicalMarketingProfileResolver::class)->byId($tenant->id, (int) $id);
                 abort_unless($profile && ! $profile->archived_at && (int) $profile->id === (int) $id, 409, 'Customer identity changed. Refresh reporting.');
-                $label = trim($profile->first_name.' '.$profile->last_name) ?: 'Customer';
+                $currentLabel = trim($profile->first_name.' '.$profile->last_name) ?: 'Customer';
+                abort_if(isset($data['customer_scope']) && $currentLabel !== $label, 409, 'Customer labels changed while reporting was read.');
+                $label = $currentLabel;
             }
             $eventIds = $this->filtered($tenant, $area, $generation, $filters, $kind);
             if ($kind === 'day') {
@@ -205,15 +208,21 @@ class EventPerformance
 
         return Cache::lock('event-performance:'.$key, 660)->block(1, function () use ($tenant, $user, $area): array {
             $signature = $this->signature($tenant, $area, true);
-            $customerSignature = $this->customerSignature($tenant);
             $customerAccess = $this->mayReadCustomers($tenant, $user, $area);
-            $customerInvalidated = false;
+            $customerFrame = $customerAccess ? $this->captureCustomerFrame($tenant, $area) : null;
+            $customerInvalidated = $customerAccess && $customerFrame === null;
+            $customerAccess = $customerAccess && ! $customerInvalidated;
+            $customerSignature = $customerFrame['signature'] ?? '';
+
             $current = $this->snapshot($tenant, $user, $area);
             $existing = $current?->data ?? [];
-            if (isset($existing['generation']) && ($existing['signature'] ?? '') === $signature
+            if (! $customerInvalidated && isset($existing['customer_scope']) && isset($existing['generation']) && ($existing['signature'] ?? '') === $signature
                 && ($existing['customer_signature'] ?? '') === $customerSignature && ($existing['customer_access'] ?? false) === $customerAccess
                 && CarbonImmutable::parse($existing['built_at'] ?? $existing['as_of'])->gt(now()->subMinutes(5))) {
                 $this->admitSources($tenant, $user, $area, $existing);
+                if ($customerAccess) {
+                    $this->assertCustomerAdmission($tenant, $user, $area, $existing);
+                }
                 $current->update(['data' => array_replace($existing, ['as_of' => now()->toIso8601String()])]);
 
                 return ['version' => $existing['generation'], 'event_count' => count($existing['source_versions']), 'as_of' => now()->toIso8601String(), 'unchanged' => true];
@@ -238,7 +247,14 @@ class EventPerformance
                 $issues = [];
                 $facts = [];
                 $histories = [];
-                $this->access->readCollection($tenant, $user, $area, function () use ($tenant, $user, $area, $events, $linkByEvent, $generation, &$customerAccess, &$customerInvalidated, &$facts, &$versions, &$issues, &$histories): void {
+                $this->access->readCollection($tenant, $user, $area, function () use ($tenant, $user, $area, $events, $linkByEvent, $generation, &$customerAccess, &$customerInvalidated, &$facts, &$versions, &$issues, &$histories, &$customerFrame, &$customerSignature): void {
+                    if ($customerAccess) {
+                        // One short local view precedes all private facts; provider calls stay outside it.
+                        $customerFrame = $this->captureCustomerFrame($tenant, $area, null, true);
+                        $customerInvalidated = $customerFrame === null;
+                        $customerAccess = ! $customerInvalidated;
+                        $customerSignature = $customerFrame['signature'] ?? '';
+                    }
                     foreach ($events as $event) {
                         $this->access->record($tenant, $user, $event);
                         $versions[$event->id] = $event->version;
@@ -262,6 +278,11 @@ class EventPerformance
 
                                     break;
                                 }
+                                if (! $this->validateCustomerFact(fn () => $this->customerDependencies->assertPurchase($customerFrame, (string) $event->id, $profile, $purchase, $summary['timezone'] ?? 'UTC'))) {
+                                    $customerAccess = false;
+                                    $customerInvalidated = true;
+                                    break;
+                                }
                                 $fact = $this->normalizedCustomerFact($tenant->id, $summary, $event->id, $profile, $purchase);
                                 $customerFacts[$fact['source_key']] = $fact;
                             }
@@ -278,7 +299,15 @@ class EventPerformance
                                     break;
                                 }
                                 $value = $histories[$id] ??= app(CustomerEventValueService::class)->forProfile($profile, $tenant->id, true);
-                                foreach ($this->customerFacts($tenant->id, $summary, $event->id, $commerce, $profile, $value, $cohort['relations'][$id] ?? []) as $fact) {
+                                $privateFacts = [];
+                                if (! $this->validateCustomerFact(function () use ($tenant, $summary, $event, $commerce, $profile, $value, $cohort, $id, $customerFrame, &$privateFacts): void {
+                                    $privateFacts = $this->customerFacts($tenant->id, $summary, $event->id, $commerce, $profile, $value, $cohort['relations'][$id] ?? [], $customerFrame);
+                                })) {
+                                    $customerAccess = false;
+                                    $customerInvalidated = true;
+                                    break;
+                                }
+                                foreach ($privateFacts as $fact) {
                                     if (isset($customerFacts[$fact['source_key']])) {
                                         if ($customerFacts[$fact['source_key']]['customer_id'] !== $fact['customer_id']) {
                                             $customerAccess = false;
@@ -303,7 +332,7 @@ class EventPerformance
                 $this->insertFacts($tenant, $area, $generation, $facts);
                 $this->authorize($tenant, $user, $area);
                 abort_unless($signature === $this->signature($tenant, $area, true), 409, 'Source records changed while reporting was prepared.');
-                if ($customerInvalidated || $customerSignature !== $this->customerSignature($tenant)) {
+                if ($customerInvalidated || $customerAccess && ($customerSignature !== ($this->captureCustomerFrame($tenant, $area, $customerFrame['scope'])['signature'] ?? null) || ! $this->mayReadCustomers($tenant, $user, $area))) {
                     // A concurrent identity import must not block event totals.
                     // Withhold every customer fact; reads still compare the old
                     // signature freshly and return preparing for that dimension.
@@ -311,7 +340,7 @@ class EventPerformance
                     $customerAccess = false;
                     $issues[] = 'Customer identities changed. Preparing the current customer comparison.';
                 }
-                $snapshot = DB::transaction(function () use ($tenant, $user, $area, $generation, $signature, $customerSignature, $versions, $issues, $customerAccess, $squareBindings): TeamOperationRecord {
+                $snapshot = DB::transaction(function () use ($tenant, $user, $area, $generation, $signature, $customerSignature, $versions, $issues, $customerAccess, $squareBindings, $customerFrame): TeamOperationRecord {
                     TeamArea::where('tenant_id', $tenant->id)->whereKey($area->id)->lockForUpdate()->firstOrFail();
                     $this->authorize($tenant, $user, $area);
                     $snapshot = $this->snapshot($tenant, $user, $area) ?? new TeamOperationRecord(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $area->id,
@@ -321,7 +350,7 @@ class EventPerformance
                         $retired[] = ['id' => $old, 'retired_at' => now()->toIso8601String()];
                     }
                     $snapshot->fill(['status' => 'ready', 'version' => ($snapshot->version ?? 0) + 1, 'data' => [
-                        'generation' => $generation, 'signature' => $signature, 'customer_signature' => $customerSignature,
+                        'generation' => $generation, 'signature' => $signature, 'customer_signature' => $customerSignature, 'customer_scope' => $customerFrame['scope'] ?? null,
                         'source_versions' => $versions, 'square_bindings' => array_values($squareBindings), 'customer_access' => $customerAccess, 'as_of' => now()->toIso8601String(), 'built_at' => now()->toIso8601String(),
                         'square_context_signature' => $this->squareContextSignature($tenant),
                         'runtime' => (string) config('pos_live.runtime_id', ''), 'review_items' => array_values(array_unique($issues)), 'retired_generations' => $retired,
@@ -451,8 +480,46 @@ class EventPerformance
     {
         abort_unless($this->mayReadCustomers($tenant, $user, $area)
             && ($snapshot['customer_access'] ?? false)
-            && hash_equals((string) ($snapshot['customer_signature'] ?? ''), $this->customerSignature($tenant)),
+            && hash_equals((string) ($snapshot['customer_signature'] ?? ''), (string) $this->snapshotCustomerSignature($tenant, $area, $snapshot)),
             409, 'Customer identities or access changed while reporting was read.');
+    }
+
+    private function captureCustomerFrame(Tenant $tenant, TeamArea $area, ?array $scope = null, bool $witnesses = false): ?array
+    {
+        try {
+            return $this->customerDependencies->capture($tenant, $area, $scope, $witnesses);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+            if ($error->getStatusCode() !== 409) {
+                throw $error;
+            }
+
+            return null;
+        }
+    }
+
+    private function snapshotCustomerSignature(Tenant $tenant, TeamArea $area, array $snapshot): ?string
+    {
+        if (($snapshot['customer_scope']['version'] ?? null) === EventCustomerDependencies::VERSION) {
+            return $this->captureCustomerFrame($tenant, $area, $snapshot['customer_scope'])['signature'] ?? null;
+        }
+
+        // Older encrypted generations retain their original conservative directory fence.
+        return $this->customerSignature($tenant);
+    }
+
+    private function validateCustomerFact(callable $validate): bool
+    {
+        try {
+            $validate();
+
+            return true;
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+            if ($error->getStatusCode() !== 409) {
+                throw $error;
+            }
+
+            return false;
+        }
     }
 
     private function finishAdmission(Tenant $tenant, User $user, TeamArea $area, array $snapshot, array $checkpoint): void
@@ -793,7 +860,7 @@ class EventPerformance
         return $facts;
     }
 
-    private function customerFacts(int $tenant, array $summary, string $event, int $commerce, MarketingProfile $profile, array $value, array $relations): array
+    private function customerFacts(int $tenant, array $summary, string $event, int $commerce, MarketingProfile $profile, array $value, array $relations, array $frame): array
     {
         $facts = [];
         $label = trim($profile->first_name.' '.$profile->last_name) ?: 'Customer';
@@ -803,6 +870,7 @@ class EventPerformance
                 || strtolower($purchase['currency'] ?? '') !== 'usd' || isset($seen[$purchase['purchase_id']])) {
                 continue;
             }
+            $this->customerDependencies->assertPurchase($frame, $event, $profile, $purchase, $summary['timezone'] ?? 'UTC');
             $seen[$purchase['purchase_id']] = true;
             $date = CarbonImmutable::parse($purchase['occurred_at'])->setTimezone($summary['timezone'] ?? 'UTC')->toDateString();
             $paid = isset($purchase['refunded_minor']) ? $purchase['amount_minor'] - $purchase['refunded_minor'] : null;
@@ -811,6 +879,7 @@ class EventPerformance
                 'net_sales_minor' => null, 'known_net_sales_minor' => 0, 'paid_total_minor' => $paid, 'sale_count' => 1, 'selling_days' => 0, 'complete' => false]);
         }
         if (! $facts && isset($relations['captured'])) {
+            $this->customerDependencies->assertCapture($frame, $event, $profile);
             $date = $summary['starts_on'] ?? null;
             if ($date) {
                 $facts[] = $this->fact($tenant, 'customer', 'capture:'.$event.':'.$profile->id, (string) $profile->id, $label,

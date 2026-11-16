@@ -21,9 +21,16 @@ class TeamConfirmedEventSalesController extends Controller
     {
         $tenant = $request->attributes->get('current_tenant');
         abort_unless($tenant instanceof Tenant, 403);
-        $input = $request->validate(['page' => 'sometimes|integer|min:1|max:100000']);
+        $input = $request->validate(['page' => 'sometimes|integer|min:1|max:100000', 'summary' => 'sometimes|boolean']);
         $event = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'kind' => 'event'])->findOrFail($id);
-        $report = app(EventCommerceReport::class)->forEvent($tenant, $request->user(), $event, true);
+        $summary = (bool) ($input['summary'] ?? false);
+        $service = app(EventCommerceReport::class);
+        $report = array_key_exists('summary', $input) ? $service->forEventSales($tenant, $request->user(), $event, ! $summary)
+            : $service->forEvent($tenant, $request->user(), $event, true);
+        if ($summary) {
+            return response()->json(['report' => $report, 'sales' => [], 'page' => 1, 'has_more' => false, 'details_loaded' => false])
+                ->header('Cache-Control', 'private, no-store');
+        }
         $store = app(PosStore::class);
         $ids = $report['sales']['receipt_ids'];
         unset($report['sales']['receipt_ids'], $report['sales']['square_order_ids']);
@@ -67,6 +74,6 @@ class TeamConfirmedEventSalesController extends Controller
             }
         }
 
-        return response()->json(['report' => $report, 'sales' => $rows, 'page' => $page, 'has_more' => count($index) > $page * 20])->header('Cache-Control', 'private, no-store');
+        return response()->json(['report' => $report, 'sales' => $rows, 'page' => $page, 'has_more' => count($index) > $page * 20, 'details_loaded' => true])->header('Cache-Control', 'private, no-store');
     }
 }

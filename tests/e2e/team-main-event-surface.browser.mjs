@@ -37,17 +37,26 @@ try {
         if (refresh.length !== 1) throw new Error(`Expected one Teams refresh timer: ${JSON.stringify([...timers.values()].map(String))}`); refresh[0]();
       };
     });
-    const errors = [], reads = []; page.on('pageerror', error => errors.push(error.message)); page.on('request', request => { const url = new URL(request.url()); if (url.pathname === '/team/operations/records') reads.push(url); });
+    const errors = [], reads = [], navigationReads = [];
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('request', request => {
+      const url = new URL(request.url());
+      if (url.pathname === '/team/operations/records') reads.push(url);
+      if (url.pathname === '/team/data' || url.pathname === '/team/operations/records' || /\/team\/areas\/[^/]+\/members$/.test(url.pathname)) navigationReads.push(url);
+    });
     await page.goto(`${origin}/teams?tenant=${fixture.tenant}`); await page.waitForFunction(() => window.TeamPremium?.context?.ready());
     const tabs = page.locator('[data-team-layout]'), target = 'Fictional seasonal makers and home goods weekend market';
     const openEvent = async () => { await page.locator('#tw-list .teams-event-board button.teams-task-card:visible, #tw-list .teams-event-list button.teams-task-card:visible, #tw-list .tops-event-calendar button.tops-calendar-session:visible').filter({ hasText: target }).first().click(); const detail = page.locator('#tops-detail'); await detail.getByRole('heading', { name: target }).waitFor(); await detail.getByRole('heading', { name: 'Schedule', exact: true }).waitFor();
       await detail.getByText('More event options', { exact: true }).waitFor();
+      assert.equal(await detail.locator('.event-detail-footer').getByRole('textbox', { name: 'Write an update', exact: true }).count(), 0, 'Opening an event leaves Updates collapsed');
+      await detail.locator('.event-detail-updates > summary').click();
+      await detail.locator('.event-detail-footer').getByRole('textbox', { name: 'Write an update', exact: true }).waitFor();
       await detail.locator('.event-updates-empty').filter({ hasText: 'Loading updates…' }).waitFor({ state: 'hidden' });
       assert.equal(await detail.locator('.event-glance').count(), 1, 'Event essentials use a card layout');
       assert.equal(await detail.locator('.tops-table').count(), 0, 'The tenant view has no raw property or source-ID table');
       assert.equal(await detail.locator('.dialog-status').count(), 0, 'Settled mount does not interrupt an open event with an editor warning');
       assert.ok(await detail.locator('#tops-detail-body').innerText().then(text => !/Source id|Source workspace|Fields revision|Observed at/.test(text)), 'Technical source metadata is absent');
-      assert.equal(await detail.locator('.event-detail-footer').getByRole('textbox', { name: 'Write an update', exact: true }).isVisible(), true, 'Update composer is visible on opening');
+      assert.equal(await detail.locator('.event-detail-footer').getByRole('textbox', { name: 'Write an update', exact: true }).isVisible(), true, 'Update composer is visible after expanding Updates');
       const width = await detail.evaluate(node => node.getBoundingClientRect().width); assert.ok(width > 1000, 'Desktop event details use the available width');
       await detail.locator('#tops-detail-body').evaluate(node => { node.scrollTop = node.scrollHeight; });
       const footer = await detail.locator('.event-detail-footer').boundingBox(); assert.ok(footer.y + footer.height <= 1000, 'Update composer stays inside the viewport while details scroll');
@@ -100,7 +109,10 @@ try {
     await page.getByRole('button', { name: 'Upcoming 30 days', exact: true }).click();
     await board.getByText('Upcoming event 204', { exact: true }).waitFor(); await page.locator('#tw-filter-toggle').click();
 
-    await tabs.filter({ hasText: 'List' }).click(); const list = page.locator('#tw-list .teams-event-list'); await list.waitFor(); await openEvent();
+    const beforeList = navigationReads.length;
+    await tabs.filter({ hasText: 'List' }).click(); const list = page.locator('#tw-list .teams-event-list'); await list.waitFor();
+    assert.equal(navigationReads.length, beforeList, 'List reuses the admitted Board dates without core, collection or member requests');
+    await openEvent();
     await list.getByText('Window event 00', { exact: true }).waitFor(); assert.equal(await list.locator('button.teams-task-card').count(), fixture.upcoming_event_count);
     const positions = await list.locator(':scope > *').evaluateAll(rows => rows.map(row => row.textContent));
     assert.ok(positions.findIndex(text => text.includes(target)) < positions.findIndex(text => text.includes('Window event 00')), 'Ongoing Nov 5 event sorts before later November events');
@@ -109,8 +121,29 @@ try {
     assert.equal(await due.locator('.teams-task-card-title').innerText(), 'Fictional Asana due marker', 'Event name leads without the repeated source date prefix');
     assert.equal(await due.getAttribute('title'), '11.09.26 - 11.10.26 Fictional Asana due marker', 'Original source title remains available');
     await page.screenshot({ path: join(evidence, `main-list-${name}.png`) });
+    // A pending wider-window admission can be superseded by a local layout
+    // switch. Its eventual failure must retire the reused cards too.
+    let finishLateFailure, announceLateRead;
+    const lateGate = new Promise(resolve => { finishLateFailure = resolve; });
+    const lateStarted = new Promise(resolve => { announceLateRead = resolve; });
+    const lateFailure = async route => { announceLateRead(); await lateGate; await route.fulfill({ status: 503, json: { message: 'Source admission unavailable' } }); };
+    await page.route('**/team/operations/records?**', lateFailure);
+    await tabs.filter({ hasText: 'Calendar' }).click(); await lateStarted;
+    await tabs.filter({ hasText: 'List' }).click(); await list.waitFor();
+    assert.equal(await list.locator('button.teams-task-card').count(), fixture.upcoming_event_count, 'A presentation switch can reuse an admitted window while a wider window is pending');
+    finishLateFailure();
+    await page.locator('#tops-content').getByText('This view is unavailable', { exact: true }).waitFor();
+    assert.equal(await page.locator('#tops-content .teams-task-card').count(), 0, 'A late failed admission retires reused cards even after its render ticket changed');
+    await page.unroute('**/team/operations/records?**', lateFailure);
+    await tabs.filter({ hasText: 'Board' }).click(); await board.waitFor();
     await tabs.filter({ hasText: 'Calendar' }).click(); const grid = page.locator('#tw-list .tops-event-calendar'); await grid.waitFor();
     await grid.locator(`[data-calendar-event="${fixture.event_id}"]`).first().waitFor(); await openEvent();
+    const beforeRearrangement = navigationReads.length;
+    for (const layout of ['List', 'Board', 'Calendar']) {
+      await tabs.filter({ hasText: layout }).click();
+      await page.locator(layout === 'Calendar' ? '#tw-list .tops-event-calendar' : layout === 'List' ? '#tw-list .teams-event-list' : '#tw-list .teams-event-board').waitFor();
+    }
+    assert.equal(navigationReads.length, beforeRearrangement, 'Returning among admitted List, Board and Calendar windows needs no collection, core or member reload');
     // A real pending refresh used to clear the entire calendar for the request's
     // duration. Exercise the timer, overlapping ticks and failure recovery.
     await page.waitForLoadState('networkidle');
@@ -172,7 +205,9 @@ try {
       await route.fulfill({ response, json: { ...body, items: body.items.slice(1), source_access_incomplete: true, collection_access_incomplete: false, partial: true, complete: false } });
     };
     await page.route('**/team/operations/records?**', partialFirstBatch);
-    await tabs.filter({ hasText: 'List' }).click(); await list.locator('button.teams-task-card').first().waitFor();
+    await tabs.filter({ hasText: 'List' }).click();
+    await tabs.filter({ hasText: 'List' }).focus(); await page.evaluate(() => window.__refreshTeams());
+    await page.locator('#tops-content:not([aria-busy])').waitFor(); await list.locator('button.teams-task-card').first().waitFor();
     assert.equal(await list.locator('button.teams-task-card').count(), fixture.upcoming_event_count - 1, 'One explicitly unavailable source record does not hide other authorized events');
     await page.locator('#tops-content').getByText('Some source records are unavailable. Only currently accessible events are shown.', { exact: true }).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Load more events', exact: true }).count(), 0, 'Partial source coverage is distinct from transport pagination');

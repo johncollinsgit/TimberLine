@@ -96,3 +96,46 @@ test('an original first-page read exactly at the offline delivery cutoff retains
     expect(app(EventSquareCoverage::class)->proven($this->tenant->id, $this->scope, 'America/New_York'))->toBeTrue();
     Http::assertNothingSent();
 })->with(['orders', 'payments']);
+
+test('long original receipt chains retain every proof and use two bounded MySQL reads', function () {
+    $middle = [];
+    foreach (['orders', 'payments'] as $kind) {
+        $parent = $this->roots[$kind];
+        foreach (range(1, 60) as $page) {
+            $parent = MarketingImportRun::create(['tenant_id' => $this->tenant->id, 'type' => 'square_'.$kind.'_sync', 'status' => 'partial', 'started_at' => '2026-01-11',
+                'summary' => [...$this->roots[$kind]->summary, 'resumed_from_run_id' => $parent->id, 'initial_cursor' => 'retained-page', 'checkpoint' => ['cursor' => 'remaining-page', 'errors' => 0]]]);
+            if ($page === 30) {
+                $middle[$kind] = $parent;
+            }
+        }
+        $head = MarketingImportRun::findOrFail($this->scope[$kind.'_run_id']);
+        $head->update(['summary' => [...$head->summary, 'resumed_from_run_id' => $parent->id]]);
+    }
+    \Illuminate\Support\Facades\DB::enableQueryLog();
+    \Illuminate\Support\Facades\DB::flushQueryLog();
+    $coverage = app(EventSquareCoverage::class);
+    expect($coverage->proven($this->tenant->id, $this->scope, 'America/New_York'))->toBeTrue();
+    $queries = collect(\Illuminate\Support\Facades\DB::getQueryLog());
+    \Illuminate\Support\Facades\DB::disableQueryLog();
+    if (\Illuminate\Support\Facades\DB::connection()->getDriverName() === 'mysql') {
+        expect($queries->filter(fn ($query) => str_contains($query['query'], 'WITH RECURSIVE square_proof_ancestry')))->toHaveCount(2);
+    }
+    $middle['payments']->update(['summary' => [...$middle['payments']->summary, 'checkpoint' => ['cursor' => 'remaining-page', 'errors' => 1]]]);
+    expect($coverage->proven($this->tenant->id, $this->scope, 'America/New_York'))->toBeFalse();
+    $middle['payments']->update(['summary' => [...$middle['payments']->summary, 'checkpoint' => ['cursor' => 'remaining-page', 'errors' => 0], 'resumed_from_run_id' => $this->scope['payments_run_id']]]);
+    expect($coverage->proven($this->tenant->id, $this->scope, 'America/New_York'))->toBeFalse();
+    Http::assertNothingSent();
+});
+
+test('batch ancestry never crosses a missing foreign or wrong-type parent', function (string $change) {
+    $root = $this->roots['payments'];
+    if ($change === 'missing') {
+        $root->delete();
+    } elseif ($change === 'foreign') {
+        $foreign = \App\Models\Tenant::create(['name' => 'Other fictional merchant', 'slug' => 'other-'.\Illuminate\Support\Str::random(12)]);
+        $root->update(['tenant_id' => $foreign->id]);
+    } else {
+        $root->update(['type' => 'square_orders_sync']);
+    }
+    expect(app(EventSquareCoverage::class)->proven($this->tenant->id, $this->scope, 'America/New_York'))->toBeFalse();
+})->with(['missing', 'foreign', 'wrong_type']);

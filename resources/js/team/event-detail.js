@@ -19,24 +19,27 @@ function field(title, value, hint) { const box = node('div', '', 'event-fact'); 
 function initials(name) { return name.split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]).join('').toUpperCase(); }
 function dateRange(start, end) { return start && end && start !== end ? date(start) + ' – ' + date(end) : date(start || end); }
 
-export function installEventDetail(body, { record, api, tenant, scope, current, actions = [] }) {
+export function installEventDetail(body, { record, api, tenant, scope, current, actions = [], mountUpdates = null }) {
   const draftKey = scope + '|' + record.id;
   const travelDraft = travelDrafts.get(draftKey) || { values: null, request: null };
   let active = true, payload, travelRequest = travelDraft.request;
   const valid = () => active && current();
   const summary = card('At a glance', 'event-glance'), facts = node('dl', '', 'event-facts'); summary.append(facts);
   const columns = node('div', '', 'event-detail-columns'), main = node('div', '', 'event-detail-main'), aside = node('aside', '', 'event-detail-aside');
-  const updates = node('section', '', 'event-detail-updates');
+  const updates = node('details', '', 'event-panel event-detail-updates'), updatesHost = node('div');
+  updates.append(node('summary', 'Updates'), updatesHost);
+  let mountedUpdates;
+  updates.ontoggle = () => { if (!valid()) return; if (updates.open) mountedUpdates ||= mountUpdates?.(updatesHost); else { mountedUpdates?.dispose(); mountedUpdates = null; } };
   const notes = node('details', '', 'event-panel event-detail-notes'); notes.append(node('summary', 'Event notes'), node('p', plain(record.data?.original_notes) || plain(record.data?.notes) || 'No event notes yet.', 'event-detail-note-text'));
   main.append(updates, notes); columns.append(main, aside); body.append(summary, columns);
   const commerce = installEventCommerce(main, { record, api, tenant, current: () => active && current() });
-  const salesHistory = installEventSalesHistory(main, { record, api, current: () => active && current() });
+  const salesHistory = installEventSalesHistory(main, { record, api, current: () => active && current(), lazy: true, allowed: false });
   const status = node('p', '', 'event-detail-status'); status.setAttribute('role', 'status'); body.prepend(status);
   body.addEventListener('event:detail-error', event => { if (valid()) status.textContent = event.detail?.message || 'This action could not be completed.'; });
 
   function draw(data) {
     if (!valid()) return;
-    payload = data; commerce.update(data);
+    payload = data; commerce.update(data); salesHistory.setAllowed(data.sales?.can_view === true);
     const dates = data.dates || {}, location = data.location || {}, hotel = data.hotel || {}, sales = data.sales || {};
     const team = node('div', '', 'event-people');
     for (const person of data.team_members || []) { const name = plain(person.name); if (!name) continue; const row = node('span', '', 'event-person'); const avatar = node('span', initials(name), 'event-avatar'); avatar.setAttribute('aria-hidden', 'true'); row.append(avatar, document.createTextNode(name)); team.append(row); }
@@ -50,7 +53,7 @@ export function installEventDetail(body, { record, api, tenant, scope, current, 
     if (hotel.address) stay.append(link(hotel.address, hotel.maps_url));
     if (!stay.childElementCount) stay.append(node('span', 'Not recorded'));
     facts.replaceChildren(field('Event dates', dateRange(dates.starts_on, dates.ends_on), dates.setup_dates?.length ? 'Setup · ' + dates.setup_dates.map(date).join(', ') : null), field('Location', venue), field('Team members', team));
-    if (sales.can_view) {
+    if (sales.can_view && sales.loaded !== false) {
       const linked = Boolean(data.commerce_event_id), recorded = sales.current?.status === 'recorded';
       const currentLabel = !linked && recorded ? 'Recorded sales comparison' : 'Current sales';
       const currentValue = linked ? 'See Sales below' : recorded ? currency(sales.current.amount_cents, sales.current.currency) : sales.current?.status === 'needs_event_link' ? 'Not linked' : sales.current?.status === 'needs_review' ? 'Needs review' : 'Not recorded';
@@ -101,13 +104,13 @@ export function installEventDetail(body, { record, api, tenant, scope, current, 
         travelRequest ||= { request_id: crypto.randomUUID(), expected_event_version: payload.event_version, expected_area_version: payload.area_version, reviewed: true, home_base: { address: inputs.home_base.value.trim(), timezone: inputs.timezone.value.trim() }, outbound_minutes: Number(inputs.outbound_minutes.value), return_minutes: Number(inputs.return_minutes.value) };
         travelDraft.request = travelRequest; travelDrafts.set(draftKey, travelDraft); for (const input of Object.values(inputs)) input.disabled = true;
         try { const result = await api('/events/' + record.id + '/travel', { method: 'POST', body: travelRequest }); travelDrafts.delete(draftKey); travelDraft.values = travelDraft.request = travelRequest = null; if (!valid()) return; draw({ ...payload, event_version: result.event_version, area_version: result.area_version, travel: result.travel }); }
-        catch (error) { if (valid()) { feedback.textContent = error.message || 'The travel plan could not be saved. Your entries are retained.'; if ([400, 401, 403, 404, 409, 419, 422].includes(error.status)) { travelDraft.request = travelRequest = null; for (const input of Object.values(inputs)) input.disabled = false; } save.disabled = false; if (error.status === 409) { save.disabled = true; feedback.append(action('Review latest plan', async () => { const fresh = await api('/events/' + record.id + '/essentials'); if (valid()) draw(fresh); })); } else if (travelRequest) save.textContent = 'Retry same save'; } }
+        catch (error) { if (valid()) { feedback.textContent = error.message || 'The travel plan could not be saved. Your entries are retained.'; if ([400, 401, 403, 404, 409, 419, 422].includes(error.status)) { travelDraft.request = travelRequest = null; for (const input of Object.values(inputs)) input.disabled = false; } save.disabled = false; if (error.status === 409) { save.disabled = true; feedback.append(action('Review latest plan', async () => { const fresh = await api('/events/' + record.id + '/essentials', { query: { include_sales: 0 } }); if (valid()) draw(fresh); })); } else if (travelRequest) save.textContent = 'Retry same save'; } }
       };
     }
     aside.append(box);
   }
   draw({ dates: { starts_on: record.starts_on, ends_on: record.ends_on }, location: { venue: record.data?.venue, address: record.data?.address }, team_members: record.data?.source_assignee_name ? [{ name: record.data.source_assignee_name }] : [], sales: { can_view: false } });
-  status.textContent = 'Loading sales and travel details…';
-  const load = async () => { try { const result = await api('/events/' + record.id + '/essentials'); if (valid()) { draw(result); status.textContent = result.notice || ''; } } catch (error) { if (valid()) { status.textContent = error.message || 'Some event details could not be loaded.'; status.append(action('Try again', load)); } } };
-  return { updatesHost: updates, ready: load(), dispose: () => { active = false; commerce.dispose(); salesHistory.dispose(); } };
+  status.textContent = 'Loading event details…';
+  const load = async () => { try { const result = await api('/events/' + record.id + '/essentials', { query: { include_sales: 0 } }); if (valid()) { draw(result); status.textContent = result.notice || ''; } } catch (error) { if (valid()) { status.textContent = error.message || 'Some event details could not be loaded.'; status.append(action('Try again', load)); } } };
+  return { updatesHost, ready: load(), dispose: () => { active = false; mountedUpdates?.dispose(); mountedUpdates = null; commerce.dispose(); salesHistory.dispose(); } };
 }

@@ -189,7 +189,15 @@ class OperationsProviders
         abort_if($c->fresh()?->retry_at?->isFuture(), 429, 'This source is cooling down. Wait before retrying.');
         $token = $this->token($c);
         try {
-            $r = Http::withToken($token)->acceptJson()->connectTimeout(5)->timeout(25)->send($method, $url, [strtoupper($method) === 'GET' ? 'query' : 'json' => $parameters]);
+            $request = Http::withToken($token)->acceptJson()->connectTimeout(5)->timeout(25);
+            if (strtoupper($method) === 'GET') {
+                // setHandler preserves Laravel's per-request fake/recorder and
+                // middleware stack. Sharing a whole client or handler option can
+                // bypass those boundaries and retain request-specific state.
+                $request->setHandler(app(OperationsReadTransport::class));
+                $request->withOptions(['cookies' => false]);
+            }
+            $r = $request->send($method, $url, [strtoupper($method) === 'GET' ? 'query' : 'json' => $parameters]);
         } catch (\Illuminate\Http\Client\ConnectionException) {
             throw new HttpException(503, 'Source unavailable. Reads may be retried; writes require reconciliation.');
         }

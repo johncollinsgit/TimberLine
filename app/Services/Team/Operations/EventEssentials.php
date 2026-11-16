@@ -16,7 +16,7 @@ class EventEssentials
 {
     public function __construct(private OperationsAccess $access, private OperationsWorkspace $workspace, private EventTravelPlan $travel) {}
 
-    public function read(Tenant $tenant, User $user, TeamOperationRecord $event): array
+    public function read(Tenant $tenant, User $user, TeamOperationRecord $event, bool $includeSales = true): array
     {
         abort_unless($event->kind === 'event', 404);
         $this->access->record($tenant, $user, $event);
@@ -40,9 +40,9 @@ class EventEssentials
         $starts = $schedule['overall_starts_on'] ?? $event->starts_on?->toDateString();
         $ends = $schedule['overall_ends_on'] ?? $event->ends_on?->toDateString();
         $comparisonDate = $schedule['selling_dates'][0] ?? $event->starts_on?->toDateString() ?? $starts;
-        $sales = ['can_view' => $admin, 'current' => ['amount_cents' => null, 'currency' => 'USD', 'status' => $admin ? 'needs_event_link' : 'restricted', 'label' => 'Current sales'],
-            'previous' => ['amount_cents' => null, 'currency' => 'USD', 'year' => $comparisonDate ? ((int) substr($comparisonDate, 0, 4) - 1) : null, 'status' => $admin ? 'not_recorded' : 'restricted', 'label' => 'Previous year sales']];
-        if ($admin) {
+        $sales = ['can_view' => $admin, 'loaded' => $admin && $includeSales, 'current' => ['amount_cents' => null, 'currency' => 'USD', 'status' => $admin ? ($includeSales ? 'needs_event_link' : 'not_loaded') : 'restricted', 'label' => 'Current sales'],
+            'previous' => ['amount_cents' => null, 'currency' => 'USD', 'year' => $comparisonDate ? ((int) substr($comparisonDate, 0, 4) - 1) : null, 'status' => $admin ? ($includeSales ? 'not_recorded' : 'not_loaded') : 'restricted', 'label' => 'Previous year sales']];
+        if ($admin && $includeSales) {
             $history = app(EventIntelligence::class)->detail($tenant, $user, $event);
             $previous = collect($history['history'])->filter(fn ($row) => substr($row['starts_on'] ?? '', 0, 4) === (string) $sales['previous']['year'])->values();
             if ($previous->count() === 1 && ($previous[0]['finance']['complete'] ?? false)) {

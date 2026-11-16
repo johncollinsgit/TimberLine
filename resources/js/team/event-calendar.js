@@ -3,6 +3,7 @@ const phases = new Set(['setup', 'selling', 'teardown', 'travel']);
 const timezones = new Map();
 const viewState = new Map(); // Presentation choices only, isolated to this page and tenant/area.
 const palette = ['#315b4a', '#4c64a0', '#985331', '#795d99', '#266f76', '#776622'];
+const defaultEventColor = '#315b4a';
 const node = (tag, text = '', cls = '') => { const element = document.createElement(tag); element.textContent = text; element.className = cls; return element; };
 const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T12:00:00Z')) && new Date(value + 'T12:00:00Z').toISOString().slice(0, 10) === value;
 const when = value => validDate(value) ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value + 'T12:00:00Z')) : 'Date unknown';
@@ -40,7 +41,21 @@ export function eventCalendarWindow(scope) {
 const people = item => (Array.isArray(item.calendar_people) ? item.calendar_people : []).filter(person => typeof person?.id === 'string' && /^(native:[1-9]\d*|asana:\d+:\d+)$/.test(person.id));
 const personName = person => person.name || 'Recorded ' + (person.provider || 'source') + ' identity ' + person.id;
 const stableColor = key => { let hash = 0; for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0; return palette[hash % palette.length]; };
-const eventColor = (item, tenant) => /^#[a-f\d]{6}$/i.test(calendar(item).calendar_color || '') ? calendar(item).calendar_color : stableColor(tenant + '|event|' + item.id);
+const eventColor = item => /^#[a-f\d]{6}$/i.test(calendar(item).calendar_color || '') ? calendar(item).calendar_color : defaultEventColor;
+const accepted = item => {
+  const data = item.data || {}, value = Object.hasOwn(data, 'calendar_acceptance_status') ? data.calendar_acceptance_status : item.source ? data.reviewed_fields?.acceptance_status : data.acceptance_status;
+  if (typeof value !== 'string') return false;
+  const status = value.trim().replace(/\s+/g, ' ').toLowerCase();
+  if (['yes', 'accepted', 'confirmed'].includes(status)) return true;
+  // Reviewed source wording stays intact; only these observed affirmative forms affect presentation.
+  if (!item.source?.connection_id) return false;
+  return /^yes\s*,\s*accepted(?:\s+on\s*\d+(?:[./-]\d+)+)?$/.test(status)
+    || /^yes\s*\(\s*via\s+email\s*(?:on\s*)?\d+(?:[./-]\d+)+\s*\)$/.test(status);
+};
+const pastEvent = (item, timezone) => {
+  const schedule = calendar(item), end = schedule.schedule_complete ? schedule.overall_ends_on || sessions(item).map(session => session.date).filter(validDate).sort().at(-1) : schedule.legacy_ends_on || item.ends_on;
+  return validDate(end) && end < eventToday(schedule.timezone || timezone);
+};
 const evidence = (item, session) => {
   if (calendar(item).provenance?.source_changed_since_review) return 'Source changed · review evidence';
   const status = calendar(item).session_evidence?.find(row => row.session_id === session.id)?.status;
@@ -65,7 +80,7 @@ export function renderScheduleSummary(parent, item, tenant) {
 }
 
 export function renderEventCalendar(host, items, coverage, tenant, open, scope = tenant, onWindowChange) {
-  const localToday = eventToday(timezones.get(scope));
+  let localToday = eventToday(timezones.get(scope));
   const previous = viewState.get(scope);
   let mode = previous?.mode || 'month', anchor = previous?.anchor || localToday, colorMode = previous?.colorMode || 'event';
   const controls = node('div', '', 'tops-event-calendar-controls'), modes = node('div', '', 'tops-calendar-views'), month = node('input'), day = node('input'), colors = node('select');
@@ -79,7 +94,13 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
   const filters = node('div', '', 'tops-calendar-filters'), dateField = node('div'), dateLabel = node('span'), colorField = node('label');
   dateField.append(dateLabel, month, day); colorField.append(node('span', 'Color by'), colors); filters.append(dateField, colorField);
   const periods = node('div', '', 'tops-calendar-periods'); periods.setAttribute('role', 'group'); periods.setAttribute('aria-label', 'Calendar period');
-  periods.append(button('Previous period', () => shift(-1)), button('Next period', () => shift(1))); controls.append(modes, filters, periods); host.append(controls);
+  const todayButton = button('Today', () => { anchor = eventToday(timezones.get(scope)); month.value = anchor.slice(0, 7); day.value = anchor; changeWindow(); });
+  const previousPeriod = button('Previous', () => shift(-1)), nextPeriod = button('Next', () => shift(1)); previousPeriod.setAttribute('aria-label', 'Previous period'); nextPeriod.setAttribute('aria-label', 'Next period');
+  periods.append(previousPeriod, todayButton, nextPeriod); controls.append(modes, filters, periods); host.append(controls);
+  const todayContext = node('p', '', 'tops-calendar-today-context'); host.append(todayContext);
+  const legend = node('ul', '', 'tops-calendar-booking-legend'); legend.setAttribute('aria-label', 'Event acceptance');
+  for (const [state, text] of [['unconfirmed', 'Acceptance unconfirmed'], ['confirmed', 'Accepted'], ['past', 'Accepted · past']]) { const entry = node('li'), swatch = node('span', '', 'tops-calendar-booking-swatch is-' + state); swatch.setAttribute('aria-hidden', 'true'); entry.append(swatch, document.createTextNode(text)); legend.append(entry); }
+  host.append(legend);
   host.append(node('p', 'Loaded results · ' + items.length + ' event records' + (coverage.has_more ? ' · more pages remain' : '') + (coverage.partial || coverage.complete === false ? ' · source coverage partial or unconfirmed' : ''), 'tops-calendar-scope'));
   if (coverage.calendar_window) host.append(node('p', when(coverage.calendar_window.from) + ' → ' + when(coverage.calendar_window.to) + (coverage.calendar_window.scan_limited ? ' · Load more events to continue checking retained dates.' : ' · Unspecified dates remain unknown.'), 'tops-calendar-scope'));
   const guide = node('details', '', 'tops-calendar-guide'); guide.append(node('summary', 'Calendar scope & source notes'), node('p', 'Explicit sessions show reviewed activity; gap days stay empty. Setup is lighter. Dashed task dates and range-start markers identify unconfirmed dates; they do not establish event activity. Other pages and unavailable source feeds are not included.'), node('p', 'Team member colors identify recorded event assignments, not shifts or attendance at each session. Event times use the displayed local timezone.')); host.append(guide);
@@ -87,7 +108,6 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
   if (host.closest('#team-operations')?.classList.contains('tops-inline-calendar')) {
     const compact = node('nav', '', 'tops-inline-calendar-nav'); compact.setAttribute('aria-label', 'Event calendar navigation');
     const previousButton = button('‹', () => shift(-1)); previousButton.setAttribute('aria-label', 'Previous period');
-    const todayButton = button('Today', () => { anchor = localToday; month.value = anchor.slice(0, 7); day.value = anchor; changeWindow(); });
     const nextButton = button('›', () => shift(1)); nextButton.setAttribute('aria-label', 'Next period');
     document.getElementById('tops-inline-options')?.remove();
     const settings = node('section', '', 'tops-inline-calendar-options'); settings.id = 'tops-inline-options'; settings.append(node('h3', 'Event calendar'));
@@ -110,11 +130,19 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
     anchor = value.toISOString().slice(0, 10); month.value = anchor.slice(0, 7); day.value = anchor; changeWindow();
   }
   function changeWindow() { paint(); onWindowChange?.(); }
+  function booking(chip, item) {
+    const confirmed = accepted(item), past = confirmed && pastEvent(item, timezones.get(scope));
+    chip.classList.add(confirmed ? 'is-booking-confirmed' : 'is-booking-unconfirmed');
+    chip.classList.toggle('is-past-event', past); chip.dataset.calendarBooking = confirmed ? 'confirmed' : 'unconfirmed';
+    chip.style.setProperty('--event-color', eventColor(item));
+    return confirmed ? 'Accepted event' + (past ? ' · Past event' : '') : 'Acceptance unconfirmed';
+  }
   function card(item, session) {
     const crew = people(item), chip = button('', () => open(item)); chip.className = 'tops-calendar-session is-' + session.kind;
-    const color = colorMode === 'person' && crew.length ? stableColor(tenant + '|' + (crew[0].provider || '') + '|' + crew[0].id) : eventColor(item, tenant);
+    const bookingLabel = booking(chip, item);
+    const color = colorMode === 'person' && crew.length ? stableColor(tenant + '|' + (crew[0].provider || '') + '|' + crew[0].id) : eventColor(item);
     chip.style.setProperty('--event-color', color); chip.dataset.calendarEvent = item.id; chip.dataset.calendarSession = session.id || ''; chip.dataset.calendarKind = session.kind;
-    const description = [item.title, title(session.kind), hours(session), calendar(item).timezone || 'Timezone unknown', session.label, !calendar(item).schedule_complete ? 'Partial schedule' : '', calendar(item).provenance?.source_changed_since_review ? 'Source changed; review needed' : '', ...(colorMode === 'person' ? (crew.length ? crew.map(personName) : ['No recorded team member']) : [])].filter(Boolean).join(' · ');
+    const description = [item.title, bookingLabel, title(session.kind), hours(session), calendar(item).timezone || 'Timezone unknown', session.label, !calendar(item).schedule_complete ? 'Partial schedule' : '', calendar(item).provenance?.source_changed_since_review ? 'Source changed; review needed' : '', ...(colorMode === 'person' ? (crew.length ? crew.map(personName) : ['No recorded team member']) : [])].filter(Boolean).join(' · ');
     chip.setAttribute('aria-label', description); chip.title = description;
     if (calendar(item).provenance?.source_changed_since_review) chip.dataset.calendarNeedsReview = 'true';
     const timezone = calendar(item).timezone, zone = node('small', timezone ? timezone.split('/').at(-1).replaceAll('_', ' ') + ' · local' : 'Timezone unknown');
@@ -132,6 +160,11 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
     return chip;
   }
   function paint() {
+    localToday = eventToday(timezones.get(scope));
+    const timezone = timezones.get(scope);
+    todayContext.textContent = 'Today · ' + when(localToday) + (timezone ? ' · ' + timezone.split('/').at(-1).replaceAll('_', ' ') : '');
+    if (timezone) todayContext.title = timezone;
+    todayButton.title = 'Go to today · ' + when(localToday);
     colors.value = colorMode;
     if (validDate(anchor)) viewState.set(scope, { mode, anchor, colorMode });
     grid.replaceChildren(); grid.classList.toggle('is-month', mode === 'month'); grid.style.setProperty('--calendar-columns', mode === 'month' ? '7' : mode);
@@ -149,18 +182,20 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
       keys = Array.from({ length: Number(mode) }, (_, i) => { const value = new Date(anchor + 'T12:00:00Z'); value.setUTCDate(value.getUTCDate() + i); return value.toISOString().slice(0, 10); });
     }
     for (const key of keys) {
-      const cell = node('section', '', 'tops-day'), heading = node('time', mode === 'month' ? key.slice(-2).replace(/^0/, '') : new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(key + 'T12:00:00Z')), 'tops-calendar-date'); heading.dateTime = key; cell.dataset.calendarDate = key; cell.setAttribute('aria-label', when(key)); cell.append(heading);
+      const cell = node('section', '', 'tops-day'), heading = node('time', mode === 'month' ? key.slice(-2).replace(/^0/, '') : new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(key + 'T12:00:00Z')), 'tops-calendar-date'); heading.dateTime = key; cell.dataset.calendarDate = key; cell.setAttribute('aria-label', when(key));
+      if (key === localToday) { cell.classList.add('is-today'); heading.setAttribute('aria-current', 'date'); heading.append(node('span', 'Today', 'tops-calendar-today-label')); }
+      cell.append(heading);
       for (const item of items) {
         for (const session of sessions(item)) if (validDate(session.date) && session.date === key) cell.append(card(item, session));
         if (validDate(dueOn(item)) && dueOn(item) === key && !sessions(item).some(session => session.date === key)) {
           const marker = button('', () => open(item)); marker.className = 'tops-calendar-session is-source-due'; marker.dataset.calendarEvent = item.id; marker.dataset.calendarKind = 'source_due';
-          marker.setAttribute('aria-label', item.title + ' · Asana due date · Task date, not a confirmed event day'); marker.title = marker.getAttribute('aria-label');
+          marker.setAttribute('aria-label', item.title + ' · ' + booking(marker, item) + ' · Asana due date · Task date, not a confirmed event day'); marker.title = marker.getAttribute('aria-label');
           marker.append(node('span', 'Asana due date', 'tops-calendar-phase'), node('strong', item.title), node('span', 'Task date · not a confirmed event day', 'tops-calendar-status')); cell.append(marker);
         }
         const [start, end] = legacyBounds(item);
         if (dueOn(item) !== start && !sessions(item).some(session => validDate(session.date)) && validDate(start) && start === key) {
           const marker = button('', () => open(item)); marker.className = 'tops-calendar-session is-range-anchor'; marker.dataset.calendarEvent = item.id; marker.dataset.calendarKind = 'range_anchor';
-          marker.setAttribute('aria-label', item.title + ' · Unconfirmed range · ' + when(start) + (validDate(end) && end !== start ? ' – ' + when(end) : '')); marker.title = marker.getAttribute('aria-label');
+          marker.setAttribute('aria-label', item.title + ' · ' + booking(marker, item) + ' · Unconfirmed range · ' + when(start) + (validDate(end) && end !== start ? ' – ' + when(end) : '')); marker.title = marker.getAttribute('aria-label');
           marker.append(node('span', 'Unconfirmed range', 'tops-calendar-phase'), node('strong', item.title), node('span', when(start) + (validDate(end) && end !== start ? ' – ' + when(end) : ''), 'tops-calendar-status')); cell.append(marker);
         }
       }

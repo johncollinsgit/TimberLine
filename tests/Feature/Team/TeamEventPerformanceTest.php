@@ -7,6 +7,7 @@ use App\Models\MarketingProfileLink;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
 use App\Models\TeamOperationRecord;
+use App\Services\Marketing\CanonicalMarketingProfileResolver;
 use App\Services\Marketing\CustomerEventValueService;
 use App\Services\Marketing\EventCustomerCohort;
 use App\Services\Team\Studio\EventCommerceReport;
@@ -32,6 +33,7 @@ beforeEach(function () {
     app()->instance(EventSalesHistory::class, $history);
     $commerce = Mockery::mock(EventCommerceReport::class);
     $commerce->shouldReceive('commerceId')->andReturn(null)->byDefault();
+    $commerce->shouldReceive('commerceIds')->andReturnUsing(fn ($events) => collect($events)->mapWithKeys(fn ($event) => [$event->id => $commerce->commerceId($event)])->all());
     app()->instance(EventCommerceReport::class, $commerce);
     $this->url = '/team/event-performance?tenant='.$this->tenant->slug.'&area='.$this->area->id.'&from=2025-11-01&to=2025-11-30';
 });
@@ -48,6 +50,43 @@ function performanceEvent($test, string $title = 'Fictional fair', string $start
         'daily' => array_map(fn ($n) => ['date' => Carbon\CarbonImmutable::parse($start)->addDays($n)->toDateString(), 'net_sales_minor' => ($n + 1) * 1000, 'sale_count' => $n + 1, 'complete' => true], [0, 1, 2])], $changes);
 
     return $event;
+}
+
+function performanceCustomerOriginal($test, TeamOperationRecord $event, MarketingProfile $profile, string $id, int $amount = 1070, int $refund = 0, int $commerce = 123): MarketingProfileLink
+{
+    app()->forgetInstance(EventCommerceReport::class);
+    app()->forgetInstance(EventCustomerCohort::class);
+    app()->forgetInstance(CustomerEventValueService::class);
+    $stock = app(\App\Services\Inventory\StockLedger::class);
+    if (! $stock->rows('event_links', $test->tenant->id)->where('event_id', $commerce)->exists()) {
+        $stock->rows('event_links', $test->tenant->id)->insert(['tenant_id' => $test->tenant->id, 'event_id' => $commerce,
+            'provider' => 'manual', 'external_id' => 'performance-customer-'.$commerce, 'reviewed_by' => $test->owner->id,
+            'metadata' => json_encode(['name' => $event->title, 'timezone' => 'America/New_York',
+                'start_on' => $event->starts_on->toDateString(), 'end_on' => $event->ends_on->toDateString()]), 'created_at' => now(), 'updated_at' => now()]);
+    }
+    $binding = ['environment' => 'production', 'merchant_id' => 'performance-merchant', 'location_ids' => ['performance-location'],
+        'connection_id' => 'performance-reader', 'runtime_id' => 'performance_fixture', 'connection_generation' => 1, 'source_purpose' => 'customer_history'];
+    SquareOrder::create(['tenant_id' => $test->tenant->id, 'square_order_id' => $id, 'location_id' => 'performance-location',
+        'state' => 'COMPLETED', 'closed_at' => '2025-11-07T15:00:00Z', 'total_money_amount' => $amount, 'total_money_currency' => 'USD',
+        'raw_payload' => ['id' => $id, 'state' => 'COMPLETED', 'location_id' => 'performance-location', '_source_binding' => $binding,
+            'total_money' => ['amount' => $amount, 'currency' => 'USD'], 'total_tax_money' => ['amount' => 0, 'currency' => 'USD'],
+            'total_tip_money' => ['amount' => 0, 'currency' => 'USD'], 'net_amounts' => ['total_money' => ['amount' => $amount - $refund, 'currency' => 'USD'],
+                'tax_money' => ['amount' => 0, 'currency' => 'USD'], 'tip_money' => ['amount' => 0, 'currency' => 'USD']]]]);
+    SquarePayment::create(['tenant_id' => $test->tenant->id, 'square_payment_id' => 'payment-'.$id, 'square_order_id' => $id,
+        'location_id' => 'performance-location', 'status' => 'COMPLETED', 'amount_money' => $amount, 'currency' => 'USD',
+        'source_type' => 'CARD', 'created_at_source' => '2025-11-07T15:00:00Z', 'raw_payload' => ['id' => 'payment-'.$id, 'order_id' => $id,
+            'location_id' => 'performance-location', 'status' => 'COMPLETED', '_source_binding' => $binding,
+            'amount_money' => ['amount' => $amount, 'currency' => 'USD'], 'total_money' => ['amount' => $amount, 'currency' => 'USD'],
+            'refunded_money' => ['amount' => $refund, 'currency' => 'USD'], 'card_details' => ['entry_method' => 'CONTACTLESS']]]);
+    $link = MarketingProfileLink::create(['tenant_id' => $test->tenant->id, 'marketing_profile_id' => $profile->id,
+        'source_type' => 'square_order', 'source_id' => $id, 'source_meta' => []]);
+    $data = $event->data;
+    $data['_teams_enrichment']['commerce_event'] = ['id' => $commerce, 'reviewed_by' => (string) $test->owner->id, 'reviewed_at' => now()->toIso8601String()];
+    $data['_teams_enrichment']['square_orders'] = ['ids' => [...($data['_teams_enrichment']['square_orders']['ids'] ?? []), $id],
+        'reviewed_by' => $test->owner->id, 'reviewed_at' => now()->toIso8601String(), 'source_binding' => $binding];
+    $event->update(['data' => $data, 'version' => $event->version + 1]);
+
+    return $link;
 }
 
 test('preparation queues an asynchronous projection without building history on the request', function () {
@@ -177,17 +216,9 @@ test('source changes retain a labelled stale generation and refresh atomically',
 test('customer monetary and count summaries cover the whole canonical cohort independently of the displayed page', function () {
     $event = performanceEvent($this);
     $profiles = collect(range(1, 251))->map(fn ($n) => MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Buyer '.$n]));
-    $commerce = Mockery::mock(EventCommerceReport::class);
-    $commerce->shouldReceive('commerceId')->andReturn(123);
-    app()->instance(EventCommerceReport::class, $commerce);
-    $cohort = Mockery::mock(EventCustomerCohort::class);
-    $cohort->shouldReceive('read')->andReturn(['profile_ids' => $profiles->pluck('id')->all(), 'relations' => [], 'review_items' => []]);
-    app()->instance(EventCustomerCohort::class, $cohort);
-    $values = Mockery::mock(CustomerEventValueService::class);
-    $values->shouldReceive('forProfile')->andReturnUsing(fn ($profile) => ['purchase_journey' => [['purchase_id' => 'original:'.$profile->id,
-        'confirmed_purchase' => true, 'purchase_event' => ['event' => ['id' => 123], 'basis' => 'original_pay_receipt_stock_pool'], 'currency' => 'usd', 'amount_minor' => 1070,
-        'refunded_minor' => 0, 'occurred_at' => '2025-11-07T15:00:00Z']]]);
-    app()->instance(CustomerEventValueService::class, $values);
+    foreach ($profiles as $profile) {
+        performanceCustomerOriginal($this, $event, $profile, 'original-'.$profile->id);
+    }
     app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
     $first = $this->actingAs($this->owner)->getJson($this->url.'&group_by=customer')->assertOk()->assertJsonCount(50, 'rows')->assertJsonPath('total_rows', 251)->json();
     $last = $this->getJson($this->url.'&group_by=customer&page=6')->assertOk()->assertJsonCount(1, 'rows')->json();
@@ -199,28 +230,16 @@ test('customer monetary and count summaries cover the whole canonical cohort ind
 });
 
 test('highest customer spending sorts whole customer totals after refunds while net sales remain unknown', function () {
-    performanceEvent($this);
+    $event = performanceEvent($this);
     $low = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Mostly refunded']);
     $high = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Highest spender']);
     $middle = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Two purchases']);
-    $commerce = Mockery::mock(EventCommerceReport::class);
-    $commerce->shouldReceive('commerceId')->andReturn(123);
-    app()->instance(EventCommerceReport::class, $commerce);
-    $cohort = Mockery::mock(EventCustomerCohort::class);
-    $cohort->shouldReceive('read')->andReturn(['profile_ids' => [$low->id, $high->id, $middle->id], 'relations' => [], 'review_items' => []]);
-    app()->instance(EventCustomerCohort::class, $cohort);
     $amounts = [$low->id => [[10000, 9000]], $high->id => [[7000, 0]], $middle->id => [[3000, 0], [2000, 0]]];
-    $values = Mockery::mock(CustomerEventValueService::class);
-    $values->shouldReceive('forProfile')->andReturnUsing(function ($profile) use ($amounts) {
-        $journey = [];
+    foreach ([$low, $high, $middle] as $profile) {
         foreach ($amounts[$profile->id] as $index => [$amount, $refund]) {
-            $journey[] = ['purchase_id' => 'sorting:'.$profile->id.':'.$index, 'confirmed_purchase' => true,
-                'purchase_event' => ['event' => ['id' => 123]], 'currency' => 'usd', 'amount_minor' => $amount, 'refunded_minor' => $refund, 'occurred_at' => '2025-11-07T15:00:00Z'];
+            performanceCustomerOriginal($this, $event, $profile, 'sorting-'.$profile->id.'-'.$index, $amount, $refund);
         }
-
-        return ['purchase_journey' => $journey];
-    });
-    app()->instance(CustomerEventValueService::class, $values);
+    }
     app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
     $rows = $this->actingAs($this->owner)->getJson($this->url.'&group_by=customer&sort=net_sales')->assertOk()->json('rows');
     expect(array_column($rows, 'id'))->toBe(array_map('strval', [$high->id, $middle->id, $low->id]))
@@ -234,6 +253,7 @@ test('concurrent identity imports withhold customer facts without blocking uncha
     $profile = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Before review']);
     $commerce = Mockery::mock(EventCommerceReport::class);
     $commerce->shouldReceive('commerceId')->andReturn(123);
+    $commerce->shouldReceive('commerceIds')->andReturnUsing(fn ($events) => collect($events)->mapWithKeys(fn ($event) => [$event->id => $commerce->commerceId($event)])->all());
     app()->instance(EventCommerceReport::class, $commerce);
     $cohort = Mockery::mock(EventCustomerCohort::class);
     $cohort->shouldReceive('read')->andReturn(['profile_ids' => [$profile->id], 'relations' => [], 'review_items' => []]);
@@ -254,10 +274,92 @@ test('concurrent identity imports withhold customer facts without blocking uncha
     $this->getJson($this->url.'&group_by=customer')->assertOk()->assertJsonPath('status', 'preparing')->assertJsonCount(0, 'rows');
 });
 
+test('an unrelated customer import during original fact assembly preserves the private event projection', function () {
+    $event = performanceEvent($this);
+    $profile = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Actual event buyer']);
+    performanceCustomerOriginal($this, $event, $profile, 'unchanged-event-original');
+    $value = app(CustomerEventValueService::class)->forProfile($profile, $this->tenant->id, true);
+    expect($value['purchase_journey'])->toHaveCount(1);
+    $calls = 0;
+    $values = Mockery::mock(CustomerEventValueService::class);
+    $values->shouldReceive('forProfile')->andReturnUsing(function ($readProfile) use ($profile, $value, &$calls) {
+        expect($readProfile->id)->toBe($profile->id);
+        $unrelated = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Concurrent unrelated import']);
+        MarketingProfileLink::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $unrelated->id,
+            'source_type' => 'square_customer', 'source_id' => 'unrelated-during-original-read-'.($calls + 1), 'source_meta' => ['retained' => ['provider_import' => true]]]);
+        $calls++;
+
+        return $value;
+    });
+    app()->instance(CustomerEventValueService::class, $values);
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    $snapshot = TeamOperationRecord::where('kind', 'performance_snapshot')->firstOrFail();
+    expect($calls)->toBeGreaterThanOrEqual(1)->and($snapshot->data['customer_access'])->toBeTrue()
+        ->and($snapshot->data['customer_scope'])->toBeArray()
+        ->and($snapshot->getRawOriginal('data'))->not->toContain('customer_scope')->not->toContain('Actual event buyer')->not->toContain('unchanged-event-original')
+        ->and(DB::table(EventPerformance::TABLE)->where('kind', 'customer')->count())->toBe(1);
+    $this->actingAs($this->owner)->getJson($this->url.'&group_by=customer')->assertOk()->assertJsonPath('status', 'ready')
+        ->assertJsonPath('summary.net_sales_minor', 6000)->assertJsonPath('summary.customer_count', 1)
+        ->assertJsonPath('summary.customer_purchase_count', 1)->assertJsonPath('summary.paid_total_minor', 1070)
+        ->assertJsonPath('rows.0.label', 'Actual event buyer');
+});
+
+test('an untrusted cached customer journey cannot publish mismatched original facts', function (string $change) {
+    $event = performanceEvent($this);
+    $profile = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'First original buyer']);
+    $other = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Second original buyer']);
+    performanceCustomerOriginal($this, $event, $profile, 'first-authoritative-original');
+    performanceCustomerOriginal($this, $event, $other, 'second-authoritative-original');
+    $valuesService = app(CustomerEventValueService::class);
+    $value = $valuesService->forProfile($change === 'customer' ? $other : $profile, $this->tenant->id, true);
+    expect($value['purchase_journey'])->toHaveCount(1);
+    if ($change === 'source') {
+        $value['purchase_journey'][0]['purchase_id'] = 'square_order:synthetic-unowned-original';
+        $value['purchase_journey'][0]['source_id'] = 'synthetic-unowned-original';
+    } elseif ($change === 'money') {
+        $value['purchase_journey'][0]['amount_minor'] += 1000;
+    }
+    $cohortValue = app(EventCustomerCohort::class)->read($this->tenant->id, 123, $event);
+    expect($cohortValue['profile_ids'])->toContain($profile->id, $other->id);
+    $cohortValue['profile_ids'] = [$profile->id];
+    $cohort = Mockery::mock(EventCustomerCohort::class);
+    $cohort->shouldReceive('read')->andReturn($cohortValue);
+    app()->instance(EventCustomerCohort::class, $cohort);
+    $values = Mockery::mock(CustomerEventValueService::class);
+    $values->shouldReceive('forProfile')->once()->withArgs(fn ($readProfile) => $readProfile->id === $profile->id)->andReturn($value);
+    app()->instance(CustomerEventValueService::class, $values);
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    $snapshot = TeamOperationRecord::where('kind', 'performance_snapshot')->firstOrFail();
+    expect($snapshot->data['customer_access'])->toBeFalse()
+        ->and(DB::table(EventPerformance::TABLE)->where('kind', 'customer')->count())->toBe(0)
+        ->and(DB::table(EventPerformance::TABLE)->where('kind', 'event')->count())->toBe(1);
+    $this->actingAs($this->owner)->getJson($this->url)->assertOk()->assertJsonPath('summary.net_sales_minor', 6000)
+        ->assertJsonPath('summary.customer_count', null)->assertJsonPath('summary.paid_total_minor', null)
+        ->assertDontSee('First original buyer')->assertDontSee('Second original buyer');
+    $this->getJson($this->url.'&group_by=customer')->assertOk()->assertJsonPath('status', 'preparing')->assertJsonCount(0, 'rows');
+})->with(['source', 'customer', 'money']);
+
+test('a same-id intermediate emitted customer label cannot reuse a matching private frame', function () {
+    $event = performanceEvent($this);
+    $profile = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Witnessed original name']);
+    performanceCustomerOriginal($this, $event, $profile, 'label-authoritative-original');
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    $intermediate = $profile->replicate();
+    $intermediate->id = $profile->id;
+    $intermediate->first_name = 'Intermediate emitted name';
+    $resolver = Mockery::mock(CanonicalMarketingProfileResolver::class)->makePartial();
+    $resolver->shouldReceive('byId')->andReturnUsing(fn ($tenant, $id) => (int) $id === $profile->id ? $intermediate : null);
+    app()->instance(CanonicalMarketingProfileResolver::class, $resolver);
+    expect($profile->fresh()->first_name)->toBe('Witnessed original name');
+    $this->actingAs($this->owner)->getJson($this->url.'&group_by=customer')->assertConflict()
+        ->assertDontSee('Witnessed original name')->assertDontSee('Intermediate emitted name');
+});
+
 test('an unavailable canonical cohort stays preparing rather than presenting an empty customer total', function () {
     performanceEvent($this);
     $commerce = Mockery::mock(EventCommerceReport::class);
     $commerce->shouldReceive('commerceId')->andReturn(123);
+    $commerce->shouldReceive('commerceIds')->andReturnUsing(fn ($events) => collect($events)->mapWithKeys(fn ($event) => [$event->id => $commerce->commerceId($event)])->all());
     app()->instance(EventCommerceReport::class, $commerce);
     $cohort = Mockery::mock(EventCustomerCohort::class);
     $cohort->shouldReceive('read')->andReturn(['profile_ids' => [999999], 'relations' => [], 'review_items' => []]);
@@ -377,23 +479,9 @@ function scopedPerformanceAccess(?Closure $afterRecord = null): \App\Services\Te
 function scopedPerformanceCustomers($test, array $events): MarketingProfile
 {
     $profile = MarketingProfile::create(['tenant_id' => $test->tenant->id, 'first_name' => 'Target buyer']);
-    $ids = [];
-    $journey = [];
     foreach ($events as $index => $event) {
-        $ids[$event->id] = 100 + $index;
-        $journey[] = ['purchase_id' => 'cohort-'.$index, 'confirmed_purchase' => true,
-            'purchase_event' => ['event' => ['id' => 100 + $index]], 'currency' => 'usd',
-            'amount_minor' => 1070, 'refunded_minor' => 0, 'occurred_at' => '2025-11-07T15:00:00Z'];
+        performanceCustomerOriginal($test, $event, $profile, 'cohort-'.$index, 1070, 0, 100 + $index);
     }
-    $commerce = Mockery::mock(EventCommerceReport::class);
-    $commerce->shouldReceive('commerceId')->andReturnUsing(fn ($event) => $ids[$event->id]);
-    app()->instance(EventCommerceReport::class, $commerce);
-    $cohort = Mockery::mock(EventCustomerCohort::class);
-    $cohort->shouldReceive('read')->andReturn(['profile_ids' => [$profile->id], 'relations' => [], 'review_items' => []]);
-    app()->instance(EventCustomerCohort::class, $cohort);
-    $values = Mockery::mock(CustomerEventValueService::class);
-    $values->shouldReceive('forProfile')->andReturn(['purchase_journey' => $journey]);
-    app()->instance(CustomerEventValueService::class, $values);
 
     return $profile;
 }
@@ -467,7 +555,7 @@ test('operator-only contributions are admitted when historical staff and current
 test('customer-total contributors are admitted even when their event titles do not match the row search', function () {
     $selected = performanceEvent($this, 'Target fair');
     $customerTotal = performanceEvent($this, 'Another fair');
-    scopedPerformanceCustomers($this, [$selected, $customerTotal]);
+    $profile = scopedPerformanceCustomers($this, [$selected, $customerTotal]);
     app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
     $access = scopedPerformanceAccess();
     app()->instance(\App\Services\Team\Operations\OperationsAccess::class, $access);
@@ -475,15 +563,22 @@ test('customer-total contributors are admitted even when their event titles do n
         ->assertJsonPath('summary.customer_purchase_count', 2);
     expect(collect($access->admitted)->sort()->values()->all())->toBe(collect([$selected->id, $customerTotal->id])->sort()->values()->all());
     $customerTotal->update(['status' => 'withdrawn']);
-    $this->getJson($this->url.'&q=Target')->assertConflict();
+    $this->getJson($this->url.'&q=Target')->assertOk()
+        ->assertJsonPath('summary.customer_count', null)->assertJsonPath('summary.customer_purchase_count', null)
+        ->assertJsonPath('summary.paid_total_minor', null)->assertDontSee('Target buyer');
+    $this->getJson($this->url.'&group_by=customer&q=Target')->assertOk()->assertJsonPath('status', 'preparing')
+        ->assertJsonCount(0, 'rows')->assertDontSee('Target buyer');
+    $this->getJson($this->url.'&customer_id='.$profile->id)->assertOk()->assertJsonPath('status', 'preparing')
+        ->assertJsonCount(0, 'rows')->assertDontSee('Target buyer');
+    Queue::assertPushed(RefreshEventPerformance::class);
 });
 
 test('a same-request canonical association change during source admission cannot return old customer facts', function () {
     $event = performanceEvent($this);
     $profile = scopedPerformanceCustomers($this, [$event]);
     $replacement = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Replacement buyer']);
-    $link = MarketingProfileLink::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $profile->id,
-        'source_type' => 'square_order', 'source_id' => 'original-cohort-order', 'source_meta' => []]);
+    $link = MarketingProfileLink::where('tenant_id', $this->tenant->id)->where('marketing_profile_id', $profile->id)
+        ->where('source_type', 'square_order')->firstOrFail();
     app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
     $access = scopedPerformanceAccess(fn () => $link->update(['marketing_profile_id' => $replacement->id]));
     app()->instance(\App\Services\Team\Operations\OperationsAccess::class, $access);

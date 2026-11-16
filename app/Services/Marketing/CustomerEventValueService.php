@@ -113,7 +113,7 @@ class CustomerEventValueService
     }
 
     /** Exact event relationships without rebuilding unrelated lifetime value, rewards or membership. */
-    public function eventSourceRelations(MarketingProfile $profile, int $tenant, int $event, array $sources): array
+    public function eventSourceRelations(MarketingProfile $profile, int $tenant, int $event, array $sources, bool $dependencyView = false): array
     {
         $profile = (int) $profile->tenant_id === $tenant ? $this->identities->byId($tenant, (int) $profile->id) : null;
         abort_unless($profile && $profile->archived_at === null && $this->reviewedEvent($tenant, $event), 404);
@@ -122,7 +122,8 @@ class CustomerEventValueService
         $links = $this->profileLinks($profile, $tenant, $issues, $sources);
         $captures = $this->captures($links, $profile, $tenant, $now, $issues);
         try {
-            $history = $sources ? app(CustomerCommerceSnapshotService::class)->forSelectedSources($profile, $tenant, $sources)
+            $history = $sources ? ($dependencyView ? app(CustomerCommerceSnapshotService::class)->forDependencySources($profile, $tenant, $sources)
+                : app(CustomerCommerceSnapshotService::class)->forSelectedSources($profile, $tenant, $sources))
                 : ['customer_id' => (int) $profile->id, 'purchases' => [], 'has_more' => false, 'issues' => []];
         } catch (\Throwable) {
             $history = ['customer_id' => (int) $profile->id, 'purchases' => [], 'has_more' => true, 'issues' => ['customer_history_unavailable']];
@@ -329,7 +330,7 @@ class CustomerEventValueService
                     $review = $occurrence->data['_teams_enrichment']['square_orders'];
                     if (! is_int($review['reviewed_by'] ?? null) || ! $this->date($review['reviewed_at'] ?? null)
                         || $this->date($review['reviewed_at']) > $now
-                        || ! app(CustomerCommerceLinkService::class)->canLink(\App\Models\User::find($review['reviewed_by']), $tenant)) {
+                        || ! app(CustomerCommerceLinkService::class)->canLinkReviewer($review['reviewed_by'], $tenant)) {
                         continue;
                     }
                     $id = app(\App\Services\Team\Studio\EventCommerceReport::class)->commerceId($occurrence);
@@ -530,7 +531,7 @@ class CustomerEventValueService
 
         return is_int($review['reviewed_by'] ?? null) && $date && $date <= $now
             && is_string($review['evidence_reference'] ?? null) && trim($review['evidence_reference']) !== ''
-            && app(CustomerCommerceLinkService::class)->canLink(\App\Models\User::find($review['reviewed_by']), $tenant);
+            && app(CustomerCommerceLinkService::class)->canLinkReviewer($review['reviewed_by'], $tenant);
     }
 
     private function date(mixed $date): ?CarbonImmutable

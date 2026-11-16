@@ -15,7 +15,8 @@ final class PosCustomerPurchases
     public function __construct(private PosStore $store, private PaymentJournal $journal,
         private CanonicalMarketingProfileResolver $identities) {}
 
-    public function forProfiles(int $tenant, array $profiles, int $limit, array $excludedReceipts = []): array
+    /** Dependency views opt into local journal projection reads; ordinary callers keep recovery boundaries. */
+    public function forProfiles(int $tenant, array $profiles, int $limit, array $excludedReceipts = [], bool $dependencyView = false): array
     {
         $result = ['purchases' => [], 'square_payments' => [], 'square_orders' => [], 'shopify_orders' => [], 'issues' => []];
         if (! Schema::hasTable('pos_live_sales') || ! filled(config('pos_live.runtime_id'))) {
@@ -46,7 +47,7 @@ final class PosCustomerPurchases
 
                     continue;
                 }
-                $payment = app(PosSalePaymentEvidence::class)->read($sale, app(PosService::class)->snapshot($sale));
+                $payment = $this->paymentEvidence($sale, app(PosService::class)->snapshot($sale), $dependencyView);
                 if (! $payment || $payment['state'] !== 'succeeded' || $payment['kind'] !== 'payment'
                     || ($payment['binding']['environment'] ?? null) !== 'live'
                     || $payment['provider_id'] === null || $payment['sale_id'] !== $sale->id
@@ -60,7 +61,7 @@ final class PosCustomerPurchases
 
                     continue;
                 }
-                $refunds = $this->confirmedRefunds($sale);
+                $refunds = $this->confirmedRefunds($sale, null, $dependencyView);
                 $result['purchases'][] = ['id' => 'pos_sale:'.$id, 'source' => 'pos_sale', 'source_id' => $id,
                     'catalog_source' => $sale->commerce_source, 'catalog_namespace' => $sale->commerce_source === StockPosCommerce::VERSION ? 'stock' : 'pos:'.$this->store->runtime(),
                     'number' => 'Everbranch Pay · EB-'.strtoupper(substr($id, 0, 12)), 'channel' => 'in_person',
@@ -88,7 +89,7 @@ final class PosCustomerPurchases
         return $result;
     }
 
-    public function sourceConflicts(int $tenant, string $type, string $source, int $profile): bool
+    public function sourceConflicts(int $tenant, string $type, string $source, int $profile, bool $dependencyView = false): bool
     {
         if (! Schema::hasTable('pos_live_sales') || ! filled(config('pos_live.runtime_id'))) {
             return false;
@@ -125,7 +126,7 @@ final class PosCustomerPurchases
                 if (! $customer || $customer->id !== $profile) {
                     return true;
                 }
-                $payment = app(PosSalePaymentEvidence::class)->read($sale, $original);
+                $payment = $this->paymentEvidence($sale, $original, $dependencyView);
                 if (! $payment || $payment['state'] !== 'succeeded' || $payment['kind'] !== 'payment'
                     || ($payment['binding']['environment'] ?? null) !== 'live' || $payment['provider_id'] === null
                     || $payment['sale_id'] !== $sale->id || (int) $payment['amount_minor'] !== (int) $sale->amount_minor
@@ -140,6 +141,27 @@ final class PosCustomerPurchases
         }
 
         return false;
+    }
+
+    private function paymentEvidence(object $sale, array $snapshot, bool $dependencyView): ?array
+    {
+        if ($dependencyView && ($snapshot['reward_only'] ?? false)) {
+            return app(PosRewardOnlySale::class)->evidence($sale, $snapshot, true);
+        }
+        if ($dependencyView && ($snapshot['tender'] ?? 'card') !== 'cash') {
+            return $sale->attempt_id ? $this->payment((int) $sale->tenant_id, $sale->attempt_id, true) : null;
+        }
+
+        return app(PosSalePaymentEvidence::class)->read($sale, $snapshot);
+    }
+
+    private function payment(int $tenant, string $id, bool $dependencyView): array
+    {
+        if ($dependencyView && $this->store->db->transactionLevel() > 0 && $this->journal instanceof \App\Services\PaymentsCore\MySqlPaymentJournal) {
+            return $this->journal->getForReporting($tenant, $id);
+        }
+
+        return $this->journal->get($tenant, $id);
     }
 
     private function mirrorLinksConflict(int $tenant, object $sale, array $snapshot, string $payment, int $profile): bool
@@ -179,14 +201,14 @@ final class PosCustomerPurchases
         return \App\Services\PaymentsCore\Contract::hash([$operations->all(), $events->all()]);
     }
 
-    public function confirmedRefunds(object $sale, ?array $additionalVerifiedRefund = null): int
+    public function confirmedRefunds(object $sale, ?array $additionalVerifiedRefund = null, bool $dependencyView = false): int
     {
         if ((app(PosService::class)->snapshot($sale)['tender'] ?? null) === 'cash') {
             return app(PosCashSale::class)->refunded($sale);
         }
         $operations = [];
         foreach ($this->store->db->table('payment_core_operations')->where('tenant_id', $sale->tenant_id)->where('original_id', $sale->attempt_id)->where('kind', 'refund')->where('state', 'succeeded')->pluck('id') as $id) {
-            $refund = $this->journal->get((int) $sale->tenant_id, $id);
+            $refund = $this->payment((int) $sale->tenant_id, $id, $dependencyView);
             if ($refund['kind'] === 'refund' && $refund['state'] === 'succeeded' && $refund['original_id'] === $sale->attempt_id) {
                 $operations[$refund['provider_id'] ?? ('operation:'.$id)] = (int) $refund['amount_minor'];
             }
@@ -194,7 +216,7 @@ final class PosCustomerPurchases
         foreach ($this->store->rows('events', (int) $sale->tenant_id)->where('sale_id', $sale->id)
             ->where('code', 'customer_refund_confirmed')->get() as $event) {
             $details = $this->store->decrypt($event->details);
-            $refund = $this->journal->get((int) $sale->tenant_id, $details['operation_id']);
+            $refund = $this->payment((int) $sale->tenant_id, $details['operation_id'], $dependencyView);
             if ($refund['state'] === 'succeeded' && $refund['kind'] === 'refund' && $refund['original_id'] === $sale->attempt_id) {
                 $operations[$refund['provider_id'] ?? ('operation:'.$refund['id'])] = (int) $refund['amount_minor'];
             }
@@ -202,7 +224,7 @@ final class PosCustomerPurchases
 
         foreach ($this->store->rows('events', (int) $sale->tenant_id)->where('sale_id', $sale->id)->where('code', 'square_refund_observed')->get() as $event) {
             $details = $this->store->decrypt($event->details);
-            $payment = $this->journal->get((int) $sale->tenant_id, $sale->attempt_id);
+            $payment = $this->payment((int) $sale->tenant_id, $sale->attempt_id, $dependencyView);
             if ($payment['provider_id'] === $details['payment_id']) {
                 $operations[$details['refund_id']] = (int) $details['amount_minor'];
             }

@@ -67,3 +67,47 @@ test('staff customer page displays the shared section and only an authorized own
         ])->assertRedirect()->assertSessionHasNoErrors();
     expect(MarketingProfileLink::query()->count())->toBe(1);
 });
+
+test('fresh reviewer authority exactly matches current user and tenant membership policy', function (string $role, ?string $membershipRole, bool $active, bool $membershipActive, bool $wrongTenant) {
+    $service = app(CustomerCommerceLinkService::class);
+    $actor = User::factory()->create(['role' => $role, 'is_active' => $active, 'email_verified_at' => null]);
+    if ($membershipRole !== null) {
+        $tenant = $wrongTenant ? Tenant::create(['name' => 'Other reviewer tenant', 'slug' => 'reviewer-other']) : $this->tenant;
+        $actor->tenants()->attach($tenant->id, ['role' => $membershipRole, 'membership_active' => $membershipActive]);
+    }
+    $expected = $service->canLink(User::find($actor->id), $this->tenant->id);
+    \Illuminate\Support\Facades\DB::enableQueryLog();
+    \Illuminate\Support\Facades\DB::flushQueryLog();
+    $actual = $service->canLinkReviewer($actor->id, $this->tenant->id);
+    $queries = \Illuminate\Support\Facades\DB::getQueryLog();
+    \Illuminate\Support\Facades\DB::disableQueryLog();
+    expect($actual)->toBe($expected)->and($queries)->toHaveCount(1);
+})->with([
+    'tenant owner' => ['member', 'owner', true, true, false],
+    'legacy owner' => ['member', 'tenant_owner', true, true, false],
+    'tenant admin' => ['member', 'admin', true, true, false],
+    'inactive membership' => ['member', 'owner', true, false, false],
+    'inactive actor' => ['member', 'admin', false, true, false],
+    'ordinary member' => ['member', 'member', true, true, false],
+    'global admin without tenant grant' => ['admin', null, true, true, false],
+    'wrong tenant owner' => ['member', 'owner', true, true, true],
+    'active platform admin' => ['platform_admin', null, true, false, false],
+    'inactive platform admin' => ['platform_admin', null, false, true, false],
+    'case differs in global role' => ['Platform_admin', null, true, true, false],
+    'case differs in tenant role' => ['member', 'Admin', true, true, false],
+]);
+
+test('reviewer authority stays fresh after revocation and rejects missing or invalid identities', function () {
+    $service = app(CustomerCommerceLinkService::class);
+    expect($service->canLinkReviewer($this->admin->id, $this->tenant->id))->toBeTrue();
+    $this->admin->tenants()->updateExistingPivot($this->tenant->id, ['membership_active' => false]);
+    expect($service->canLinkReviewer($this->admin->id, $this->tenant->id))->toBeFalse();
+    $this->admin->update(['role' => 'platform_admin']);
+    expect($service->canLinkReviewer($this->admin->id, $this->tenant->id))->toBeTrue()
+        ->and($service->canLinkReviewer($this->admin->id, $this->tenant->id + 100000))->toBeTrue();
+    $this->admin->update(['is_active' => false]);
+    expect($service->canLinkReviewer($this->admin->id, $this->tenant->id))->toBeFalse()
+        ->and($service->canLinkReviewer(99999999, $this->tenant->id))->toBeFalse()
+        ->and($service->canLinkReviewer(null, $this->tenant->id))->toBeFalse()
+        ->and($service->canLinkReviewer($this->admin->id, 0))->toBeFalse();
+});
