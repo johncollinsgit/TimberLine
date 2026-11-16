@@ -45,13 +45,30 @@ class MySqlSchemaFingerprint
 
         $json = json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         // Keep the old physical export/hash reproducible, while the gate also
-        // verifies FK actions. Fetch all actions once, rather than per alias.
+        // verifies FK actions and generated expressions. Fetch metadata once,
+        // rather than once per table; retain the historical raw export/hash.
         $actions = [];
         foreach ($connection->select('SELECT table_name AS table_name, constraint_name AS constraint_name, delete_rule AS on_delete, update_rule AS on_update FROM information_schema.referential_constraints WHERE constraint_schema = ?', [$database]) as $action) {
             $actions[$action->table_name][$action->constraint_name] = $action;
         }
+        $expressions = [];
+        foreach ($connection->select("SELECT table_name AS table_name, column_name AS column_name, generation_expression AS expression FROM information_schema.columns WHERE table_schema = ? AND generation_expression <> ''", [$database]) as $column) {
+            $expressions[$column->table_name][$column->column_name] = $column->expression;
+        }
         $canonical = $schema;
         foreach ($canonical as &$table) {
+            foreach ($table['columns'] as &$column) {
+                $expression = $expressions[$table['table']][$column['name']] ?? null;
+                if ($expression !== null) {
+                    // Preserve literal case and whitespace: both can change an
+                    // expression's value without changing the column/index type.
+                    $column['generation_expression'] = $expression;
+                    ksort($column);
+                } elseif (str_contains(strtoupper($column['EXTRA'] ?? $column['extra'] ?? ''), ' GENERATED')) {
+                    throw new RuntimeException('Generated-column expression metadata is incomplete.');
+                }
+            }
+            unset($column);
             foreach ($table['foreign_keys'] as &$foreign) {
                 $action = $actions[$table['table']][$foreign['name']] ?? null;
                 if (! $action) {

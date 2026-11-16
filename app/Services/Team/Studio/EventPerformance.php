@@ -26,6 +26,32 @@ class EventPerformance
 {
     public const TABLE = 'team_event_performance_facts';
 
+    private const DIGEST_VERSION = 'indexed-content-v1';
+
+    /** Frozen with the immutable generated-column migration; changed fields use the full digest. */
+    private const INDEXED_DIGESTS = [
+        'square_orders' => [
+            'columns' => ['id', 'square_order_id', 'square_customer_id', 'location_id', 'state', 'total_money_amount', 'total_money_currency', 'closed_at', 'raw_payload'],
+            'timestamp' => 'closed_at',
+            'indexes' => ['epo_window_hash_idx', 'epo_order_hash_idx'],
+        ],
+        'square_payments' => [
+            'columns' => ['id', 'square_payment_id', 'square_order_id', 'square_customer_id', 'location_id', 'amount_money', 'currency', 'status', 'raw_payload'],
+            'timestamp' => null,
+            'indexes' => ['epp_order_hash_idx'],
+        ],
+        'marketing_profiles' => [
+            'columns' => ['id', 'merged_into_profile_id', 'archived_at', 'source_channels'],
+            'timestamp' => 'archived_at',
+            'indexes' => ['ep_profile_hash_idx'],
+        ],
+        'marketing_profile_links' => [
+            'columns' => ['id', 'marketing_profile_id', 'source_type', 'source_id', 'source_meta', 'match_method', 'confidence'],
+            'timestamp' => null,
+            'indexes' => ['ep_link_hash_idx'],
+        ],
+    ];
+
     public function __construct(private OperationsAccess $access) {}
 
     public static function rules(): array
@@ -451,10 +477,11 @@ class EventPerformance
     {
         $records = TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id])->whereIn('kind', ['event', 'event_link', 'financial', 'staff', 'series'])->orderBy('id')->get(['id', 'version', 'status', 'assigned_user_id', 'connection_id'])->toArray();
         $sources = \App\Models\TeamProviderConnection::where(['tenant_id' => $tenant->id, 'area_id' => $area->id])->orderBy('id')->get(['id', 'user_id', 'generation', 'status'])->toArray();
-        $cacheKey = 'event-performance-source-revision:'.hash('sha256', config('pos_live.runtime_id', '').'|'.$tenant->id.'|'.$area->id);
+        $scope = $this->squareSourceScope($tenant, $area, $records);
+        // A new mapping or receipt ancestor cannot reuse a previous scope's revision.
+        $cacheKey = 'event-performance-source-revision:'.self::DIGEST_VERSION.':'.hash('sha256', json_encode([config('pos_live.runtime_id', ''), $tenant->id, $area->id, $records, $sources, $scope], JSON_THROW_ON_ERROR));
         $revisions = $fresh ? null : Cache::get($cacheKey);
         if (! is_array($revisions)) {
-            $scope = $this->squareSourceScope($tenant, $area, $records);
             $revisions = [];
             foreach (['square_orders', 'square_payments', 'pos_live_sales', 'pos_live_events', 'marketing_import_runs'] as $table) {
                 if (Schema::hasTable($table)) {
@@ -471,13 +498,13 @@ class EventPerformance
             Cache::put($cacheKey, $revisions, 30);
         }
 
-        return hash('sha256', json_encode([$records, $sources, $revisions, $this->squareContextSignature($tenant)], JSON_THROW_ON_ERROR));
+        return hash('sha256', json_encode([self::DIGEST_VERSION, $records, $sources, $revisions, $this->squareContextSignature($tenant)], JSON_THROW_ON_ERROR));
     }
 
     /** Only reviewed report inputs can invalidate this reporting generation. */
     private function squareSourceScope(Tenant $tenant, TeamArea $area, array $versions): array
     {
-        $key = 'event-performance-square-scope:'.hash('sha256', json_encode([$tenant->id, $area->id, $versions], JSON_THROW_ON_ERROR));
+        $key = 'event-performance-square-scope:'.self::DIGEST_VERSION.':'.hash('sha256', json_encode([$tenant->id, $area->id, $versions], JSON_THROW_ON_ERROR));
         $scope = Cache::remember($key, 300, function () use ($tenant, $area): array {
             $scope = ['windows' => [], 'order_ids' => [], 'run_ids' => []];
             foreach (TeamOperationRecord::where(['tenant_id' => $tenant->id, 'area_id' => $area->id])
@@ -503,29 +530,64 @@ class EventPerformance
 
             return $scope;
         });
-        // Original receipt ancestry is small and checked freshly. Unrelated
-        // scheduled/backfill runs are not evidence used by this report.
-        $pending = $scope['run_ids'];
-        $seen = [];
-        while ($pending) {
-            $ids = array_values(array_diff($pending, array_keys($seen)));
-            if (! $ids) {
-                break;
-            }
-            abort_if(count($seen) + count($ids) > 10000, 409, 'Original Square pagination needs review.');
-            $pending = [];
-            foreach ($ids as $id) {
-                $seen[$id] = true;
-            }
-            foreach (\App\Models\MarketingImportRun::forTenantId($tenant->id)->whereIn('id', $ids)->get(['summary']) as $run) {
-                if ($parent = (int) ($run->summary['resumed_from_run_id'] ?? 0)) {
-                    $pending[] = $parent;
-                }
-            }
-        }
-        $scope['run_ids'] = array_keys($seen);
+        // Receipt ancestry is checked freshly; a deep pagination chain must not
+        // turn every warm read into one network round trip per original page.
+        $scope['run_ids'] = $this->receiptAncestors($tenant, $scope['run_ids']);
 
         return $scope;
+    }
+
+    private function receiptAncestors(Tenant $tenant, array $roots): array
+    {
+        $seen = array_fill_keys($roots, true);
+        abort_if(count($seen) > 10000, 409, 'Original Square pagination needs review.');
+        if (! $roots) {
+            return [];
+        }
+        if (DB::connection()->getDriverName() === 'mysql') {
+            $parent = "CAST(JSON_UNQUOTE(JSON_EXTRACT(receipt.summary, '$.resumed_from_run_id')) AS UNSIGNED)";
+            // DISTINCT terminates cycles. Keep original/missing IDs in the
+            // revision too, so later insertion or changed ancestry invalidates it.
+            $rows = DB::select('WITH RECURSIVE report_receipt_ancestry AS ('
+                .'SELECT receipt.id, '.$parent.' AS parent_id FROM marketing_import_runs AS receipt '
+                .'WHERE receipt.tenant_id = ? AND receipt.id IN ('.implode(',', array_fill(0, count($roots), '?')).') '
+                .'UNION DISTINCT SELECT receipt.id, '.$parent.' AS parent_id FROM marketing_import_runs AS receipt '
+                .'INNER JOIN report_receipt_ancestry AS child ON receipt.id = child.parent_id '
+                .'WHERE receipt.tenant_id = ? LIMIT 10001) '
+                .'SELECT /*+ SET_VAR(cte_max_recursion_depth=10001) */ id, parent_id FROM report_receipt_ancestry',
+                [$tenant->id, ...$roots, $tenant->id]);
+            foreach ($rows as $row) {
+                $seen[(int) $row->id] = true;
+                if ($row->parent_id) {
+                    $seen[(int) $row->parent_id] = true;
+                }
+            }
+            abort_if(count($seen) > 10000, 409, 'Original Square pagination needs review.');
+        } else {
+            $pending = $roots;
+            $visited = [];
+            while ($pending) {
+                $ids = array_values(array_diff($pending, array_keys($visited)));
+                if (! $ids) {
+                    break;
+                }
+                $pending = [];
+                foreach ($ids as $id) {
+                    $visited[$id] = true;
+                }
+                foreach (\App\Models\MarketingImportRun::forTenantId($tenant->id)->whereIn('id', $ids)->get(['summary']) as $run) {
+                    if ($parent = (int) ($run->summary['resumed_from_run_id'] ?? 0)) {
+                        $pending[] = $parent;
+                        $seen[$parent] = true;
+                    }
+                }
+                abort_if(count($seen) > 10000, 409, 'Original Square pagination needs review.');
+            }
+        }
+        $ids = array_keys($seen);
+        sort($ids, SORT_NUMERIC);
+
+        return $ids;
     }
 
     private function squareContextSignature(Tenant $tenant): string
@@ -549,13 +611,16 @@ class EventPerformance
             }
         }
 
-        return hash('sha256', json_encode($parts, JSON_THROW_ON_ERROR));
+        return hash('sha256', json_encode([self::DIGEST_VERSION, $parts], JSON_THROW_ON_ERROR));
     }
 
     /** Content revisions catch same-second edits and delete/reinsert pairs. Never emit private bytes. */
     private function tableDigest(string $table, int $tenant, array $columns, ?array $scope = null): string
     {
-        $columns = array_values(array_intersect($columns, Schema::getColumnListing($table)));
+        $requestedColumns = $columns;
+        $availableColumns = Schema::getColumnListing($table);
+        $columns = array_values(array_intersect($columns, $availableColumns));
+        $indexed = $this->indexedDigest($table, $requestedColumns, $availableColumns);
         $query = DB::table($table)->where('tenant_id', $tenant);
         if ($scope !== null && in_array($table, ['square_orders', 'square_payments'], true)) {
             $orders = DB::table('square_orders')->where('tenant_id', $tenant)->where(function (Builder $query) use ($scope): void {
@@ -565,9 +630,33 @@ class EventPerformance
                         ->where('closed_at', '>=', $window['from'])->where('closed_at', '<', $window['through']));
                 }
             });
+            if ($indexed !== null) {
+                $orderIndex = $scope['windows'] ? 'epo_window_hash_idx' : 'epo_order_hash_idx';
+                if ($table === 'square_orders' || Schema::hasIndex('square_orders', $orderIndex)) {
+                    $orders->forceIndex($orderIndex);
+                }
+            }
             $table === 'square_orders' ? $query = $orders : $query->whereIn('square_order_id', $orders->select('square_order_id'));
         } elseif ($scope !== null && $table === 'marketing_import_runs') {
             $query->whereIn('id', $scope['run_ids']);
+        }
+        if ($indexed !== null) {
+            // Older tenant/order indexes can otherwise force virtual-hash
+            // recomputation from the base JSON despite a covering index existing.
+            $query->forceIndex($table === 'square_orders'
+                ? (! empty($scope['windows']) ? 'epo_window_hash_idx' : 'epo_order_hash_idx')
+                : $indexed['indexes'][0]);
+            // InnoDB's covering index contains the generated 32-byte content hash
+            // and primary id. No original document is read or hashed on this path.
+            $fields = ['`id`'];
+            if ($indexed['timestamp'] !== null) {
+                $fields[] = 'UNIX_TIMESTAMP(`'.$indexed['timestamp'].'`)';
+            }
+            $fields[] = 'HEX(`event_content_hash`)';
+            $rowHash = 'UNHEX(SHA2(JSON_ARRAY('.implode(',', $fields).'),256))';
+            $revision = (array) $query->selectRaw('COUNT(*) as n, HEX(BIT_XOR('.$rowHash.')) as h')->first();
+
+            return hash('sha256', json_encode([self::DIGEST_VERSION, $revision], JSON_THROW_ON_ERROR));
         }
         if (DB::connection()->getDriverName() === 'mysql') {
             // Four independent 64-bit XOR lanes retain the full SHA-256 row digest.
@@ -589,6 +678,21 @@ class EventPerformance
         }
 
         return hash_final($context);
+    }
+
+    /** Partial online upgrades and future field additions retain the complete fallback. */
+    private function indexedDigest(string $table, array $requested, array $available): ?array
+    {
+        $definition = self::INDEXED_DIGESTS[$table] ?? null;
+        if (DB::connection()->getDriverName() !== 'mysql' || $definition === null
+            || $requested !== $definition['columns']
+            || array_diff($definition['columns'], $available)
+            || ! in_array('event_content_hash', $available, true)) {
+            return null;
+        }
+        $indexes = array_column(Schema::getIndexes($table), 'name');
+
+        return array_diff($definition['indexes'], $indexes) ? null : $definition;
     }
 
     private function facts(Tenant $tenant, TeamArea $area, string $generation): Builder

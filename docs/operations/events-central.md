@@ -87,6 +87,19 @@ source checks; broader cohorts use fresh project inventories. Final membership,
 source and customer-identity checks run after provider requests and before the
 response. This is not a shared authorization cache.
 
+MySQL financial and customer content revisions use covering indexes over invisible
+virtual SHA-256 columns. Imports and direct SQL updates maintain those hashes in
+the same transaction; no reporting worker or update-time convention supplies the
+revision. The read combines the full 256-bit content hash with original row IDs
+and timestamps, retaining same-second edits, typed JSON changes and row
+replacement detection without rehashing large source documents. The generated
+field set is immutable. New fields, incomplete schema and other database engines
+use the complete content-digest fallback. Algorithm-versioned revision keys also
+include current source records, reviewed scopes and receipt ancestry. MySQL checks
+that ancestry freshly in one tenant-scoped, cycle-safe recursive query with a
+10,000-receipt bound. These financial revision caches never replace fresh provider
+or customer admission.
+
 Pay's current Sales summary reuses the same register/event/source gates and
 confirmed-sales reader without rebuilding unused budget and history details.
 Teams' full event report retains those details. A blank reviewed workbook total
