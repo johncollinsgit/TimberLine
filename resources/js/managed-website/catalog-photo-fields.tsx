@@ -7,7 +7,8 @@ function parse<T>(text: string | undefined, fallback: T): T { try { return text 
 function catalogPhoto(photo: PhotoAsset): PhotoAsset | null {
   // Uploads are never made public through a page URL when used by a catalog.
   const url = typeof photo.id === "number" ? photo.catalog_url : photo.url;
-  return url ? { ...photo, url: new URL(url, window.location.origin).href } : null;
+  // Keep the server's owned upload reference; the browser resolves its preview.
+  return url ? { ...photo, url } : null;
 }
 
 function ConnectedPhoto({ root }: { root: HTMLElement }) {

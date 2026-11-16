@@ -34,7 +34,8 @@ async function fixture(options = {}) {
         }
         if (url.pathname === '/catalog') {
             const values = options.connected ? [{url: '/original.png', alt: ''}] : options.multiple ? [{url: origin + '/website-catalog-media/1', alt: 'Existing product'}] : [{url: '', alt: ''}];
-            const photos = options.connected ? [{id: 'owned', name: 'Original website photo', url: '/original.png'}] : [{id: 9, name: 'Owned catalog photo', url: origin + '/website-media/9', catalog_url: origin + '/website-catalog-media/9', alt_text: 'Owned catalog detail', mime_type: 'image/png'}];
+            const mediaOrigin = options.relativeOwned ? '' : origin;
+            const photos = options.connected ? [{id: 'owned', name: 'Original website photo', url: '/original.png'}] : [{id: 9, name: 'Owned catalog photo', url: mediaOrigin + '/website-media/9', catalog_url: mediaOrigin + '/website-catalog-media/9', alt_text: 'Owned catalog detail', mime_type: 'image/png'}];
             response.writeHead(200, {'Content-Type': 'text/html'});
             response.end(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="fictional-only">${cssFor(catalogEntry).map(file => `<link rel="stylesheet" href="/build/${file}">`).join('')}</head><body><form method="POST" action="/catalog-submit"><div data-website-photo-field data-value='${escape(JSON.stringify(values))}' data-multiple="${options.multiple ? 'true' : 'false'}" data-connected-origin="${options.connected ? origin : ''}" data-name="${options.connected ? 'content[home_001]' : options.multiple ? 'retained_media[]' : 'image_url'}" data-alt-name="image_alt" data-photos='${escape(JSON.stringify(photos))}' data-related-photos='${escape(JSON.stringify([{id:'starter',name:'Related business photo',url:options.connected ? '/starter.png' : origin + '/starter.png',alt_text:'Original business image'}]))}' data-upload-url="/upload"></div><button type="submit">Save catalog</button></form><script type="module" src="/build/${catalogEntry.file}"></script></body></html>`); return;
         }
@@ -82,7 +83,8 @@ async function fixture(options = {}) {
             assert.match(request.headers['content-type'], /^multipart\/form-data;/);
             assert.match(raw, /fictional.png/);
             if (state.uploadStatus !== 201) { json({errors: {image: ['Your private trial includes 10 photos. Activate a plan for more.']}}, state.uploadStatus); return; }
-            json({media: {id: 7, name: 'fictional.png', url: origin + '/website-media/7', catalog_url: origin + '/website-catalog-media/7', alt_text: 'Uploaded graphic', mime_type: 'image/png'}}, 201); return;
+            const mediaOrigin = options.relativeOwned ? '' : origin;
+            json({media: {id: 7, name: 'fictional.png', url: mediaOrigin + '/website-media/7', catalog_url: mediaOrigin + '/website-catalog-media/7', alt_text: 'Uploaded graphic', mime_type: 'image/png'}}, 201); return;
         }
         if (url.pathname === '/publish' && request.method === 'POST') { state.publishAttempts.push(structuredClone(state.savedPage)); if (state.publishStatus !== 200) { json({message: state.publishMessage}, state.publishStatus); return; } state.published = structuredClone(state.savedPage); if (state.publishResponse === 'interrupted') { response.writeHead(200, {'Content-Type': 'application/json', 'Content-Length': '1000'}); response.flushHeaders(); response.write('{"status":'); setTimeout(() => response.destroy(), 50); return; } json({status: state.publishResponse === 'unknown' ? 'unknown' : 'published'}); return; }
         response.writeHead(404); response.end();
@@ -503,6 +505,26 @@ test('collection photo selection submits the catalog alias and its description w
         await f.page.getByRole('button', {name: 'Save catalog', exact: true}).click();
         await expect.poll(() => f.state.submitted).not.toBeNull();
         assert.deepEqual(f.state.submitted, [['image_url', f.origin + '/website-catalog-media/9'], ['image_alt', 'Fictional collection detail']]);
+        assert.deepEqual(f.errors, []);
+    } finally { await f.close(); }
+});
+
+test('native owned picker and upload preserve relative catalog references on a nondefault port', async () => {
+    const f = await fixture({catalog: true, relativeOwned: true});
+    try {
+        assert.notEqual(new URL(f.origin).port, '');
+        await f.page.getByRole('button', {name: 'Choose photo', exact: true}).click();
+        await f.page.getByRole('button', {name: 'Use Owned catalog photo', exact: true}).click();
+        await expect(f.page.locator('input[name=image_url]')).toHaveValue('/website-catalog-media/9');
+        await expect.poll(() => f.page.locator('.eb-photo__preview img').first().evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
+        await f.page.locator('input[type=file]').setInputFiles({name: 'fictional.png', mimeType: 'image/png', buffer: png});
+        await expect(f.page.locator('input[name=image_url]')).toHaveValue('/website-catalog-media/7');
+        await expect(f.page.locator('input[name=image_alt]')).toHaveValue('Uploaded graphic');
+        await expect.poll(() => f.page.locator('.eb-photo__preview img').first().evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
+        await f.page.getByRole('button', {name: 'Save catalog', exact: true}).click();
+        await expect.poll(() => f.state.submitted).not.toBeNull();
+        assert.deepEqual(f.state.submitted, [['image_url', '/website-catalog-media/7'], ['image_alt', 'Uploaded graphic']]);
+        assert.equal(f.state.uploads, 1);
         assert.deepEqual(f.errors, []);
     } finally { await f.close(); }
 });

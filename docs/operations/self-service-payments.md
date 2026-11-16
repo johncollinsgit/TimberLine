@@ -123,6 +123,15 @@ MANAGED_WEBSITE_STRIPE_WEBHOOK_SECRET verifies platform/destination events and
 must not be reused as proof for direct events. Ingress selects the secret by
 scope, verifies raw signatures/time, and checks frozen event.account/livemode.
 
+Website cart readiness follows that same routing boundary. An exact `direct`
+account requires the dedicated Connect signing secret, without also requiring
+the unused platform/destination signing secret. Destination accounts, absent
+accounts and unrecognized routing retain the generic Website-secret requirement.
+A generic secret cannot substitute for the direct secret. This source correction
+does not enable a rollout or prove merchant readiness: paid/module admission,
+global and literal collection cohorts, owned ready accounts, live callback
+verification and the Website tax decision remain independent requirements.
+
 Subscribe to checkout.session completed/expired/async_payment_succeeded/
 async_payment_failed, charge.refunded, and refund created/updated/failed events.
 `website:reconcile-payments` recovers both cart v1 and invoice v2, even while

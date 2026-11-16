@@ -51,11 +51,12 @@ class WebsiteCommerceService
         }
 
         $result = $this->payments->readinessFor($tenant);
+        $direct = $result['account']?->routingMode() === 'direct';
 
-        if (blank(config('managed_website.stripe_webhook_secret'))) {
+        if (! $direct && blank(config('managed_website.stripe_webhook_secret'))) {
             $result['blockers'][] = 'Website checkout requires its signed Stripe webhook to be configured.';
         }
-        if ($result['account']?->routingMode() === 'direct' && blank(config('managed_website.stripe_connect_webhook_secret'))) {
+        if ($direct && blank(config('managed_website.stripe_connect_webhook_secret'))) {
             $result['blockers'][] = 'Business-account checkout requires its dedicated signed webhook.';
         }
 

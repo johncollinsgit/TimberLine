@@ -46,7 +46,7 @@ class WebsiteCatalogService
                 'handle' => ['required', 'string', 'max:160', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('website_products', 'handle')->where('tenant_site_id', $site->id)->ignore($product->id)],
                 'description' => ['nullable', 'string', 'max:8000'], 'status' => ['required', Rule::in(['active', 'draft', 'archived'])],
                 'product_type' => ['required', Rule::in(['physical', 'service', 'quote'])], 'track_inventory' => ['required', 'boolean'],
-                'media' => ['present', 'array', 'max:12'], 'media.*' => ['required', 'url:http,https', 'max:2048'],
+                'media' => ['present', 'array', 'max:12'], 'media.*' => ['required', 'string', 'max:2048'],
                 'collection_ids' => ['present', 'array', 'max:100'], 'collection_ids.*' => ['integer', 'distinct', Rule::exists('website_collections', 'id')->where('tenant_id', $site->tenant_id)->where('tenant_site_id', $site->id)],
                 'variants' => ['required', 'array', 'min:1', 'max:100'],
                 'variants.*.id' => ['nullable', 'integer', 'distinct', Rule::exists('website_product_variants', 'id')->where('tenant_id', $site->tenant_id)->where('website_product_id', $product->id ?? 0)],
@@ -68,7 +68,7 @@ class WebsiteCatalogService
             ];
             $data = Validator::make($data, $rules)->validate();
             foreach ($data['media'] as $index => $image) {
-                app(WebsiteMediaUrls::class)->validatedImage($site, $image, 'media.'.$index);
+                $data['media'][$index] = app(WebsiteMediaUrls::class)->validatedImage($site, $image, 'media.'.$index);
             }
             if ($product->status === 'active' || $data['status'] === 'active') {
                 abort_unless(app(ManagedWebsiteService::class)->publishingEnabled(), 423, 'Publishing is paused. Active products cannot change right now.');

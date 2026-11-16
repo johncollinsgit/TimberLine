@@ -13,6 +13,7 @@ use App\Services\ManagedWebsite\WebsiteMediaUrls;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 
 beforeEach(function (): void {
     $this->withoutVite();
@@ -123,7 +124,7 @@ test('real app editor upload renders and serves the same image anonymously on in
     $upload = $this->postJson('https://app.theeverbranch.com/website/media?tenant='.$this->tenant->slug, ['image' => UploadedFile::fake()->image('fictional-photo.png', 16, 16), 'alt_text' => 'Fictional transport picture'])->assertCreated();
     $url = $upload->json('media.url');
     $id = $upload->json('media.id');
-    expect($url)->toBe('https://app.theeverbranch.com/website-media/'.$id);
+    expect($url)->toBe('/website-media/'.$id);
     $media = TenantSiteMedia::query()->findOrFail($id);
     $bytes = Storage::disk('local')->get($media->storage_path);
     $privatePreview = $this->get($url)->assertOk()->assertStreamedContent($bytes);
@@ -137,9 +138,9 @@ test('real app editor upload renders and serves the same image anonymously on in
     auth()->forgetGuards();
     $this->flushSession();
     $path = '/website-media/'.$id;
-    $this->get('https://image-studio.theeverbranch.com/')->assertOk()->assertSee('src="'.$path.'"', false)->assertSee("url('".$path."')", false)->assertDontSee($url, false);
+    $this->get('https://image-studio.theeverbranch.com/')->assertOk()->assertSee('src="'.$path.'"', false)->assertSee("url('".$path."')", false)->assertDontSee('https://app.theeverbranch.com'.$url, false);
     $this->get('https://image-studio.theeverbranch.com'.$path)->assertOk()->assertHeader('Content-Type', 'image/png')->assertStreamedContent($bytes);
-    $this->call('GET', 'https://app.theeverbranch.com/', [], [], [], imageRelayHeaders($this->domain->hostname, '/'))->assertOk()->assertSee('src="'.$path.'"', false)->assertDontSee($url, false);
+    $this->call('GET', 'https://app.theeverbranch.com/', [], [], [], imageRelayHeaders($this->domain->hostname, '/'))->assertOk()->assertSee('src="'.$path.'"', false)->assertDontSee('https://app.theeverbranch.com'.$url, false);
     $response = $this->call('GET', 'https://app.theeverbranch.com'.$path, [], [], [], imageRelayHeaders($this->domain->hostname, $path));
     $response->assertOk()->assertHeader('Content-Type', 'image/png')->assertStreamedContent($bytes);
     expect($response->headers->get('Cache-Control'))->toContain('no-store');
@@ -156,7 +157,7 @@ test('catalog upload audience uses its exact site-owned reference across editor 
     $product = WebsiteProduct::query()->where('tenant_id', $this->tenant->id)->firstOrFail();
     $media = TenantSiteMedia::query()->where('tenant_id', $this->tenant->id)->firstOrFail();
     $path = '/website-catalog-media/'.$media->id;
-    expect($product->media)->toBe(['https://app.theeverbranch.com'.$path]);
+    expect($product->media)->toBe([$path]);
     $bytes = Storage::disk('local')->get($media->storage_path);
     $this->get('https://app.theeverbranch.com'.$path)->assertOk(); // Owner's private editor remains available.
     auth()->forgetGuards();
@@ -219,3 +220,115 @@ test('upload references never adopt foreign identifiers hosts credentials or mal
     $this->websites->publish($otherSite, null);
     $this->get('https://other-image-studio.theeverbranch.com'.$path)->assertNotFound();
 });
+
+test('owned picker uploads stay relative through catalog validation and hero rendering on a development port', function (): void {
+    $origin = 'http://app.theeverbranch.com:5196';
+    URL::forceRootUrl($origin);
+    try {
+        $photo = $this->postJson($origin.'/website/media?tenant='.$this->tenant->slug, [
+            'image' => UploadedFile::fake()->image('owned-port-photo.png'), 'alt_text' => 'Owned port-safe photo',
+        ])->assertCreated()->json('media');
+        expect($photo['url'])->toBe('/website-media/'.$photo['id'])
+            ->and($photo['catalog_url'])->toBe('/website-catalog-media/'.$photo['id']);
+        $this->getJson($origin.'/website/media?tenant='.$this->tenant->slug)
+            ->assertOk()->assertJsonPath('media.0.url', $photo['url'])->assertJsonPath('media.0.catalog_url', $photo['catalog_url']);
+        $this->get($origin.'/website/products/create?tenant='.$this->tenant->slug)->assertOk()
+            ->assertViewHas('photoLibrary', fn ($rows): bool => $rows[0]['url'] === $photo['url'] && $rows[0]['catalog_url'] === $photo['catalog_url']);
+        $this->post($origin.'/website/products?tenant='.$this->tenant->slug, [
+            'catalog_form' => 1, 'title' => 'Fictional port-safe product', 'handle' => 'port-safe-product',
+            'status' => 'draft', 'product_type' => 'physical', 'track_inventory' => false,
+            'retained_media' => [$photo['catalog_url']], 'collection_ids' => [],
+            'variants' => [['title' => 'Default', 'price' => '12.00', 'is_available' => true]],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        expect(WebsiteProduct::query()->where('tenant_id', $this->tenant->id)->sole()->media)->toBe([$photo['catalog_url']]);
+        $this->post($origin.'/website/collections?tenant='.$this->tenant->slug, [
+            'title' => 'Port-safe collection', 'handle' => 'port-safe-collection', 'status' => 'draft',
+            'image_url' => $photo['catalog_url'],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        expect(WebsiteCollection::query()->where('tenant_id', $this->tenant->id)->sole()->image_url)->toBe($photo['catalog_url']);
+        $home = $this->site->pages()->where('slug', '/')->firstOrFail();
+        $this->putJson($origin.'/website/editor/'.$home->id.'?tenant='.$this->tenant->slug, [
+            'current_version_id' => $home->draft_version_id, 'title' => 'Port-safe private draft',
+            'blocks' => [['type' => 'hero', 'heading' => 'Port-safe hero', 'image_url' => $photo['url'], 'image_alt' => 'Owned port-safe photo']],
+        ])->assertOk();
+        $this->get($origin.'/website/editor/'.$home->id.'/preview-site?tenant='.$this->tenant->slug)
+            ->assertOk()->assertSee("url('".$photo['url']."')", false);
+        expect(app(WebsiteMediaUrls::class)->forSite($this->site, $origin.$photo['url']))->toBe('');
+        Http::assertNothingSent();
+    } finally {
+        URL::forceRootUrl(null);
+    }
+});
+
+test('multipart catalog uploads persist the same relative owned catalog alias', function (): void {
+    URL::forceRootUrl('http://app.theeverbranch.com:5196');
+    try {
+        $this->post('http://app.theeverbranch.com:5196/website/products?tenant='.$this->tenant->slug, [
+            'catalog_form' => 1, 'title' => 'Uploaded catalog product', 'handle' => 'uploaded-port-product',
+            'status' => 'draft', 'product_type' => 'physical', 'track_inventory' => false,
+            'retained_media' => [], 'collection_ids' => [], 'images' => [UploadedFile::fake()->image('catalog-port.png')],
+            'variants' => [['title' => 'Default', 'price' => '10.00', 'is_available' => true]],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $media = TenantSiteMedia::query()->where('tenant_id', $this->tenant->id)->sole();
+        expect(WebsiteProduct::query()->where('tenant_id', $this->tenant->id)->sole()->media)->toBe(['/website-catalog-media/'.$media->id]);
+        Http::assertNothingSent();
+    } finally {
+        URL::forceRootUrl(null);
+    }
+});
+
+test('approved related photos retain their relative path through normal HTTPS catalog forms', function (): void {
+    $path = '/images/public-site/guide-retail.webp';
+    expect(is_file(public_path(ltrim($path, '/'))))->toBeTrue();
+    $this->post('https://app.theeverbranch.com/website/products?tenant='.$this->tenant->slug, [
+        'catalog_form' => 1, 'title' => 'Related-photo product', 'handle' => 'related-photo-product',
+        'status' => 'draft', 'product_type' => 'physical', 'track_inventory' => false,
+        'retained_media' => [$path], 'collection_ids' => [],
+        'variants' => [['title' => 'Default', 'price' => '10.00', 'is_available' => true]],
+    ])->assertRedirect()->assertSessionHasNoErrors();
+    $this->post('https://app.theeverbranch.com/website/collections?tenant='.$this->tenant->slug, [
+        'title' => 'Related-photo collection', 'handle' => 'related-photo-collection', 'status' => 'draft', 'image_url' => $path,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+    expect(WebsiteProduct::query()->where('tenant_id', $this->tenant->id)->sole()->media)->toBe([$path])
+        ->and(WebsiteCollection::query()->where('tenant_id', $this->tenant->id)->sole()->image_url)->toBe($path);
+    Http::assertNothingSent();
+});
+
+test('catalog photo strings still reject foreign ownership and noncanonical upload URLs', function (string $case): void {
+    $photo = $this->postJson('https://app.theeverbranch.com/website/media?tenant='.$this->tenant->slug, [
+        'image' => UploadedFile::fake()->image('allowed-photo.png'),
+    ])->assertCreated()->json('media');
+    $path = $photo['catalog_url'];
+    if (in_array($case, ['foreign tenant', 'foreign site'], true)) {
+        $other = Tenant::query()->create(['name' => 'Other image owner', 'slug' => 'other-catalog-image']);
+        $otherSite = $this->websites->createSite($other, null);
+        $foreign = TenantSiteMedia::query()->create([
+            'tenant_id' => $case === 'foreign tenant' ? $other->id : $this->tenant->id,
+            'tenant_site_id' => $otherSite->id, 'storage_disk' => 'local', 'storage_path' => 'foreign.png',
+            'file_name' => 'foreign.png', 'mime_type' => 'image/png', 'file_size' => 1,
+            'checksum' => str_repeat('a', 64), 'kind' => 'image', 'source' => 'upload',
+        ]);
+        $path = '/website-catalog-media/'.$foreign->id;
+    } else {
+        $path = match ($case) {
+            'development port' => 'http://app.theeverbranch.com:5196'.$path,
+            'default explicit port' => 'https://app.theeverbranch.com:443'.$path,
+            'scheme relative' => '//app.theeverbranch.com'.$path,
+            'query' => $path.'?download=1',
+            'unrelated relative' => '/private-photo.png',
+            'unsupported scheme' => 'javascript:alert(1)',
+        };
+    }
+    $this->postJson('https://app.theeverbranch.com/website/products?tenant='.$this->tenant->slug, [
+        'catalog_form' => 1, 'title' => 'Denied photo', 'handle' => 'denied-photo-product',
+        'status' => 'draft', 'product_type' => 'physical', 'track_inventory' => false,
+        'retained_media' => [$path], 'collection_ids' => [],
+        'variants' => [['title' => 'Default', 'price' => '10.00', 'is_available' => true]],
+    ])->assertUnprocessable()->assertJsonValidationErrors('media.0');
+    $this->postJson('https://app.theeverbranch.com/website/collections?tenant='.$this->tenant->slug, [
+        'title' => 'Denied collection', 'handle' => 'denied-photo-collection', 'status' => 'draft', 'image_url' => $path,
+    ])->assertUnprocessable()->assertJsonValidationErrors('image_url');
+    expect(WebsiteProduct::query()->where('tenant_id', $this->tenant->id)->count())->toBe(0)
+        ->and(WebsiteCollection::query()->where('tenant_id', $this->tenant->id)->count())->toBe(0);
+    Http::assertNothingSent();
+})->with(['foreign tenant', 'foreign site', 'development port', 'default explicit port', 'scheme relative', 'query', 'unrelated relative', 'unsupported scheme']);
