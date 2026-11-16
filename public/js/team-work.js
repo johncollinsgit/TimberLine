@@ -6,7 +6,7 @@
   if (premium) $('layout').value = 'board';
   let projects = [], members = [], selected = null, editingProject = null, parentId = null, page = 1, generation = 0;
   let createTaskId, createTaskKey, createProjectId, createProjectKey;
-  let detailGeneration = 0, projectSearchPage = 1;
+  let detailGeneration = 0, projectSearchPage = 1, activeCoreRead = 0;
   let followUpDraft = null;
   let overview = null, statusDraft = null, statusGeneration = 0, statusBefore = null, statusCandidates = [], statusOwnerProbe = 0;
   let pendingMutations = 0, workspaceNavigating = false, workspacePage = 1, workspaceGeneration = 0;
@@ -174,7 +174,7 @@
   $('project-result-prev').onclick = () => { if (projectSearchPage > 1) { projectSearchPage--; load(); } };
   $('project-result-next').onclick = () => { projectSearchPage++; load(); };
   async function load() {
-    const current = ++generation; premium?.beforeLoad?.(); clearProjectResults();
+    const current = ++generation; activeCoreRead = current; premium?.beforeLoad?.(); clearProjectResults();
     try {
       const endpoint = url(root.dataset.dataUrl); endpoint.searchParams.set('q', $('search').value); endpoint.searchParams.set('mine', ['mine', 'home'].includes($('mode').value) ? '1' : '0'); endpoint.searchParams.set('page', page); endpoint.searchParams.set('project_page', projectSearchPage);
       endpoint.searchParams.set('completion', $('mode').value === 'home' ? 'incomplete' : $('completion').value);
@@ -260,6 +260,7 @@
       }
       if (!data.tasks.length) $('list').append(element('p', 'No accessible tasks match this view.', 'muted'));
     } catch (error) { status(error.message); }
+    finally { if (activeCoreRead === current) activeCoreRead = 0; }
   }
   async function openTask(id, commentId = null, internal = false) {
     if (!internal && !coreNavigationReady()) return;
@@ -484,7 +485,13 @@
     try { const reply = await command({ kind: item.kind === 'project' ? 'project.from_template' : 'task.from_template', id: item.copyId, idempotency_key: item.copyKey, project_id: item.project.id, project_version: item.preview.project_version, template_id: item.id, template_version: item.preview.version, acknowledge_sharing: true, ...(item.kind === 'project' ? { name: $('template-new-name').value } : {}) }); $('template-dialog').close(); $('mode').value = 'all'; $('layout').value = 'list'; $('date-filter').value = 'all'; $('search').value = ''; $('priority-filter').value = ''; $('completion').value = 'all'; page = 1; clearDetail(); await load(); $('project-filter').value = item.kind === 'project' ? reply.result.id : item.project.id; await load(); if (item.kind === 'task') await openTask(reply.result.id); status('Reviewed copy created; source work is unchanged.'); } catch (error) { status(error.message); }
   };
   for (const button of root.querySelectorAll('[data-close]')) button.onclick = () => document.getElementById(button.dataset.close).close();
-  for (const id of ['search', 'mode', 'project-filter', 'layout', 'completion', 'priority-filter', 'month', 'date-filter', 'sort']) $(id)[id === 'search' ? 'oninput' : 'onchange'] = () => { if (!coreNavigationReady()) { $(id).value = acceptedFilters[id] ?? ''; return; } acceptedFilters[id] = $(id).value; page = 1; projectSearchPage = 1; clearDetail(); load(); };
+  for (const id of ['search', 'mode', 'project-filter', 'layout', 'completion', 'priority-filter', 'month', 'date-filter', 'sort']) $(id)[id === 'search' ? 'oninput' : 'onchange'] = () => {
+    if (!coreNavigationReady()) { $(id).value = acceptedFilters[id] ?? ''; return; }
+    const presentationOnly = id === 'layout' && filterIds.filter(candidate => candidate !== 'layout').every(candidate => $(candidate).value === acceptedFilters[candidate]);
+    acceptedFilters[id] = $(id).value; page = 1; projectSearchPage = 1; clearDetail();
+    if (presentationOnly && !activeCoreRead && premium?.changeEventLayout?.($('layout').value)) return;
+    load();
+  };
   $('month').value = new Date().toISOString().slice(0, 7);
   function renderSubtasks(task) {
     $('subtasks').replaceChildren();

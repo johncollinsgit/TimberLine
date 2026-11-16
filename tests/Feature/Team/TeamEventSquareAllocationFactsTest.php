@@ -71,6 +71,60 @@ test('effective scoped revisions ignore observation churn but retain allocation 
     expect($facts->revisionFor($this->tenant->id, ['selected']))->not->toBe($before);
 });
 
+test('reused occurrence models require fresh complete row witnesses and callers cannot poison their retained copies', function () {
+    expect(app(EventSquareAllocationFacts::class)->occurrencesFor($this->tenant->id, 'no-events-yet'))->toBeEmpty();
+    $event = allocationFactEvent($this, allocationFactData(['selected'], $this->owner->id), ['starts_on' => '2025-11-01', 'ends_on' => '2025-11-02']);
+    $facts = app(EventSquareAllocationFacts::class);
+    $first = $facts->occurrencesFor($this->tenant->id, 'selected')->sole();
+    expect((int) $first->tenant_id)->toBe($this->tenant->id)->and($first->title)->toBe($event->title);
+    $first->title = 'Caller decoration';
+    $first->data = [];
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    $again = $facts->occurrencesFor($this->tenant->id, 'selected')->sole();
+    $queries = DB::getQueryLog();
+    DB::disableQueryLog();
+    expect($again->title)->toBe($event->title)->and($again->data)->toBe($event->data)
+        ->and($queries)->toHaveCount(1)->and($queries[0]['bindings'])->toContain($this->tenant->id, 'event')
+        ->and(strtolower($queries[0]['query']))->not->toContain(' in (');
+    foreach (['title' => 'Current title', 'starts_on' => '2025-11-03', 'ends_on' => '2025-11-04', 'visibility' => 'admin', 'source_key' => hash('sha256', 'new-source'), 'assigned_user_id' => $this->owner->id] as $column => $value) {
+        DB::table('team_operation_records')->where('id', $event->id)->update([$column => $value]);
+        $fresh = $facts->occurrencesFor($this->tenant->id, 'selected')->sole();
+        expect($fresh->getRawOriginal($column))->toEqual($value)->and($fresh->version)->toBe(1);
+    }
+    $original = $event->getRawOriginal('data');
+    $event->update(['data' => allocationFactData(['replacement'], $this->owner->id)]);
+    expect($facts->occurrencesFor($this->tenant->id, 'selected'))->toBeEmpty();
+    DB::table('team_operation_records')->where('id', $event->id)->update(['data' => $original]);
+    expect($facts->occurrencesFor($this->tenant->id, 'selected')->sole()->data)->toBe(allocationFactData(['selected'], $this->owner->id));
+    $event->update(['status' => 'withdrawn']);
+    expect($facts->occurrencesFor($this->tenant->id, 'selected'))->toBeEmpty();
+    $event->delete();
+    expect($facts->occurrencesFor($this->tenant->id, 'selected'))->toBeEmpty();
+    Http::assertNothingSent();
+});
+
+test('a changed occurrence model cannot pair a fresh witness with an older ciphertext during reload', function () {
+    $event = allocationFactEvent($this, allocationFactData(['selected'], $this->owner->id));
+    $facts = app(EventSquareAllocationFacts::class);
+    $facts->occurrencesFor($this->tenant->id, 'selected');
+    $original = (array) DB::table('team_operation_records')->where('id', $event->id)->first();
+    $event->update(['title' => 'Intermediate title', 'data' => [...allocationFactData(['selected'], $this->owner->id), 'notes' => 'Intermediate source']]);
+    $changed = false;
+    DB::listen(function ($query) use (&$changed, $original, $event) {
+        if (! $changed && str_starts_with(strtolower($query->sql), 'select') && str_contains($query->sql, 'team_operation_records') && ! str_contains(strtolower($query->sql), ' in (')) {
+            $changed = true;
+            DB::table('team_operation_records')->where('id', $event->id)->update($original);
+        }
+    });
+    $fresh = $facts->occurrencesFor($this->tenant->id, 'selected')->sole();
+    expect($changed)->toBeTrue()->and($fresh->title)->toBe($original['title'])
+        ->and($fresh->getRawOriginal('data'))->toBe($original['data']);
+    $event->update(['title' => 'Current source', 'data' => [...allocationFactData(['selected'], $this->owner->id), 'notes' => 'Current source']]);
+    expect($facts->occurrencesFor($this->tenant->id, 'selected')->sole()->data['notes'])->toBe('Current source');
+    Http::assertNothingSent();
+});
+
 test('new competing commerce mappings and issuer selection stay in the effective source predicate', function () {
     $connection = TeamProviderConnection::create(['id' => Str::uuid(), 'tenant_id' => $this->tenant->id, 'area_id' => $this->area->id, 'user_id' => $this->owner->id,
         'provider' => 'asana', 'account_key' => hash('sha256', Str::uuid()), 'status' => 'connected', 'generation' => 1, 'settings' => ['source' => ['asana_project' => '200']]]);

@@ -283,3 +283,23 @@ test('mobile essentials and setup require real scoped bearer access and matching
     \Illuminate\Support\Facades\Auth::shouldUse('web');
     $this->getJson($path)->assertUnauthorized();
 });
+
+test('explicit basic essentials omit heavy finance and history reads while retaining event facts and source admission', function () {
+    [$tenant, $owner, $area, $event, $task] = essentialsSource();
+    app()->instance(\App\Services\Team\Studio\EventIntelligence::class, Mockery::mock(\App\Services\Team\Studio\EventIntelligence::class)->shouldNotReceive('detail')->getMock());
+    $commerce = Mockery::mock(\App\Services\Team\Studio\EventCommerceReport::class);
+    $commerce->shouldReceive('commerceId')->andReturn(123);
+    $commerce->shouldNotReceive('forEvent');
+    $commerce->shouldNotReceive('forEventSales');
+    app()->instance(\App\Services\Team\Studio\EventCommerceReport::class, $commerce);
+    Http::fake(['*tasks/400*' => Http::sequence()->push(['data' => $task])->pushStatus(403)]);
+    $url = '/team/events/'.$event->id.'/essentials?tenant='.$tenant->slug.'&include_sales=0';
+    $response = $this->actingAs($owner)->getJson($url)->assertOk()->assertJsonPath('event_id', $event->id)
+        ->assertJsonPath('sales.can_view', true)->assertJsonPath('sales.loaded', false)
+        ->assertJsonPath('sales.current.status', 'not_loaded')->assertJsonPath('sales.previous.status', 'not_loaded')
+        ->assertJsonPath('sales.current.amount_cents', null)->assertJsonPath('commerce_event_id', 123)
+        ->assertJsonStructure(['location', 'dates', 'team_members', 'hotel', 'coordinator', 'travel']);
+    expect($response->headers->get('Cache-Control'))->toContain('private', 'no-store');
+    $this->getJson($url)->assertForbidden()->assertJsonMissingPath('location')->assertJsonMissingPath('sales');
+    Http::assertSentCount(2);
+});

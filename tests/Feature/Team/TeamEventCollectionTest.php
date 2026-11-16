@@ -48,9 +48,36 @@ test('collection projection preserves reviewed sparse sessions and crew without 
     $session = ['id' => (string) Str::uuid(), 'kind' => 'setup', 'date' => '2026-11-05'];
     collectionEvent($tenant, $area, 'Reviewed event', ['assigned_user_id' => $owner->id, 'data' => ['sessions' => [$session], 'original_notes' => str_repeat('Private detail ', 100), 'fields' => [['field' => 'address', 'value' => 'Private venue']], 'amount_cents' => 1234]]);
     $item = readCollectionEvents($tenant, $owner, $area)['items'][0];
-    expect(array_keys($item['data']))->toBe(['event_schedule', 'source_schedule'])
+    expect(array_keys($item['data']))->toBe(['event_schedule', 'source_schedule', 'calendar_acceptance_status'])
         ->and($item['data']['event_schedule']['sessions'][0]['date'])->toBe('2026-11-05')
         ->and($item['calendar_people'][0]['id'])->toBe('native:'.$owner->id);
+});
+
+test('compact calendar booking uses native acceptance or reviewed source acceptance without inferring from record status or dates', function () {
+    [$tenant, $owner] = teamWorkspace();
+    $area = studioArea($tenant);
+    collectionEvent($tenant, $area, 'Native accepted', ['data' => ['acceptance_status' => 'Confirmed']]);
+    collectionEvent($tenant, $area, 'Native unknown', ['status' => 'accepted', 'data' => ['schedule_complete' => true]]);
+    collectionEvent($tenant, $area, 'Native declined', ['data' => ['acceptance_status' => 'no']]);
+    $connection = TeamProviderConnection::create(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $area->id, 'user_id' => $owner->id,
+        'provider' => 'asana', 'account_key' => hash('sha256', Str::uuid()), 'status' => 'connected', 'generation' => 1, 'expires_at' => now()->addHour(),
+        'credentials' => ['access_token' => 'fictional'], 'settings' => ['source' => ['asana_workspace' => '100', 'asana_project' => '200']]]);
+    $source = ['_generation' => 1, 'source_workspace' => '100', 'source_project' => '200', 'acceptance_status' => 'yes',
+        'fields' => [['field' => 'acceptance_status', 'value' => 'yes', 'review_state' => 'needs_review']]];
+    collectionEvent($tenant, $area, 'Source unreviewed', ['connection_id' => $connection->id, 'data' => [...$source, 'source_id' => '300']]);
+    collectionEvent($tenant, $area, 'Source reviewed', ['connection_id' => $connection->id, 'data' => [...$source, 'source_id' => '301', 'reviewed_fields' => ['acceptance_status' => 'yes']]]);
+    collectionEvent($tenant, $area, 'Source declined', ['connection_id' => $connection->id, 'data' => [...$source, 'source_id' => '302', 'reviewed_fields' => ['acceptance_status' => 'no']]]);
+    Http::fake(['*projects/200/tasks*' => Http::response(['data' => array_map(fn ($id) => ['gid' => (string) $id, 'workspace' => ['gid' => '100'],
+        'memberships' => [['project' => ['gid' => '200']]]], range(300, 302)), 'next_page' => null])]);
+    $items = collect(readCollectionEvents($tenant, $owner, $area)['items'])->keyBy('title');
+    expect($items['Native accepted']['data']['calendar_acceptance_status'])->toBe('Confirmed')
+        ->and($items['Native unknown']['data']['calendar_acceptance_status'])->toBeNull()
+        ->and($items['Native declined']['data']['calendar_acceptance_status'])->toBe('no')
+        ->and($items['Source unreviewed']['data']['calendar_acceptance_status'])->toBeNull()
+        ->and($items['Source reviewed']['data']['calendar_acceptance_status'])->toBe('yes')
+        ->and($items['Source declined']['data']['calendar_acceptance_status'])->toBe('no')
+        ->and(array_keys($items['Source reviewed']['data']))->toBe(['event_schedule', 'source_schedule', 'calendar_acceptance_status']);
+    Http::assertSentCount(1);
 });
 
 test('collection authorization setup and crew queries do not grow with native event count', function () {

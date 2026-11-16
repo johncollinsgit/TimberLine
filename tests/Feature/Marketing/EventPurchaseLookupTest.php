@@ -20,7 +20,7 @@ function purchaseLookupRecord($tenant, $area, string $kind, array $data = []): T
         'kind' => $kind, 'title' => 'Fictional '.$kind, 'source_key' => hash('sha256', Str::uuid()), 'status' => 'accepted', 'version' => 1, 'data' => $data]);
 }
 
-function purchaseLookupScans(): array
+function purchaseLookupEventScans(): array
 {
     return array_values(array_filter(DB::getQueryLog(), function (array $query): bool {
         $sql = strtolower(str_replace(['"', '`'], '', $query['query']));
@@ -28,6 +28,26 @@ function purchaseLookupScans(): array
         return str_contains($sql, 'from team_operation_records') && in_array('event', $query['bindings'], true)
             && ! preg_match('/\bid\s*(?:in\s*\(|=)/', $sql);
     }));
+}
+
+function purchaseLookupMetadataScan(array $query): bool
+{
+    $sql = strtolower(str_replace(['"', '`'], '', $query['query']));
+
+    // MySQL reads a ciphertext hash; SQLite reads ciphertext to hash locally.
+    // Neither projection creates/decrypts a tenant-wide collection of event models.
+    return str_starts_with($sql, 'select id, area_id, version, status, connection_id, assigned_user_id, visibility, ')
+        && (str_contains($sql, 'data from team_operation_records') || str_contains($sql, 'sha2(data,256) as ciphertext_hash'));
+}
+
+function purchaseLookupScans(): array
+{
+    return array_values(array_filter(purchaseLookupEventScans(), fn ($query) => ! purchaseLookupMetadataScan($query)));
+}
+
+function purchaseLookupMetadataScans(): array
+{
+    return array_values(array_filter(purchaseLookupEventScans(), 'purchaseLookupMetadataScan'));
 }
 
 beforeEach(function (): void {
@@ -76,6 +96,7 @@ it('bounds encrypted event scans across a cold audience and refreshes late attri
     $preview = $this->actingAs($this->owner)->postJson($url, [...$input, 'preview_id' => (string) Str::uuid()])
         ->assertOk()->assertJsonPath('matched', 24)->assertJsonPath('complete', true);
     $scans = purchaseLookupScans();
+    $metadata = purchaseLookupMetadataScans();
     $coldQueryCount = count(DB::getQueryLog());
     $coldHistoryReads = collect(DB::getQueryLog())->filter(function ($query) {
         $sql = str_replace(['"', '`'], '', $query['query']);
@@ -83,9 +104,12 @@ it('bounds encrypted event scans across a cold audience and refreshes late attri
         return str_contains($sql, 'from square_orders') && str_contains($sql, 'order by closed_at desc, id desc');
     })->count();
     DB::disableQueryLog();
-    // One shared lookup plus the independent original-sales allocation conflict check, rather than a scan per purchase/profile.
-    expect($scans)->toHaveCount(2);
-    foreach ($scans as $scan) {
+    // One shared broad model lookup; changed allocation bodies load by bounded
+    // IDs. Fresh metadata checks each purchase plus the normalizer's coherent
+    // before/after frame and final allocation revision (three boundaries).
+    expect($scans)->toHaveCount(1);
+    expect($metadata)->toHaveCount(count($orders) + 3);
+    foreach ([...$scans, ...$metadata] as $scan) {
         expect($scan['bindings'])->toContain($this->tenant->id)->not->toContain($foreign->id);
     }
     expect(collect($scans)->filter(fn ($scan) => str_contains(str_replace(['"', '`'], '', $scan['query']), 'select id, connection_id, data')))->toHaveCount(1);
@@ -108,6 +132,11 @@ it('bounds encrypted event scans across a cold audience and refreshes late attri
     $warmQueries = count(DB::getQueryLog());
     DB::disableQueryLog();
     expect($warmHistoryReads)->toBe(0)->and($warmQueries)->toBeLessThan(700);
+    if (getenv('EVENT_LOOKUP_METRICS') === '1') {
+        fwrite(STDERR, json_encode(['cold_queries' => $coldQueryCount, 'cold_history_reads' => $coldHistoryReads,
+            'cold_broad_model_scans' => count($scans), 'cold_fresh_metadata_witnesses' => count($metadata),
+            'warm_queries' => $warmQueries, 'warm_history_reads' => $warmHistoryReads], JSON_THROW_ON_ERROR).PHP_EOL);
+    }
 
     // Explicit attribution can move to a newly confirmed canonical customer; another HTTP request must not reuse the old lookup/projection.
     $late = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Confirmed later', 'country' => 'US', 'postal_code' => '75201']);
@@ -120,8 +149,10 @@ it('bounds encrypted event scans across a cold audience and refreshes late attri
     DB::flushQueryLog();
     $fresh = $this->postJson($url, [...$input, 'preview_id' => (string) Str::uuid()])->assertOk()->assertJsonPath('matched', 24)->assertJsonPath('complete', true);
     $scans = purchaseLookupScans();
+    $metadata = purchaseLookupMetadataScans();
     DB::disableQueryLog();
-    expect($scans)->toHaveCount(2)->and(array_column($fresh->json('samples'), 'id'))->toContain($late->id)->not->toContain($buyers->first()->id);
+    expect($scans)->toHaveCount(1)->and($metadata)->toHaveCount(count($orders) + 3)
+        ->and(array_column($fresh->json('samples'), 'id'))->toContain($late->id)->not->toContain($buyers->first()->id);
     expect(app(ConfirmedCustomerPurchaseProjection::class)->read($buyers->first(), $this->tenant->id)['confirmed_orders'])->toBe(0);
     Http::assertNothingSent();
 });

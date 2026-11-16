@@ -171,6 +171,18 @@ broadband with representative Modern Forestry data and twice that volume.
 Record measured results separately from targets; do not remove source or tenant
 admission checks to meet them.
 
+The browser event dialog initially requests the admitted record and basic
+`essentials?include_sales=0` only. Updates, Sales, History and Customers load when
+expanded. Sales first requests `confirmed-sales?summary=1`; Transactions explicitly
+requests `summary=0&page=N`, returning at most twenty original purchases at a time.
+Neither compact mode loads unused budget, profitability or annual-history detail.
+The unflagged legacy endpoints and full/native service behavior remain compatible.
+Closed sections stop their requests and polling; source/identity denial removes
+private content. Reopening re-admits current access. Discussion drafts remain
+scoped to their original actor, tenant and event, and stay sealed until readmitted.
+Upcoming current occurrences keep verified prior history visible and distinguish
+not-started, in-progress and elapsed incomplete source coverage.
+
 ## Delivery and acceptance
 
 Use the protected PR, migration and Forge release gates, then verify the exact

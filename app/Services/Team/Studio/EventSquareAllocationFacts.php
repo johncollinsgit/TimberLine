@@ -7,10 +7,28 @@ use App\Models\TeamProviderConnection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-/** Scoped derived source IDs, never an access grant or a cross-request cache. */
+/** Freshly witnessed source projections, never an access grant or a cross-request cache. */
 final class EventSquareAllocationFacts
 {
     private array $snapshots = [];
+
+    private ?array $recordColumns = null;
+
+    /** Every reuse first checks the complete current row/ciphertext inventory. */
+    public function occurrencesFor(int $tenant, string $orderId): \Illuminate\Support\Collection
+    {
+        $facts = $this->facts($tenant);
+        $models = $this->snapshots[$tenant]['models'] ?? [];
+        $result = [];
+        foreach ($facts as $id => $fact) {
+            if (in_array($orderId, $fact['order_ids'], true) && isset($models[$id])) {
+                // Callers may decorate their copy; that must not alter the witness.
+                $result[] = clone $models[$id];
+            }
+        }
+
+        return collect($result);
+    }
 
     /** Candidate IDs only; callers still freshly load and admit the original records. */
     public function occurrenceIdsFor(int $tenant, array $orderIds): array
@@ -141,14 +159,16 @@ final class EventSquareAllocationFacts
         abort_unless($tenant > 0, 404);
         for ($attempt = 0; $attempt < 3; $attempt++) {
             $before = $this->metadata($tenant);
-            $cached = $this->snapshots[$tenant] ?? ['metadata' => [], 'facts' => []];
+            $cached = $this->snapshots[$tenant] ?? ['metadata' => [], 'facts' => [], 'models' => []];
             if ($before === $cached['metadata']) {
                 return $cached['facts'];
             }
             $facts = array_intersect_key($cached['facts'], $before);
+            $models = array_intersect_key($cached['models'], $before);
             $changed = array_keys(array_filter($before, fn ($value, $id) => ($cached['metadata'][$id] ?? null) !== $value, ARRAY_FILTER_USE_BOTH));
             // A changed row that disappears during reload cannot retain its old facts.
             $facts = array_diff_key($facts, array_fill_keys($changed, true));
+            $models = array_diff_key($models, array_fill_keys($changed, true));
             $coherent = true;
             foreach (array_chunk($changed, 500) as $ids) {
                 foreach ($this->rows($tenant)->whereIn('id', $ids)->get() as $row) {
@@ -156,7 +176,10 @@ final class EventSquareAllocationFacts
                         $coherent = false;
                         break 2;
                     }
-                    $record = (new TeamOperationRecord)->newFromBuilder((array) $row);
+                    $attributes = (array) $row;
+                    unset($attributes['ciphertext_hash']);
+                    $record = (new TeamOperationRecord)->newFromBuilder($attributes);
+                    $models[$record->id] = $record;
                     $data = $record->data ?? [];
                     $review = $data['_teams_enrichment']['square_orders'] ?? [];
                     abort_unless(is_array($review) && (! isset($review['ids']) || is_array($review['ids'])), 409, 'Event allocation metadata needs review.');
@@ -177,7 +200,7 @@ final class EventSquareAllocationFacts
             // without relying on a session's transaction-isolation default.
             if ($coherent && count($facts) === count($before) && $before === $this->metadata($tenant)) {
                 ksort($facts);
-                $this->snapshots[$tenant] = ['metadata' => $before, 'facts' => $facts];
+                $this->snapshots[$tenant] = ['metadata' => $before, 'facts' => $facts, 'models' => $models];
 
                 return $facts;
             }
@@ -199,7 +222,9 @@ final class EventSquareAllocationFacts
 
     private function rows(int $tenant, bool $data = true): \Illuminate\Database\Query\Builder
     {
-        $columns = ['id', 'area_id', 'version', 'status', 'connection_id', 'assigned_user_id', 'visibility'];
+        $identity = ['id', 'area_id', 'version', 'status', 'connection_id', 'assigned_user_id', 'visibility'];
+        $this->recordColumns ??= Schema::getColumnListing('team_operation_records');
+        $columns = [...$identity, ...array_diff($this->recordColumns, [...$identity, 'data'])];
         if ($data || DB::connection()->getDriverName() !== 'mysql') {
             $columns[] = 'data';
         }
@@ -213,8 +238,12 @@ final class EventSquareAllocationFacts
 
     private function rowMetadata(object $row): array
     {
-        return [$row->area_id, (int) $row->version, $row->status, $row->connection_id, $row->assigned_user_id, $row->visibility,
-            property_exists($row, 'ciphertext_hash') ? $row->ciphertext_hash : hash('sha256', json_encode($row->data, JSON_THROW_ON_ERROR))];
+        $metadata = (array) $row;
+        $hash = array_key_exists('ciphertext_hash', $metadata) ? $metadata['ciphertext_hash'] : hash('sha256', json_encode($metadata['data'] ?? null, JSON_THROW_ON_ERROR));
+        unset($metadata['data'], $metadata['ciphertext_hash']);
+        ksort($metadata);
+
+        return [$metadata, $hash];
     }
 
     private function strings(array $ids): array

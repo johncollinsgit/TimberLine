@@ -8,12 +8,24 @@ more than 10,000 nodes fail closed. Current source/policy admission remains fres
 for every proof. Other engines retain the original bounded traversal. No receipt
 or access result is cached across requests.
 
-The scoped allocation-facts helper keeps derived source IDs rather than decrypting
-all event notes for every purchase group. Each use checks fresh record metadata
-and complete ciphertext SHA-256 values. Changed records are loaded with their own
+The scoped allocation-facts helper keeps derived source IDs and request-local
+copies of original models rather than reloading all event notes for every purchase
+group. Every model reuse first checks fresh complete row metadata (including
+tenant, kind, title, dates, status, version, connection, assignment and visibility)
+and complete ciphertext SHA-256 values. Callers receive independent model copies;
+decoration cannot modify a retained witness. Changed records load with their own
 hash in the same SELECT; a second metadata collection must agree before the new
 projection is retained. Missing changed rows cannot retain old decoded facts.
 This detects insertions, deletion, withdrawal and same-version direct edits.
+MySQL returns only the ciphertext hash for unchanged records; SQLite's fallback
+reads ciphertext and hashes it locally. Only the structural schema-column list
+is reused without an additional database read inside this request scope.
+
+The audience lookup regression separately counts broad model/body scans and the
+per-purchase fresh metadata witnesses. Its original cold/warm total-query caps and
+one-history-rebuild-per-buyer limits remain in force. Reviewer admission uses a
+fresh combined user/membership existence query, preserving active-user,
+platform-admin and exact owner/admin membership rules without caching authority.
 
 The normalizer receives its revision and conflict answers from one projection,
 then freshly verifies that revision before returning. Customer dependency callers

@@ -204,10 +204,12 @@ class OperationsWorkspace
     {
         $data = $record->data ?? [];
         $schedule = app(EventSchedule::class)->calendar($data, $record->starts_on?->toDateString(), $record->ends_on?->toDateString());
+        $acceptance = $record->connection_id ? ($data['reviewed_fields']['acceptance_status'] ?? null) : ($data['acceptance_status'] ?? null);
 
         return ['id' => $record->id, 'area_id' => $record->area_id, 'kind' => $record->kind, 'title' => $record->title, 'status' => $record->status, 'version' => $record->version,
             'assigned_user_id' => $record->assigned_user_id, 'starts_on' => $record->starts_on?->toDateString(), 'ends_on' => $record->ends_on?->toDateString(),
-            'data' => ['event_schedule' => $schedule, 'source_schedule' => $data['source_schedule'] ?? $data['event_schedule']['source_schedule'] ?? null],
+            'data' => ['event_schedule' => $schedule, 'source_schedule' => $data['source_schedule'] ?? $data['event_schedule']['source_schedule'] ?? null,
+                'calendar_acceptance_status' => is_string($acceptance) ? $acceptance : null],
             'calendar_people' => $this->calendarPeople($record, $people), 'source' => $record->connection_id ? ['connection_id' => $record->connection_id, 'key' => $record->source_key] : null,
             'capabilities' => ['edit' => $canEdit && ! $record->connection_id, 'schedule' => $canEdit], 'updated_at' => $record->updated_at?->toIso8601String()];
     }

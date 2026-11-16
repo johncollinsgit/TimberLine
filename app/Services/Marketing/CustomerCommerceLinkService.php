@@ -32,6 +32,24 @@ class CustomerCommerceLinkService
         return in_array($membership?->pivot->role, ['owner', 'tenant_owner', 'admin'], true);
     }
 
+    /** Fresh read of retained reviewer authority, equivalent to find(id) followed by canLink(). */
+    public function canLinkReviewer(?int $reviewerId, int $tenantId): bool
+    {
+        if (! $reviewerId || $reviewerId <= 0 || $tenantId <= 0) {
+            return false;
+        }
+
+        return DB::table('users')->where('users.id', $reviewerId)->where('users.is_active', true)
+            ->where(function ($query) use ($tenantId): void {
+                // HEX preserves PHP's exact role comparison under MySQL's case-insensitive collation.
+                $query->whereRaw('HEX(users.role) = HEX(?)', ['platform_admin'])->orWhereExists(function ($membership) use ($tenantId): void {
+                    $membership->selectRaw('1')->from('tenant_user')->join('tenants', 'tenants.id', '=', 'tenant_user.tenant_id')
+                        ->whereColumn('tenant_user.user_id', 'users.id')->where('tenants.id', $tenantId)->where('tenant_user.membership_active', true)
+                        ->whereRaw('HEX(tenant_user.role) IN (HEX(?), HEX(?), HEX(?))', ['owner', 'tenant_owner', 'admin']);
+                });
+            })->exists();
+    }
+
     public function link(User $actor, int $tenantId, MarketingProfile $profile, string $type, string $sourceId, string $reason): MarketingProfileLink
     {
         abort_unless($this->canLink($actor, $tenantId), 403);

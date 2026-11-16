@@ -267,6 +267,12 @@ export function installPremium(root) {
   return {
     get context() { return context; },
     beforeLoad() { window.TeamOperations?.unmountEventCalendar(); },
+    changeEventLayout(layout) {
+      if (!context?.ready() || !window.TeamOperations?.isEventSurface?.() || $('source-filter').value !== 'all' || !['list', 'board', 'calendar'].includes(layout)
+        || (layout === 'list' && $('mode').value !== 'home')) return false;
+      this.render({ ...context, layout });
+      return true;
+    },
     closeMenu() { setMenu(false); },
     navigate() { closeControls(); asana?.clearProject(); $('source-filter').value = 'all'; setMenu(false); },
     reset() { window.TeamOperations?.unmountEventCalendar(); closeControls(); asana?.reset(); for (const id of ['teams-project-list', 'teams-favorite-list']) document.getElementById(id)?.replaceChildren(); $('selection-bar')?.remove(); selectedIds.clear(); selectionMode = false; $('page-title').textContent = 'Verify your work access'; favorites.clear(); views = []; $('saved-views').replaceChildren(new Option('Saved views', '')); $('view-name').value = ''; $('view-dialog').close(); loadedPreferences = false; context = null; },
@@ -286,7 +292,8 @@ export function installPremium(root) {
         && (['board', 'calendar'].includes(ctx.layout) || ($('mode').value === 'home' && ctx.layout === 'list')) && $('mode').value !== 'inbox';
       if (eventSurface && window.TeamOperations?.mountEventSurface) {
         $('home').hidden = true; $('list-heading').hidden = true; $('count').hidden = true; $('prev').hidden = $('next').hidden = true;
-        $('list').hidden = false; $('list').className = ''; $('list').replaceChildren(node('p', 'Loading events for the selected dates…', 'muted'));
+        $('list').hidden = false; $('list').className = '';
+        if (!window.TeamOperations.isEventSurface()) $('list').replaceChildren(node('p', 'Loading events for the selected dates…', 'muted'));
         if ($('selection-bar')) $('selection-bar').hidden = true;
         if ($('asana-work')) $('asana-work').hidden = true;
         const personal = document.getElementById('tops-personal'); if (personal) personal.hidden = true;

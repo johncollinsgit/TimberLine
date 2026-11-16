@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { createServer } from 'node:net';
 import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
+import { checkCalendarPresentation } from './team-calendar-presentation.browser.mjs';
 
 const exec = promisify(execFile), base = resolve(), probe = createServer();
 await new Promise(done => probe.listen(0, '127.0.0.1', done));
@@ -21,6 +22,7 @@ try {
   server = spawn('php', ['artisan', 'serve', '--host=127.0.0.1', `--port=${port}`, '--no-reload'], { cwd: base, env, stdio: 'ignore' });
   let ready = false; for (let i = 0; i < 100; i++) { try { if ((await fetch(origin + '/up')).ok) { ready = true; break; } } catch {} await new Promise(done => setTimeout(done, 100)); } assert.ok(ready);
   for (const [engine, engineName] of [[chromium, 'chromium'], [webkit, 'webkit']]) {
+  await checkCalendarPresentation(engine, engineName, join(evidenceRoot, 'presentation'));
   const evidence = join(evidenceRoot, engineName); activeEvidence = evidence; await mkdir(evidence, { recursive: true });
   browser = await engine.launch(); const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
   await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());

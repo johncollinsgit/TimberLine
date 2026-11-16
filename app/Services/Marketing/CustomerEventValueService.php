@@ -330,7 +330,7 @@ class CustomerEventValueService
                     $review = $occurrence->data['_teams_enrichment']['square_orders'];
                     if (! is_int($review['reviewed_by'] ?? null) || ! $this->date($review['reviewed_at'] ?? null)
                         || $this->date($review['reviewed_at']) > $now
-                        || ! app(CustomerCommerceLinkService::class)->canLink(\App\Models\User::find($review['reviewed_by']), $tenant)) {
+                        || ! app(CustomerCommerceLinkService::class)->canLinkReviewer($review['reviewed_by'], $tenant)) {
                         continue;
                     }
                     $id = app(\App\Services\Team\Studio\EventCommerceReport::class)->commerceId($occurrence);
@@ -531,7 +531,7 @@ class CustomerEventValueService
 
         return is_int($review['reviewed_by'] ?? null) && $date && $date <= $now
             && is_string($review['evidence_reference'] ?? null) && trim($review['evidence_reference']) !== ''
-            && app(CustomerCommerceLinkService::class)->canLink(\App\Models\User::find($review['reviewed_by']), $tenant);
+            && app(CustomerCommerceLinkService::class)->canLinkReviewer($review['reviewed_by'], $tenant);
     }
 
     private function date(mixed $date): ?CarbonImmutable

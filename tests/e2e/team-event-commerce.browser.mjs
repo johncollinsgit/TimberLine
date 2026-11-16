@@ -17,6 +17,8 @@ const env = { ...process.env, APP_ENV: 'testing', APP_DEBUG: 'false', APP_URL: o
   TEAM_WORK_ASANA_ENABLED: 'false', EVERBRANCH_AI_STANDARD_ENABLED: 'false', NIGHTWATCH_ENABLED: 'false', TELESCOPE_ENABLED: 'false', PULSE_ENABLED: 'false', POS_RUNTIME_ID: 'event_browser_fixture' };
 let server, browser;
 try {
+  const lazy = await exec(process.execPath, [resolve('tests/e2e/team-event-detail-lazy.browser.mjs')], { cwd: root, env, maxBuffer: 2e6 });
+  if (lazy.stdout.trim()) console.log(lazy.stdout.trim());
   await exec(php, ['artisan', 'migrate', '--force', '--no-interaction'], { cwd: root, env, maxBuffer: 2e6 });
   const fixture = JSON.parse((await exec(php, [resolve('tests/e2e/fixtures/team-event-commerce-fixture.php')], { cwd: root, env })).stdout);
   env.TEAM_WORK_TENANT_ALLOWLIST = fixture.tenant_id;
@@ -34,11 +36,15 @@ try {
     await page.getByRole('tab', { name: 'Board', exact: true }).click();
     await page.locator('.teams-event-board .teams-task-card').filter({ hasText: 'Fictional seasonal makers and home goods weekend market' }).first().click();
     const dialog = page.locator('#tops-detail'), workspace = dialog.locator('.event-commerce');
-    await workspace.getByRole('button', { name: 'Sales', exact: true }).waitFor();
+    const salesPanel = workspace.locator('.event-sales-panel'), customerPanel = workspace.locator('.event-customers-panel');
+    const showSales = async () => { if (await customerPanel.evaluate(node => node.open)) { await customerPanel.locator('summary').first().click(); await customerPanel.getByRole('searchbox').waitFor({ state: 'hidden' }); } if (await salesPanel.evaluate(node => node.open)) { await salesPanel.locator('summary').first().click(); await salesPanel.locator('.event-facts').waitFor({ state: 'detached' }); } await salesPanel.locator('summary').first().click(); await salesPanel.getByText('Collected before refunds', { exact: true }).waitFor(); await salesPanel.locator('.event-transactions>summary').click(); await salesPanel.locator('.event-transactions [role=status]').filter({ hasText: 'Updated' }).waitFor(); };
+    const showCustomers = async () => { if (await salesPanel.evaluate(node => node.open)) { await salesPanel.locator('summary').first().click(); await salesPanel.locator('.event-facts').waitFor({ state: 'detached' }); } if (!(await customerPanel.evaluate(node => node.open))) await customerPanel.locator('summary').first().click(); await customerPanel.getByRole('searchbox').waitFor(); };
+    await salesPanel.locator('summary').first().waitFor();
+    assert.equal(await workspace.locator('.event-sale').count(), 0, 'Opening the event does not fetch or display transactions');
+    await showSales();
     await workspace.getByText('Fictional Returning customer · $21.60', { exact: true }).waitFor();
     assert.equal(await workspace.getByText('$20.00', { exact: true }).count(), 2, 'Net sales and average order use net merchandise totals');
-    await workspace.getByRole('link', { name: 'Marketing audience', exact: true }).waitFor();
-    await dialog.locator('.event-glance').getByText('See Sales below', { exact: true }).waitFor();
+    assert.equal(await dialog.locator('.event-glance').getByText('See Sales below', { exact: true }).count(), 0, 'Basics omit deferred sales placeholders');
     await workspace.getByText('Collected before refunds', { exact: true }).waitFor();
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
@@ -53,18 +59,18 @@ try {
       assert.ok((await openCustomer.boundingBox()).height >= 44, 'Customer navigation keeps a full touch target');
       assert.equal(new URL(await openCustomer.getAttribute('href'), origin).searchParams.get('event_id'), '730', 'Customer navigation retains event context');
       await workspace.getByRole('button', { name: 'Back to sales', exact: true }).click();
-      await workspace.getByRole('button', { name: 'Customers', exact: true }).click();
+      await showCustomers();
       const search = workspace.getByRole('searchbox', { name: 'Search event customers', exact: true }); await search.fill('fictional');
       const customer = workspace.getByRole('button', { name: /Fictional Returning customer/ }); await customer.waitFor();
       await workspace.evaluate(node => { const body = node.closest('#tops-detail-body'); body.scrollTop += node.getBoundingClientRect().top - body.getBoundingClientRect().top - 16; });
       await page.screenshot({ path: join(evidence, `event-customers-${name}-${width}.png`) });
       await customer.click(); await workspace.getByRole('heading', { name: 'Fictional Returning customer', exact: true }).waitFor();
       await workspace.getByRole('button', { name: 'Back to customers', exact: true }).click();
-      await workspace.getByRole('button', { name: 'Sales', exact: true }).click();
+      await showSales();
       await workspace.getByText('Fictional Returning customer · $21.60', { exact: true }).waitFor();
       checked.push(`${name}@${width}`);
     }
-    await workspace.getByRole('button', { name: 'Customers', exact: true }).click();
+    await showCustomers();
     const contactSearch = workspace.getByRole('searchbox', { name: 'Search event customers', exact: true });
     await contactSearch.fill(fixture.contact_phone);
     const contact = workspace.getByRole('button', { name: fixture.contact_phone, exact: true }); await contact.waitFor();
@@ -96,7 +102,7 @@ try {
       }
       await route.fulfill({ response, json: body });
     });
-    await workspace.getByRole('button', { name: 'Sales', exact: true }).click();
+    await showSales();
     await workspace.getByText('Recorded refunds cover available evidence only. Refund coverage and net totals need review.', { exact: true }).waitFor();
     assert.equal(await workspace.getByText('Confirmed refunds', { exact: true }).count(), 0);
     const gross = workspace.locator('.event-fact').filter({ hasText: 'Collected before refunds' });
@@ -104,8 +110,8 @@ try {
     assert.equal(await workspace.locator('.event-fact').filter({ hasText: 'Net sales' }).locator('dd').innerText(), 'Needs review');
     await page.screenshot({ path: join(evidence, `event-unknown-refunds-${name}.png`) });
     emptySales = true;
-    await workspace.getByRole('button', { name: 'Customers', exact: true }).click();
-    await workspace.getByRole('button', { name: 'Sales', exact: true }).click();
+    await showCustomers();
+    await showSales();
     await workspace.getByText('No sales yet', { exact: true }).waitFor();
     assert.equal(await workspace.locator('.event-fact').filter({ hasText: 'Average order' }).locator('dd').innerText(), 'No sales yet', 'An empty event has no invented or disputed average');
     await dialog.locator('#tops-detail-close').click();
@@ -115,10 +121,9 @@ try {
       await route.fulfill({ response, json: body });
     });
     await page.locator('.teams-event-board .teams-task-card').filter({ hasText: 'Fictional seasonal makers and home goods weekend market' }).first().click();
-    const recorded = dialog.locator('.event-fact').filter({ hasText: 'Recorded sales comparison' });
-    assert.equal(await recorded.locator('dd').innerText(), '$123.45');
-    assert.equal(await recorded.locator('.event-fact-hint').innerText(), 'Historical net sales comparison');
-    assert.equal(await dialog.getByText(/temporarily unavailable/).count(), 0, 'An unlinked recorded comparison is not labeled a provider outage');
+    await dialog.getByRole('heading', { name: 'At a glance', exact: true }).waitFor();
+    assert.equal(await dialog.getByText('$123.45', { exact: true }).count(), 0, 'Deferred financial payload does not enter the basics card');
+    assert.equal(await dialog.getByText(/temporarily unavailable/).count(), 0, 'An intentionally unloaded comparison is not a provider outage');
     await dialog.locator('#tops-detail-close').click(); assert.deepEqual(errors, []); await browser.close(); browser = null;
   }
   console.log(JSON.stringify({ checked, errors: [], evidence }));

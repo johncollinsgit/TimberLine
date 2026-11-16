@@ -17,7 +17,21 @@ class EventCommerceReport
 
     public function commerceId(TeamOperationRecord $event): ?int
     {
-        return $this->commerceIds([$event])[(string) $event->id] ?? null;
+        $data = $event->data;
+        $explicit = $data['_teams_enrichment']['commerce_event']['id'] ?? null;
+        if ($explicit) {
+            return $this->stock->rows('event_links', $event->tenant_id)->where('event_id', $explicit)->whereNotNull('reviewed_by')->exists() ? (int) $explicit : null;
+        }
+        if (! $event->connection_id || ! isset($data['source_id'])) {
+            return null;
+        }
+        $connection = \App\Models\TeamProviderConnection::where('tenant_id', $event->tenant_id)->find($event->connection_id);
+        if ($connection?->provider !== 'asana') {
+            return null;
+        }
+        $ids = $this->stock->rows('event_links', $event->tenant_id)->where('provider', 'asana')->where('external_id', $data['source_id'])->whereNotNull('reviewed_by')->distinct()->pluck('event_id');
+
+        return $ids->count() === 1 ? (int) $ids[0] : null;
     }
 
     /** The same reviewed association rules, with one local inventory per tenant. */
@@ -72,6 +86,13 @@ class EventCommerceReport
             'annual_history' => $history['annual_history'], 'history' => $history['history'],
             'review_items' => $budget ? [] : ['Save an event budget to calculate estimated profitability and break-even.'],
             'basis' => 'Confirmed event-linked Pay, cash and reviewed Square revenue with saved event cost estimates. Recorded workbook comparisons remain separate; they are not added to current sales. Tax uses the register’s reviewed location, not cost settings.'];
+    }
+
+    /** Browser summary and explicit receipt expansion share the current-source financial gates. */
+    public function forEventSales(Tenant $tenant, User $user, TeamOperationRecord $event, bool $includeReceipts = false): array
+    {
+        return [...$this->admittedSales($tenant, $user, $event, $includeReceipts),
+            'basis' => 'Confirmed event-linked Pay, cash and reviewed Square revenue. Recorded workbook comparisons remain separate; they are not added to current sales.'];
     }
 
     public function forRegister(array $scope, User $user): array
@@ -138,12 +159,7 @@ class EventCommerceReport
     /** Candidate IDs only; fresh source review, actor and event ownership remain the caller's authority. */
     public function squareOccurrences(int $tenantId, string $orderId): \Illuminate\Support\Collection
     {
-        $ids = app(EventSquareAllocationFacts::class)->occurrenceIdsFor($tenantId, [$orderId])[$orderId] ?? [];
-        if (! $ids) {
-            return collect();
-        }
-
-        return TeamOperationRecord::where(['tenant_id' => $tenantId, 'kind' => 'event'])->where('status', '!=', 'withdrawn')->whereIn('id', $ids)->get()
+        return app(EventSquareAllocationFacts::class)->occurrencesFor($tenantId, $orderId)
             ->filter(fn ($event) => in_array($orderId, $event->data['_teams_enrichment']['square_orders']['ids'] ?? [], true));
     }
 
