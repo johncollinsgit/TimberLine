@@ -116,6 +116,12 @@ required; the earlier Everbranch SaaS TEST purchase proves a different lane.
 
 ## Focused verification
 
+Keep whitespace between adjacent Blade directives, including `@csrf` followed
+by `@include`. `WebsiteBladeRenderingTest` renders populated native/Sawyer carts
+with the Shop Pay choice both hidden and present, independently gated navigation,
+guest/signed-in account alerts and actual published card/gallery conditions.
+The tests prohibit provider requests and do not establish merchant readiness.
+
 `WebsiteRetailPresentationTest` creates a genuine disposable signed fake-provider
 SaaS purchase through the normal fulfillment service, then checks an empty retail
 starter, real uploaded product/collection photos, owned preview, deliberate draft
