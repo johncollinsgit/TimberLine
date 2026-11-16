@@ -13,13 +13,23 @@ class CustomerProfileAccess
     public function allows(?User $actor, Tenant|int|null $tenant): bool
     {
         $tenantId = $tenant instanceof Tenant ? (int) $tenant->id : (int) $tenant;
+        $allowed = $this->allowed($actor, $tenantId);
+        if ($actor && $tenantId > 0) {
+            app(\App\Services\Team\Studio\EventCustomerReadView::class)->profile($tenantId, (int) $actor->id, $allowed);
+        }
+
+        return $allowed;
+    }
+
+    private function allowed(?User $actor, int $tenantId): bool
+    {
         if (! $actor || $tenantId < 1 || ! Tenant::whereKey($tenantId)->exists()) {
             return false;
         }
         $actor = User::find($actor->id);
         if (! $actor?->is_active || ! $actor->email_verified_at
             || app(TenantExperienceProfileService::class)->workspaceFocusForTenant($tenantId) === 'soccer'
-            || ! app(TenantModuleAccessResolver::class)->canAccess($tenantId, 'customers')) {
+            || ! (app(\App\Services\Team\Studio\EventCustomerReadView::class)->modules($tenantId) ?? app(TenantModuleAccessResolver::class))->canAccess($tenantId, 'customers')) {
             return false;
         }
         // Matches the Core controller's explicit platform-admin read authority.

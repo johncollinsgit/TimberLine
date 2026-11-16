@@ -98,6 +98,7 @@ class SquareSourceRefresh
     public function assertPolicyCurrent(int $tenant, string $version): array
     {
         $policy = $this->status($tenant);
+        app(\App\Services\Team\Studio\EventCustomerReadView::class)->policy($tenant, $version, (int) ($policy['reviewed_by'] ?? 0));
         abort_unless(($policy['enabled'] ?? false) === true && preg_match('/^[a-f0-9]{64}$/D', (string) ($policy['version'] ?? ''))
             && hash_equals((string) $policy['version'], $version) && hash_equals($policy['version'], $this->policyHash(array_diff_key($policy, ['version' => true])))
             && ($policy['historical_source_only'] ?? false) === true, 409, 'Automatic Square source refresh is not enabled for this workspace.');
@@ -113,6 +114,7 @@ class SquareSourceRefresh
         $expected = ! empty($policy['all_locations']) ? ($policy['reader_location_ids'] ?? []) : ($binding['location_ids'] ?? []);
         sort($expected);
         abort_unless($expected && $locations === $expected, 409, 'Square locations changed. Review source refresh settings.');
+        app(\App\Services\Team\Studio\EventCustomerReadView::class)->policy($tenant, $version, (int) $actor->id, true);
 
         return $policy;
     }

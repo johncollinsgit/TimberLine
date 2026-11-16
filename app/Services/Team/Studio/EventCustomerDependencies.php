@@ -39,13 +39,7 @@ class EventCustomerDependencies
     /** Capture original anchors before any result/customer cohort is consumed. */
     public function capture(Tenant $tenant, TeamArea $area, ?array $scope = null, bool $witnesses = false): array
     {
-        $db = DB::connection();
-        if ($db->getDriverName() === 'mysql') {
-            abort_if($db->transactionLevel() !== 0 || $db->getPdo()->inTransaction(), 409, 'Customer dependency reads need a fresh short transaction.');
-            $db->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
-        }
-
-        $frame = $db->transaction(function () use ($tenant, $area, $scope, $witnesses): array {
+        $frame = app(EventCustomerReadView::class)->run($tenant->id, function () use ($tenant, $area, $scope, $witnesses): array {
             // Selectors and their selected originals belong to one local read view.
             $revision = $this->selectorRevisionInView($tenant, $area);
             if ($scope !== null) {

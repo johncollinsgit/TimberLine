@@ -8,6 +8,23 @@ more than 10,000 nodes fail closed. Current source/policy admission remains fres
 for every proof. Other engines retain the original bounded traversal. No receipt
 or access result is cached across requests.
 
+Full customer dependency builds keep their cohort's original purchase witnesses
+in one database-enforced MySQL READ ONLY view. The narrowly owned tenant/PDO
+context omits implicit Square configuration and reviewer row locks only within
+that view. Normal source-sync, identity and payment writers retain their locks.
+All attempted authority inputs are compared after commit; successful connection,
+policy and reviewer checks are freshly admitted with fresh permission resolvers.
+Stable inadmissible sources keep their existing conservative exclusion behavior.
+This removes reporting row-lock contention while retaining coherent originals
+and revocation checks. It does not shorten the full witness pass or remove the
+metadata locks held until commit; full build and published endpoint timings must
+still be measured separately from dependency-frame component benchmarks.
+Withheld customer evidence emits a server-side phase and, for a caught 409, a
+SHA-256 message fingerprint. It does not log the exception message, original
+payload, customer identity or source keys. These diagnostics distinguish a
+witness failure from a final dependency/access change without manually running
+a report builder or weakening its publication checks.
+
 The scoped allocation-facts helper keeps derived source IDs and request-local
 copies of original models rather than reloading all event notes for every purchase
 group. Every model reuse first checks fresh complete row metadata (including

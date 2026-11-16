@@ -100,17 +100,26 @@ commerce associations invalidate this scope; unrelated customer inserts and even
 notes do not. The small selector and seed descriptor is encrypted with the
 snapshot, and no identity metadata is exposed to staff summaries.
 
-Each frame uses one short local repeatable-read transaction; no provider request
-or lifetime history walk occurs while that transaction is open. Existing MySQL
-transactions, including raw PDO transactions, are rejected before selectors are
+Each frame uses one owned local repeatable-read transaction. Full build frames
+also read the cohort's original purchase witnesses within that view; the view
+therefore lasts for the full witness pass. No provider request occurs within it.
+Existing MySQL transactions, including raw PDO transactions, are rejected before selectors are
 read because their view could predate the request. Initial selector revision,
 scope selection and original dependency rows share that frame's read view.
 After commit, a separate short coherent selector view checks the fresh effective
 revision. Standalone selector revision reads use the same short view outside a
 caller transaction and preserve the caller's isolation inside one. The one-shot
-isolation setting does not change the session default, and none of these reads
-locks source rows. Full ciphertext witnesses still force fresh decoding after a
-same-version source rewrite; changes only to observation metadata do not change
+isolation setting does not change the session default. The MySQL view is enforced
+READ ONLY. Only its exact tenant, PDO and active transaction scope may omit the
+shared Square readers' implicit row locks; ordinary writers keep those locks.
+After commit, a new coherent view compares all attempted authority inputs and
+freshly re-admits every successful Square connection, policy and actor check,
+including current permission inputs and credential expiry. Stable inadmissible
+sources retain their existing exclusion behavior. Any changed authority bytes
+reject the frame. This is private
+request evidence, never an authorization cache. Ordinary metadata locks still
+last until the view commits. Full ciphertext witnesses force fresh decoding
+after a same-version source rewrite; changes only to observation metadata do not change
 the effective selector. Changed allocations, reviewer/source authority and
 commerce membership continue to invalidate it.
 Builds validate emitted source/customer/event, original money/date and rendered

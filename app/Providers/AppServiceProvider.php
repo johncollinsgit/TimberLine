@@ -55,6 +55,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(TenantContext::class);
         $this->app->scoped(\App\Services\Team\Operations\OperationsReadTransport::class);
         $this->app->scoped(\App\Services\Team\Studio\EventSquareAllocationFacts::class);
+        $this->app->scoped(\App\Services\Team\Studio\EventCustomerReadView::class);
         $this->app->scoped(\App\Services\Marketing\Desk\MarketingReplyContext::class);
     }
 
