@@ -166,12 +166,10 @@ final class ReviewedSquareEventPurchases
         if (! $ids || ! isset($review['reviewed_by'], $review['reviewed_at']) || ! Schema::hasTable('square_orders')) {
             return $result;
         }
-        $conflicts = [];
-        foreach (TeamOperationRecord::where(['tenant_id' => $tenant, 'kind' => 'event'])->whereKeyNot($occurrence->id)->where('status', '!=', 'withdrawn')->cursor() as $other) {
-            foreach ($other->data['_teams_enrichment']['square_orders']['ids'] ?? [] as $id) {
-                $conflicts[$id] = true;
-            }
-        }
+        $allocationFacts = app(\App\Services\Team\Studio\EventSquareAllocationFacts::class);
+        $allocationFrame = $allocationFacts->conflictFrameFor($tenant, $ids, $occurrence->id);
+        $allocationRevision = $allocationFrame['revision'];
+        $conflicts = array_fill_keys($allocationFrame['conflicts'], true);
         $orders = SquareOrder::forTenantId($tenant)->whereIn('square_order_id', $ids)->get();
         $allPayments = SquarePayment::forTenantId($tenant)->whereIn('square_order_id', $ids)->where('status', 'COMPLETED')->get();
         $paymentGroups = $allPayments->groupBy('square_order_id');
@@ -326,6 +324,7 @@ final class ReviewedSquareEventPurchases
                 }
             }
         }
+        abort_unless(hash_equals($allocationRevision, $allocationFacts->revisionFor($tenant, $ids)), 409, 'Event allocations changed while purchases were read.');
         $result['review_items'] = array_values(array_unique($result['review_items']));
         $result['customer_review_items'] = array_values(array_unique($result['customer_review_items']));
 

@@ -60,6 +60,18 @@ class CustomerCommerceSnapshotService
         return $this->snapshot($profile, $tenantId, 5000, [], $sources);
     }
 
+    /** Internal dependency witnesses use the same original ownership, money and mirror admission. */
+    public function forDependencySources(MarketingProfile $profile, int $tenantId, array $sources): array
+    {
+        abort_unless(count($sources) <= 5000 && collect($sources)->every(fn ($source) => is_array($source)
+            && in_array($source['type'] ?? null, ['pos_sale', 'order', 'square_order', 'square_payment', 'website_order', 'website_customer'], true)
+            && is_string($source['id'] ?? null) && $source['id'] !== ''), 422);
+        abort_if(collect($sources)->contains('type', 'website_customer')
+            && ! collect($sources)->contains('type', 'website_order'), 422, 'Select exact Website orders for customer dependency witnesses.');
+
+        return $this->snapshot($profile, $tenantId, 5000, [], $sources, true);
+    }
+
     /** Server-internal prior-history read for an already verified receipt attribution. */
     public function forReceiptAttributionHistory(MarketingProfile $profile, int $tenantId, object $sale, array $payment): array
     {
@@ -97,7 +109,7 @@ class CustomerCommerceSnapshotService
         return $this->snapshot($profile, $tenantId, 100, $excluded);
     }
 
-    private function snapshot(MarketingProfile $profile, int $tenantId, int $limit, array $excluded = [], ?array $selected = null): array
+    private function snapshot(MarketingProfile $profile, int $tenantId, int $limit, array $excluded = [], ?array $selected = null, bool $dependencySources = false): array
     {
         $canonical = $this->identities->byId($tenantId, (int) $profile->id);
         if (! $canonical || $tenantId <= 0) {
@@ -128,7 +140,7 @@ class CustomerCommerceSnapshotService
             }))->get()
             ->reject(fn ($link) => in_array($link->source_id, $excluded[$link->source_type] ?? [], true));
         $native = $links->contains('source_type', 'pos_sale')
-            ? app(\App\Services\Pos\PosCustomerPurchases::class)->forProfiles($tenantId, $ids, $limit, $excluded['pos_sale'] ?? [])
+            ? app(\App\Services\Pos\PosCustomerPurchases::class)->forProfiles($tenantId, $ids, $limit, $excluded['pos_sale'] ?? [], $dependencySources)
             : ['purchases' => [], 'square_payments' => [], 'square_orders' => [], 'shopify_orders' => [], 'issues' => []];
         $issues = $native['issues'];
         $purchases = collect($native['purchases']);
@@ -143,7 +155,7 @@ class CustomerCommerceSnapshotService
             $orders = $orderIds ? Order::query()->forTenantId($tenantId)->whereIn('id', $orderIds)
                 ->latest('ordered_at')->latest('id')->limit($limit + 1)->get() : collect();
             foreach ($orders as $order) {
-                if (app(\App\Services\Pos\PosCustomerPurchases::class)->sourceConflicts($tenantId, 'order', (string) $order->id, $canonical->id)) {
+                if (app(\App\Services\Pos\PosCustomerPurchases::class)->sourceConflicts($tenantId, 'order', (string) $order->id, $canonical->id, $dependencySources)) {
                     $issues[] = 'customer_identity_review_required';
 
                     continue;
@@ -183,7 +195,7 @@ class CustomerCommerceSnapshotService
                 ->where('status', 'COMPLETED')->get()->groupBy('square_order_id') : collect();
             $conflictingPayments = $this->conflictingSourceIds('square_payment', $payments->flatten(1)->pluck('square_payment_id'), $tenantId, $canonical, $issues);
             foreach ($squareOrders as $order) {
-                if (app(\App\Services\Pos\PosCustomerPurchases::class)->sourceConflicts($tenantId, 'square_order', $order->square_order_id, $canonical->id)) {
+                if (app(\App\Services\Pos\PosCustomerPurchases::class)->sourceConflicts($tenantId, 'square_order', $order->square_order_id, $canonical->id, $dependencySources)) {
                     $issues[] = 'customer_identity_review_required';
 
                     continue;
@@ -217,7 +229,7 @@ class CustomerCommerceSnapshotService
                 ->latest('created_at_source')->latest('id')->limit($limit + 1)->get() : collect();
             $conflictingOrders = $this->conflictingSourceIds('square_order', $payments->pluck('square_order_id')->filter(), $tenantId, $canonical, $issues);
             foreach ($payments as $payment) {
-                if (app(\App\Services\Pos\PosCustomerPurchases::class)->sourceConflicts($tenantId, 'square_payment', $payment->square_payment_id, $canonical->id)) {
+                if (app(\App\Services\Pos\PosCustomerPurchases::class)->sourceConflicts($tenantId, 'square_payment', $payment->square_payment_id, $canonical->id, $dependencySources)) {
                     $issues[] = 'customer_identity_review_required';
 
                     continue;
@@ -250,6 +262,7 @@ class CustomerCommerceSnapshotService
             // Only an explicit source association admits Website records. No contact matching.
             $websiteOrders = $customerIds || $orderIds ? WebsiteOrder::query()->withoutPosSimulation()->forTenantId($tenantId)
                 ->where(fn ($q) => $q->whereIn('website_customer_id', $customerIds)->orWhereIn('id', $orderIds))
+                ->when($dependencySources, fn ($query) => $query->whereIn('id', $selection['website_order'] ?? []))
                 ->latest('paid_at')->latest('id')->limit($limit + 1)->get() : collect();
             $conflictingOrders = $this->conflictingSourceIds('website_order', $websiteOrders->pluck('id')->map('strval'), $tenantId, $canonical, $issues);
             $conflictingCustomers = $this->conflictingSourceIds('website_customer', $websiteOrders->pluck('website_customer_id')->filter()->map('strval'), $tenantId, $canonical, $issues);

@@ -89,6 +89,33 @@ allocations and original receipt ancestry. Unrelated historical imports must not
 restart a coherent event report. If customer identities change during a build,
 publish unchanged event totals while withholding customer facts until their next
 verified generation. Source admission and customer identity checks remain fresh.
+New customer generations use a private event-cohort dependency frame, rather than
+requiring the entire tenant customer directory to stop importing. Before reading
+facts, discover exact reviewed order/window, original native receipt, capture and
+reviewed attribution anchors. Include fresh canonical merge chains and incoming
+aliases, full relevant link metadata, competing source-key claimants, original
+financial rows and suppressed native/provider mirrors. Relevant competing event
+allocations include other Teams areas. Changes to reviewed selectors or effective
+commerce associations invalidate this scope; unrelated customer inserts and event
+notes do not. The small selector and seed descriptor is encrypted with the
+snapshot, and no identity metadata is exposed to staff summaries.
+
+Each frame uses one short local repeatable-read transaction; no provider request
+or lifetime history walk occurs while that transaction is open. Existing MySQL
+transactions are rejected because their read view could predate the request.
+Builds validate emitted source/customer/event, original money/date and rendered
+labels against the pre-fact frame using the shared confirmed-purchase readers.
+The frame is checked again after assembly, after fresh provider admission and
+before response. Unsupported, truncated or changing evidence withholds all private
+customer facts and queues a refresh while permitted financial totals can remain
+explicitly stale. Older generations keep the global directory fence until their
+atomic refresh. The frame does not grant customer access or replace original
+source admission, canonical resolution, purchase or lifetime readers. Native card
+witnesses use the journal's explicit read-only reporting projection with the same
+stored-term and binding validation; ordinary journal reads/recovery retain their
+committed transaction boundary. Dependency rewards reads omit wallet row locks,
+while ordinary wallet callers keep their existing locks.
+
 Filtered reads admit the full set of events contributing rows, off-page totals,
 customer totals and original operator metrics. Small selections use fresh exact
 source checks; broader cohorts use fresh project inventories. Final membership,

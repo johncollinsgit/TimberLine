@@ -6,6 +6,7 @@ use App\Models\MarketingImportRun;
 use App\Services\Marketing\SquareConnectionContext;
 use App\Services\Marketing\SquareSourceRefresh;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 
 /** A manager checkbox cannot substitute for original provider pagination evidence. */
 class EventSquareCoverage
@@ -33,12 +34,13 @@ class EventSquareCoverage
     {
         $seen = [];
         $binding = null;
+        $runs = DB::connection()->getDriverName() === 'mysql' ? $this->ancestry($tenant, $id, $type) : null;
         for ($depth = 0; $id > 0 && $depth < 10000; $depth++) {
             if (isset($seen[$id])) {
                 return null;
             }
             $seen[$id] = true;
-            $run = MarketingImportRun::forTenantId($tenant)->where('type', $type)->find($id);
+            $run = $runs === null ? MarketingImportRun::forTenantId($tenant)->where('type', $type)->find($id) : ($runs[$id] ?? null);
             $summary = $run?->summary ?? [];
             $currentBinding = $summary['source_binding'] ?? [];
             if (! $run || ! in_array($run->status, ['completed', 'partial'], true) || ($summary['mode'] ?? '') !== 'live-sync'
@@ -71,6 +73,29 @@ class EventSquareCoverage
         }
 
         return null;
+    }
+
+    /** One coherent statement; node/head/root validation remains in run(). */
+    private function ancestry(int $tenant, int $id, string $type): array
+    {
+        if ($id <= 0) {
+            return [];
+        }
+        $parent = "CAST(JSON_UNQUOTE(JSON_EXTRACT(receipt.summary, '$.resumed_from_run_id')) AS SIGNED)";
+        $rows = DB::select('WITH RECURSIVE square_proof_ancestry AS ('
+            .'SELECT receipt.id, '.$parent.' AS parent_id FROM marketing_import_runs AS receipt '
+            .'WHERE receipt.tenant_id = ? AND receipt.type = ? AND receipt.id = ? '
+            .'UNION DISTINCT SELECT receipt.id, '.$parent.' AS parent_id FROM marketing_import_runs AS receipt '
+            .'INNER JOIN square_proof_ancestry AS child ON receipt.id = child.parent_id '
+            .'WHERE receipt.tenant_id = ? AND receipt.type = ? LIMIT 10001) '
+            .'SELECT /*+ SET_VAR(cte_max_recursion_depth=10001) */ receipt.id, receipt.tenant_id, receipt.type, receipt.status, receipt.started_at, receipt.summary '
+            .'FROM marketing_import_runs AS receipt INNER JOIN square_proof_ancestry AS chain ON chain.id = receipt.id '
+            .'WHERE receipt.tenant_id = ? AND receipt.type = ?', [$tenant, $type, $id, $tenant, $type, $tenant, $type]);
+        if (count($rows) > 10000) {
+            return [];
+        }
+
+        return MarketingImportRun::hydrate(array_map(fn ($row) => (array) $row, $rows))->keyBy('id')->all();
     }
 
     private function firstPageProven(int $tenant, string $type, array $summary): bool

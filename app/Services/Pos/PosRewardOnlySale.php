@@ -56,13 +56,14 @@ final class PosRewardOnlySale
     }
 
     /** Independent internal evidence. Never represent a zero-tender sale as a Square payment. */
-    public function evidence(object $sale, array $snapshot): ?array
+    /** Reporting keeps the consistent read view; wallet callers retain the current row lock. */
+    public function evidence(object $sale, array $snapshot, bool $readOnly = false): ?array
     {
         if (($snapshot['reward_only'] ?? false) !== true || $sale->state !== 'succeeded' || (int) $sale->amount_minor !== 0
             || $sale->attempt_id || $sale->descriptor_issued_at || ! hash_equals($sale->snapshot_hash, Contract::hash($snapshot))) {
             return null;
         }
-        $hold = $this->hold($sale);
+        $hold = $this->hold($sale, ! $readOnly);
         $event = $this->store->rows('events', (int) $sale->tenant_id)->where('sale_id', $sale->id)->where('code', 'reward_only_sale_completed')->first();
         $details = $event ? $this->store->decrypt($event->details) : [];
         if (! $hold || ! in_array($hold->state, ['spent', 'refunded'], true) || ($details['snapshot_hash'] ?? null) !== $sale->snapshot_hash
@@ -99,9 +100,9 @@ final class PosRewardOnlySale
         });
     }
 
-    private function hold(object $sale): ?object
+    private function hold(object $sale, bool $lock = true): ?object
     {
         return $this->store->db->table('pos_candle_cash_reservations')->where('runtime_id', $this->store->runtime())->where('tenant_id', $sale->tenant_id)
-            ->where('sale_id', $sale->id)->lockForUpdate()->first();
+            ->where('sale_id', $sale->id)->when($lock, fn ($query) => $query->lockForUpdate())->first();
     }
 }

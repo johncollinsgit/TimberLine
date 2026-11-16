@@ -114,6 +114,81 @@ test('website records need explicit association and practice sales stay out', fu
         ->and($snapshot['confirmed_purchase_count'])->toBe(1);
 });
 
+test('dependency witnesses retain inherited Website ownership and exact original money and dates', function (): void {
+    $profile = commerceCustomer('dependency-website');
+    $site = TenantSite::query()->create(['tenant_id' => $profile->tenant_id, 'subdomain' => 'dependency']);
+    $customer = WebsiteCustomer::query()->create(['tenant_id' => $profile->tenant_id]);
+    $alias = MarketingProfile::query()->create(['tenant_id' => $profile->tenant_id, 'merged_into_profile_id' => $profile->id]);
+    commerceLink($alias, 'website_customer', $customer->id);
+    $paidAt = now()->subDays(2)->startOfSecond();
+    $wanted = WebsiteOrder::query()->create(['tenant_id' => $profile->tenant_id, 'tenant_site_id' => $site->id,
+        'website_customer_id' => $customer->id, 'source' => 'website', 'number' => 'wanted', 'lookup_token' => 'wanted',
+        'payment_status' => 'partially_refunded', 'paid_at' => $paidAt, 'total_cents' => 1500, 'refunded_cents' => 200, 'currency' => 'USD']);
+    WebsiteOrder::query()->create(['tenant_id' => $profile->tenant_id, 'tenant_site_id' => $site->id,
+        'website_customer_id' => $customer->id, 'source' => 'website', 'number' => 'unselected', 'lookup_token' => 'unselected',
+        'payment_status' => 'paid', 'paid_at' => now(), 'total_cents' => 2900, 'refunded_cents' => 0, 'currency' => 'USD']);
+    $otherCustomer = WebsiteCustomer::query()->create(['tenant_id' => $profile->tenant_id]);
+    $unowned = WebsiteOrder::query()->create(['tenant_id' => $profile->tenant_id, 'tenant_site_id' => $site->id,
+        'website_customer_id' => $otherCustomer->id, 'source' => 'website', 'number' => 'unowned', 'lookup_token' => 'unowned',
+        'payment_status' => 'paid', 'paid_at' => now(), 'total_cents' => 9000, 'currency' => 'USD']);
+    $practice = WebsiteOrder::query()->create(['tenant_id' => $profile->tenant_id, 'tenant_site_id' => $site->id,
+        'website_customer_id' => $customer->id, 'source' => 'pos_simulation', 'number' => 'practice', 'lookup_token' => 'practice',
+        'payment_status' => 'paid', 'paid_at' => now(), 'total_cents' => 1900, 'currency' => 'USD']);
+    $service = app(CustomerCommerceSnapshotService::class);
+    Http::preventStrayRequests();
+
+    $snapshot = $service->forDependencySources($profile, $profile->tenant_id, [
+        ['type' => 'website_customer', 'id' => (string) $customer->id],
+        ...array_map(fn ($order) => ['type' => 'website_order', 'id' => (string) $order->id], [$wanted, $unowned, $practice]),
+    ]);
+
+    expect($snapshot['customer_id'])->toBe($profile->id)
+        ->and($snapshot['purchases'])->toHaveCount(1)
+        ->and($snapshot['purchases'][0])->toMatchArray(['source' => 'website_order', 'source_id' => (string) $wanted->id,
+            'confirmed' => true, 'amount_minor' => 1500, 'refunded_minor' => 200, 'currency' => 'USD', 'occurred_at' => $paidAt->toIso8601String()])
+        ->and($snapshot['behavior'])->toBeNull()
+        ->and($snapshot['rewards'])->toBeNull()
+        ->and($service->forReportingProfile($profile, $profile->tenant_id)['purchases'])->toHaveCount(2)
+        ->and($service->forSelectedSources($profile, $profile->tenant_id, [['type' => 'website_order', 'id' => (string) $wanted->id]])['purchases'])->toBe([]);
+    Http::assertNothingSent();
+
+    $competitor = MarketingProfile::query()->create(['tenant_id' => $profile->tenant_id]);
+    commerceLink($competitor, 'website_order', $wanted->id);
+    $conflicted = $service->forDependencySources($profile, $profile->tenant_id, [
+        ['type' => 'website_customer', 'id' => (string) $customer->id], ['type' => 'website_order', 'id' => (string) $wanted->id],
+    ]);
+    expect($conflicted['purchases'])->toBe([])
+        ->and($conflicted['issues'])->toContain('customer_identity_review_required');
+});
+
+test('exact dependency Website witnesses remain available beyond an inherited lifetime window', function (): void {
+    $profile = commerceCustomer('dependency-website-window');
+    $site = TenantSite::query()->create(['tenant_id' => $profile->tenant_id, 'subdomain' => 'dependency-window']);
+    $customer = WebsiteCustomer::query()->create(['tenant_id' => $profile->tenant_id]);
+    commerceLink($profile, 'website_customer', $customer->id);
+    $base = ['tenant_id' => $profile->tenant_id, 'tenant_site_id' => $site->id, 'website_customer_id' => $customer->id,
+        'source' => 'website', 'payment_status' => 'paid', 'total_cents' => 1500, 'refunded_cents' => 0, 'currency' => 'USD'];
+    $wanted = WebsiteOrder::query()->create($base + ['number' => 'old-original', 'lookup_token' => 'old-original', 'paid_at' => '2025-01-01 00:00:00']);
+    foreach (array_chunk(range(1, 5001), 200) as $chunk) {
+        DB::table('website_orders')->insert(array_map(fn ($id) => $base + ['number' => 'later-'.$id,
+            'lookup_token' => 'later-'.$id, 'paid_at' => '2025-01-02 00:00:00'], $chunk));
+    }
+
+    $snapshot = app(CustomerCommerceSnapshotService::class)->forDependencySources($profile, $profile->tenant_id, [
+        ['type' => 'website_customer', 'id' => (string) $customer->id], ['type' => 'website_order', 'id' => (string) $wanted->id],
+    ]);
+    expect($snapshot['purchases'])->toHaveCount(1)
+        ->and($snapshot['purchases'][0]['source_id'])->toBe((string) $wanted->id)
+        ->and($snapshot['has_more'])->toBeFalse();
+});
+
+test('Website customer dependency witnesses require exact order selections', function (): void {
+    $profile = commerceCustomer('dependency-website-validation');
+    app(CustomerCommerceSnapshotService::class)->forDependencySources($profile, $profile->tenant_id, [
+        ['type' => 'website_customer', 'id' => '1'],
+    ]);
+})->throws(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+
 test('retained customer aliases resolve to the survivor and broken tenant chains fail closed', function (): void {
     $profile = commerceCustomer('aliases');
     $alias = MarketingProfile::query()->create(['tenant_id' => $profile->tenant_id, 'merged_into_profile_id' => $profile->id]);

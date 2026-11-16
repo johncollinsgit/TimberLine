@@ -172,6 +172,16 @@ final class MySqlPaymentJournal implements NativeAtomicPaymentJournal, PaymentJo
         return $this->load($tenantId, $id, false);
     }
 
+    /** Internal read projection only; recovery keeps using get() outside transactions. */
+    public function getForReporting(int $tenantId, string $id): array
+    {
+        if ($this->db->transactionLevel() < 1) {
+            throw new DomainException('A reporting payment view requires a local read transaction.');
+        }
+
+        return $this->load($tenantId, $id, false);
+    }
+
     public function findByRequest(int $tenantId, string $requestId): ?array
     {
         $this->outsideTransaction();
