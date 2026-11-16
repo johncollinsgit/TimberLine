@@ -94,7 +94,10 @@ it('recovers committed columns and partial indexes without changing original sou
             DB::statement('ALTER TABLE `'.$table.'` DROP INDEX `'.$index.'`, ALGORITHM=INPLACE, LOCK=NONE');
         }
         if ($table !== 'square_orders') {
-            DB::statement('ALTER TABLE `'.$table.'` DROP COLUMN `event_content_hash`, ALGORITHM=INSTANT');
+            // MySQL needs INPLACE when another indexed virtual derivation
+            // remains on the link table; this only constructs the retry fixture.
+            $algorithm = $table === 'marketing_profile_links' ? 'INPLACE, LOCK=NONE' : 'INSTANT';
+            DB::statement('ALTER TABLE `'.$table.'` DROP COLUMN `event_content_hash`, ALGORITHM='.$algorithm);
         }
     }
     // MySQL has committed only the first column; Laravel has not recorded up().
@@ -140,7 +143,7 @@ it('rejects incompatible generated definitions visibility and named indexes with
     $definition = DB::selectOne("SELECT GENERATION_EXPRESSION AS expression FROM information_schema.columns WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'marketing_profile_links' AND COLUMN_NAME = 'event_content_hash'")->expression;
     DB::statement('ALTER TABLE `marketing_profile_links` DROP INDEX `ep_link_hash_idx`, ALGORITHM=INPLACE, LOCK=NONE');
     $beforeExpression = app(MySqlSchemaFingerprint::class)->inspect(DB::connection());
-    DB::statement('ALTER TABLE `marketing_profile_links` DROP COLUMN `event_content_hash`, ALGORITHM=INSTANT');
+    DB::statement('ALTER TABLE `marketing_profile_links` DROP COLUMN `event_content_hash`, ALGORITHM=INPLACE, LOCK=NONE');
     DB::statement("ALTER TABLE `marketing_profile_links` ADD COLUMN `event_content_hash` BINARY(32) GENERATED ALWAYS AS (UNHEX(SHA2('changed-expression',256))) VIRTUAL INVISIBLE, ALGORITHM=INSTANT");
     try {
         $changedExpression = app(MySqlSchemaFingerprint::class)->inspect(DB::connection());
@@ -148,7 +151,7 @@ it('rejects incompatible generated definitions visibility and named indexes with
         expect($changedExpression['fingerprint'])->not->toBe($beforeExpression['fingerprint']);
         expect(fn () => $migration->up())->toThrow(RuntimeException::class, 'Incompatible event content hash on marketing_profile_links');
     } finally {
-        DB::statement('ALTER TABLE `marketing_profile_links` DROP COLUMN `event_content_hash`, ALGORITHM=INSTANT');
+        DB::statement('ALTER TABLE `marketing_profile_links` DROP COLUMN `event_content_hash`, ALGORITHM=INPLACE, LOCK=NONE');
         DB::statement('ALTER TABLE `marketing_profile_links` ADD COLUMN `event_content_hash` BINARY(32) GENERATED ALWAYS AS ('.$definition.') VIRTUAL INVISIBLE, ALGORITHM=INSTANT');
         $migration->up();
     }

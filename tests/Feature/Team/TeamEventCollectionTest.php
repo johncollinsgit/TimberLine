@@ -139,7 +139,7 @@ test('fresh task inventory pages authorize exact workspace membership once per s
         collectionEvent($tenant, $area, 'Source '.$id, ['connection_id' => $connection->id, 'data' => ['_generation' => 1, 'source_workspace' => '100', 'source_project' => '200', 'source_id' => (string) $id]]);
     }
     Http::fake(function ($request) use ($task) {
-        expect($request->url())->toContain('/projects/200/tasks')->and($request['opt_fields'])->toBe('gid,workspace.gid,memberships.project.gid');
+        expect($request->url())->toContain('/projects/200/tasks')->and($request['opt_fields'])->toBe('gid,workspace.gid,memberships.project.gid,modified_at,tags.gid,tags.name');
         if (! $request['offset']) {
             return Http::response(['data' => array_map($task, range(300, 329)), 'next_page' => ['offset' => 'last']]);
         }

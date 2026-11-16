@@ -71,6 +71,28 @@ test('effective scoped revisions ignore observation churn but retain allocation 
     expect($facts->revisionFor($this->tenant->id, ['selected']))->not->toBe($before);
 });
 
+test('empty explicit allocations retain commerce and reviewer evidence without making unrelated empty facts relevant', function () {
+    $empty = allocationFactEvent($this, ['_teams_enrichment' => ['commerce_event' => ['id' => 100],
+        'square_orders' => ['ids' => [], 'reviewed_by' => $this->owner->id, 'reviewed_at' => '2025-01-01T12:00:00Z']]]);
+    $unrelated = allocationFactEvent($this);
+    $facts = app(EventSquareAllocationFacts::class);
+    $before = $facts->revisionFor($this->tenant->id, ['selected'], [100]);
+    $withoutOrders = $facts->revisionFor($this->tenant->id, [], [100]);
+    $unrelated->update(['data' => ['observed_at' => 'new observation'], 'version' => 2]);
+    expect($facts->revisionFor($this->tenant->id, ['selected'], [100]))->toBe($before)
+        ->and($facts->revisionFor($this->tenant->id, [], [100]))->toBe($withoutOrders);
+    $this->tenant->users()->updateExistingPivot($this->owner->id, ['membership_active' => false]);
+    expect($facts->revisionFor($this->tenant->id, ['selected'], [100]))->not->toBe($before)
+        ->and($facts->revisionFor($this->tenant->id, [], [100]))->not->toBe($withoutOrders);
+    $this->tenant->users()->updateExistingPivot($this->owner->id, ['membership_active' => true]);
+    expect($facts->revisionFor($this->tenant->id, ['selected'], [100]))->toBe($before);
+    $data = $empty->data;
+    $data['_teams_enrichment']['square_orders']['ids'] = ['selected'];
+    $empty->update(['data' => $data]);
+    expect($facts->revisionFor($this->tenant->id, ['selected'], [100]))->not->toBe($before)
+        ->and($facts->revisionFor($this->tenant->id, [], [100]))->not->toBe($withoutOrders);
+});
+
 test('reused occurrence models require fresh complete row witnesses and callers cannot poison their retained copies', function () {
     expect(app(EventSquareAllocationFacts::class)->occurrencesFor($this->tenant->id, 'no-events-yet'))->toBeEmpty();
     $event = allocationFactEvent($this, allocationFactData(['selected'], $this->owner->id), ['starts_on' => '2025-11-01', 'ends_on' => '2025-11-02']);

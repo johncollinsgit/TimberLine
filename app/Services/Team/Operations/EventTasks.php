@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
 /** Asana owns these tasks. This service never copies them into the native graph. */
 class EventTasks
 {
-    public const FIELDS = 'gid,name,notes,completed,due_on,start_on,due_at,start_at,modified_at,assignee.gid,assignee.name,workspace.gid,memberships.project.gid,memberships.project.name,permalink_url,num_subtasks,parent.gid';
+    public const FIELDS = 'gid,name,notes,completed,due_on,start_on,due_at,start_at,modified_at,assignee.gid,assignee.name,workspace.gid,memberships.project.gid,memberships.project.name,permalink_url,num_subtasks,parent.gid,tags.gid,tags.name';
 
     public function __construct(private OperationsAccess $access, private OperationsProviders $providers) {}
 
@@ -106,7 +106,7 @@ class EventTasks
 
     private function present(TeamProviderConnection $c, array $task): array
     {
-        return ['date_evidence' => app(EventSchedule::class)->dateEvidence($task, $this->version($task)), 'event_fields' => app(OperationsSync::class)->extract($task['notes'] ?? ''), 'event_schedule' => app(EventSchedule::class)->source($task), 'memberships' => array_values(array_filter($task['memberships'] ?? [], fn ($m) => in_array((string) ($m['project']['gid'] ?? ''), $this->providers->selectedProjects($c), true))), 'gid' => (string) $task['gid'], 'name' => $task['name'] ?? '', 'notes' => $task['notes'] ?? '', 'completed' => (bool) ($task['completed'] ?? false),
+        return ['source_acceptance' => app(EventAcceptance::class)->source($c, $this->project($c, $task) ?? $task['_verified_parent_project'] ?? '', $task), 'date_evidence' => app(EventSchedule::class)->dateEvidence($task, $this->version($task)), 'event_fields' => app(OperationsSync::class)->extract($task['notes'] ?? ''), 'event_schedule' => app(EventSchedule::class)->source($task), 'memberships' => array_values(array_filter($task['memberships'] ?? [], fn ($m) => in_array((string) ($m['project']['gid'] ?? ''), $this->providers->selectedProjects($c), true))), 'gid' => (string) $task['gid'], 'name' => $task['name'] ?? '', 'notes' => $task['notes'] ?? '', 'completed' => (bool) ($task['completed'] ?? false),
             'due_on' => $task['due_on'] ?? null, 'start_on' => $task['start_on'] ?? null, 'due_at' => $task['due_at'] ?? null, 'start_at' => $task['start_at'] ?? null, 'assignee' => $task['assignee'] ?? null,
             'modified_at' => $task['modified_at'] ?? null, 'source_url' => 'https://app.asana.com/0/'.($this->project($c, $task) ?? $task['_verified_parent_project'] ?? '0').'/'.$task['gid'],
             'connection_id' => $c->id, 'parent_id' => $task['_verified_parent'] ?? null, 'version' => $this->version($task), 'can_write' => $this->writable($c),

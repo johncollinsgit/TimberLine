@@ -172,7 +172,7 @@ class OperationsWorkspace
                     $more = true;
                     break;
                 }
-                $items[] = $compactEvents ? $record : $this->view($record, $canEdit, $admin);
+                $items[] = $compactEvents ? $record : $this->view($record, $canEdit, $admin, true, $this->access->admittedAsanaAcceptance($tenant, $user, $record));
             } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
                 if (! in_array($e->getStatusCode(), [403, 404, 409, 429, 502, 503])) {
                     throw $e;
@@ -188,7 +188,7 @@ class OperationsWorkspace
         if ($compactEvents) {
             $collectionAccessIncomplete = $collectionAccessIncomplete || ! $this->access->collectionSourcesAvailable();
             $people = $this->collectionPeople($items, $tenant, $area);
-            $items = array_map(fn ($record) => $this->eventCollectionView($record, $canEdit, $people), $items);
+            $items = array_map(fn ($record) => $this->eventCollectionView($record, $canEdit, $people, $this->access->admittedAsanaAcceptance($tenant, $user, $record)), $items);
         }
         $page = (int) ($filters['page'] ?? 1);
         $health = app(OperationsHealth::class)->area($area, $user->id);
@@ -200,21 +200,22 @@ class OperationsWorkspace
     }
 
     /** Collection cards need schedules, not original notes, candidate parsing or finance detail. */
-    private function eventCollectionView(TeamOperationRecord $record, bool $canEdit, array $people): array
+    private function eventCollectionView(TeamOperationRecord $record, bool $canEdit, array $people, ?array $acceptanceHint = null): array
     {
         $data = $record->data ?? [];
         $schedule = app(EventSchedule::class)->calendar($data, $record->starts_on?->toDateString(), $record->ends_on?->toDateString());
-        $acceptance = $record->connection_id ? ($data['reviewed_fields']['acceptance_status'] ?? null) : ($data['acceptance_status'] ?? null);
+        $acceptance = app(EventAcceptance::class)->project($record, $acceptanceHint);
 
         return ['id' => $record->id, 'area_id' => $record->area_id, 'kind' => $record->kind, 'title' => $record->title, 'status' => $record->status, 'version' => $record->version,
             'assigned_user_id' => $record->assigned_user_id, 'starts_on' => $record->starts_on?->toDateString(), 'ends_on' => $record->ends_on?->toDateString(),
             'data' => ['event_schedule' => $schedule, 'source_schedule' => $data['source_schedule'] ?? $data['event_schedule']['source_schedule'] ?? null,
-                'calendar_acceptance_status' => is_string($acceptance) ? $acceptance : null],
+                'calendar_acceptance_status' => $acceptance['status'],
+                ...in_array($acceptance['basis'], ['asana_tags', 'source_unverified'], true) ? ['event_acceptance' => $acceptance] : []],
             'calendar_people' => $this->calendarPeople($record, $people), 'source' => $record->connection_id ? ['connection_id' => $record->connection_id, 'key' => $record->source_key] : null,
             'capabilities' => ['edit' => $canEdit && ! $record->connection_id, 'schedule' => $canEdit], 'updated_at' => $record->updated_at?->toIso8601String()];
     }
 
-    public function view(TeamOperationRecord $record, bool $canEdit = true, bool $canFinance = false, bool $includePresentationDetails = true): array
+    public function view(TeamOperationRecord $record, bool $canEdit = true, bool $canFinance = false, bool $includePresentationDetails = true, ?array $acceptanceHint = null): array
     {
         $data = $record->data ?? [];
         if ($record->kind === 'event') {
@@ -258,6 +259,13 @@ class OperationsWorkspace
         }
         if ($record->kind === 'document') {
             $data = array_intersect_key($data, array_flip(['filename', 'mime', 'checksum', 'scan', 'target_id', 'matching', 'observed_at']));
+        }
+        if ($record->kind === 'event') {
+            $acceptance = app(EventAcceptance::class)->project($record, $acceptanceHint);
+            if (in_array($acceptance['basis'], ['asana_tags', 'source_unverified'], true)) {
+                $data['calendar_acceptance_status'] = $acceptance['status'];
+                $data['event_acceptance'] = $acceptance;
+            }
         }
         if ($record->kind === 'document' && isset($data['matching'])) {
             $data['matching'] = array_intersect_key($data['matching'], array_flip(['automatic', 'notice', 'reviewed_by', 'reviewed_at']));

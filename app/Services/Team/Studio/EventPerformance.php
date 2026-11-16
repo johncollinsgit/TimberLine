@@ -752,6 +752,11 @@ class EventPerformance
     /** Partial online upgrades and future field additions retain the complete fallback. */
     private function indexedDigest(string $table, array $requested, array $available): ?array
     {
+        if ($table === 'marketing_profile_links' && array_intersect($requested, ['event_capture_present', 'event_attribution_present'])) {
+            // These optional fields repeat exact source_meta path presence. Do
+            // not omit unknown, ordinary or schema-drifted requested fields.
+            $requested = array_values(array_diff($requested, app(EventCustomerAnchorSchema::class)->redundantColumns(DB::connection())));
+        }
         $definition = self::INDEXED_DIGESTS[$table] ?? null;
         if (DB::connection()->getDriverName() !== 'mysql' || $definition === null
             || $requested !== $definition['columns']

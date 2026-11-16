@@ -5753,11 +5753,15 @@ CREATE TABLE `marketing_profile_links` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   `event_content_hash` binary(32) GENERATED ALWAYS AS (unhex(sha2(json_array(`marketing_profile_id`,`source_type`,`source_id`,sha2(cast(`source_meta` as char charset utf8mb4),256),`match_method`,`confidence`),256))) VIRTUAL /*!80023 INVISIBLE */,
+  `event_capture_present` tinyint unsigned GENERATED ALWAYS AS ((json_extract(`source_meta`,_utf8mb4'$.event_id') is not null)) VIRTUAL /*!80023 INVISIBLE */,
+  `event_attribution_present` tinyint unsigned GENERATED ALWAYS AS ((json_extract(`source_meta`,_utf8mb4'$.event_attribution.event_id') is not null)) VIRTUAL /*!80023 INVISIBLE */,
   PRIMARY KEY (`id`),
   UNIQUE KEY `mpl_tenant_source_unique_idx` (`tenant_id`,`source_type`,`source_id`),
   KEY `mpl_profile_source_type_idx` (`marketing_profile_id`,`source_type`),
   KEY `marketing_profile_links_tenant_id_index` (`tenant_id`),
   KEY `ep_link_hash_idx` (`tenant_id`,`event_content_hash`),
+  KEY `mpl_event_capture_idx` (`tenant_id`,`source_type`,`event_capture_present`,`id`),
+  KEY `mpl_event_attribution_idx` (`tenant_id`,`source_type`,`event_attribution_present`,`id`),
   CONSTRAINT `marketing_profile_links_marketing_profile_id_foreign` FOREIGN KEY (`marketing_profile_id`) REFERENCES `marketing_profiles` (`id`) ON DELETE CASCADE,
   CONSTRAINT `marketing_profile_links_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -14672,3 +14676,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (336,'2026_11_08_19
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (337,'2026_11_11_190000_create_rental_workspaces',53);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (338,'2026_11_15_160000_create_team_event_performance_facts',54);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (339,'2026_11_16_030000_add_indexed_event_content_hashes',55);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (340,'2026_11_16_170000_add_event_customer_anchor_presence_indexes',56);

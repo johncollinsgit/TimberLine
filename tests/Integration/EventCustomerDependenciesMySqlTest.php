@@ -102,6 +102,118 @@ test('preexisting transactions cannot lend an old snapshot to a dependency admis
     }
 })->with(['REPEATABLE READ', 'READ COMMITTED']);
 
+test('a raw PDO caller transaction is rejected before any selector read and remains owned by its caller', function () {
+    $pdo = DB::connection()->getPdo();
+    $pdo->beginTransaction();
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    try {
+        $this->dependencies->capture($this->tenant, $this->area);
+        $this->fail('An unmanaged caller snapshot must not become a dependency frame.');
+    } catch (HttpException $error) {
+        expect($error->getStatusCode())->toBe(409)->and(DB::transactionLevel())->toBe(0)
+            ->and($pdo->inTransaction())->toBeTrue()->and(DB::getQueryLog())->toBeEmpty();
+    } finally {
+        DB::disableQueryLog();
+        $pdo->rollBack();
+    }
+});
+
+function dependencyObservationCiphertext(TeamOperationRecord $event, int $sequence): string
+{
+    $copy = clone $event;
+    $copy->data = [...$event->data, 'observed_at' => '2026-11-16T12:00:'.str_pad((string) $sequence, 2, '0', STR_PAD_LEFT).'Z', '_source_run' => 'observation-'.$sequence];
+
+    return $copy->getAttributes()['data'];
+}
+
+test('cold selector revisions decode one coherent view during committed observation-only rewrites', function () {
+    DB::statement('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED');
+    $baseline = $this->dependencies->selectorRevision($this->tenant, $this->area);
+    $original = $this->event->getRawOriginal('data');
+    config(['database.connections.event_dependencies_writer' => DB::connection()->getConfig()]);
+    $writer = DB::connection('event_dependencies_writer');
+    $writes = 0;
+    $observe = true;
+    DB::listen(function ($query) use ($writer, &$writes, &$observe) {
+        if ($observe && $query->connectionName !== 'event_dependencies_writer' && str_contains($query->sql, 'SHA2(`data`,256) AS content_revision')) {
+            expect(DB::transactionLevel())->toBe(1);
+            $writer->table('team_operation_records')->where('id', $this->event->id)->update([
+                'data' => dependencyObservationCiphertext($this->event, ++$writes),
+            ]);
+        }
+    });
+    $dependencies = new EventCustomerDependencies;
+    try {
+        expect($dependencies->selectorRevision($this->tenant, $this->area))->toBe($baseline)
+            ->and($dependencies->selectorRevision($this->tenant, $this->area))->toBe($baseline);
+    } finally {
+        $observe = false;
+    }
+    expect($writes)->toBe(2)->and(DB::transactionLevel())->toBe(0)
+        ->and(DB::selectOne('SELECT @@transaction_isolation AS level')->level)->toBe('READ-COMMITTED')
+        ->and($this->event->fresh()->version)->toBe(1)
+        ->and($this->event->fresh()->getRawOriginal('data'))->not->toBe($original)
+        ->and($this->event->fresh()->data['_source_run'])->toBe('observation-2');
+    Http::assertNothingSent();
+});
+
+test('initial scope and postcommit selector checks tolerate committed observation churn in their own coherent views', function (bool $existingScope) {
+    DB::statement('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED');
+    $baseline = $this->dependencies->capture($this->tenant, $this->area);
+    config(['database.connections.event_dependencies_writer' => DB::connection()->getConfig()]);
+    $writer = DB::connection('event_dependencies_writer');
+    $writes = 0;
+    $observe = true;
+    DB::listen(function ($query) use ($writer, &$writes, &$observe) {
+        if ($observe && $query->connectionName !== 'event_dependencies_writer' && str_contains($query->sql, 'SHA2(`data`,256) AS content_revision')) {
+            expect(DB::transactionLevel())->toBe(1);
+            $writer->table('team_operation_records')->where('id', $this->event->id)->update([
+                'data' => dependencyObservationCiphertext($this->event, ++$writes),
+            ]);
+        }
+    });
+    try {
+        $frame = (new EventCustomerDependencies)->capture($this->tenant, $this->area, $existingScope ? $baseline['scope'] : null);
+    } finally {
+        $observe = false;
+    }
+    expect($writes)->toBeGreaterThanOrEqual(2)->and($frame['scope'])->toBe($baseline['scope'])
+        ->and($frame['signature'])->toBe($baseline['signature'])
+        ->and($frame['claims']['square_order:'.$this->sourceId])->toBe($this->first->id)
+        ->and($this->event->fresh()->version)->toBe(1)->and(DB::transactionLevel())->toBe(0)
+        ->and(DB::selectOne('SELECT @@transaction_isolation AS level')->level)->toBe('READ-COMMITTED');
+    Http::assertNothingSent();
+})->with(['new scope' => false, 'existing scope' => true]);
+
+test('a real selector change committed during original reads is rejected by the fresh postcommit view', function () {
+    DB::statement('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED');
+    $baseline = $this->dependencies->capture($this->tenant, $this->area);
+    $copy = clone $this->event;
+    $copy->data = ['_teams_enrichment' => ['square_orders' => ['ids' => ['another-original-source']]]];
+    $replacement = $copy->getAttributes()['data'];
+    config(['database.connections.event_dependencies_writer' => DB::connection()->getConfig()]);
+    $writer = DB::connection('event_dependencies_writer');
+    $changed = false;
+    DB::listen(function ($query) use ($writer, $replacement, &$changed) {
+        if (! $changed && $query->connectionName !== 'event_dependencies_writer' && str_starts_with(strtolower($query->sql), 'select') && str_contains($query->sql, 'from `square_orders`')) {
+            $changed = true;
+            $writer->table('team_operation_records')->where('id', $this->event->id)->update(['data' => $replacement]);
+        }
+    });
+    try {
+        $this->dependencies->capture($this->tenant, $this->area, $baseline['scope']);
+        $this->fail('A committed allocation change must invalidate the returned dependency frame.');
+    } catch (HttpException $error) {
+        expect($error->getStatusCode())->toBe(409)->and($error->getMessage())->toBe('Customer event selectors changed while reporting was read.')
+            ->and($changed)->toBeTrue()->and(DB::transactionLevel())->toBe(0)
+            ->and(DB::selectOne('SELECT @@transaction_isolation AS level')->level)->toBe('READ-COMMITTED');
+    }
+    expect($this->event->fresh()->version)->toBe(1)
+        ->and($this->dependencies->selectorRevision($this->tenant, $this->area))->not->toBe($baseline['scope']['selector_revision']);
+    Http::assertNothingSent();
+});
+
 test('original source revisions use covering indexed hashes and retain typed and same-second mutations', function () {
     DB::enableQueryLog();
     $before = $this->dependencies->capture($this->tenant, $this->area);

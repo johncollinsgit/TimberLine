@@ -30,6 +30,27 @@ class OperationsAccess
         return $hint['modified_at'];
     }
 
+    /** Current admitted source evidence for presentation only, never an access grant. */
+    public function admittedAsanaAcceptance(Tenant $tenant, User $user, TeamOperationRecord $record): ?array
+    {
+        $hint = $this->admittedAsanaVersions[$tenant->id.':'.$user->id.':'.$record->id] ?? null;
+        if (! $hint || ($hint['actor_id'] ?? null) !== (int) $user->id || ($hint['tenant_id'] ?? null) !== (int) $tenant->id
+            || ($hint['area_id'] ?? null) !== (string) $record->area_id || ! app(EventAcceptance::class)->hintMatches($record, $hint)) {
+            return null;
+        }
+        if (is_array($hint['evidence'] ?? null)) {
+            $evidence = $hint['evidence'];
+            $connection = TeamProviderConnection::where(['tenant_id' => $tenant->id, 'area_id' => $record->area_id, 'user_id' => $user->id,
+                'provider' => 'asana', 'status' => 'connected', 'generation' => $evidence['connection_generation']])->find($evidence['connection_id']);
+            if (! $connection || ($connection->settings['source']['asana_workspace'] ?? null) !== ($evidence['workspace_id'] ?? null)
+                || ! in_array($evidence['project_id'] ?? null, app(OperationsProviders::class)->selectedProjects($connection), true)) {
+                $hint['evidence']['valid'] = false;
+            }
+        }
+
+        return $hint;
+    }
+
     /** Exists only while one authorized collection is assembled; never survives a request. */
     private ?array $recordReadScope = null;
 
@@ -46,7 +67,7 @@ class OperationsAccess
         }
     }
 
-    private function verifyCollectionTask(OperationsProviders $providers, TeamProviderConnection $connection, string $taskId, string $project): void
+    private function verifyCollectionTask(OperationsProviders $providers, TeamProviderConnection $connection, string $taskId, string $project): array
     {
         $key = $connection->id.':'.$connection->generation.':'.$project;
         $this->recordReadScope['source_connections'][$connection->id] = $connection->generation;
@@ -61,13 +82,13 @@ class OperationsAccess
             throw $error;
         }
         if (isset($inventory['tasks'][$taskId])) {
-            return;
+            return $inventory['task_evidence'][$taskId] ?? [];
         }
         // A bounded inventory is an optimization, never a reason to hide an
         // unresolved task. Large projects fall back to fresh exact-task access.
         if (! $inventory['complete']) {
             try {
-                $providers->verifyAsanaRecord($connection, $taskId, $project);
+                $task = $providers->verifyAsanaRecord($connection, $taskId, $project);
             } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
                 if (! in_array($error->getStatusCode(), [403, 404], true)) {
                     $this->recordReadScope['source_incomplete'] = true;
@@ -75,7 +96,7 @@ class OperationsAccess
                 throw $error;
             }
 
-            return;
+            return $task;
         }
         abort(403); // Completed fresh inventory proves this retained task is unavailable.
     }
@@ -203,12 +224,16 @@ class OperationsAccess
                     $providers->verifyAsanaProject($connection, $selectedProject);
                 } else {
                     if ($scoped && $this->recordReadScope['collection_asana']) {
-                        $this->verifyCollectionTask($providers, $connection, (string) ($record->data['source_id'] ?? ''), $selectedProject);
+                        $task = $this->verifyCollectionTask($providers, $connection, (string) ($record->data['source_id'] ?? ''), $selectedProject);
                     } else {
                         $task = $providers->verifyAsanaRecord($connection, $record->data['source_id'] ?? '', $selectedProject);
-                        $this->admittedAsanaVersions[$hintKey] = ['record_version' => $record->version, 'connection_id' => $record->connection_id, 'source_id' => $record->data['source_id'] ?? null,
-                            'modified_at' => is_string($task['modified_at'] ?? null) && $task['modified_at'] !== '' ? $task['modified_at'] : null];
                     }
+                    $this->admittedAsanaVersions[$hintKey] = ['tenant_id' => (int) $tenant->id, 'area_id' => (string) $record->area_id, 'actor_id' => (int) $user->id,
+                        'record_id' => $record->id, 'record_version' => $record->version, 'record_connection_id' => $record->connection_id, 'record_source_version' => $record->data['source_version'] ?? null,
+                        'record_scope' => app(EventAcceptance::class)->recordScope($record),
+                        'connection_id' => $record->connection_id, 'source_id' => $record->data['source_id'] ?? null,
+                        'modified_at' => is_string($task['modified_at'] ?? null) && $task['modified_at'] !== '' ? $task['modified_at'] : null,
+                        'evidence' => app(EventAcceptance::class)->source($connection, $selectedProject, $task)];
                 }
             } else {
                 abort_unless($connection->status === 'connected', 403);
