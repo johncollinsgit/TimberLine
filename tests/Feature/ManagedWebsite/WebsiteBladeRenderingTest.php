@@ -5,6 +5,7 @@ use App\Models\TenantModuleEntitlement;
 use App\Models\User;
 use App\Models\WebsiteCustomer;
 use App\Models\WebsiteOrder;
+use App\Models\WebsiteOrderLine;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsiteCatalogService;
 use App\Services\ManagedWebsite\WebsiteCommerceService;
@@ -97,6 +98,52 @@ test('shopper account alerts never change the guest or signed-in branch', functi
     'native guest' => ['hvac-service', false, false], 'native guest alerts' => ['hvac-service', false, true],
     'native signed-in alerts' => ['hvac-service', true, true], 'Sawyer guest' => ['sawyer-naturals', false, false],
     'Sawyer guest alerts' => ['sawyer-naturals', false, true], 'Sawyer signed-in alerts' => ['sawyer-naturals', true, true],
+]);
+
+test('order confirmations explain stored charges and retain receipt actions in both designs', function (string $theme, int $tax, int $shipping): void {
+    $this->websites->applyTheme($this->site, $theme, $this->owner);
+    $this->websites->publish($this->site->fresh(), $this->owner);
+    $order = WebsiteOrder::query()->create([
+        'tenant_id' => $this->tenant->id, 'tenant_site_id' => $this->site->id, 'number' => 'WEB-FICTIONAL-RECEIPT-1234567890123456',
+        'lookup_token' => str_repeat('f', 56), 'source' => 'native', 'currency' => 'usd', 'payment_status' => 'paid',
+        'fulfillment_method' => $shipping > 0 ? 'ship' : 'pickup', 'fulfillment_status' => 'unfulfilled', 'subtotal_cents' => 1200,
+        'tax_cents' => $tax, 'shipping_cents' => $shipping, 'total_cents' => 1200 + $tax + $shipping,
+    ]);
+    $title = 'Fictional packing kit with an extra-long recyclable presentation sleeve';
+    WebsiteOrderLine::query()->create(['tenant_id' => $this->tenant->id, 'website_order_id' => $order->id,
+        'title' => $title, 'product_type' => 'physical', 'quantity' => 2, 'unit_price_cents' => 600,
+        'line_total_cents' => 1200, 'snapshot' => []]);
+    $html = view('managed-website.order', ['site' => $this->site->fresh(), 'order' => $order->fresh(),
+        'storefront' => ['can_account' => false, 'can_cart' => false]])->render();
+    $xpath = websiteRenderedDocument($html);
+    $summary = '//section[@aria-label="Order summary"]';
+    $isSawyer = $theme === 'sawyer-naturals';
+    $prefix = $isSawyer ? 'sn' : 'store';
+    $taxRow = $summary.'//div[span[normalize-space(.)="Tax"]]';
+    $shippingRow = $summary.'//div[span[normalize-space(.)="Shipping"]]';
+    expect($html)->not->toMatch('/@(include|if|endif|endforeach)\b/')
+        ->and($xpath->query('//h1/span[normalize-space(.)="'.$order->number.'"]')->length)->toBe(1)
+        ->and($xpath->query($summary)->length)->toBe(1)
+        ->and($xpath->query($summary.'//div[@class="'.$prefix.'-order__details"]/strong[normalize-space(.)="'.$title.'"]')->length)->toBe(1)
+        ->and($xpath->query($summary.'//div[@class="'.$prefix.'-order__details"]/span[normalize-space(.)="2 × $6.00"]')->length)->toBe(1)
+        ->and($xpath->query($summary.'//strong[@class="'.$prefix.'-order__amount" and normalize-space(.)="$12.00"]')->length)->toBeGreaterThanOrEqual(1)
+        ->and($xpath->query($taxRow)->length)->toBe($tax > 0 ? 1 : 0)
+        ->and($xpath->query($shippingRow)->length)->toBe($shipping > 0 ? 1 : 0)
+        ->and($xpath->query($summary.'//div[contains(@class,"'.$prefix.'-order__total")]/strong[2]')->item(0)->textContent)->toBe('$'.number_format($order->total_cents / 100, 2))
+        ->and($xpath->query($summary.'//a | '.$summary.'//form')->length)->toBe(0)
+        ->and($xpath->query('//div[@class="'.$prefix.'-order__actions"]/a[@href="'.route('managed-website.store.index').'"]')->length)->toBe(1)
+        ->and(str_contains($html, $isSawyer ? 'Your payment is paid.' : 'Your payment status is <strong>Paid</strong>. We will coordinate '.$order->fulfillment_method.' directly.'))->toBeTrue();
+    if ($tax > 0) {
+        expect(trim($xpath->query($taxRow.'/span[2]')->item(0)->textContent))->toBe('$'.number_format($tax / 100, 2));
+    }
+    if ($shipping > 0) {
+        expect(trim($xpath->query($shippingRow.'/span[2]')->item(0)->textContent))->toBe('$'.number_format($shipping / 100, 2));
+    }
+})->with([
+    'native tax' => ['hvac-service', 107, 0], 'native shipping' => ['hvac-service', 0, 450],
+    'native both charges' => ['hvac-service', 107, 450], 'native no charges' => ['hvac-service', 0, 0],
+    'Sawyer tax' => ['sawyer-naturals', 107, 0], 'Sawyer shipping' => ['sawyer-naturals', 0, 450],
+    'Sawyer both charges' => ['sawyer-naturals', 107, 450], 'Sawyer no charges' => ['sawyer-naturals', 0, 0],
 ]);
 
 test('published card and gallery conditions render only their own saved fields', function (): void {
