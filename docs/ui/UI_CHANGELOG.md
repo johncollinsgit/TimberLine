@@ -73,6 +73,8 @@ displayed history, while temporary server errors keep the comparison retryable.
 Filtered comparisons check the sources contributing to the selected report, and
 Pay's current Sales summary avoids loading unused planning details. A blank
 reviewed workbook total is shown as unavailable rather than a changed source row.
+Before the first reporting generation, summary cards show pending values and
+dashes; a report still preparing its sources does not display zero sales.
 
 ## 2026-11-15 - Private website starters and saved drafts
 
