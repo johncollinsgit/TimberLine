@@ -222,15 +222,19 @@ class SquareCustomerIdentityService
 
     public function authorize(int $tenantId, User $actor): void
     {
-        $tenant = \App\Models\Tenant::query()->whereKey($tenantId)->when(DB::transactionLevel() > 0, fn ($query) => $query->lockForUpdate())->first();
-        $access = \App\Models\TenantAccessProfile::where('tenant_id', $tenantId)->when(DB::transactionLevel() > 0, fn ($query) => $query->lockForUpdate())->first();
-        $state = \App\Models\TenantModuleState::where('tenant_id', $tenantId)->where('module_key', 'customers')->when(DB::transactionLevel() > 0, fn ($query) => $query->lockForUpdate())->first();
+        $reporting = app(\App\Services\Team\Studio\EventCustomerReadView::class);
+        $reporting->actor($tenantId, (int) $actor->id);
+        $lock = DB::transactionLevel() > 0 && ! $reporting->owns($tenantId);
+        $tenant = \App\Models\Tenant::query()->whereKey($tenantId)->when($lock, fn ($query) => $query->lockForUpdate())->first();
+        $access = \App\Models\TenantAccessProfile::where('tenant_id', $tenantId)->when($lock, fn ($query) => $query->lockForUpdate())->first();
+        $state = \App\Models\TenantModuleState::where('tenant_id', $tenantId)->where('module_key', 'customers')->when($lock, fn ($query) => $query->lockForUpdate())->first();
         abort_if(data_get($access?->metadata, 'workspace_focus') === 'soccer' || ($state && $state->getRawOriginal('enabled_override') !== null && ! $state->enabled_override), 403);
-        abort_unless(app(TenantModuleAccessResolver::class)->canAccess($tenantId, 'customers'), 403);
-        $current = User::query()->whereKey($actor->id)->when(DB::transactionLevel() > 0, fn ($query) => $query->lockForUpdate())->first();
-        $member = $current?->tenants()->whereKey($tenantId)->wherePivot('membership_active', true)->when(DB::transactionLevel() > 0, fn ($query) => $query->lockForUpdate())->first();
+        abort_unless(($reporting->modules($tenantId) ?? app(TenantModuleAccessResolver::class))->canAccess($tenantId, 'customers'), 403);
+        $current = User::query()->whereKey($actor->id)->when($lock, fn ($query) => $query->lockForUpdate())->first();
+        $member = $current?->tenants()->whereKey($tenantId)->wherePivot('membership_active', true)->when($lock, fn ($query) => $query->lockForUpdate())->first();
         abort_unless($current?->is_active && $current->email_verified_at && $tenant && app(CustomerProfileAccess::class)->allows($current, $tenant) && $member
             && in_array(strtolower((string) $member->pivot->role), ['owner', 'tenant_owner', 'admin'], true), 403);
+        $reporting->actor($tenantId, (int) $actor->id, true);
     }
 
     private function candidates(int $tenant, array $identity): array

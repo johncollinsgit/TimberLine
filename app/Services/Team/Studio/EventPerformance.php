@@ -18,6 +18,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -249,7 +250,7 @@ class EventPerformance
                 $histories = [];
                 $this->access->readCollection($tenant, $user, $area, function () use ($tenant, $user, $area, $events, $linkByEvent, $generation, &$customerAccess, &$customerInvalidated, &$facts, &$versions, &$issues, &$histories, &$customerFrame, &$customerSignature): void {
                     if ($customerAccess) {
-                        // One short local view precedes all private facts; provider calls stay outside it.
+                        // One owned coherent witness view precedes private facts; provider calls stay outside it.
                         $customerFrame = $this->captureCustomerFrame($tenant, $area, null, true);
                         $customerInvalidated = $customerFrame === null;
                         $customerAccess = ! $customerInvalidated;
@@ -337,6 +338,8 @@ class EventPerformance
                     // Withhold every customer fact; reads still compare the old
                     // signature freshly and return preparing for that dimension.
                     $this->facts($tenant, $area, $generation)->where('kind', 'customer')->delete();
+                    Log::notice('Event reporting customer evidence withheld', ['tenant_id' => (int) $tenant->id, 'area_id' => (string) $area->id,
+                        'phase' => $customerInvalidated ? 'witness_validation' : 'final_dependency_or_access']);
                     $customerAccess = false;
                     $issues[] = 'Customer identities changed. Preparing the current customer comparison.';
                 }
@@ -493,6 +496,9 @@ class EventPerformance
                 throw $error;
             }
 
+            Log::notice('Event reporting customer evidence withheld', ['tenant_id' => (int) $tenant->id, 'area_id' => (string) $area->id,
+                'phase' => 'dependency_frame', 'witnesses' => $witnesses, 'reason_fingerprint' => hash('sha256', $error->getMessage())]);
+
             return null;
         }
     }
@@ -517,6 +523,8 @@ class EventPerformance
             if ($error->getStatusCode() !== 409) {
                 throw $error;
             }
+
+            Log::notice('Event reporting customer evidence withheld', ['phase' => 'purchase_validation', 'reason_fingerprint' => hash('sha256', $error->getMessage())]);
 
             return false;
         }

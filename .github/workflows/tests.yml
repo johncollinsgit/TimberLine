@@ -723,7 +723,7 @@ jobs:
     - name: Verify coherent event reporting reads during source observations
       env:
         TEAM_WORK_DISPOSABLE_MYSQL: '1'
-      run: php ./vendor/bin/pest tests/Integration/EventCustomerDependenciesMySqlTest.php tests/Integration/EventSquareAllocationFactsMySqlTest.php tests/Integration/EventCustomerFinancialReadsMySqlTest.php tests/Integration/EventCustomerFrameScaleMySqlTest.php --compact
+      run: php ./vendor/bin/pest tests/Integration/EventCustomerDependenciesMySqlTest.php tests/Integration/EventSquareAllocationFactsMySqlTest.php tests/Integration/EventCustomerFinancialReadsMySqlTest.php tests/Integration/EventCustomerFrameScaleMySqlTest.php tests/Integration/EventCustomerReadOnlyWitnessesMySqlTest.php --compact
       if: matrix.group == 'concurrency'
     - name: Verify platform SES durable claims and shared account concurrency
       env:

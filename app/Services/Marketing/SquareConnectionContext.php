@@ -58,7 +58,7 @@ class SquareConnectionContext
         if ($connectionId && $connectionId !== 'tenant-config' && $connectionId !== ($raw['connection_id'] ?? null)) {
             $legacy = str_starts_with($connectionId, 'legacy:');
             $originalId = $legacy ? substr($connectionId, 7) : $connectionId;
-            $connection = $this->store->rows('connections', $tenantId)->where('id', $originalId)->when(DB::transactionLevel() > 0, fn ($query) => $query->lockForUpdate())->first();
+            $connection = $this->store->rows('connections', $tenantId)->where('id', $originalId)->when(DB::transactionLevel() > 0 && ! app(\App\Services\Team\Studio\EventCustomerReadView::class)->owns($tenantId, $this->store->db), fn ($query) => $query->lockForUpdate())->first();
             abort_unless($connection, 404);
             $credentials = $legacy ? ['access_token' => config('marketing.square.access_token')] : $this->store->decrypt($connection->credentials);
             abort_unless(! empty($credentials['access_token']) && ($legacy || (! empty($credentials['expires_at']) && strtotime($credentials['expires_at']) > time())), 409, 'The original Square authorization expired. Reconnect the existing connection.');
@@ -136,15 +136,17 @@ class SquareConnectionContext
     /** Local admission for late responses; no provider HTTP inside customer locks. */
     public function assertCurrent(int $tenantId, array $binding): void
     {
+        app(\App\Services\Team\Studio\EventCustomerReadView::class)->binding($tenantId, $binding);
         $current = $this->local($tenantId, $binding['connection_id'] ?? null);
         abort_unless($current && (string) $current['connection_generation'] === (string) ($binding['connection_generation'] ?? '')
             && $current['environment'] === ($binding['environment'] ?? null)
             && (empty($current['merchant_id']) || $current['merchant_id'] === ($binding['merchant_id'] ?? null)), 409, 'The original Square connection changed. Refresh its current state.');
+        app(\App\Services\Team\Studio\EventCustomerReadView::class)->binding($tenantId, $binding, true);
     }
 
     private function setting(int $tenantId): ?array
     {
-        $value = TenantMarketingSetting::query()->where('tenant_id', $tenantId)->where('key', 'square_config')->when(DB::transactionLevel() > 0, fn ($query) => $query->lockForUpdate())->first()?->value;
+        $value = TenantMarketingSetting::query()->where('tenant_id', $tenantId)->where('key', 'square_config')->when(DB::transactionLevel() > 0 && ! app(\App\Services\Team\Studio\EventCustomerReadView::class)->owns($tenantId), fn ($query) => $query->lockForUpdate())->first()?->value;
 
         return is_array($value) ? $value : null;
     }
