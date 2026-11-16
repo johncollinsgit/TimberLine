@@ -13,6 +13,12 @@ use Illuminate\Support\Str;
 
 class TenantStripeConnectionService
 {
+    public const ACCOUNTS_V2_VERSION = '2026-10-28.endive';
+
+    private const ACCOUNTS_V2_ENDPOINT = 'https://api.stripe.com/v2/core/accounts';
+
+    private const ACCOUNTS_V1_UNSUPPORTED = 'Stripe no longer recommends Accounts v1 for new Connect integrations. Create connected accounts with POST /v2/core/accounts instead';
+
     private function stripe()
     {
         return Http::asForm()->withBasicAuth((string) config('services.stripe.secret'), '')
@@ -38,13 +44,12 @@ class TenantStripeConnectionService
             $express = in_array($tenant->slug, config('tenant_payments.legacy_express_tenants', []), true);
             $attempt = IntegrationConnection::query()->forTenant($tenant)->firstOrCreate(
                 ['tenant_id' => $tenant->id, 'provider' => 'tenant_stripe_onboarding', 'external_account_id' => $this->fingerprint()],
-                ['status' => 'pending', 'connected_by_user_id' => $actor->id, 'external_account_secret' => json_encode([
-                    'key' => (string) Str::uuid(),
-                    'payload' => ['type' => $express ? 'express' : 'standard', 'country' => 'US', 'email' => $email,
+                ['status' => 'pending', 'connected_by_user_id' => $actor->id, 'external_account_secret' => json_encode($express ? [
+                    'key' => (string) Str::uuid(), 'payload' => ['type' => 'express', 'country' => 'US', 'email' => $email,
                         'capabilities' => ['card_payments' => ['requested' => 'true'], 'transfers' => ['requested' => 'true']],
                         'business_profile' => ['name' => $tenant->name, 'product_description' => 'Customer payments for '.$tenant->name],
                         'metadata' => ['tenant_id' => (string) $tenant->id, 'tenant_slug' => $tenant->slug]],
-                ], JSON_THROW_ON_ERROR)]
+                ] : $this->newAccountsV2Request($email, $tenant->name, ['tenant_id' => (string) $tenant->id, 'tenant_slug' => $tenant->slug]), JSON_THROW_ON_ERROR)]
             );
 
             return $attempt;
@@ -56,11 +61,14 @@ class TenantStripeConnectionService
         if ($attempt->status === 'rejected' && data_get($attempt->metadata, 'rejection') === 'stripe_missing_transfers_capability') {
             $attempt = $this->capabilityReplacement($tenant, $actor, $attempt);
         }
+        if ($attempt->status === 'rejected' && data_get($attempt->metadata, 'rejection') === 'stripe_accounts_v1_create_unsupported') {
+            $attempt = $this->accountsV2Replacement($tenant, $actor, $attempt);
+        }
 
         abort_if($attempt->created_at->lt(now()->subHours(23)), 409, 'This payment setup attempt needs support review before retrying. This prevents creating a duplicate account.');
 
         $frozen = json_decode($attempt->external_account_secret, true, flags: JSON_THROW_ON_ERROR);
-        $response = $this->stripe()->withHeaders(['Idempotency-Key' => $frozen['key']])->post('https://api.stripe.com/v1/accounts', $frozen['payload']);
+        $response = $this->sendAccountRequest($frozen);
         // This specific validation rejection proves the old request did not create
         // an account. Retain its immutable payload/key and reserve a separate,
         // auditable corrected request. Timeouts and other failures never qualify.
@@ -82,9 +90,31 @@ class TenantStripeConnectionService
             $attempt = $this->capabilityReplacement($tenant, $actor, $attempt->fresh());
             abort_if($attempt->created_at->lt(now()->subHours(23)), 409, 'This corrected payment setup attempt needs support review before retrying.');
             $frozen = json_decode($attempt->external_account_secret, true, flags: JSON_THROW_ON_ERROR);
-            $response = $this->stripe()->withHeaders(['Idempotency-Key' => $frozen['key']])->post('https://api.stripe.com/v1/accounts', $frozen['payload']);
+            $response = $this->sendAccountRequest($frozen);
+        }
+        if (! $this->isAccountsV2($frozen) && data_get($frozen, 'payload.type') === 'standard'
+            && $response->status() === 400 && $response->json('error.type') === 'invalid_request_error'
+            && str_starts_with((string) $response->json('error.message'), self::ACCOUNTS_V1_UNSUPPORTED)) {
+            DB::transaction(function () use ($tenant, $actor, $attempt): void {
+                Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+                $original = IntegrationConnection::query()->forTenant($tenant)->findOrFail($attempt->id);
+                if ($original->status !== 'rejected') {
+                    $original->update(['status' => 'rejected', 'metadata' => array_merge($original->metadata ?? [],
+                        ['rejection' => 'stripe_accounts_v1_create_unsupported', 'rejected_at' => now()->toIso8601String()])]);
+                    app(\App\Services\Tenancy\LandlordOperatorActionAuditService::class)->record($tenant->id, $actor->id,
+                        'tenant_payments.stripe.account_request_rejected', targetType: 'integration_connection', targetId: $original->id,
+                        result: ['provider_status' => 400, 'reason' => 'stripe_accounts_v1_create_unsupported', 'account_created' => false]);
+                }
+            });
+            $attempt = $this->accountsV2Replacement($tenant, $actor, $attempt->fresh());
+            abort_if($attempt->created_at->lt(now()->subHours(23)), 409, 'This corrected payment setup attempt needs support review before retrying.');
+            $frozen = json_decode($attempt->external_account_secret, true, flags: JSON_THROW_ON_ERROR);
+            $response = $this->sendAccountRequest($frozen);
         }
         $this->assertSuccess($response);
+        if ($this->isAccountsV2($frozen)) {
+            $this->assertAccountsV2Response($response, $frozen);
+        }
         $id = (string) $response->json('id');
         abort_unless(preg_match('/^acct_[A-Za-z0-9]+$/D', $id), 502, 'Stripe returned an invalid payment account.');
 
@@ -92,18 +122,91 @@ class TenantStripeConnectionService
             Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
             $account = $tenant->paymentAccount()->first();
             abort_if($account?->provider_account_id && $account->provider_account_id !== $id, 409, 'Payment account changed. Refresh before continuing.');
+            abort_if(TenantPaymentAccount::withoutGlobalScopes()->where('provider_account_id', $id)->where('tenant_id', '!=', $tenant->id)->exists(), 409, 'This Stripe account is already bound to a workspace.');
             if ($account?->provider_account_id === $id) {
                 return $account;
             }
             $account ??= new TenantPaymentAccount(['tenant_id' => $tenant->id]);
             $account->fill(['provider' => 'stripe_connect', 'provider_account_id' => $id, 'status' => 'onboarding',
                 'onboarding_started_at' => now(), 'metadata' => array_merge($account->metadata ?? [], ['setup_fingerprint' => $this->fingerprint(),
-                    'routing_mode' => $frozen['payload']['type'] === 'standard' ? 'direct' : 'destination',
-                    'ownership_verified_via' => 'created_account', 'purposes' => ['payment_processing', 'payout_bank']])])->save();
+                    'routing_mode' => $this->isAccountsV2($frozen) || $frozen['payload']['type'] === 'standard' ? 'direct' : 'destination',
+                    'ownership_verified_via' => 'created_account', 'purposes' => ['payment_processing', 'payout_bank']],
+                    $this->isAccountsV2($frozen) ? ['creation_api' => 'accounts_v2', 'creation_api_version' => self::ACCOUNTS_V2_VERSION] : [])])->save();
             $attempt->update(['status' => 'connected', 'connected_at' => now()]);
             app(\App\Services\Tenancy\LandlordOperatorActionAuditService::class)->record($tenant->id, $actor->id, 'tenant_payments.stripe.connected', targetType: 'tenant_payment_account', targetId: $account->id);
 
             return $account;
+        });
+    }
+
+    private function newAccountsV2Request(string $email, string $name, array $metadata): array
+    {
+        return ['key' => (string) Str::uuid(), 'api_family' => 'accounts_v2', 'endpoint' => self::ACCOUNTS_V2_ENDPOINT,
+            'api_version' => self::ACCOUNTS_V2_VERSION, 'payload' => [
+                'contact_email' => $email, 'display_name' => $name, 'identity' => ['country' => 'us'],
+                'dashboard' => 'full', 'defaults' => ['responsibilities' => ['fees_collector' => 'stripe', 'losses_collector' => 'stripe']],
+                'configuration' => ['merchant' => ['capabilities' => ['card_payments' => ['requested' => true]]],
+                    'recipient' => ['capabilities' => ['stripe_balance' => ['stripe_transfers' => ['requested' => true]]]]],
+                'metadata' => $metadata, 'include' => ['defaults', 'configuration.merchant', 'configuration.recipient', 'identity'],
+            ]];
+    }
+
+    private function isAccountsV2(array $frozen): bool
+    {
+        abort_unless(! array_key_exists('api_family', $frozen) || $frozen['api_family'] === 'accounts_v2', 409, 'Review the original payment account request before retrying.');
+
+        return ($frozen['api_family'] ?? null) === 'accounts_v2';
+    }
+
+    private function sendAccountRequest(array $frozen): Response
+    {
+        if (! $this->isAccountsV2($frozen)) {
+            return $this->stripe()->withHeaders(['Idempotency-Key' => $frozen['key']])->post('https://api.stripe.com/v1/accounts', $frozen['payload']);
+        }
+        abort_unless(($frozen['endpoint'] ?? null) === self::ACCOUNTS_V2_ENDPOINT && ($frozen['api_version'] ?? null) === self::ACCOUNTS_V2_VERSION, 409, 'The original Stripe account request version changed.');
+
+        return Http::asJson()->withToken((string) config('services.stripe.secret'))->withoutRedirecting()->connectTimeout(5)->timeout(20)
+            ->withHeaders(['Stripe-Version' => $frozen['api_version'], 'Idempotency-Key' => $frozen['key']])
+            ->post($frozen['endpoint'], $frozen['payload']);
+    }
+
+    private function assertAccountsV2Response(Response $response, array $frozen): void
+    {
+        abort_unless($response->json('object') === 'v2.core.account' && $response->json('livemode') === str_starts_with((string) config('services.stripe.secret'), 'sk_live_')
+            && $response->json('dashboard') === 'full' && $response->json('defaults.responsibilities.fees_collector') === 'stripe'
+            && $response->json('defaults.responsibilities.losses_collector') === 'stripe'
+            && $response->json('defaults.responsibilities.requirements_collector') === 'stripe'
+            && strtoupper((string) $response->json('identity.country')) === 'US'
+            && (string) $response->json('metadata.tenant_id') === (string) data_get($frozen, 'payload.metadata.tenant_id')
+            && $response->json('metadata.tenant_slug') === data_get($frozen, 'payload.metadata.tenant_slug')
+            && in_array('merchant', (array) $response->json('applied_configurations'), true)
+            && in_array('recipient', (array) $response->json('applied_configurations'), true), 502, 'Stripe returned a payment account with different ownership or responsibilities.');
+    }
+
+    private function accountsV2Replacement(Tenant $tenant, User $actor, IntegrationConnection $original): IntegrationConnection
+    {
+        $old = json_decode($original->external_account_secret, true, flags: JSON_THROW_ON_ERROR);
+        abort_unless($original->status === 'rejected' && data_get($original->metadata, 'rejection') === 'stripe_accounts_v1_create_unsupported'
+            && ! $this->isAccountsV2($old) && data_get($old, 'payload.type') === 'standard'
+            && in_array($original->external_account_id, [$this->fingerprint(), $this->fingerprint().':standard-capabilities-v2'], true)
+            && (string) data_get($old, 'payload.metadata.tenant_id') === (string) $tenant->id, 409);
+
+        return DB::transaction(function () use ($tenant, $actor, $original, $old): IntegrationConnection {
+            Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+            $next = IntegrationConnection::query()->forTenant($tenant)->firstOrCreate(
+                ['tenant_id' => $tenant->id, 'provider' => 'tenant_stripe_onboarding', 'external_account_id' => $this->fingerprint().':accounts-v2:'.$original->id],
+                ['status' => 'pending', 'connected_by_user_id' => $actor->id,
+                    'external_account_secret' => json_encode($this->newAccountsV2Request((string) data_get($old, 'payload.email'),
+                        (string) data_get($old, 'payload.business_profile.name', $tenant->name), (array) data_get($old, 'payload.metadata')), JSON_THROW_ON_ERROR),
+                    'metadata' => ['replaces_rejected_attempt_id' => $original->id, 'replacement_reason' => 'stripe_accounts_v1_create_unsupported']]
+            );
+            if ($next->wasRecentlyCreated) {
+                app(\App\Services\Tenancy\LandlordOperatorActionAuditService::class)->record($tenant->id, $actor->id,
+                    'tenant_payments.stripe.account_request_replaced', targetType: 'integration_connection', targetId: $next->id,
+                    result: ['replaces_rejected_attempt_id' => $original->id, 'creation_api' => 'accounts_v2']);
+            }
+
+            return $next;
         });
     }
 
