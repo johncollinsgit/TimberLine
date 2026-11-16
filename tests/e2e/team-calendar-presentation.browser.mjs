@@ -23,13 +23,34 @@ export async function checkCalendarPresentation(engine, name, evidence) {
       const event = (id, date, acceptance, extra = {}) => ({ id, title: id, status: 'accepted', starts_on: date, ends_on: date,
         calendar_people: [{ id: 'native:1', provider: 'teams', name: 'Fictional team member' }],
         data: { acceptance_status: acceptance, event_schedule: { timezone: 'America/New_York', sessions: [{ id: id + '-session', date, kind: 'selling' }], schedule_complete: true } }, ...extra });
+      const reviewedSource = (id, date, acceptance, compact = true) => {
+        const item = event(id, date, null, { source: { connection_id: 'fictional' } });
+        item.data.reviewed_fields = { acceptance_status: acceptance };
+        if (compact) item.data.calendar_acceptance_status = acceptance;
+        return item;
+      };
       const items = [event('Accepted upcoming', '2026-11-03', ' yes '), event('Unreviewed upcoming', '2026-11-03', null),
         event('Accepted past', '2026-11-01', 'confirmed'), event('Unconfirmed past', '2026-11-01', null, { status: 'completed' }),
         event('Accepted today', '2026-11-02', 'accepted'), event('Declined', '2026-11-03', 'not accepted'),
         event('Source candidate', '2026-11-03', null), event('Source reviewed', '2026-11-03', null),
         event('Custom color', '2026-11-03', 'yes'), event('Invalid color', '2026-11-03', 'yes'),
         event('Ongoing event', '2026-11-01', 'yes'), event('Unknown ending', '2026-11-01', 'yes'),
-        event('Due marker', '2026-11-04', null), event('Range marker', '2026-11-04', 'yes'), event('No dates', null, null)];
+        event('Due marker', '2026-11-04', null), event('Range marker', '2026-11-04', 'yes'), event('No dates', null, null),
+        reviewedSource('Source dated acceptance past', '2026-11-01', ' Yes, accepted on 02.04.26 '),
+        reviewedSource('Source email acceptance past', '2026-11-01', 'Yes (via email on 1/17/25)', false),
+        reviewedSource('Source acceptance whitespace', '2026-11-03', 'YES ,  AcCePtEd'),
+        reviewedSource('Source email without on', '2026-11-03', ' YES ( VIA EMAIL 1/17/25 ) '),
+        reviewedSource('Source email tight spacing', '2026-11-03', 'Yes(via email on1/17/25)'),
+        reviewedSource('Source contradictory acceptance', '2026-11-01', 'Yes, accepted on 02.04.26 but cancelled'),
+        reviewedSource('Source pending email', '2026-11-01', 'Yes (via email on 1/17/25) pending'),
+        reviewedSource('Source negative acceptance', '2026-11-01', 'Yes, not accepted'),
+        reviewedSource('Source pending acceptance', '2026-11-01', 'Yes, accepted pending'),
+        reviewedSource('Source pending email qualifier', '2026-11-01', 'Yes (via email on 1/17/25; pending)'),
+        reviewedSource('Source nonnumeric date', '2026-11-01', 'Yes, accepted on tomorrow'),
+        reviewedSource('Source extra trailing text', '2026-11-01', 'Yes (via email on 1/17/25) extra'),
+        event('Native qualified acceptance', '2026-11-01', 'Yes, accepted on 02.04.26'),
+        event('Native qualified email', '2026-11-01', 'Yes (via email on 1/17/25)'),
+        event('Source qualifier awaiting review', '2026-11-01', null)];
       const byName = Object.fromEntries(items.map(item => [item.id, item]));
       byName['Source candidate'].source = { connection_id: 'fictional' };
       byName['Source candidate'].data.acceptance_status = 'yes';
@@ -44,6 +65,17 @@ export async function checkCalendarPresentation(engine, name, evidence) {
       byName['Due marker'].data.event_schedule.sessions = []; byName['Due marker'].data.source_schedule = { due_on: '2026-11-04' };
       byName['Range marker'].data.event_schedule.sessions = [];
       byName['No dates'].data.event_schedule.sessions = [];
+      const awaiting = byName['Source qualifier awaiting review'];
+      awaiting.source = { connection_id: 'fictional' };
+      awaiting.data.acceptance_status = 'Yes, accepted on 02.04.26';
+      awaiting.data.fields = [{ field: 'acceptance_status', value: awaiting.data.acceptance_status, review_state: 'needs_review' }];
+      window.reviewQualifiedAcceptance = reviewed => {
+        awaiting.data.calendar_acceptance_status = reviewed ? awaiting.data.acceptance_status : null;
+        awaiting.data.fields[0].review_state = reviewed ? 'approved' : 'needs_review';
+        if (reviewed) awaiting.data.reviewed_fields = { acceptance_status: awaiting.data.acceptance_status };
+        else delete awaiting.data.reviewed_fields;
+      };
+      window.reviewQualifiedAcceptance(false);
       window.calendarOpened = []; window.calendarDates = { business: eventToday('America/New_York'), device: eventToday() };
       window.paintCalendar = inline => {
         document.getElementById('team-operations').classList.toggle('tops-inline-calendar', inline);
@@ -55,18 +87,22 @@ export async function checkCalendarPresentation(engine, name, evidence) {
     }, 'data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
     assert.deepEqual(await page.evaluate(() => window.calendarDates), { business: '2026-11-02', device: '2026-11-03' });
     for (const inline of [false, true]) {
-      await page.evaluate(inline => window.paintCalendar(inline), inline);
+      await page.evaluate(inline => { window.reviewQualifiedAcceptance(false); window.paintCalendar(inline); }, inline);
       const grid = page.locator('.tops-event-calendar'), card = name => grid.locator('[data-calendar-event]').filter({ has: page.locator('strong', { hasText: new RegExp('^' + name + '$') }) }).first();
       assert.equal(await grid.locator('[aria-current="date"]').getAttribute('datetime'), '2026-11-02');
       await grid.locator('[data-calendar-date="2026-11-02"] .tops-calendar-today-label').getByText('Today', { exact: true }).waitFor();
       await page.getByText('Today · Nov 2, 2026 · New York', { exact: true }).waitFor();
       assert.equal(await page.getByRole('button', { name: 'Today', exact: true }).count(), 1);
-      for (const label of ['Unreviewed upcoming', 'Unconfirmed past', 'Declined', 'Source candidate', 'Due marker']) {
+      await page.getByRole('list', { name: 'Event acceptance' }).getByText('Acceptance unconfirmed', { exact: true }).waitFor();
+      for (const label of ['Unreviewed upcoming', 'Unconfirmed past', 'Declined', 'Source candidate', 'Due marker', 'Source qualifier awaiting review',
+        'Source contradictory acceptance', 'Source pending email', 'Source negative acceptance', 'Source pending acceptance',
+        'Source pending email qualifier', 'Source nonnumeric date', 'Source extra trailing text', 'Native qualified acceptance', 'Native qualified email']) {
         assert.equal(await card(label).getAttribute('data-calendar-booking'), 'unconfirmed', label);
         assert.match(await card(label).evaluate(element => getComputedStyle(element).backgroundImage), /repeating-linear-gradient/, label + ' stays striped');
         assert.equal(await card(label).evaluate(element => element.classList.contains('is-past-event')), false, label + ' is never faded as accepted');
       }
-      for (const label of ['Accepted upcoming', 'Accepted past', 'Accepted today', 'Source reviewed', 'Custom color', 'Range marker', 'Ongoing event', 'Unknown ending']) {
+      for (const label of ['Accepted upcoming', 'Accepted past', 'Accepted today', 'Source reviewed', 'Custom color', 'Range marker', 'Ongoing event', 'Unknown ending',
+        'Source dated acceptance past', 'Source email acceptance past', 'Source acceptance whitespace', 'Source email without on', 'Source email tight spacing']) {
         assert.equal(await card(label).getAttribute('data-calendar-booking'), 'confirmed', label);
         assert.equal(await card(label).evaluate(element => getComputedStyle(element).backgroundImage), 'none', label + ' has solid fill');
       }
@@ -74,6 +110,12 @@ export async function checkCalendarPresentation(engine, name, evidence) {
       assert.equal(await card('Accepted today').evaluate(element => element.classList.contains('is-past-event')), false);
       assert.equal(await card('Ongoing event').evaluate(element => element.classList.contains('is-past-event')), false);
       assert.equal(await card('Unknown ending').evaluate(element => element.classList.contains('is-past-event')), false);
+      for (const label of ['Source dated acceptance past', 'Source email acceptance past']) assert.equal(await card(label).evaluate(element => element.classList.contains('is-past-event')), true, label + ' fades only after the known ending');
+      assert.equal(await card('Source acceptance whitespace').evaluate(element => element.classList.contains('is-past-event')), false, 'An upcoming qualified acceptance stays solid');
+      await page.evaluate(inline => { window.reviewQualifiedAcceptance(true); window.paintCalendar(inline); }, inline);
+      assert.equal(await card('Source qualifier awaiting review').getAttribute('data-calendar-booking'), 'confirmed', 'Explicit review enables the qualified source value');
+      assert.equal(await card('Source qualifier awaiting review').evaluate(element => getComputedStyle(element).backgroundImage), 'none');
+      assert.equal(await card('Source qualifier awaiting review').evaluate(element => element.classList.contains('is-past-event')), true, 'The newly reviewed past event fades');
       assert.notEqual(await card('Accepted past').evaluate(element => getComputedStyle(element).backgroundColor), await card('Accepted upcoming').evaluate(element => getComputedStyle(element).backgroundColor));
       assert.equal(await card('Custom color').evaluate(element => element.style.getPropertyValue('--event-color')), '#325b91');
       for (const label of ['Accepted upcoming', 'Unreviewed upcoming', 'Invalid color']) assert.equal(await card(label).evaluate(element => element.style.getPropertyValue('--event-color')), '#315b4a');
@@ -111,7 +153,7 @@ export async function checkCalendarPresentation(engine, name, evidence) {
     assert.equal(await page.locator('.tops-event-calendar [aria-current="date"]').getAttribute('datetime'), '2026-11-03', 'Today recomputes after local midnight');
     await page.getByText('Today · Nov 3, 2026 · New York', { exact: true }).waitFor();
     assert.deepEqual(errors, []); assert.deepEqual(requests, [], 'Presentation does not read or write any API');
-    return { browser: name, bookingStates: true, allClickable: true, defaultAndCustomColors: true, businessLocalToday: true, desktopAndPhone: true };
+    return { browser: name, bookingStates: true, reviewedQualifiedAcceptance: true, nativeExactAcceptance: true, allClickable: true, defaultAndCustomColors: true, businessLocalToday: true, desktopAndPhone: true };
   } finally { await browser.close(); }
 }
 

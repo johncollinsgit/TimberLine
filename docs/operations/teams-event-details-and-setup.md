@@ -10,7 +10,7 @@ checks passed; see `teams-clamav-scanner.md` for the separate live scanner evide
 
 Calendar cards use one forest default color. A valid saved `calendar_color` stays
 visible; the optional team-member color mode remains available. Fill communicates
-booking independently of color: awaiting acceptance is striped, accepted is solid,
+booking independently of color: unconfirmed acceptance is striped, accepted is solid,
 and an accepted event with a known ending before its local today has a faded solid
 fill. A past unconfirmed event stays striped. Date-only task anchors and legacy
 range markers keep their distinct dashed borders and remain clickable, as do all
@@ -18,7 +18,11 @@ session cards and the unknown-date event list.
 
 Acceptance uses only native Teams `data.acceptance_status` or connected-source
 `data.reviewed_fields.acceptance_status`. The exact values `yes`, `accepted` and
-`confirmed` are matched without case or surrounding whitespace. Record lifecycle
+`confirmed` are matched without case or surrounding whitespace. Reviewed connected
+sources also recognize the observed whole affirmative forms `Yes, accepted` with
+an optional numeric date and `Yes (via email [on] numeric date)`. Stored wording
+and its source audit stay intact; unreviewed, negative, pending or contradictory
+values remain unconfirmed. Native values retain their exact token rules. Record lifecycle
 status, completed tasks, payment/application status, unreviewed note candidates
 and `schedule_complete` do not establish booking acceptance. Compact collections
 expose only that authoritative literal as `data.calendar_acceptance_status`; no

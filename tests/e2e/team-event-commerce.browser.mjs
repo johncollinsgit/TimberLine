@@ -15,7 +15,11 @@ const env = { ...process.env, APP_ENV: 'testing', APP_DEBUG: 'false', APP_URL: o
   DB_CONNECTION: 'sqlite', DB_DATABASE: join(dir, 'db.sqlite'), DB_URL: '', DATABASE_URL: '', CACHE_STORE: 'array', SESSION_DRIVER: 'database', SESSION_SECURE_COOKIE: 'false', SESSION_DOMAIN: '',
   MAIL_MAILER: 'array', QUEUE_CONNECTION: 'sync', LOG_CHANNEL: 'null', BCRYPT_ROUNDS: '4', TEAM_WORK_ENABLED: 'true', TEAM_WORK_PREMIUM_ENABLED: 'true', TEAM_OPERATIONS_ENABLED: 'true',
   TEAM_WORK_ASANA_ENABLED: 'false', EVERBRANCH_AI_STANDARD_ENABLED: 'false', NIGHTWATCH_ENABLED: 'false', TELESCOPE_ENABLED: 'false', PULSE_ENABLED: 'false', POS_RUNTIME_ID: 'event_browser_fixture' };
-let server, browser;
+let server, browser, activePage, activeContext, failure;
+async function drainRoutes() {
+  await activePage?.unrouteAll({ behavior: 'wait' });
+  await activeContext?.unrouteAll({ behavior: 'wait' });
+}
 try {
   const lazy = await exec(process.execPath, [resolve('tests/e2e/team-event-detail-lazy.browser.mjs')], { cwd: root, env, maxBuffer: 2e6 });
   if (lazy.stdout.trim()) console.log(lazy.stdout.trim());
@@ -26,11 +30,11 @@ try {
   let ready = false; for (let i = 0; i < 100; i++) { try { if ((await fetch(origin + '/up')).ok) { ready = true; break; } } catch {} await new Promise(done => setTimeout(done, 100)); } assert.ok(ready);
   const checked = [];
   for (const [engine, name] of [[chromium, 'chromium'], [webkit, 'webkit']]) {
-    browser = await engine.launch(); const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    browser = await engine.launch(); const context = activeContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
     const csrf = (await (await context.request.get(origin + '/login')).text()).match(/<meta name="csrf-token" content="([^"]+)"/)?.[1];
     assert.ok((await context.request.post(origin + '/login', { form: { email: 'owner@fixture.invalid', password: 'Fictional-local-only-2026!', _token: csrf }, headers: { Accept: 'application/json' } })).ok());
-    const page = await context.newPage(); page.setDefaultTimeout(15000); await page.clock.setFixedTime(new Date('2026-11-07T12:00:00Z'));
+    const page = activePage = await context.newPage(); page.setDefaultTimeout(15000); await page.clock.setFixedTime(new Date('2026-11-07T12:00:00Z'));
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto(`${origin}/teams?tenant=${fixture.tenant}`); await page.waitForFunction(() => window.TeamPremium?.context?.ready());
     await page.getByRole('tab', { name: 'Board', exact: true }).click();
@@ -115,16 +119,32 @@ try {
     await workspace.getByText('No sales yet', { exact: true }).waitFor();
     assert.equal(await workspace.locator('.event-fact').filter({ hasText: 'Average order' }).locator('dd').innerText(), 'No sales yet', 'An empty event has no invented or disputed average');
     await dialog.locator('#tops-detail-close').click();
+    let lightweightReads = 0;
+    const returnedVenue = 'Fictional returned lightweight venue';
     await page.route(`**/team/events/${fixture.event_id}/essentials*`, async route => {
+      assert.equal(new URL(route.request().url()).searchParams.get('include_sales'), '0');
+      lightweightReads++;
       const response = await route.fetch(), body = await response.json();
+      assert.equal(response.status(), 200);
+      assert.equal(body.sales.loaded, false, 'The returned basics contract defers sales');
+      body.location = { ...body.location, venue: returnedVenue };
       body.commerce_event_id = null; body.sales.current = { status: 'recorded', amount_cents: 12345, currency: 'USD' };
       await route.fulfill({ response, json: body });
     });
+    const lightweightResponse = page.waitForResponse(response => { const url = new URL(response.url()); return url.pathname === `/team/events/${fixture.event_id}/essentials` && url.searchParams.get('include_sales') === '0'; });
     await page.locator('.teams-event-board .teams-task-card').filter({ hasText: 'Fictional seasonal makers and home goods weekend market' }).first().click();
-    await dialog.getByRole('heading', { name: 'At a glance', exact: true }).waitFor();
+    const returnedBasics = await lightweightResponse; assert.equal(returnedBasics.status(), 200); await returnedBasics.finished();
+    await dialog.locator('.event-glance').getByText(returnedVenue, { exact: true }).waitFor();
+    assert.equal(lightweightReads, 1, 'Reopening reads and renders one lightweight Essentials response');
+    assert.equal(await dialog.locator('.event-detail-status').innerText(), '', 'The returned basics have completed rendering');
     assert.equal(await dialog.getByText('$123.45', { exact: true }).count(), 0, 'Deferred financial payload does not enter the basics card');
     assert.equal(await dialog.getByText(/temporarily unavailable/).count(), 0, 'An intentionally unloaded comparison is not a provider outage');
-    await dialog.locator('#tops-detail-close').click(); assert.deepEqual(errors, []); await browser.close(); browser = null;
+    await dialog.locator('#tops-detail-close').click(); await drainRoutes(); assert.deepEqual(errors, []); await browser.close(); browser = activePage = activeContext = null;
   }
   console.log(JSON.stringify({ checked, errors: [], evidence }));
-} finally { await browser?.close(); server?.kill(); await rm(dir, { recursive: true, force: true }); }
+} catch (error) { failure = error; throw error; }
+finally {
+  try { await drainRoutes(); }
+  catch (error) { if (!failure) throw error; console.error('Route cleanup also failed after the primary failure:', error.message.split('\n')[0]); }
+  finally { await browser?.close(); server?.kill(); await rm(dir, { recursive: true, force: true }); }
+}

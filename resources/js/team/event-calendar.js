@@ -44,7 +44,13 @@ const stableColor = key => { let hash = 0; for (const char of key) hash = (hash 
 const eventColor = item => /^#[a-f\d]{6}$/i.test(calendar(item).calendar_color || '') ? calendar(item).calendar_color : defaultEventColor;
 const accepted = item => {
   const data = item.data || {}, value = Object.hasOwn(data, 'calendar_acceptance_status') ? data.calendar_acceptance_status : item.source ? data.reviewed_fields?.acceptance_status : data.acceptance_status;
-  return typeof value === 'string' && ['yes', 'accepted', 'confirmed'].includes(value.trim().toLowerCase());
+  if (typeof value !== 'string') return false;
+  const status = value.trim().replace(/\s+/g, ' ').toLowerCase();
+  if (['yes', 'accepted', 'confirmed'].includes(status)) return true;
+  // Reviewed source wording stays intact; only these observed affirmative forms affect presentation.
+  if (!item.source?.connection_id) return false;
+  return /^yes\s*,\s*accepted(?:\s+on\s*\d+(?:[./-]\d+)+)?$/.test(status)
+    || /^yes\s*\(\s*via\s+email\s*(?:on\s*)?\d+(?:[./-]\d+)+\s*\)$/.test(status);
 };
 const pastEvent = (item, timezone) => {
   const schedule = calendar(item), end = schedule.schedule_complete ? schedule.overall_ends_on || sessions(item).map(session => session.date).filter(validDate).sort().at(-1) : schedule.legacy_ends_on || item.ends_on;
@@ -93,7 +99,7 @@ export function renderEventCalendar(host, items, coverage, tenant, open, scope =
   periods.append(previousPeriod, todayButton, nextPeriod); controls.append(modes, filters, periods); host.append(controls);
   const todayContext = node('p', '', 'tops-calendar-today-context'); host.append(todayContext);
   const legend = node('ul', '', 'tops-calendar-booking-legend'); legend.setAttribute('aria-label', 'Event acceptance');
-  for (const [state, text] of [['unconfirmed', 'Awaiting acceptance'], ['confirmed', 'Accepted'], ['past', 'Accepted · past']]) { const entry = node('li'), swatch = node('span', '', 'tops-calendar-booking-swatch is-' + state); swatch.setAttribute('aria-hidden', 'true'); entry.append(swatch, document.createTextNode(text)); legend.append(entry); }
+  for (const [state, text] of [['unconfirmed', 'Acceptance unconfirmed'], ['confirmed', 'Accepted'], ['past', 'Accepted · past']]) { const entry = node('li'), swatch = node('span', '', 'tops-calendar-booking-swatch is-' + state); swatch.setAttribute('aria-hidden', 'true'); entry.append(swatch, document.createTextNode(text)); legend.append(entry); }
   host.append(legend);
   host.append(node('p', 'Loaded results · ' + items.length + ' event records' + (coverage.has_more ? ' · more pages remain' : '') + (coverage.partial || coverage.complete === false ? ' · source coverage partial or unconfirmed' : ''), 'tops-calendar-scope'));
   if (coverage.calendar_window) host.append(node('p', when(coverage.calendar_window.from) + ' → ' + when(coverage.calendar_window.to) + (coverage.calendar_window.scan_limited ? ' · Load more events to continue checking retained dates.' : ' · Unspecified dates remain unknown.'), 'tops-calendar-scope'));
