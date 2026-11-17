@@ -49,6 +49,39 @@ try {
         expect(filters).toBeHidden({ timeout: 12000 }),
         expect(filterLink).toHaveAttribute('aria-expanded', 'false', { timeout: 12000 }),
       ]);
+      phase = 'progressive_filter_pointer';
+      await filterLink.evaluate(node => {
+        window.teamFilterPointerClicks = 0;
+        node.addEventListener('click', () => window.teamFilterPointerClicks++);
+      });
+      for (const opening of [true, false]) {
+        let releaseApps, held = false, appsStatus = null;
+        const appsGate = new Promise(done => { releaseApps = done; });
+        const holdFilterApps = async route => {
+          const url = new URL(route.request().url());
+          if (held || url.searchParams.get('q') !== 'seasonal' || url.searchParams.get('stage') !== 'apps') return route.continue();
+          held = true;
+          try { const response = await route.fetch({ timeout: 12000 }); appsStatus = response.status(); await appsGate; await route.fulfill({ response }); }
+          catch { appsStatus = 'unavailable'; await route.abort().catch(() => {}); }
+        };
+        await page.route('**/team/search/all?**', holdFilterApps);
+        try {
+          await input.fill('seasonal'); await result.waitFor();
+          await expect.poll(() => appsStatus, { timeout: 12000 }).toBe(200);
+          const text = await filterLink.evaluateHandle(node => node.firstChild);
+          await page.evaluate(() => { window.teamFilterPointerClicks = 0; });
+          const box = await filterLink.boundingBox(); assert.ok(box);
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); releaseApps();
+          await page.locator('.eb-search-status').filter({ hasText: 'Searching other apps…' }).waitFor({ state: 'hidden' });
+          assert.ok(await filterLink.evaluate((node, original) => node.firstChild === original && original.isConnected, text), 'An unchanged filter label retains its text node while the actual app response arrives');
+          await page.mouse.up();
+          await expect(filters)[opening ? 'toBeVisible' : 'toBeHidden']({ timeout: 12000 });
+          await expect(filterLink).toHaveAttribute('aria-expanded', String(opening), { timeout: 12000 });
+          assert.equal(await page.evaluate(() => window.teamFilterPointerClicks), 1, 'One pointer action toggles Filters exactly once across the real app-stage merge');
+          await text.dispose();
+        } finally { releaseApps(); await page.mouse.up(); await page.unroute('**/team/search/all?**', holdFilterApps); }
+      }
+      checks.push(`${name} ${width}: actual app response preserves the pressed Filters label and exactly one open/close toggle`);
       phase = 'viewport';
       assert.ok(['rgb(214, 229, 215)', 'rgb(225, 237, 223)'].includes(await input.evaluate(node => getComputedStyle(node).backgroundColor)), 'Search uses a solid green background in focused and resting states');
       if (width === 1440) {
