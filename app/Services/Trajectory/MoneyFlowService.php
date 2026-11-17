@@ -4,6 +4,7 @@ namespace App\Services\Trajectory;
 
 use App\Models\Trajectory\Space;
 use App\Models\Trajectory\Transaction;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
@@ -40,7 +41,7 @@ class MoneyFlowService
         return app(SalesTaxService::class)->decorateEntries($space, $rows);
     }
 
-    public function build(Space $space, Collection $entries, Collection $accounts, array $coverage = [], ?Collection $allEntries = null, ?string $start = null, ?string $end = null): array
+    public function build(Space $space, Collection $entries, Collection $accounts, array $coverage = [], ?Collection $allEntries = null, ?string $start = null, ?string $end = null, ?User $viewer = null): array
     {
         $owned = $accounts->where('space_id', $space->id)->keyBy('id');
         $allEntries ??= $entries;
@@ -57,7 +58,7 @@ class MoneyFlowService
         $result = $this->aggregate($space, $entries, $owned, $sources, $selectedCash);
         $history = $start && $end ? $this->history($space, $allEntries, $owned, $sources, $cashEntries, $start, $end) : null;
 
-        return ['views' => $result, 'history' => $history, 'coverage' => ['complete' => false, 'provisional' => $coverage['provisional'] ?? true, 'history_start' => $coverage['history_start'] ?? null,
+        return ['views' => $result, 'family_inflows' => app(HouseholdInflowService::class)->build($space, $owned->values(), $sources, $result['cash'], $viewer), 'history' => $history, 'coverage' => ['complete' => false, 'provisional' => $coverage['provisional'] ?? true, 'history_start' => $coverage['history_start'] ?? null,
             'notes' => ['Recorded posted transactions in the selected dates/account only. Missing accounts or history may change this picture.',
                 'Spending includes allocated economic purchases, including credit-card purchases. Cash movement uses full bank amounts on owned cash accounts.',
                 'Internal transfers and marked duplicates stay outside both diagrams. Debt repayments are excluded from Spending and included in Cash movement.',

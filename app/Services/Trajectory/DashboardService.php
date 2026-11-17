@@ -348,7 +348,7 @@ class DashboardService
             'income_runway' => $incomeRunway,
             'economic_coverage' => $economic->coverage($selected),
             'sales_tax' => app(SalesTaxService::class)->build($space, $selected, $records, $accounts),
-            'money_flow' => app(MoneyFlowService::class)->build($space, $selected, $accounts, ['provisional' => $days < 90 || count($blockers) > 0, 'history_start' => $historyStart?->toDateString()], $entries, $start->toDateString(), $end->toDateString()),
+            'money_flow' => app(MoneyFlowService::class)->build($space, $selected, $accounts, ['provisional' => $days < 90 || count($blockers) > 0, 'history_start' => $historyStart?->toDateString()], $entries, $start->toDateString(), $end->toDateString(), $viewer),
             'tax_review' => app(TaxReviewService::class)->review($space, $selected, $records),
             'income_sources' => $incomeSources,
             'categories' => $categories, 'daily_series' => $dailySeries,

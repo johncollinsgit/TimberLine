@@ -93,3 +93,22 @@ test('condensed branches retain only the tax components they actually include',(
  const other=graph.nodes.find(node=>node.key==='other'&&node.column===2);
  assert.equal(other.amount_cents,300);assert.deepEqual(other.economic_categories,['interest','tax_fees']);assert.deepEqual(other.ids,[77]);
 });
+
+test('family receipt sources and small company subtypes conserve cents without changing other views or income labels',()=>{
+ const groups=[['company','Fictional <company>','support','payroll',12001],['company','Fictional <company>','support','draw',2002],['company','Fictional <company>','support','other',103],['loans','Loans','borrowing','loan',30004],['metals','Metals','asset','metal',40005],['odd_jobs','Odd jobs','income','jobs',5006],['medical','Medical bill shares','medical','medical',6007],['review','Needs review','review','unknown',708],['other-income','Interest income','income','interest',9]];
+ const parents=new Map(),types=groups.map(([key,label,kind,type,amount_cents],index)=>{const id=500+index,purpose_key='household:'+key;if(!parents.has(key))parents.set(key,{key,label,purpose_key,purpose_label:label,kind,amount_cents:0,ids:[]});const p=parents.get(key);p.amount_cents+=amount_cents;p.ids.push(id);return {key:type,label:label+' · '+type,kind,amount_cents,ids:[id],preserve:true,merchants:[{key:'sender',label:'Fictional sender',amount_cents,ids:[id]}]};});
+ const total=groups.reduce((n,row)=>n+row[4],0),view={receipt_view:true,inflows:[...parents.values()],outflows:types,inflow_cents:total,outflow_cents:total,receipt_count:9,review_inflow_cents:708,source_families:[],notes:['Fictional receipt coverage']};
+ for(const [compact,graph] of [[false,moneyFlowGraph(view)],[true,moneyFlowCompactGraph(view)]]){conserved(graph,compact?2:3);assert.equal(graph.total_cents,total);assert.ok(!graph.nodes.some(row=>row.kind==='difference'));for(const type of types)assert.deepEqual(graph.nodes.find(row=>row.column===2&&row.key===type.key).ids,type.ids);}
+ const withFamily={...report,family_inflows:view},html=moneyFlowHtml({report:withFamily,mode:'inflows',esc,precise,btn});
+ for(const text of ['Recorded receipts','Receipt transactions','Receipts needing review','Receipt types','Received from','Fictional &lt;company&gt;','data-cash="true"','data-inflows="true"','not how it was spent'])assert.ok(html.includes(text),text);
+ for(const text of ['Recorded outflows','Outgoing categories','Monthly recorded outflows','Verified savings'])assert.ok(!html.includes(text),text);
+ assert.equal(moneyFlowHtml({report:withFamily,mode:'spending',esc,precise,btn}).includes('Fictional &lt;company&gt;'),false);
+ assert.ok(!moneyFlowHtml({report,esc,precise,btn}).includes('data-mode="inflows"'));
+});
+test('receipt trends and evidence use incoming owned-bank cash including zero and unknown months',()=>{
+ const point=(amount,ids)=>({views:{cash:{inflow_cents:amount,outflow_cents:999,inflow_ids:ids,outflow_ids:[999],ids:[...ids,999]}}});
+ const history={note:'Fictional limited history',current:{from:'2028-01-01',through:'2028-07-20',...point(12345,[1])},prior:{from:'2027-01-01',through:'2027-07-20',...point(null,[])},years:[{year:2028,months:Array.from({length:12},(_,index)=>point(index===0?0:index===1?12345:null,index===1?[1]:[]))}]};
+ const view={receipt_view:true,inflows:[],outflows:[],inflow_cents:null,known_inflow_cents:0,receipt_count:0,review_inflow_cents:0,source_families:[{label:'Loans',ids:[]}],notes:[]};
+ const report={family_inflows:view,history};assert.deepEqual(moneyFlowTrendSeries(report,'inflows')[0].values,[0,12345,...Array(10).fill(null)]);
+ const html=moneyFlowHtml({report,mode:'inflows',esc,precise,btn});assert.ok(html.includes('Monthly recorded receipts'));assert.ok(html.includes('data-ids="[1]"'));assert.ok(!html.includes('data-ids="[999]"'));assert.ok(html.includes('No reviewed receipts for Loans'));
+});

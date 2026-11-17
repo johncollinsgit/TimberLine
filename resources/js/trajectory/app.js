@@ -5,6 +5,7 @@ import { outlookUI } from './outlook.js';
 import { decisionSupportHtml } from './decision-support.js';
 import {salesTaxHtml,taxRemittanceReview} from './sales-tax.js';
 import {moneyFlowHtml,moneyFlowTrendSeries} from './money-flow.js';
+import {reportNavigation} from './navigation-history.js';
 import { accountingComponentsHtml } from './accounting-report.js';
 import { questionSummaryHtml, supportBusinessChoices, monthlyBudgetRecords } from './question-summary.js';
 import { budgetMappingPayload, budgetMappingHtml, budgetPreviewHtml } from './budget-import.js';
@@ -46,6 +47,7 @@ function boot() {
   let linkInProgress = false;
   let scope = requestedSpace?.kind==='business' ? 'business' : personalSpace ? 'personal' : 'business';
   let active = (scope==='personal' ? personalSpace : businessSpace)?.id, data, evidenceRows=null, tab = 'overview', charts = [], chartTables = {}, filter = {}, scenarioId = '', historyMonth = '', budgetSource = null, budgetMonth = '', seasonal = false, moneyFlowMode = 'spending', formAction;
+  let flowDialog=null,restoringNavigation=false,displayedReportContext=null;
   if (['transactions','accounts','planning','anomalies','tax','sales-tax','profit','companies','bud'].includes(incoming.get('tab'))) {tab=incoming.get('tab');filter=tab==='transactions'?{review:true}:{};}
   if (oauthReturn) tab = 'accounts';
   const endpoint = (path, spaceId=active) => `/trajectory/spaces/${spaceId}${path}`;
@@ -92,6 +94,9 @@ function boot() {
   const load = async () => {
     if (!active) {$('#tr-context').textContent='Your private financial workspace';$('#tr-content').innerHTML='<div class="tr-empty"><h2>Your next chapter starts here.</h2>Your Trajectory pilot has not been enabled yet.<br>Once enabled, connect an account or import a statement to begin.</div>';$('#tr-add').disabled=true;return;}
     const requestedVersion = ++loadVersion;
+    if(displayedReportContext!==null&&displayedReportContext!==reportContext()){
+      filter={};flowDialog=null;navigation.length=0;$('#tr-back').hidden=true;$('#tr-dialog').close();$('#tr-content').innerHTML='';data=null;
+    }
     evidenceRows=null;
     $('#tr-content').classList.add('tr-loading');$('#tr-content').setAttribute('aria-busy','true');
     try {
@@ -102,7 +107,7 @@ function boot() {
         try {combined=await api(endpoint(`/combined?business_id=${businessSpace.id}&from=${personal.range.start}&through=${personal.range.end}`,personalSpace.id));} catch {}
         result=combinedDashboard(personal,business,combined);
       } else result=await api(dashboardPath(active));
-      if(requestedVersion!==loadVersion)return;data=result;accountFilter=data.scope_filter?.account_id??null;if(scope!=='both'&&(filter.ids||filter.date)){const rows=await api(endpoint('/evidence'),'POST',filter);if(requestedVersion!==loadVersion)return;evidenceRows=rows;}render();
+      if(requestedVersion!==loadVersion)return;data=result;accountFilter=data.scope_filter?.account_id??null;if(scope!=='both'&&(filter.ids||filter.date||filter.account_id)){const rows=await fetchEvidence(filter);if(requestedVersion!==loadVersion)return;evidenceRows=rows;}render();
     }
     catch(e){if(requestedVersion===loadVersion){accountFilter=data?.scope_filter?.account_id??null;if($('#tr-account-filter'))$('#tr-account-filter').value=accountFilter??'';notice(e.message);}}
     finally {if(requestedVersion===loadVersion){$('#tr-content').classList.remove('tr-loading');$('#tr-content').setAttribute('aria-busy','false');}}
@@ -120,15 +125,32 @@ function boot() {
   };
   const line = (label,values,color,fill=false) => ({label,data:values,borderColor:color,backgroundColor:color+'0a',fill,tension:0,borderWidth:2.5,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#fff',pointHoverBorderWidth:2,pointHitRadius:16,spanGaps:false});
   const navigation=[];
-  const remember=()=>{navigation.push({tab,filter:{...filter},evidenceRows,scroll:window.scrollY});$('#tr-back').hidden=false;};
+  const reportContext=()=>JSON.stringify([scope,active,businessSpace?.id,accountFilter,reportingRange,$('#tr-start').value,$('#tr-end').value,scenarioId,seasonal]);
+  const focusDescriptor=()=>{const node=document.activeElement?.closest?.('[data-action]');return node?{action:node.dataset.action,label:node.dataset.label||'',ids:node.dataset.ids||''}:null;};
+  const captureNavigation=()=>({tab,filter:JSON.parse(JSON.stringify(filter)),scroll:window.scrollY,moneyFlowMode,depth:navigation.length,flowDialog:flowDialog?{...flowDialog}:null,focus:focusDescriptor()});
+  const historyNavigation=reportNavigation({window,capture:captureNavigation,context:reportContext,enabled:()=>!new URLSearchParams(location.search).has('oauth_state_id'),
+    invalidate:reason=>{navigation.length=0;filter={};evidenceRows=null;flowDialog=null;$('#tr-back').hidden=true;$('#tr-dialog').close();if(reason==='history'){tab='overview';data=null;$('#tr-content').innerHTML='';void load();}},
+    restore:async(previous,isCurrent)=>{
+      restoringNavigation=true;flowDialog=null;$('#tr-dialog').close();tab=previous.tab;filter=previous.filter;evidenceRows=null;moneyFlowMode=previous.moneyFlowMode;navigation.length=previous.depth;
+      await load();if(!isCurrent()){restoringNavigation=false;return;}
+      if(previous.flowDialog&&tab==='money-flow'){
+        const node=[...root.querySelectorAll('[data-action="money-flow-category"]')].find(node=>node.dataset.label===previous.flowDialog.label&&node.dataset.ids===previous.flowDialog.ids&&node.getClientRects().length);
+        if(node)openFlowCategory(node,false);
+      }
+      $('#tr-back').hidden=!navigation.length;window.scrollTo(0,previous.scroll);
+      const target=previous.focus&&[...root.querySelectorAll('[data-action]')].find(node=>node.dataset.action===previous.focus.action&&(node.dataset.label||'')===previous.focus.label&&(node.dataset.ids||'')===previous.focus.ids&&node.getClientRects().length);
+      target?.focus({preventScroll:true});restoringNavigation=false;historyNavigation.sync();
+    }});
+  const remember=()=>{historyNavigation.push();navigation.push({});$('#tr-back').hidden=false;};
   const navigate=(view)=>{remember();tab=view;filter={};evidenceRows=null;render();window.scrollTo(0,0);};
+  const fetchEvidence=async next=>{const batches=next.ids?.length>5000?Array.from({length:Math.ceil(next.ids.length/5000)},(_,index)=>({...next,ids:next.ids.slice(index*5000,(index+1)*5000)})):[next];return (await Promise.all(batches.map(batch=>api(endpoint('/evidence'),'POST',batch)))).flat();};
   const showTransactions = async (next) => {
-    const requestedSpace=active;
+    const requestedContext=reportContext();
     try {
       let records=null;
-      if(next.ids||next.date){const batches=next.ids?.length>5000?Array.from({length:Math.ceil(next.ids.length/5000)},(_,index)=>({...next,ids:next.ids.slice(index*5000,(index+1)*5000)})):[next];records=(await Promise.all(batches.map(batch=>api(endpoint('/evidence'),'POST',batch)))).flat();}
-      if(requestedSpace!==active)return;
-      remember();evidenceRows=records;filter=next;tab='transactions';render();
+      if(next.ids||next.date||next.account_id)records=await fetchEvidence(next);
+      if(requestedContext!==reportContext())return;
+      remember();flowDialog=null;if($('#tr-dialog').open)$('#tr-dialog').close();evidenceRows=records;filter=next;tab='transactions';render();
     } catch(e){notice(e.message);}
   };
   const planning=planningUI({getData:()=>data,spaces,esc,money,precise,panel,btn,plot,chart,line,dialog,field,api,endpoint,minor,load,navigate,evidence:showTransactions,reviewBudget:proposal=>{
@@ -142,6 +164,7 @@ function boot() {
   const debtPlanner=debtPlannerUI({getData:()=>data,esc,precise,btn,plot,chart,line,render,requestScenario:(extraCents,spaceId)=>api(endpoint('/debt-scenarios',spaceId),'POST',{extra_cents:extraCents,...(accountFilter!==null&&spaceId===active?{account_id:accountFilter}:{})})});
   function render() {
     if(!data)return;
+    if(moneyFlowMode==='inflows'&&!data.money_flow?.family_inflows)moneyFlowMode='spending';
     charts.forEach(c=>c.destroy());charts=[];chartTables={};
     root.querySelectorAll('[data-tab]').forEach(b=>{if(b.dataset.tab===tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
     $('#tr-context').textContent=`${date(data.range.start)} – ${date(data.range.end)} · ${data.coverage.history_days} days of baseline history${data.scope_filter?.account_id?' · Account: '+data.scope_filter.label:''}${data.coverage.provisional?' · Provisional forecast':''}`;
@@ -164,8 +187,10 @@ function boot() {
     if(tab==='budget') drawBudget();
     if(tab==='money-flow'&&scope!=='both'){
       const series=moneyFlowTrendSeries(data.money_flow,moneyFlowMode).filter(year=>year.values.some(value=>value!==null)),colors=['#a7834b','#527f94','#397d69'];
-      chart('tr-flow-trend','line',['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],series.map((year,index)=>({...line(`${year.year} · recorded outflows`,year.values,colors[index]),pointRadius:4,pointHoverRadius:6,pointHitRadius:24,pointBackgroundColor:colors[index],pointBorderColor:'#fff',pointBorderWidth:1})),(month,year)=>{const ids=series[year]?.months[month]?.views?.[moneyFlowMode]?.outflow_ids;if(ids?.length)showTransactions({ids,...(moneyFlowMode==='cash'?{cash_movement:true}:{economic_costs:true})});},{beginAtZero:true});
+      const receipts=moneyFlowMode==='inflows',basis=receipts?'cash':moneyFlowMode;
+      chart('tr-flow-trend','line',['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],series.map((year,index)=>({...line(`${year.year} · recorded ${receipts?'receipts':'outflows'}`,year.values,colors[index]),pointRadius:4,pointHoverRadius:6,pointHitRadius:24,pointBackgroundColor:colors[index],pointBorderColor:'#fff',pointBorderWidth:1})),(month,year)=>{const ids=series[year]?.months[month]?.views?.[basis]?.[receipts?'inflow_ids':'outflow_ids'];if(ids?.length)showTransactions({ids,...(basis==='cash'?{cash_movement:true}:{economic_costs:true})});},{beginAtZero:true});
     }
+    displayedReportContext=reportContext();historyNavigation.sync();
   }
   function comparisonText(current,previous,comparable=false,previousDate=null) {
     if(!compareYear)return '';
@@ -383,6 +408,13 @@ function boot() {
   function dialog(heading,html,action,save='Save') {
     $('#tr-dialog-title').textContent=heading;$('#tr-fields').innerHTML=html;$('#tr-form-error').hidden=true;$('#tr-save').textContent=save;$('#tr-save').hidden=!action;formAction=action;$('#tr-dialog').showModal();
   }
+  function openFlowCategory(target,record=true){
+    const merchants=JSON.parse(target.dataset.merchants||'[]'),cash=target.dataset.cash==='true',receipts=target.dataset.inflows==='true';
+    if(record)remember();
+    flowDialog={label:target.dataset.label||'',ids:target.dataset.ids||''};
+    dialog(target.dataset.label||'Category records',`<p class="tr-subtle">${receipts?'Senders for this household receipt type.':'Merchants in this recorded category. Shared allocations keep the other space’s source private.'}</p><div class="tr-actions">${btn(receipts?'View all receipts':'View all category records','money-flow-evidence',`data-cash="${cash}" data-economic-category="${esc(target.dataset.economicCategory||'')}" data-economic-categories="${esc(target.dataset.economicCategories||'[]')}" data-ids="${esc(target.dataset.ids)}"`)}</div>${merchants.map(row=>`<div class="tr-row"><div><strong>${esc(row.label)}</strong><div>${precise(row.amount_cents)}</div></div>${btn('View transactions','money-flow-evidence',`data-cash="${cash}" data-economic-category="${esc(row.economic_category||'')}" data-economic-categories="${esc(JSON.stringify(row.economic_categories||[]))}" data-ids="${esc(JSON.stringify(row.ids))}"`)}</div>`).join('')}`,null);
+    historyNavigation.sync();
+  }
   function recordForm(kind,record=null,preset={}) {
     if(['business_funding_plan','financial_observation','budget'].includes(kind)&&accountFilter!==null){notice('Choose all accounts before editing whole-space budgets, source totals or funding assumptions.');return;}
     const taxRow=kind==='tax_remittance'?data.sales_tax?.rows?.find(row=>row.transaction_id===(record?.data?.transaction_id??preset.transaction_id)):null;
@@ -517,9 +549,9 @@ function boot() {
       if(await debtPlanner.handle(a,target))return;
       if(a==='welcome-open'){navigate('welcome');return;}
       if(a==='tax-bank-review'){const rows=await api(endpoint('/evidence'),'POST',{ids:[id]});if(!rows[0]?.editable)throw new Error('This bank source is not available for review.');transactionForm({...rows[0],category:'taxes',flow:'sales_tax_remittance',face_punched:false,bullshit_spending:false});return;}
-      if(a==='money-flow-mode'){if(['spending','cash'].includes(target.dataset.mode)){moneyFlowMode=target.dataset.mode;render();root.querySelector(`[data-action="money-flow-mode"][data-mode="${moneyFlowMode}"]`)?.focus();}return;}
-      if(a==='money-flow-category'){const merchants=JSON.parse(target.dataset.merchants||'[]'),cash=target.dataset.cash==='true';dialog(target.dataset.label||'Category records',`<p class="tr-subtle">Merchants in this recorded category. Shared allocations keep the other space’s source private.</p><div class="tr-actions">${btn('View all category records','money-flow-evidence',`data-cash="${cash}" data-economic-category="${esc(target.dataset.economicCategory||'')}" data-economic-categories="${esc(target.dataset.economicCategories||'[]')}" data-ids="${esc(target.dataset.ids)}"`)}</div>${merchants.map(row=>`<div class="tr-row"><div><strong>${esc(row.label)}</strong><div>${precise(row.amount_cents)}</div></div>${btn('View transactions','money-flow-evidence',`data-cash="${cash}" data-economic-category="${esc(row.economic_category||'')}" data-economic-categories="${esc(JSON.stringify(row.economic_categories||[]))}" data-ids="${esc(JSON.stringify(row.ids))}"`)}</div>`).join('')}`,null);return;}
-      if(a==='money-flow-evidence'){if($('#tr-dialog').open)$('#tr-dialog').close();await showTransactions({ids:JSON.parse(target.dataset.ids),...(target.dataset.cash==='true'?{cash_movement:true}:target.dataset.economic==='false'?{}:{economic_costs:true,...(target.dataset.economicCategory?{economic_category:target.dataset.economicCategory}:JSON.parse(target.dataset.economicCategories||'[]').length?{economic_categories:JSON.parse(target.dataset.economicCategories)}:{})})});return;}
+      if(a==='money-flow-mode'){if(['spending','cash',...(data.money_flow?.family_inflows?['inflows']:[])].includes(target.dataset.mode)){moneyFlowMode=target.dataset.mode;render();root.querySelector(`[data-action="money-flow-mode"][data-mode="${moneyFlowMode}"]`)?.focus();}return;}
+      if(a==='money-flow-category'){openFlowCategory(target);return;}
+      if(a==='money-flow-evidence'){if($('#tr-dialog').open&&!flowDialog)$('#tr-dialog').close();await showTransactions({ids:JSON.parse(target.dataset.ids),...(target.dataset.cash==='true'?{cash_movement:true}:target.dataset.economic==='false'?{}:{economic_costs:true,...(target.dataset.economicCategory?{economic_category:target.dataset.economicCategory}:JSON.parse(target.dataset.economicCategories||'[]').length?{economic_categories:JSON.parse(target.dataset.economicCategories)}:{})})});return;}
       if(a==='budget-import'){budgetImportForm();return;}
       if(a==='account-filter-clear'){accountFilter=null;decisionMonth='';scenarioId='';filter={};evidenceRows=null;navigation.length=0;$('#tr-back').hidden=true;debtPlanner.reset();await load();return;}
       if(a==='business-funding-plan'){
@@ -569,7 +601,7 @@ function boot() {
         const account=data.accounts.find(a=>a.id===id);
         dialog('Update observed balance',`<p class="tr-subtle">${esc(account.name)} · Record the lender’s actual balance and date. This does not create a payment or change transaction history.</p>${field('balance','Observed balance','number',account.balance_cents===null?'':account.balance_cents/100)}${field('observed_on','Balance date','date',data.household_cards?.as_of||data.range.end)}`,async v=>{await api(endpoint(`/accounts/${id}`),'PATCH',{balance_cents:minor(v.get('balance')),observed_on:v.get('observed_on')});});
       }
-      else if(a==='account-activity'){const requestedSpace=active;const rows=await api(endpoint('/evidence'),'POST',{account_id:id});if(requestedSpace!==active)return;remember();evidenceRows=rows;filter={};tab='transactions';render();}
+      else if(a==='account-activity'){await showTransactions({account_id:id});}
       else if(a==='membership')recordForm('recurring',null,{name:'Monthly Samaritan sharing',merchant:'Samaritan Ministries',cadence:'monthly',category:'health',expense_type:'fixed',amount_cents:0});
       else if(a==='medical-child')recordForm(target.dataset.kind,null,{[target.dataset.parentKey]:id});
       else if(a==='membership-match'){$('#tr-dialog').close();recordForm('medical_membership',null,{name:tx.merchant,transaction_id:tx.id,paid_on:tx.date,amount_cents:Math.abs(tx.amount_cents)});}
@@ -632,6 +664,7 @@ function boot() {
   function smsForm(){dialog('Text reminders',field('phone','Your mobile number','tel','+1',null,true)+field('consent','I want bill reminders, cash alerts, and weekly summaries','checkbox',false),async v=>{await api(endpoint('/sms/verify'),'POST',{phone:v.get('phone'),consent:v.get('consent')==='on'});dialog('Verify your phone',field('code','Code from your text','text','',null,true),async v2=>{await api(endpoint('/sms/confirm'),'POST',{code:v2.get('code')});},'Verify');return false;},'Send verification code');}
   $('#tr-form').addEventListener('submit',async e=>{e.preventDefault();if(!formAction)return;$('#tr-save').disabled=true;$('#tr-form-error').hidden=true;try{const done=await formAction(new FormData($('#tr-form')));if(done!==false){$('#tr-dialog').close();await load();}}catch(e){$('#tr-form-error').textContent=e.message;$('#tr-form-error').hidden=false;}finally{$('#tr-save').disabled=false;}});
   $('#tr-close').onclick=$('#tr-cancel').onclick=()=>$('#tr-dialog').close();
+  $('#tr-dialog').addEventListener('close',()=>{if(flowDialog&&!restoringNavigation){const backed=historyNavigation.back();flowDialog=null;if(!backed)historyNavigation.sync();}});
   root.addEventListener('keydown',e=>{
     const flow=e.target.closest('.tr-flow-action');
     if(flow&&['Enter',' '].includes(e.key)){e.preventDefault();flow.dispatchEvent(new MouseEvent('click',{bubbles:true}));return;}
@@ -649,7 +682,7 @@ function boot() {
   $('#tr-range').onclick=e=>{const button=e.target.closest('[data-range]');if(!button||button.dataset.range===reportingRange)return;reportingRange=button.dataset.range;filter={};evidenceRows=null;$('#tr-range').querySelectorAll('[data-range]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.range===reportingRange)));$('#tr-date-fields').hidden=reportingRange!=='custom';if(reportingRange!=='custom'||($('#tr-start').value&&$('#tr-end').value))load();};
   for(const selector of ['#tr-start','#tr-end'])$(selector).onchange=()=>{if($('#tr-start').value&&$('#tr-end').value)load();};
   root.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(data)navigate(b.dataset.tab);});
-  $('#tr-back').onclick=()=>{const previous=navigation.pop();if(!previous)return;({tab,filter,evidenceRows}=previous);render();$('#tr-back').hidden=!navigation.length;window.scrollTo(0,previous.scroll);};
+  $('#tr-back').onclick=()=>{historyNavigation.back();};
   $('#tr-company').onchange=()=>{welcome.reset();debtPlanner.reset();decisionMonth='';forecastExpanded=false;overviewExpanded=false;accountFilter=null;businessSpace=spaces.find(s=>s.id===Number($('#tr-company').value));active=businessSpace.id;scenarioId='';navigation.length=0;$('#tr-back').hidden=true;renderSpaceTabs();load();};
   if(root.dataset.invite){$('#tr-invite').hidden=false;$('#tr-accept').onclick=async()=>{try{await api('/trajectory/invites/accept','POST',{token:root.dataset.invite});location.href='/trajectory';}catch(e){notice(e.message);}};}
   document.addEventListener('visibilitychange',()=>{if(!document.hidden && tab==='assets' && data?.metals.length && !$('#tr-dialog').open)load();});
