@@ -41,8 +41,24 @@ try{
    await page.getByRole('button',{name:'Money flow',exact:true}).click();
    await page.getByRole('heading',{name:'Follow your money'}).waitFor();
    await page.getByRole('heading',{name:'Last year and the monthly trend'}).waitFor();
-   await expect(page.locator('#tr-flow-trend')).toBeAttached();
+   await expect(page.locator('#tr-flow-trend')).not.toBeAttached(); // Unknown tax cost prevents a fabricated monthly economic total.
    await expect(page.getByRole('button',{name:'Spending',exact:true})).toHaveAttribute('aria-pressed','true');
+   await expect(page.locator('.tr-tax-economic-warning')).toContainText('Economic totals unavailable');
+   await expect(page.locator('.tr-money-flow > .tr-grid')).toContainText('Unavailable');
+   await page.getByText('All flow amounts and transactions',{exact:true}).click();
+   const taxInterest=page.getByRole('row').filter({hasText:'Outgoing · Tax interest'});
+   const taxRequest=page.waitForRequest(request=>request.method()==='POST'&&new URL(request.url()).pathname.endsWith('/evidence'));
+   await taxInterest.getByRole('button',{name:'View transactions',exact:true}).click();
+   const taxSent=(await taxRequest).postDataJSON();assert.equal(taxSent.economic_costs,true);assert.equal(taxSent.economic_category,'interest');
+   await page.getByRole('heading',{name:'Review transactions',level:1,exact:true}).waitFor();
+   const taxEvidence=page.getByRole('row').filter({hasText:'Fictional known sales-tax cash'});
+   await expect(taxEvidence).toContainText('-$2.00');await expect(taxEvidence).toContainText('Bank amount -$100.00');
+   await expect(taxEvidence).toContainText('Shown: Interest');await expect(taxEvidence).toContainText('Sales-tax principal $90.00');
+   await page.locator('#tr-back').click();
+   assert.equal(await page.getByText('All flow amounts and transactions',{exact:true}).evaluate(node=>node.parentElement.open),false);
+   await page.evaluate(()=>scrollTo(0,0));
+   await page.screenshot({path:join(evidence,`${name}-${width}-tax-spending.png`),fullPage:true});
+
    assert.ok(await page.getByText('Medical sharing · bill reimbursements',{exact:false}).count());
    assert.ok(await page.getByText('Needs review · incoming',{exact:false}).count());
    const diagram=page.locator(width<700?'.tr-flow-phone':'.tr-flow-desktop');
@@ -53,10 +69,12 @@ try{
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
    await page.getByRole('button',{name:'Cash movement',exact:true}).click();
    await expect(page.getByRole('button',{name:'Cash movement',exact:true})).toHaveAttribute('aria-pressed','true');
+   await expect(page.locator('#tr-flow-trend')).toBeAttached();
    if(width<700){const cards=await page.locator('.tr-money-flow > .tr-grid > .tr-metric').evaluateAll(nodes=>nodes.map(node=>({top:node.getBoundingClientRect().top,height:node.getBoundingClientRect().height})));assert.equal(cards.length,3);assert.ok(cards.every(card=>Math.abs(card.top-cards[0].top)<1&&card.height<100),'Phone totals stay in one compact row');}
    const openMerchant=async(label,category,keyboard=false)=>{
     const categoryNode=diagram.locator(`[data-action="money-flow-category"][data-label="${category}"]`);
-    const node=width<700?(await categoryNode.count()?categoryNode:diagram.locator('[data-action="money-flow-category"][data-label="Other outgoing categories"]')):diagram.locator('.tr-flow-action').filter({has:page.locator('title').filter({hasText:label})});
+    let node=width<700?(await categoryNode.count()?categoryNode:diagram.locator('[data-action="money-flow-category"][data-label="Other outgoing categories"]')):diagram.locator('.tr-flow-action').filter({has:page.locator('title').filter({hasText:label})});
+    if(width>=700&&!await node.count())node=diagram.locator('[data-action="money-flow-evidence"][data-label="Other outgoing categories"]'); // Aggregated categories still open every underlying source.
     if(keyboard){await node.first().focus();await page.keyboard.press('Enter');}else await node.first().click();
     if(width<700){await expect(page.locator('#tr-dialog')).toBeVisible();await page.locator('#tr-dialog .tr-row').filter({hasText:label}).getByRole('button',{name:'View transactions',exact:true}).click();}
    };

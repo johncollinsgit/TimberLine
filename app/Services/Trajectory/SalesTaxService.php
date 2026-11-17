@@ -2,6 +2,10 @@
 
 namespace App\Services\Trajectory;
 
+use App\Models\Trajectory\Account;
+use App\Models\Trajectory\Allocation;
+use App\Models\Trajectory\Event;
+use App\Models\Trajectory\Record;
 use App\Models\Trajectory\Space;
 use App\Models\Trajectory\Transaction;
 use Illuminate\Support\Collection;
@@ -31,6 +35,91 @@ class SalesTaxService
     public function bankFingerprint(int $spaceId, int $accountId, int $transactionId, string $date, int $amount, string $merchant): string
     {
         return hash('sha256', json_encode([$spaceId, $accountId, $transactionId, $date, $amount, $merchant], JSON_THROW_ON_ERROR));
+    }
+
+    /** Resolve only owned bank facts; no foreign source data is disclosed through allocations. */
+    public function decorateEntries(Space $space, array $entries): array
+    {
+        $ids = collect($entries)->where('flow', EconomicActivityService::TAX_FLOW)->where('editable', true)->pluck('id');
+        if (! collect($entries)->contains(fn ($e) => $e['flow'] === EconomicActivityService::TAX_FLOW)) {
+            return $entries;
+        }
+        $sources = Transaction::where('space_id', $space->id)->whereIn('id', $ids)->get()->keyBy('id');
+        $allocations = Allocation::whereIn('transaction_id', $ids)->get()->groupBy('transaction_id');
+        $records = Record::where('space_id', $space->id)->where('kind', 'tax_remittance')->where('active', true)->get();
+        $accounts = Account::where('space_id', $space->id)->get()->keyBy('id');
+        foreach ($entries as &$entry) {
+            if ($entry['flow'] !== EconomicActivityService::TAX_FLOW) {
+                continue;
+            }
+            $tx = $sources->get($entry['id']);
+            $parts = $allocations->get($entry['id'], collect());
+            $whole = $tx && $parts->count() === 1 && $parts->first()->space_id === $space->id && $parts->first()->amount_cents === $tx->amount_cents;
+            $purpose = $whole && $entry['amount_cents'] === $tx->amount_cents
+                ? $this->purpose($space, $tx, $records, $accounts) : ['evidence_valid' => false, 'components' => null, 'issue' => 'Review owned bank evidence and allocation before applying sales-tax purpose.'];
+            $purpose['valid'] = $purpose['evidence_valid'] && $entry['reviewed'];
+            $entry['tax_purpose'] = $purpose;
+            if (! $purpose['evidence_valid']) {
+                $entry['reviewed'] = false;
+                $entry['explanation'] = 'Sales-tax bank evidence changed; review the purpose again.';
+            }
+        }
+        unset($entry);
+
+        return $entries;
+    }
+
+    public function purpose(Space $space, Transaction $tx, ?Collection $records = null, ?Collection $accounts = null): array
+    {
+        $records ??= Record::where('space_id', $space->id)->where('kind', 'tax_remittance')->where('active', true)->get();
+        $accounts ??= Account::where('space_id', $space->id)->get()->keyBy('id');
+        $entry = ['id' => $tx->id, 'space_id' => $tx->space_id, 'account_id' => $tx->account_id, 'date' => $tx->posted_on->toDateString(),
+            'amount_cents' => $tx->amount_cents, 'merchant' => $tx->merchant, 'flow' => $tx->flow, 'category' => $tx->category,
+            'reviewed' => $tx->reviewed, 'editable' => $tx->space_id === $space->id, 'pending' => $tx->pending, 'removed' => $tx->removed];
+        $row = $this->build($space, collect([$entry]), $records, $accounts)['rows'][0] ?? null;
+        $valid = ($accounts->get($tx->account_id)?->kind === 'cash') && ($row['reviewed'] ?? false) && ($row['tax_type'] ?? null) === 'sales_tax';
+
+        return ['evidence_valid' => $valid, 'components' => $valid ? $row['components'] : null,
+            'record_id' => $row['record_id'] ?? null, 'movement' => $valid ? $row['movement'] : null,
+            'issue' => $valid ? (($row['components'] ?? null) === null ? 'Sales-tax economic split is unknown.' : null) : 'Sales-tax evidence is missing, changed or not reviewed.'];
+    }
+
+    public function admitClassification(Space $space, Transaction $tx, array $data, bool $learn): void
+    {
+        if (($data['flow'] ?? null) !== EconomicActivityService::TAX_FLOW) {
+            abort_if($this->purpose($space, $tx)['evidence_valid'], 422, 'Edit or unconfirm the sales-tax evidence before changing its bank purpose.');
+
+            return;
+        }
+        abort_if($learn, 422, 'Sales-tax purpose needs receipt evidence for each payment; do not remember an agency merchant rule.');
+        abort_unless(($data['category'] ?? null) === 'taxes' && ! ($data['face_punched'] ?? false) && ! ($data['bullshit_spending'] ?? false), 422, 'Use Taxes with receipt-backed sales-tax purpose; components are reported separately.');
+        abort_unless($this->purpose($space, $tx)['evidence_valid'], 422, 'First save reviewed sales-tax evidence matching this posted bank source.');
+        $allocations = Allocation::where('transaction_id', $tx->id)->lockForUpdate()->get();
+        abort_unless($allocations->count() === 1 && $allocations->first()->space_id === $space->id && $allocations->first()->amount_cents === $tx->amount_cents, 422, 'Sales-tax purpose requires the full owned bank movement, not a cross-space allocation.');
+    }
+
+    /** A changed/archived binding cannot leave the old bank purpose silently reviewed. */
+    public function invalidateChangedBinding(Record $record, ?array $newData, ?int $actorId): void
+    {
+        if ($record->kind !== 'tax_remittance') {
+            return;
+        }
+        $keys = ['transaction_id', 'paid_on', 'amount_cents', 'tax_type', 'movement', 'reviewed', 'bank_source_fingerprint', 'tax_principal_cents', 'interest_cents', 'penalty_cents', 'other_fees_cents'];
+        $old = array_intersect_key($record->data, array_flip($keys));
+        $new = $newData === null ? null : array_intersect_key($newData, array_flip($keys));
+        ksort($old);
+        if ($new !== null) {
+            ksort($new);
+        }
+        if ($new !== null && $old === $new) {
+            return;
+        }
+        $tx = Transaction::where('space_id', $record->space_id)->whereKey($record->data['transaction_id'] ?? 0)->lockForUpdate()->first();
+        if ($tx && $tx->flow === EconomicActivityService::TAX_FLOW && $tx->reviewed) {
+            $before = $tx->only(['reviewed', 'version']);
+            $tx->update(['reviewed' => false, 'version' => $tx->version + 1, 'explanation' => 'Sales-tax evidence changed; review this bank purpose again.']);
+            Event::create(['space_id' => $record->space_id, 'actor_id' => $actorId, 'record_id' => $record->id, 'action' => 'tax_bank_purpose_needs_review', 'before' => $before, 'after' => ['source_transaction_id' => $tx->id, 'reviewed' => false, 'version' => $tx->version]]);
+        }
     }
 
     public function build(Space $space, Collection $entries, Collection $records, Collection $accounts): array
@@ -86,7 +175,7 @@ class SalesTaxService
                 'agency' => $valid ? $data['agency'] : null, 'jurisdiction' => $valid ? ($data['jurisdiction'] ?? null) : null,
                 'tax_type' => $type, 'movement' => $movement, 'filing_start' => $valid ? ($data['filing_start'] ?? null) : null,
                 'filing_end' => $valid ? ($data['filing_end'] ?? null) : null, 'reviewed' => $reviewed,
-                'bank_reviewed' => ($entry['reviewed'] ?? false) === true, 'source' => $valid ? ($data['source'] ?? null) : null,
+                'bank_reviewed' => ($entry['reviewed'] ?? false) === true, 'bank_flow' => $entry['flow'] ?? null, 'source' => $valid ? ($data['source'] ?? null) : null,
                 'issue' => $matches->count() > 1 ? 'Conflicting tax evidence; edit duplicate records.' : ($record && ! $valid ? 'Bank source changed; recheck this evidence.' : (! $reviewed ? 'Tax type or filing evidence needs review.' : null))];
         }
 

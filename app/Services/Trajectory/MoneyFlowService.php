@@ -37,7 +37,7 @@ class MoneyFlowService
             }
         }
 
-        return $rows;
+        return app(SalesTaxService::class)->decorateEntries($space, $rows);
     }
 
     public function build(Space $space, Collection $entries, Collection $accounts, array $coverage = [], ?Collection $allEntries = null, ?string $start = null, ?string $end = null): array
@@ -63,6 +63,7 @@ class MoneyFlowService
                 'Internal transfers and marked duplicates stay outside both diagrams. Debt repayments are excluded from Spending and included in Cash movement.',
                 'Refunds remain separate inflows. The table nets a category only when its refund classification is known; no vendor or invoice match is implied.',
                 'Received medical shares are bill reimbursements, not unrestricted income. Planned family support and expected medical shares are excluded.',
+                'Sales-tax principal is a liability settlement. Spending includes only known interest, penalties and fees; unresolved splits make totals unavailable. Cash movement preserves the whole agency payment or credit.',
                 'The difference is derived activity, not a cash balance, savings, profit, or an amount available to spend. No opening cash, budgets or expected receipts are added.']]];
     }
 
@@ -108,6 +109,7 @@ class MoneyFlowService
         foreach (['spending', 'cash'] as $mode) {
             $in = $out = $excluded = $refunds = [];
             $seen = [];
+            $unresolvedTax = [];
             $count = $shared = $stale = $reviewIn = $reviewOut = $zero = 0;
             foreach ($mode === 'cash' ? ($cashEntries ?? $entries) : $entries as $entry) {
                 $id = $entry['id'] ?? null;
@@ -141,6 +143,46 @@ class MoneyFlowService
                 }
                 $count++;
                 $flow = $entry['flow'] ?? '';
+                if ($mode === 'spending' && $flow === EconomicActivityService::TAX_FLOW) {
+                    $purpose = $entry['tax_purpose'] ?? [];
+                    if (! ($purpose['valid'] ?? false) || ($purpose['components'] ?? null) === null) {
+                        $unresolvedTax[$id] = $amount;
+                        $this->exclude($excluded, 'tax_split_unknown', 'Sales-tax economic split needs review', $entry, $amount);
+
+                        continue;
+                    }
+                    $principal = ($amount < 0 ? -1 : 1) * $purpose['components']['tax_principal_cents'];
+                    if ($principal !== 0) {
+                        $this->exclude($excluded, 'sales_tax_principal', 'Sales-tax principal · liability settlement', $entry, $principal);
+                        $excluded['sales_tax_principal']['economic_category'] = 'sales_tax_principal';
+                    }
+                    foreach (app(EconomicActivityService::class)->expenses(collect([$entry])) as $cost) {
+                        $category = $cost['category'];
+                        $key = $category === 'interest' ? 'tax_interest' : $category;
+                        $label = $category === 'interest' ? 'Tax interest' : $this->label($category);
+                        if ($cost['amount_cents'] > 0) {
+                            $this->add($in, $key, $label.' credits', 'tax_credit', $cost['amount_cents'], $id);
+                            $in[$key]['economic_category'] = $category;
+                            $in[$key]['purpose_key'] = 'tax_cost_credit:'.$category;
+                            $in[$key]['purpose_label'] = $label.' credits';
+                            $this->refund($refunds, $key, $cost['amount_cents'], $id, true);
+                            $refunds[$key]['economic_category'] = $category;
+                        } else {
+                            $this->add($out, $key, $label, 'outflow', -$cost['amount_cents'], $id);
+                            $out[$key]['economic_category'] = $category;
+                            $merchant = trim($entry['merchant'] ?? '') ?: 'Unnamed agency';
+                            $out[$key]['merchants'] ??= [];
+                            $merchantKey = ClassificationService::merchant($merchant);
+                            $this->add($out[$key]['merchants'], $merchantKey, $merchant, 'outflow', -$cost['amount_cents'], $id);
+                            $out[$key]['merchants'][$merchantKey]['economic_category'] = $category;
+                            $this->refund($refunds, $key, -$cost['amount_cents'], $id, false);
+                            $refunds[$key]['economic_category'] = $category;
+                        }
+                    }
+
+                    continue;
+                }
+
                 if ($mode === 'spending' && $flow === 'loan_draw' && ($amount < 0 || ($own && $owned[$entry['account_id']]->kind !== 'cash'))) {
                     $this->exclude($excluded, 'noncash_borrowing', 'Debt-ledger movement (cash draw counted separately)', $entry, $amount);
 
@@ -162,11 +204,12 @@ class MoneyFlowService
                     continue;
                 }
                 $category = $entry['category'] ?? 'uncategorized';
-                $purposeKnown = in_array($flow, ['owner_distribution', 'owner_wages', 'card_payment', 'debt_payment', 'loan_draw', 'asset_sale', 'asset_transfer', 'medical_share', 'reimbursement'], true);
+                $purposeKnown = in_array($flow, ['owner_distribution', 'owner_wages', 'card_payment', 'debt_payment', 'loan_draw', 'asset_sale', 'asset_transfer', 'medical_share', 'reimbursement', EconomicActivityService::TAX_FLOW], true);
                 $needsCategory = ! $purposeKnown || ($mode === 'spending' && $amount < 0 && $flow === 'owner_wages');
                 $review = ($entry['reviewed'] ?? false) !== true || ($category === 'uncategorized' && $needsCategory);
                 if ($amount > 0) {
                     [$kind, $label] = $review ? ['review', 'Needs review · incoming'] : match ($flow) {
+                        EconomicActivityService::TAX_FLOW => ['tax_credit', ($entry['tax_purpose']['movement'] ?? null) === 'returned_payment' ? 'Returned sales-tax payments' : 'Sales-tax refunds'],
                         'income' => ['income', 'Classified income'],
                         'owner_wages' => ['income', 'Payroll received'],
                         'owner_distribution' => ['support', 'Company distributions'],
@@ -178,7 +221,7 @@ class MoneyFlowService
                         'card_payment', 'debt_payment' => ['debt_credit', 'Debt-payment credits'],
                         default => ['review', 'Needs review · incoming'],
                     };
-                    $purpose = $kind === 'income' && $flow === 'owner_wages' ? 'income:owner_wages' : $kind;
+                    $purpose = $flow === EconomicActivityService::TAX_FLOW && ! $review ? 'tax_credit:'.$entry['tax_purpose']['movement'] : ($kind === 'income' && $flow === 'owner_wages' ? 'income:owner_wages' : $kind);
                     $custom = $space->settings['income_categories'][$category] ?? null;
                     if ($kind === 'income' && $flow === 'income' && is_string($custom) && trim($custom) !== '') {
                         $label = $custom;
@@ -197,15 +240,15 @@ class MoneyFlowService
                     }
                 } else {
                     $known = in_array($flow, ['expense', 'refund', 'medical_payment', 'medical_membership', 'owner_wages'], true);
-                    $knownCash = in_array($flow, ['card_payment', 'debt_payment', 'owner_distribution', 'asset_transfer'], true);
+                    $knownCash = in_array($flow, ['card_payment', 'debt_payment', 'owner_distribution', 'asset_transfer', EconomicActivityService::TAX_FLOW], true);
                     $key = $review || (! $known && ($mode === 'spending' || ! $knownCash)) ? 'needs_review' : $category;
                     if ($mode === 'cash' && ! $review) {
                         $key = match ($flow) {
-                            'card_payment', 'debt_payment' => 'debt_cash', 'owner_distribution' => 'owner_distributions', 'owner_wages' => 'owner_payroll', 'asset_transfer' => 'asset_purchases', default => $key,
+                            'card_payment', 'debt_payment' => 'debt_cash', 'owner_distribution' => 'owner_distributions', 'owner_wages' => 'owner_payroll', 'asset_transfer' => 'asset_purchases', EconomicActivityService::TAX_FLOW => 'sales_tax_cash', default => $key,
                         };
                     }
                     $label = match ($key) {
-                        'needs_review' => 'Needs review · outgoing', 'debt_cash' => 'Debt repayments',
+                        'sales_tax_cash' => 'Sales-tax payments · full bank cash', 'needs_review' => 'Needs review · outgoing', 'debt_cash' => 'Debt repayments',
                         'owner_distributions' => 'Owner distributions', 'owner_payroll' => 'Owner payroll', 'asset_purchases' => 'Asset purchases / transfers', default => $this->label($category),
                     };
                     $this->add($out, $key, $label, $key === 'needs_review' ? 'review' : 'outflow', -$amount, $id);
@@ -228,8 +271,10 @@ class MoneyFlowService
             unset($group);
             $result[$mode] = ['inflows' => array_values($in), 'outflows' => array_values($out), 'excluded' => array_values($excluded),
                 'refund_categories' => array_values($refunds), 'transaction_count' => $count, 'zero_count' => $zero, 'shared_allocation_count' => $shared,
-                'inflow_cents' => $count ? $inflow : null, 'outflow_cents' => $count ? $outflow : null,
-                'difference_cents' => $count ? $inflow - $outflow : null, 'review_inflow_cents' => $reviewIn, 'review_outflow_cents' => $reviewOut,
+                'inflow_cents' => $count && ! array_filter($unresolvedTax, fn ($value) => $value > 0) ? $inflow : null, 'outflow_cents' => $count && ! array_filter($unresolvedTax, fn ($value) => $value < 0) ? $outflow : null,
+                'known_inflow_cents' => $count ? $inflow : null, 'known_outflow_cents' => $count ? $outflow : null,
+                'tax_split_unknown_ids' => array_keys($unresolvedTax), 'tax_split_unknown_gross_cents' => array_sum(array_map('abs', $unresolvedTax)),
+                'difference_cents' => $count && ! $unresolvedTax ? $inflow - $outflow : null, 'review_inflow_cents' => $reviewIn, 'review_outflow_cents' => $reviewOut,
                 'stale_source_count' => $stale,
                 'denominator' => 'Each incoming percentage uses recorded inflows; each outgoing percentage uses recorded outflows. Derived difference branches are excluded from percentages.'];
         }

@@ -82,10 +82,10 @@ class QuestionSummaryService
             $answers[] = $this->answer('monthly_operating_budget', 'How much is the business planning to spend on operations this month?', $spendingPlan,
                 $budget['draft_spending_cents'] !== null ? 'draft' : 'partial',
                 'Latest effective category spending targets for this month. Debt cash, owner support and savings are separate.', $planMissing);
-            $operating = $reviewed->whereIn('flow', ['expense', 'refund'])->where('category', '!=', 'interest');
-            $answers[] = $this->answer('recorded_operating_spend', 'How much operating spending is recorded for this period?', $reviewed->isEmpty() ? null : -(int) $operating->sum('amount_cents'), 'partial',
+            $operating = app(EconomicActivityService::class)->operating($reviewed);
+            $answers[] = $this->answer('recorded_operating_spend', 'How much operating spending is recorded for this period?', $reviewed->isEmpty() || app(EconomicActivityService::class)->unresolved($selected)->isNotEmpty() ? null : -(int) $operating->sum('amount_cents'), 'partial',
                 'Reviewed expenses less refunds in the selected period, excluding interest. Card principal, debt payments, owner payments and transfers are excluded.',
-                ['Missing accounts and unreviewed transactions can change this recorded subset.'], $this->evidence($operating));
+                ['Missing accounts and unreviewed transactions can change this recorded subset.', 'Sales-tax principal is excluded; known penalties/fees remain. Unknown tax splits make this total unavailable.'], $this->evidence($operating));
             $borrowed = $this->period($entries, $today->startOfYear(), $today)->filter(fn ($e) => ($e['reviewed'] ?? false) === true)->where('flow', 'loan_draw')->where('amount_cents', '>', 0);
             $answers[] = $this->answer('recorded_new_borrowing', 'How much new borrowing is recorded this year?', $borrowed->isEmpty() ? null : (int) $borrowed->sum('amount_cents'), 'partial',
                 'Positive reviewed loan draws from January 1 through today. This is gross recorded borrowing, not the change in debt balances.',
@@ -347,7 +347,7 @@ class QuestionSummaryService
     {
         $reviewed = $selected->filter(fn ($e) => ($e['reviewed'] ?? false) === true);
         $flagged = $reviewed->where('bullshit_spending', true)->whereIn('flow', ['expense', 'refund'])->where('category', '!=', 'interest');
-        $interest = $reviewed->where('flow', 'expense')->where('category', 'interest')->where('amount_cents', '<', 0);
+        $interest = app(EconomicActivityService::class)->expenses($reviewed)->where('flow', 'expense')->where('category', 'interest')->where('amount_cents', '<', 0);
         $statements = [];
         $missing = ['These are costs to review, not guaranteed savings. Unreviewed and uncategorized spending is not automatically waste.'];
         foreach ($records->where('kind', 'interest_statement')->filter(fn ($r) => $accounts->contains('id', $r->data['account_id'] ?? null)
@@ -383,7 +383,7 @@ class QuestionSummaryService
             $selected = $future ? collect() : $this->period($entries, $month, $month->endOfMonth()->min($today));
             $reviewed = $selected->filter(fn ($e) => ($e['reviewed'] ?? false) === true);
             $income = $reviewed->whereIn('flow', ['income', 'owner_wages', 'owner_distribution'])->where('amount_cents', '>', 0);
-            $spent = $reviewed->whereIn('flow', $space->kind === 'business' ? ['expense', 'refund'] : ['expense', 'refund', 'medical_payment', 'medical_membership'])->where('category', '!=', 'interest');
+            $spent = app(EconomicActivityService::class)->expenses($reviewed, $space->kind !== 'business')->where('category', '!=', 'interest');
             $budget = app(MonthlyBudgetService::class)->build($space, $records, $month);
             $debt = $offset >= 0 ? $this->debtCash($accounts, $records, $entries, $month, $today) : ['amount_cents' => null, 'complete' => false];
             $cashPlan = $this->cashPlan($budget, $debt, $space->kind === 'business');
@@ -404,7 +404,7 @@ class QuestionSummaryService
                 'budget_record_ids' => $offset >= 0 ? $budget['record_ids'] : [],
                 'status' => $future ? ($hasPlan ? 'draft' : 'unavailable') : ($reviewed->isNotEmpty() || $offset === 0 && $hasPlan ? 'partial' : 'unavailable'),
                 'actual_income_cents' => ! $future && $reviewed->isNotEmpty() ? (int) $income->sum('amount_cents') : null,
-                'actual_spending_cents' => ! $future && $reviewed->isNotEmpty() ? -(int) $spent->sum('amount_cents') : null,
+                'actual_spending_cents' => ! $future && $reviewed->isNotEmpty() && app(EconomicActivityService::class)->unresolved($selected)->isEmpty() ? -(int) $spent->sum('amount_cents') : null,
                 'company_received_cents' => $reviewed->isNotEmpty() ? ($receipts['amount_cents'] ?? null) : null,
                 'company_support_plan_cents' => $offset >= 0 ? ($supportPlan['amount_cents'] ?? null) : null,
                 'business_income_plan_cents' => $offset >= 0 ? ($incomeSources['business_cents'] ?? null) : null,

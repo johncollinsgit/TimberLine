@@ -284,6 +284,9 @@ class RecordService
             if ($kind === 'debt' && ! empty($data['recurring_record_id'])) {
                 abort_if(Record::where('space_id', $space->id)->where('active', true)->whereIn('kind', ['medical_bill', 'debt', 'medical_membership'])->get()->contains(fn ($r) => $r->id !== $record?->id && ($r->data['recurring_record_id'] ?? null) === $data['recurring_record_id']), 422, 'This schedule is already replaced.');
             }
+            if ($record && $kind === 'tax_remittance') {
+                app(SalesTaxService::class)->invalidateChangedBinding($record, $data, $user->id);
+            }
             $before = $record?->data;
             $record ??= new Record(['space_id' => $space->id, 'kind' => $kind]);
             $record->fill(['name' => $name, 'data' => $data, 'version' => $record->exists ? $record->version + 1 : 1])->save();

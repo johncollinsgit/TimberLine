@@ -43,3 +43,45 @@ browser gate after browser installation.
 The feature has no customer identity master or customer data. Financial-space
 ownership remains the authority. Tests use fictional fixtures; actual financial
 evidence and import proposals remain outside the repository.
+
+## Bank purpose and economic costs
+
+Filing evidence and bank-purpose review remain separate explicit decisions.
+`Review bank purpose` opens the ordinary transaction review with
+`sales_tax_remittance` and Taxes selected; saving requires one active reviewed
+sales-tax annotation bound to the exact current owned cash-bank fingerprint.
+The full source movement must remain allocated to its own space. This purpose
+cannot be bulk applied, learned as an agency merchant rule, or reallocated across
+spaces. A verified binding also prevents reviewing the same payment as an
+internal transfer, lender repayment or ordinary gross expense. Unconfirm or
+correct the evidence first if the tax purpose was wrong.
+
+`EconomicActivityService` provides one shared read projection for financial
+summaries, history, operating questions, provisional P&L and comparisons. It
+never creates ledger rows. Sales-tax principal settles a liability; only the
+known interest, penalties and other fees become economic costs. Positive returns
+and refunds reverse their own supported component amounts and never become
+earned income. Ancillary costs retain the original bank ID, gross bank amount
+and component basis. Evidence can show the selected cost component or principal
+alongside the original bank movement. Cross-space evidence remains private.
+
+Unknown components are not zero: economic totals become unavailable, the known
+subset and unresolved gross cash remain inspectable, and a visible warning stays
+outside collapsed overview details. Money flow Spending excludes known principal;
+Cash movement preserves the full external agency payment or credit. Source,
+annotation type/review changes or archive invalidate the old purpose and require
+fresh bank review. Ordinary source reimports cannot propagate or silently replace
+this receipt-bound classification.
+
+Historical remittance principal and one-time ancillary charges are excluded from
+automatically learned recurring/seasonal operating needs. Future tax cash requires
+an explicit reviewed payment/budget plan. This exclusion does not establish zero
+future tax liability or release a tax reserve. Explicit existing schedules and
+budget targets retain their original values; no records are silently recoded.
+
+Regression coverage uses fictional sources for principal-only zero costs, complete
+and unknown splits, signed returns/refunds, source and annotation changes,
+authorization, account filtering, allocation/privacy guards, component evidence,
+and matching consumer totals. Browser acceptance checks the warning and component
+drilldown at 390px and desktop in Chromium and WebKit. No provider writeback,
+liability calculation, migration or real customer fixture is introduced.

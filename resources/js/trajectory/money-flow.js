@@ -1,4 +1,4 @@
-const kindNames={income:'Classified income',support:'Company distributions',borrowing:'Borrowed money',asset:'Asset-sale proceeds',refund:'Purchase refunds',reimbursement:'Reimbursements',medical:'Medical sharing · bill reimbursements',debt_credit:'Debt-payment credits',review:'Needs review · incoming'};
+const kindNames={income:'Classified income',support:'Company distributions',borrowing:'Borrowed money',asset:'Asset-sale proceeds',refund:'Purchase refunds',reimbursement:'Reimbursements',medical:'Medical sharing · bill reimbursements',debt_credit:'Debt-payment credits',tax_credit:'Sales-tax returns & cost credits',review:'Needs review · incoming'};
 const palette=['#397d69','#527f94','#a7834b','#766b94','#af7968','#699078','#6e8892','#b58a3e'];
 const ids=rows=>[...new Set(rows.flatMap(row=>row.ids||[]))];
 const sum=rows=>rows.reduce((total,row)=>total+row.amount_cents,0);
@@ -7,7 +7,7 @@ function condensed(rows,limit,label){
   const sorted=rows.filter(row=>Number.isSafeInteger(row.amount_cents)&&row.amount_cents>0).map(row=>({...row})).sort((a,b)=>b.amount_cents-a.amount_cents||String(a.key).localeCompare(String(b.key)));
   if(sorted.length<=limit)return sorted;
   const rest=sorted.slice(limit-1);
-  return [...sorted.slice(0,limit-1),{key:'other',label,kind:rest.some(row=>row.kind==='review')?'review':'outflow',amount_cents:sum(rest),ids:ids(rest),merchants:rest.flatMap(row=>row.merchants||[])}];
+  return [...sorted.slice(0,limit-1),{key:'other',label,kind:rest.some(row=>row.kind==='review')?'review':'outflow',amount_cents:sum(rest),ids:ids(rest),economic_categories:[...new Set(rest.flatMap(row=>row.economic_categories||[row.economic_category].filter(Boolean)))],merchants:rest.flatMap(row=>row.merchants||[])}];
 }
 
 /** Every layer uses nonnegative integer cents; difference nodes have no source IDs. */
@@ -25,8 +25,8 @@ export function moneyFlowGraph(view){
   if(!total)return {nodes,links,total_cents:0,inflow_cents:incomingTotal,outflow_cents:outgoingTotal};
   const pool=node('pool',1,{label:'Recorded activity',amount_cents:total,kind:'pool',ids:[]});
   for(const [index,row] of incoming.entries()){const item=node(`in-${index}`,0,row);link(item,pool,row);}
-  if(outgoingTotal>incomingTotal){const gap=node('funding-gap',0,{label:'Outflows above recorded inflows',amount_cents:outgoingTotal-incomingTotal,kind:'difference',ids:[]});link(gap,pool,gap);}
-  if(incomingTotal>outgoingTotal)outgoing.push({key:'difference',label:'Recorded inflows above outflows',amount_cents:incomingTotal-outgoingTotal,kind:'difference',ids:[],merchants:[]});
+  if(outgoingTotal>incomingTotal){const gap=node('funding-gap',0,{label:view.tax_split_unknown_ids?.length?'Known subset funding gap · tax costs unresolved':'Outflows above recorded inflows',amount_cents:outgoingTotal-incomingTotal,kind:'difference',ids:[]});link(gap,pool,gap);}
+  if(incomingTotal>outgoingTotal)outgoing.push({key:'difference',label:view.tax_split_unknown_ids?.length?'Known subset difference · tax costs unresolved':'Recorded inflows above outflows',amount_cents:incomingTotal-outgoingTotal,kind:'difference',ids:[],merchants:[]});
   for(const [index,row] of outgoing.entries()){
     const category=node(`out-${index}`,2,{...row,color:palette[index%palette.length]});link(pool,category,row);
     const merchants=row.kind==='difference'?[{...row,label:'Derived difference · not savings'}]:condensed(row.merchants||[],3,'Other merchants');
@@ -40,11 +40,11 @@ export function moneyFlowCompactGraph(view){
   const groups=new Map(),short={...kindNames,income:'Classified income',support:'Company draws',asset:'Asset sales',medical:'Medical bill shares',review:'Needs review'};
   for(const row of full.nodes.filter(node=>node.column===0)){
     const key=row.kind==='difference'?row.id:row.purpose_key||row.kind;
-    if(!groups.has(key))groups.set(key,{...row,id:`compact-${key}`,label:row.kind==='difference'?'Recorded funding gap':row.purpose_key!==row.kind&&row.purpose_label?row.purpose_label:short[row.kind]||row.label,amount_cents:0,ids:[]});
+    if(!groups.has(key))groups.set(key,{...row,id:`compact-${key}`,label:row.kind==='difference'?(view.tax_split_unknown_ids?.length?'Known subset gap':'Recorded funding gap'):row.purpose_key!==row.kind&&row.purpose_label?row.purpose_label:short[row.kind]||row.label,amount_cents:0,ids:[]});
     const group=groups.get(key);group.amount_cents+=row.amount_cents;group.ids.push(...row.ids);
   }
   const pool={id:'compact-pool',column:1,label:'Recorded activity',kind:'pool',amount_cents:full.total_cents,ids:[]};
-  const outgoing=full.nodes.filter(node=>node.column===2).map(node=>({...node,id:`compact-${node.id}`,label:node.kind==='difference'?'Inflows above outflows':node.label}));
+  const outgoing=full.nodes.filter(node=>node.column===2).map(node=>({...node,id:`compact-${node.id}`,label:node.kind==='difference'?(view.tax_split_unknown_ids?.length?'Known subset difference':'Inflows above outflows'):node.label}));
   const nodes=[...groups.values(),pool,...outgoing],links=[];
   for(const row of groups.values())links.push({source:row.id,target:pool.id,amount_cents:row.amount_cents,ids:row.ids,kind:row.kind});
   for(const row of outgoing)links.push({source:pool.id,target:row.id,amount_cents:row.amount_cents,ids:row.ids,kind:row.kind});
@@ -100,7 +100,7 @@ function diagram(view,{esc,precise,cash=false},compact=false){
   const attrs=row=>{
     if(!row.ids?.length)return '';
     const category=compact&&row.column===2;
-    return `class="tr-flow-action" role="button" tabindex="0" data-action="${category?'money-flow-category':'money-flow-evidence'}" data-label="${esc(row.label)}" data-merchants="${esc(JSON.stringify(category?condensed(row.merchants||[],8,'Other merchants'):[]))}" data-cash="${cash}" data-ids="${esc(JSON.stringify(row.ids))}" aria-label="${esc(row.label)} · ${esc(precise(row.amount_cents))} · ${category?'View merchants and records':`View ${row.ids.length} transactions`}"`;
+    return `class="tr-flow-action" role="button" tabindex="0" data-action="${category?'money-flow-category':'money-flow-evidence'}" data-label="${esc(row.label)}" data-merchants="${esc(JSON.stringify(category?condensed(row.merchants||[],8,'Other merchants'):[]))}" data-cash="${cash}" data-economic-category="${esc(row.economic_category||'')}" data-economic-categories="${esc(JSON.stringify(row.economic_categories||[]))}" data-ids="${esc(JSON.stringify(row.ids))}" aria-label="${esc(row.label)} · ${esc(precise(row.amount_cents))} · ${category?'View merchants and records':`View ${row.ids.length} transactions`}"`;
   };
   const headings=compact?[['Sources',8],['Where it went',208]]:[['Incoming sources',18],['Activity',410],['Outgoing categories',640],['Merchants',960]];
   return `<div class="tr-flow-scroll tr-flow-${suffix}" role="region" aria-label="${compact?'Phone source-to-category overview; tap categories for merchants':'Money flow from sources to categories and merchants'}"><svg class="tr-flow-svg" viewBox="0 0 ${layout.width} ${layout.height+40}" width="${layout.width}" height="${layout.height+40}" aria-labelledby="tr-flow-title-${suffix} tr-flow-desc-${suffix}"><title id="tr-flow-title-${suffix}">Recorded money flow</title><desc id="tr-flow-desc-${suffix}">Sources pass through a shared activity anchor; the bands do not establish that one receipt funded a particular purchase. Select a labeled branch for its source records. Differences are derived, not savings.</desc>
@@ -117,16 +117,17 @@ export function moneyFlowHtml({report,mode='spending',esc,precise:formatMoney,bt
   const precise=value=>formatMoney(Number.isSafeInteger(value)?value:null);
   const view=report?.views?.[mode];
   if(!view)return '<div class="tr-empty">Recorded money flow is unavailable for this view.</div>';
-  const inspect=(row,cash=mode==='cash')=>row.ids?.length?btn('View transactions','money-flow-evidence',`data-cash="${cash}" data-ids="${esc(JSON.stringify(row.ids))}"`):'Derived · no transaction';
+  const inspect=(row,cash=mode==='cash')=>row.ids?.length?btn('View transactions','money-flow-evidence',`data-cash="${cash}" data-economic="${mode==='spending'&&(!row.amount_basis||row.economic_category==='sales_tax_principal')}" data-economic-category="${esc(row.economic_category||'')}" data-economic-categories="${esc(JSON.stringify(row.economic_categories||[]))}" data-ids="${esc(JSON.stringify(row.ids))}"`):'Derived · no transaction';
   const percentage=(amount,total)=>Number.isSafeInteger(total)&&total>0?`${(amount/total*100).toFixed(1)}%`:'Unavailable';
   const rows=(groups,total,section)=>groups.map(row=>`<tr><th scope="row">${esc(section)} · ${esc(row.label)}</th><td>${esc(precise(row.amount_cents))}</td><td>${percentage(row.amount_cents,total)}</td><td>${row.ids.length}</td><td>${inspect(row)}</td></tr>`).join('');
   const difference=view.difference_cents;
   const differenceLabel=difference===null?'Activity difference unavailable':difference<0?'Outflows above recorded inflows':difference>0?'Recorded inflows above outflows':'Recorded inflows equal outflows';
   return `<section class="tr-panel tr-money-flow" aria-labelledby="tr-flow-title"><header class="tr-panel-head"><h2 id="tr-flow-title">Follow your money</h2></header>
     <div class="tr-period-tabs tr-flow-modes" role="group" aria-label="Money flow view"><button type="button" data-action="money-flow-mode" data-mode="spending" aria-pressed="${mode==='spending'}">Spending</button><button type="button" data-action="money-flow-mode" data-mode="cash" aria-pressed="${mode==='cash'}">Cash movement</button></div>
-    <p class="tr-subtle"><span class="tr-flow-long">${mode==='spending'?'Economic purchases, including credit-card purchases and authorized shared allocations. Debt repayments are excluded.':'Full posted bank movements on your owned cash accounts. Debt repayments appear here; card purchases and other spaces’ cash do not.'}</span><span class="tr-flow-short">${mode==='spending'?'Assigned purchases, including cards. Repayments excluded.':'Owned bank cash. Debt payments included; card purchases excluded.'}</span></p>
+    <p class="tr-subtle"><span class="tr-flow-long">${mode==='spending'?'Economic purchases, including credit-card purchases and authorized shared allocations. Debt repayments and sales-tax principal are excluded; known tax interest, penalties and fees remain.':'Full posted bank movements on your owned cash accounts. Debt repayments appear here; card purchases and other spaces’ cash do not.'}</span><span class="tr-flow-short">${mode==='spending'?'Purchases and known costs. Repayments and sales-tax principal excluded.':'Owned bank cash. Debt payments included; card purchases excluded.'}</span></p>
     <div class="tr-data-note tr-flow-coverage"><span class="tr-flow-long"><strong>Recorded coverage · may be partial.</strong> ${report.coverage?.history_start?`Account history starts ${esc(report.coverage.history_start)}. `:''}Report dates and the account filter apply. This diagram does not establish your cash balance or savings.</span><span class="tr-flow-short">Partial recorded coverage. Not a cash balance or savings.</span></div>
     <div class="tr-grid equal"><div class="tr-metric"><span class="tr-kicker"><span class="tr-flow-long">Recorded inflows · all types</span><span class="tr-flow-short">In · all types</span></span><div class="tr-number">${precise(view.inflow_cents)}</div></div><div class="tr-metric"><span class="tr-kicker"><span class="tr-flow-long">Recorded outflows · gross</span><span class="tr-flow-short">Out · gross</span></span><div class="tr-number">${precise(view.outflow_cents)}</div></div><div class="tr-metric"><span class="tr-kicker"><span class="tr-flow-long">${esc(differenceLabel)}</span><span class="tr-flow-short">Difference</span></span><div class="tr-number">${precise(difference===null?null:Math.abs(difference))}</div><small class="tr-flow-long">Derived activity difference</small></div></div><p class="tr-flow-difference"><span class="tr-flow-short">${esc(differenceLabel)} · derived, not savings.</span></p>
+    ${view.tax_split_unknown_ids?.length?`<p class="tr-data-note tr-tax-economic-warning"><strong>Economic totals unavailable.</strong> Known outgoing subset: ${precise(view.known_outflow_cents)}. ${precise(view.tax_split_unknown_gross_cents)} of tax cash has an unknown split or changed evidence. The diagram shows only the known subset; it is not total operating spending. ${inspect({ids:view.tax_split_unknown_ids,amount_basis:'allocated'},false)}</p>`:''}
     ${view.review_inflow_cents||view.review_outflow_cents?`<p class="tr-flow-review-note">Needs review: ${precise(view.review_inflow_cents)} in · ${precise(view.review_outflow_cents)} out. <span class="tr-flow-long">These amounts are included and are not verified income or categorized expenses.</span><span class="tr-flow-short">Included; purpose unverified.</span></p>`:''}
     <p class="tr-subtle"><span class="tr-flow-long">Tap a labeled branch for its records. Small categories and merchants may be grouped without dropping cents.</span><span class="tr-flow-short">Tap a category for merchants and records.</span></p>
     ${view.outflows.some(row=>payrollCategories.has(row.key))?'<p class="tr-subtle tr-flow-payroll-note">Owner, studio and event payroll separate matched net-pay distributions. Payroll retains taxes and unassigned withdrawals. These bank amounts are not total employer cost.</p>':''}
