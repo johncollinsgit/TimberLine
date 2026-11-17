@@ -36,6 +36,21 @@ does not claim artwork approval, create assignments or release existing holds.
 Checkout uses the existing shop/theme switches to remove the required label
 wizard while retaining approved-wholesaler and quantity validation.
 
+## 2026-11-16 - Website cart rendering and order confirmations (source candidate)
+
+Separate adjacent Blade directives in the native and Sawyer cart and related
+Website views. Populated carts render the payment-method partial instead of its
+literal include text. Existing Shop Pay visibility, navigation, account branches,
+CSRF controls and payment/tenant gates remain unchanged. Rendered regressions
+cover both cart designs, guest/signed-in alerts and published photo cards/gallery.
+
+Native and Sawyer order confirmations separate product titles, quantity/unit
+details, line amounts, stored tax/shipping charges and the final total. Zero
+charges stay hidden. The return-to-shop action sits below the summary with phone
+wrapping for long titles and order numbers. Fictional full-view and desktop/phone
+visual checks cover this presentation; no payment, fulfillment or provider state
+is changed or established by those checks.
+
 ## 2026-11-15 - Guided retail website flow (source candidate)
 
 Retail starters show real product and collection photo cards, with an empty-state
