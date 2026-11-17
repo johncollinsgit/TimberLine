@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\WebsiteInventoryMovement;
 use App\Models\WebsiteInventoryReservation;
 use App\Models\WebsiteOrder;
+use App\Models\WebsiteOrderNotification;
 use App\Models\WebsitePayment;
 use App\Models\WebsiteStripeWebhookEvent;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
@@ -16,6 +17,7 @@ use App\Services\ManagedWebsite\WebsiteCommerceService;
 use App\Services\ManagedWebsite\WebsitePaymentService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -286,6 +288,8 @@ test('refunds reverse merchant transfers return application fees and replay with
     $this->payments->reconcile($order->payments()->sole());
     expect($order->fresh()->payment_status)->toBe('refunded')->and($order->fresh()->refunded_cents)->toBe(2000)
         ->and($this->variant->fresh()->inventory_quantity)->toBe(0)->and($this->refunds)->toHaveCount(1);
+    $receipt = WebsiteOrderNotification::query()->where('kind', 'refund_confirmed')->sole();
+    expect($receipt->snapshot['refund_cents'])->toBe(2000)->and($receipt->snapshot['refunded_cents'])->toBe(2000);
     Http::assertSent(fn ($request) => $request->method() === 'POST' && str_ends_with($request->url(), '/refunds') && $request['reverse_transfer'] === 'true' && $request['refund_application_fee'] === 'true');
     expect(collect(Http::recorded())->filter(fn ($entry) => $entry[0]->method() === 'POST' && str_ends_with($entry[0]->url(), '/refunds')))->toHaveCount(1);
 });
@@ -296,15 +300,92 @@ test('pending and timed out refunds reserve balance until canonical confirmation
     $this->refundStatus = 'pending';
     $this->refundTimeout = true;
     expect(fn () => $this->commerce->refund($order, $this->actor, 1500, '', $id))->toThrow(ValidationException::class);
+    expect(WebsiteOrderNotification::query()->where('kind', 'refund_confirmed')->count())->toBe(0);
     expect(fn () => $this->commerce->refund($order, $this->actor, 1000, '', (string) Str::uuid()))->toThrow(HttpException::class, 'pending refunds');
     $this->payments->reconcileRefunds($order->payments()->sole());
     expect($order->fresh()->refunded_cents)->toBe(0);
+    expect(WebsiteOrderNotification::query()->where('kind', 'refund_confirmed')->count())->toBe(0);
     $key = array_key_first($this->refunds);
     $this->refunds[$key]['status'] = 'succeeded';
     $this->payments->reconcileRefunds($order->payments()->sole());
     expect($order->fresh()->refunded_cents)->toBe(1500)->and($order->fresh()->payment_status)->toBe('partially_refunded');
     $this->commerce->refund($order->fresh(), $this->actor, 500, '', (string) Str::uuid());
     expect($order->fresh()->refunded_cents)->toBe(1500); // second refund is still pending
+    $receipt = WebsiteOrderNotification::query()->where('kind', 'refund_confirmed')->sole();
+    expect($receipt->snapshot['refund_cents'])->toBe(1500)->and($receipt->snapshot['refunded_cents'])->toBe(1500);
+});
+
+test('separate confirmed refunds retain each amount and deduplicate webhook readback', function (): void {
+    $order = ($this->pay)();
+    $this->commerce->refund($order, $this->actor, 300, '', (string) Str::uuid());
+    $this->commerce->refund($order->fresh(), $this->actor, 1700, '', (string) Str::uuid());
+    $payment = $order->payments()->sole();
+    $event = ['id' => 'evt_refund_receipt', 'type' => 'refund.updated', 'livemode' => false,
+        'data' => ['object' => ['id' => array_key_last($this->refunds), 'payment_intent' => $payment->provider_payment_intent_id]]];
+    $this->payments->processEvent($event);
+    $this->payments->processEvent($event);
+    $this->payments->reconcileRefunds($payment);
+    $receipts = WebsiteOrderNotification::query()->where('kind', 'refund_confirmed')->orderBy('id')->get();
+    expect($receipts)->toHaveCount(2)->and($receipts->pluck('snapshot')->pluck('refund_cents')->all())->toBe([300, 1700])
+        ->and($receipts->pluck('snapshot')->pluck('refunded_cents')->all())->toBe([300, 2000])
+        ->and($order->fresh()->payment_status)->toBe('refunded')->and($this->variant->fresh()->inventory_quantity)->toBe(0)
+        ->and(WebsiteInventoryMovement::query()->where('reason', 'website_sale')->count())->toBe(1);
+});
+
+test('unconfirmed or unsuccessful refund states cannot enqueue a refund receipt', function (string $status): void {
+    $order = ($this->pay)();
+    $this->refundStatus = $status;
+    $this->commerce->refund($order, $this->actor, 500, '', (string) Str::uuid());
+    $this->payments->reconcileRefunds($order->payments()->sole());
+    expect($order->fresh()->refunded_cents)->toBe(0)->and($order->fresh()->payment_status)->toBe('paid')
+        ->and(WebsiteOrderNotification::query()->where('kind', 'refund_confirmed')->count())->toBe(0);
+})->with(['pending', 'requires_action', 'failed', 'canceled']);
+
+test('foreign account mode or tenant refund events cannot create a receipt', function (string $change): void {
+    $order = ($this->pay)();
+    $payment = $order->payments()->sole();
+    $event = ['id' => 'evt_foreign_refund', 'type' => 'refund.updated', 'livemode' => false,
+        'data' => ['object' => ['id' => 're_foreign', 'payment_intent' => $payment->provider_payment_intent_id]]];
+    match ($change) {
+        'account' => $event['account'] = 'acct_other',
+        'mode' => $event['livemode'] = true,
+        'tenant' => $payment->update(['tenant_id' => Tenant::query()->create(['name' => 'Other receipt tenant', 'slug' => 'other-receipt-tenant'])->id]),
+    };
+    $before = count(Http::recorded());
+    $this->payments->processEvent($event);
+    expect(count(Http::recorded()))->toBe($before)->and(WebsiteStripeWebhookEvent::query()->count())->toBe(0)
+        ->and(WebsiteOrderNotification::query()->where('kind', 'refund_confirmed')->count())->toBe(0)
+        ->and($order->fresh()->refunded_cents)->toBe(0);
+})->with(['account', 'mode', 'tenant']);
+
+test('the dedicated database worker sends one refund MIME after native payment and refund confirmation', function (): void {
+    config()->set(['managed_website.publishing_enabled' => true,
+        'managed_website.order_notifications_enabled' => true, 'managed_website.order_notifications_tenant_ids' => [$this->tenant->id],
+        'managed_website.order_notifications_sender_approved' => true, 'managed_website.order_notifications_mailer' => 'receipt_queue_test',
+        'managed_website.order_notifications_from_address' => 'orders@everbranch.example', 'managed_website.order_notifications_from_name' => 'Fictional order updates',
+        'mail.mailers.receipt_queue_test' => ['transport' => 'array']]);
+    $websites = app(ManagedWebsiteService::class);
+    $websites->applyTheme($this->site, 'outdoor-elements', $this->actor);
+    $websites->publish($this->site->fresh(), $this->actor);
+    $order = ($this->pay)();
+    $this->payments->refund($order, $this->actor, 2000, '', (string) Str::uuid());
+    $notices = WebsiteOrderNotification::query()->where('website_order_id', $order->id)->get();
+    expect($notices)->toHaveCount(2)->and($notices->pluck('status')->unique()->all())->toBe(['queued']);
+    expect(Illuminate\Support\Facades\DB::table('jobs')->where('queue', 'website-order-notifications')->count())->toBe(2);
+    for ($job = 0; $job < 2; $job++) {
+        $this->artisan('queue:work', ['connection' => 'website_order_notifications', '--queue' => 'website-order-notifications', '--once' => true, '--tries' => 1, '--timeout' => 90])
+            ->assertSuccessful();
+    }
+    expect(WebsiteOrderNotification::query()->where('kind', 'confirmed')->sole()->status)->toBe('superseded')
+        ->and(WebsiteOrderNotification::query()->where('kind', 'refund_confirmed')->sole()->status)->toBe('accepted')
+        ->and(Illuminate\Support\Facades\DB::table('jobs')->where('queue', 'website-order-notifications')->count())->toBe(0);
+    $messages = Mail::mailer('receipt_queue_test')->getSymfonyTransport()->messages();
+    expect($messages)->toHaveCount(1);
+    $message = $messages->first()->getOriginalMessage();
+    expect($message->getSubject())->toStartWith('Refund confirmed')
+        ->and($message->getTextBody())->toContain('Refund confirmed: $20.00 USD')->not->toContain('Total paid:')
+        ->and($this->variant->fresh()->inventory_quantity)->toBe(0)
+        ->and(WebsiteInventoryMovement::query()->where('reason', 'website_sale')->count())->toBe(1);
 });
 
 test('Stripe signature rotation accepts a later v1 but rejects invalid or stale signatures', function (): void {

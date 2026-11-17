@@ -70,12 +70,56 @@ global switch, configured platform and tax-decision controls. Private trials,
 copied registration flags, unfulfilled purchases and revoked Website access do
 not qualify.
 
-This is setup admission only. Existing `enabledFor()` consumers and the literal
-collection allowlist are unchanged. Customer collection still requires that
-allowlist, account ownership/readiness, independently verified callbacks, tax
-and all relevant Website commerce/host gates. Preparing an account does not
-prove a live merchant checkout, activate collection, alter a contract or charge
-the owner again.
+This setup flag grants setup admission only. Existing `enabledFor()` consumers
+and generic collection admission retain their literal allowlist. Collection also
+requires account ownership/readiness, independently verified callbacks, tax and
+the relevant commerce/host gates. The separately gated native Website cohort is
+described below. Preparing an account does not prove a live merchant checkout,
+activate collection, alter a contract or charge the owner again.
+
+### Native Website self-service collection
+
+The separate default-off `TENANT_PAYMENT_SELF_SERVICE_COLLECTION_ENABLED` flag
+admits only registered workspaces with a current durably verified Standard
+purchase and enabled canonical Website module. `SelfServiceWebsiteCollectionAccess`
+reuses the existing purchase/module policy; registration metadata or a pending
+fulfillment cannot grant it. Trial, canceled/expired billing, a foreign receipt
+and revoked Website access fail closed. Pausing new account setup does not
+silently change existing native Website collection or payment servicing.
+
+Only `TenantPaymentsReadinessService::readinessForWebsite()` accepts this cohort
+as an alternative to the preserved literal collection list. Website storefront
+checkout uses that entry point. The generic `readinessFor()` and
+`canCollectCustomerPayments()` consumers, including Soccer, subscriptions and
+native issued quote/invoice collection, retain their existing admission. Neither
+literal legacy cohort is changed. Native notification readiness may reuse the
+same separately gated cohort only behind its own delivery controls.
+
+The collection flag does not bypass the payments/Website global switches,
+owned ready merchant, live connected/direct verification, dedicated signing
+secret, or confirmed Tax controls. New paid owners see the actual remaining
+Website checkout checks on Payments, with their existing Continue setup and
+Check verification actions. Account verification never labels merchant Tax or
+live confirmation acceptance complete. Platform checks remain visibly pending
+Everbranch review; the page GET makes no provider request.
+
+Existing custom-domain/relay write restrictions and trusted published quote-only
+site settings remain enforced. This change does not enable customer-domain
+checkout or weaken host, cart, CSRF, original-attempt, refund or stock checks.
+New neutral retail starters can use their included Everbranch address with the
+same payment gates; the setup form's address choice does not add a legacy
+quote-only restriction to that published site. Custom-domain Shop and product
+pages offer a "Shop securely" GET link to that site's exact included address.
+The product handle is retained; private sessions, cart contents and payment
+tokens are not forwarded across hosts. Private previews and trusted quote-only
+sites have no shopping handoff. New native receipt links also use the included
+tracking route, which is served by the app rather than the public-page relay.
+Existing outbox snapshots keep their exact URL guard and are not rewritten;
+an operator must use the normal reviewed retry for a blocked historical row.
+Activation requires a separate reviewed configuration/deployment/acceptance
+decision; shipping the source leaves the new flag off. Preserve the existing
+genuine TEST purchase/refund and paused-payment evidence rather than creating
+another real charge to test rollout admission.
 
 ## Separate bank feeds
 

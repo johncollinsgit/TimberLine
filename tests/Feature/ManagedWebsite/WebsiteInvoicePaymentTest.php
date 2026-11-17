@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\WebsiteInventoryMovement;
 use App\Models\WebsiteInventoryReservation;
 use App\Models\WebsiteOrder;
+use App\Models\WebsiteOrderNotification;
 use App\Models\WebsitePayment;
 use App\Models\WebsiteStripeWebhookEvent;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
@@ -331,12 +332,16 @@ it('uses the original account for separate installment refunds and aggregates ea
     $first = (string) Str::uuid();
     $second = (string) Str::uuid();
     $this->payments->refund($order->fresh(), $this->actor, 1250, 'Fictional deposit refund', $first, $deposit->id);
-    $this->payments->refund($order->fresh(), $this->actor, 1750, 'Fictional balance refund', $second, $balance->id);
+    $this->payments->refund($order->fresh(), $this->actor, 750, 'Fictional balance refund', $second, $balance->id);
     $this->payments->refund($order->fresh(), $this->actor, 1250, 'Replay', $first, $deposit->id);
     $this->payments->reconcileRefunds($deposit->fresh());
     $this->payments->reconcileRefunds($balance->fresh());
-    expect($order->fresh()->refunded_cents)->toBe(3000)->and($order->fresh()->payment_status)->toBe('partially_refunded')
+    expect($order->fresh()->refunded_cents)->toBe(2000)->and($order->fresh()->payment_status)->toBe('partially_refunded')
         ->and(count($this->refunds))->toBe(2)->and($this->variant->fresh()->inventory_quantity)->toBe(3);
+    $receipts = WebsiteOrderNotification::query()->where('kind', 'refund_confirmed')->orderBy('id')->get();
+    expect($receipts)->toHaveCount(2)->and($receipts->pluck('snapshot')->pluck('refund_cents')->all())->toBe([1250, 750])
+        ->and($receipts->pluck('snapshot')->pluck('refunded_cents')->all())->toBe([1250, 2000]);
+    expect($order->events()->where('event_type', 'refund_confirmed')->reorder('id')->get()->pluck('data.refunded_cents')->all())->toBe([1250, 2000]);
     Http::assertSent(fn ($r) => str_ends_with($r->url(), '/v1/refunds') && $r->method() === 'POST'
         && $r->hasHeader('Stripe-Account', 'acct_invoiceMerchant') && ! isset($r['reverse_transfer']));
     expect(fn () => $this->payments->refund($order->fresh(), $this->actor, 1001, 'Too much', (string) Str::uuid(), $deposit->id))->toThrow(HttpException::class);

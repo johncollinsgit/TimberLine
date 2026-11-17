@@ -415,7 +415,10 @@ class WebsitePaymentService
             $status = $confirmed >= $payment->amount_cents ? 'refunded' : ($confirmed > 0 ? 'partially_refunded' : $payment->status);
             $payment->update(['metadata' => $metadata, 'status' => $status]);
             if (data_get($metadata, 'checkout_version') === 2) {
-                $receipts = $order->payments()->where('metadata->paid_confirmed', true)->get();
+                // The initial scope read can precede a wait on the site lock.
+                // Use current reads, not that earlier MySQL RR snapshot, for
+                // every installment after the canonical site/order locks.
+                $receipts = $order->payments()->forTenantId($order->tenant_id)->where('metadata->paid_confirmed', true)->orderBy('id')->lockForUpdate()->get();
                 $aggregate = $receipts->sum(fn ($receipt) => collect(data_get($receipt->metadata, 'refunds', []))->where('status', 'succeeded')->unique('provider_id')->sum('amount_cents'));
                 $order->update(['refunded_cents' => $aggregate,
                     'payment_status' => $aggregate >= $receipts->sum('amount_cents') ? 'refunded' : ($aggregate > 0 ? 'partially_refunded' : $order->payment_status)]);
@@ -428,8 +431,11 @@ class WebsitePaymentService
                 WebsiteInventoryReservation::query()->forTenantId($order->tenant_id)->where('website_order_id', $order->id)
                     ->where('status', 'active')->update(['status' => 'released']);
             }
-            if ($confirmed > $before) {
-                app(WebsiteStripeService::class)->event($order, 'refund_confirmed', 'Stripe confirmed a refund. Inventory was not restocked.', ['refunded_cents' => $confirmed]);
+            if ($order->refunded_cents > $before) {
+                app(WebsiteStripeService::class)->event($order, 'refund_confirmed', 'Stripe confirmed a refund. Inventory was not restocked.', ['refunded_cents' => $order->refunded_cents]);
+            }
+            if ($refund['status'] === 'succeeded' && $order->refunded_cents > $before) {
+                app(WebsiteOrderNotificationService::class)->record($order, 'payment:'.$payment->id.':refund:'.$refund['id'], 'refund_confirmed', refundCents: $refund['amount']);
             }
         });
     }

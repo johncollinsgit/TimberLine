@@ -26,6 +26,14 @@ class WebsiteStorefrontPresentation
         $account = ! $preview && ! $customHost && ! $quoteOnly;
         $cart = $account && $this->commerce->enabledFor($site->tenant);
         $readiness = $this->commerce->checkoutReadiness($site->tenant);
+        $secureStoreUrl = null;
+        if (! $preview && $customHost && ! $quoteOnly && $site->public_enabled && $this->commerce->enabledFor($site->tenant)) {
+            $host = $site->subdomain.'.'.trim((string) config('tenancy.domains.canonical.base_domain'));
+            if (filter_var('https://'.$host, FILTER_VALIDATE_URL) && preg_match('/^[a-z0-9]+(?:[a-z0-9.-]*[a-z0-9])?$/D', $host)
+                && app(ManagedWebsiteService::class)->publicHostAllowed($site, $host)) {
+                $secureStoreUrl = 'https://'.$host;
+            }
+        }
 
         return [
             'is_retail_starter' => in_array(data_get($settings, 'theme_key'), ['starter-candle_maker', 'starter-apparel'], true),
@@ -37,6 +45,7 @@ class WebsiteStorefrontPresentation
             'checkout_ready' => $cart && $readiness['ready'],
             'merchant_ready' => $readiness['ready'],
             'checkout_blockers' => $readiness['blockers'],
+            'secure_store_url' => $secureStoreUrl,
         ];
     }
 

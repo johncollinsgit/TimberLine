@@ -12,6 +12,11 @@ Shipping: ${{ number_format($update['shipping_cents'] / 100, 2) }}
 Tax: ${{ number_format($update['tax_cents'] / 100, 2) }}
 Total paid: ${{ number_format($update['total_cents'] / 100, 2) }} {{ strtoupper($update['currency']) }}
 @endif
+@if($update['kind'] === 'refund_confirmed')
+Refund confirmed: ${{ number_format($update['refund_cents'] / 100, 2) }} {{ strtoupper($update['currency']) }}
+Total refunded at this update: ${{ number_format($update['refunded_cents'] / 100, 2) }}
+Original order total: ${{ number_format($update['total_cents'] / 100, 2) }}
+@endif
 @if($update['tracking_number'])
 {{ $update['carrier'] }} tracking: {{ $update['tracking_number'] }}
 @endif

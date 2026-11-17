@@ -1,3 +1,14 @@
+## 2026-11-17 - Retail checkout and receipt guidance (source candidate)
+
+Payment setup shows a short Website checkout checklist with the next owner
+action and any remaining Everbranch review. Account verification no longer
+implies that tax, payment confirmation or checkout approval is complete.
+Native refund emails distinguish the confirmed refund, cumulative refunds and
+original order total, and keep private order links out of click/open tracking.
+Custom-domain shops hand shoppers to their owned included address for secure
+checkout; receipt links use that same working native address. Host and payment
+approval gates remain separate from this source change.
+
 ## 2026-11-17 - Customer refunds and net recorded income (source candidate)
 
 Income by source shows positive receipts, a separate signed customer-refund row
