@@ -177,3 +177,18 @@ scenario invalidates historical report snapshots; old private evidence is not
 restored into a different context. Business and combined scopes normalize the
 household-only Inflows mode. Provider OAuth callback state is left untouched.
 Unrelated edit forms do not acquire history steps.
+
+## Undo one mistaken bulk review
+
+The existing transaction Undo action can restore one row's prior unreviewed
+classification from its latest bulk-review audit. Other rows in that suggestion
+remain unchanged. The server requires current financial access, exact version
+and complete matching review snapshots, an unchanged owned posted source, and
+one full allocation to that space. Pending, removed, split or bound tax/medical
+rows cannot use this bulk undo. Snapshots that changed spending flags require
+individual review; this path changes no flags or merchant rules.
+
+Restoration increments the version and records an undo audit. Replaying the old
+version or undoing the same audit again fails. Raw source, amount, account balance
+and allocations stay intact. Restoring a purchase to Needs review does not
+establish its household/business beneficiary or recurring cost.

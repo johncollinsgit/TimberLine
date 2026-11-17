@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Trajectory;
 use App\Http\Controllers\Controller;
 use App\Jobs\Trajectory\SyncBank;
 use App\Models\Trajectory\Account;
+use App\Models\Trajectory\Allocation;
 use App\Models\Trajectory\Connection;
 use App\Models\Trajectory\Event;
 use App\Models\Trajectory\Invite;
@@ -136,12 +137,17 @@ class TrajectoryController extends Controller
         $access->authorize($request->user(), $space);
         abort_unless($transaction->space_id === $space->id, 404);
         $request->validate(['version' => 'required|integer']);
-        DB::transaction(function () use ($request, $space, $transaction): void {
-            $tx = Transaction::whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+        DB::transaction(function () use ($request, $space, $transaction, $access): void {
+            $space = Space::whereKey($space->id)->lockForUpdate()->firstOrFail();
+            $access->authorize($request->user()->fresh(), $space);
+            $tx = Transaction::where('space_id', $space->id)->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
             app(\App\Services\Trajectory\MedicalSharingService::class)->assertUnbound($tx);
             abort_unless($tx->version === (int) $request->input('version'), 409);
-            $event = Event::where('space_id', $space->id)->where('record_id', $tx->id)->whereIn('action', ['classify', 'undo_classify'])->latest('id')->first();
-            abort_unless($event && $event->action === 'classify' && ($event->after['version'] ?? null) === $tx->version, 409, 'Only the latest classification can be undone.');
+            $event = Event::where('space_id', $space->id)->where('record_id', $tx->id)->whereIn('action', ['classify', 'bulk_classify', 'undo_classify'])->latest('id')->lockForUpdate()->first();
+            abort_unless($event && in_array($event->action, ['classify', 'bulk_classify'], true) && ($event->after['version'] ?? null) === $tx->version, 409, 'Only the latest classification can be undone.');
+            if ($event->action === 'bulk_classify') {
+                $this->admitBulkUndo($space, $tx, $event);
+            }
             if (! empty($event->after['created_rule_id'])) {
                 Record::where('space_id', $space->id)->where('kind', 'rule')->whereKey($event->after['created_rule_id'])->update(['active' => false]);
             }
@@ -152,6 +158,36 @@ class TrajectoryController extends Controller
         });
 
         return response()->json(['ok' => true]);
+    }
+
+    /** Undo one exact bulk review, never its siblings or a changed source/allocation. */
+    private function admitBulkUndo(Space $space, Transaction $tx, Event $event): void
+    {
+        $fields = ['category', 'flow', 'face_punched', 'bullshit_spending', 'reviewed', 'explanation', 'version'];
+        foreach ([$event->before, $event->after] as $snapshot) {
+            abort_unless(is_array($snapshot) && count($snapshot) === count($fields) && array_diff($fields, array_keys($snapshot)) === [], 409, 'Bulk review evidence is incomplete.');
+        }
+        foreach ($fields as $field) {
+            abort_unless($event->after[$field] === $tx->$field, 409, 'This bulk-reviewed transaction changed. Refresh before undoing.');
+        }
+        $before = $event->before;
+        abort_unless(is_int($before['version']) && $tx->version === $before['version'] + 1 && $before['reviewed'] === false && $tx->reviewed
+            && in_array($before['category'], app(\App\Services\Trajectory\WorkspaceService::class)->categories($space), true)
+            && in_array($before['flow'], ['expense', 'income', 'refund', 'transfer', 'card_payment', 'asset_transfer', 'asset_sale', 'loan_draw', 'unclassified_deposit', 'owner_wages', 'owner_distribution', 'reimbursement', 'debt_payment', 'duplicate'], true)
+            && is_string($before['explanation']), 409, 'Bulk review cannot restore this prior classification.');
+        abort_unless($before['face_punched'] === $tx->face_punched && $before['bullshit_spending'] === $tx->bullshit_spending, 409, 'Bulk review changed spending flags; review this transaction individually.');
+        $account = Account::where('space_id', $space->id)->whereKey($tx->account_id)->lockForUpdate()->first();
+        $source = $tx->source;
+        abort_unless($account && ! $tx->pending && ! $tx->removed && is_array($source) && isset($source['id'])
+            && (is_string($source['id']) || is_int($source['id'])) && (string) $source['id'] !== ''
+            && $tx->source_key === $account->source_key.':'.$source['id']
+            && ($source['date'] ?? null) === $tx->posted_on->toDateString()
+            && ($source['amount_cents'] ?? null) === $tx->amount_cents && ($source['merchant'] ?? null) === $tx->merchant
+            && ! ($source['pending'] ?? false), 409, 'The owned posted source changed; review it before undoing.');
+        $allocations = Allocation::where('transaction_id', $tx->id)->orderBy('id')->lockForUpdate()->get();
+        abort_unless($allocations->count() === 1 && $allocations->first()->space_id === $space->id && $allocations->first()->amount_cents === $tx->amount_cents, 409, 'Bulk undo requires the unchanged full owned allocation.');
+        abort_if(Record::where('space_id', $space->id)->where('kind', 'tax_remittance')->where('active', true)->lockForUpdate()->get()
+            ->contains(fn ($record) => ($record->data['transaction_id'] ?? null) === $tx->id), 422, 'Edit or unlink this tax evidence before undoing the bulk review.');
     }
 
     public function split(Request $request, Space $space, Transaction $transaction, LedgerService $ledger)
