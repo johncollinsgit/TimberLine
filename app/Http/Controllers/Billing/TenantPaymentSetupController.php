@@ -29,6 +29,8 @@ class TenantPaymentSetupController extends Controller
             'braintreeConnections' => $braintree->enabledFor($tenant) ? $braintree->connections($tenant) : collect(),
             'stripeCanStart' => $stripe->canStartOnboarding($tenant),
             'stripeCollectionReady' => $stripe->canCollectCustomerPayments($tenant),
+            'websiteCheckout' => app(\App\Services\Tenancy\TenantModuleAccessResolver::class)->canAccess($tenant->id, 'managed_website')
+                ? app(\App\Services\ManagedWebsite\WebsiteCommerceService::class)->checkoutReadinessChecklist($tenant) : null,
             'stripeEmbedded' => config('tenant_payments.stripe_embedded_enabled') && filled(config('services.stripe.publishable_key')),
             'paypalConfigured' => $paypal->configured(), 'paypalSandbox' => config('tenant_payments.paypal.environment') === 'sandbox',
             'paypalFresh' => $connection?->last_synced_at?->gt(now()->subMinutes(15)) ?? false,

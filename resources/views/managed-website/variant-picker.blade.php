@@ -30,7 +30,11 @@
             </form>
             @if(! $checkoutReady)<p class="retail-shopping-note">You can save your bag. Online payment is not available yet. @if($contactUrl ?? null)<a href="{{ $contactUrl }}">Contact us to order.</a>@else Contact the business directly to order.@endif</p>@endif
         @else
-            <p class="retail-shopping-note">Online shopping is not available on this address. @if($contactUrl ?? null)<a href="{{ $contactUrl }}">Contact us to order.</a>@else Contact the business directly to order.@endif</p>
+            @if($storefront['secure_store_url'] ?? null)
+                <p class="retail-shopping-note">Continue at our secure Everbranch address. <a href="{{ $storefront['secure_store_url'].'/products/'.rawurlencode($product->handle) }}">Shop securely</a></p>
+            @else
+                <p class="retail-shopping-note">Online shopping is not available on this address. @if($contactUrl ?? null)<a href="{{ $contactUrl }}">Contact us to order.</a>@else Contact the business directly to order.@endif</p>
+            @endif
         @endif
     @else
         <p class="retail-availability">Currently unavailable</p>

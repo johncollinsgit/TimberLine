@@ -3,7 +3,9 @@
 use App\Jobs\SendWebsiteOrderNotification;
 use App\Mail\WebsiteOrderUpdateMail;
 use App\Models\Tenant;
+use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleEntitlement;
+use App\Models\TenantModuleState;
 use App\Models\User;
 use App\Models\WebsiteFulfillment;
 use App\Models\WebsiteOrder;
@@ -18,6 +20,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Tests\Support\SelfServiceWebsitePurchaseFixture;
 
 beforeEach(function (): void {
     $this->withoutVite();
@@ -330,6 +333,15 @@ test('the explicit Laravel array transport renders one MIME message with the app
         ->and(iterator_to_array($message->getHeaders()->all('Message-ID')))->toHaveCount(1)
         ->and($message->getHtmlBody())->toContain('/orders/track?')->toContain('Total paid: $12.99')
         ->and($message->getTextBody())->toContain('Total paid: $12.99')->toContain('&token=')->not->toContain('&amp;token=');
+    $tracking = iterator_to_array($message->getHeaders()->all('X-SMTPAPI'), false);
+    expect($tracking)->toHaveCount(1)
+        ->and(json_decode($tracking[0]->getBodyAsString(), true, flags: JSON_THROW_ON_ERROR))->toBe(['filters' => [
+            'clicktrack' => ['settings' => ['enable' => 0, 'enable_text' => false]], 'opentrack' => ['settings' => ['enable' => 0]],
+        ]])
+        ->and($message->getHtmlBody())->toContain('href="'.e($row->snapshot['order_url']).'"')
+        ->and($message->getTextBody())->toContain($row->snapshot['order_url']);
+    Mail::mailer('native_test')->raw('Ordinary fixture mail', fn ($mail) => $mail->to('ordinary@example.test')->subject('Ordinary fixture'));
+    expect($messages->last()->getOriginalMessage()->getHeaders()->has('X-SMTPAPI'))->toBeFalse();
     Http::assertNothingSent();
 });
 
@@ -343,4 +355,133 @@ test('platform order mail requires the confirmed mode and reviewed SES sender co
         'ses_migration.platform_secret' => 'fixture', 'ses_migration.platform_configuration_set' => 'platform-fixture',
         'ses_migration.approved_attempt_cost_micros' => 1000]);
     expect($this->notifications->readiness($this->tenant)['ready'])->toBeTrue();
+});
+
+test('partial and full refund receipts freeze confirmed amounts without paid-order copy', function (): void {
+    Mail::swap($this->nativeMailManager);
+    $this->order->update(['payment_status' => 'partially_refunded', 'refunded_cents' => 500]);
+    DB::transaction(fn () => $this->notifications->record($this->order, 'payment:1:refund:re_first', 'refund_confirmed', refundCents: 500));
+    DB::transaction(fn () => $this->notifications->record($this->order, 'payment:1:refund:re_first', 'refund_confirmed', refundCents: 500));
+    $first = WebsiteOrderNotification::query()->sole();
+    $this->order->update(['payment_status' => 'refunded', 'refunded_cents' => 1299]);
+    DB::transaction(fn () => $this->notifications->record($this->order, 'payment:1:refund:re_second', 'refund_confirmed', refundCents: 799));
+    $second = WebsiteOrderNotification::query()->latest('id')->firstOrFail();
+    foreach ([$first, $second] as $row) {
+        $this->notifications->deliver($row->id);
+        $this->notifications->deliver($row->id);
+        expect($row->fresh()->status)->toBe('accepted')->and($row->fresh()->attempts)->toBe(1);
+    }
+    expect($first->snapshot['refund_cents'])->toBe(500)->and($first->snapshot['refunded_cents'])->toBe(500)
+        ->and($second->snapshot['refund_cents'])->toBe(799)->and($second->snapshot['refunded_cents'])->toBe(1299);
+    $messages = Mail::mailer('native_test')->getSymfonyTransport()->messages();
+    expect($messages)->toHaveCount(2);
+    foreach ($messages as $index => $sent) {
+        $message = $sent->getOriginalMessage();
+        $amount = $index === 0 ? '$5.00' : '$7.99';
+        expect($message->getSubject())->toStartWith('Refund confirmed')
+            ->and($message->getHtmlBody())->toContain('Refund confirmed: '.$amount.' USD')->toContain('Original order total: $12.99')->not->toContain('Total paid:')->not->toContain('Order confirmed')
+            ->and($message->getTextBody())->toContain('Refund confirmed: '.$amount.' USD')->toContain('/orders/track?')->not->toContain('Total paid:');
+        $tracking = iterator_to_array($message->getHeaders()->all('X-SMTPAPI'), false);
+        expect($tracking)->toHaveCount(1)
+            ->and(json_decode($tracking[0]->getBodyAsString(), true, flags: JSON_THROW_ON_ERROR))->toBe(['filters' => [
+                'clicktrack' => ['settings' => ['enable' => 0, 'enable_text' => false]], 'opentrack' => ['settings' => ['enable' => 0]],
+            ]])
+            ->and($message->getHtmlBody())->toContain('href="'.e($first->snapshot['order_url']).'"')
+            ->and($message->getTextBody())->toContain($first->snapshot['order_url']);
+    }
+    Http::assertNothingSent();
+});
+
+test('an original payment notice is superseded after a confirmed refund', function (string $kind): void {
+    ($this->record)('paid-before-refund', $kind);
+    $row = WebsiteOrderNotification::query()->sole();
+    $this->order->update(['payment_status' => 'partially_refunded', 'refunded_cents' => 500]);
+    $this->notifications->deliver($row->id);
+    expect($row->fresh()->status)->toBe('superseded')->and($row->fresh()->failure_code)->toBe('transition_superseded');
+    Mail::assertNothingSent();
+})->with(['confirmed', 'invoice_payment']);
+
+test('a new installment receipt survives an earlier refund but not a later one', function (): void {
+    $this->order->update(['source' => 'staff_draft_invoice', 'payment_status' => 'partially_paid', 'refunded_cents' => 500]);
+    ($this->record)('later-installment', 'invoice_payment');
+    $row = WebsiteOrderNotification::query()->sole();
+    expect($row->snapshot['refunded_cents'])->toBe(500);
+    $this->notifications->deliver($row->id);
+    expect($row->fresh()->status)->toBe('accepted');
+    Mail::assertSentCount(1);
+    ($this->record)('another-installment', 'invoice_payment');
+    $later = WebsiteOrderNotification::query()->latest('id')->firstOrFail();
+    $this->order->update(['payment_status' => 'partially_refunded', 'refunded_cents' => 700]);
+    $this->notifications->deliver($later->id);
+    expect($later->fresh()->status)->toBe('superseded');
+    Mail::assertSentCount(1);
+});
+
+test('a refund notification cannot be manufactured without confirmed refund state', function (): void {
+    expect(fn () => DB::transaction(fn () => $this->notifications->record($this->order, 'unconfirmed', 'refund_confirmed', refundCents: 500)))
+        ->toThrow(LogicException::class, 'accepted confirmed refund');
+    expect(WebsiteOrderNotification::query()->count())->toBe(0);
+    Mail::assertNothingSent();
+});
+
+test('native order jobs use only their explicitly selected queue', function (): void {
+    config()->set(['managed_website.order_notifications_queue' => 'owned-receipts', 'managed_website.order_notifications_connection' => 'owned-connection']);
+    $job = new SendWebsiteOrderNotification(123);
+    expect($job->queue)->toBe('owned-receipts')->and($job->connection)->toBe('owned-connection');
+    ($this->record)();
+    WebsiteOrderNotification::query()->sole()->update(['next_attempt_at' => now()->subSecond()]);
+    $this->notifications->scan();
+    Queue::assertPushedOn('owned-receipts', SendWebsiteOrderNotification::class);
+    config()->set('managed_website.order_notifications_queue', '  ');
+    expect(fn () => new SendWebsiteOrderNotification(123))->toThrow(LogicException::class)
+        ->and($this->notifications->readiness($this->tenant)['ready'])->toBeFalse();
+    config()->set(['managed_website.order_notifications_queue' => 'owned-receipts', 'managed_website.order_notifications_connection' => '']);
+    expect(fn () => new SendWebsiteOrderNotification(123))->toThrow(LogicException::class)
+        ->and($this->notifications->readiness($this->tenant)['ready'])->toBeFalse();
+    Mail::assertNothingSent();
+});
+
+test('production receipt readiness checks the actual persistent connection driver', function (string $driver, bool $ready): void {
+    config()->set(['queue.default' => 'sync', 'managed_website.order_notifications_connection' => 'named-native',
+        'queue.connections.named-native' => ['driver' => $driver, 'retry_after' => 150], 'mail.mailers.native_test.transport' => 'smtp']);
+    $this->app->detectEnvironment(fn () => 'production');
+    expect($this->notifications->readiness($this->tenant)['ready'])->toBe($ready);
+    Mail::assertNothingSent();
+})->with([['database', true], ['redis', true], ['sqs', true], ['beanstalkd', true], ['sync', false], ['null', false], ['background', false], ['deferred', false], ['failover', false], ['missing', false]]);
+
+test('production receipt readiness rejects missing short or untyped queue leases', function (mixed $lease): void {
+    config()->set(['managed_website.order_notifications_connection' => 'native-lease',
+        'queue.connections.native-lease' => ['driver' => 'database', 'retry_after' => $lease], 'mail.mailers.native_test.transport' => 'smtp']);
+    $this->app->detectEnvironment(fn () => 'production');
+    expect($this->notifications->readiness($this->tenant)['ready'])->toBeFalse();
+    Mail::assertNothingSent();
+})->with([null, 0, 90, '150']);
+
+test('paid self-service notification admission preserves every independent sending gate', function (string $blocker): void {
+    TenantAccessProfile::query()->create(['tenant_id' => $this->tenant->id, 'plan_key' => 'starter', 'operating_mode' => 'direct', 'metadata' => ['self_service_registration' => true]]);
+    $this->actor->tenants()->updateExistingPivot($this->tenant->id, ['role' => 'owner']);
+    SelfServiceWebsitePurchaseFixture::confirm($this->tenant, $this->actor);
+    Http::fake();
+    config()->set(['tenant_payments.self_service_collection_enabled' => true, 'managed_website.order_notifications_tenant_ids' => []]);
+    match ($blocker) {
+        'collection switch' => config()->set('tenant_payments.self_service_collection_enabled', false),
+        'notification switch' => config()->set('managed_website.order_notifications_enabled', false),
+        'sender' => config()->set('managed_website.order_notifications_sender_approved', false),
+        'queue' => config()->set('managed_website.order_notifications_queue', ''),
+        'host' => $this->site->update(['public_enabled' => false]),
+        'revoked' => TenantModuleState::query()->updateOrCreate(['tenant_id' => $this->tenant->id, 'module_key' => 'managed_website'], ['enabled_override' => false]),
+        'registration' => TenantAccessProfile::query()->where('tenant_id', $this->tenant->id)->update(['metadata' => []]),
+        default => null,
+    };
+    expect($this->notifications->readiness($this->tenant)['ready'])->toBe($blocker === 'none');
+    Http::assertNothingSent();
+    Mail::assertNothingSent();
+})->with(['none', 'collection switch', 'notification switch', 'sender', 'queue', 'host', 'revoked', 'registration']);
+
+test('an unpaid registration cannot acquire notification admission outside the legacy cohort', function (): void {
+    TenantAccessProfile::query()->create(['tenant_id' => $this->tenant->id, 'plan_key' => 'standard', 'operating_mode' => 'direct', 'metadata' => ['self_service_registration' => true]]);
+    config()->set(['tenant_payments.self_service_collection_enabled' => true, 'managed_website.order_notifications_tenant_ids' => []]);
+    expect($this->notifications->readiness($this->tenant)['ready'])->toBeFalse();
+    Http::assertNothingSent();
+    Mail::assertNothingSent();
 });

@@ -135,8 +135,34 @@ missed queue dispatches. The existing persistent queue worker sends messages.
 
 The global notification gate, tenant allowlist, explicitly approved transactional
 mailer/sender, published Website and verified public host must all be ready.
+The separately enabled, canonically registered and currently paid self-service
+Website collection cohort is an alternative to the legacy notification tenant
+list; it does not enable the notification global switch or approve a sender.
+Jobs use the dedicated `website_order_notifications` database connection and
+`website-order-notifications` queue by default, reusing the existing jobs table.
+Its 150-second lease exceeds the 90-second one-attempt job timeout; the default
+connection and unrelated backlog are unchanged. A nonblank queue/connection,
+actual persistent driver and verified longer lease are required in production.
+Existing SQS admission is preserved; its external visibility timeout requires
+operator review and is not proved by application configuration. Drain only the
+dedicated queue during bounded receipt
+acceptance; do not process the default queue or unrelated historical backlog.
+The normal dedicated worker command is:
+
+`php /home/forge/backstage.theforestrystudio.com/current/artisan queue:work website_order_notifications --queue=website-order-notifications --sleep=3 --tries=1 --timeout=90`
+
 Marketing/Shopify resolvers, customer consent and messaging credits are excluded.
 Disabled historical rows stay blocked even after configuration is enabled.
+
+Confirmed Stripe refunds record a separate receipt in the same accepted native
+transaction, keyed to the original payment and provider refund. It freezes that
+refund amount and the cumulative confirmed refunds, labels the original order
+total separately, and never claims a pending/unknown refund or a new payment.
+Duplicate callbacks/readbacks cannot add another receipt. A delayed original
+payment notice is superseded if confirmed refunds increase after its frozen
+snapshot; a later accepted installment receipt can retain earlier refunds. Existing succeeded
+refunds are not automatically backfilled or resent when this code is released;
+the ordinary sender, tenant rollout, queue and explicit retry rules still apply.
 
 Accepted means the transport accepted a message, not that it reached the inbox.
 An uncertain send or expired send lease becomes Unknown and never auto-resends.
@@ -149,6 +175,12 @@ or an active delivery exception.
 The guest tracking link binds the verified store host, tenant/site, order and
 56-character token. Keep it private. Customer tracking omits address-bearing
 labels, staff notes, billing details and provider payloads.
+Native order mail explicitly disables SendGrid click tracking in HTML/text and
+open tracking with its per-message `X-SMTPAPI` header. Private bearer links remain
+direct in both MIME parts; ordinary marketing/account tracking defaults are
+unchanged. Local MIME checks prove the emitted header and links, not that a
+provider honored the header: verify that with one separately authorized clearly
+TEST inbox copy after release, without a new financial request.
 
 ### Release and activation
 

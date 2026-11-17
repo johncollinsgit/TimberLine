@@ -19,7 +19,15 @@ class WebsiteOrderUpdateMail extends Mailable
 
     public function headers(): Headers
     {
-        return new Headers(messageId: $this->messageId, text: ['X-Everbranch-Logical-Message-ID' => 'website-order:'.hash('sha256', $this->messageId)]);
+        return new Headers(messageId: $this->messageId, text: [
+            'X-Everbranch-Logical-Message-ID' => 'website-order:'.hash('sha256', $this->messageId),
+            // Private bearer links must not pass through tracking redirects.
+            // This affects native order updates only, not marketing mail.
+            'X-SMTPAPI' => json_encode(['filters' => [
+                'clicktrack' => ['settings' => ['enable' => 0, 'enable_text' => false]],
+                'opentrack' => ['settings' => ['enable' => 0]],
+            ]], JSON_THROW_ON_ERROR),
+        ]);
     }
 
     public function content(): Content

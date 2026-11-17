@@ -50,7 +50,57 @@ class WebsiteCommerceService
             return ['ready' => false, 'blockers' => ['Website Commerce is not enabled for this workspace.']];
         }
 
-        $result = $this->payments->readinessFor($tenant);
+        return $this->paymentReadiness($tenant);
+    }
+
+    /** Read the actual launch blockers without creating or refreshing a provider account. */
+    public function checkoutReadinessChecklist(Tenant $tenant): array
+    {
+        $result = $this->paymentReadiness($tenant);
+        if (! (bool) config('managed_website.commerce_enabled', false)) {
+            array_unshift($result['blockers'], 'Website checkout is not enabled.');
+        }
+        if (! $this->enabledFor($tenant)) {
+            array_unshift($result['blockers'], 'Website Commerce is not enabled for this workspace.');
+        }
+        $account = $tenant->paymentAccount()->first();
+        $dashboard = $account?->routingMode() === 'direct' && preg_match('/^acct_[A-Za-z0-9]+$/D', (string) $account->provider_account_id)
+            ? 'https://dashboard.stripe.com/'.$account->provider_account_id.'/dashboard' : null;
+        $items = [];
+        foreach (array_values(array_unique($result['blockers'])) as $message) {
+            $key = 'store_checkout';
+            $item = ['label' => 'Store checkout', 'detail' => 'Checkout is waiting for Everbranch approval.',
+                'action' => 'Ask about checkout', 'url' => route('legal.support'), 'owner_action' => false];
+            if ($message === 'The tenant has not completed verified Stripe Connect onboarding and payouts.') {
+                $key = 'payment_account';
+                $item = ['label' => 'Payment account', 'detail' => 'Finish your business and bank details in Stripe, then check verification.',
+                    'action' => 'Continue setup', 'url' => '#card-setup-title', 'owner_action' => true];
+            } elseif ($message === 'Stripe is not configured.') {
+                $key = 'payment_account';
+                $item = ['label' => 'Payment account', 'detail' => 'Everbranch needs to finish payment setup.',
+                    'action' => 'Ask about payment setup', 'url' => route('legal.support'), 'owner_action' => false];
+            } elseif (str_contains($message, 'Tax decision') || str_contains($message, 'tax decision')) {
+                $key = 'tax_setup';
+                $item = ['label' => 'Tax setup', 'detail' => 'Review your business tax details in Stripe. Everbranch still needs to approve checkout.',
+                    'action' => $dashboard ? 'Open Stripe' : 'Ask about tax review', 'url' => $dashboard ?? route('legal.support'), 'owner_action' => false];
+            } elseif (str_contains($message, 'webhooks') || str_contains($message, 'callbacks') || str_contains($message, 'signed')) {
+                $key = 'payment_verification';
+                $item = ['label' => 'Payment verification', 'detail' => 'Everbranch needs to verify payment confirmation before checkout can open.',
+                    'action' => 'Ask about verification', 'url' => route('legal.support'), 'owner_action' => false];
+            } elseif (str_contains($message, 'Activate your Everbranch plan')) {
+                $item['detail'] = 'Activate your Everbranch plan before accepting customer payments.';
+            }
+            if (! isset($items[$key]) || $items[$key]['owner_action']) {
+                $items[$key] = $item;
+            }
+        }
+
+        return ['ready' => $items === [], 'items' => array_values($items)];
+    }
+
+    private function paymentReadiness(Tenant $tenant): array
+    {
+        $result = $this->payments->readinessForWebsite($tenant);
         $direct = $result['account']?->routingMode() === 'direct';
 
         if (! $direct && blank(config('managed_website.stripe_webhook_secret'))) {

@@ -726,6 +726,12 @@ jobs:
         POS_DISPOSABLE_MYSQL: '1'
       run: php ./vendor/bin/pest tests/Integration/PointOfSaleConcurrencyTest.php --compact
       if: matrix.group == 'concurrency'
+    - name: Verify Website installment refunds across stale MySQL snapshots
+      env:
+        WEBSITE_REFUND_DISPOSABLE_MYSQL: '1'
+        LOG_CHANNEL: 'null'
+      run: php ./vendor/bin/pest tests/Integration/WebsiteRefundMySqlConcurrencyTest.php --compact
+      if: matrix.group == 'concurrency'
     - name: Verify coherent event reporting reads during source observations
       env:
         TEAM_WORK_DISPOSABLE_MYSQL: '1'

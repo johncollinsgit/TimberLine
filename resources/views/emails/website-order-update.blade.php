@@ -9,6 +9,9 @@
         <ul>@foreach($update['items'] as $item)<li>{{ $item['quantity'] }} × {{ $item['title'] }} — ${{ number_format($item['line_total_cents'] / 100, 2) }}</li>@endforeach</ul>
         <p>Subtotal: ${{ number_format($update['subtotal_cents'] / 100, 2) }}<br>Shipping: ${{ number_format($update['shipping_cents'] / 100, 2) }}<br>Tax: ${{ number_format($update['tax_cents'] / 100, 2) }}<br><strong>Total paid: ${{ number_format($update['total_cents'] / 100, 2) }} {{ strtoupper($update['currency']) }}</strong></p>
     @endif
+    @if($update['kind'] === 'refund_confirmed')
+        <p><strong>Refund confirmed: ${{ number_format($update['refund_cents'] / 100, 2) }} {{ strtoupper($update['currency']) }}</strong><br>Total refunded at this update: ${{ number_format($update['refunded_cents'] / 100, 2) }}<br>Original order total: ${{ number_format($update['total_cents'] / 100, 2) }}</p>
+    @endif
     @if($update['tracking_number'])<p>{{ $update['carrier'] }} tracking: {{ $update['tracking_number'] }}</p>@endif
     <p><a href="{{ $update['order_url'] }}" rel="noreferrer">View your order and shipping updates</a></p>
     <p style="font-size:12px;color:#536273">Keep this private order link secure. This is a transactional update about your order.</p>

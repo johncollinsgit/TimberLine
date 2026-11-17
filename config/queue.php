@@ -44,6 +44,17 @@ return [
             'after_commit' => false,
         ],
 
+        // Native receipts have their own worker and a lease longer than their
+        // 90-second job timeout. Never consume the unrelated default backlog.
+        'website_order_notifications' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => env('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_QUEUE', 'website-order-notifications'),
+            'retry_after' => 150,
+            'after_commit' => true,
+        ],
+
         // Source reporting can walk historical cohorts; keep its lease longer
         // than the dedicated 600-second worker timeout, independent of checkout.
         'event_performance' => [

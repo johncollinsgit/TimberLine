@@ -10,6 +10,7 @@ use App\Models\WebsiteOrder;
 use App\Models\WebsiteOrderEvent;
 use App\Models\WebsiteOrderNotification;
 use App\Models\WebsiteShipment;
+use App\Services\Billing\SelfServiceWebsiteCollectionAccess;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -21,6 +22,7 @@ class WebsiteOrderNotificationService
     private const COPY = [
         'invoice_payment' => ['Invoice payment received', 'Your payment has been received against your invoice. Open your private invoice to review the receipt and any remaining balance.'],
         'confirmed' => ['Order confirmed', 'Your payment is confirmed. We will update you when your order is ready or on its way.'],
+        'refund_confirmed' => ['Refund confirmed', 'Your refund is confirmed. Open your private order link for the latest refund and order details.'],
         'payment_review' => ['Your order needs review', 'The store is reviewing your order. Please contact the store before trying another payment.'],
         'preparing' => ['Preparing your package', 'A shipping label is ready. Your package has not yet been handed to the carrier.'],
         'shipped' => ['Your package is on its way', 'Your package has been handed to the carrier. Follow its progress using your private order link.'],
@@ -30,7 +32,7 @@ class WebsiteOrderNotificationService
     ];
 
     /** Called inside the transaction that accepts a real order/shipment transition. */
-    public function record(WebsiteOrder $order, string $transitionKey, string $kind, ?WebsiteShipment $shipment = null): void
+    public function record(WebsiteOrder $order, string $transitionKey, string $kind, ?WebsiteShipment $shipment = null, ?int $refundCents = null): void
     {
         if (! in_array($order->source, ['native', 'staff_quote', 'staff_draft_invoice'], true)) {
             return;
@@ -40,6 +42,10 @@ class WebsiteOrderNotificationService
             throw new \LogicException('Native order notifications require a supported accepted transition transaction.');
         }
         $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($order->tenant_id)->with('lines')->findOrFail($order->id);
+        if ($kind === 'refund_confirmed' && ($refundCents === null || $refundCents < 1 || $refundCents > $order->refunded_cents
+            || ! in_array($order->payment_status, ['partially_refunded', 'refunded'], true))) {
+            throw new \LogicException('A refund receipt requires an accepted confirmed refund.');
+        }
         if ($shipment) {
             $shipment = WebsiteShipment::query()->forTenantId($order->tenant_id)->where('website_order_id', $order->id)->findOrFail($shipment->id);
         }
@@ -58,6 +64,8 @@ class WebsiteOrderNotificationService
             'subject' => $heading.' · '.$this->oneLine($order->number).' · '.$brand, 'heading' => $heading, 'message' => $message,
             'order_number' => $order->number, 'currency' => $order->currency, 'subtotal_cents' => $order->subtotal_cents,
             'shipping_cents' => $order->shipping_cents, 'tax_cents' => $order->tax_cents, 'total_cents' => $order->total_cents,
+            'refunded_cents' => $order->refunded_cents,
+            ...($kind === 'refund_confirmed' ? ['refund_cents' => $refundCents] : []),
             'items' => $order->lines->map(fn ($line) => ['title' => $line->title, 'quantity' => $line->quantity, 'line_total_cents' => $line->line_total_cents])->all(),
             'carrier' => $shipment?->carrier, 'tracking_number' => $shipment?->tracking_number,
             'order_url' => $readiness['public_url'] && $validToken ? $this->orderUrl($order, $readiness['public_url']) : null,
@@ -78,7 +86,8 @@ class WebsiteOrderNotificationService
     public function readiness(Tenant $tenant): array
     {
         $blockers = [];
-        if (! config('managed_website.order_notifications_enabled') || ! in_array($tenant->id, (array) config('managed_website.order_notifications_tenant_ids', []), true)) {
+        if (! config('managed_website.order_notifications_enabled') || (! in_array($tenant->id, (array) config('managed_website.order_notifications_tenant_ids', []), true)
+            && ! app(SelfServiceWebsiteCollectionAccess::class)->allows($tenant))) {
             $blockers[] = 'Native order notifications are not enabled for this workspace.';
         }
         if (! app(TenantModuleAccessResolver::class)->canAccess($tenant->id, 'managed_website')) {
@@ -106,8 +115,20 @@ class WebsiteOrderNotificationService
                 $blockers[] = 'The approved platform SES sender, rollout and budget are not ready.';
             }
         }
-        if (! app()->environment('testing') && in_array(config('queue.default'), ['sync', 'null', null, ''], true)) {
-            $blockers[] = 'Native order updates require a persistent queue worker.';
+        $queueConnection = trim((string) config('managed_website.order_notifications_connection'));
+        if (trim((string) config('managed_website.order_notifications_queue')) === '' || $queueConnection === '') {
+            $blockers[] = 'Select a dedicated native order notification queue.';
+        }
+        if (! app()->environment('testing')) {
+            $connection = (array) config('queue.connections.'.$queueConnection, []);
+            if (! in_array($connection['driver'] ?? null, ['database', 'redis', 'sqs', 'beanstalkd'], true)) {
+                $blockers[] = 'Native order updates require a persistent queue worker.';
+            } elseif (in_array($connection['driver'], ['database', 'redis', 'beanstalkd'], true)
+                && (! is_int($connection['retry_after'] ?? null) || $connection['retry_after'] <= SendWebsiteOrderNotification::TIMEOUT)) {
+                $blockers[] = 'Configure a queue lease longer than the native notification job timeout.';
+            }
+            // SQS retains its existing durable-driver admission. Its external
+            // visibility timeout needs operator review, not a fabricated local proof.
         }
         $site = TenantSite::query()->forTenantId($tenant->id)->first();
         $url = $site ? $this->publicUrl($site) : null;
@@ -301,7 +322,13 @@ class WebsiteOrderNotificationService
             return in_array($order->payment_status, ['payment_review', 'paid_review'], true);
         }
         if (in_array($row->kind, ['confirmed', 'invoice_payment'], true)) {
-            return true; // A delayed receipt remains useful after fulfillment/refund.
+            // An earlier refund must not hide a later accepted installment receipt.
+            return $order->refunded_cents <= (int) data_get($row->snapshot, 'refunded_cents', 0);
+        }
+        if ($row->kind === 'refund_confirmed') {
+            return in_array($order->payment_status, ['partially_refunded', 'refunded'], true)
+                && data_get($row->snapshot, 'refund_cents', 0) > 0
+                && data_get($row->snapshot, 'refunded_cents', 0) <= $order->refunded_cents;
         }
         $shipment = WebsiteShipment::query()->forTenantId($order->tenant_id)->where('website_order_id', $order->id)->find($row->website_shipment_id);
         if (! $shipment || data_get($shipment->parcel, '_native.retired')) {
@@ -328,9 +355,9 @@ class WebsiteOrderNotificationService
 
     private function publicUrl(TenantSite $site): ?string
     {
-        $domain = app(ManagedWebsiteDomainService::class)->enabledFor($site->tenant)
-            ? $site->domains()->where('status', 'active')->where('is_primary', true)->whereNotNull('verified_at')->whereNotNull('activated_at')->first() : null;
-        $host = $domain?->hostname ?: $site->subdomain.'.'.trim((string) config('tenancy.domains.canonical.base_domain'));
+        // Private order routes stay on the owned application-backed store host.
+        // Custom-domain relays intentionally expose public website pages only.
+        $host = $site->subdomain.'.'.trim((string) config('tenancy.domains.canonical.base_domain'));
         if (! filter_var('https://'.$host, FILTER_VALIDATE_URL) || ! preg_match('/^[a-z0-9]+(?:[a-z0-9.-]*[a-z0-9])?$/', $host)
             || ! app(ManagedWebsiteService::class)->publicHostAllowed($site, $host)) {
             return null;

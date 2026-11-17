@@ -79,7 +79,28 @@
                         </dl>
                         <p class="text-xs text-zinc-500">{{ $account->last_checked_at ? 'Last checked '.$account->last_checked_at->diffForHumans().'.' : 'Use Check verification after returning from Stripe.' }}</p>
                     @endif
-                    <p class="border-t border-zinc-100 pt-4 text-sm leading-6 text-zinc-500">{{ $stripeCollectionReady ? 'Account setup is complete. Each checkout also checks its launch requirements.' : 'Customer checkout stays closed until payment and launch verification are complete.' }}</p>
+                    @if($websiteCheckout !== null)
+                        <section class="border-t border-zinc-100 pt-4" aria-label="Website checkout checklist" data-website-checkout-readiness>
+                            <h3 class="text-sm font-semibold text-zinc-950">Website checkout</h3>
+                            @if($websiteCheckout['ready'])
+                                <p class="mt-2 text-sm text-emerald-900" role="status">Ready for Website checkout.</p>
+                            @else
+                                <p class="mt-2 text-sm text-zinc-600">Account verification is separate. Complete these launch checks:</p>
+                                <ul class="mt-3 space-y-3">
+                                    @foreach($websiteCheckout['items'] as $check)
+                                        <li class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                                            <p class="font-semibold">{{ $check['label'] }}</p>
+                                            <p class="mt-1">{{ $check['detail'] }}</p>
+                                            <p class="mt-1 text-xs">{{ $check['owner_action'] ? 'Your next step' : 'Everbranch review required' }}</p>
+                                            <a href="{{ $check['url'] }}" class="mt-2 inline-block font-semibold underline">{{ $check['action'] }}</a>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </section>
+                    @else
+                        <p class="border-t border-zinc-100 pt-4 text-sm leading-6 text-zinc-500">{{ $stripeCollectionReady ? 'Account setup is complete. Each checkout also checks its launch requirements.' : 'Customer checkout stays closed until payment and launch verification are complete.' }}</p>
+                    @endif
                 </div>
                 <aside class="space-y-6 border-t border-zinc-100 bg-zinc-50/70 p-6 sm:p-8 lg:border-l lg:border-t-0" aria-label="Payment setup help">
                     <div><h3 class="text-sm font-semibold text-zinc-950">Your next step</h3><p class="mt-2 text-sm leading-6 text-zinc-600">{{ !$stripeCanStart ? 'Everbranch needs to finish payment setup. Contact support to check when your business can connect.' : ($stripeReady ? 'Your Stripe account is verified. Finish any remaining launch checks before accepting customer payments.' : ($account ? 'Choose Continue setup to pick up where you left off in Stripe. Then return and check verification.' : ($stripeOAuthAvailable ? 'Already use Stripe? Sign in to connect it. New to Stripe? Create an account with your business email.' : 'Use your business email to open secure Stripe setup. Have your legal business details ready.'))) }}</p></div>

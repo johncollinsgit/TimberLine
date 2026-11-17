@@ -38,6 +38,9 @@ return [
     'freight_booking_tenant_ids' => $tenantIds('MANAGED_WEBSITE_FREIGHT_BOOKING_TENANT_IDS'),
     // Transactional native order updates never use a marketing/provider fallback.
     'order_notifications_enabled' => $bool('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_ENABLED'),
+    'order_notifications_connection' => trim((string) env('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_CONNECTION', 'website_order_notifications')),
+    // Keep native receipts off unrelated application queues and their backlog.
+    'order_notifications_queue' => trim((string) env('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_QUEUE', 'website-order-notifications')),
     'order_notifications_tenant_ids' => $tenantIds('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_TENANT_IDS'),
     'order_notifications_sender_approved' => $bool('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_SENDER_APPROVED'),
     'order_notifications_mailer' => trim((string) env('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_MAILER', '')),

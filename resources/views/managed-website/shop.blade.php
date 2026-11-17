@@ -1,5 +1,8 @@
 @extends('managed-website.store-layout')
 @section('store-content')
+@if($storefront['secure_store_url'] ?? null)
+    <p class="store-shell retail-shopping-note" role="status">Continue shopping at our secure Everbranch address. <a href="{{ $storefront['secure_store_url'].'/shop' }}">Shop securely</a></p>
+@endif
 @if(data_get($storeSettings ?? $site->publishedSiteVersion?->settings ?? $site->settings, 'theme_key') === 'sawyer-naturals')
 @include('managed-website.sawyer.shop')
 @else

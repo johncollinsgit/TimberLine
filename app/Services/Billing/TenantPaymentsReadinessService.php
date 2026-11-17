@@ -19,7 +19,13 @@ class TenantPaymentsReadinessService
         return $this->readiness($tenant, $requireConnectedAccount, $requireVerifiedLiveWebhooks, false);
     }
 
-    private function readiness(Tenant $tenant, bool $requireConnectedAccount, bool $requireVerifiedLiveWebhooks, bool $setupOnly): array
+    /** Only the native Website storefront may use the separately gated paid cohort. */
+    public function readinessForWebsite(Tenant $tenant): array
+    {
+        return $this->readiness($tenant, true, true, false, true);
+    }
+
+    private function readiness(Tenant $tenant, bool $requireConnectedAccount, bool $requireVerifiedLiveWebhooks, bool $setupOnly, bool $websiteCollection = false): array
     {
         $blockers = [];
         if (app(\App\Services\Onboarding\SelfServiceTrialService::class)->unpaidTrialForTenant($tenant)) {
@@ -33,7 +39,8 @@ class TenantPaymentsReadinessService
 
         $allowed = array_values(array_filter(array_map('strval', (array) ($settings['tenant_slugs'] ?? []))));
         if (! in_array('*', $allowed, true) && ! in_array((string) $tenant->slug, $allowed, true)
-            && ! ($setupOnly && app(TenantPaymentSetupAccess::class)->selfServiceSetupEnabledFor($tenant))) {
+            && ! ($setupOnly && app(TenantPaymentSetupAccess::class)->selfServiceSetupEnabledFor($tenant))
+            && ! ($websiteCollection && app(SelfServiceWebsiteCollectionAccess::class)->allows($tenant))) {
             $blockers[] = 'Everbranch Billing is not approved for this workspace.';
         }
 
