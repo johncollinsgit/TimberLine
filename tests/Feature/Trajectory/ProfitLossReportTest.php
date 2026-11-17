@@ -145,3 +145,25 @@ test('unknown account detail coverage is distinct from reconciled totals and con
     expect($report['operating_profit_cents'])->toBe(99900)->and($report['coverage']['reconciles'])->toBeTrue()
         ->and($report['coverage']['operating_profit_reconciles'])->toBeFalse()->and($report['complete'])->toBeFalse()->and($report['coverage']['status'])->toBe('partial');
 });
+
+test('source parent direct postings reconcile leaf totals and retain the same account identity for drill down', function (): void {
+    foreach (['integrations', 'quickbooks'] as $module) {
+        \App\Models\TenantModuleState::create(['tenant_id' => $this->tenant->id, 'module_key' => $module, 'enabled_override' => true, 'setup_status' => 'configured']);
+    }
+    $this->connection->update(['access_token' => 'fictional-source-token', 'expires_at' => now()->addHour()]);
+    $parser = new ReflectionMethod(\App\Services\FieldService\QuickBooksReportingSnapshotService::class, 'accountSections');
+    $sections = $parser->invoke(app(\App\Services\FieldService\QuickBooksReportingSnapshotService::class), ['Rows' => ['Row' => [
+        ['group' => 'COGS', 'Summary' => ['ColData' => [['value' => 'Total COGS'], ['value' => '400.00']]], 'Rows' => ['Row' => [
+            ['type' => 'Section', 'Header' => ['ColData' => [['value' => 'Fictional material account', 'id' => '511'], ['value' => '22.00']]],
+                'Summary' => ['ColData' => [['value' => 'Total fictional materials'], ['value' => '400.00']]],
+                'Rows' => ['Row' => [['type' => 'Data', 'ColData' => [['value' => 'Fictional component', 'id' => '512'], ['value' => '378.00']]]]]],
+        ]]],
+    ]]]);
+    ($this->save)('2026-10-01', '2026-10-31', ['account_sections' => $sections]);
+    $report = ($this->report)('2026-10-01', '2026-10-31');
+    $parent = $report['statement']['sections'][1]['lines'][0];
+    expect($parent['amount_cents'])->toBe(40000)->and($parent['transaction_detail_available'])->toBeFalse()
+        ->and($parent['children'][0])->toMatchArray(['key' => '0.0.direct', 'id' => '511', 'label' => 'Fictional material account (direct postings)', 'amount_cents' => 2200, 'transaction_detail_available' => true])
+        ->and($report['statement']['sections'][1]['account_total_cents'])->toBe(40000)->and($report['statement']['sections'][1]['accounts_reconcile'])->toBeTrue()
+        ->and($report['cogs_cents'])->toBe(40000)->and($report['net_cents'])->toBe(27500);
+});

@@ -74,7 +74,7 @@ class QuickBooksReportingSnapshotService
 
     protected function accountSections(array $payload): array
     {
-        $walk = function (array $nodes, string $path = '') use (&$walk): array {
+        $walk = function (array $nodes, string $path = '', ?string $ancestorGroup = null) use (&$walk): array {
             $result = [];
             foreach ($nodes as $index => $node) {
                 if (! is_array($node)) {
@@ -86,11 +86,21 @@ class QuickBooksReportingSnapshotService
                 $amount = data_get($node, 'type') === 'Data' || isset($node['ColData'])
                     ? data_get($columns, '1.value') : data_get($summary, '1.value');
                 $key = $path === '' ? (string) $index : $path.'.'.$index;
+                $id = trim((string) data_get($columns, '0.id', '')) ?: null;
+                $group = $node['group'] ?? $ancestorGroup;
+                $children = $walk((array) data_get($node, 'Rows.Row', []), $key, $group);
+                $direct = data_get($node, 'Header.ColData.1.value');
+                // Header is this account's own activity; Summary includes its
+                // children. Preserve explicit postings, never a balancing gap.
+                if ($children !== [] && $id !== null && $this->numeric($direct) && round((float) $direct, 2) != 0.0) {
+                    array_unshift($children, ['key' => $key.'.direct', 'id' => $id, 'label' => $label.' (direct postings)',
+                        'group' => $group, 'amount' => round((float) $direct, 2), 'children' => []]);
+                }
                 $result[] = [
-                    'key' => $key, 'id' => trim((string) data_get($columns, '0.id', '')) ?: null,
+                    'key' => $key, 'id' => $id,
                     'label' => $label, 'group' => $node['group'] ?? null,
                     'amount' => $this->numeric($amount) ? round((float) $amount, 2) : null,
-                    'children' => $walk((array) data_get($node, 'Rows.Row', []), $key),
+                    'children' => $children,
                 ];
             }
 

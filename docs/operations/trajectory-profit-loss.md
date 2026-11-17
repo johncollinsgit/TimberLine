@@ -46,8 +46,16 @@ permissions, enabled QuickBooks access, unchanged company/realm, usable
 credentials and any pinned statement revision are checked after provider
 retrieval and before saving the cache. Revocation or a mismatched response saves
 nothing. The action shares the QuickBooks operation lock and has its own bounded
-request throttle. Expired credentials use the normal reconnection workflow;
-this endpoint does not silently perform an OAuth refresh POST.
+request throttle. Active connections with refreshable credentials remain
+available when their access token expires or approaches expiry. The normal
+QuickBooks connector renews credentials through the OAuth token endpoint before
+the financial report GET; this credential-maintenance POST does not modify
+provider financial records, add scopes or start a sync. Credential rotation uses
+a short database lock after OAuth, verifies unchanged company/status and source
+credential version, and rechecks current caller permissions before persisting.
+No database lock spans the OAuth network request. Missing or invalid refresh
+credentials retain an honest failure/reconnection state; a disconnect or newer
+credential rotation cannot be resurrected or overwritten by an older response.
 The UI retains prior figures when a source request fails. After a successful
 cache save it reloads the dashboard. If that reload fails, it reports that the
 source save succeeded but the screen still needs a reload; retry does not
@@ -72,6 +80,13 @@ account name. Source section totals can be available while hierarchy detail is
 unavailable. Current interest and sales-tax cost coverage limits stay visible in
 supporting activity and are not silently converted into accounting zeros.
 
+When a source parent account has its own nonzero Header amount as well as child
+accounts, its explicit own activity appears as a **(direct postings)** leaf with
+the same source account ID. The parent's Summary remains its reported subtotal.
+Positive postings and negative credits retain their source signs; empty/zero
+Headers create no extra line. A missing amount is never derived from a subtotal
+gap. Previously cached hierarchies need a targeted refresh to gain this detail.
+
 After release, **Refresh report** for the chosen period and basis can populate
 the new saved account hierarchy. Use this targeted action or the existing
 authorized QuickBooks reporting workflow; do not run a full sync, clear caches,
@@ -88,16 +103,24 @@ a provider query. Parent and unsectioned accounts do not inherit a guessed
 classification. The original connected company must retain enabled QuickBooks
 access and usable credentials.
 
-The endpoint performs one direct `GeneralLedger` GET for that exact account,
-period and basis. It requests explicit debit and credit columns. Income and
+The endpoint requests `GeneralLedger` for that exact account through the normal
+QuickBooks connector after any required credential renewal, using financial GET
+requests only. Current member/module/space and source identity are checked before
+credential persistence, before the financial GET, and after retrieval. Each
+request retains the selected period/basis and explicit debit/credit columns. Income and
 other-income postings use credits minus debits; COGS and expense postings use
 debits minus credits. Refunds and credits retain their negative amounts. No
 natural amount, running balance or bank total is substituted. Opening balances
 are excluded, and distinct postings sharing a transaction ID remain distinct.
 
 The response must confirm source dates, basis, currency and account identity.
-Unknown/foreign account results are withheld. Source summary totals must match
-the visible signed postings before an activity total can be complete. Missing,
+Unknown/foreign account results are withheld. Each account section's source
+summary must match its recursively parsed subtree before activity can be
+complete. For a direct-postings leaf only, the provider may include descendants
+known from that same saved parent: their postings and summaries are validated
+but excluded from the displayed own-account activity. Accounts from another
+branch of the chart remain forbidden. Parent and descendant summaries are never
+added together, and direct amounts are never derived from their difference. Missing,
 malformed, impossible-date or truncated rows retain partial status; the response
 is bounded to 2,000 postings. The live account total is compared with the selected
 saved account amount. A difference or older provider timestamp remains visible
@@ -105,9 +128,10 @@ as a possible stale-source condition; the saved statement is not overwritten.
 Fresh financial permissions, company identity and snapshot revision are checked
 after retrieval before returning private rows.
 
-This read does not persist or deduplicate transactions, trigger provider writes,
-refresh OAuth credentials or supply AI context. Errors, revoked access, expired
-credentials and unavailable source detail retain explicit states. The QuickBooks
+This read does not persist or deduplicate transactions, trigger financial
+provider writes or supply AI context. OAuth renewal only updates the existing
+local credentials. Errors, revoked access, unrefreshable credentials and
+unavailable source detail retain explicit states. The QuickBooks
 operation lock and a separate request throttle bound reads.
 
 ## Financial Insights and provider quarantine

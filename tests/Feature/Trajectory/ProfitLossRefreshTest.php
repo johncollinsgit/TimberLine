@@ -107,12 +107,47 @@ test('unavailable access invalid controls and a shared provider lock never dispa
     Http::assertNothingSent();
 });
 
-test('expired credentials cannot silently refresh a provider token or claim report loading is ready', function (): void {
-    $this->connection->update(['expires_at' => now()->subMinute(), 'refresh_token' => 'fictional-refresh-token']);
+test('expired credentials without a refresh token require reconnection and never dispatch a report read', function (): void {
+    $this->connection->update(['expires_at' => now()->subMinute(), 'refresh_token' => null]);
     expect(ProfitLossRefreshService::available($this->space))->toBeFalse();
     $this->actingAs($this->owner)->postJson($this->url, $this->input)->assertUnprocessable();
     Http::assertNothingSent();
 });
+
+test('expired and expiring report access renews credentials normally before a financial GET', function (int $minutes): void {
+    $this->connection->update(['expires_at' => now()->addMinutes($minutes), 'refresh_token' => 'fictional-refresh-token']);
+    Http::fake(['https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer' => Http::response(['access_token' => 'renewed-access', 'refresh_token' => 'rotated-refresh', 'expires_in' => 3600])]);
+    expect(ProfitLossRefreshService::available($this->space))->toBeTrue();
+    $this->actingAs($this->owner)->postJson($this->url, $this->input)->assertOk();
+    Http::assertSent(fn ($request) => $request->url() === 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer' && $request->method() === 'POST' && $request['grant_type'] === 'refresh_token');
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/reports/ProfitAndLoss') && $request->method() === 'GET' && $request->hasHeader('Authorization', 'Bearer renewed-access'));
+    Http::assertSentCount(2);
+    expect($this->connection->fresh()->refresh_token)->toBe('rotated-refresh')->and($this->connection->fresh()->expires_at->isFuture())->toBeTrue();
+})->with([-1, 2]);
+
+test('OAuth failures and authorization changes cannot persist credentials or retrieve a financial report', function (string $change): void {
+    $this->connection->update(['expires_at' => now()->subMinute(), 'refresh_token' => 'fictional-refresh-token']);
+    $oauthCalls = 0;
+    Http::fake(['https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer' => function () use ($change, &$oauthCalls) {
+        $oauthCalls++;
+        match ($change) {
+            'member' => $this->owner->tenants()->updateExistingPivot($this->tenant->id, ['membership_active' => false]),
+            'module' => TenantModuleState::where('tenant_id', $this->tenant->id)->where('module_key', 'quickbooks')->update(['enabled_override' => false]),
+            'space' => $this->space->update(['kind' => 'household']),
+            'disconnect' => $this->connection->update(['status' => 'disconnected']),
+            'realm' => $this->connection->update(['external_account_secret' => 'reconnected-company']),
+            default => null,
+        };
+
+        return Http::response(['access_token' => 'unsafe-access', 'refresh_token' => 'unsafe-refresh', 'expires_in' => 3600], $change === 'failure' ? 400 : 200);
+    }]);
+    $expected = match ($change) {
+        'failure' => 502, 'disconnect', 'realm', 'space' => 409, default => 403
+    };
+    $this->actingAs($this->owner)->postJson($this->url, $this->input)->assertStatus($expected);
+    expect($oauthCalls)->toBe(1)->and($this->providerReads)->toBe(0)->and(QuickBooksReportingSnapshot::count())->toBe(0)
+        ->and($this->connection->fresh()->access_token)->toBe('fictional-access-token')->and($this->connection->fresh()->refresh_token)->toBe('fictional-refresh-token');
+})->with(['failure', 'member', 'module', 'space', 'disconnect', 'realm']);
 
 test('refreshing a selected source preserves currency and refuses a statement changed during retrieval', function (): void {
     $snapshot = QuickBooksReportingSnapshot::create(['tenant_id' => $this->tenant->id, 'integration_connection_id' => $this->connection->id, 'range_key' => 'selected', 'period_start' => '2026-01-01', 'period_end' => '2026-01-31', 'metrics' => ['accounting_method' => 'Cash', 'source_report' => ['Currency' => 'EUR']], 'observed_at' => now()]);
