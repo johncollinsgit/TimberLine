@@ -245,3 +245,43 @@ test('payroll categories keep net owner studio event and unassigned cash separat
         ->and(collect($view['cash']['outflows'])->firstWhere('key', 'owner_distributions')['ids'])->not->toContain($ids['owner_payroll'])
         ->and(Transaction::count())->toBe(5);
 });
+
+test('customer refund settlements conserve cash reduce income and never become overhead or purchase refunds', function (): void {
+    ($this->post)('collection', 100000, 'income', 'income');
+    $return = ($this->post)('customer-return', -6500, 'income', 'income', merchant: 'Fictional processor settlement');
+    ($this->post)('materials', -20000, 'expense', 'materials');
+    ($this->post)('purchase-return', 1000, 'refund', 'materials');
+    $data = app(DashboardService::class)->build($this->space, 'month', viewer: $this->owner);
+    foreach (['spending', 'cash'] as $mode) {
+        $view = $data['money_flow']['views'][$mode];
+        $refund = collect($view['outflows'])->firstWhere('key', 'customer_refunds');
+        expect($view['inflow_cents'])->toBe(101000)->and($view['outflow_cents'])->toBe(26500)
+            ->and($view['difference_cents'])->toBe(74500)->and($view['review_outflow_cents'])->toBe(0)
+            ->and($refund['kind'])->toBe('customer_refund')->and($refund['label'])->toBe('Customer refunds / sales reversals')
+            ->and($refund['amount_cents'])->toBe(6500)->and($refund['ids'])->toBe([$return->id])
+            ->and($refund['preserve'])->toBeTrue()
+            ->and(collect($view['refund_categories'])->pluck('key')->all())->toBe(['materials']);
+    }
+    expect($data['summary']['income_cents'])->toBe(93500)->and($data['summary']['spending_cents'])->toBe(19000)
+        ->and($data['daily_series'][0]['income_cents'])->toBe(93500)
+        ->and($data['history']['months'][0]['income_cents'])->toBe(93500)
+        ->and(collect($data['categories'])->pluck('category')->all())->toBe(['materials']);
+    $entries = collect(app(LedgerService::class)->entries($this->space));
+    $profit = app(\App\Services\Trajectory\TaxReviewService::class)->profitLoss($entries, []);
+    expect($profit['income_cents'])->toBe(93500)->and($profit['expenses_cents'])->toBe(19000)->and($profit['net_cents'])->toBe(74500)
+        ->and(collect($data['planning']['sources'])->firstWhere('category', 'income')['ids'])->toContain($return->id);
+    $sourceProfit = app(\App\Services\Trajectory\TaxReviewService::class)->profitLoss($entries, ['snapshot_id' => 99, 'income_cents' => 70000, 'net_income_cents' => 30000]);
+    expect($sourceProfit['income_cents'])->toBe(70000)->and($sourceProfit['net_cents'])->toBe(30000);
+    $this->actingAs($this->owner)->postJson('/trajectory/spaces/'.$this->space->id.'/evidence', ['ids' => [$return->id], 'cash_movement' => true])
+        ->assertOk()->assertJsonPath('0.amount_cents', -6500)->assertJsonPath('0.flow', 'income');
+});
+
+test('an unreviewed negative income row stays in outgoing review and does not net classified income', function (): void {
+    $unknown = ($this->post)('unknown-return', -6500, 'income', 'income', reviewed: false);
+    $view = ($this->report)()['views']['cash'];
+    expect($view['outflow_cents'])->toBe(6500)->and($view['review_outflow_cents'])->toBe(6500)
+        ->and($view['outflows'][0]['key'])->toBe('needs_review')->and($view['outflows'][0]['ids'])->toBe([$unknown->id]);
+    $unknown->update(['reviewed' => true]);
+    $data = app(DashboardService::class)->build($this->space, 'month', viewer: $this->owner);
+    expect($data['summary']['income_cents'])->toBe(-6500)->and($data['summary']['spending_cents'])->toBe(0);
+});

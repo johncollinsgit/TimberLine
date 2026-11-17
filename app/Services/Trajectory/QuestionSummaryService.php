@@ -382,7 +382,7 @@ class QuestionSummaryService
             $future = $offset > 0;
             $selected = $future ? collect() : $this->period($entries, $month, $month->endOfMonth()->min($today));
             $reviewed = $selected->filter(fn ($e) => ($e['reviewed'] ?? false) === true);
-            $income = $reviewed->whereIn('flow', ['income', 'owner_wages', 'owner_distribution'])->where('amount_cents', '>', 0);
+            $income = app(IncomeSourceService::class)->incomeEntries($reviewed);
             $spent = app(EconomicActivityService::class)->expenses($reviewed, $space->kind !== 'business')->where('category', '!=', 'interest');
             $budget = app(MonthlyBudgetService::class)->build($space, $records, $month);
             $debt = $offset >= 0 ? $this->debtCash($accounts, $records, $entries, $month, $today) : ['amount_cents' => null, 'complete' => false];

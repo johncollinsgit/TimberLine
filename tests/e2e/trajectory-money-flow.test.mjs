@@ -112,3 +112,14 @@ test('receipt trends and evidence use incoming owned-bank cash including zero an
  const report={family_inflows:view,history};assert.deepEqual(moneyFlowTrendSeries(report,'inflows')[0].values,[0,12345,...Array(10).fill(null)]);
  const html=moneyFlowHtml({report,mode:'inflows',esc,precise,btn});assert.ok(html.includes('Monthly recorded receipts'));assert.ok(html.includes('data-ids="[1]"'));assert.ok(!html.includes('data-ids="[999]"'));assert.ok(html.includes('No reviewed receipts for Loans'));
 });
+
+test('customer-refund outflows conserve gross movement and stay visible outside purchase refund tables',()=>{
+ const customerReturn={key:'customer_refunds',label:'Customer refunds / sales reversals',kind:'customer_refund',preserve:true,amount_cents:6500,ids:[71],merchants:[{key:'processor',label:'Fictional processor',amount_cents:6500,ids:[71]}]};
+ const view={...report.views.cash,inflows:[{key:'collections',kind:'income',label:'Net bank sales collections',amount_cents:100000,ids:[70]}],outflows:[customerReturn],inflow_cents:100000,outflow_cents:6500,difference_cents:93500,refund_categories:[]};
+ const graph=moneyFlowGraph(view);conserved(graph);
+ assert.equal(graph.nodes.find(node=>node.key==='customer_refunds').amount_cents,6500);
+ const html=moneyFlowHtml({report:{...report,views:{cash:view}},mode:'cash',esc,precise,btn});
+ assert.match(html,/Customer refunds \/ sales reversals/);
+ assert.match(html,/data-ids="\[71\]"/);
+ assert.match(html,/\$65.00/);
+});

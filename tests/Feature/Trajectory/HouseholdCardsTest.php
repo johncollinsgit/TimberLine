@@ -152,3 +152,17 @@ test('leap-day comparison uses the prior February month end without rolling into
         ->and($data['period_comparison']['range']['end'])->toBe('2023-02-28')
         ->and($data['period_comparison']['summary']['spending_cents'])->toBeNull();
 });
+
+test('ledger take home nets reviewed sales reversals while source totals and owner draw cards retain precedence', function (): void {
+    $service = app(\App\Services\Trajectory\HouseholdCardsService::class);
+    $entry = fn (int $id, int $amount, string $flow) => ['id' => $id, 'date' => '2026-11-02', 'merchant' => 'Fictional source', 'category' => 'income', 'amount_cents' => $amount, 'flow' => $flow, 'reviewed' => true];
+    $entries = collect([$entry(1, 100000, 'income'), $entry(2, -6500, 'income'), $entry(3, 20000, 'owner_distribution'), $entry(4, -50000, 'owner_distribution')]);
+    $cards = $service->build(collect(), '2026-11-01', '2026-11-04', '2026-11-04', $entries);
+    expect($cards['take_home_income']['amount_cents'])->toBe(113500)->and($cards['take_home_income']['ids'])->toBe([1, 2, 3])
+        ->and($cards['owner_draws']['amount_cents'])->toBe(20000)->and($cards['owner_draws']['ids'])->toBe([3]);
+    $record = Record::create(['space_id' => $this->space->id, 'kind' => 'financial_observation', 'active' => true, 'name' => 'Fictional exact source total', 'data' => [
+        'metric' => 'take_home_income', 'aggregation' => 'period_total', 'period_start' => '2026-11-01', 'period_end' => '2026-11-04', 'observed_on' => '2026-11-04', 'amount_cents' => 90000, 'complete' => true,
+    ]]);
+    $cards = $service->build(collect([$record]), '2026-11-01', '2026-11-04', '2026-11-04', $entries);
+    expect($cards['take_home_income']['amount_cents'])->toBe(90000)->and($cards['take_home_income']['id'])->toBe($record->id);
+});

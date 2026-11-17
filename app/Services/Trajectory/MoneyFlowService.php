@@ -62,7 +62,7 @@ class MoneyFlowService
             'notes' => ['Recorded posted transactions in the selected dates/account only. Missing accounts or history may change this picture.',
                 'Spending includes allocated economic purchases, including credit-card purchases. Cash movement uses full bank amounts on owned cash accounts.',
                 'Internal transfers and marked duplicates stay outside both diagrams. Debt repayments are excluded from Spending and included in Cash movement.',
-                'Refunds remain separate inflows. The table nets a category only when its refund classification is known; no vendor or invoice match is implied.',
+                'Customer refunds / sales reversals are separate outflows and reduce recorded income, not operating costs. Purchase refunds remain separate inflows. The table nets a category only when its refund classification is known; no vendor or invoice match is implied.',
                 'Received medical shares are bill reimbursements, not unrestricted income. Planned family support and expected medical shares are excluded.',
                 'Sales-tax principal is a liability settlement. Spending includes only known interest, penalties and fees; unresolved splits make totals unavailable. Cash movement preserves the whole agency payment or credit.',
                 'The difference is derived activity, not a cash balance, savings, profit, or an amount available to spend. No opening cash, budgets or expected receipts are added.']]];
@@ -240,19 +240,23 @@ class MoneyFlowService
                         $this->refund($refunds, $category, $amount, $id, true);
                     }
                 } else {
+                    $customerRefund = app(IncomeSourceService::class)->isCustomerRefund([...$entry, 'amount_cents' => $amount]);
                     $known = in_array($flow, ['expense', 'refund', 'medical_payment', 'medical_membership', 'owner_wages'], true);
                     $knownCash = in_array($flow, ['card_payment', 'debt_payment', 'owner_distribution', 'asset_transfer', EconomicActivityService::TAX_FLOW], true);
-                    $key = $review || (! $known && ($mode === 'spending' || ! $knownCash)) ? 'needs_review' : $category;
+                    $key = $customerRefund ? 'customer_refunds' : ($review || (! $known && ($mode === 'spending' || ! $knownCash)) ? 'needs_review' : $category);
                     if ($mode === 'cash' && ! $review) {
                         $key = match ($flow) {
                             'card_payment', 'debt_payment' => 'debt_cash', 'owner_distribution' => 'owner_distributions', 'owner_wages' => 'owner_payroll', 'asset_transfer' => 'asset_purchases', EconomicActivityService::TAX_FLOW => 'sales_tax_cash', default => $key,
                         };
                     }
                     $label = match ($key) {
-                        'sales_tax_cash' => 'Sales-tax payments · full bank cash', 'needs_review' => 'Needs review · outgoing', 'debt_cash' => 'Debt repayments',
+                        'customer_refunds' => 'Customer refunds / sales reversals', 'sales_tax_cash' => 'Sales-tax payments · full bank cash', 'needs_review' => 'Needs review · outgoing', 'debt_cash' => 'Debt repayments',
                         'owner_distributions' => 'Owner distributions', 'owner_payroll' => 'Owner payroll', 'asset_purchases' => 'Asset purchases / transfers', default => $this->label($category),
                     };
-                    $this->add($out, $key, $label, $key === 'needs_review' ? 'review' : 'outflow', -$amount, $id);
+                    $this->add($out, $key, $label, $customerRefund ? 'customer_refund' : ($key === 'needs_review' ? 'review' : 'outflow'), -$amount, $id);
+                    if ($customerRefund) {
+                        $out[$key]['preserve'] = true;
+                    }
                     $merchant = trim($entry['merchant'] ?? '') ?: 'Unnamed merchant';
                     $merchantKey = ClassificationService::merchant($merchant);
                     $out[$key]['merchants'] ??= [];
