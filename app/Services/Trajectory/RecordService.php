@@ -59,6 +59,9 @@ class RecordService
                 $data[$key] = (bool) $data[$key];
             }
         }
+        if ($kind === 'tax_remittance') {
+            $data['bank_source_fingerprint'] = app(SalesTaxService::class)->validateRemittance($space, $data);
+        }
         if ($kind === 'company_support_source') {
             abort_unless(DB::table('trajectory_links')->where('household_id', $space->id)->where('business_id', $data['business_space_id'])->exists(), 422, 'Choose an explicitly linked business for this receipt source.');
             if ($data['source_type'] === 'category') {
@@ -173,6 +176,11 @@ class RecordService
             if ($record) {
                 $record = Record::where('space_id', $space->id)->whereKey($record->id)->lockForUpdate()->firstOrFail();
                 abort_unless($record->active && $record->kind === $kind && $record->version === $version, 409);
+            }
+            if ($kind === 'tax_remittance') {
+                foreach (Record::where('space_id', $space->id)->where('kind', $kind)->where('active', true)->lockForUpdate()->get() as $other) {
+                    abort_if($other->id !== $record?->id && ($other->data['transaction_id'] ?? null) === $data['transaction_id'], 409, 'This bank transaction already has tax evidence. Edit the existing record.');
+                }
             }
             // Revalidate references while holding the space lock, including concurrent archive changes.
             $this->validate($space, $kind, $data);

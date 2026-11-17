@@ -3,6 +3,7 @@ import { planningUI } from './planning.js';
 import { chartPresentation } from './chart-theme.js';
 import { outlookUI } from './outlook.js';
 import { decisionSupportHtml } from './decision-support.js';
+import {salesTaxHtml} from './sales-tax.js';
 import { accountingComponentsHtml } from './accounting-report.js';
 import { questionSummaryHtml, supportBusinessChoices, monthlyBudgetRecords } from './question-summary.js';
 import { budgetMappingPayload, budgetMappingHtml, budgetPreviewHtml } from './budget-import.js';
@@ -43,7 +44,7 @@ function boot() {
   let linkInProgress = false;
   let scope = requestedSpace?.kind==='business' ? 'business' : personalSpace ? 'personal' : 'business';
   let active = (scope==='personal' ? personalSpace : businessSpace)?.id, data, evidenceRows=null, tab = 'overview', charts = [], chartTables = {}, filter = {}, scenarioId = '', historyMonth = '', budgetSource = null, budgetMonth = '', seasonal = false, formAction;
-  if (['transactions','accounts','planning','anomalies','tax','profit','companies','bud'].includes(incoming.get('tab'))) {tab=incoming.get('tab');filter=tab==='transactions'?{review:true}:{};}
+  if (['transactions','accounts','planning','anomalies','tax','sales-tax','profit','companies','bud'].includes(incoming.get('tab'))) {tab=incoming.get('tab');filter=tab==='transactions'?{review:true}:{};}
   if (oauthReturn) tab = 'accounts';
   const endpoint = (path, spaceId=active) => `/trajectory/spaces/${spaceId}${path}`;
   const renderSpaceTabs = () => {
@@ -144,8 +145,8 @@ function boot() {
     $('#tr-add').disabled=scope==='both';$('#tr-compare').disabled=scope==='both';
     const accountSelect=$('#tr-account-filter');
     if(accountSelect){accountSelect.innerHTML='<option value="">All accounts</option>'+(data.account_options||[]).map(account=>`<option value="${account.id}"${account.id===accountFilter?' selected':''}>${esc(account.name)}</option>`).join('');accountSelect.disabled=scope==='both';}
-    const views=scope==='both'?{overview:bothOverview,transactions}:{overview,welcome:welcome.render,accounts,history,budget,transactions,bills,medical,assets,business,planning:accountFilter===null?planning.planning:wholeSpacePlanNotice,anomalies:planning.anomalies,tax:planning.tax,profit:planning.profit,companies:planning.companies,bud:planning.bud};
-    const labels={overview:'Your trajectory',accounts:'Accounts',history:'Cash flow & history',budget:'Your budget',transactions:'Review transactions',bills:'Bills & goals',medical:'Medical sharing',assets:'Wealth & debt',business:'Business',planning:'Income & scenarios',anomalies:'Category anomalies',tax:'Tax accountant review',profit:'Profit & loss',companies:'Businesses & accounts',bud:'Ask Bud'};
+    const views=scope==='both'?{overview:bothOverview,transactions}:{overview,welcome:welcome.render,accounts,history,budget,transactions,bills,medical,assets,business,planning:accountFilter===null?planning.planning:wholeSpacePlanNotice,anomalies:planning.anomalies,tax:planning.tax,'sales-tax':()=>salesTaxHtml({report:data.sales_tax,esc,precise,btn}),profit:planning.profit,companies:planning.companies,bud:planning.bud};
+    const labels={overview:'Your trajectory',accounts:'Accounts',history:'Cash flow & history',budget:'Your budget',transactions:'Review transactions',bills:'Bills & goals',medical:'Medical sharing',assets:'Wealth & debt',business:'Business',planning:'Income & scenarios',anomalies:'Category anomalies',tax:'Tax accountant review','sales-tax':'Sales tax payments',profit:'Profit & loss',companies:'Businesses & accounts',bud:'Ask Bud'};
     $('#tr-page-title').textContent=tab==='welcome'?'Get started':labels[tab];
     $('#tr-page-subtitle').textContent=scope==='both'?'Your household and company, side by side.':tab==='overview'?'A clearer picture of today. A better plan for tomorrow.':'Your money, with the context that matters.';
     $('#tr-content').innerHTML=(views[tab]||combinedOnly)();
@@ -514,7 +515,8 @@ function boot() {
       if(a==='previous-metric'){outlook.setPreviousMetric(target.dataset.metric);render();root.querySelector('[aria-label="Previous year comparison metric"] [aria-pressed="true"]')?.focus({preventScroll:true});return;}
       if(a==='forecast-horizon'){outlook.setHorizon(Number(target.dataset.days));render();root.querySelector('.tr-horizon [aria-pressed="true"]')?.focus({preventScroll:true});return;}
       if(await planning.handle(a,target))return;
-      if(['overview','accounts','history','budget','bills','assets','business','medical'].includes(a)){navigate(a);}
+      if(['overview','accounts','history','budget','bills','assets','business','medical','sales-tax'].includes(a)){navigate(a);}
+      else if(a==='tax-annotate'){const row=data.sales_tax?.rows?.find(row=>row.transaction_id===id);if(row){const record=data.records.find(r=>r.id===row.record_id);recordForm('tax_remittance',record||null,{transaction_id:id,paid_on:row.date,amount_cents:row.amount_cents,agency:row.agency||row.merchant,tax_type:row.tax_type||'unknown',movement:row.amount_cents<0?'payment':'',reviewed:false});}}
       else if(a==='review-email'){const p=data.review_email;dialog('Review email reminders',`<p class="tr-subtle tr-block">Send to ${esc(p.email)} for ${esc(data.space.name)}. Includes the total waiting for review and the four most recent transactions. Daily emails arrive around 9 AM; weekly emails arrive Monday around 9 AM. Empty queues do not generate email. These settings apply only to you.</p>${field('frequency','Frequency','text',p.frequency,[{value:'off',label:'Off'},{value:'daily',label:'Daily'},{value:'weekly',label:'Weekly · Mondays'}])}${field('timezone','Timezone','text',p.timezone,null,true)}`,async v=>{await api(endpoint('/review-email'),'PATCH',{frequency:v.get('frequency'),timezone:v.get('timezone')});notice('Your review email preference is saved.');});}
       else if(a==='transactions'){remember();tab=a;filter={review:true};render();}
       else if(a==='subscription-add')recordForm('recurring',null,{category:'subscriptions',cadence:'monthly',expense_type:'fixed'});
