@@ -32,3 +32,11 @@ test('tax forms bind current bank facts and require explicit review on each edit
  assert.equal(taxRemittanceReview(record,{...row,bank_source_fingerprint:undefined}),null);
  assert.equal(taxRemittanceReview(record,null),null);
 });
+
+test('draft tax classification is labeled unconfirmed near both agency and tax type',()=>{
+ const draft=salesTaxHtml({report:{rows:[{date:'2028-07-20',agency:'Fictional revenue agency',tax_type:'sales_tax',reviewed:false,amount_cents:-12345}],notes:[]},esc,precise,btn});
+ assert.ok(draft.includes('Sales tax · not confirmed'));
+ assert.ok(draft.includes('Tax type not confirmed'));
+ const reviewed=salesTaxHtml({report:{rows:[{date:'2028-07-20',agency:'Fictional revenue agency',tax_type:'sales_tax',reviewed:true,amount_cents:-12345}],notes:[]},esc,precise,btn});
+ assert.ok(!reviewed.includes('not confirmed'));
+});

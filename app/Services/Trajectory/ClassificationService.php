@@ -38,7 +38,7 @@ class ClassificationService
 
     public static function isAmbiguousMerchant(string $merchant): bool
     {
-        return (bool) preg_match('/\b(amazon|amzn|walmart|wal-mart|target|ebay|etsy|costco|paypal|venmo|zelle|cash app|transfer|payment|square|sq)\b/i', $merchant);
+        return (bool) preg_match('/\b(amazon|amzn|walmart|wal-mart|target|ebay|etsy|costco|shopify|sam(?:\'|’)?s[\s-]*club|paypal|venmo|zelle|cash app|transfer|payment|square|sq)\b/i', $merchant);
     }
 
     public static function isTransferMerchant(string $merchant): bool
