@@ -41,15 +41,15 @@ class BudgetImportService
         $base = ['format' => $format, 'file_fingerprint' => $hash, 'columns' => $headers, 'sample' => array_slice($raw, 0, 5), 'rows' => [], 'unmapped_categories' => [], 'missing_fields' => [], 'mapping_required' => false, 'warnings' => []];
         if ($format === 'template') {
             $required = ['name', 'category', 'monthly_cents', 'purpose', 'effective_on'];
-            abort_if(array_diff($required, $headers), 422, 'Use template columns: name,category,monthly_cents,purpose,effective_on,source,reviewed,source_id.');
-            $mapping = array_intersect_key(array_combine($headers, $headers), array_flip(['name', 'category', 'purpose', 'effective_on', 'source', 'reviewed', 'source_id']));
+            abort_if(array_diff($required, $headers), 422, 'Use template columns: name,category,monthly_cents,purpose,effective_on,ends_on,source,reviewed,source_id. The ends_on column is optional.');
+            $mapping = array_intersect_key(array_combine($headers, $headers), array_flip(['name', 'category', 'purpose', 'effective_on', 'ends_on', 'source', 'reviewed', 'source_id']));
             $mapping['amount'] = 'monthly_cents';
             $units = 'cents';
         } else {
             // EveryDollar export versions are not guessed. The user chooses the
             // actual planned column and source grouping from this file's headers.
             foreach ($mapping as $role => $column) {
-                abort_unless(in_array($role, ['name', 'category', 'amount', 'purpose', 'effective_on', 'source', 'reviewed', 'source_id'], true) && in_array($column, $headers, true), 422, 'Map each field to an actual CSV header.');
+                abort_unless(in_array($role, ['name', 'category', 'amount', 'purpose', 'effective_on', 'ends_on', 'source', 'reviewed', 'source_id'], true) && in_array($column, $headers, true), 422, 'Map each field to an actual CSV header.');
             }
             foreach (['name', 'category', 'amount', 'purpose', 'effective_on'] as $role) {
                 if (! isset($mapping[$role]) && ! ($role !== 'amount' && array_key_exists($role, $defaults))) {
@@ -98,18 +98,22 @@ class BudgetImportService
             }
             abort_if(isset($seen[$sourceId]), 422, 'Duplicate budget source_id in this CSV.');
             $seen[$sourceId] = true;
+            $endsOn = $get('ends_on');
             $row = Validator::make([
                 'name' => $get('name'), 'category' => $get('category'), 'monthly_cents' => $cents,
                 'purpose' => $get('purpose'), 'effective_on' => $get('effective_on'),
+                ...($endsOn !== null && $endsOn !== '' ? ['ends_on' => $endsOn] : []),
                 'source' => $source,
                 'reviewed' => in_array($reviewed, [true, 1, '1', 'true'], true), 'source_id' => $sourceId,
             ], [
                 'name' => 'required|string|max:160', 'category' => 'required|string|max:160',
                 'monthly_cents' => 'required|integer|between:0,100000000000',
-                'purpose' => ['required', Rule::in(['spending', 'savings', 'debt_payment', 'income'])],
+                'purpose' => ['required', Rule::in(config('trajectory_records.budget.purpose.choices'))],
                 'effective_on' => 'required|date_format:Y-m-d|after_or_equal:1900-01-01|before:2200-01-01',
+                'ends_on' => 'sometimes|date_format:Y-m-d|after_or_equal:1900-01-01|before:2200-01-01|after_or_equal:effective_on',
                 'source' => 'required|string|max:160', 'reviewed' => 'required|boolean', 'source_id' => 'required|string|max:160',
             ])->validate();
+            abort_if($row['purpose'] === 'owner_support' && $space->kind !== 'business', 422, 'Owner-support budgets belong to a business space.');
             $category = $row['category'];
             if (! in_array($category, $categories, true)) {
                 $base['unmapped_categories'][] = $category;

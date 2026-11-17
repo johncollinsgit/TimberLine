@@ -102,7 +102,7 @@ class AccountingCommandCenterService
         $expenses = $available ? (float) $metrics['total_expenses'] : null;
         $net = is_numeric($metrics['net_income'] ?? null)
             ? (float) $metrics['net_income']
-            : ($available ? $income - $expenses : null);
+            : null;
 
         return [
             'available' => $available,

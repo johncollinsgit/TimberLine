@@ -221,7 +221,7 @@ class TrajectoryAiService
                 }
                 $context['budgets'][] = [
                     ...$pick($budget, ['id', 'version']),
-                    'data' => $pick($budget['data'], ['category', 'monthly_cents', 'purpose', 'effective_on', 'reviewed']),
+                    'data' => $pick($budget['data'], ['category', 'monthly_cents', 'purpose', 'effective_on', 'ends_on', 'reviewed']),
                 ];
             }
             $metals = $facts['metals'] ?? [];

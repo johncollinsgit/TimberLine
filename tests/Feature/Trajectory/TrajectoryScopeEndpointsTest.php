@@ -58,6 +58,7 @@ test('dashboard account filter scopes actuals history reviews holdings and compa
         ->and($data['period_comparison']['summary']['net_worth_cents'])->toBeNull()
         ->and($data['cash_history'])->toBe([])->and($data['net_worth_history'])->toBe([])
         ->and($data['decision_support'])->toBeNull()->and($data['business'])->toBeNull()
+        ->and($data['question_summary'])->toBeNull()->and($data['support_business_options'])->toBe([])
         ->and($data['assets'])->toBe([])->and($data['metals'])->toBe([])
         ->and($data['records'])->toBe([])
         ->and(array_unique(array_column($data['transactions'], 'account_id')))->toBe([$this->cash->id])
@@ -77,7 +78,9 @@ test('account filters exclude other-account unresolved deposits and cached liabi
         ->and($data['unresolved_deposits']['ids'])->toBe([])
         ->and($data['debt_suggestions'])->toBe([]);
     $all = $this->getJson('/trajectory/spaces/'.$this->space->id.'/dashboard?range=month')->assertOk()->json();
-    expect($all['unresolved_deposits']['ids'])->toContain($deposit->id)
+    expect($all['question_summary']['title'])->toContain($this->space->name)
+        ->and(collect($all['question_summary']['answers'])->pluck('key'))->toContain('company_cash_received', 'known_monthly_debt_cash')
+        ->and($all['unresolved_deposits']['ids'])->toContain($deposit->id)
         ->and(array_column($all['debt_suggestions'], 'account_id'))->toContain($this->otherCard->id);
 });
 

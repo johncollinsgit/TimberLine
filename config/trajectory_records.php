@@ -1,6 +1,21 @@
 <?php
 
 return [
+    'company_support_source' => [
+        'business_space_id' => ['label' => 'Linked business', 'type' => 'business_space', 'required' => true],
+        'source_type' => ['label' => 'Match receipts by', 'type' => 'select', 'required' => true, 'choices' => ['category', 'merchant']],
+        'source_value' => ['label' => 'Exact category or merchant', 'type' => 'text', 'required' => true],
+        'support_kind' => ['label' => 'Family support type', 'type' => 'select', 'required' => true, 'choices' => ['net_payroll', 'owner_draw', 'other_support']],
+        'source' => ['label' => 'Evidence for this company attribution', 'type' => 'text', 'required' => true],
+        'confirmed' => ['label' => 'Source attribution reviewed', 'type' => 'boolean', 'required' => true],
+    ],
+    'debt_balance_observation' => [
+        'account_id' => ['label' => 'Debt account', 'type' => 'account', 'required' => true],
+        'balance_cents' => ['label' => 'Observed debt balance', 'type' => 'money', 'required' => true],
+        'observed_on' => ['label' => 'Actual balance date', 'type' => 'date', 'required' => true],
+        'source' => ['label' => 'Statement or provider evidence', 'type' => 'text', 'required' => true],
+        'reviewed' => ['label' => 'Balance and date reviewed', 'type' => 'boolean', 'required' => true],
+    ],
     'financial_observation' => [
         'metric' => ['label' => 'Card', 'type' => 'select', 'required' => true, 'choices' => ['take_home_income', 'owner_draws', 'employee_pay', 'metals_sold', 'personal_credit_cards', 'personal_debt', 'interest_paid', 'interest_charged']],
         'aggregation' => ['label' => 'Evidence shape (blank means period total)', 'type' => 'select', 'required' => false, 'choices' => ['period_total', 'dated_item']],
@@ -41,6 +56,7 @@ return [
         'source' => ['label' => 'Lender statement source', 'type' => 'text', 'required' => true],
     ],
     'payment_notice' => [
+        'payment_type' => ['label' => 'Payment evidence type', 'type' => 'select', 'required' => false, 'choices' => ['minimum_due', 'scheduled_payment']],
         'recurring_record_id' => ['label' => 'Existing payment schedule', 'type' => 'recurring_record', 'required' => false],
         'account_id' => ['label' => 'Loan or credit account', 'type' => 'account', 'required' => true],
         'payment_account_id' => ['label' => 'Pays from (if known)', 'type' => 'account', 'required' => false],
@@ -62,8 +78,9 @@ return [
         'source_id' => ['label' => 'Stable source reference (budget imports)', 'type' => 'text', 'required' => false],
         'category' => ['label' => 'Category', 'type' => 'category', 'required' => true],
         'monthly_cents' => ['label' => 'Monthly target', 'type' => 'money', 'required' => true],
-        'purpose' => ['label' => 'Purpose', 'type' => 'select', 'required' => true, 'choices' => ['spending', 'savings', 'debt_payment', 'income']],
+        'purpose' => ['label' => 'Purpose', 'type' => 'select', 'required' => true, 'choices' => ['spending', 'savings', 'debt_payment', 'income', 'owner_support']],
         'effective_on' => ['label' => 'Effective date', 'type' => 'date', 'required' => true],
+        'ends_on' => ['label' => 'Last effective date (optional)', 'type' => 'date', 'required' => false],
         'source' => ['label' => 'Source / notes', 'type' => 'text', 'required' => false],
         'reviewed' => ['label' => 'Target reviewed', 'type' => 'boolean', 'required' => true],
     ],

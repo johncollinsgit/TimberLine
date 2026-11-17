@@ -21,6 +21,7 @@ class RecordService
         abort_if(in_array($kind, ['payroll', 'reliance', 'business_funding_plan'], true) && $space->kind !== 'business', 422);
         abort_if(str_starts_with($kind, 'medical_') && $space->kind !== 'household', 422, 'Medical sharing belongs to a private household.');
         abort_if($kind === 'financial_observation' && $space->kind !== 'household', 422, 'Household financial observations belong to a private household.');
+        abort_if($kind === 'company_support_source' && $space->kind !== 'household', 422, 'Company support sources belong to a private household.');
         $rules = [];
         foreach ($definition as $key => $field) {
             $rules[$key] = [$field['required'] ? 'required' : 'nullable'];
@@ -31,6 +32,7 @@ class RecordService
                 'integer' => ['integer', 'min:0', 'max:1000000000'],
                 'debt_record', 'recurring_record', 'medical_need_record', 'medical_bill_record' => ['integer', Rule::exists('trajectory_records', 'id')->where('space_id', $space->id)->where('kind', substr($field['type'], 0, -7))->where('active', true)],
                 'account' => ['integer', Rule::exists('trajectory_accounts', 'id')->where('space_id', $space->id)],
+                'business_space' => ['integer', Rule::exists('trajectory_spaces', 'id')->where('kind', 'business')],
                 'decimal' => ['regex:/^\d{1,8}(\.\d{1,8})?$/', 'numeric', 'gt:0'],
                 'date' => ['date_format:Y-m-d', 'after_or_equal:1900-01-01', 'before:2200-01-01'],
                 'boolean' => ['boolean'],
@@ -41,18 +43,37 @@ class RecordService
             if ($field['type'] === 'money' && ! in_array($key, ['amount_cents', 'resale_adjustment_cents'], true)) {
                 $rules[$key][] = 'min:0';
             }
+            if ($kind === 'budget' && $key === 'ends_on') {
+                $rules[$key][] = 'after_or_equal:effective_on';
+            }
         }
         $data = Validator::make($input, $rules)->validate();
         foreach ($definition as $key => $field) {
             if (! isset($data[$key])) {
                 continue;
             }
-            if (in_array($field['type'], ['money', 'percent', 'rate', 'integer', 'account', 'debt_record', 'recurring_record', 'medical_need_record', 'medical_bill_record'], true)) {
+            if (in_array($field['type'], ['money', 'percent', 'rate', 'integer', 'account', 'business_space', 'debt_record', 'recurring_record', 'medical_need_record', 'medical_bill_record'], true)) {
                 $data[$key] = (int) $data[$key];
             }
             if ($field['type'] === 'boolean') {
                 $data[$key] = (bool) $data[$key];
             }
+        }
+        if ($kind === 'company_support_source') {
+            abort_unless(DB::table('trajectory_links')->where('household_id', $space->id)->where('business_id', $data['business_space_id'])->exists(), 422, 'Choose an explicitly linked business for this receipt source.');
+            if ($data['source_type'] === 'category') {
+                abort_unless(in_array($data['source_value'], app(WorkspaceService::class)->categories($space), true), 422, 'Choose an actual household category for this receipt source.');
+            } else {
+                $data['source_value'] = ClassificationService::merchant($data['source_value']);
+                abort_unless($data['source_value'] !== '', 422, 'Enter a nonempty exact merchant.');
+            }
+        }
+        if ($kind === 'debt_balance_observation') {
+            abort_unless(in_array(Account::where('space_id', $space->id)->findOrFail($data['account_id'])->kind, ['credit', 'loan'], true), 422, 'Choose a debt account for this balance observation.');
+            abort_unless($data['observed_on'] <= now($space->timezone)->toDateString(), 422, 'Use an actual balance date, not a future observation.');
+        }
+        if ($kind === 'budget') {
+            abort_if($data['purpose'] === 'owner_support' && $space->kind !== 'business', 422, 'Owner-support budgets belong to a business space.');
         }
         if ($kind === 'business_funding_plan') {
             abort_unless($data['reviewed_on'] <= now($space->timezone)->toDateString(), 422, 'Use an actual review date.');
@@ -138,6 +159,9 @@ class RecordService
     {
         app(FinanceAccess::class)->authorize($user, $space);
         $data = $this->validate($space, $kind, $input);
+        if ($kind === 'company_support_source') {
+            app(FinanceAccess::class)->authorize($user, Space::where('kind', 'business')->findOrFail($data['business_space_id']));
+        }
         if ($kind === 'asset' && ! empty($data['linked_business_space_id'])) {
             $business = Space::where('kind', 'business')->findOrFail($data['linked_business_space_id']);
             app(FinanceAccess::class)->authorize($user, $business);
@@ -152,6 +176,29 @@ class RecordService
             }
             // Revalidate references while holding the space lock, including concurrent archive changes.
             $this->validate($space, $kind, $data);
+            if ($kind === 'company_support_source') {
+                app(FinanceAccess::class)->authorize($user, Space::where('kind', 'business')->findOrFail($data['business_space_id']));
+                foreach (Record::where('space_id', $space->id)->where('kind', $kind)->where('active', true)->lockForUpdate()->get() as $other) {
+                    $value = $other->data['source_value'] ?? null;
+                    if (($other->data['source_type'] ?? null) === 'merchant' && is_string($value)) {
+                        $value = ClassificationService::merchant($value);
+                    }
+                    if ($other->id !== $record?->id && ($other->data['source_type'] ?? null) === $data['source_type'] && $value === $data['source_value']) {
+                        abort_unless($record === null && $other->name === $name && $other->data == $data, 409, 'This receipt source already exists. Correct it with a versioned edit.');
+
+                        return $other;
+                    }
+                }
+            }
+            if ($kind === 'debt_balance_observation') {
+                foreach (Record::where('space_id', $space->id)->where('kind', $kind)->where('active', true)->lockForUpdate()->get() as $other) {
+                    if ($other->id !== $record?->id && ($other->data['account_id'] ?? null) === $data['account_id'] && ($other->data['observed_on'] ?? null) === $data['observed_on']) {
+                        abort_unless($record === null && $other->name === $name && $other->data == $data, 409, 'This debt balance date already has evidence. Correct it with a versioned edit.');
+
+                        return $other;
+                    }
+                }
+            }
             if ($kind === 'business_funding_plan' && ($data['complete'] ?? false)) {
                 // Never accept a client snapshot. A new explicit attestation binds
                 // the remaining receipts/costs to the exact locked source balances.

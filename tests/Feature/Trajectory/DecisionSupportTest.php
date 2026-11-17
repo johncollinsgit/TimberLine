@@ -78,7 +78,7 @@ test('reviewed budgets replace matching flexible categories without adding fixed
     $fixed = Record::create(['space_id' => $this->space->id, 'kind' => 'recurring', 'active' => true, 'name' => 'Utility schedule', 'data' => ['category' => 'utilities']]);
     foreach ([
         ['groceries', 10000, '2026-09-01', true, 'spending'], ['groceries', 20000, '2026-10-01', true, 'spending'],
-        ['groceries', 999999, '2026-11-01', false, 'spending'], ['utilities', 40000, '2026-10-01', true, 'spending'],
+        ['utilities', 40000, '2026-10-01', true, 'spending'],
         ['groceries', 999999, '2027-01-01', true, 'spending'], ['savings', 999999, '2026-10-01', true, 'savings'],
         ['debt', 999999, '2026-10-01', true, 'debt_payment'],
     ] as [$category, $monthly, $effective, $reviewed, $purpose]) {
@@ -99,6 +99,59 @@ test('reviewed budgets replace matching flexible categories without adding fixed
     $data = $this->service->build($this->space, $entries, ($this->records)(), $plan, [], [], $this->today);
     expect($data['ongoing']['monthly_needed_cents'])->toBe(40000 + $flex)
         ->and($data['ongoing']['applied_budget_records'])->toBe([]);
+});
+
+test('cost plan aggregates every reviewed row in the latest category cohort and deducts fixed costs once', function (): void {
+    $fixed = Record::create(['space_id' => $this->space->id, 'kind' => 'recurring', 'active' => true, 'name' => 'Fictional utility schedule', 'data' => ['category' => 'utilities']]);
+    $cohort = [];
+    foreach ([25000, 15000] as $amount) {
+        $cohort[] = Record::create(['space_id' => $this->space->id, 'kind' => 'budget', 'active' => true, 'name' => 'Fictional utility component', 'data' => ['category' => 'utilities', 'monthly_cents' => $amount, 'purpose' => 'spending', 'effective_on' => '2026-11-01', 'ends_on' => '2026-11-30', 'reviewed' => true]]);
+    }
+    $entries = collect([['id' => 1, 'date' => '2026-10-10', 'amount_cents' => -6000, 'category' => 'utilities', 'flow' => 'expense', 'reviewed' => true, 'merchant' => 'Fictional utility extras']]);
+    $historical = Money::ratio(6000, 365, 90 * 12);
+    $plan = [...$this->planning, 'flexible_ids' => [1], 'flexible_monthly_cents' => $historical, 'required_monthly_cents' => 40000 + $historical,
+        'fixed_records' => [['record_id' => $fixed->id, 'name' => $fixed->name, 'monthly_cents' => 30000, 'estimated' => false]]];
+    $result = $this->service->build($this->space, $entries, ($this->records)(), $plan, [], [], $this->today)['ongoing'];
+    expect($result['monthly_needed_cents'])->toBe(50000)
+        ->and($result['applied_budget_records'])->toHaveCount(1)
+        ->and($result['applied_budget_records'][0]['record_ids'])->toBe(array_map(fn ($r) => $r->id, $cohort))
+        ->and($result['applied_budget_records'][0]['flexible_cents'])->toBe(10000)
+        ->and(array_sum(array_column($result['breakdown'], 'amount_cents')))->toBe(50000);
+});
+
+test('an unreviewed latest cohort excludes the whole category without reviving earlier reviewed targets', function (): void {
+    foreach ([
+        ['groceries', 50000, '2026-10-01', true],
+        ['groceries', 10000, '2026-11-01', true],
+        ['groceries', 2000, '2026-11-01', false],
+        ['utilities', 60000, '2026-10-01', true],
+        ['utilities', 12000, '2026-11-01', false],
+    ] as [$category, $amount, $effective, $reviewed]) {
+        Record::create(['space_id' => $this->space->id, 'kind' => 'budget', 'active' => true, 'name' => 'Fictional category target', 'data' => ['category' => $category, 'monthly_cents' => $amount, 'purpose' => 'spending', 'effective_on' => $effective, 'ends_on' => '2026-11-30', 'reviewed' => $reviewed]]);
+    }
+    $result = $this->service->build($this->space, collect(), ($this->records)(), $this->planning, [], [], $this->today)['ongoing'];
+    expect($result['monthly_needed_cents'])->toBe(60000)->and($result['applied_budget_records'])->toBe([]);
+});
+
+test('cost plan respects expired replacements and current-day boundaries without selecting a future cohort', function (): void {
+    $base = ['purpose' => 'spending', 'reviewed' => true];
+    foreach ([
+        ['groceries', 50000, '2026-09-01', null],
+        ['groceries', 30000, '2026-10-01', '2026-10-31'],
+        ['utilities', 60000, '2026-09-01', null],
+        ['utilities', 35000, '2026-11-01', '2026-11-03'],
+        ['transport', 40000, '2026-11-01', '2026-11-04'],
+        ['transport', 999999, '2026-11-20', '2026-11-30'],
+    ] as [$category, $amount, $effective, $ends]) {
+        Record::create(['space_id' => $this->space->id, 'kind' => 'budget', 'active' => true, 'name' => 'Fictional dated target', 'data' => [...$base, 'category' => $category, 'monthly_cents' => $amount, 'effective_on' => $effective, 'ends_on' => $ends]]);
+    }
+    $result = $this->service->build($this->space, collect(), ($this->records)(), $this->planning, [], [], $this->today)['ongoing'];
+    expect($result['monthly_needed_cents'])->toBe(100000)
+        ->and($result['applied_budget_records'])->toHaveCount(1)
+        ->and($result['applied_budget_records'][0]['category'])->toBe('transport')
+        ->and($result['applied_budget_records'][0]['flexible_cents'])->toBe(40000);
+    $tomorrow = $this->service->build($this->space, collect(), ($this->records)(), $this->planning, [], [], $this->today->addDay())['ongoing'];
+    expect($tomorrow['monthly_needed_cents'])->toBe(60000)->and($tomorrow['applied_budget_records'])->toBe([]);
 });
 
 test('inferred bills advance their original cadence without duplicating a confirmed merchant or erasing overdue bills', function (): void {

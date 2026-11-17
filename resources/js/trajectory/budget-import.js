@@ -1,7 +1,8 @@
-const roles=['name','category','amount','purpose','effective_on','source','reviewed','source_id'];
+const roles=['name','category','amount','purpose','effective_on','ends_on','source','reviewed','source_id'];
 const purposes=['spending','savings','debt_payment','income'];
+const purposesFor=spaceKind=>spaceKind==='business'?[...purposes,'owner_support']:purposes;
 
-export function budgetMappingPayload(values,columns) {
+export function budgetMappingPayload(values,columns,spaceKind='household') {
   const column_mapping={};
   for(const role of roles){
     const column=values.get(`map_${role}`);
@@ -12,26 +13,33 @@ export function budgetMappingPayload(values,columns) {
   const amount_units=values.get('amount_units');
   if(!['dollars','cents'].includes(amount_units))throw new Error('Choose dollars or integer cents for the planned amount.');
   const budget_defaults={amount_units,amount_basis:'planned',reviewed:values.get('default_reviewed')==='on'};
-  for(const role of ['purpose','effective_on','source']){
+  for(const role of ['purpose','effective_on','ends_on','source']){
     const value=String(values.get(`default_${role}`)||'').trim();
     if(value)budget_defaults[role]=value;
   }
-  if(!column_mapping.purpose&&!purposes.includes(budget_defaults.purpose))throw new Error('Map a purpose column or choose a purpose for these rows.');
+  if(budget_defaults.purpose&&!purposesFor(spaceKind).includes(budget_defaults.purpose))throw new Error('Choose a purpose allowed in this financial space.');
+  if(!column_mapping.purpose&&!purposesFor(spaceKind).includes(budget_defaults.purpose))throw new Error('Map a purpose column or choose a purpose for these rows.');
   if(!column_mapping.effective_on&&!budget_defaults.effective_on)throw new Error('Map an effective date column or supply the budget effective date.');
+  if(!column_mapping.ends_on&&budget_defaults.ends_on){
+    const date=budget_defaults.ends_on;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date+'T00:00:00Z'))||new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date||date<'1900-01-01'||date>='2200-01-01')throw new Error('Use YYYY-MM-DD for the optional last effective date.');
+    if(!column_mapping.effective_on&&date<budget_defaults.effective_on)throw new Error('The last effective date must be on or after the effective date.');
+  }
   return {column_mapping,budget_defaults};
 }
 
-export function budgetMappingHtml({preview,esc,field}) {
+export function budgetMappingHtml({preview,esc,field,spaceKind='household'}) {
+  const allowedPurposes=purposesFor(spaceKind);
   const choices=[{value:'',label:'Not mapped'},...(preview.columns||[]).map(column=>({value:column,label:column}))];
-  const labels={name:'Target name',category:'Source category or group',amount:'Planned monthly amount',purpose:'Purpose (optional if chosen below)',effective_on:'Effective date (optional if entered below)',source:'Source notes (optional)',reviewed:'Reviewed flag (optional)',source_id:'Stable source ID (recommended)'};
+  const labels={name:'Target name',category:'Source category or group',amount:'Planned monthly amount',purpose:'Purpose (optional if chosen below)',effective_on:'Effective date (optional if entered below)',ends_on:'Last effective date (optional, inclusive)',source:'Source notes (optional)',reviewed:'Reviewed flag (optional)',source_id:'Stable source ID (recommended)'};
   return `<p class="tr-data-note">Choose the columns in your actual export. EveryDollar versions vary, so no column is guessed. Select planned monthly targets, not spent, remaining, transaction or received amounts.</p>
     <details class="tr-block" open><summary>Sample rows from this file</summary><div class="tr-table-wrap"><table class="tr-table"><thead><tr>${(preview.columns||[]).map(column=>`<th>${esc(column)}</th>`).join('')}</tr></thead><tbody>${(preview.sample||[]).map(row=>`<tr>${(preview.columns||[]).map(column=>`<td>${esc(String(row[column]??'').slice(0,200))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>
     ${roles.map(role=>field(`map_${role}`,labels[role],'text','',choices)).join('')}
     ${field('amount_units','Planned amount units','text','',[{value:'',label:'Choose units'},{value:'dollars',label:'Dollars, e.g. 125.50'},{value:'cents',label:'Integer cents, e.g. 12550'}])}
     ${field('planned_amounts','The chosen amounts are planned monthly targets, not actual spending or remaining balances','checkbox',false)}
-    <p class="tr-subtle">For fields without a mapped column, choose defaults below. A mapped purpose column must use spending, savings, debt_payment or income. Dates must use YYYY-MM-DD.</p>
-    ${field('default_purpose','Default purpose','text','',[{value:'',label:'Choose if no purpose column'},...purposes.map(purpose=>({value:purpose,label:purpose.replaceAll('_',' ')}))])}
-    ${field('default_effective_on','Default effective date','date','')}${field('default_source','Default source notes (optional)','text','')}
+    <p class="tr-subtle">For fields without a mapped column, choose defaults below. A mapped purpose column must use ${allowedPurposes.map(esc).join(', ')}. Dates must use YYYY-MM-DD. An optional last effective date includes that day and cannot precede the effective date.</p>
+    ${field('default_purpose','Default purpose','text','',[{value:'',label:'Choose if no purpose column'},...allowedPurposes.map(purpose=>({value:purpose,label:purpose.replaceAll('_',' ')}))])}
+    ${field('default_effective_on','Default effective date','date','')}${field('default_ends_on','Default last effective date (optional, inclusive)','date','')}${field('default_source','Default source notes (optional)','text','')}
     ${field('default_reviewed','Mark rows without a mapped reviewed flag as reviewed targets; I have checked their amounts and purposes','checkbox',false)}
     <p class="tr-subtle">Targets remain plans. Savings and debt-payment purposes stay separate from spending. Unknown category names are mapped in the next step.</p>`;
 }
@@ -42,5 +50,5 @@ export function budgetPreviewHtml({preview,categoryMap={},esc,precise}) {
   return `<p class="tr-data-note">${rows.length} planned targets. Confirm names, exact amounts, purposes, dates and categories before saving. This import creates no transactions, income received or bank balances. Targets marked unreviewed need review before entering the monthly cost plan.</p>
     ${(preview.warnings||[]).map(warning=>`<p class="tr-subtle">${esc(warning)}</p>`).join('')}
     <p class="tr-subtle">Replaying the same unchanged source skips existing targets. Edited or archived targets and changed sources are protected; this import does not overwrite them.</p>
-    <div class="tr-table-wrap"><table class="tr-table"><caption>All ${rows.length} targets in this preview · amounts in USD</caption><thead><tr><th>Name</th><th>Monthly planned</th><th>Purpose</th><th>Effective</th><th>Category</th><th>Review</th><th>Source reference</th></tr></thead><tbody>${rows.map(row=>`<tr><td>${esc(row.name)}</td><td>${precise(row.monthly_cents)}</td><td>${esc(row.purpose)}</td><td>${esc(row.effective_on)}</td><td>${esc(categoryFor(row))}${row._source_category&&row._source_category!==categoryFor(row)?`<br><small>From ${esc(row._source_category)}</small>`:''}</td><td>${row.reviewed?'Reviewed target':'Needs review'}${row._existing_record_id?'<br>Existing source; unchanged replay only':''}</td><td>${esc(row.source_id)}<br><small>${esc(row.source)}</small></td></tr>`).join('')}</tbody></table></div>`;
+    <div class="tr-table-wrap"><table class="tr-table"><caption>All ${rows.length} targets in this preview · amounts in USD</caption><thead><tr><th>Name</th><th>Monthly planned</th><th>Purpose</th><th>Effective</th><th>Through (inclusive)</th><th>Category</th><th>Review</th><th>Source reference</th></tr></thead><tbody>${rows.map(row=>`<tr><td>${esc(row.name)}</td><td>${precise(row.monthly_cents)}</td><td>${esc(row.purpose)}</td><td>${esc(row.effective_on)}</td><td>${row.ends_on?esc(row.ends_on):'No end date'}</td><td>${esc(categoryFor(row))}${row._source_category&&row._source_category!==categoryFor(row)?`<br><small>From ${esc(row._source_category)}</small>`:''}</td><td>${row.reviewed?'Reviewed target':'Needs review'}${row._existing_record_id?'<br>Existing source; unchanged replay only':''}</td><td>${esc(row.source_id)}<br><small>${esc(row.source)}</small></td></tr>`).join('')}</tbody></table></div>`;
 }
