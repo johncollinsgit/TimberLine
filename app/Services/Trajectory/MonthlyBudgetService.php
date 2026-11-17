@@ -79,7 +79,8 @@ class MonthlyBudgetService
                     $missing[] = $issue;
                     $purposeMissing[$purpose][] = $issue;
                 }
-                $selected[] = ['id' => $record->id, 'purpose' => $purpose, 'monthly_cents' => $data['monthly_cents'], 'reviewed' => ($data['reviewed'] ?? false) === true];
+                $selected[] = ['id' => $record->id, 'purpose' => $purpose, 'category' => $data['category'], 'monthly_cents' => $data['monthly_cents'],
+                    'effective_on' => $data['effective_on'], 'ends_on' => $endsOn, 'reviewed' => ($data['reviewed'] ?? false) === true];
             }
         }
 
@@ -88,11 +89,18 @@ class MonthlyBudgetService
         foreach (self::PURPOSES as $purpose) {
             $rows = $selected->where('purpose', $purpose);
             $reviewed = $rows->where('reviewed', true);
+            $overlapIds = $this->payrollOverlapIds($rows, $start, $end);
+            if ($overlapIds) {
+                $issue = 'Payroll and role-specific targets overlap for '.str_replace('_', ' ', $purpose).' in '.$month->format('F Y').'. Choose one Payroll total or separate role targets.';
+                $missing[] = $issue;
+                $purposeMissing[$purpose][] = $issue;
+            }
             $purposes[$purpose] = [
-                'amount_cents' => $this->total($rows),
-                'reviewed_cents' => $this->total($reviewed),
+                'amount_cents' => $overlapIds ? null : $this->total($rows),
+                'reviewed_cents' => $overlapIds ? null : $this->total($reviewed),
                 'status' => $this->status($rows, $purposeMissing[$purpose]),
                 'record_ids' => $rows->pluck('id')->values()->all(),
+                'overlapping_record_ids' => $overlapIds,
             ];
         }
         $spending = $selected->where('purpose', 'spending');
@@ -100,7 +108,7 @@ class MonthlyBudgetService
         return [
             'month' => $month->format('Y-m'), 'from' => $start, 'through' => $end,
             'reviewed_spending_cents' => $purposes['spending']['reviewed_cents'],
-            'draft_spending_cents' => $spending->contains('reviewed', false) ? $this->total($spending) : null,
+            'draft_spending_cents' => $spending->contains('reviewed', false) ? $purposes['spending']['amount_cents'] : null,
             'planned_income_cents' => $purposes['income']['amount_cents'],
             'debt_budget_cents' => $purposes['debt_payment']['amount_cents'],
             'owner_support_cents' => $purposes['owner_support']['amount_cents'],
@@ -112,6 +120,21 @@ class MonthlyBudgetService
             'purposes' => $purposes,
             'basis' => 'Monthly budget targets only. Reviewed plans are not historical spending or verified income, debt terms, or business funding capacity.',
         ];
+    }
+
+    private function payrollOverlapIds(Collection $rows, string $start, string $end): array
+    {
+        $ids = [];
+        foreach ($rows->where('category', 'payroll') as $parent) {
+            foreach ($rows->whereIn('category', ['owner_payroll', 'studio_payroll', 'event_payroll']) as $role) {
+                if (max($start, $parent['effective_on'], $role['effective_on']) <= min($end, $parent['ends_on'] ?? $end, $role['ends_on'] ?? $end)) {
+                    $ids[] = $parent['id'];
+                    $ids[] = $role['id'];
+                }
+            }
+        }
+
+        return array_values(array_unique($ids));
     }
 
     private function total(Collection $rows): ?int

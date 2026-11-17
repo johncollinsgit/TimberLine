@@ -31,7 +31,7 @@ class QuestionSummaryService
         $cashPlan = $this->cashPlan($budget, $debt, $space->kind === 'business');
         $spendingPlan = $budget['draft_spending_cents'] ?? $budget['reviewed_spending_cents'];
         $planMissing = [...$budget['missing'], 'This is a category plan, not a complete cost claim or historical spending.'];
-        if ($spendingPlan === null) {
+        if ($spendingPlan === null && empty($budget['purposes']['spending']['overlapping_record_ids'])) {
             $planMissing[] = 'Add monthly spending targets for this month.';
         }
         $answers = [];

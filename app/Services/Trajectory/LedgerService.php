@@ -122,20 +122,30 @@ class LedgerService
 
     public function split(User $user, Space $space, Transaction $tx, array $splits, int $version): void
     {
-        app(FinanceAccess::class)->authorize($user, $space);
-        abort_unless($tx->space_id === $space->id, 404);
-        foreach ($splits as $split) {
-            $target = Space::findOrFail($split['space_id']);
-            app(FinanceAccess::class)->authorize($user, $target);
-            if ($target->id !== $space->id) {
-                abort_unless(DB::table('trajectory_links')->where(function ($q) use ($space, $target): void {
+        DB::transaction(function () use ($user, $space, $tx, $splits, $version): void {
+            // Lock current space ownership before checking financial access.
+            $spaces = Space::whereIn('id', [$space->id, ...array_column($splits, 'space_id')])->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $space = $spaces->get($space->id);
+            abort_unless($space, 404);
+            app(FinanceAccess::class)->authorize($user, $space);
+            abort_unless($tx->space_id === $space->id, 404);
+            foreach ($splits as $split) {
+                $target = $spaces->get($split['space_id']);
+                abort_unless($target, 404);
+                app(FinanceAccess::class)->authorize($user, $target);
+                if ($target->id === $space->id) {
+                    continue;
+                }
+                $ownedBusinesses = $space->kind === 'business' && $target->kind === 'business'
+                    && $space->owner_user_id === $user->id && $target->owner_user_id === $user->id;
+                $householdBusiness = in_array([$space->kind, $target->kind], [['household', 'business'], ['business', 'household']], true);
+                $linked = $householdBusiness && DB::table('trajectory_links')->where(function ($q) use ($space, $target): void {
                     $q->where('household_id', $space->id)->where('business_id', $target->id);
                 })->orWhere(function ($q) use ($space, $target): void {
                     $q->where('household_id', $target->id)->where('business_id', $space->id);
-                })->exists(), 422, 'Link these spaces before allocating between them.');
+                })->exists();
+                abort_unless($ownedBusinesses || $linked, 422, 'Use linked household/business spaces or businesses you own with financial access to both.');
             }
-        }
-        DB::transaction(function () use ($user, $space, $tx, $splits, $version): void {
             $tx = Transaction::where('space_id', $space->id)->whereKey($tx->id)->lockForUpdate()->firstOrFail();
             app(MedicalSharingService::class)->assertUnbound($tx);
             abort_unless($tx->version === $version, 409);
@@ -143,7 +153,8 @@ class LedgerService
                 throw ValidationException::withMessages(['splits' => 'Allocations must total the original amount with one allocation per space.']);
             }
             foreach ($splits as $split) {
-                abort_if(($tx->amount_cents < 0 && $split['amount_cents'] > 0) || ($tx->amount_cents > 0 && $split['amount_cents'] < 0), 422);
+                abort_if(($tx->amount_cents < 0 && $split['amount_cents'] > 0) || ($tx->amount_cents > 0 && $split['amount_cents'] < 0)
+                    || ($tx->amount_cents === 0 && $split['amount_cents'] !== 0), 422);
             }
             $before = Allocation::where('transaction_id', $tx->id)->get()->toArray();
             Allocation::where('transaction_id', $tx->id)->delete();

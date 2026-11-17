@@ -206,3 +206,92 @@ test('business capacity requires linked authorized access and complete fresh cur
     DB::table('trajectory_links')->where('household_id', $this->space->id)->where('business_id', $business->id)->delete();
     expect($build($this->owner)['businesses'])->toBe([]);
 });
+
+beforeEach(function (): void {
+    $this->payrollFixture = function (): array {
+        $fixed = Record::create(['space_id' => $this->space->id, 'kind' => 'recurring', 'active' => true, 'name' => 'Fictional owner payroll schedule', 'data' => ['category' => 'owner_payroll']]);
+        $housing = Record::create(['space_id' => $this->space->id, 'kind' => 'recurring', 'active' => true, 'name' => 'Fictional housing schedule', 'data' => ['category' => 'housing']]);
+        $entries = collect();
+        foreach (['owner_payroll' => -12000, 'studio_payroll' => -24000, 'event_payroll' => -36000, 'payroll' => -4800, 'groceries' => -12000] as $category => $amount) {
+            $entries->push(['id' => $entries->count() + 1, 'date' => '2026-10-10', 'amount_cents' => $amount, 'category' => $category, 'flow' => 'expense', 'reviewed' => true, 'merchant' => 'Fictional '.$category]);
+        }
+        $plan = [...$this->planning, 'fixed_monthly_cents' => 30000, 'flexible_monthly_cents' => 7400, 'required_monthly_cents' => 37400,
+            'history_days' => 365, 'flexible_ids' => $entries->pluck('id')->all(),
+            'fixed_records' => [['record_id' => $fixed->id, 'name' => $fixed->name, 'monthly_cents' => 10000, 'estimated' => false],
+                ['record_id' => $housing->id, 'name' => $housing->name, 'monthly_cents' => 20000, 'estimated' => false]]];
+
+        return [$entries, $plan];
+    };
+    $this->payrollTarget = fn (string $category, int $amount) => Record::create(['space_id' => $this->space->id, 'kind' => 'budget', 'active' => true, 'name' => 'Fictional '.$category.' target',
+        'data' => ['category' => $category, 'monthly_cents' => $amount, 'purpose' => 'spending', 'effective_on' => '2026-11-01', 'reviewed' => true]]);
+});
+
+test('a single Payroll target covers every role and scheduled payroll once without changing need after attribution', function (): void {
+    [$entries, $plan] = ($this->payrollFixture)();
+    ($this->payrollTarget)('payroll', 45000);
+    $before = $entries->map(fn ($row) => [...$row, 'category' => $row['category'] === 'groceries' ? 'groceries' : 'payroll']);
+    $old = $this->service->build($this->space, $before, ($this->records)(), $plan, [], [], $this->today)['ongoing'];
+    $result = $this->service->build($this->space, $entries, ($this->records)(), $plan, [], [], $this->today)['ongoing'];
+    // Payroll target 45000 includes scheduled 10000; unrelated fixed 20000 and groceries 1000 remain.
+    expect($result['monthly_needed_cents'])->toBe(66000)->and($old['monthly_needed_cents'])->toBe(66000)
+        ->and($result['applied_budget_records'])->toHaveCount(1)
+        ->and($result['applied_budget_records'][0]['flexible_cents'])->toBe(35000)
+        ->and($result['applied_budget_records'][0]['covered_categories'])->toBe(['payroll', 'owner_payroll', 'studio_payroll', 'event_payroll'])
+        ->and(array_sum(array_column($result['breakdown'], 'amount_cents')))->toBe(66000);
+});
+
+test('a Studio payroll target leaves owner event and unassigned payroll in historical cost need', function (): void {
+    [$entries, $plan] = ($this->payrollFixture)();
+    ($this->payrollTarget)('studio_payroll', 5000);
+    $result = $this->service->build($this->space, $entries, ($this->records)(), $plan, [], [], $this->today)['ongoing'];
+    // Fixed 30000 plus historical 7400 replaces only studio 2000 with target 5000.
+    expect($result['monthly_needed_cents'])->toBe(40400)
+        ->and($result['applied_budget_records'][0]['covered_categories'])->toBe(['studio_payroll'])
+        ->and($result['applied_budget_records'][0]['flexible_cents'])->toBe(5000);
+});
+
+test('overlapping reviewed Payroll and role targets make monthly need unavailable instead of adding both', function (): void {
+    [$entries, $plan] = ($this->payrollFixture)();
+    $parent = ($this->payrollTarget)('payroll', 45000);
+    $role = ($this->payrollTarget)('studio_payroll', 5000);
+    $result = $this->service->build($this->space, $entries, ($this->records)(), $plan, [], [], $this->today);
+    expect($result['ongoing']['monthly_needed_cents'])->toBeNull()->and($result['month']['needed_cents'])->toBeNull()
+        ->and($result['ongoing']['basis'])->toContain('Review overlapping Payroll')
+        ->and($result['ongoing']['overlapping_budget_record_ids'])->toBe([$parent->id, $role->id])
+        ->and($result['ongoing']['applied_budget_records'])->toBe([])->and($result['ongoing']['coverage_complete'])->toBeFalse();
+});
+
+test('umbrella payroll history is rounded once so categorizing small cents cannot inflate monthly need', function (): void {
+    ($this->payrollTarget)('payroll', 1000);
+    $entries = collect();
+    foreach (['owner_payroll' => -1, 'studio_payroll' => -1, 'event_payroll' => -1, 'groceries' => -1000] as $category => $amount) {
+        $entries->push(['id' => $entries->count() + 1, 'date' => '2026-10-10', 'amount_cents' => $amount, 'category' => $category, 'flow' => 'expense', 'reviewed' => true, 'merchant' => 'Fictional small cost']);
+    }
+    $plan = [...$this->planning, 'fixed_monthly_cents' => 0, 'flexible_monthly_cents' => 339, 'required_monthly_cents' => 339, 'flexible_ids' => $entries->pluck('id')->all()];
+    $before = $entries->map(fn ($row) => [...$row, 'category' => $row['category'] === 'groceries' ? 'groceries' : 'payroll']);
+    foreach ([$before, $entries] as $rows) {
+        $result = $this->service->build($this->space, $rows, ($this->records)(), $plan, [], [], $this->today)['ongoing'];
+        expect($result['monthly_needed_cents'])->toBe(1338);
+    }
+});
+
+test('an aggregate flexible override keeps its own amount and ignores overlapping category targets', function (): void {
+    [$entries, $plan] = ($this->payrollFixture)();
+    ($this->payrollTarget)('payroll', 45000);
+    ($this->payrollTarget)('studio_payroll', 5000);
+    $this->space->update(['settings' => [...$this->space->settings, 'flexible_monthly_cents' => 7400]]);
+    $result = $this->service->build($this->space, $entries, ($this->records)(), $plan, [], [], $this->today)['ongoing'];
+    expect($result['monthly_needed_cents'])->toBe(37400)->and($result['applied_budget_records'])->toBe([])
+        ->and($result['overlapping_budget_record_ids'])->toBe([])
+        ->and(collect($result['breakdown'])->firstWhere('label', 'Everyday spending')['detail'])->toContain('Category budget targets are not added');
+});
+
+test('a draft role target overlapping a reviewed Payroll total also requires plan review without a zero fallback', function (): void {
+    [$entries, $plan] = ($this->payrollFixture)();
+    ($this->payrollTarget)('payroll', 45000);
+    $role = ($this->payrollTarget)('event_payroll', 5000);
+    $role->update(['data' => [...$role->data, 'reviewed' => false]]);
+    $result = $this->service->build($this->space, $entries, ($this->records)(), $plan, [], [], $this->today)['ongoing'];
+    expect($result['monthly_needed_cents'])->toBeNull()->and($result['overlapping_budget_record_ids'])->toContain($role->id)
+        ->and($result['basis'])->toContain('Review overlapping Payroll');
+});

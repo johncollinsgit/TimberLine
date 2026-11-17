@@ -1,3 +1,15 @@
+## 2026-11-16 - Trajectory payroll groups and cost allocations (source candidate)
+
+Money flow keeps owner, studio, event and unassigned Payroll branches distinct,
+including small payroll amounts on phones. A nearby note distinguishes matched
+net distributions from total employer cost. Existing category charts reuse the
+same transaction categories; owner distributions stay separate.
+
+The transaction action now says “Allocate across spaces.” Its form explains
+linked household/business spaces and commonly owned businesses, while retaining
+the original bank account and cash movement. Backend authorization and exact
+source-cent checks apply before any allocation is saved.
+
 ## 2026-11-16 - Trajectory sales-tax bank evidence (source candidate)
 
 Sales tax has a dedicated navigation view with scoped bank dates, agency and

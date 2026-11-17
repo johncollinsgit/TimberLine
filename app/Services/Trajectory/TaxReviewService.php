@@ -20,7 +20,7 @@ class TaxReviewService
                 'dining', 'alcohol', 'entertainment' => 'Separate business meals from entertainment and personal use. Record business purpose and participants; category alone does not establish deductibility. IRC §274.',
                 'transport', 'travel' => 'Separate personal travel, commuting, and business use. Retain mileage or travel records and the applicable deduction method. IRC §§162, 274.',
                 'materials', 'shopping' => 'Distinguish supplies consumed, inventory, and capital assets. A purchase is not automatically a current expense. Review IRC §§263, 471 and any depreciation election.',
-                'payroll' => 'Reconcile wages, employer taxes, and benefits to payroll evidence. Owner distributions are not payroll. IRC §162.',
+                'payroll', 'owner_payroll', 'studio_payroll', 'event_payroll' => 'Reconcile wages, employer taxes, and benefits to payroll evidence. Owner distributions are not payroll. IRC §162.',
                 'interest' => 'Separate principal and interest, and trace how borrowed funds were used. Deductibility follows purpose and applicable limits. IRC §163.',
                 'giving' => 'Review the recipient, entity treatment, and contribution limits. A gift is not automatically an ordinary operating expense. IRC §170.',
                 default => 'Document the ordinary and necessary business purpose and separate any personal portion. IRC §§162, 262.',

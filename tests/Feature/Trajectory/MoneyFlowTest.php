@@ -220,3 +220,28 @@ test('authorized income labels preserve net-collection meaning without overridin
         ->and($rows[0]['purpose_key'])->toBe('income:fictional_net_collections')->and($rows[1]['purpose_key'])->toBe('income')
         ->and(array_column($rows, 'kind'))->toBe(['income', 'income', 'borrowing', 'medical', 'support']);
 });
+
+test('payroll categories keep net owner studio event and unassigned cash separate without adding gross payroll', function (): void {
+    $ids = [];
+    foreach (['owner_payroll' => -12001, 'studio_payroll' => -23002, 'event_payroll' => -34003, 'payroll' => -4555] as $category => $amount) {
+        $tx = ($this->post)('net-'.$category, $amount, 'expense', 'uncategorized', reviewed: false, merchant: 'Fictional payroll withdrawal');
+        $this->actingAs($this->owner)->patchJson('/trajectory/spaces/'.$this->space->id.'/transactions/'.$tx->id, [
+            'version' => $tx->version, 'category' => $category, 'flow' => 'expense', 'face_punched' => false, 'bullshit_spending' => false,
+        ])->assertOk();
+        $ids[$category] = $tx->id;
+    }
+    ($this->post)('draw-separate', -7777, 'owner_distribution', 'uncategorized');
+    \App\Models\Trajectory\Record::create(['space_id' => $this->space->id, 'kind' => 'payroll', 'name' => 'Fictional gross payroll evidence', 'data' => ['reviewed' => true, 'period_end' => '2028-07-20', 'wages_cents' => 900000], 'active' => true]);
+    $view = ($this->report)()['views'];
+    foreach (['spending', 'cash'] as $mode) {
+        $out = collect($view[$mode]['outflows'])->keyBy('key');
+        foreach ($ids as $category => $id) {
+            expect($out[$category]['ids'])->toBe([$id]);
+        }
+        expect($out['owner_payroll']['label'])->toBe('Owner payroll')->and($out['studio_payroll']['label'])->toBe('Studio Payroll')
+            ->and($out['event_payroll']['label'])->toBe('Event Payroll')->and($out['payroll']['label'])->toBe('Payroll');
+    }
+    expect($view['spending']['outflow_cents'])->toBe(73561)->and($view['cash']['outflow_cents'])->toBe(81338)
+        ->and(collect($view['cash']['outflows'])->firstWhere('key', 'owner_distributions')['ids'])->not->toContain($ids['owner_payroll'])
+        ->and(Transaction::count())->toBe(5);
+});
