@@ -688,7 +688,7 @@ jobs:
     - name: Upload MySQL schema baseline candidate
       uses: actions/upload-artifact@v4
       with:
-        name: mysql-schema-baseline-${{ github.run_id }}
+        name: mysql-schema-baseline-${{ github.run_id }}-${{ github.run_attempt }}
         path: database/schema/
         if-no-files-found: error
         retention-days: 7
