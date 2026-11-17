@@ -5,6 +5,54 @@ uses actual posted ledger entries in the selected date/account scope. It does
 not import another ledger, create financial records, or include budgets,
 forecast receipts, expected medical shares, or opening cash.
 
+## Owned credit-card activity
+
+Wealth & debt begins with selected-period activity for each owned credit account.
+It keeps reviewed other card purchases, gold/silver asset outlays and credits,
+other asset movements, interest, fees, repayment credits and repayment debits
+distinct. Unreviewed purposes and other adjustments remain visible. A merchant
+name does not establish a metals purchase. Marked duplicates are inspectable but
+excluded from recorded charges/credits and prevent a balance equation.
+Reviewed interest and fee credits offset their own group rather than becoming
+purchase credits.
+
+These are full physical card amounts. The separate economic allocation for
+classified other purchases is already within that amount, not an additional
+cost. An explicit zero owner allocation remains zero. A missing owner allocation
+or nonconserving split leaves its share unavailable. Other spaces' names,
+accounts and source details are never included in this allocation summary.
+
+The latest account balance always carries its actual observation date. A period
+comparison requires consistent reviewed balance evidence at the opening boundary
+and a balance at the exact report cutoff. A January 1 opening or the preceding
+December 31 observation supports a January 1 comparison. A following January 1
+is not silently used as a historical December 31 closing. Reconstructed record
+names and source notes are displayed. Missing or conflicting evidence stays
+unavailable. Matching recorded charges/credits can reconcile the dated balances
+but does not establish complete history. No payment is attributed to prior-year
+principal without separate evidence or an explicit accounting convention.
+A wholly future report retains its requested dates with actual activity and
+period balances unavailable. A current-period report stops actual activity at
+today; a separately dated latest balance is never presented as a future closing.
+
+Card evidence uses `credit_movement: true` plus an explicit owned credit
+`account_id`. The server authorizes that space/account and returns only its
+actual posted rows, full source amounts and a separately labeled economic
+allocation. It excludes pending, removed, future and foreign sources, including
+foreign sources allocated into this space. All dates includes older owned card
+sources even when their owner allocation is missing; custom dates stay bounded.
+Currency remains per account; no
+cross-card or cross-currency household total is fabricated. Cash movement
+continues to admit cash accounts only; default allocated evidence is unchanged.
+Cash, credit-source and economic-cost evidence modes are mutually exclusive.
+The posted-only caption does not claim that absent pending records mean zero
+pending charges. This feature reads native records only and changes no lender
+balances, source transactions, allocations, forecasts, repayment terms or plans.
+
+Focused checks include `CardActivityTest.php`, the Trajectory JavaScript suite
+and the existing authenticated money-flow browser check (Chromium/WebKit phone
+and desktop), including zero-owner-allocation source evidence and Back navigation.
+
 ## Spending and cash bases
 
 - **Spending** counts allocated economic purchases, including card purchases.
