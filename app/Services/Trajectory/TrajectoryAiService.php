@@ -31,6 +31,9 @@ class TrajectoryAiService
         abort_unless(($data['space']['id'] ?? null) === $space->id && ($data['space']['kind'] ?? null) === $space->kind, 403);
         abort_unless(trim($question) !== '' && mb_strlen($question) <= 2000, 422);
         $core = app(TrajectoryBudService::class)->respond($question, $data);
+        if ($core['local_financial_insight'] ?? false) {
+            return $this->fallback($core, 'local_source_calculation', 'Financial Insights use private source-backed calculations. Accounting snapshots are not sent to an external AI provider.');
+        }
         if ($core['proposals'] ?? []) {
             return $this->fallback($core, 'review_required', 'A budget draft is ready for explicit review. No paid AI request was made.');
         }

@@ -52,6 +52,26 @@ test('native report parser preserves COGS other sections and explicit profit ins
         ->and($metrics['source_report']['StartPeriod'])->toBe('2026-01-01');
 });
 
+test('native report retains account section ancestry and credits with stable source account identifiers', function (): void {
+    $income = ($this->section)('Income', '1000.00', 'Total Income');
+    $income['Rows']['Row'] = [[
+        'type' => 'Section', 'Header' => ['ColData' => [['value' => 'Store', 'id' => '100'], ['value' => '']]],
+        'Summary' => ['ColData' => [['value' => 'Total Store'], ['value' => '1000.00']]],
+        'Rows' => ['Row' => [
+            ['type' => 'Data', 'ColData' => [['value' => 'Sales', 'id' => '101'], ['value' => '1100.00']]],
+            ['type' => 'Data', 'ColData' => [['value' => 'Returns', 'id' => '102'], ['value' => '-100.00']]],
+        ]],
+    ]];
+    $snapshot = ($this->refresh)(($this->payload)([$income, ($this->section)('NetIncome', '1000.00')]));
+    $sections = $snapshot->metrics['account_sections'];
+    expect($sections[0]['group'])->toBe('Income')
+        ->and($sections[0]['children'][0]['id'])->toBe('100')
+        ->and($sections[0]['children'][0]['amount'])->toEqual(1000.0)
+        ->and($sections[0]['children'][0]['children'][1]['id'])->toBe('102')
+        ->and($sections[0]['children'][0]['children'][1]['amount'])->toEqual(-100.0)
+        ->and($sections[0]['children'][0]['children'][1]['key'])->toBe('0.0.1');
+});
+
 test('only a complete single-total report establishes absent optional sections as zero', function (): void {
     $rows = [($this->section)('Income', '0.00', 'Total Income'), ($this->section)('Expenses', '0.00', 'Total Expenses'), ($this->section)('NetIncome', '0.00', 'Net Income')];
     $complete = ($this->refresh)(($this->payload)($rows));
@@ -139,4 +159,16 @@ test('legacy snapshots retain reported net while missing cost components stay un
     $withoutNet = $reader->invoke($service, $snapshot, ['total_income' => 1000, 'total_expenses' => 150], $this->connection);
     $withZeroNet = $reader->invoke($service, $snapshot, ['total_income' => 1000, 'total_expenses' => 150, 'net_income' => 0], $this->connection);
     expect($withoutNet['net_operating_result'])->toBeNull()->and($withZeroNet['net_operating_result'])->toBe(0.0);
+});
+
+test('cash refresh preserves an existing accrual snapshot for the same named period', function (): void {
+    $accrual = ($this->refresh)(($this->payload)([($this->section)('Income', '100'), ($this->section)('NetIncome', '100')]));
+    $client = Mockery::mock(QuickBooksOnlineClient::class);
+    $client->shouldReceive('report')->once()->with('ProfitAndLoss', ['accounting_method' => 'Cash', 'start_date' => '2026-01-01', 'end_date' => '2026-01-31'])
+        ->andReturn(($this->payload)([($this->section)('Income', '50'), ($this->section)('NetIncome', '50')], ['ReportBasis' => 'Cash']));
+    $cash = app(QuickBooksReportingSnapshotService::class)->refresh($this->tenant, $this->connection, $client, 'example:month:accrual', CarbonImmutable::parse('2026-01-01'), CarbonImmutable::parse('2026-01-31'), 'Cash');
+    expect($cash->id)->not->toBe($accrual->id)
+        ->and($cash->metrics['accounting_method'])->toBe('Cash')
+        ->and($accrual->fresh()->metrics['accounting_method'])->toBe('Accrual')
+        ->and(QuickBooksReportingSnapshot::count())->toBe(2);
 });

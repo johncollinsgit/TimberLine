@@ -3,8 +3,6 @@
 namespace App\Services\Trajectory;
 
 use App\Models\FieldServiceMaterial;
-use App\Models\IntegrationConnection;
-use App\Models\QuickBooksReportingSnapshot;
 use App\Models\Trajectory\Account;
 use App\Models\Trajectory\Connection;
 use App\Models\Trajectory\Record;
@@ -17,7 +15,7 @@ use Carbon\CarbonImmutable;
 
 class DashboardService
 {
-    public function build(Space $space, string $range = 'month', ?int $scenarioId = null, ?string $from = null, ?string $through = null, bool $seasonal = false, ?User $viewer = null, ?int $accountId = null): array
+    public function build(Space $space, string $range = 'month', ?int $scenarioId = null, ?string $from = null, ?string $through = null, bool $seasonal = false, ?User $viewer = null, ?int $accountId = null, string $accountingBasis = 'accrual'): array
     {
         $economic = app(EconomicActivityService::class);
         $today = CarbonImmutable::now($space->timezone)->startOfDay();
@@ -309,7 +307,7 @@ class DashboardService
         }, $plans('goal'));
 
         $decisionSupport = $scopeAccount ? null : app(DecisionSupportService::class)->build($space, $entries, $records, $planning, $bills, $this->recurringSuggestions($entries, $schedules), $today, $viewer);
-        $business = ! $scopeAccount && $space->kind === 'business' ? $this->business($space, $start, $end, $records, $selected) : null;
+        $business = ! $scopeAccount && $space->kind === 'business' ? $this->business($space, $start, $end, $records, $selected, $accountingBasis) : null;
         $questionSummary = $scopeAccount ? null : app(QuestionSummaryService::class)->build($space, $entries, $records, $accounts, $planning, $start, $end, $today, $viewer, $decisionSupport ?? [], $business['ledger'] ?? []);
 
         return [
@@ -404,24 +402,10 @@ class DashboardService
         return array_slice($suggestions, 0, 30);
     }
 
-    private function business(Space $space, CarbonImmutable $start, CarbonImmutable $end, $records, $entries): array
+    private function business(Space $space, CarbonImmutable $start, CarbonImmutable $end, $records, $entries, string $accountingBasis = 'accrual'): array
     {
-        $connectionIds = IntegrationConnection::query()->forTenantId($space->tenant_id)->where('provider', 'quickbooks')->pluck('id');
-        $snapshot = QuickBooksReportingSnapshot::query()->forTenantId($space->tenant_id)->whereIn('integration_connection_id', $connectionIds)
-            ->whereDate('period_start', $start)->whereDate('period_end', $end)->latest('observed_at')->first();
-        $metrics = $snapshot?->metrics ?? [];
-        $cents = fn ($key) => isset($metrics[$key]) && is_numeric($metrics[$key]) && is_finite((float) $metrics[$key]) ? Money::cents($metrics[$key]) : null;
-        $cogs = $cents('total_cogs');
-        $expenses = $cents('total_expenses');
-        $otherExpenses = $cents('total_other_expenses');
-        $ledger = ['source' => 'QuickBooks', 'snapshot_id' => $snapshot?->id, 'tenant_id' => $space->tenant_id,
-            'period_start' => $snapshot?->period_start?->toDateString(), 'period_end' => $snapshot?->period_end?->toDateString(),
-            'observed_at' => $snapshot?->observed_at, 'income_cents' => $cents('total_income'),
-            'expenses_cents' => $expenses, 'cogs_cents' => $cogs,
-            'other_income_cents' => $cents('total_other_income'), 'other_expenses_cents' => $otherExpenses,
-            'total_costs_cents' => $cogs !== null && $expenses !== null && $otherExpenses !== null ? $cogs + $expenses + $otherExpenses : null,
-            'net_operating_income_cents' => $cents('net_operating_income'), 'net_income_cents' => $cents('net_income'),
-            'basis' => $metrics['accounting_method'] ?? null];
+        $accounting = app(ProfitLossReportService::class)->build($space, $start, $end, $entries, $accountingBasis);
+        $ledger = $accounting['ledger'];
         $channels = app(SalesChannelSummaryService::class)->forTrajectory($space->tenant_id, $start, $end->endOfDay());
         $payroll = $records->where('kind', 'payroll')->filter(fn ($r) => $r->data['reviewed'] && $r->data['period_end'] >= $start->toDateString() && $r->data['period_end'] <= $end->toDateString())->map(fn ($r) => ['id' => $r->id, ...$r->data, 'total_cents' => array_sum(array_intersect_key($r->data, array_flip(['wages_cents', 'overtime_cents', 'employer_taxes_cents', 'benefits_cents', 'contractor_cents'])))])->values();
         $materials = FieldServiceMaterial::query()->forTenantId($space->tenant_id)->get()->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'quantity' => $m->quantity, 'used_quantity' => $m->used_quantity, 'unit' => $m->unit, 'unit_cost_cents' => $m->unit_cost === null ? null : Money::cents($m->unit_cost), 'consumed_cost_cents' => $m->unit_cost === null || $m->used_quantity === null ? null : Money::cents((string) BigDecimal::of($m->unit_cost)->multipliedBy($m->used_quantity ?? 0))])->all();
@@ -446,6 +430,6 @@ class DashboardService
             }
         }
 
-        return ['profit_loss' => app(TaxReviewService::class)->profitLoss($entries, $ledger), 'ledger' => $ledger, 'channels' => $channels, 'payroll' => $payroll->all(), 'materials' => $materials, 'insights' => $insights, 'reliance' => app(ProjectionService::class)->reliance($records->where('kind', 'reliance')->last()?->data ?? [])];
+        return ['profit_loss' => $accounting['profit_loss'], 'ledger' => $ledger, 'channels' => $channels, 'payroll' => $payroll->all(), 'materials' => $materials, 'insights' => $insights, 'reliance' => app(ProjectionService::class)->reliance($records->where('kind', 'reliance')->last()?->data ?? [])];
     }
 }

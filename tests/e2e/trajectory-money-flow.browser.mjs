@@ -7,6 +7,7 @@ import {promisify} from 'node:util';
 import {createServer} from 'node:net';
 import {chromium,webkit} from 'playwright';
 import {expect} from '@playwright/test';
+import {verifyProfitLoss} from './trajectory-profit-loss.browser-helpers.mjs';
 const exec=promisify(execFile),base=resolve(),probe=createServer();
 await new Promise(done=>probe.listen(0,'127.0.0.1',done));const port=probe.address().port;await new Promise(done=>probe.close(done));
 const dir=await mkdtemp(join(tmpdir(),'codex-money-flow-')),origin=`http://127.0.0.1:${port}`,evidence=resolve(process.env.TRAJECTORY_FLOW_EVIDENCE||'test-results/trajectory-money-flow');
@@ -15,7 +16,7 @@ const env={...process.env,APP_ENV:'testing',APP_DEBUG:'false',APP_URL:origin,APP
 let server,browser;const checks=[];
 try{
  await exec('php',['artisan','migrate','--force','--no-interaction'],{cwd:base,env,maxBuffer:2e6});
- const fixture=JSON.parse((await exec('php',['scripts/trajectory/money-flow-browser-fixture.php'],{cwd:base,env})).stdout);
+ const fixture=JSON.parse((await exec('php',['scripts/trajectory/profit-loss-browser-fixture.php'],{cwd:base,env})).stdout);
  server=spawn('php',['artisan','serve','--host=127.0.0.1',`--port=${port}`,'--no-reload'],{cwd:base,env,stdio:'ignore'});
  let ready=false;for(let i=0;i<100;i++){try{if((await fetch(origin+'/up')).ok){ready=true;break;}}catch{}await new Promise(done=>setTimeout(done,100));}assert.ok(ready);
  for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
@@ -210,6 +211,7 @@ try{
    await expect(cardDetail.locator('.tr-card-figures')).toContainText('$223.46');
    await page.locator('#tr-account-filter').selectOption(String(fixture.cash_id));await expect(page.locator('.tr-card-activity')).toContainText('No owned credit cards');
    await page.locator('#tr-account-filter').selectOption('');
+   await verifyProfitLoss({page,fixture,width,name,evidence});
    checks.push(`${name} ${width}: native/browser Back from prior 404, category menu/detail restoration, scoped family receipt sources, incoming-only trends, keyboard/touch evidence, allocation privacy and horizontal containment`);
   }
   assert.deepEqual(errors,[]);await context.close();await browser.close();browser=null;

@@ -195,8 +195,10 @@ it('reads Square and Shopify as evidence without adding them to QuickBooks incom
     \App\Models\QuickBooksReportingSnapshot::create(['tenant_id' => $tenant->id, 'integration_connection_id' => $connection->id, 'range_key' => 'month', 'period_start' => now()->startOfMonth(), 'period_end' => now(), 'observed_at' => now(), 'metrics' => ['total_income' => '1000.00', 'total_expenses' => '400.00', 'accounting_method' => 'Cash']]);
     \App\Models\SquareOrder::create(['tenant_id' => $tenant->id, 'square_order_id' => 'fixture-square', 'state' => 'COMPLETED', 'closed_at' => now(), 'total_money_amount' => 50000, 'total_money_currency' => 'USD']);
     \App\Models\Order::create(['tenant_id' => $tenant->id, 'shopify_order_id' => 'fixture-shopify', 'order_type' => 'retail', 'source' => 'shopify', 'ordered_at' => now(), 'total_price' => 400]);
-    $data = app(\App\Services\Trajectory\DashboardService::class)->build($business);
-    expect($data['business']['ledger']['income_cents'])->toBe(100000)->and($data['business']['channels']['revenue_cents'])->toBe(90000);
+    $data = app(\App\Services\Trajectory\DashboardService::class)->build($business, accountingBasis: 'cash');
+    expect($data['business']['ledger']['income_cents'])->toBe(100000)
+        ->and($data['business']['ledger']['basis'])->toBe('cash')
+        ->and($data['business']['channels']['revenue_cents'])->toBe(90000);
 });
 
 it('replaces a linked bill with its debt payment and pays debt goals without double reserving cash', function (): void {
