@@ -118,6 +118,12 @@ class RecordService
             abort_unless($data['period_start'] <= $data['period_end'] && $data['period_end'] <= now($space->timezone)->toDateString(), 422, 'Use a completed interest observation period.');
             abort_unless(in_array(Account::findOrFail($data['account_id'])->kind, ['credit', 'loan'], true), 422, 'Choose a debt account.');
         }
+        if ($kind === 'lender_interest_ytd') {
+            $lenderAccount = Account::where('space_id', $space->id)->findOrFail($data['account_id']);
+            abort_unless($lenderAccount->kind === 'credit', 422, 'Choose an owned credit account.');
+            abort_unless(($data['currency'] ?? null) === $lenderAccount->currency, 422, 'Statement currency must match its owned credit account.');
+            abort_unless(app(LenderInterestYtdService::class)->valid($data, now($space->timezone)->toDateString()), 422, 'Use a completed calendar-year lender observation, its original source hash and nonempty statement reference.');
+        }
         if ($kind === 'payment_notice') {
             abort_unless(in_array(Account::findOrFail($data['account_id'])->kind, ['credit', 'loan'], true), 422, 'Choose a loan or credit account.');
             abort_unless($data['amount_cents'] > 0, 422, 'Payment must be positive.');
@@ -230,6 +236,15 @@ class RecordService
             if ($kind === 'interest_statement') {
                 foreach (Record::where('space_id', $space->id)->where('kind', 'interest_statement')->where('active', true)->get() as $other) {
                     abort_if($other->id !== $record?->id && $other->data['account_id'] === $data['account_id'] && $other->data['period_start'] <= $data['period_end'] && $other->data['period_end'] >= $data['period_start'], 422, 'Interest observation periods for the same debt must not overlap. Edit the existing statement.');
+                }
+            }
+            if ($kind === 'lender_interest_ytd') {
+                foreach (Record::where('space_id', $space->id)->where('kind', $kind)->where('active', true)->lockForUpdate()->get() as $other) {
+                    if ($other->id !== $record?->id && (($other->data['source_id'] ?? null) === $data['source_id'] || (($other->data['account_id'] ?? null) === $data['account_id'] && ($other->data['reported_year'] ?? null) === $data['reported_year'] && ($other->data['reported_through'] ?? null) === $data['reported_through']))) {
+                        abort_unless($record === null && $other->name === $name && $other->data == $data, 409, 'This lender statement cutoff/reference already has evidence. Correct it with a versioned edit.');
+
+                        return $other;
+                    }
                 }
             }
             if ($kind === 'debt' && ! empty($data['account_id'])) {

@@ -7,6 +7,8 @@ import {salesTaxHtml,taxRemittanceReview} from './sales-tax.js';
 import {moneyFlowHtml,moneyFlowTrendSeries} from './money-flow.js';
 import {reportNavigation} from './navigation-history.js';
 import {cardActivityHtml,cardMoney} from './card-activity.js';
+import {lenderInterestYtdHtml} from './lender-interest-ytd.js';
+import './lender-interest-ytd.css';
 import { accountingComponentsHtml } from './accounting-report.js';
 import { questionSummaryHtml, supportBusinessChoices, monthlyBudgetRecords } from './question-summary.js';
 import { budgetMappingPayload, budgetMappingHtml, budgetPreviewHtml } from './budget-import.js';
@@ -49,7 +51,7 @@ function boot() {
   let decisionMonth = '', forecastExpanded = false, overviewExpanded = false;
   let linkInProgress = false;
   let scope = requestedSpace?.kind==='business' ? 'business' : personalSpace ? 'personal' : 'business';
-  let active = (scope==='personal' ? personalSpace : businessSpace)?.id, data, evidenceRows=null, tab = 'overview', charts = [], chartTables = {}, filter = {}, scenarioId = '', historyMonth = '', budgetSource = null, budgetMonth = '', seasonal = false, moneyFlowMode = 'spending', formAction;
+  let active = (scope==='personal' ? personalSpace : businessSpace)?.id, data, evidenceRows=null, tab = 'overview', charts = [], chartTables = {}, filter = {}, scenarioId = '', historyMonth = '', budgetSource = null, budgetMonth = '', seasonal = false, moneyFlowMode = 'spending', lenderInterestYear = null, formAction;
   let flowDialog=null,restoringNavigation=false,displayedReportContext=null;
   if (['transactions','accounts','planning','anomalies','tax','sales-tax','profit','companies','bud'].includes(incoming.get('tab'))) {tab=incoming.get('tab');filter=tab==='transactions'?{review:true}:{};}
   if (oauthReturn) tab = 'accounts';
@@ -338,7 +340,7 @@ function boot() {
   }
   function assets() {
     const s=data.summary;
-    return `${cardActivityHtml(data.card_activity,{esc,btn})}${debtPlanner.html()}<div class="tr-metrics">${metric('Net worth',s.net_worth_cents,s.net_worth_complete?'Assets minus debts':'Partial valuation')}${metric('Interest this period',s.selected_interest_cents,'Observed charges')}${metric('Recorded interest',s.recorded_interest_cents,'All available imported history')}${metric('Remaining interest',s.projected_interest_cents,'Estimated from reviewed debt terms')}</div>
+    return `${cardActivityHtml(data.card_activity,{esc,btn})}${lenderInterestYtdHtml(data.lender_interest_ytd,{esc,selectedYear:lenderInterestYear})}${debtPlanner.html()}<div class="tr-metrics">${metric('Net worth',s.net_worth_cents,s.net_worth_complete?'Assets minus debts':'Partial valuation')}${metric('Interest this period',s.selected_interest_cents,'Observed charges')}${metric('Recorded interest',s.recorded_interest_cents,'All available imported history')}${metric('Remaining interest',s.projected_interest_cents,'Estimated from reviewed debt terms')}</div>
       ${panel('Interest by account',`<div class="tr-table-wrap"><table class="tr-table"><caption>Recorded interest only; missing history is not zero interest.</caption><thead><tr><th>Account</th><th>Selected period</th><th>Year to date</th><th>All available history</th></tr></thead><tbody>${data.interest_by_account.map(a=>`<tr><td>${esc(a.name)} ${a.ids.length?btn('Charges','interest-evidence',`data-id="${a.account_id}"`):''}</td><td>${a.has_evidence?precise(a.selected_cents):'No evidence'}</td><td>${a.has_evidence?precise(a.ytd_cents):'No evidence'}</td><td>${a.has_evidence?precise(a.recorded_cents):'No evidence'}</td></tr>`).join('')}</tbody></table></div>`)}
       ${data.interest_statements.length?panel('Lender interest evidence',`<p class="tr-subtle">YTD recorded interest: ${money(s.ytd_interest_cents)}. Period totals replace overlapping imported charges. A period total cannot determine an individual month’s charges.</p>${data.interest_statements.map(r=>`<div class="tr-row"><div><strong>${esc(r.name)}</strong><div class="tr-source">${esc(r.period_start)} – ${esc(r.period_end)} · ${esc(r.source)}</div></div><strong>${money(r.interest_cents)}</strong></div>`).join('')}`):''}
       <div class="tr-grid equal">${panel('Net-worth history',data.net_worth_history.length?plot('tr-networth','Observed net worth over time'):empty('Daily snapshots begin after your accounts are added. History is never fabricated.'))}${panel('Assets and liabilities',plot('tr-allocation','Assets versus liabilities'))}</div>
@@ -347,6 +349,7 @@ function boot() {
       <div class="tr-grid equal">${panel('Gold and silver',`<p class="tr-subtle">Spot metal value · ${esc(title(data.quotes.status))}. Coin premiums are not inferred.</p>${data.metals.map(m=>`<div class="tr-row"><div><strong>${esc(m.name)}</strong><div class="tr-subtle">${esc(m.quantity)} × ${esc(m.weight)} ${esc(m.unit)} · ${(m.purity_bps/100).toFixed(2)}% pure<br>Cost ${money(m.cost_basis_cents)} · Gain ${money(m.gain_cents)}</div></div><div><strong>${money(m.value_cents)}</strong><div class="tr-small-actions">${btn('Edit','edit',`data-id="${m.id}"`)}${btn('Record sale','sell',`data-id="${m.id}"`)}</div></div></div>`).join('')||empty('Record physical gold and silver by acquisition lot.')}${data.metals.length?plot('tr-metals','Metals cost basis versus current value','small'):''}`,btn('Add metals','add','data-kind="metal"'))}${panel('Other assets',data.assets.map(a=>`<div class="tr-row"><div><strong>${esc(a.name)}</strong><div class="tr-subtle">${esc(title(a.asset_type))} · Valued ${date(a.observed_on)}</div></div><div>${money(a.value_cents)} ${btn('Edit','edit',`data-id="${a.id}"`)}</div></div>`).join('')||empty('Add a property, vehicle, or manually valued investment.'),btn('Add asset','add','data-kind="asset"'))}</div>`;
   }
   function drawAssets() {
+    $('#tr-lender-ytd-year')?.addEventListener('change',e=>{lenderInterestYear=Number(e.target.value);render();});
     debtPlanner.draw();
     chart('tr-networth','line',data.net_worth_history.map(r=>date(r.date)),[line('Net worth',data.net_worth_history.map(r=>r.net_worth_cents),'#176b52',true)]);
     chart('tr-allocation','doughnut',['Assets','Liabilities'],[{data:[Math.max(0,data.summary.assets_cents),Math.max(0,data.summary.liabilities_cents)],backgroundColor:['#397c5e','#cc9c79'],borderWidth:4}]);
@@ -422,12 +425,12 @@ function boot() {
     if(['business_funding_plan','financial_observation','budget'].includes(kind)&&accountFilter!==null){notice('Choose all accounts before editing whole-space budgets, source totals or funding assumptions.');return;}
     const taxRow=kind==='tax_remittance'?data.sales_tax?.rows?.find(row=>row.transaction_id===(record?.data?.transaction_id??preset.transaction_id)):null;
     if(kind==='tax_remittance'&&!taxRow){dialog('Choose tax bank evidence',`<p class="tr-subtle">Choose a posted bank movement from the selected report dates and account.</p><div class="tr-choices tr-block">${(data.sales_tax?.rows||[]).map(row=>btn(`${row.date} · ${row.account} · ${row.merchant} · ${precise(row.amount_cents)}`,'tax-annotate',`data-id="${row.transaction_id}"`)).join('')||'<p>No tax bank movements identified in this scope.</p>'}</div>`,null);return;}
-    const d=kind==='tax_remittance'?taxRemittanceReview(record,taxRow):kind==='business_funding_plan'?{...(record?.data||preset),complete:false,reviewed_on:data.decision_support?.as_of||''}:record?.data||preset;
+    const d=kind==='tax_remittance'?taxRemittanceReview(record,taxRow):kind==='business_funding_plan'?{...(record?.data||preset),complete:false,reviewed_on:data.decision_support?.as_of||''}:kind==='lender_interest_ytd'?{...(record?.data||preset),reviewed:false}:record?.data||preset;
     if(!d){notice('Refresh this view before reviewing current bank evidence.');return;}
     const defaults={ministry:'Samaritan Ministries',provider:'Prisma Health',reserve_shares:true,confirmed:false,reviewed:false,priority:1,purity_bps:9999,quantity:1,weight:1,distribution_retention_bps:10000};
     let html=field('name','Name','text',record?.name||preset.name||'',null,true);
     for(const [key,def] of Object.entries(data.definitions[kind])) {
-      let value=d[key]??defaults[key]??(['money','percent'].includes(def.type)&&def.required&&kind!=='business_funding_plan'?0:'');
+      let value=d[key]??defaults[key]??(['money','percent'].includes(def.type)&&def.required&&!['business_funding_plan','lender_interest_ytd'].includes(kind)?0:'');
       if(['money','percent'].includes(def.type)&&value!=='')value=value/100;
       if(def.type==='rate'&&value!=='')value=value/1000;
       const choices=def.type.endsWith('_record')?[{value:'',label:'Choose a record'},...data.records.filter(r=>r.kind===def.type.slice(0,-7)).map(r=>({value:r.id,label:r.name}))]:def.type==='account'?[{value:'',label:'Select account'},...data.accounts.map(a=>({value:a.id,label:a.name}))]:def.type==='business_space'?supportBusinessChoices(data.support_business_options):def.type==='category'?(def.required?data.category_options:[{value:'',label:'All categories'},...data.category_options]):def.choices;

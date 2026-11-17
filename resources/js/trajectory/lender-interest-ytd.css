@@ -1,0 +1,11 @@
+.tr-lender-ytd .tr-table{font-size:.82rem;table-layout:fixed;width:100%}
+.tr-lender-ytd .tr-table th:first-child{width:43%}
+.tr-lender-ytd .tr-table th,.tr-lender-ytd .tr-table td{white-space:normal;overflow-wrap:anywhere;vertical-align:top}
+.tr-lender-ytd .tr-table th:nth-child(2){width:27%}
+.tr-lender-source{font-weight:400;font-size:.75rem;margin-top:.35rem}
+.tr-lender-source summary{cursor:pointer;padding:.3rem 0;min-height:2rem}
+.tr-lender-source p{line-height:1.5}
+.tr-lender-source small{overflow-wrap:anywhere}
+.tr-lender-coverage{font-size:.82rem;line-height:1.5;margin-bottom:0}
+@media(max-width:600px){.tr-lender-ytd .tr-table{font-size:.73rem}.tr-lender-ytd .tr-table th,.tr-lender-ytd .tr-table td{padding:.5rem .3rem}.tr-lender-source{font-size:.68rem}.tr-lender-ytd .tr-table th:first-child{width:40%}.tr-lender-ytd .tr-table th:nth-child(2){width:28%}}
+@media(max-width:600px){.trajectory-site .tr-mobile-enhanced .tr-lender-ytd .tr-table{min-width:0}.trajectory-site .tr-mobile-enhanced .tr-lender-ytd .tr-table th,.trajectory-site .tr-mobile-enhanced .tr-lender-ytd .tr-table td{padding:9px 5px}}

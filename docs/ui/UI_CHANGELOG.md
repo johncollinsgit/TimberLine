@@ -3679,3 +3679,12 @@ balance comparisons. Company-fronted charges stay in the physical card amount,
 with the household allocation shown separately. Source drilldown names its card
 basis and currency and preserves explicit zero versus missing allocations.
 Pending or incomplete history is never presented as verified zero spending.
+
+## 2026-11-17 - Separate lender-reported annual interest
+
+Wealth & debt includes a calendar-year lender-interest table with each card's
+statement cutoff and readable source evidence. Cumulative snapshots remain
+separate from selected-period charges, economic costs and projections. Coverage,
+different cutoffs, currency mismatches, conflicts and missing observations stay
+explicit. The three-column table fits enhanced phone and desktop layouts; source
+IDs and hashes are retained as backend metadata.

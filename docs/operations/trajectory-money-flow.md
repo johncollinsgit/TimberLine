@@ -5,6 +5,37 @@ uses actual posted ledger entries in the selected date/account scope. It does
 not import another ledger, create financial records, or include budgets,
 forecast receipts, expected medical shares, or opening cash.
 
+## Lender-reported annual interest
+
+Wealth & debt separately displays `lender_interest_ytd` source observations by
+calendar year. Each owned credit account retains its lender's statement cutoff,
+source currency and verified statement reference/hash. Only active, valid,
+reviewed evidence at or before the report cutoff is usable. Future-only reports
+have no actual total. The latest observation for each account/year replaces
+earlier cumulative snapshots; it is never added to them. Conflicting same-cutoff
+values are unavailable. A later account-currency change also makes the amount
+unavailable instead of relabeling historical cents. No implicit FX is performed.
+
+The compact table includes statement/table/page evidence and verification date.
+Internal source IDs and hashes remain backend metadata. Missing or unreviewed
+evidence is unavailable, while an explicit lender zero remains zero. A subtotal
+names its covered account count and different cutoff dates; mixed currencies have
+no subtotal. The calendar-year selector changes this source-context table only.
+
+These observations are excluded from `InterestService`, economic costs, cash,
+monthly history, question answers, budgets and all future projections. Existing
+`interest_statement` cycle records still replace overlapping imported charges and
+still return unavailable for partial windows. Annual observations must never be
+entered as overlapping cycle records, distributed into monthly charges, or used
+to infer cash paid. No lender observations or customer financial data are seeded
+by the release. Native source-backed creation is a separate reviewed operation.
+
+Focused coverage is in `LenderInterestYtdTest.php` and the annual-interest JS
+tests, with enhanced-phone/desktop table/source/year-selector checks in the
+authenticated Chromium/WebKit money-flow browser script. The financial regression
+compares actual interest, unknown tax coverage, cash, histories, questions,
+economic costs and nonempty debt projections before/after an annual observation.
+
 ## Owned credit-card activity
 
 Wealth & debt begins with selected-period activity for each owned credit account.
