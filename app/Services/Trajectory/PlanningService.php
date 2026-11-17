@@ -14,7 +14,7 @@ class PlanningService
         $first = $entries->min('date');
         $days = $first ? max(1, min(90, (int) CarbonImmutable::parse($first)->diffInDays($today))) : 0;
         $recent = $entries->where('date', '>=', $today->subDays($days ?: 90)->toDateString())->where('date', '<', $today->toDateString());
-        $income = $recent->where('reviewed', true)->whereIn('flow', ['income', 'owner_wages', 'owner_distribution'])->where('amount_cents', '>', 0);
+        $income = app(IncomeSourceService::class)->incomeEntries($recent->where('reviewed', true));
         $labels = $space->settings['income_categories'] ?? [];
         $overrides = $space->settings['income_expectations'] ?? [];
         $sources = [];

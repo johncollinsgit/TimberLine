@@ -271,3 +271,27 @@ Restoration increments the version and records an undo audit. Replaying the old
 version or undoing the same audit again fails. Raw source, amount, account balance
 and allocations stay intact. Restoring a purchase to Needs review does not
 establish its household/business beneficiary or recurring cost.
+
+## Customer refunds in processor settlements
+
+A source-confirmed customer refund withdrawn by a processor uses the existing
+`income` flow with its original negative cents. Only reviewed negative income is
+contra-revenue. It is separate from positive purchase refunds, never operating
+overhead, an internal transfer or a new bank transaction. No customer order,
+refund tax split, cost basis or gross-sales reconciliation is inferred.
+
+Income by source retains positive receipts and a separate signed customer-refund
+row, with original evidence IDs. The headline is receipts less customer refunds;
+receipt doughnuts stay gross and label the net amount separately. A refund-only
+period can have negative recorded income, and a full refund can produce a true
+zero without losing either source record. Unreviewed negative income stays in
+Money flow's outgoing review group and does not reduce classified income.
+
+Spending and Cash movement show the customer refund as its own outgoing branch,
+conserving gross cash. Economic operating costs and the purchase-refund table
+exclude it. Historical income, actual monthly questions, ledger-derived household
+income cards and historical planning averages use signed reviewed income while
+retaining the existing positive-only owner-pay receipt semantics. Explicit source
+observations and user income targets keep their precedence. This adds no future
+refund schedule or financial record. QuickBooks accounting P&L figures retain
+their independent report authority.
