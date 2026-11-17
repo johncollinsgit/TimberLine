@@ -20,7 +20,7 @@ beforeEach(function (): void {
     $this->input = ['transaction_id' => $this->tx->id, 'paid_on' => '2028-07-20', 'amount_cents' => -12500, 'agency' => 'Example revenue agency', 'jurisdiction' => 'Example state', 'tax_type' => 'sales_tax', 'movement' => 'payment', 'source' => 'Example filing receipt', 'reviewed' => true];
     $this->input['expected_bank_source_fingerprint'] = app(SalesTaxService::class)->bankFingerprint($this->space->id, $this->account->id, $this->tx->id, '2028-07-20', -12500, 'State Revenue');
     $this->saveTax = fn (array $change = [], ?Record $record = null) => app(RecordService::class)->save($this->owner, $this->space, 'tax_remittance', 'Example filing', [...$this->input, ...$change], $record, $record?->version);
-    $this->row = fn (int $id, array $change = []) => ['id' => $id, 'date' => '2028-07-20', 'account_id' => $this->account->id, 'merchant' => 'State Revenue', 'amount_cents' => -12500, 'category' => 'taxes', 'editable' => true, 'reviewed' => true, ...$change];
+    $this->row = fn (int $id, array $change = []) => ['id' => $id, 'date' => '2028-07-20', 'account_id' => $this->account->id, 'merchant' => 'State Revenue', 'amount_cents' => -12500, 'category' => 'taxes', 'flow' => 'expense', 'editable' => true, 'reviewed' => true, ...$change];
     $this->metadata = function (int $id, array $change = []): Record {
         $data = [...$this->input, 'transaction_id' => $id, ...$change];
         $data['bank_source_fingerprint'] = app(SalesTaxService::class)->bankFingerprint($this->space->id, $this->account->id, $id, $data['paid_on'], $data['amount_cents'], 'State Revenue');
@@ -62,6 +62,27 @@ test('agency-only payments are unknown and source zero does not imply complete s
     $report = ($this->taxReport)([($this->row)(1)]);
     expect($report['confirmed_payment_cents'])->toBeNull()->and($report['rows'][0]['tax_type'])->toBe('unknown')->and($report['rows'][0]['filing_start'])->toBeNull();
     expect(($this->taxReport)([])['net_remittance_cents'])->toBeNull();
+});
+
+test('internal TAX allocations and nonexpense flows are not heuristic remittance candidates', function (): void {
+    foreach (['transfer', 'card_payment', 'owner_distribution', 'owner_wages', 'reimbursement', 'loan_draw', 'asset_transfer', 'duplicate', 'income', 'unclassified_deposit'] as $flow) {
+        $report = ($this->taxReport)([($this->row)(1, ['merchant' => 'Relay Income to TAX', 'flow' => $flow])]);
+        expect($report['rows'])->toBe([])->and($report['confirmed_payment_cents'])->toBeNull();
+    }
+    foreach (['refund', 'income', 'unclassified_deposit'] as $flow) {
+        $refund = ($this->taxReport)([($this->row)(1, ['amount_cents' => 12500, 'flow' => $flow])]);
+        expect($refund['rows'])->toHaveCount(1)->and($refund['rows'][0]['movement'])->toBe('unverified_credit')
+            ->and($refund['rows'][0]['tax_type'])->toBe('unknown')->and($refund['confirmed_payment_cents'])->toBeNull();
+    }
+});
+
+test('explicit tax evidence stays visible despite an inferred transfer classification', function (): void {
+    $row = ($this->row)(1, ['flow' => 'transfer']);
+    $record = ($this->metadata)(1);
+    $report = ($this->taxReport)([$row], [$record]);
+    expect($report['rows'])->toHaveCount(1)->and($report['confirmed_payment_cents'])->toBe(12500);
+    $draft = ($this->taxReport)([$row], [($this->metadata)(1, ['reviewed' => false])]);
+    expect($draft['rows'])->toHaveCount(1)->and($draft['confirmed_payment_cents'])->toBeNull();
 });
 
 test('sales tax payments returns and refunds net once while income tax and draft evidence stay separate', function (): void {

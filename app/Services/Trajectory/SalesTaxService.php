@@ -57,7 +57,10 @@ class SalesTaxService
                 && is_string($data['agency'] ?? null) && trim($data['agency']) !== ''
                 && in_array($data['tax_type'] ?? null, ['unknown', 'sales_tax', 'income_tax', 'payroll_tax', 'other_tax'], true)
                 && in_array($data['movement'] ?? null, $amount < 0 ? ['payment'] : ['returned_payment', 'refund'], true);
-            $candidate = ($entry['category'] ?? null) === 'taxes' || preg_match('/\b(treasury|revenue|dor|eftps|tax)\b/i', $entry['merchant'] ?? '');
+            $cashFlow = in_array($entry['flow'] ?? null, ['expense', 'refund'], true)
+                || ($amount > 0 && in_array($entry['flow'] ?? null, ['income', 'unclassified_deposit'], true));
+            $candidate = $cashFlow
+                && (($entry['category'] ?? null) === 'taxes' || preg_match('/\b(treasury|revenue|dor|eftps|tax)\b/i', $entry['merchant'] ?? ''));
             if (! $record && ! $candidate && $matches->isEmpty()) {
                 continue;
             }
