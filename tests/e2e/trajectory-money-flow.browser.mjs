@@ -153,6 +153,18 @@ try{
    await expect(page.getByRole('button',{name:'Spending',exact:true})).toHaveAttribute('aria-pressed','true');
    await page.locator('#tr-space-tabs [data-scope="personal"]').click();await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
    await page.locator('#tr-range [data-range="year"]').click();await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
+   // Account activity retains its original selector through fresh, scoped history restoration.
+   if(width<700)await page.locator('#tr-mobile-menu').click();await page.getByRole('button',{name:'Accounts',exact:true}).click();
+   await page.locator('.tr-row').filter({has:page.getByText('Fictional checking',{exact:true})}).getByRole('button',{name:'Activity',exact:true}).click();
+   await page.getByRole('heading',{name:'Review transactions',level:1,exact:true}).waitFor();
+   await expect(page.getByRole('row').filter({hasText:'Fictional employer'})).toBeVisible();
+   await expect(page.getByRole('row').filter({hasText:'Fictional card purchase'})).not.toBeAttached();
+   if(width<700)await page.locator('#tr-mobile-menu').click();await page.getByRole('button',{name:'Money flow',exact:true}).click();
+   const accountRestore=page.waitForRequest(request=>request.method()==='POST'&&new URL(request.url()).pathname.endsWith('/evidence'));
+   await page.locator('#tr-back').click();assert.equal((await accountRestore).postDataJSON().account_id,fixture.cash_id);
+   await page.getByRole('heading',{name:'Review transactions',level:1,exact:true}).waitFor();
+   await expect(page.getByRole('row').filter({hasText:'Fictional employer'})).toBeVisible();
+   await expect(page.getByRole('row').filter({hasText:'Fictional card purchase'})).not.toBeAttached();
    checks.push(`${name} ${width}: native/browser Back from prior 404, category menu/detail restoration, scoped family receipt sources, incoming-only trends, keyboard/touch evidence, allocation privacy and horizontal containment`);
   }
   assert.deepEqual(errors,[]);await context.close();await browser.close();browser=null;

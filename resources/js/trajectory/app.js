@@ -107,7 +107,7 @@ function boot() {
         try {combined=await api(endpoint(`/combined?business_id=${businessSpace.id}&from=${personal.range.start}&through=${personal.range.end}`,personalSpace.id));} catch {}
         result=combinedDashboard(personal,business,combined);
       } else result=await api(dashboardPath(active));
-      if(requestedVersion!==loadVersion)return;data=result;accountFilter=data.scope_filter?.account_id??null;if(scope!=='both'&&(filter.ids||filter.date)){const rows=await fetchEvidence(filter);if(requestedVersion!==loadVersion)return;evidenceRows=rows;}render();
+      if(requestedVersion!==loadVersion)return;data=result;accountFilter=data.scope_filter?.account_id??null;if(scope!=='both'&&(filter.ids||filter.date||filter.account_id)){const rows=await fetchEvidence(filter);if(requestedVersion!==loadVersion)return;evidenceRows=rows;}render();
     }
     catch(e){if(requestedVersion===loadVersion){accountFilter=data?.scope_filter?.account_id??null;if($('#tr-account-filter'))$('#tr-account-filter').value=accountFilter??'';notice(e.message);}}
     finally {if(requestedVersion===loadVersion){$('#tr-content').classList.remove('tr-loading');$('#tr-content').setAttribute('aria-busy','false');}}
@@ -148,7 +148,7 @@ function boot() {
     const requestedContext=reportContext();
     try {
       let records=null;
-      if(next.ids||next.date)records=await fetchEvidence(next);
+      if(next.ids||next.date||next.account_id)records=await fetchEvidence(next);
       if(requestedContext!==reportContext())return;
       remember();flowDialog=null;if($('#tr-dialog').open)$('#tr-dialog').close();evidenceRows=records;filter=next;tab='transactions';render();
     } catch(e){notice(e.message);}
@@ -601,7 +601,7 @@ function boot() {
         const account=data.accounts.find(a=>a.id===id);
         dialog('Update observed balance',`<p class="tr-subtle">${esc(account.name)} · Record the lender’s actual balance and date. This does not create a payment or change transaction history.</p>${field('balance','Observed balance','number',account.balance_cents===null?'':account.balance_cents/100)}${field('observed_on','Balance date','date',data.household_cards?.as_of||data.range.end)}`,async v=>{await api(endpoint(`/accounts/${id}`),'PATCH',{balance_cents:minor(v.get('balance')),observed_on:v.get('observed_on')});});
       }
-      else if(a==='account-activity'){const requestedSpace=active;const rows=await api(endpoint('/evidence'),'POST',{account_id:id});if(requestedSpace!==active)return;remember();evidenceRows=rows;filter={};tab='transactions';render();}
+      else if(a==='account-activity'){await showTransactions({account_id:id});}
       else if(a==='membership')recordForm('recurring',null,{name:'Monthly Samaritan sharing',merchant:'Samaritan Ministries',cadence:'monthly',category:'health',expense_type:'fixed',amount_cents:0});
       else if(a==='medical-child')recordForm(target.dataset.kind,null,{[target.dataset.parentKey]:id});
       else if(a==='membership-match'){$('#tr-dialog').close();recordForm('medical_membership',null,{name:tx.merchant,transaction_id:tx.id,paid_on:tx.date,amount_cents:Math.abs(tx.amount_cents)});}
