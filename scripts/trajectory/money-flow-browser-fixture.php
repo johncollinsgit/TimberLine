@@ -40,5 +40,18 @@ $partial = $post($cash, 'partial-cost', 'Fictional partial cost', -10000, 'expen
 App\Models\Trajectory\Allocation::where('transaction_id', $partial->id)->update(['amount_cents' => -2500]);
 $transfer = $post($cash, 'internal-transfer', 'Fictional internal transfer', -12345, 'transfer', 'uncategorized');
 App\Models\Trajectory\Allocation::where('transaction_id', $transfer->id)->update(['amount_cents' => 0]);
+$taxIds = [];
+foreach (['known' => [-10000, [9000, 200, 700, 100]], 'unknown' => [-22222, null]] as $key => [$amount, $parts]) {
+    $tax = $post($cash, 'tax-'.$key, 'Fictional '.$key.' sales-tax cash', $amount, 'expense', 'uncategorized', false);
+    $input = ['transaction_id' => $tax->id, 'paid_on' => $posted->toDateString(), 'amount_cents' => $amount,
+        'agency' => 'Fictional revenue agency', 'tax_type' => 'sales_tax', 'movement' => 'payment', 'source' => 'Fictional browser tax receipt', 'reviewed' => true,
+        'expected_bank_source_fingerprint' => app(App\Services\Trajectory\SalesTaxService::class)->bankFingerprint($space->id, $cash->id, $tax->id, $posted->toDateString(), $amount, $tax->merchant)];
+    if ($parts !== null) {
+        $input = [...$input, ...array_combine(['tax_principal_cents', 'interest_cents', 'penalty_cents', 'other_fees_cents'], $parts)];
+    }
+    app(App\Services\Trajectory\RecordService::class)->save($owner, $space, 'tax_remittance', 'Fictional '.$key.' tax evidence', $input);
+    app(App\Services\Trajectory\LedgerService::class)->classify($owner, $space, $tax, ['version' => $tax->version, 'flow' => 'sales_tax_remittance', 'category' => 'taxes', 'face_punched' => false, 'bullshit_spending' => false]);
+    $taxIds[$key] = $tax->id;
+}
 echo json_encode(['space_id' => $space->id, 'zero_id' => $zero->id, 'partial_id' => $partial->id, 'transfer_id' => $transfer->id,
-    'cash_outflow_ids' => [$repayment->id, $rent->id, $zero->id, $partial->id, ...$payrollIds]], JSON_THROW_ON_ERROR);
+    'tax_ids' => $taxIds, 'cash_outflow_ids' => [$repayment->id, $rent->id, $zero->id, $partial->id, ...$payrollIds, ...array_values($taxIds)]], JSON_THROW_ON_ERROR);

@@ -3661,3 +3661,12 @@ signup and business setup, with branch adjustments available after purchase.
 - Customers, Work and Documents retain private creation and basic editing during
   the trial. At expiry they show saved details, search and downloads; connected
   alerts, assignments, archive actions and provider controls stay out of trial UI.
+
+### Trajectory sales-tax cash purpose
+
+- Keep external tax cash separate from economic operating costs. Reviewed filing
+  evidence offers an explicit bank-purpose review; known components show their
+  bank amount and cost basis in evidence.
+- Unknown tax splits keep economic totals unavailable with a visible overview and
+  Money flow warning. Cash movement preserves the full payment/credit, while
+  Spending separates principal from known interest, penalties and fees.

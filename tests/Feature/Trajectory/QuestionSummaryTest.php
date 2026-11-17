@@ -310,3 +310,15 @@ test('question plans keep overlapping Payroll and draft role amounts unknown wit
     $month = collect($result['monthly']['rows'])->firstWhere('month', '2026-11');
     expect($month['reviewed_spending_plan_cents'])->toBeNull()->and($month['draft_spending_plan_cents'])->toBeNull();
 });
+
+test('business operating answers and monthly actuals exclude sales tax principal and interest while preserving unknown splits', function (): void {
+    $tax = ($this->entry)(1, ['amount_cents' => -10000, 'flow' => 'sales_tax_remittance', 'category' => 'taxes',
+        'tax_purpose' => ['valid' => true, 'components' => ['tax_principal_cents' => 9000, 'interest_cents' => 200, 'penalty_cents' => 700, 'other_fees_cents' => 100]]]);
+    $known = ($this->build)([$tax]);
+    expect(($this->answer)($known, 'recorded_operating_spend')['amount_cents'])->toBe(800)
+        ->and(collect($known['monthly']['rows'])->firstWhere('month', '2026-11')['actual_spending_cents'])->toBe(800);
+    $tax['tax_purpose']['components'] = null;
+    $unknown = ($this->build)([$tax]);
+    expect(($this->answer)($unknown, 'recorded_operating_spend')['amount_cents'])->toBeNull()
+        ->and(collect($unknown['monthly']['rows'])->firstWhere('month', '2026-11')['actual_spending_cents'])->toBeNull();
+});

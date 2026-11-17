@@ -75,3 +75,21 @@ test('payroll branches retain separate cents and IDs with a conditional net-dist
   for(const row of groups)assert.deepEqual(graph.nodes.find(node=>node.column===2&&node.key===row.key)?.ids,row.ids,'Small payroll categories must remain separate');
  }
 });
+
+test('unknown tax splits leave totals unavailable and known component evidence keeps its exact basis on phone and desktop',()=>{
+ const view={inflows:[],outflows:[{key:'tax_interest',label:'Tax interest',kind:'outflow',amount_cents:200,ids:[7],economic_category:'interest',merchants:[{key:'agency',label:'Fictional agency',kind:'outflow',amount_cents:200,ids:[7],economic_category:'interest'}]}],excluded:[],refund_categories:[],inflow_cents:null,outflow_cents:null,difference_cents:null,review_inflow_cents:0,review_outflow_cents:0,tax_split_unknown_ids:[8],tax_split_unknown_gross_cents:22222};
+ const rendered=moneyFlowHtml({report:{views:{spending:view},coverage:{notes:[]}},esc,precise,btn});
+ assert.ok(rendered.includes('Economic totals unavailable'));assert.ok(rendered.includes('not total operating spending'));
+ assert.ok(rendered.includes('data-economic-category="interest"'));assert.ok(rendered.includes('data-economic="true"'));
+ const credits={...view,inflows:[{key:'interest-credit',label:'Tax interest credits',purpose_key:'tax_cost_credit:interest',purpose_label:'Tax interest credits',kind:'tax_credit',amount_cents:200,ids:[9],economic_category:'interest'},{key:'penalty-credit',label:'Tax penalty credits',purpose_key:'tax_cost_credit:tax_penalties',purpose_label:'Tax penalty credits',kind:'tax_credit',amount_cents:700,ids:[10],economic_category:'tax_penalties'}],outflows:[]};
+ const phone=moneyFlowCompactGraph(credits).nodes.filter(node=>node.column===0&&node.kind!=='difference');
+ assert.equal(phone.length,2);assert.deepEqual(phone.map(node=>node.economic_category),['interest','tax_penalties']);
+});
+
+test('condensed branches retain only the tax components they actually include',()=>{
+ const component=(key,amount)=>({key,label:key,kind:'outflow',amount_cents:amount,ids:[77],economic_category:key==='tax_interest'?'interest':key,merchants:[]});
+ const preserved=['payroll','owner_payroll','studio_payroll','event_payroll'].map((key,index)=>({key,label:key,kind:'outflow',amount_cents:100-index,ids:[index+1],merchants:[]}));
+ const graph=moneyFlowCompactGraph({inflows:[],outflows:[{key:'housing',label:'Housing',kind:'outflow',amount_cents:100000,ids:[20],merchants:[]},component('tax_penalties',70000),component('tax_interest',200),component('tax_fees',100),...preserved]});
+ const other=graph.nodes.find(node=>node.key==='other'&&node.column===2);
+ assert.equal(other.amount_cents,300);assert.deepEqual(other.economic_categories,['interest','tax_fees']);assert.deepEqual(other.ids,[77]);
+});

@@ -18,11 +18,11 @@ class HistoryService
             $start = CarbonImmutable::parse($month.'-01', $today->timezone);
             $end = $start->endOfMonth();
             $covered = $accounts->whereIn('kind', ['cash', 'credit'])->filter(fn ($a) => $a->history_start && $a->history_start->lte($start));
-            $expense = $rows->whereIn('flow', self::SPENDING);
+            $expense = app(EconomicActivityService::class)->expenses($rows);
             $months[] = [
                 'month' => $month, 'start' => $start->toDateString(), 'end' => min($end->toDateString(), $today->toDateString()),
                 'income_cents' => (int) $rows->whereIn('flow', self::INCOME)->where('amount_cents', '>', 0)->sum('amount_cents'),
-                'spending_cents' => -(int) $expense->sum('amount_cents'),
+                'spending_cents' => app(EconomicActivityService::class)->total($rows), 'economic_coverage' => app(EconomicActivityService::class)->coverage($rows),
                 'one_time_cents' => -(int) $expense->where('face_punched', true)->sum('amount_cents'),
                 'review_count' => $rows->where('reviewed', false)->count(), 'transaction_count' => $rows->count(),
                 'closed_month' => $end->lt($today), 'covered_accounts' => $covered->count(),

@@ -11,6 +11,9 @@ class ClassificationService
     {
         $normalized = self::merchant($merchant);
         foreach (Record::query()->where('space_id', $space->id)->where('kind', 'rule')->where('active', true)->orderByDesc('id')->get() as $rule) {
+            if (($rule->data['classification']['flow'] ?? null) === EconomicActivityService::TAX_FLOW) {
+                continue; // Receipt-bound tax purpose can never propagate by agency name.
+            }
             if (self::merchant($rule->data['merchant']) === $normalized) {
                 return [...$rule->data['classification'], 'reviewed' => true, 'explanation' => 'Your exact merchant rule: '.$rule->name];
             }

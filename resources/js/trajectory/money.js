@@ -23,3 +23,10 @@ export function rateMillis(value) {
   if(!Number.isSafeInteger(result)||result>100000)throw new Error('Use an annual rate between 0 and 100%.');
   return result;
 }
+
+/** Missing costs cannot become a zero through JavaScript arithmetic coercion. */
+export function recordedDifference(incoming,outgoing) {
+  if(!Number.isSafeInteger(incoming)||!Number.isSafeInteger(outgoing))return null;
+  const value=incoming-outgoing;
+  return Number.isSafeInteger(value)?value:null;
+}

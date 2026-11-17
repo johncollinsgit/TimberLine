@@ -23,3 +23,10 @@ test('mortgage rates retain three decimal places', async () => {
   assert.equal(rateMillis('0'), 0);
   assert.throws(() => rateMillis('2.3751'));
 });
+
+test('missing economic costs do not turn into an income-sized difference',async()=>{
+ const {recordedDifference}=await import('../../resources/js/trajectory/money.js');
+ assert.equal(recordedDifference(10000,null),null);assert.equal(recordedDifference(null,200),null);
+ assert.equal(recordedDifference(10000,0),10000);assert.equal(recordedDifference(0,200),-200);
+ assert.equal(recordedDifference('10000',200),null);
+});

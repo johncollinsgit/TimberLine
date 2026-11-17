@@ -21,6 +21,6 @@ return [
         ))),
     ],
     'goldapi_key' => env('GOLDAPI_KEY'),
-    'categories' => ['giving', 'travel', 'taxes', 'housing', 'utilities', 'groceries', 'transport', 'health', 'insurance', 'education', 'dining', 'delivery_fees', 'entertainment', 'shopping', 'alcohol', 'tobacco', 'gambling', 'subscriptions', 'materials', 'payroll', 'owner_payroll', 'studio_payroll', 'event_payroll', 'fees', 'interest', 'income', 'uncategorized'],
+    'categories' => ['giving', 'travel', 'taxes', 'tax_penalties', 'tax_fees', 'housing', 'utilities', 'groceries', 'transport', 'health', 'insurance', 'education', 'dining', 'delivery_fees', 'entertainment', 'shopping', 'alcohol', 'tobacco', 'gambling', 'subscriptions', 'materials', 'payroll', 'owner_payroll', 'studio_payroll', 'event_payroll', 'fees', 'interest', 'income', 'uncategorized'],
     'discretionary_defaults' => ['gambling', 'tobacco', 'alcohol', 'delivery_fees', 'entertainment', 'shopping'],
 ];

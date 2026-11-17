@@ -12,7 +12,7 @@ class TaxReviewService
         $profile = $space->settings['tax_profile'] ?? [];
         $receipts = $records->where('kind', 'receipt')->pluck('data')->pluck('transaction_id')->filter()->all();
         $rows = [];
-        foreach ($entries->where('flow', 'expense')->where('amount_cents', '<', 0)->groupBy('category') as $category => $group) {
+        foreach (app(EconomicActivityService::class)->expenses($entries)->where('flow', 'expense')->where('amount_cents', '<', 0)->groupBy('category') as $category => $group) {
             $reviewed = $group->where('reviewed', true)->count();
             $documented = $group->whereIn('id', $receipts)->count();
             $score = Money::ratio($reviewed * 50 + $documented * 50, 1, $group->count());
@@ -21,6 +21,7 @@ class TaxReviewService
                 'transport', 'travel' => 'Separate personal travel, commuting, and business use. Retain mileage or travel records and the applicable deduction method. IRC §§162, 274.',
                 'materials', 'shopping' => 'Distinguish supplies consumed, inventory, and capital assets. A purchase is not automatically a current expense. Review IRC §§263, 471 and any depreciation election.',
                 'payroll', 'owner_payroll', 'studio_payroll', 'event_payroll' => 'Reconcile wages, employer taxes, and benefits to payroll evidence. Owner distributions are not payroll. IRC §162.',
+                'tax_penalties', 'tax_fees' => 'Keep agency tax principal separate from interest, penalties and fees. Recorded cash and component evidence do not establish deductibility; request accountant review.',
                 'interest' => 'Separate principal and interest, and trace how borrowed funds were used. Deductibility follows purpose and applicable limits. IRC §163.',
                 'giving' => 'Review the recipient, entity treatment, and contribution limits. A gift is not automatically an ordinary operating expense. IRC §170.',
                 default => 'Document the ordinary and necessary business purpose and separate any personal portion. IRC §§162, 262.',
@@ -54,21 +55,23 @@ class TaxReviewService
     public function profitLoss(Collection $entries, array $ledger): array
     {
         $revenue = $entries->where('flow', 'income');
-        $expense = $entries->filter(fn ($e) => in_array($e['flow'], ['expense', 'refund'], true) || ($e['flow'] === 'owner_wages' && $e['amount_cents'] < 0));
+        $expense = app(EconomicActivityService::class)->expenses($entries, false)->concat($entries->where('flow', 'owner_wages')->where('amount_cents', '<', 0));
+        $costUnknown = app(EconomicActivityService::class)->unresolved($entries)->isNotEmpty();
         $lines = $expense->groupBy('category')->map(fn ($rows, $category) => ['category' => $category, 'amount_cents' => -(int) $rows->sum('amount_cents'), 'ids' => $rows->pluck('id')->all()])->values()->all();
         $ready = isset($ledger['snapshot_id']) || ($ledger['income_cents'] ?? null) !== null || ($ledger['expenses_cents'] ?? null) !== null || ($ledger['net_income_cents'] ?? null) !== null;
 
         return ['authoritative' => $ready, 'complete' => $ready && isset($ledger['income_cents'], $ledger['total_costs_cents'], $ledger['other_income_cents'], $ledger['net_income_cents']),
             'source' => $ready ? 'QuickBooks · selected report period' : 'Provisional transaction activity · incomplete accounting',
             'income_cents' => $ready ? ($ledger['income_cents'] ?? null) : (int) $revenue->sum('amount_cents'),
-            'expenses_cents' => $ready ? ($ledger['expenses_cents'] ?? null) : -(int) $expense->sum('amount_cents'),
+            'expenses_cents' => $ready ? ($ledger['expenses_cents'] ?? null) : ($costUnknown ? null : -(int) $expense->sum('amount_cents')),
             'cogs_cents' => $ready ? ($ledger['cogs_cents'] ?? null) : null,
             'other_income_cents' => $ready ? ($ledger['other_income_cents'] ?? null) : null,
             'other_expenses_cents' => $ready ? ($ledger['other_expenses_cents'] ?? null) : null,
             'total_costs_cents' => $ready ? ($ledger['total_costs_cents'] ?? null) : null,
             // Source net income includes COGS and other sections. Never replace a
             // missing source net with Income minus the Expenses component alone.
-            'net_cents' => $ready ? ($ledger['net_income_cents'] ?? null) : (int) $revenue->sum('amount_cents') + (int) $expense->sum('amount_cents'),
+            'net_cents' => $ready ? ($ledger['net_income_cents'] ?? null) : ($costUnknown ? null : (int) $revenue->sum('amount_cents') + (int) $expense->sum('amount_cents')),
+            'economic_coverage' => app(EconomicActivityService::class)->coverage($entries),
             'observed_at' => $ledger['observed_at'] ?? null, 'basis' => $ledger['basis'] ?? null,
             'revenue_ids' => $revenue->pluck('id')->all(), 'transaction_expense_lines' => $lines, 'unreviewed_count' => $entries->where('reviewed', false)->count(),
             'note' => 'QuickBooks Expenses is one component; total accounting costs also include cost of goods sold and other expenses. Net result uses reported QuickBooks net income; missing report totals stay unavailable. Transaction detail is supporting evidence and may not reconcile to accruals, inventory, depreciation or payroll. Accounting costs include recorded interest but exclude debt principal and owner distributions; they are not cash need or distributable profit.'];

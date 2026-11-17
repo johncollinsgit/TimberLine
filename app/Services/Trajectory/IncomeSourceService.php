@@ -16,11 +16,13 @@ class IncomeSourceService
             'loan_draws' => $this->row('Loan draws', 'Borrowed cash; excluded from earned income.', false),
             'transfers' => $this->row('Transfers', 'Money moved between accounts; excluded from earned income.', false),
             'unclassified_deposits' => $this->row('Deposits needing purpose', 'Cash received without enough evidence to call income.', false),
+            'sales_tax_returns' => $this->row('Sales-tax returns & refunds', 'Agency cash credits settle or reverse tax remittances; excluded from income.', false),
             'refunds' => $this->row('Refunds & reimbursements', 'Returned or reimbursed money; excluded from earned income.', false),
         ];
 
         foreach ($entries->filter(fn (array $entry): bool => $entry['amount_cents'] > 0) as $entry) {
             $key = match (true) {
+                $entry['flow'] === EconomicActivityService::TAX_FLOW => ($entry['tax_purpose']['valid'] ?? false) ? 'sales_tax_returns' : 'unclassified_deposits',
                 $entry['flow'] === 'asset_sale' => 'metals_sales',
                 $entry['flow'] === 'loan_draw' => 'loan_draws',
                 in_array($entry['flow'], ['transfer', 'card_payment', 'debt_payment', 'duplicate'], true) => 'transfers',

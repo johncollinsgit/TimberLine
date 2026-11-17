@@ -43,7 +43,7 @@ class DecisionSupportService
             $received = $cards['take_home_income']['amount_cents'] ?? ($reviewed->isNotEmpty() ? (int) $reviewed->whereIn('flow', ['income', 'owner_wages', 'owner_distribution'])->where('amount_cents', '>', 0)->sum('amount_cents') : null);
             // Source observations replace matching ledger proceeds, never add to them.
             $metals = $cards['metals_sold']['amount_cents'] ?? null;
-            $spent = $selected->isNotEmpty() ? -(int) $selected->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership'])->sum('amount_cents') : null;
+            $spent = $selected->isNotEmpty() ? app(EconomicActivityService::class)->total($selected) : null;
             $gap = $received === null || $ongoing['monthly_needed_cents'] === null ? null : max(0, $ongoing['monthly_needed_cents'] - $received);
             $months[] = [
                 'month' => $start->format('Y-m'), 'label' => $start->format('F Y'),
@@ -93,7 +93,7 @@ class DecisionSupportService
                 $fixedCategories[$category] = ($fixedCategories[$category] ?? 0) + $row['monthly_cents'];
             }
         }
-        $variable = $entries->whereIn('id', $planning['flexible_ids'] ?? []);
+        $variable = app(EconomicActivityService::class)->expenses($entries)->whereIn('id', $planning['flexible_ids'] ?? []);
         foreach ($variable->groupBy('category') as $category => $rows) {
             $categoryMonthly[$category] = Money::ratio(max(0, -(int) $rows->sum('amount_cents')), 365, max(1, $planning['history_days'] ?? 0) * 12);
         }

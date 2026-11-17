@@ -55,13 +55,17 @@ class TrajectoryController extends Controller
     public function evidence(Request $request, Space $space, FinanceAccess $access, LedgerService $ledger)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['ids' => 'required_without_all:date,account_id|array|min:1|max:5000', 'ids.*' => 'integer', 'date' => 'required_without_all:ids,account_id|date_format:Y-m-d|before_or_equal:today', 'account_id' => 'sometimes|integer', 'cash_movement' => 'sometimes|boolean']);
+        $data = $request->validate(['ids' => 'required_without_all:date,account_id|array|min:1|max:5000', 'ids.*' => 'integer', 'date' => 'required_without_all:ids,account_id|date_format:Y-m-d|before_or_equal:today', 'account_id' => 'sometimes|integer', 'cash_movement' => 'sometimes|boolean', 'economic_costs' => 'sometimes|boolean', 'economic_category' => ['sometimes', Rule::in([...app(\App\Services\Trajectory\WorkspaceService::class)->categories($space), 'sales_tax_principal'])], 'economic_categories' => 'sometimes|array|min:1|max:3', 'economic_categories.*' => ['string', 'distinct', Rule::in(['interest', 'tax_penalties', 'tax_fees'])]]);
 
         if (isset($data['account_id'])) {
             Account::where('space_id', $space->id)->findOrFail($data['account_id']);
         }
 
         $entries = $ledger->entries($space, $data['date'] ?? null, $data['date'] ?? null, $data['ids'] ?? null, $data['account_id'] ?? null);
+        abort_if(($data['cash_movement'] ?? false) && ($data['economic_costs'] ?? false), 422, 'Choose bank cash or economic costs, not both.');
+        if ($data['economic_costs'] ?? false) {
+            $entries = app(\App\Services\Trajectory\EconomicActivityService::class)->evidence(collect($entries), $data['economic_category'] ?? null, $data['economic_categories'] ?? null);
+        }
         if ($data['cash_movement'] ?? false) {
             $entries = app(\App\Services\Trajectory\MoneyFlowService::class)->cashEvidence($space, $entries, $data['ids'] ?? null, $data['account_id'] ?? null, $data['date'] ?? null);
         }
@@ -107,7 +111,7 @@ class TrajectoryController extends Controller
 
     public function classify(Request $request, Space $space, Transaction $transaction, LedgerService $ledger)
     {
-        $data = $request->validate(['version' => 'required|integer', 'category' => ['required', Rule::in(app(\App\Services\Trajectory\WorkspaceService::class)->categories($space))], 'flow' => ['required', Rule::in(['expense', 'income', 'refund', 'transfer', 'card_payment', 'asset_transfer', 'asset_sale', 'loan_draw', 'unclassified_deposit', 'owner_wages', 'owner_distribution', 'reimbursement', 'debt_payment', 'duplicate'])], 'face_punched' => 'required|boolean', 'bullshit_spending' => 'required|boolean', 'learn' => 'sometimes|boolean']);
+        $data = $request->validate(['version' => 'required|integer', 'category' => ['required', Rule::in(app(\App\Services\Trajectory\WorkspaceService::class)->categories($space))], 'flow' => ['required', Rule::in(['expense', 'income', 'refund', 'transfer', 'card_payment', 'asset_transfer', 'asset_sale', 'loan_draw', 'unclassified_deposit', 'owner_wages', 'owner_distribution', 'reimbursement', 'debt_payment', 'duplicate', 'sales_tax_remittance'])], 'face_punched' => 'required|boolean', 'bullshit_spending' => 'required|boolean', 'learn' => 'sometimes|boolean']);
 
         return response()->json($ledger->classify($request->user(), $space, $transaction, $data, $data['learn'] ?? false));
     }
@@ -141,6 +145,7 @@ class TrajectoryController extends Controller
             if (! empty($event->after['created_rule_id'])) {
                 Record::where('space_id', $space->id)->where('kind', 'rule')->whereKey($event->after['created_rule_id'])->update(['active' => false]);
             }
+            app(\App\Services\Trajectory\SalesTaxService::class)->admitClassification($space, $tx, $event->before, false);
             $before = $tx->only(array_keys($event->before));
             $tx->update([...$event->before, 'version' => $tx->version + 1]);
             Event::create(['space_id' => $space->id, 'actor_id' => $request->user()->id, 'action' => 'undo_classify', 'record_id' => $tx->id, 'before' => $before, 'after' => $tx->only(array_keys($before))]);
@@ -174,6 +179,7 @@ class TrajectoryController extends Controller
             $record = Record::whereKey($record->id)->lockForUpdate()->firstOrFail();
             abort_unless($record->active && $record->version === $data['version'], 409);
             app(\App\Services\Trajectory\MedicalSharingService::class)->archive($request->user(), $space, $record);
+            app(\App\Services\Trajectory\SalesTaxService::class)->invalidateChangedBinding($record, null, $request->user()->id);
             $record->update(['active' => false, 'version' => $record->version + 1]);
             Event::create(['space_id' => $space->id, 'actor_id' => $request->user()->id, 'action' => 'archive_'.$record->kind, 'record_id' => $record->id]);
         });

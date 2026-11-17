@@ -40,3 +40,10 @@ test('draft tax classification is labeled unconfirmed near both agency and tax t
  const reviewed=salesTaxHtml({report:{rows:[{date:'2028-07-20',agency:'Fictional revenue agency',tax_type:'sales_tax',reviewed:true,amount_cents:-12345}],notes:[]},esc,precise,btn});
  assert.ok(!reviewed.includes('not confirmed'));
 });
+
+test('verified tax filing still exposes a separate bank purpose review without promoting draft evidence',()=>{
+ const reviewed=salesTaxHtml({report:{rows:[{transaction_id:77,date:'2028-07-20',agency:'Fictional <agency>',tax_type:'sales_tax',reviewed:true,bank_reviewed:false,bank_flow:'expense',amount_cents:-10000}],notes:[]},esc,precise,btn});
+ assert.ok(reviewed.includes('Review bank purpose'));assert.ok(reviewed.includes('tax-bank-review'));assert.ok(reviewed.includes('Fictional &lt;agency&gt;'));
+ const bound=salesTaxHtml({report:{rows:[{transaction_id:77,tax_type:'sales_tax',reviewed:true,bank_flow:'sales_tax_remittance'}],notes:[]},esc,precise,btn});
+ assert.ok(!bound.includes('tax-bank-review'));
+});

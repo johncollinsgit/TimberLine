@@ -26,8 +26,8 @@ class LedgerService
                 if (! $tx && $pendingKey) {
                     $tx = Transaction::where('account_id', $account->id)->where('source_key', $pendingKey)->lockForUpdate()->first();
                 }
-                $classification = $tx?->reviewed ? [] : app(ClassificationService::class)->suggest($space, $row['merchant'], $row['amount_cents'], $row['category'] ?? null);
-                if (! $tx?->reviewed && in_array($row['source_provider'] ?? null, ['monarch_csv', 'chase_csv', 'observed_statement'], true) && ! str_starts_with($classification['explanation'] ?? '', 'Your exact merchant rule:')) {
+                $classification = ($tx?->reviewed || $tx?->flow === EconomicActivityService::TAX_FLOW) ? [] : app(ClassificationService::class)->suggest($space, $row['merchant'], $row['amount_cents'], $row['category'] ?? null);
+                if (! $tx?->reviewed && $tx?->flow !== EconomicActivityService::TAX_FLOW && in_array($row['source_provider'] ?? null, ['monarch_csv', 'chase_csv', 'observed_statement'], true) && ! str_starts_with($classification['explanation'] ?? '', 'Your exact merchant rule:')) {
                     $profileFlag = $classification['bullshit_spending'] ?? false;
                     $classification = $row['import_classification'];
                     $classification['bullshit_spending'] = $profileFlag && $classification['flow'] === 'expense';
@@ -48,6 +48,10 @@ class LedgerService
                     'pending' => $row['pending'] ?? false, 'removed' => (bool) $coverageSource,
                     'source' => [...$row, ...$coverageSource], ...$classification,
                 ]);
+                if ($tx->flow === EconomicActivityService::TAX_FLOW && $tx->isDirty(['account_id', 'posted_on', 'amount_cents', 'merchant'])) {
+                    $tx->reviewed = false;
+                    $tx->explanation = 'Sales-tax bank source changed; review its evidence and purpose again.';
+                }
                 if ($tx->isDirty()) {
                     $tx->version = ($tx->exists ? $tx->version : 0) + 1;
                     $tx->save();
@@ -76,10 +80,12 @@ class LedgerService
         abort_unless($tx->space_id === $space->id, 404);
 
         return DB::transaction(function () use ($user, $space, $tx, $data, $learn) {
+            Space::whereKey($space->id)->lockForUpdate()->firstOrFail();
             $tx = Transaction::where('space_id', $space->id)->whereKey($tx->id)->lockForUpdate()->firstOrFail();
             app(MedicalSharingService::class)->assertUnbound($tx);
             abort_unless($tx->version === $data['version'], 409, 'This transaction changed. Refresh before editing.');
             $before = $tx->only(['category', 'flow', 'face_punched', 'bullshit_spending', 'reviewed', 'explanation', 'version']);
+            app(SalesTaxService::class)->admitClassification($space, $tx, $data, $learn);
             $values = array_intersect_key($data, array_flip(['category', 'flow', 'face_punched', 'bullshit_spending']));
             $tx->update([...$values, 'reviewed' => true, 'explanation' => 'Reviewed by you.', 'version' => $tx->version + 1]);
             $rule = null;
@@ -97,7 +103,10 @@ class LedgerService
     {
         app(FinanceAccess::class)->authorize($user, $space);
 
+        abort_if(($data['flow'] ?? null) === EconomicActivityService::TAX_FLOW, 422, 'Review each receipt-backed tax payment individually.');
+
         return DB::transaction(function () use ($user, $space, $transactions, $data): array {
+            Space::whereKey($space->id)->lockForUpdate()->firstOrFail();
             $ids = array_column($transactions, 'id');
             $versions = array_column($transactions, 'version', 'id');
             $rows = Transaction::where('space_id', $space->id)->whereIn('id', $ids)->lockForUpdate()->get()->keyBy('id');
@@ -108,6 +117,8 @@ class LedgerService
             foreach ($ids as $id) {
                 $tx = $rows[$id];
                 app(MedicalSharingService::class)->assertUnbound($tx);
+                abort_if($tx->flow === EconomicActivityService::TAX_FLOW, 422, 'Review this tax purpose individually.');
+                app(SalesTaxService::class)->admitClassification($space, $tx, $data, false);
                 abort_unless(! $tx->pending && ! $tx->removed && ! $tx->reviewed, 422, 'Only posted transactions still needing review can be bulk categorized.');
                 abort_unless($tx->version === (int) $versions[$id], 409, 'A transaction changed. Refresh before applying this suggestion.');
                 $before = $tx->only(['category', 'flow', 'face_punched', 'bullshit_spending', 'reviewed', 'explanation', 'version']);
@@ -156,6 +167,7 @@ class LedgerService
                 abort_if(($tx->amount_cents < 0 && $split['amount_cents'] > 0) || ($tx->amount_cents > 0 && $split['amount_cents'] < 0)
                     || ($tx->amount_cents === 0 && $split['amount_cents'] !== 0), 422);
             }
+            abort_if($tx->flow === EconomicActivityService::TAX_FLOW, 422, 'Clear the sales-tax purpose before changing its allocation.');
             $before = Allocation::where('transaction_id', $tx->id)->get()->toArray();
             Allocation::where('transaction_id', $tx->id)->delete();
             foreach ($splits as $split) {
@@ -182,7 +194,7 @@ class LedgerService
             $query->whereDate('t.posted_on', '<=', $end);
         }
 
-        return $query->select(['t.*', 'trajectory_allocations.amount_cents as allocated_cents'])->orderBy('t.posted_on')->get()->map(function ($row) use ($space): array {
+        $entries = $query->select(['t.*', 'trajectory_allocations.amount_cents as allocated_cents'])->orderBy('t.posted_on')->get()->map(function ($row) use ($space): array {
             $own = (int) $row->space_id === $space->id;
 
             // Shared allocations disclose neither the source account nor the unsplit amount.
@@ -193,5 +205,7 @@ class LedgerService
                 'editable' => $own, 'version' => (int) $row->version, 'account_id' => $own ? (int) $row->account_id : null,
                 'explanation' => $own ? $row->explanation : 'Only your allocated amount is visible.'];
         })->all();
+
+        return app(SalesTaxService::class)->decorateEntries($space, $entries);
     }
 }
