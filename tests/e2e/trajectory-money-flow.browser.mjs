@@ -25,7 +25,7 @@ try{
   assert.ok((await context.request.post(origin+'/login',{form:{email:'flow@fixture.invalid',password:'Fictional-flow-only-2028!',_token:csrf},headers:{Accept:'application/json'}})).ok());
   const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(12000);
   for(const width of [390,1440]){
-   await page.setViewportSize({width,height:950});await page.goto(origin+'/trajectory');
+   await page.setViewportSize({width,height:950});await page.goto(origin+'/fictional-prior-404');await page.goto(origin+'/trajectory');
    if(await page.locator('#tr-splash-skip').isVisible())await page.locator('#tr-splash-skip').click();
    await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
    await expect(page.locator('#tr-overview-explore')).not.toHaveAttribute('open','');
@@ -83,11 +83,11 @@ try{
    assert.equal(sent.postDataJSON().cash_movement,true);assert.deepEqual(sent.postDataJSON().ids,[fixture.zero_id]);
    const zeroRow=page.getByRole('row').filter({hasText:'Fictional shared cost'});
    await expect(zeroRow).toContainText('$770.00');await expect(zeroRow).toContainText('Economic allocation $0.00');
-   await page.locator('#tr-back').click();
+   await page.locator('#tr-back').click();await page.getByRole('heading',{name:'Follow your money'}).waitFor();if(width<700){await expect(page.locator('#tr-dialog')).toBeVisible();await page.locator('#tr-close').click();await expect(page.locator('#tr-dialog')).not.toBeVisible();}
    await openMerchant('Fictional partial cost','Transport');
    const partial=page.getByRole('row').filter({hasText:'Fictional partial cost'});
    await expect(partial).toContainText('$100.00');await expect(partial).toContainText('Economic allocation -$25.00');
-   await page.locator('#tr-back').click();
+   await page.locator('#tr-back').click();await page.getByRole('heading',{name:'Follow your money'}).waitFor();if(width<700){await expect(page.locator('#tr-dialog')).toBeVisible();await page.locator('#tr-close').click();await expect(page.locator('#tr-dialog')).not.toBeVisible();}
    await page.getByText(/^Excluded and zero-amount records/).click();
    await page.getByRole('row').filter({hasText:'Internal transfers'}).getByRole('button',{name:'View transactions',exact:true}).click();
    await expect(page.getByRole('row').filter({hasText:'Fictional internal transfer'})).toContainText('-$123.45');
@@ -106,7 +106,54 @@ try{
    await page.evaluate(()=>scrollTo(0,0));
    await page.screenshot({path:join(evidence,`${name}-${width}.png`),fullPage:true});
    await diagram.screenshot({path:join(evidence,`${name}-${width}-diagram.png`)});
-   checks.push(`${name} ${width}: actual navigation, mode switch, keyboard/touch evidence, zero/partial allocations, table and horizontal containment`);
+   // Browser Back from an internal menu must never leave for the preceding 404 document.
+   await page.getByRole('button',{name:'Inflows',exact:true}).click();
+   await expect(page.locator('.tr-family-inflows')).toBeVisible();
+   await expect(page.locator('.tr-family-inflows > .tr-grid')).toContainText('Recorded receipts');
+   await expect(page.getByRole('heading',{name:'Monthly recorded receipts',exact:true})).toBeVisible();
+   const receiptDiagram=page.locator(width<700?'.tr-flow-phone':'.tr-flow-desktop');
+   for(const label of ['Loans','Metals','Odd jobs','Fictional Candle Studio'])await expect(receiptDiagram.locator(`[data-action][data-label="${label}"]`).first()).toBeVisible();
+   const sourceNode=receiptDiagram.locator('[data-action="money-flow-evidence"][data-label="Fictional Candle Studio"]');
+   await sourceNode.click();await page.getByRole('heading',{name:'Review transactions',level:1,exact:true}).waitFor();
+   await expect(page.getByRole('row').filter({hasText:'Fictional net payroll'})).toContainText('$110.01');
+   await expect(page.getByRole('row').filter({hasText:'Fictional owner draw'})).toContainText('$220.02');
+   await expect(page.getByRole('row').filter({hasText:'Fictional other support'})).toContainText('$30.03');
+   await page.locator('#tr-back').click();await expect(page.getByRole('button',{name:'Inflows',exact:true})).toHaveAttribute('aria-pressed','true');
+   await expect(sourceNode).toBeFocused();assert.equal(page.url(),origin+'/trajectory');
+   if(width<700){
+    const type=receiptDiagram.locator('[data-action="money-flow-category"][data-label="Fictional Candle Studio · Net payroll"]');
+    await type.click();await expect(page.locator('#tr-dialog')).toBeVisible();await page.goBack();
+    await expect(page.locator('#tr-dialog')).not.toBeVisible();await expect(type).toBeFocused();assert.equal(page.url(),origin+'/trajectory');
+    await type.click();await page.locator('#tr-dialog').getByRole('button',{name:'View all receipts',exact:true}).click();
+    await page.getByRole('heading',{name:'Review transactions',level:1,exact:true}).waitFor();
+    await page.goBack();await expect(page.locator('#tr-dialog')).toBeVisible();
+    await expect(page.locator('#tr-dialog-title')).toHaveText('Fictional Candle Studio · Net payroll');
+    await page.goBack();await expect(page.locator('#tr-dialog')).not.toBeVisible();await expect(type).toBeFocused();
+   }
+   await page.screenshot({path:join(evidence,`${name}-${width}-family-inflows.png`),fullPage:true});
+   const receiptTrend=page.locator('#tr-flow-trend');await receiptTrend.scrollIntoViewIfNeeded();
+   let receiptPoint;await expect.poll(async()=>{receiptPoint=await receiptTrend.evaluate(node=>{const ctx=node.getContext('2d'),data=ctx.getImageData(0,0,node.width,node.height).data,box=node.getBoundingClientRect();let left=node.width,right=0,top=node.height,bottom=0,count=0;for(let y=0;y<node.height;y++)for(let x=0;x<node.width;x++){const i=(y*node.width+x)*4;if(Math.abs(data[i]-167)<3&&Math.abs(data[i+1]-131)<3&&Math.abs(data[i+2]-75)<3&&data[i+3]>240){left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);count++;}}return count>=4?{x:box.x+(left+right)/2*box.width/node.width,y:box.y+(top+bottom)/2*box.height/node.height}:null;});return Boolean(receiptPoint);}).toBe(true);
+   const receiptRequest=page.waitForRequest(request=>request.method()==='POST'&&new URL(request.url()).pathname.endsWith('/evidence'));
+   await page.mouse.click(receiptPoint.x,receiptPoint.y);const receiptSent=(await receiptRequest).postDataJSON();
+   assert.equal(receiptSent.cash_movement,true);assert.deepEqual(receiptSent.ids.toSorted((a,b)=>a-b),fixture.cash_inflow_ids.toSorted((a,b)=>a-b));
+   await page.getByRole('heading',{name:'Review transactions',level:1,exact:true}).waitFor();await page.locator('#tr-back').click();
+   await expect(page.getByRole('button',{name:'Inflows',exact:true})).toHaveAttribute('aria-pressed','true');
+   // Account/date/scope changes invalidate private historical evidence and normalize unsupported modes.
+   await page.locator('#tr-account-filter').selectOption(String(fixture.other_cash_id));
+   await expect(page.locator('.tr-family-inflows')).toContainText('No included receipts');
+   await page.goBack();await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
+   await expect(page.getByRole('heading',{name:'Review transactions',level:1,exact:true})).not.toBeVisible();
+   assert.equal(await page.locator('#tr-account-filter').inputValue(),String(fixture.other_cash_id));
+   await page.locator('#tr-account-filter').selectOption('');await page.locator('#tr-range [data-range="month"]').click();
+   await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
+   await page.locator('#tr-space-tabs [data-scope="business"]').click();await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
+   if(width<700)await page.locator('#tr-mobile-menu').click();await page.getByRole('button',{name:'Money flow',exact:true}).click();
+   await expect(page.getByRole('button',{name:'Inflows',exact:true})).not.toBeAttached();
+   await expect(page.locator('.tr-family-inflows')).not.toBeAttached();
+   await expect(page.getByRole('button',{name:'Spending',exact:true})).toHaveAttribute('aria-pressed','true');
+   await page.locator('#tr-space-tabs [data-scope="personal"]').click();await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
+   await page.locator('#tr-range [data-range="year"]').click();await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
+   checks.push(`${name} ${width}: native/browser Back from prior 404, category menu/detail restoration, scoped family receipt sources, incoming-only trends, keyboard/touch evidence, allocation privacy and horizontal containment`);
   }
   assert.deepEqual(errors,[]);await context.close();await browser.close();browser=null;
  }

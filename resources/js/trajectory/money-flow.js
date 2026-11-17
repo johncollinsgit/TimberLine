@@ -15,15 +15,16 @@ export function moneyFlowGraph(view){
   const byKind=new Map();
   for(const row of view?.inflows||[]){const purpose=row.purpose_key||row.kind||'review';if(!byKind.has(purpose))byKind.set(purpose,[]);byKind.get(purpose).push(row);}
   const incoming=[...byKind].flatMap(([purpose,rows])=>{const kind=rows[0].kind||'review',label=rows[0].purpose_label||kindNames[kind]||'incoming money';return condensed(rows,3,`Other ${label}`).map(row=>({...row,kind,purpose_key:purpose,purpose_label:label}));});
-  const preserved=(view?.outflows||[]).filter(row=>row.kind==='review'||payrollCategories.has(row.key));
-  const outgoing=[...condensed((view?.outflows||[]).filter(row=>row.kind!=='review'&&!payrollCategories.has(row.key)),Math.max(2,7-preserved.length),'Other outgoing categories'),...preserved];
+  const keep=row=>row.kind==='review'||payrollCategories.has(row.key)||row.preserve===true;
+  const preserved=(view?.outflows||[]).filter(keep);
+  const outgoing=[...condensed((view?.outflows||[]).filter(row=>!keep(row)),Math.max(2,7-preserved.length),view?.receipt_view?'Other receipt types':'Other outgoing categories'),...preserved];
   const incomingTotal=sum(incoming),outgoingTotal=sum(outgoing),total=Math.max(incomingTotal,outgoingTotal);
   const nodes=[],links=[];
   if(!Number.isSafeInteger(incomingTotal)||!Number.isSafeInteger(outgoingTotal))return {nodes,links,total_cents:0,error:'amount_range'};
   const node=(id,column,row)=>{const value={...row,id,column};nodes.push(value);return value;};
   const link=(source,target,row)=>links.push({source:source.id,target:target.id,amount_cents:row.amount_cents,ids:row.ids||[],kind:row.kind});
   if(!total)return {nodes,links,total_cents:0,inflow_cents:incomingTotal,outflow_cents:outgoingTotal};
-  const pool=node('pool',1,{label:'Recorded activity',amount_cents:total,kind:'pool',ids:[]});
+  const pool=node('pool',1,{label:view?.receipt_view?'Recorded receipts':'Recorded activity',amount_cents:total,kind:'pool',ids:[]});
   for(const [index,row] of incoming.entries()){const item=node(`in-${index}`,0,row);link(item,pool,row);}
   if(outgoingTotal>incomingTotal){const gap=node('funding-gap',0,{label:view.tax_split_unknown_ids?.length?'Known subset funding gap · tax costs unresolved':'Outflows above recorded inflows',amount_cents:outgoingTotal-incomingTotal,kind:'difference',ids:[]});link(gap,pool,gap);}
   if(incomingTotal>outgoingTotal)outgoing.push({key:'difference',label:view.tax_split_unknown_ids?.length?'Known subset difference · tax costs unresolved':'Recorded inflows above outflows',amount_cents:incomingTotal-outgoingTotal,kind:'difference',ids:[],merchants:[]});
@@ -43,7 +44,7 @@ export function moneyFlowCompactGraph(view){
     if(!groups.has(key))groups.set(key,{...row,id:`compact-${key}`,label:row.kind==='difference'?(view.tax_split_unknown_ids?.length?'Known subset gap':'Recorded funding gap'):row.purpose_key!==row.kind&&row.purpose_label?row.purpose_label:short[row.kind]||row.label,amount_cents:0,ids:[]});
     const group=groups.get(key);group.amount_cents+=row.amount_cents;group.ids.push(...row.ids);
   }
-  const pool={id:'compact-pool',column:1,label:'Recorded activity',kind:'pool',amount_cents:full.total_cents,ids:[]};
+  const pool={id:'compact-pool',column:1,label:view?.receipt_view?'Recorded receipts':'Recorded activity',kind:'pool',amount_cents:full.total_cents,ids:[]};
   const outgoing=full.nodes.filter(node=>node.column===2).map(node=>({...node,id:`compact-${node.id}`,label:node.kind==='difference'?(view.tax_split_unknown_ids?.length?'Known subset difference':'Inflows above outflows'):node.label}));
   const nodes=[...groups.values(),pool,...outgoing],links=[];
   for(const row of groups.values())links.push({source:row.id,target:pool.id,amount_cents:row.amount_cents,ids:row.ids,kind:row.kind});
@@ -79,11 +80,13 @@ function wrapLabel(value,limit){
 }
 
 export function moneyFlowTrendSeries(report,mode='spending'){
-  return (report?.history?.years||[]).map(year=>({year:year.year,values:year.months.map(month=>Number.isSafeInteger(month.views?.[mode]?.outflow_cents)?month.views[mode].outflow_cents:null),months:year.months}));
+  const source=mode==='inflows'?'cash':mode,field=mode==='inflows'?'inflow_cents':'outflow_cents';
+  return (report?.history?.years||[]).map(year=>({year:year.year,values:year.months.map(month=>Number.isSafeInteger(month.views?.[source]?.[field])?month.views[source][field]:null),months:year.months}));
 }
 
 function historyHtml(report,mode,{esc,precise,btn}){
   const history=report?.history;if(!history)return '';
+  if(mode==='inflows')return inflowHistoryHtml(report,{esc,precise,btn});
   const source=point=>point?.ids?.length?btn('View records','money-flow-evidence',`data-cash="${mode==='cash'}" data-ids="${esc(JSON.stringify(point.ids))}"`):'';
   const current=history.current.views[mode],prior=history.prior.views[mode];
   const months=Array.from({length:12},(_,index)=>new Intl.DateTimeFormat('en-US',{month:'short',timeZone:'UTC'}).format(new Date(Date.UTC(2020,index,1))));
@@ -100,10 +103,10 @@ function diagram(view,{esc,precise,cash=false},compact=false){
   const attrs=row=>{
     if(!row.ids?.length)return '';
     const category=compact&&row.column===2;
-    return `class="tr-flow-action" role="button" tabindex="0" data-action="${category?'money-flow-category':'money-flow-evidence'}" data-label="${esc(row.label)}" data-merchants="${esc(JSON.stringify(category?condensed(row.merchants||[],8,'Other merchants'):[]))}" data-cash="${cash}" data-economic-category="${esc(row.economic_category||'')}" data-economic-categories="${esc(JSON.stringify(row.economic_categories||[]))}" data-ids="${esc(JSON.stringify(row.ids))}" aria-label="${esc(row.label)} · ${esc(precise(row.amount_cents))} · ${category?'View merchants and records':`View ${row.ids.length} transactions`}"`;
+    return `class="tr-flow-action" role="button" tabindex="0" data-action="${category?'money-flow-category':'money-flow-evidence'}" data-label="${esc(row.label)}" data-merchants="${esc(JSON.stringify(category?condensed(row.merchants||[],8,'Other merchants'):[]))}" data-cash="${cash}" data-inflows="${view.receipt_view===true}" data-economic-category="${esc(row.economic_category||'')}" data-economic-categories="${esc(JSON.stringify(row.economic_categories||[]))}" data-ids="${esc(JSON.stringify(row.ids))}" aria-label="${esc(row.label)} · ${esc(precise(row.amount_cents))} · ${category?'View merchants and records':`View ${row.ids.length} transactions`}"`;
   };
-  const headings=compact?[['Sources',8],['Where it went',208]]:[['Incoming sources',18],['Activity',410],['Outgoing categories',640],['Merchants',960]];
-  return `<div class="tr-flow-scroll tr-flow-${suffix}" role="region" aria-label="${compact?'Phone source-to-category overview; tap categories for merchants':'Money flow from sources to categories and merchants'}"><svg class="tr-flow-svg" viewBox="0 0 ${layout.width} ${layout.height+40}" width="${layout.width}" height="${layout.height+40}" aria-labelledby="tr-flow-title-${suffix} tr-flow-desc-${suffix}"><title id="tr-flow-title-${suffix}">Recorded money flow</title><desc id="tr-flow-desc-${suffix}">Sources pass through a shared activity anchor; the bands do not establish that one receipt funded a particular purchase. Select a labeled branch for its source records. Differences are derived, not savings.</desc>
+  const headings=view.receipt_view?(compact?[['Sources',8],['Receipt types',208]]:[['Sources',18],['Receipts',410],['Receipt types',640],['Received from',960]]):compact?[['Sources',8],['Where it went',208]]:[['Incoming sources',18],['Activity',410],['Outgoing categories',640],['Merchants',960]];
+  return `<div class="tr-flow-scroll tr-flow-${suffix}" role="region" aria-label="${view.receipt_view?'Household receipts from sources to receipt types and senders':compact?'Phone source-to-category overview; tap categories for merchants':'Money flow from sources to categories and merchants'}"><svg class="tr-flow-svg" viewBox="0 0 ${layout.width} ${layout.height+40}" width="${layout.width}" height="${layout.height+40}" aria-labelledby="tr-flow-title-${suffix} tr-flow-desc-${suffix}"><title id="tr-flow-title-${suffix}">${view.receipt_view?'Recorded household receipts':'Recorded money flow'}</title><desc id="tr-flow-desc-${suffix}">${view.receipt_view?'The same bank receipts are grouped by source and receipt type. The bands describe received money, not how it was spent. Select a labeled branch for its bank records.':'Sources pass through a shared activity anchor; the bands do not establish that one receipt funded a particular purchase. Select a labeled branch for its source records. Differences are derived, not savings.'}</desc>
     ${headings.map(([label,x])=>`<text class="tr-flow-column" x="${x}" y="22">${label}</text>`).join('')}
     <g transform="translate(0 32)">${layout.links.map(link=>`<path d="${link.path}" class="tr-flow-band ${link.kind==='difference'?'tr-flow-derived':''}" stroke="${esc(link.color||'#6c9b8d')}" stroke-width="${Math.max(.5,link.band)}"><title>${esc(precise(link.amount_cents))}</title></path>`).join('')}
     ${layout.nodes.map(node=>{
@@ -115,6 +118,7 @@ function diagram(view,{esc,precise,cash=false},compact=false){
 
 export function moneyFlowHtml({report,mode='spending',esc,precise:formatMoney,btn}){
   const precise=value=>formatMoney(Number.isSafeInteger(value)?value:null);
+  if(mode==='inflows'&&report?.family_inflows)return familyInflowHtml(report,{esc,precise,btn});
   const view=report?.views?.[mode];
   if(!view)return '<div class="tr-empty">Recorded money flow is unavailable for this view.</div>';
   const inspect=(row,cash=mode==='cash')=>row.ids?.length?btn('View transactions','money-flow-evidence',`data-cash="${cash}" data-economic="${mode==='spending'&&(!row.amount_basis||row.economic_category==='sales_tax_principal')}" data-economic-category="${esc(row.economic_category||'')}" data-economic-categories="${esc(JSON.stringify(row.economic_categories||[]))}" data-ids="${esc(JSON.stringify(row.ids))}"`):'Derived · no transaction';
@@ -123,7 +127,7 @@ export function moneyFlowHtml({report,mode='spending',esc,precise:formatMoney,bt
   const difference=view.difference_cents;
   const differenceLabel=difference===null?'Activity difference unavailable':difference<0?'Outflows above recorded inflows':difference>0?'Recorded inflows above outflows':'Recorded inflows equal outflows';
   return `<section class="tr-panel tr-money-flow" aria-labelledby="tr-flow-title"><header class="tr-panel-head"><h2 id="tr-flow-title">Follow your money</h2></header>
-    <div class="tr-period-tabs tr-flow-modes" role="group" aria-label="Money flow view"><button type="button" data-action="money-flow-mode" data-mode="spending" aria-pressed="${mode==='spending'}">Spending</button><button type="button" data-action="money-flow-mode" data-mode="cash" aria-pressed="${mode==='cash'}">Cash movement</button></div>
+    ${flowModes(report,mode)}
     <p class="tr-subtle"><span class="tr-flow-long">${mode==='spending'?'Economic purchases, including credit-card purchases and authorized shared allocations. Debt repayments and sales-tax principal are excluded; known tax interest, penalties and fees remain.':'Full posted bank movements on your owned cash accounts. Debt repayments appear here; card purchases and other spaces’ cash do not.'}</span><span class="tr-flow-short">${mode==='spending'?'Purchases and known costs. Repayments and sales-tax principal excluded.':'Owned bank cash. Debt payments included; card purchases excluded.'}</span></p>
     <div class="tr-data-note tr-flow-coverage"><span class="tr-flow-long"><strong>Recorded coverage · may be partial.</strong> ${report.coverage?.history_start?`Account history starts ${esc(report.coverage.history_start)}. `:''}Report dates and the account filter apply. This diagram does not establish your cash balance or savings.</span><span class="tr-flow-short">Partial recorded coverage. Not a cash balance or savings.</span></div>
     <div class="tr-grid equal"><div class="tr-metric"><span class="tr-kicker"><span class="tr-flow-long">Recorded inflows · all types</span><span class="tr-flow-short">In · all types</span></span><div class="tr-number">${precise(view.inflow_cents)}</div></div><div class="tr-metric"><span class="tr-kicker"><span class="tr-flow-long">Recorded outflows · gross</span><span class="tr-flow-short">Out · gross</span></span><div class="tr-number">${precise(view.outflow_cents)}</div></div><div class="tr-metric"><span class="tr-kicker"><span class="tr-flow-long">${esc(differenceLabel)}</span><span class="tr-flow-short">Difference</span></span><div class="tr-number">${precise(difference===null?null:Math.abs(difference))}</div><small class="tr-flow-long">Derived activity difference</small></div></div><p class="tr-flow-difference"><span class="tr-flow-short">${esc(differenceLabel)} · derived, not savings.</span></p>
@@ -137,4 +141,36 @@ export function moneyFlowHtml({report,mode='spending',esc,precise:formatMoney,bt
     <details class="tr-flow-table"><summary>Excluded and zero-amount records · ${view.excluded.reduce((n,row)=>n+row.ids.length,0)} records</summary><p class="tr-subtle">Excluded amounts are shown as gross absolute movements, not spending. Both legs of an internal transfer may be present. Unreviewed exclusions remain inspectable.</p><div class="tr-table-wrap" tabindex="0"><table class="tr-table"><caption>Records outside this diagram</caption><thead><tr><th scope="col">Reason</th><th scope="col">Gross amount</th><th scope="col">Signed total</th><th scope="col">Needs review</th><th scope="col">Evidence</th></tr></thead><tbody>${view.excluded.map(row=>`<tr><th scope="row">${esc(row.label)}</th><td>${precise(row.amount_cents)}</td><td>${precise(row.signed_cents)}</td><td>${row.review_count}</td><td>${inspect(row,row.amount_basis==='owned_bank_cash')}</td></tr>`).join('')||'<tr><td colspan="5">No excluded records in this scope.</td></tr>'}</tbody></table></div></details>
     <details class="tr-flow-table"><summary>How to read this view</summary>${(report.coverage?.notes||[]).map(note=>`<p class="tr-subtle">${esc(note)}</p>`).join('')}${view.shared_allocation_count?`<p class="tr-subtle">${view.shared_allocation_count} authorized shared allocation(s); the other space’s merchant and account stay private.</p>`:''}${view.stale_source_count?'<p class="tr-subtle">Some bank sources changed while loading. Refresh before relying on Cash movement.</p>':''}</details>
   </section>${historyHtml(report,mode,{esc,precise,btn})}`;
+}
+
+function flowModes(report,mode){
+  return `<div class="tr-period-tabs tr-flow-modes" role="group" aria-label="Money flow view">${[['spending','Spending'],['cash','Cash movement'],...(report?.family_inflows?[['inflows','Inflows']]:[])].map(([key,label])=>`<button type="button" data-action="money-flow-mode" data-mode="${key}" aria-pressed="${mode===key}">${label}</button>`).join('')}</div>`;
+}
+
+function familyInflowHtml(report,{esc,precise,btn}){
+  const view=report.family_inflows;
+  const inspect=row=>row.ids?.length?btn('View receipts','money-flow-evidence',`data-cash="true" data-ids="${esc(JSON.stringify(row.ids))}"`):'';
+  const rows=groups=>groups.map(row=>`<tr><th scope="row">${esc(row.label)}</th><td>${precise(row.amount_cents)}</td><td>${row.ids.length}</td><td>${inspect(row)}</td></tr>`).join('');
+  const absent=(view.source_families||[]).filter(row=>!row.ids.length);
+  return `<section class="tr-panel tr-money-flow tr-family-inflows" aria-labelledby="tr-flow-title"><header class="tr-panel-head"><h2 id="tr-flow-title">Follow your money</h2></header>${flowModes(report,'inflows')}
+    <p class="tr-subtle">Actual household bank receipts, grouped by source and receipt type. Loans, metal sales, company pay and odd jobs keep their own branches.</p>
+    <div class="tr-data-note tr-flow-coverage">Partial recorded coverage. Plans and cash held outside these accounts are separate.</div>
+    <div class="tr-grid equal"><div class="tr-metric"><span class="tr-kicker">Recorded receipts · all types</span><div class="tr-number">${precise(view.inflow_cents)}</div></div><div class="tr-metric"><span class="tr-kicker">Receipt transactions</span><div class="tr-number">${esc(view.receipt_count)}</div></div><div class="tr-metric"><span class="tr-kicker">Receipts needing review</span><div class="tr-number">${precise(view.review_inflow_cents)}</div></div></div>
+    ${view.inflow_cents===null?`<p class="tr-data-note">Receipt total unavailable. Known source subset: ${precise(view.known_inflow_cents)}. Refresh changed bank sources and review coverage.</p>`:''}
+    ${absent.length?`<p class="tr-subtle">No reviewed receipts for ${absent.map(row=>esc(row.label)).join(', ')} in this scope. Other deposits may still need review.</p>`:''}
+    <p class="tr-subtle">Tap a source or receipt type for the bank records. This view describes receipts; it does not assign them to purchases.</p>
+    ${diagram(view,{esc,precise,cash:true})}${diagram(view,{esc,precise,cash:true},true)}
+    <details class="tr-flow-table"><summary>All receipt amounts and records</summary><div class="tr-table-wrap" tabindex="0"><table class="tr-table"><caption>Household bank receipts by source</caption><thead><tr><th scope="col">Source</th><th scope="col">Receipts</th><th scope="col">Records</th><th scope="col">Evidence</th></tr></thead><tbody>${rows(view.inflows)||'<tr><td colspan="4">No included receipts in this scope.</td></tr>'}</tbody></table></div><div class="tr-table-wrap" tabindex="0"><table class="tr-table"><caption>Household receipt types and senders</caption><thead><tr><th scope="col">Receipt type / sender</th><th scope="col">Receipts</th><th scope="col">Records</th><th scope="col">Evidence</th></tr></thead><tbody>${view.outflows.map(row=>rows([row])+rows(row.merchants||[])).join('')}</tbody></table></div></details>
+    <details class="tr-flow-table"><summary>Receipt sources and coverage</summary>${view.notes.map(note=>`<p class="tr-subtle">${esc(note)}</p>`).join('')}</details></section>${inflowHistoryHtml(report,{esc,precise,btn})}`;
+}
+
+function inflowHistoryHtml(report,{esc,precise,btn}){
+  const history=report?.history;if(!history)return '';
+  const source=point=>point?.inflow_ids?.length?btn('View receipts','money-flow-evidence',`data-cash="true" data-ids="${esc(JSON.stringify(point.inflow_ids))}"`):'';
+  const series=moneyFlowTrendSeries(report,'inflows');
+  const months=Array.from({length:12},(_,index)=>new Intl.DateTimeFormat('en-US',{month:'short',timeZone:'UTC'}).format(new Date(Date.UTC(2020,index,1))));
+  return `<section class="tr-panel tr-money-flow-history"><header class="tr-panel-head"><h2>Last year and the monthly receipt trend</h2></header><p class="tr-subtle">Recorded bank receipts of all types. Coverage may differ; missing history stays unavailable.</p><details class="tr-flow-history-coverage"><summary>Coverage and comparison basis</summary><p class="tr-subtle">${esc(history.note)}</p></details>
+    <div class="tr-table-wrap"><table class="tr-table"><caption>Same calendar period · household bank receipts</caption><thead><tr><th scope="col">Period</th><th scope="col">Recorded receipts · all types</th><th scope="col">Evidence</th></tr></thead><tbody>${[history.current,history.prior].map(period=>`<tr><th scope="row">${esc(period.from)} – ${esc(period.through)}</th><td>${precise(period.views.cash.inflow_cents)}</td><td>${source(period.views.cash)}</td></tr>`).join('')}</tbody></table></div>
+    <h3>Monthly recorded receipts</h3><p class="tr-subtle">Whole calendar-year actuals. The current month is partial. Tap a point for incoming bank records.</p>${series.some(year=>year.values.some(value=>value!==null))?'<div class="tr-chart"><canvas id="tr-flow-trend" role="img" aria-label="Monthly recorded household receipts by year; gaps mean unavailable history"></canvas></div>':'<p class="tr-empty">No monthly receipt evidence is available in this scope.</p>'}
+    <details class="tr-flow-table"><summary>Monthly receipts and source records</summary><div class="tr-table-wrap"><table class="tr-table"><caption>Three-year monthly household bank receipts</caption><thead><tr><th scope="col">Month</th>${history.years.map(year=>`<th scope="col">${esc(year.year)} · receipts</th>`).join('')}</tr></thead><tbody>${months.map((month,index)=>`<tr><th scope="row">${month}</th>${history.years.map(year=>{const point=year.months[index].views.cash;return `<td>${precise(point.inflow_cents)}<br>${source(point)}</td>`;}).join('')}</tr>`).join('')}</tbody></table></div></details></section>`;
 }

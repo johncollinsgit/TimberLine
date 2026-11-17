@@ -5,7 +5,7 @@ uses actual posted ledger entries in the selected date/account scope. It does
 not import another ledger, create financial records, or include budgets,
 forecast receipts, expected medical shares, or opening cash.
 
-## Two bases
+## Spending and cash bases
 
 - **Spending** counts allocated economic purchases, including card purchases.
   Authorized shared allocations keep their allocated cents and the generic
@@ -134,3 +134,46 @@ aggregate flexible override still takes precedence and ignores category targets.
 This changes neither planned budget records nor recorded payroll amounts. Zero
 source transactions permit only zero allocations, preventing invented opposing
 expense shares.
+
+
+## Household receipt sources
+
+Personal spaces also offer **Inflows** in the same Sankey renderer. It describes
+only positive posted receipts already included in owned bank cash. Source and
+receipt-type columns partition the same cents; they do not assign a receipt to
+any purchase. The tables and incoming-only monthly trend retain other income,
+refunds, medical bill reimbursements and Needs review alongside the named sources.
+
+- Loans require a reviewed cash-leg `loan_draw`; debt-ledger movements and
+  ordinary transfers do not establish new household borrowing.
+- Metals require reviewed `asset_sale` receipts in `gold_and_silver`. These are
+  sale proceeds, not gains or recurring earnings. Off-bank retained proceeds and
+  planned sales do not create bank receipts.
+- Named company receipts reuse confirmed `company_support_source` records and
+  `SupportReceiptService` ambiguity/refinement rules for currently authorized,
+  linked businesses. Net payroll, owner draws and other support remain separate.
+  A company name or similar amount cannot establish the source.
+- Odd jobs require reviewed income in `odd_jobs` or `mowing_lawns`. Generic
+  deposits and unreviewed lookalikes remain Needs review.
+
+Company-paid household purchases are not extra household bank receipts. Metal
+purchases and card repayments do not become metal-sale proceeds. The existing
+Spending and Cash movement bases remain separate; a card repayment does not by
+itself establish that prior-year debt was paid off. Missing reviewed source
+receipts are a coverage gap, not evidence of zero borrowing or earnings.
+
+## Report navigation
+
+The chart's category menu and transaction drilldowns use same-document browser
+history, so browser Back closes the menu or returns to the preceding report
+instead of skipping internal panels for a prior external page. The native Back
+button uses those same steps. Mode, source focus, scroll and scoped filters stay
+in session memory. Only random opaque navigation keys enter browser history;
+no financial rows, amounts or source IDs are persisted there.
+
+Restoration fetches current authorized report/evidence data, using the existing
+5,000-ID batching limit. Changing space, business, account, report dates or
+scenario invalidates historical report snapshots; old private evidence is not
+restored into a different context. Business and combined scopes normalize the
+household-only Inflows mode. Provider OAuth callback state is left untouched.
+Unrelated edit forms do not acquire history steps.
