@@ -105,13 +105,107 @@ test('foreign snapshots unknown account keys household source and unauthorized u
     Http::assertNothingSent();
 });
 
-test('disconnected and expired tokens do not cause automatic OAuth refresh or provider reads', function (): void {
+test('disconnected or unrefreshable expired tokens never dispatch a financial report read', function (): void {
     Http::fake();
-    $this->connection->update(['expires_at' => now()->subHour(), 'refresh_token' => 'fictional-refresh']);
+    $this->connection->update(['expires_at' => now()->subHour(), 'refresh_token' => null]);
     $this->actingAs($this->owner)->getJson($this->url)->assertOk()->assertJsonPath('status', 'unavailable');
     $this->connection->update(['expires_at' => now()->addHour(), 'status' => 'disconnected']);
     $this->getJson($this->url)->assertOk()->assertJsonPath('status', 'unavailable');
     Http::assertNothingSent();
+});
+
+test('expired and near expiry account access renews before reading the same source account', function (int $minutes): void {
+    $this->connection->update(['expires_at' => now()->addMinutes($minutes), 'refresh_token' => 'fictional-refresh']);
+    Http::fake([
+        'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer' => Http::response(['access_token' => 'renewed-account-access', 'refresh_token' => 'rotated-account-refresh', 'expires_in' => 3600]),
+        'https://quickbooks.api.intuit.com/*' => Http::response(($this->report)([($this->entry)('2026-11-04', '100', '')], '100', '0')),
+    ]);
+    expect(AccountLedgerService::ready($this->snapshot))->toBeTrue();
+    $this->actingAs($this->owner)->getJson($this->url)->assertOk()->assertJsonPath('reconciles', true);
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/reports/GeneralLedger') && $request->method() === 'GET' && $request->hasHeader('Authorization', 'Bearer renewed-account-access'));
+    Http::assertSentCount(2);
+    expect($this->connection->fresh()->refresh_token)->toBe('rotated-account-refresh');
+})->with([-1, 2]);
+
+test('revocation during account OAuth renewal blocks both rotation and the accounting GET', function (): void {
+    $this->connection->update(['expires_at' => now()->subMinute(), 'refresh_token' => 'fictional-refresh']);
+    Http::fake(['https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer' => function () {
+        $this->owner->tenants()->updateExistingPivot($this->tenant->id, ['membership_active' => false]);
+
+        return Http::response(['access_token' => 'unsafe-access', 'refresh_token' => 'unsafe-refresh', 'expires_in' => 3600]);
+    }]);
+    $this->actingAs($this->owner)->getJson($this->url)->assertForbidden();
+    Http::assertSentCount(1);
+    expect($this->connection->fresh()->access_token)->toBe('fictional-token')->and($this->connection->fresh()->refresh_token)->toBe('fictional-refresh');
+});
+
+test('failed account credential renewal returns unavailable detail without a financial GET', function (): void {
+    $this->connection->update(['expires_at' => now()->subMinute(), 'refresh_token' => 'fictional-refresh']);
+    Http::fake(['https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer' => Http::response(['error' => 'invalid_grant'], 400)]);
+    $this->actingAs($this->owner)->getJson($this->url)->assertOk()->assertJsonPath('status', 'unavailable')->assertJsonPath('rows', []);
+    Http::assertSentCount(1);
+    expect($this->connection->fresh()->access_token)->toBe('fictional-token')->and($this->connection->fresh()->refresh_token)->toBe('fictional-refresh');
+});
+
+test('a direct postings leaf requests the original parent account without its child account subtotal', function (): void {
+    $metrics = $this->snapshot->metrics;
+    $metrics['account_sections'][0]['children'] = [['key' => '2.0', 'id' => '300', 'label' => 'Fictional parent', 'amount' => '150', 'children' => [
+        ['key' => '2.0.direct', 'id' => '300', 'label' => 'Fictional parent (direct postings)', 'group' => 'Expenses', 'amount' => '100', 'children' => []],
+        ['key' => '2.0.0', 'id' => '301', 'label' => 'Fictional child', 'amount' => '50', 'children' => []],
+    ]]];
+    $metrics['account_sections'][0]['children'][] = ['key' => 'different-branch', 'id' => '999', 'label' => 'Separate source account', 'amount' => '10'];
+    $this->snapshot->update(['metrics' => $metrics]);
+    $payload = ($this->report)([($this->entry)('2026-11-04', '100', ''), ['type' => 'Section', 'Header' => ['ColData' => [['value' => 'Fictional child', 'id' => '301']]],
+        'Rows' => ['Row' => [($this->entry)('2026-11-05', '50', '', 'child-posting')]],
+        'Summary' => ['ColData' => [['value' => 'Total child'], [], [], [], [], [], ['value' => '50'], ['value' => '0']]]]], '150', '0');
+    Http::fake(['https://quickbooks.api.intuit.com/*' => function () use (&$payload) {
+        return Http::response($payload);
+    }]);
+    $this->actingAs($this->owner)->getJson(str_replace('account_key=2.0', 'account_key=2.0.direct', $this->url))->assertOk()->assertJsonPath('reconciles', true)->assertJsonPath('statement_amount_cents', 10000);
+    Http::assertSent(fn ($request) => $request['account'] === '300' && $request->method() === 'GET');
+    $payload['Rows']['Row'][0]['Rows']['Row'][1]['Header']['ColData'][0]['id'] = '999';
+    // Even another account in the same snapshot is not this parent's descendant.
+    $this->getJson(str_replace('account_key=2.0', 'account_key=2.0.direct', $this->url))->assertOk()->assertJsonPath('status', 'unavailable')->assertJsonPath('rows', []);
+});
+
+test('direct parent detail validates known recursive subaccount summaries without displaying or adding their postings', function (): void {
+    $subaccount = function (string $id, array $rows, string $debit, string $credit = '0'): array {
+        return ['type' => 'Section', 'Header' => ['ColData' => [['value' => 'Fictional descendant', 'id' => $id]]], 'Rows' => ['Row' => $rows],
+            'Summary' => ['ColData' => [['value' => 'Total descendant'], [], [], [], [], [], ['value' => $debit], ['value' => $credit]]]];
+    };
+    $childRefund = ($this->entry)('2026-11-05', '', '10', 'child-refund');
+    $childRefund['ColData'][3]['value'] = 'Private child vendor excluded from direct view';
+    $grandchild = $subaccount('302', [($this->entry)('2026-11-06', '60', '', 'grandchild-posting')], '60');
+    $child = $subaccount('301', [$childRefund, $grandchild], '60', '10');
+    $payload = ($this->report)([($this->entry)('2026-11-04', '100', '', 'parent-own'), $child], '160', '10');
+    $context = [...$this->context, 'direct_postings' => true, 'descendant_account_ids' => ['301', '302']];
+    $result = app(AccountLedgerService::class)->normalize($payload, $context);
+    expect($result['status'])->toBe('complete')->and($result['activity_cents'])->toBe(10000)->and($result['reconciles'])->toBeTrue()
+        ->and($result['rows'])->toHaveCount(1)->and($result['rows'][0]['transaction_id'])->toBe('parent-own')
+        ->and(json_encode($result))->not->toContain('Private child vendor', 'grandchild-posting', 'child-refund');
+    // The very same provider descendants remain forbidden for an ordinary leaf.
+    expect(app(AccountLedgerService::class)->normalize($payload, $this->context)['status'])->toBe('unavailable');
+    $foreign = $payload;
+    $foreign['Rows']['Row'][0]['Rows']['Row'][1]['Header']['ColData'][0]['id'] = '999';
+    expect(app(AccountLedgerService::class)->normalize($foreign, $context)['rows'])->toBe([]);
+    $mismatched = $payload;
+    $mismatched['Rows']['Row'][0]['Rows']['Row'][1]['Summary']['ColData'][6]['value'] = '61';
+    $partial = app(AccountLedgerService::class)->normalize($mismatched, $context);
+    expect($partial['status'])->toBe('partial')->and($partial['activity_cents'])->toBeNull()->and($partial['visible_activity_cents'])->toBe(10000)->and($partial['reconciles'])->toBeNull();
+    $missing = $payload;
+    unset($missing['Rows']['Row'][0]['Rows']['Row'][1]['Summary']);
+    expect(app(AccountLedgerService::class)->normalize($missing, $context)['activity_cents'])->toBeNull();
+    $malformed = $payload;
+    $malformed['Rows']['Row'][0]['Rows']['Row'][1]['Rows']['Row'][0]['ColData'][0]['value'] = '2026-11-31';
+    expect(app(AccountLedgerService::class)->normalize($malformed, $context)['activity_cents'])->toBeNull();
+    $bounded = $payload;
+    $bounded['Rows']['Row'][0]['Rows']['Row'][1]['Rows']['Row'] = array_fill(0, 2000, ($this->entry)('2026-11-05', '0', '', 'child-zero'));
+    $bounded['Rows']['Row'][0]['Rows']['Row'][1]['Summary']['ColData'][6]['value'] = '0';
+    $bounded['Rows']['Row'][0]['Rows']['Row'][1]['Summary']['ColData'][7]['value'] = '0';
+    $bounded['Rows']['Row'][0]['Summary']['ColData'][6]['value'] = '100';
+    $bounded['Rows']['Row'][0]['Summary']['ColData'][7]['value'] = '0';
+    $limited = app(AccountLedgerService::class)->normalize($bounded, $context);
+    expect($limited['truncated'])->toBeTrue()->and($limited['activity_cents'])->toBeNull()->and($limited['rows'])->toHaveCount(1);
 });
 
 test('provider-time permission revocation and company reconnection fail before returning private data', function (): void {

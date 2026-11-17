@@ -6,14 +6,14 @@ use App\Models\IntegrationConnection;
 use App\Models\QuickBooksReportingSnapshot;
 use App\Models\Trajectory\Space;
 use App\Models\User;
-use App\Services\Integrations\QuickBooks\QuickBooksOnlineClient;
+use App\Services\Integrations\QuickBooks\QuickBooksConnector;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
 
-/** On-demand provider GET only. No imports, persistence, deduplication or AI context. */
+/** Financial report GET only; ordinary OAuth renewal may rotate local credentials. */
 class AccountLedgerService
 {
     public const COLUMNS = 'tx_date,txn_type,doc_num,name,memo,split_acc,debt_amt,credit_amt';
@@ -24,8 +24,9 @@ class AccountLedgerService
     {
         $connection = IntegrationConnection::query()->forTenantId($snapshot->tenant_id)->whereKey($snapshot->integration_connection_id)->where('provider', 'quickbooks')->first();
 
-        return $connection && $connection->status === IntegrationConnection::STATUS_CONNECTED && filled($connection->access_token)
-            && ! $connection->isExpired() && ! $connection->needsRefresh() && app(TenantModuleAccessResolver::class)->canAccess($snapshot->tenant_id, 'quickbooks');
+        return $connection && $connection->status === IntegrationConnection::STATUS_CONNECTED
+            && (filled($connection->refresh_token) || filled($connection->access_token) && ! $connection->isExpired())
+            && app(TenantModuleAccessResolver::class)->canAccess($snapshot->tenant_id, 'quickbooks');
     }
 
     public function forAccount(User $user, Space $space, int $snapshotId, string $accountKey): array
@@ -45,13 +46,13 @@ class AccountLedgerService
             && (! isset($header['ReportName']) || $header['ReportName'] === 'ProfitAndLoss')
             && (! isset($header['SummarizeColumnsBy']) || $header['SummarizeColumnsBy'] === 'Total'), 422, 'This saved report does not establish a supported accounting identity.');
         $matches = [];
-        $walk = function (array $rows, ?string $group = null) use (&$walk, &$matches, $accountKey): void {
+        $walk = function (array $rows, ?string $group = null, ?array $parent = null) use (&$walk, &$matches, $accountKey): void {
             foreach ($rows as $row) {
                 $rowGroup = $row['group'] ?? $group;
                 if (($row['key'] ?? null) === $accountKey) {
-                    $matches[] = [...$row, 'source_group' => $rowGroup];
+                    $matches[] = [...$row, 'source_group' => $rowGroup, 'source_parent' => $parent];
                 }
-                $walk((array) ($row['children'] ?? []), $rowGroup);
+                $walk((array) ($row['children'] ?? []), $rowGroup, $row);
             }
         };
         $walk((array) ($metrics['account_sections'] ?? []));
@@ -60,10 +61,25 @@ class AccountLedgerService
         abort_unless(in_array($account['source_group'], ['Income', 'OtherIncome', 'COGS', 'Expenses', 'OtherExpenses'], true)
             && empty($account['children']) && preg_match('/^[0-9]{1,30}$/D', (string) ($account['id'] ?? ''))
             && $this->money($account['amount'] ?? null) !== null, 422, 'Choose a source account with its own reported amount. Expand parent accounts first.');
+        $parent = $account['source_parent'];
+        $direct = $parent && $accountKey === ($parent['key'] ?? '').'.direct' && ($parent['id'] ?? null) === $account['id'];
+        $descendants = [];
+        $collectIds = function (array $children) use (&$collectIds, &$descendants): void {
+            foreach ($children as $child) {
+                if (preg_match('/^[0-9]{1,30}$/D', (string) ($child['id'] ?? ''))) {
+                    $descendants[] = (string) $child['id'];
+                }
+                $collectIds((array) ($child['children'] ?? []));
+            }
+        };
+        if ($direct) {
+            $collectIds((array) $parent['children']);
+        }
         $context = ['snapshot_id' => $snapshot->id, 'account_key' => $accountKey, 'account' => ['id' => (string) $account['id'], 'label' => (string) ($account['label'] ?? '')],
             'period' => ['start' => $snapshot->period_start->toDateString(), 'end' => $snapshot->period_end->toDateString()], 'basis' => $basis, 'currency' => $currency,
             'source' => 'QuickBooks General Ledger', 'snapshot_observed_at' => $snapshot->observed_at?->toIso8601String(),
-            'statement_amount_cents' => $this->money($account['amount']), 'orientation' => in_array($account['source_group'], ['Income', 'OtherIncome'], true) ? 'credit_minus_debit' : 'debit_minus_credit'];
+            'statement_amount_cents' => $this->money($account['amount']), 'orientation' => in_array($account['source_group'], ['Income', 'OtherIncome'], true) ? 'credit_minus_debit' : 'debit_minus_credit',
+            'direct_postings' => (bool) $direct, 'descendant_account_ids' => array_values(array_diff(array_unique($descendants), [(string) $account['id']]))];
         if (! self::ready($snapshot)) {
             return $this->unavailable($context, 'The original QuickBooks connection is unavailable or needs its normal reconnection. Saved statement totals remain available.');
         }
@@ -72,20 +88,24 @@ class AccountLedgerService
             return $this->unavailable($context, 'QuickBooks is busy with another operation. Open this account again shortly.');
         }
         try {
-            // Instantiate the existing client with the admitted token. Its connector
-            // automatically refreshes via POST; this GET-only endpoint must not do so.
-            $client = new QuickBooksOnlineClient($connection, (string) config('services.quickbooks.api_base'), (int) config('services.quickbooks.minor_version', 75));
+            $admit = function () use ($user, $space, $connection, $snapshot, $metrics): void {
+                $currentSpace = $space->fresh();
+                abort_unless($currentSpace && $currentSpace->tenant_id === $space->tenant_id && $currentSpace->kind === 'business', 403);
+                app(FinanceAccess::class)->authorize($user->fresh(), $currentSpace);
+                $currentConnection = IntegrationConnection::query()->forTenantId($space->tenant_id)->whereKey($connection->id)->where('provider', 'quickbooks')->where('status', IntegrationConnection::STATUS_CONNECTED)->first();
+                abort_unless($currentConnection && $currentConnection->external_account_id === $connection->external_account_id
+                    && $currentConnection->external_account_secret === $connection->external_account_secret
+                    && data_get($currentConnection->metadata, 'realm_id') === data_get($connection->metadata, 'realm_id')
+                    && app(TenantModuleAccessResolver::class)->canAccess($space->tenant_id, 'quickbooks'), 403);
+                $fresh = $snapshot->fresh();
+                abort_unless($fresh && $fresh->tenant_id === $space->tenant_id && $fresh->integration_connection_id === $connection->id
+                    && $fresh->period_start->equalTo($snapshot->period_start) && $fresh->period_end->equalTo($snapshot->period_end) && $fresh->metrics === $metrics, 409, 'The saved statement changed during this request. Reload the statement.');
+            };
+            $admit();
+            $client = app(QuickBooksConnector::class)->client($connection->fresh(), $admit);
+            $admit();
             $payload = $client->report('GeneralLedger', ['accounting_method' => ucfirst($basis), 'start_date' => $context['period']['start'], 'end_date' => $context['period']['end'], 'account' => $account['id'], 'columns' => self::COLUMNS]);
-            $currentSpace = $space->fresh();
-            abort_unless($currentSpace && $currentSpace->tenant_id === $space->tenant_id && $currentSpace->kind === 'business', 403);
-            app(FinanceAccess::class)->authorize($user->fresh(), $currentSpace);
-            $currentConnection = IntegrationConnection::query()->forTenantId($space->tenant_id)->whereKey($connection->id)->where('provider', 'quickbooks')->where('status', IntegrationConnection::STATUS_CONNECTED)->first();
-            abort_unless($currentConnection && $currentConnection->external_account_id === $connection->external_account_id
-                && $currentConnection->external_account_secret === $connection->external_account_secret
-                && app(TenantModuleAccessResolver::class)->canAccess($space->tenant_id, 'quickbooks'), 403);
-            $fresh = $snapshot->fresh();
-            abort_unless($fresh && $fresh->tenant_id === $space->tenant_id && $fresh->integration_connection_id === $connection->id
-                && $fresh->period_start->equalTo($snapshot->period_start) && $fresh->period_end->equalTo($snapshot->period_end) && $fresh->metrics === $metrics, 409, 'The saved statement changed during this request. Reload the statement.');
+            $admit();
 
             return $this->normalize($payload, $context);
         } catch (RequestException|ConnectionException $exception) {
@@ -138,14 +158,18 @@ class AccountLedgerService
         $malformed = 0;
         $truncated = false;
         $foreign = false;
-        $summaries = [];
+        $summaryCount = 0;
+        $summaryMismatch = false;
         $nodesSeen = 0;
-        $walk = function (array $nodes, ?string $accountId = null, int $depth = 0) use (&$walk, &$rows, &$malformed, &$truncated, &$foreign, &$summaries, &$nodesSeen, $cell, $amount, $columns, $context): void {
+        $postingsSeen = 0;
+        $allowedAccounts = [$context['account']['id'], ...(($context['direct_postings'] ?? false) ? ($context['descendant_account_ids'] ?? []) : [])];
+        $walk = function (array $nodes, ?string $accountId = null, int $depth = 0) use (&$walk, &$rows, &$malformed, &$truncated, &$foreign, &$summaryCount, &$summaryMismatch, &$nodesSeen, &$postingsSeen, $allowedAccounts, $cell, $amount, $columns, $context): int {
+            $total = 0;
             foreach ($nodes as $node) {
                 if (++$nodesSeen > self::MAX_ROWS * 3 || $depth > 20) {
                     $truncated = true;
 
-                    return;
+                    return $total;
                 }
                 if (! is_array($node)) {
                     $malformed++;
@@ -155,22 +179,23 @@ class AccountLedgerService
                 $scope = $accountId;
                 if (isset($node['Header'])) {
                     $scope = (string) data_get($node, 'Header.ColData.0.id', '');
-                    if ($scope !== $context['account']['id']) {
+                    if (! in_array($scope, $allowedAccounts, true)) {
                         $foreign = true;
 
-                        return;
+                        return $total;
                     }
                 }
+                $nodeTotal = 0;
                 if (isset($node['ColData'])) {
                     $date = (string) $cell($node, 'tx_date');
                     $type = (string) $cell($node, 'txn_type');
                     if (in_array(strtolower(trim($date)), ['beginning balance', 'opening balance', 'ending balance'], true) && $type === '') {
                         continue;
                     }
-                    if ($scope !== $context['account']['id']) {
+                    if (! in_array($scope, $allowedAccounts, true)) {
                         $foreign = true;
 
-                        return;
+                        return $total;
                     }
                     $validDate = preg_match('/^\d{4}-\d{2}-\d{2}$/D', $date)
                         && checkdate((int) substr($date, 5, 2), (int) substr($date, 8, 2), (int) substr($date, 0, 4));
@@ -180,26 +205,35 @@ class AccountLedgerService
 
                         continue;
                     }
-                    if (count($rows) >= self::MAX_ROWS) {
+                    if (++$postingsSeen > self::MAX_ROWS) {
                         $truncated = true;
 
                         continue;
                     }
-                    $rows[] = ['date' => $date, 'transaction_type' => $type, 'transaction_id' => data_get($node, 'ColData.'.$columns['txn_type']['index'].'.id'),
-                        'document_number' => (string) $cell($node, 'doc_num'), 'name' => (string) $cell($node, 'name'), 'memo' => (string) $cell($node, 'memo'), 'split_account' => (string) $cell($node, 'split_acc'), ...$values];
+                    $nodeTotal += $values['amount_cents'];
+                    if ($scope === $context['account']['id']) {
+                        $rows[] = ['date' => $date, 'transaction_type' => $type, 'transaction_id' => data_get($node, 'ColData.'.$columns['txn_type']['index'].'.id'),
+                            'document_number' => (string) $cell($node, 'doc_num'), 'name' => (string) $cell($node, 'name'), 'memo' => (string) $cell($node, 'memo'), 'split_account' => (string) $cell($node, 'split_acc'), ...$values];
+                    }
                 }
                 if (isset($node['Rows']['Row'])) {
-                    $walk((array) $node['Rows']['Row'], $scope, $depth + 1);
+                    $nodeTotal += $walk((array) $node['Rows']['Row'], $scope, $depth + 1);
                 }
-                if (isset($node['Summary']) && $scope === $context['account']['id']) {
+                if (isset($node['Summary']) && in_array($scope, $allowedAccounts, true)) {
                     $summary = $amount((array) $node['Summary']);
                     if ($summary === null) {
                         $malformed++;
                     } else {
-                        $summaries[] = $summary['amount_cents'];
+                        $summaryCount++;
+                        $summaryMismatch = $summaryMismatch || $summary['amount_cents'] !== $nodeTotal;
                     }
+                } elseif (isset($node['Header'])) {
+                    $malformed++;
                 }
+                $total += $nodeTotal;
             }
+
+            return $total;
         };
         $walk((array) data_get($payload, 'Rows.Row', []));
         if ($foreign) {
@@ -209,12 +243,15 @@ class AccountLedgerService
         $providerTruncated = collect((array) ($header['Option'] ?? []))->contains(fn ($option) => str_contains(strtolower((string) ($option['Name'] ?? '')), 'truncat') && strtolower((string) ($option['Value'] ?? '')) === 'true');
         $truncated = $truncated || $providerTruncated;
         $sum = array_sum(array_column($rows, 'amount_cents'));
-        $summaryMatches = $summaries !== [] ? array_sum($summaries) === $sum : $noData && $rows === [];
-        $partial = $malformed > 0 || $truncated || ! $summaryMatches || $noData && $rows !== [];
+        $summaryMatches = $summaryCount > 0 ? ! $summaryMismatch : $noData && $postingsSeen === 0;
+        $partial = $malformed > 0 || $truncated || ! $summaryMatches || $noData && $postingsSeen > 0;
         $activity = $partial ? null : $sum;
         $difference = $activity === null ? null : $activity - $context['statement_amount_cents'];
         $reconciles = $difference === null ? null : $difference === 0;
         $notes = ['Signed amounts use '.str_replace('_', ' ', $context['orientation']).' from explicit source debit and credit columns. Opening balances and running totals are excluded. Multiple postings sharing a transaction ID remain separate.'];
+        if ($context['direct_postings'] ?? false) {
+            $notes[] = 'Only this parent account’s own postings are displayed. Known descendant accounts are validated against their source summaries but are excluded from the displayed direct activity.';
+        }
         if ($partial) {
             $notes[] = 'Some report rows or source totals are unavailable, malformed or truncated. The visible rows do not establish a complete account total.';
         }

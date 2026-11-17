@@ -8,7 +8,7 @@ use App\Models\Tenant;
 use App\Models\Trajectory\Space;
 use App\Models\User;
 use App\Services\FieldService\QuickBooksReportingSnapshotService;
-use App\Services\Integrations\QuickBooks\QuickBooksOnlineClient;
+use App\Services\Integrations\QuickBooks\QuickBooksConnector;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
@@ -30,7 +30,8 @@ class ProfitLossRefreshService
 
     private static function usable(IntegrationConnection $connection): bool
     {
-        return $connection->status === IntegrationConnection::STATUS_CONNECTED && filled($connection->access_token) && ! $connection->isExpired() && ! $connection->needsRefresh();
+        return $connection->status === IntegrationConnection::STATUS_CONNECTED
+            && (filled($connection->refresh_token) || filled($connection->access_token) && ! $connection->isExpired());
     }
 
     public function refresh(User $user, Space $space, string $from, string $through, string $basis, ?int $snapshotId = null): array
@@ -54,10 +55,27 @@ class ProfitLossRefreshService
         abort_unless($lock->get(), 409, 'QuickBooks is busy with another operation. Load this report again shortly.');
         try {
             $tenant = Tenant::findOrFail($space->tenant_id);
-            $client = new QuickBooksOnlineClient($connection, (string) config('services.quickbooks.api_base'), (int) config('services.quickbooks.minor_version', 75));
             $snapshotMetrics = $snapshot?->metrics;
             $expectedCurrency = $snapshot ? data_get($snapshotMetrics, 'source_report.Currency') : null;
-            $admit = function (array $payload) use ($user, $space, $connection, $snapshot, $snapshotMetrics, $from, $through, $basis, $expectedCurrency): void {
+            $authorize = function () use ($user, $space, $connection, $snapshot, $snapshotMetrics, $from, $through): void {
+                $freshSpace = $space->fresh();
+                abort_unless($freshSpace && $freshSpace->tenant_id === $space->tenant_id && $freshSpace->kind === 'business', 409, 'This finance space changed. Reload it before loading a report.');
+                app(FinanceAccess::class)->authorize($user->fresh(), $freshSpace);
+                $current = IntegrationConnection::query()->forTenantId($space->tenant_id)->whereKey($connection->id)->where('provider', 'quickbooks')->first();
+                abort_unless($current && self::usable($current) && $current->external_account_id === $connection->external_account_id
+                    && $current->external_account_secret === $connection->external_account_secret
+                    && data_get($current->metadata, 'realm_id') === data_get($connection->metadata, 'realm_id')
+                    && app(TenantModuleAccessResolver::class)->canAccess($space->tenant_id, 'quickbooks'), 403, 'The QuickBooks connection or financial access changed. No report was saved.');
+                if ($snapshot) {
+                    $fresh = $snapshot->fresh();
+                    abort_unless($fresh && $fresh->tenant_id === $space->tenant_id && $fresh->integration_connection_id === $connection->id && $fresh->metrics === $snapshotMetrics
+                        && $fresh->period_start->toDateString() === $from && $fresh->period_end->toDateString() === $through, 409, 'The selected saved statement changed. Reload it before refreshing.');
+                }
+            };
+            $authorize();
+            $client = app(QuickBooksConnector::class)->client($connection->fresh(), $authorize);
+            $authorize();
+            $admit = function (array $payload) use ($authorize, $from, $through, $basis, $expectedCurrency): void {
                 $header = (array) ($payload['Header'] ?? []);
                 $currency = $header['Currency'] ?? null;
                 abort_unless(($header['ReportName'] ?? null) === 'ProfitAndLoss' && ($header['StartPeriod'] ?? null) === $from && ($header['EndPeriod'] ?? null) === $through
@@ -65,18 +83,7 @@ class ProfitLossRefreshService
                     && is_string($currency) && preg_match('/^[A-Z]{3}$/D', $currency) && ($expectedCurrency === null || $expectedCurrency === $currency), 422, 'QuickBooks returned an unsupported report identity, accounting basis or currency. No report was saved.');
                 $columns = (array) data_get($payload, 'Columns.Column', []);
                 abort_unless(count($columns) === 2 && ($columns[0]['ColType'] ?? null) === 'Account' && ($columns[1]['ColType'] ?? null) === 'Money', 422, 'QuickBooks did not return one total accounting column. No report was saved.');
-                $freshSpace = $space->fresh();
-                abort_unless($freshSpace && $freshSpace->tenant_id === $space->tenant_id, 409, 'This finance space changed. Reload it before loading a report.');
-                app(FinanceAccess::class)->authorize($user->fresh(), $freshSpace);
-                $current = IntegrationConnection::query()->forTenantId($space->tenant_id)->whereKey($connection->id)->where('provider', 'quickbooks')->first();
-                abort_unless($current && self::usable($current) && $current->external_account_id === $connection->external_account_id
-                    && $current->external_account_secret === $connection->external_account_secret
-                    && app(TenantModuleAccessResolver::class)->canAccess($space->tenant_id, 'quickbooks'), 403, 'The QuickBooks connection or financial access changed. No report was saved.');
-                if ($snapshot) {
-                    $fresh = $snapshot->fresh();
-                    abort_unless($fresh && $fresh->tenant_id === $space->tenant_id && $fresh->integration_connection_id === $connection->id && $fresh->metrics === $snapshotMetrics
-                        && $fresh->period_start->toDateString() === $from && $fresh->period_end->toDateString() === $through, 409, 'The selected saved statement changed. Reload it before refreshing.');
-                }
+                $authorize();
             };
             $saved = app(QuickBooksReportingSnapshotService::class)->refresh($tenant, $connection, $client,
                 'trajectory:'.$connection->id.':'.str_replace('-', '', $from).':'.str_replace('-', '', $through),

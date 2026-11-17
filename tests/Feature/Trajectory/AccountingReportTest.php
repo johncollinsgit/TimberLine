@@ -72,6 +72,33 @@ test('native report retains account section ancestry and credits with stable sou
         ->and($sections[0]['children'][0]['children'][1]['key'])->toBe('0.0.1');
 });
 
+test('explicit parent account postings are retained once while unexplained hierarchy gaps stay partial', function (mixed $direct, string $total, bool $hasDirect, bool $reconciles): void {
+    $cogs = ($this->section)('COGS', $total);
+    $parent = ['type' => 'Section', 'Header' => ['ColData' => [['value' => 'Fictional materials', 'id' => '501'], ['value' => $direct]]],
+        'Rows' => ['Row' => [['type' => 'Data', 'ColData' => [['value' => 'Fictional component', 'id' => '502'], ['value' => '80.00']]]]],
+        'Summary' => ['ColData' => [['value' => 'Total fictional materials'], ['value' => $total]]]];
+    if ($direct === null) {
+        unset($parent['Header']['ColData'][1]);
+    }
+    $cogs['Rows']['Row'] = [$parent];
+    $net = \App\Services\Trajectory\Money::cents('200.00') - \App\Services\Trajectory\Money::cents($total);
+    $snapshot = ($this->refresh)(($this->payload)([($this->section)('Income', '200.00'), $cogs, ($this->section)('NetIncome', number_format($net / 100, 2, '.', ''))], ['Currency' => 'USD']));
+    $account = $snapshot->metrics['account_sections'][1]['children'][0];
+    $directLines = collect($account['children'])->filter(fn ($row) => $row['key'] === '1.0.direct')->values();
+    expect($account['amount'])->toEqual((float) $total)->and($directLines)->toHaveCount($hasDirect ? 1 : 0)
+        ->and(collect($account['children'])->firstWhere('id', '502')['key'])->toBe('1.0.0');
+    if ($hasDirect) {
+        expect($directLines[0])->toMatchArray(['id' => '501', 'label' => 'Fictional materials (direct postings)', 'group' => 'COGS', 'amount' => (float) $direct, 'children' => []]);
+    }
+    $report = app(\App\Services\Trajectory\ProfitLossReportService::class)->build($this->space, CarbonImmutable::parse('2026-01-01'), CarbonImmutable::parse('2026-01-31'), collect())['profit_loss'];
+    expect($report['statement']['sections'][1]['accounts_reconcile'])->toBe($reconciles)
+        ->and($report['cogs_cents'])->toBe(\App\Services\Trajectory\Money::cents($total))->and($report['net_cents'])->toBe($net)
+        ->and($report['complete'])->toBe($reconciles);
+})->with([
+    ['7.25', '87.25', true, true], ['-3.50', '76.50', true, true], ['0.00', '80.00', false, true],
+    ['', '90.00', false, false], [null, '90.00', false, false], ['unknown', '90.00', false, false],
+]);
+
 test('only a complete single-total report establishes absent optional sections as zero', function (): void {
     $rows = [($this->section)('Income', '0.00', 'Total Income'), ($this->section)('Expenses', '0.00', 'Total Expenses'), ($this->section)('NetIncome', '0.00', 'Net Income')];
     $complete = ($this->refresh)(($this->payload)($rows));
