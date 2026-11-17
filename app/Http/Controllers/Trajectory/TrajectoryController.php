@@ -55,13 +55,18 @@ class TrajectoryController extends Controller
     public function evidence(Request $request, Space $space, FinanceAccess $access, LedgerService $ledger)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['ids' => 'required_without_all:date,account_id|array|min:1|max:5000', 'ids.*' => 'integer', 'date' => 'required_without_all:ids,account_id|date_format:Y-m-d|before_or_equal:today', 'account_id' => 'sometimes|integer']);
+        $data = $request->validate(['ids' => 'required_without_all:date,account_id|array|min:1|max:5000', 'ids.*' => 'integer', 'date' => 'required_without_all:ids,account_id|date_format:Y-m-d|before_or_equal:today', 'account_id' => 'sometimes|integer', 'cash_movement' => 'sometimes|boolean']);
 
         if (isset($data['account_id'])) {
             Account::where('space_id', $space->id)->findOrFail($data['account_id']);
         }
 
-        return response()->json($ledger->entries($space, $data['date'] ?? null, $data['date'] ?? null, $data['ids'] ?? null, $data['account_id'] ?? null))->header('Cache-Control', 'private, no-store');
+        $entries = $ledger->entries($space, $data['date'] ?? null, $data['date'] ?? null, $data['ids'] ?? null, $data['account_id'] ?? null);
+        if ($data['cash_movement'] ?? false) {
+            $entries = app(\App\Services\Trajectory\MoneyFlowService::class)->cashEvidence($space, $entries, $data['ids'] ?? null, $data['account_id'] ?? null, $data['date'] ?? null);
+        }
+
+        return response()->json($entries)->header('Cache-Control', 'private, no-store');
     }
 
     public function account(Request $request, Space $space, FinanceAccess $access)

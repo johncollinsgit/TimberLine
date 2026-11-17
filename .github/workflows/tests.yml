@@ -473,6 +473,9 @@ jobs:
     - name: Verify Trajectory sales tax desktop and mobile evidence
       run: node tests/e2e/trajectory-sales-tax.browser.mjs
       if: matrix.group == 'workspace'
+    - name: Verify Trajectory money flow and owned cash evidence
+      run: node tests/e2e/trajectory-money-flow.browser.mjs
+      if: matrix.group == 'workspace'
     - name: Verify Fleet embedding and allowance in Chromium and WebKit
       run: npm run test:highlevel-fleet
       if: matrix.group == 'workspace'
