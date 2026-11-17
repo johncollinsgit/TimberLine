@@ -31,7 +31,7 @@
             @if(! $checkoutReady)<p class="retail-shopping-note">You can save your bag. Online payment is not available yet. @if($contactUrl ?? null)<a href="{{ $contactUrl }}">Contact us to order.</a>@else Contact the business directly to order.@endif</p>@endif
         @else
             @if($storefront['secure_store_url'] ?? null)
-                <p class="retail-shopping-note">Continue at our secure Everbranch address. <a href="{{ $storefront['secure_store_url'].'/products/'.rawurlencode($product->handle) }}">Shop securely</a></p>
+                <p class="retail-shopping-note"><a href="{{ $storefront['secure_store_url'].'/products/'.rawurlencode($product->handle) }}">Shop securely</a>. @if($contactUrl ?? null)<a href="{{ $contactUrl }}">Contact us to order.</a>@else Contact the business directly to order.@endif</p>
             @else
                 <p class="retail-shopping-note">Online shopping is not available on this address. @if($contactUrl ?? null)<a href="{{ $contactUrl }}">Contact us to order.</a>@else Contact the business directly to order.@endif</p>
             @endif
