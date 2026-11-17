@@ -72,6 +72,18 @@ return [
         'interest_cents' => ['label' => 'Recorded interest charged', 'type' => 'money', 'required' => true],
         'source' => ['label' => 'Lender statement source', 'type' => 'text', 'required' => true],
     ],
+    'lender_interest_ytd' => [
+        'account_id' => ['label' => 'Owned credit account', 'type' => 'account', 'required' => true],
+        'reported_year' => ['label' => 'Calendar year', 'type' => 'integer', 'required' => true],
+        'reported_through' => ['label' => 'Statement through', 'type' => 'date', 'required' => true],
+        'interest_charged_cents' => ['label' => 'Lender-reported cumulative interest', 'type' => 'money', 'required' => true],
+        'currency' => ['label' => 'Statement currency (three uppercase letters)', 'type' => 'text', 'required' => true],
+        'observed_on' => ['label' => 'Source verified on', 'type' => 'date', 'required' => true],
+        'source_id' => ['label' => 'Statement reference', 'type' => 'text', 'required' => true],
+        'source' => ['label' => 'Statement, year, table and page', 'type' => 'text', 'required' => true],
+        'source_sha256' => ['label' => 'Original statement SHA-256', 'type' => 'text', 'required' => true],
+        'reviewed' => ['label' => 'Account, year, cutoff and amount reviewed', 'type' => 'boolean', 'required' => true],
+    ],
     'payment_notice' => [
         'payment_type' => ['label' => 'Payment evidence type', 'type' => 'select', 'required' => false, 'choices' => ['minimum_due', 'scheduled_payment']],
         'recurring_record_id' => ['label' => 'Existing payment schedule', 'type' => 'recurring_record', 'required' => false],

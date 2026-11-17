@@ -168,7 +168,17 @@ try{
    // Per-card source activity uses full credit amounts and a separate economic allocation.
    if(width<700)await page.locator('#tr-mobile-menu').click();await page.getByRole('button',{name:'Wealth & debt',exact:true}).click();
    await page.getByRole('heading',{name:'Credit card activity',exact:true}).waitFor();
+   const annualPanel=page.locator('.tr-lender-ytd');
+   await expect(annualPanel).toContainText('$69.12');await expect(annualPanel).toContainText('2 of 2');await expect(annualPanel).toContainText('different statement cutoffs');
+   assert.ok(await annualPanel.locator('.tr-table-wrap').evaluate(node=>node.scrollWidth<=node.clientWidth+1),'Annual lender table fits enhanced phone/desktop without horizontal panning');
+   await annualPanel.screenshot({path:join(evidence,`${name}-${width}-lender-interest-ytd.png`)});
+   await annualPanel.locator('.tr-lender-source > summary').first().click();await expect(annualPanel).toContainText('Fictional statement, calendar-year interest table, page3.');
+   await expect(annualPanel).not.toContainText('a'.repeat(64));await expect(annualPanel).not.toContainText('fictional-annual:');
+   const annualYear=Number(fixture.today.slice(0,4));await page.locator('#tr-lender-ytd-year').selectOption(String(annualYear-1));
+   await expect(annualPanel).toContainText('$0.00');await expect(annualPanel).not.toContainText('$69.12');
+   await page.locator('#tr-lender-ytd-year').selectOption(String(annualYear));await expect(annualPanel).toContainText('$69.12');
    await page.locator('#tr-account-filter').selectOption(String(fixture.detail_card_id));
+   await expect(annualPanel).toContainText('1 of 1');await expect(annualPanel).toContainText('$12.34');await expect(annualPanel).not.toContainText('$56.78');
    const cardPanel=page.locator('.tr-card-activity'),cardDetail=cardPanel.locator('.tr-card-account');
    await expect(cardDetail).toHaveCount(1);await expect(cardDetail).toContainText('Fictional detail card');
    await expect(cardDetail.locator('.tr-card-figures')).toContainText('$223.46');await expect(cardDetail.locator('.tr-card-figures')).toContainText('$200.00');await expect(cardDetail.locator('.tr-card-figures')).toContainText('$130.00');
