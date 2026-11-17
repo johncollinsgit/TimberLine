@@ -58,3 +58,20 @@ test('custom net-collection labels stay escaped and separate from other income i
  const html=moneyFlowHtml({report:{...report,views:{spending:view}},esc,precise,btn});
  assert.ok(html.includes('Net &lt;bank&gt; collections'));assert.ok(!html.includes('<bank>'));
 });
+test('payroll branches retain separate cents and IDs with a conditional net-distribution explanation',()=>{
+ const groups=[['owner_payroll','Owner payroll',12001,101],['studio_payroll','Studio Payroll',23002,102],['event_payroll','Event Payroll',34003,103],['payroll','Payroll',4555,104]].map(([key,label,amount_cents,id])=>({key,label,kind:'outflow',amount_cents,ids:[id],merchants:[{key:'provider',label:'Fictional payroll provider',amount_cents,ids:[id]}]}));
+ const view={...report.views.spending,outflows:groups,outflow_cents:73561};
+ for(const compact of [false,true]){
+  const graph=compact?moneyFlowCompactGraph(view):moneyFlowGraph(view);conserved(graph,compact?2:3);
+  const outgoing=graph.nodes.filter(node=>node.column===2&&node.kind!=='difference');
+  assert.deepEqual(outgoing.map(row=>row.ids).flat().toSorted(),[101,102,103,104]);
+  assert.equal(outgoing.reduce((n,row)=>n+row.amount_cents,0),73561);
+ }
+ const html=moneyFlowHtml({report:{...report,views:{spending:view}},esc,precise,btn});
+ for(const label of ['Owner payroll','Studio Payroll','Event Payroll','Payroll retains taxes and unassigned withdrawals','not total employer cost'])assert.ok(html.includes(label));
+ assert.ok(!moneyFlowHtml({report,esc,precise,btn}).includes('tr-flow-payroll-note'));
+ const busy={...view,outflows:[...Array.from({length:20},(_,i)=>({key:'cost'+i,label:'Other cost '+i,kind:'outflow',amount_cents:100000+i,ids:[200+i],merchants:[{key:'supplier'+i,label:'Fictional supplier',amount_cents:100000+i,ids:[200+i]}]})),...groups]};
+ for(const graph of [moneyFlowGraph(busy),moneyFlowCompactGraph(busy)]){
+  for(const row of groups)assert.deepEqual(graph.nodes.find(node=>node.column===2&&node.key===row.key)?.ids,row.ids,'Small payroll categories must remain separate');
+ }
+});

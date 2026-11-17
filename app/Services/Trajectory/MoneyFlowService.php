@@ -206,7 +206,7 @@ class MoneyFlowService
                     }
                     $label = match ($key) {
                         'needs_review' => 'Needs review · outgoing', 'debt_cash' => 'Debt repayments',
-                        'owner_distributions' => 'Owner distributions', 'owner_payroll' => 'Owner wages', 'asset_purchases' => 'Asset purchases / transfers', default => $this->label($category),
+                        'owner_distributions' => 'Owner distributions', 'owner_payroll' => 'Owner payroll', 'asset_purchases' => 'Asset purchases / transfers', default => $this->label($category),
                     };
                     $this->add($out, $key, $label, $key === 'needs_review' ? 'review' : 'outflow', -$amount, $id);
                     $merchant = trim($entry['merchant'] ?? '') ?: 'Unnamed merchant';

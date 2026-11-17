@@ -30,6 +30,10 @@ $post($card, 'purchase', 'Fictional card purchase', -20000, 'expense', 'grocerie
 $repayment = $post($cash, 'repayment', 'Fictional card repayment', -10000, 'card_payment', 'uncategorized');
 $post($card, 'repayment', 'Fictional bank repayment', 10000, 'card_payment', 'uncategorized');
 $rent = $post($cash, 'rent', 'Fictional landlord', -90000, 'expense', 'housing');
+$payrollIds = [];
+foreach (['owner_payroll' => -12001, 'studio_payroll' => -23002, 'event_payroll' => -34003, 'payroll' => -4555] as $category => $amount) {
+    $payrollIds[] = $post($cash, $category, 'Fictional '.$category.' withdrawal', $amount, 'expense', $category)->id;
+}
 $zero = $post($cash, 'shared-cost', 'Fictional shared cost', -77000, 'expense', 'shopping');
 App\Models\Trajectory\Allocation::where('transaction_id', $zero->id)->update(['amount_cents' => 0]);
 $partial = $post($cash, 'partial-cost', 'Fictional partial cost', -10000, 'expense', 'transport');
@@ -37,4 +41,4 @@ App\Models\Trajectory\Allocation::where('transaction_id', $partial->id)->update(
 $transfer = $post($cash, 'internal-transfer', 'Fictional internal transfer', -12345, 'transfer', 'uncategorized');
 App\Models\Trajectory\Allocation::where('transaction_id', $transfer->id)->update(['amount_cents' => 0]);
 echo json_encode(['space_id' => $space->id, 'zero_id' => $zero->id, 'partial_id' => $partial->id, 'transfer_id' => $transfer->id,
-    'cash_outflow_ids' => [$repayment->id, $rent->id, $zero->id, $partial->id]], JSON_THROW_ON_ERROR);
+    'cash_outflow_ids' => [$repayment->id, $rent->id, $zero->id, $partial->id, ...$payrollIds]], JSON_THROW_ON_ERROR);

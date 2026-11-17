@@ -298,3 +298,15 @@ test('family bank receipt answer follows the selected day month and year rather 
         ->and(($this->answer)($build($this->today->startOfMonth()), 'company_cash_received')['amount_cents'])->toBe(5000)
         ->and(($this->answer)($build($this->today), 'company_cash_received')['amount_cents'])->toBe(3000);
 });
+
+test('question plans keep overlapping Payroll and draft role amounts unknown with the exact review reason', function (): void {
+    $records = [($this->budget)(['category' => 'payroll', 'monthly_cents' => 45000]),
+        ($this->budget)(['category' => 'event_payroll', 'monthly_cents' => 5000, 'reviewed' => false]), ($this->debt)()];
+    $result = ($this->build)([], $records, [($this->account)(1)]);
+    $answer = ($this->answer)($result, 'monthly_operating_budget');
+    expect($answer['amount_cents'])->toBeNull()
+        ->and(implode(' ', $answer['missing']))->toContain('Payroll and role-specific targets overlap')
+        ->and(implode(' ', $answer['missing']))->not->toContain('Add monthly spending targets');
+    $month = collect($result['monthly']['rows'])->firstWhere('month', '2026-11');
+    expect($month['reviewed_spending_plan_cents'])->toBeNull()->and($month['draft_spending_plan_cents'])->toBeNull();
+});

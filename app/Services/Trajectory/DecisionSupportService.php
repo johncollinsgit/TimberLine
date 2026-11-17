@@ -111,15 +111,29 @@ class DecisionSupportService
         $applied = [];
         $replacedHistorical = 0;
         $replacementTargets = 0;
+        $payrollCategories = ['payroll', 'owner_payroll', 'studio_payroll', 'event_payroll'];
+        $payrollTargetIds = $monthly['purposes']['spending']['overlapping_record_ids'] ?? [];
+        $aggregateOverride = array_key_exists('flexible_monthly_cents', $space->settings ?? []);
+        $ambiguousPayroll = $payrollTargetIds !== [] && ! $aggregateOverride;
         // An aggregate manual override has no proven category allocation. Preserve
         // it instead of inventing a split that would double-count a reviewed target.
-        if (! array_key_exists('flexible_monthly_cents', $space->settings ?? [])) {
+        if (! $aggregateOverride) {
             foreach ($targets as $category => $cohort) {
-                $replacement = max(0, $cohort->sum(fn ($r) => $r->data['monthly_cents']) - ($fixedCategories[$category] ?? 0));
-                $replacedHistorical += $categoryMonthly[$category] ?? 0;
+                if ($ambiguousPayroll && in_array($category, $payrollCategories, true)) {
+                    continue;
+                }
+                $covered = $category === 'payroll' ? $payrollCategories : [$category];
+                $scheduled = array_sum(array_intersect_key($fixedCategories, array_flip($covered)));
+                $replacement = max(0, $cohort->sum(fn ($r) => $r->data['monthly_cents']) - $scheduled);
+                // A lone Payroll target covers every role. Aggregate before
+                // rounding so reclassifying existing cents cannot alter need.
+                $historical = $category === 'payroll'
+                    ? Money::ratio(max(0, -(int) $variable->whereIn('category', $covered)->sum('amount_cents')), 365, max(1, $planning['history_days'] ?? 0) * 12)
+                    : ($categoryMonthly[$category] ?? 0);
+                $replacedHistorical += $historical;
                 $replacementTargets += $replacement;
                 $applied[] = ['record_id' => $cohort->first()->id, 'record_ids' => $cohort->pluck('id')->values()->all(),
-                    'category' => $category, 'flexible_cents' => $replacement, 'effective_on' => $cohort->first()->data['effective_on']];
+                    'category' => $category, 'covered_categories' => $covered, 'flexible_cents' => $replacement, 'effective_on' => $cohort->first()->data['effective_on']];
             }
             // Refunds in another category can reduce the old aggregate below
             // a replaced category. They must not erase its new reviewed target.
@@ -139,9 +153,10 @@ class DecisionSupportService
         $hasPlan = $fixed + $flex + $other > 0 || $targets->isNotEmpty() || $variable->isNotEmpty()
             || ! empty($planning['fixed_records']) || array_key_exists('flexible_monthly_cents', $space->settings ?? []);
 
-        return ['monthly_needed_cents' => $hasPlan ? $fixed + $flex + $other : null, 'breakdown' => $breakdown,
-            'basis' => $hasPlan ? 'Current cost plan; current targets applied for historical context' : 'Monthly cost inputs have not been established',
-            'coverage_complete' => $hasPlan && ! ($planning['provisional'] ?? true), 'applied_budget_records' => $applied];
+        return ['monthly_needed_cents' => $hasPlan && ! $ambiguousPayroll ? $fixed + $flex + $other : null, 'breakdown' => $breakdown,
+            'basis' => $ambiguousPayroll ? 'Review overlapping Payroll and role-specific budget targets before using monthly need.' : ($hasPlan ? 'Current cost plan; current targets applied for historical context' : 'Monthly cost inputs have not been established'),
+            'coverage_complete' => $hasPlan && ! $ambiguousPayroll && ! ($planning['provisional'] ?? true), 'applied_budget_records' => $applied,
+            'overlapping_budget_record_ids' => $ambiguousPayroll ? $payrollTargetIds : []];
     }
 
     private function upcoming(Collection $records, array $bills, array $suggestions, CarbonImmutable $today): array

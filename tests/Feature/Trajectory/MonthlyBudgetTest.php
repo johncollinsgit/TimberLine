@@ -141,3 +141,29 @@ test('blank optional end dates are unbounded and invalid effective dates remain 
         ->and($result['purposes']['income']['status'])->toBe('partial')
         ->and(implode(' ', $result['missing']))->toContain('valid effective date');
 });
+
+test('overlapping Payroll and role targets never produce a reviewed or draft combined spending amount', function (bool $parentReviewed, bool $roleReviewed): void {
+    $parent = ($this->target)(['category' => 'payroll', 'monthly_cents' => 45000, 'reviewed' => $parentReviewed]);
+    $role = ($this->target)(['category' => 'studio_payroll', 'monthly_cents' => 5000, 'reviewed' => $roleReviewed]);
+    $materials = ($this->target)();
+    $income = ($this->target)(['category' => 'income', 'purpose' => 'income', 'monthly_cents' => 100000]);
+    $result = ($this->build)([$parent, $role, $materials, $income]);
+    expect($result['reviewed_spending_cents'])->toBeNull()->and($result['draft_spending_cents'])->toBeNull()
+        ->and($result['purposes']['spending']['amount_cents'])->toBeNull()
+        ->and($result['purposes']['spending']['reviewed_cents'])->toBeNull()
+        ->and($result['purposes']['spending']['overlapping_record_ids'])->toBe([$parent->id, $role->id])
+        ->and($result['planned_income_cents'])->toBe(100000)
+        ->and(implode(' ', $result['missing']))->toContain('Payroll and role-specific targets overlap', 'Choose one Payroll total or separate role targets');
+})->with([[true, true], [true, false], [false, true], [false, false]]);
+
+test('payroll overlap checks respect actual effective intervals and separate plan purposes', function (): void {
+    $parent = ($this->target)(['category' => 'payroll', 'monthly_cents' => 45000, 'ends_on' => '2027-01-15']);
+    $role = ($this->target)(['category' => 'studio_payroll', 'monthly_cents' => 5000, 'effective_on' => '2027-01-16']);
+    $result = ($this->build)([$parent, $role]);
+    expect($result['purposes']['spending']['overlapping_record_ids'])->toBe([])->and($result['reviewed_spending_cents'])->toBe(50000)
+        ->and(implode(' ', $result['missing']))->toContain('covers only part');
+    $income = ($this->target)(['category' => 'studio_payroll', 'purpose' => 'income', 'monthly_cents' => 5000]);
+    $result = ($this->build)([$parent, $income]);
+    expect($result['reviewed_spending_cents'])->toBe(45000)->and($result['planned_income_cents'])->toBe(5000)
+        ->and($result['purposes']['spending']['overlapping_record_ids'])->toBe([]);
+});

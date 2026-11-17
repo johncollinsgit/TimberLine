@@ -99,3 +99,38 @@ explicit saved merchant rules keep their existing precedence.
 
 The browser fixture refuses any environment except a disposable SQLite testing
 database under `/codex-money-flow-`. Fixtures contain fictional records only.
+
+## Payroll attribution and business allocations
+
+Owner payroll, Studio payroll and Event payroll are distinct transaction
+categories alongside the existing Payroll category. They remain separate in
+both diagram sizes even when small categories are grouped. Category charts,
+provisional cost detail and transaction evidence use those same posted entries;
+no gross payroll records are added to bank distributions. Use payroll evidence
+to match net distributions before classifying them. Generic Payroll retains tax
+funding and unassigned withdrawals until their purpose is supported. Owner
+payroll is separate from owner distributions; category attribution does not
+change the transaction flow or determine tax treatment.
+
+Allocations can assign an economic share between two businesses only when the
+current signed-in user owns both spaces and passes financial authorization on
+both. Current space facts are locked before admission. Existing household to
+business allocations still require the actual household/business link; a
+business pair cannot use a malformed household link as an ownership bypass.
+Amounts must conserve the source cents, retain its sign and use each space at
+most once. Version checks, medical bindings and audit events remain in force.
+The source bank account, source space and full cash withdrawal stay unchanged;
+the other business sees only its privacy-safe allocated economic share. This
+creates neither a bank transfer nor an intercompany loan or second expense.
+
+For ongoing monthly need, a lone reviewed Payroll budget target is an umbrella:
+it replaces history for all four payroll categories and deducts their scheduled
+fixed costs once. Aggregate payroll history is rounded once so attribution alone
+cannot change the estimate. A role-specific target replaces only that role.
+Overlapping Payroll and role-specific targets, including drafts, leave monthly
+budget totals and monthly need unavailable with a review explanation and source
+record IDs. The check respects their purpose and actual effective intervals. An existing manual
+aggregate flexible override still takes precedence and ignores category targets.
+This changes neither planned budget records nor recorded payroll amounts. Zero
+source transactions permit only zero allocations, preventing invented opposing
+expense shares.

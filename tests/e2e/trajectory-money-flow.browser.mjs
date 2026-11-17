@@ -47,13 +47,16 @@ try{
    assert.ok(await page.getByText('Needs review · incoming',{exact:false}).count());
    const diagram=page.locator(width<700?'.tr-flow-phone':'.tr-flow-desktop');
    await expect(diagram).toBeVisible();
+   await expect(page.locator('.tr-flow-payroll-note')).toContainText('not total employer cost');
+   for(const label of ['Owner payroll','Studio Payroll','Event Payroll','Payroll'])await expect(diagram.locator(`[data-label="${label}"]`)).toBeVisible();
    if(width<700){assert.ok(await diagram.evaluate(node=>node.scrollWidth<=node.clientWidth+1));await expect(diagram.locator('text').filter({hasText:'Where it went'})).toBeVisible();}
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
    await page.getByRole('button',{name:'Cash movement',exact:true}).click();
    await expect(page.getByRole('button',{name:'Cash movement',exact:true})).toHaveAttribute('aria-pressed','true');
    if(width<700){const cards=await page.locator('.tr-money-flow > .tr-grid > .tr-metric').evaluateAll(nodes=>nodes.map(node=>({top:node.getBoundingClientRect().top,height:node.getBoundingClientRect().height})));assert.equal(cards.length,3);assert.ok(cards.every(card=>Math.abs(card.top-cards[0].top)<1&&card.height<100),'Phone totals stay in one compact row');}
    const openMerchant=async(label,category,keyboard=false)=>{
-    const node=width<700?diagram.locator(`[data-action="money-flow-category"][data-label="${category}"]`):diagram.locator('.tr-flow-action').filter({has:page.locator('title').filter({hasText:label})});
+    const categoryNode=diagram.locator(`[data-action="money-flow-category"][data-label="${category}"]`);
+    const node=width<700?(await categoryNode.count()?categoryNode:diagram.locator('[data-action="money-flow-category"][data-label="Other outgoing categories"]')):diagram.locator('.tr-flow-action').filter({has:page.locator('title').filter({hasText:label})});
     if(keyboard){await node.first().focus();await page.keyboard.press('Enter');}else await node.first().click();
     if(width<700){await expect(page.locator('#tr-dialog')).toBeVisible();await page.locator('#tr-dialog .tr-row').filter({hasText:label}).getByRole('button',{name:'View transactions',exact:true}).click();}
    };
