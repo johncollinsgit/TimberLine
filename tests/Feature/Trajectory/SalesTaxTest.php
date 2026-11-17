@@ -18,6 +18,7 @@ beforeEach(function (): void {
     app(LedgerService::class)->ingest($this->account, [['id' => 'tax-payment', 'date' => '2028-07-20', 'merchant' => 'State Revenue', 'amount_cents' => -12500]]);
     $this->tx = Transaction::where('account_id', $this->account->id)->firstOrFail();
     $this->input = ['transaction_id' => $this->tx->id, 'paid_on' => '2028-07-20', 'amount_cents' => -12500, 'agency' => 'Example revenue agency', 'jurisdiction' => 'Example state', 'tax_type' => 'sales_tax', 'movement' => 'payment', 'source' => 'Example filing receipt', 'reviewed' => true];
+    $this->input['expected_bank_source_fingerprint'] = app(SalesTaxService::class)->bankFingerprint($this->space->id, $this->account->id, $this->tx->id, '2028-07-20', -12500, 'State Revenue');
     $this->saveTax = fn (array $change = [], ?Record $record = null) => app(RecordService::class)->save($this->owner, $this->space, 'tax_remittance', 'Example filing', [...$this->input, ...$change], $record, $record?->version);
     $this->row = fn (int $id, array $change = []) => ['id' => $id, 'date' => '2028-07-20', 'account_id' => $this->account->id, 'merchant' => 'State Revenue', 'amount_cents' => -12500, 'category' => 'taxes', 'editable' => true, 'reviewed' => true, ...$change];
     $this->metadata = function (int $id, array $change = []): Record {
@@ -134,4 +135,80 @@ test('merchant or account amendments invalidate confirmation while ordinary cate
     expect($changedAccount['confirmed_payment_cents'])->toBeNull();
     $categoryOnly = ($this->taxReport)([($this->row)($this->tx->id, ['category' => 'uncategorized', 'version' => 77])], [$record]);
     expect($categoryOnly['confirmed_payment_cents'])->toBe(12500);
+});
+
+test('tax saves require the reviewed bank fingerprint and never trust a supplied stored fingerprint', function (): void {
+    foreach ([null, 'invalid'] as $fingerprint) {
+        expect(fn () => ($this->saveTax)(['expected_bank_source_fingerprint' => $fingerprint]))->toThrow(\Illuminate\Validation\ValidationException::class);
+    }
+    try {
+        ($this->saveTax)(['expected_bank_source_fingerprint' => str_repeat('0', 64), 'bank_source_fingerprint' => $this->input['expected_bank_source_fingerprint']]);
+        test()->fail('Unreviewed bank evidence accepted.');
+    } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+        expect($e->getStatusCode())->toBe(409);
+    }
+    $validated = app(RecordService::class)->validate($this->space, 'tax_remittance', $this->input);
+    $record = ($this->saveTax)(['bank_source_fingerprint' => str_repeat('0', 64)]);
+    expect($validated)->not->toHaveKey('expected_bank_source_fingerprint')
+        ->and($record->data)->not->toHaveKey('expected_bank_source_fingerprint')
+        ->and($record->data['bank_source_fingerprint'])->toBe($this->input['expected_bank_source_fingerprint']);
+});
+
+test('stale tax forms cannot rebind confirmation after a bank merchant amendment', function (): void {
+    $record = ($this->saveTax)();
+    $this->tx->update(['merchant' => 'Different income tax agency', 'version' => $this->tx->version + 1]);
+    try {
+        ($this->saveTax)([], $record);
+        test()->fail('Stale tax review rebound to changed bank facts.');
+    } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+        expect($e->getStatusCode())->toBe(409);
+    }
+    expect($record->fresh()->version)->toBe(1)->and(Event::where('action', 'save_tax_remittance')->count())->toBe(1);
+    $report = ($this->taxReport)([($this->row)($this->tx->id, ['merchant' => $this->tx->merchant])], [$record->fresh()]);
+    expect($report['confirmed_payment_cents'])->toBeNull()->and($report['rows'][0]['reviewed'])->toBeFalse();
+    $updated = ($this->saveTax)(['expected_bank_source_fingerprint' => $report['rows'][0]['bank_source_fingerprint'], 'agency' => 'Different income tax agency', 'tax_type' => 'income_tax', 'source' => 'New agency receipt'], $record);
+    expect($updated->version)->toBe(2)->and($updated->data['tax_type'])->toBe('income_tax');
+});
+
+test('tax admission binds account identity but ignores ordinary category and transaction version edits', function (): void {
+    $this->tx->update(['category' => 'taxes', 'reviewed' => true, 'version' => $this->tx->version + 1]);
+    $record = ($this->saveTax)();
+    $other = Account::create(['space_id' => $this->space->id, 'name' => 'Amended bank', 'kind' => 'cash', 'source_key' => 'test:tax-amendment', 'balance_cents' => 0]);
+    $this->tx->update(['account_id' => $other->id]);
+    try {
+        ($this->saveTax)([], $record);
+        test()->fail('Changed bank account accepted with stale admission.');
+    } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+        expect($e->getStatusCode())->toBe(409);
+    }
+    expect($record->fresh()->version)->toBe(1);
+});
+
+test('bank facts are revalidated under the save lock after initial admission', function (): void {
+    $service = new class($this->tx) extends SalesTaxService
+    {
+        private bool $amended = false;
+
+        public function __construct(private Transaction $source) {}
+
+        public function validateRemittance(\App\Models\Trajectory\Space $space, array $data): string
+        {
+            $fingerprint = parent::validateRemittance($space, $data);
+            if (! $this->amended) {
+                $this->amended = true;
+                $this->source->update(['merchant' => 'Source amended between validations']);
+            }
+
+            return $fingerprint;
+        }
+    };
+    app()->instance(SalesTaxService::class, $service);
+    try {
+        ($this->saveTax)();
+        test()->fail('Bank amendment between validations accepted.');
+    } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+        expect($e->getStatusCode())->toBe(409);
+    }
+    expect(Record::where('kind', 'tax_remittance')->count())->toBe(0)
+        ->and(Event::where('action', 'save_tax_remittance')->count())->toBe(0);
 });

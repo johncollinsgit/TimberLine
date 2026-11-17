@@ -1,0 +1,6 @@
+import {salesTaxHtml} from '../../resources/js/trajectory/sales-tax.js';
+export const esc=x=>String(x??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+export const precise=x=>x===null?'Unavailable':`$${(x/100).toFixed(2)}`;
+export const btn=(name,action,attrs='')=>`<button data-action="${action}" ${attrs}>${esc(name)}</button>`;
+const report={confirmed_payment_cents:45123,returned_payment_cents:10000,refund_cents:0,net_remittance_cents:35123,notes:['Net cash does not establish tax liability.'],rows:[{transaction_id:42,date:'2028-07-20',account:'Example operating bank',agency:'Example Revenue',jurisdiction:'Sample state',tax_type:'sales_tax',movement:'payment',amount_cents:-45123,filing_start:'2028-06-01',filing_end:'2028-06-30',reviewed:true,bank_reviewed:true,source:'Example filing receipt',components:{tax_principal_cents:45000,interest_cents:123,penalty_cents:0,other_fees_cents:0}},{transaction_id:43,date:'2028-07-21',account:'Example operating bank',merchant:'Unknown agency <script>',tax_type:'unknown',movement:'unverified_credit',amount_cents:10000,reviewed:false,bank_reviewed:false}]};
+export const html=()=>salesTaxHtml({report,esc,precise,btn});

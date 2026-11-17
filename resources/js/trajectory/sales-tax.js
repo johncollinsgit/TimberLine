@@ -1,6 +1,13 @@
 const types={sales_tax:'Sales tax',income_tax:'Income tax',payroll_tax:'Payroll tax',other_tax:'Other tax',unknown:'Unknown tax type'};
 const movements={payment:'Payment',returned_payment:'Returned payment',refund:'Refund',unverified_credit:'Credit · needs review'};
 
+export function taxRemittanceReview(record,row) {
+  if(!row||!Number.isSafeInteger(row.transaction_id)||!Number.isSafeInteger(row.amount_cents)||!/^[a-f0-9]{64}$/.test(row.bank_source_fingerprint||''))return null;
+  const unchanged=record?.data?.bank_source_fingerprint===row.bank_source_fingerprint;
+  const details=unchanged?record.data:{agency:row.merchant,tax_type:'unknown',movement:row.amount_cents<0?'payment':'',source:''};
+  return {...details,transaction_id:row.transaction_id,paid_on:row.date,amount_cents:row.amount_cents,reviewed:false,expected_bank_source_fingerprint:row.bank_source_fingerprint};
+}
+
 export function salesTaxHtml({report,esc,precise,btn}) {
   if(!report)return '<div class="tr-empty">Sales-tax bank evidence is unavailable for this view.</div>';
   const amount=value=>precise(Number.isSafeInteger(value)?value:null);

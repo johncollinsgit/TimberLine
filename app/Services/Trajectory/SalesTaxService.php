@@ -11,7 +11,7 @@ class SalesTaxService
 {
     public function validateRemittance(Space $space, array $data): string
     {
-        $tx = Transaction::where('space_id', $space->id)->whereKey($data['transaction_id'])->firstOrFail();
+        $tx = Transaction::where('space_id', $space->id)->whereKey($data['transaction_id'])->lockForUpdate()->firstOrFail();
         abort_unless(! $tx->pending && ! $tx->removed && $tx->amount_cents === $data['amount_cents'] && $tx->posted_on->toDateString() === $data['paid_on'], 422, 'Use the posted bank date and exact signed amount.');
         abort_unless($data['amount_cents'] !== 0 && ($data['movement'] === 'payment' ? $data['amount_cents'] < 0 : $data['amount_cents'] > 0), 422, 'Payments must be negative; returns and refunds must be positive bank credits.');
         $components = array_intersect_key($data, array_flip(['tax_principal_cents', 'interest_cents', 'penalty_cents', 'other_fees_cents']));
@@ -22,7 +22,10 @@ class SalesTaxService
         abort_unless(($start === null && $end === null) || ($start !== null && $end !== null && $start <= $end), 422, 'Supply both filing dates in chronological order, or leave both unknown.');
         abort_unless($data['paid_on'] <= now($space->timezone)->toDateString(), 422, 'Future payments are not posted bank evidence.');
 
-        return $this->bankFingerprint($space->id, $tx->account_id, $tx->id, $tx->posted_on->toDateString(), $tx->amount_cents, $tx->merchant);
+        $fingerprint = $this->bankFingerprint($space->id, $tx->account_id, $tx->id, $tx->posted_on->toDateString(), $tx->amount_cents, $tx->merchant);
+        abort_unless(hash_equals($fingerprint, $data['expected_bank_source_fingerprint']), 409, 'Bank source changed. Refresh and review the current bank evidence before saving tax details.');
+
+        return $fingerprint;
     }
 
     public function bankFingerprint(int $spaceId, int $accountId, int $transactionId, string $date, int $amount, string $merchant): string
@@ -75,6 +78,7 @@ class SalesTaxService
             $components = array_filter($components, fn ($value) => is_int($value) && $value >= 0);
             $split = count($components) === 4 && array_sum($components) === abs($amount) ? $components : null;
             $rows[] = ['transaction_id' => $id, 'record_id' => $record?->id, 'date' => $entry['date'], 'account_id' => $account->id,
+                'bank_source_fingerprint' => is_int($amount) ? $this->bankFingerprint($space->id, $account->id, $id, $entry['date'], $amount, $entry['merchant']) : null,
                 'components' => $split, 'account' => $account->name, 'merchant' => $entry['merchant'], 'amount_cents' => $amount,
                 'agency' => $valid ? $data['agency'] : null, 'jurisdiction' => $valid ? ($data['jurisdiction'] ?? null) : null,
                 'tax_type' => $type, 'movement' => $movement, 'filing_start' => $valid ? ($data['filing_start'] ?? null) : null,

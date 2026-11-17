@@ -3,7 +3,7 @@ import { planningUI } from './planning.js';
 import { chartPresentation } from './chart-theme.js';
 import { outlookUI } from './outlook.js';
 import { decisionSupportHtml } from './decision-support.js';
-import {salesTaxHtml} from './sales-tax.js';
+import {salesTaxHtml,taxRemittanceReview} from './sales-tax.js';
 import { accountingComponentsHtml } from './accounting-report.js';
 import { questionSummaryHtml, supportBusinessChoices, monthlyBudgetRecords } from './question-summary.js';
 import { budgetMappingPayload, budgetMappingHtml, budgetPreviewHtml } from './budget-import.js';
@@ -374,7 +374,10 @@ function boot() {
   }
   function recordForm(kind,record=null,preset={}) {
     if(['business_funding_plan','financial_observation','budget'].includes(kind)&&accountFilter!==null){notice('Choose all accounts before editing whole-space budgets, source totals or funding assumptions.');return;}
-    const d=kind==='business_funding_plan'?{...(record?.data||preset),complete:false,reviewed_on:data.decision_support?.as_of||''}:record?.data||preset;
+    const taxRow=kind==='tax_remittance'?data.sales_tax?.rows?.find(row=>row.transaction_id===(record?.data?.transaction_id??preset.transaction_id)):null;
+    if(kind==='tax_remittance'&&!taxRow){dialog('Choose tax bank evidence',`<p class="tr-subtle">Choose a posted bank movement from the selected report dates and account.</p><div class="tr-choices tr-block">${(data.sales_tax?.rows||[]).map(row=>btn(`${row.date} · ${row.account} · ${row.merchant} · ${precise(row.amount_cents)}`,'tax-annotate',`data-id="${row.transaction_id}"`)).join('')||'<p>No tax bank movements identified in this scope.</p>'}</div>`,null);return;}
+    const d=kind==='tax_remittance'?taxRemittanceReview(record,taxRow):kind==='business_funding_plan'?{...(record?.data||preset),complete:false,reviewed_on:data.decision_support?.as_of||''}:record?.data||preset;
+    if(!d){notice('Refresh this view before reviewing current bank evidence.');return;}
     const defaults={ministry:'Samaritan Ministries',provider:'Prisma Health',reserve_shares:true,confirmed:false,reviewed:false,priority:1,purity_bps:9999,quantity:1,weight:1,distribution_retention_bps:10000};
     let html=field('name','Name','text',record?.name||preset.name||'',null,true);
     for(const [key,def] of Object.entries(data.definitions[kind])) {
@@ -384,6 +387,7 @@ function boot() {
       const choices=def.type.endsWith('_record')?[{value:'',label:'Choose a record'},...data.records.filter(r=>r.kind===def.type.slice(0,-7)).map(r=>({value:r.id,label:r.name}))]:def.type==='account'?[{value:'',label:'Select account'},...data.accounts.map(a=>({value:a.id,label:a.name}))]:def.type==='business_space'?supportBusinessChoices(data.support_business_options):def.type==='category'?(def.required?data.category_options:[{value:'',label:'All categories'},...data.category_options]):def.choices;
       html+=field(key,def.label,def.type==='boolean'?'checkbox':def.type==='date'?'date':['money','percent','rate','decimal','integer'].includes(def.type)?'number':'text',value,choices);
     }
+    if(kind==='tax_remittance')html=`<p class="tr-data-note">Review this current bank evidence: ${esc(taxRow.date)} · ${esc(taxRow.account)} · ${esc(taxRow.merchant)} · ${precise(taxRow.amount_cents)}. Confirm the tax type and bank match again before marking it reviewed.</p>`+html;
     if(kind==='business_funding_plan')html='<p class="tr-data-note">Review remaining receipts and unpaid obligations using current balances. Confirm the complete plan again after balances or debt terms change. A capacity estimate does not schedule or guarantee a distribution.</p>'+html;
     if(kind.startsWith('medical_'))html=`<p class="tr-subtle tr-block">Track financial references only. Submit bills through your ministry separately. Expected shares are never guaranteed income. Matching a statement row prevents duplicate spending; a manual record does not change bank cash.</p>`+html+(record?`<div class="tr-actions tr-block">${btn('Remove record','medical-remove',`data-id="${record.id}"`)}</div>`:'');
     dialog(`${record?'Edit':'Add'} ${title(kind)}`,html,async values=>{
@@ -397,6 +401,7 @@ function boot() {
         else if((['integer','account','business_space'].includes(def.type)||def.type.endsWith('_record')))v=Number(v);
         payload[key]=v;
       }
+      if(kind==='tax_remittance')payload.expected_bank_source_fingerprint=d.expected_bank_source_fingerprint;
       await api(endpoint(record?`/records/${record.id}`:'/records'),record?'PATCH':'POST',{kind,name:values.get('name'),data:payload,version:record?.version});
     });
   }
