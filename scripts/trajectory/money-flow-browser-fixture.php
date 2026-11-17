@@ -71,5 +71,18 @@ foreach (['known' => [-10000, [9000, 200, 700, 100]], 'unknown' => [-22222, null
     $taxIds[$key] = $tax->id;
 }
 $cashInflowIds = App\Models\Trajectory\Transaction::where('account_id', $cash->id)->where('amount_cents', '>', 0)->where('flow', '!=', 'transfer')->pluck('id')->all();
+$detailCard = App\Models\Trajectory\Account::create(['space_id' => $space->id, 'source_key' => 'fictional:detail-card', 'name' => 'Fictional detail card', 'kind' => 'credit', 'currency' => 'USD', 'balance_cents' => 131902, 'observed_at' => $today->toDateString()]);
+$detailIds = [];
+foreach ([['purchase', -10001, 'expense', 'shopping'], ['metals', -25000, 'asset_transfer', 'gold_and_silver'], ['metals-credit', 5000, 'asset_transfer', 'gold_and_silver'], ['interest', -345, 'expense', 'interest'], ['fee', -200, 'expense', 'fees'], ['repayment', 15000, 'card_payment', 'uncategorized'], ['returned-repayment', -2000, 'card_payment', 'uncategorized'], ['unknown', -777, 'expense', 'shopping'], ['other-asset', -1234, 'asset_transfer', 'uncategorized'], ['client-equipment', -12345, 'expense', 'shopping']] as [$key, $amount, $flow, $category]) {
+    $detailIds[$key] = $post($detailCard, $key, 'Fictional detail '.$key, $amount, $flow, $category, $key !== 'unknown')->id;
+}
+App\Models\Trajectory\Allocation::where('transaction_id', $detailIds['client-equipment'])->update(['amount_cents' => 0]);
+App\Models\Trajectory\Allocation::create(['transaction_id' => $detailIds['client-equipment'], 'space_id' => $business->id, 'amount_cents' => -12345]);
+$post($detailCard, 'pending', 'Fictional pending card purchase', -99999, 'expense', 'shopping', false)->update(['pending' => true]);
+$olderUnallocated = $post($detailCard, 'older-unallocated', 'Fictional older unallocated card purchase', -7500, 'expense', 'shopping');
+$olderUnallocated->update(['posted_on' => $today->copy()->subYear()->startOfYear()->addDays(19)->toDateString()]);
+App\Models\Trajectory\Allocation::where('transaction_id', $olderUnallocated->id)->delete();
+$detailIds['older-unallocated'] = $olderUnallocated->id;
+App\Models\Trajectory\Record::create(['space_id' => $space->id, 'kind' => 'debt_balance_observation', 'name' => 'Fictional reconstructed opening', 'active' => true, 'data' => ['account_id' => $detailCard->id, 'balance_cents' => 100000, 'observed_on' => $today->copy()->startOfYear()->toDateString(), 'source' => 'Fictional statement reconstruction; not a direct opening-date screenshot.', 'reviewed' => true]]);
 echo json_encode(['posted_on' => $posted->toDateString(), 'today' => $today->toDateString(), 'cash_inflow_ids' => $cashInflowIds, 'space_id' => $space->id, 'company_id' => $business->id, 'family_ids' => $familyIds, 'cash_id' => $cash->id, 'other_cash_id' => $otherCash->id, 'zero_id' => $zero->id, 'partial_id' => $partial->id, 'transfer_id' => $transfer->id,
-    'tax_ids' => $taxIds, 'cash_outflow_ids' => [$repayment->id, $rent->id, $zero->id, $partial->id, ...$payrollIds, ...array_values($taxIds)]], JSON_THROW_ON_ERROR);
+    'detail_card_id' => $detailCard->id, 'detail_card_ids' => $detailIds, 'tax_ids' => $taxIds, 'cash_outflow_ids' => [$repayment->id, $rent->id, $zero->id, $partial->id, ...$payrollIds, ...array_values($taxIds)]], JSON_THROW_ON_ERROR);

@@ -3670,3 +3670,12 @@ signup and business setup, with branch adjustments available after purchase.
 - Unknown tax splits keep economic totals unavailable with a visible overview and
   Money flow warning. Cash movement preserves the full payment/credit, while
   Spending separates principal from known interest, penalties and fees.
+## 2026-11-17 - Trajectory card activity (source candidate)
+
+Wealth & debt now starts with a compact, per-card view of selected-period
+purchases, metals outlays and repayments. Current balances retain their actual
+dates; a closed detail shows gross charges/credits, unknown purposes and dated
+balance comparisons. Company-fronted charges stay in the physical card amount,
+with the household allocation shown separately. Source drilldown names its card
+basis and currency and preserves explicit zero versus missing allocations.
+Pending or incomplete history is never presented as verified zero spending.

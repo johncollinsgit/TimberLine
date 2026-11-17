@@ -329,6 +329,7 @@ class DashboardService
             'connections' => Connection::where(fn ($q) => $q->where('space_id', $space->id)->orWhereIn('id', $accounts->pluck('connection_id')->filter()))->get()->map(fn ($c) => [...$c->only(['id', 'status', 'institution_name', 'synced_at']), 'managed_here' => $c->space_id === $space->id])->all(),
             'medical' => $space->kind === 'household' ? $medical : null,
             'household_cards' => $space->kind === 'household' ? app(HouseholdCardsService::class)->build($records, $start->toDateString(), $end->toDateString(), $today->toDateString(), $entries) : null,
+            'card_activity' => app(CardActivityService::class)->build($space, $accounts, $records, $start->toDateString(), $end->toDateString(), $viewer, $range === 'all'),
             'interest_by_account' => $interestByAccount, 'interest_statements' => $interestStatements,
             'commitments' => app(CommitmentsService::class)->summary($records, $entries, $accounts, $today),
             'history' => app(HistoryService::class)->summarize($entries, $accounts, $today),

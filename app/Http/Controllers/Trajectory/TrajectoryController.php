@@ -56,14 +56,19 @@ class TrajectoryController extends Controller
     public function evidence(Request $request, Space $space, FinanceAccess $access, LedgerService $ledger)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['ids' => 'required_without_all:date,account_id|array|min:1|max:5000', 'ids.*' => 'integer', 'date' => 'required_without_all:ids,account_id|date_format:Y-m-d|before_or_equal:today', 'account_id' => 'sometimes|integer', 'cash_movement' => 'sometimes|boolean', 'economic_costs' => 'sometimes|boolean', 'economic_category' => ['sometimes', Rule::in([...app(\App\Services\Trajectory\WorkspaceService::class)->categories($space), 'sales_tax_principal'])], 'economic_categories' => 'sometimes|array|min:1|max:3', 'economic_categories.*' => ['string', 'distinct', Rule::in(['interest', 'tax_penalties', 'tax_fees'])]]);
+        $data = $request->validate(['ids' => 'required_without_all:date,account_id|array|min:1|max:5000', 'ids.*' => 'integer', 'date' => 'required_without_all:ids,account_id|date_format:Y-m-d|before_or_equal:today', 'account_id' => 'sometimes|integer', 'cash_movement' => 'sometimes|boolean', 'credit_movement' => 'sometimes|boolean', 'economic_costs' => 'sometimes|boolean', 'economic_category' => ['sometimes', Rule::in([...app(\App\Services\Trajectory\WorkspaceService::class)->categories($space), 'sales_tax_principal'])], 'economic_categories' => 'sometimes|array|min:1|max:3', 'economic_categories.*' => ['string', 'distinct', Rule::in(['interest', 'tax_penalties', 'tax_fees'])]]);
 
         if (isset($data['account_id'])) {
             Account::where('space_id', $space->id)->findOrFail($data['account_id']);
         }
 
+        abort_if((int) ($data['cash_movement'] ?? false) + (int) ($data['credit_movement'] ?? false) + (int) ($data['economic_costs'] ?? false) > 1, 422, 'Choose one evidence basis: bank cash, card activity or economic costs.');
+        if ($data['credit_movement'] ?? false) {
+            abort_unless(isset($data['account_id']), 422, 'Choose an owned credit account for card activity.');
+
+            return response()->json(app(\App\Services\Trajectory\CardActivityService::class)->evidence($request->user(), $space, (int) $data['account_id'], $data['ids'] ?? null, $data['date'] ?? null))->header('Cache-Control', 'private, no-store');
+        }
         $entries = $ledger->entries($space, $data['date'] ?? null, $data['date'] ?? null, $data['ids'] ?? null, $data['account_id'] ?? null);
-        abort_if(($data['cash_movement'] ?? false) && ($data['economic_costs'] ?? false), 422, 'Choose bank cash or economic costs, not both.');
         if ($data['economic_costs'] ?? false) {
             $entries = app(\App\Services\Trajectory\EconomicActivityService::class)->evidence(collect($entries), $data['economic_category'] ?? null, $data['economic_categories'] ?? null);
         }

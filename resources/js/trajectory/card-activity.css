@@ -1,0 +1,30 @@
+.tr-card-account{border-top:1px solid var(--tr-line,#e3e7e2);padding:1.1rem 0}
+.tr-card-account:last-child{padding-bottom:0}
+.tr-card-account>header{display:flex;align-items:start;justify-content:space-between;gap:1rem}
+.tr-card-account h3{margin:0 0 .3rem;font-size:1rem}
+.tr-card-account header p{margin:0;font-size:.78rem}
+.tr-card-latest{display:grid;text-align:right;font-size:.75rem;gap:.2rem;flex-shrink:0}
+.tr-card-latest strong{font-size:1.15rem}
+.tr-card-latest small{font-size:.73rem;color:#68776d}
+.tr-card-figures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem;margin:1rem 0}
+.tr-card-figures>div{min-width:0}
+.tr-card-figures dt{font-size:.78rem;color:#53675b;line-height:1.35;min-height:2.7em}
+.tr-card-figures dd{font-size:1.25rem;font-weight:650;margin:.3rem 0}
+.tr-card-figures button{font-size:.74rem;padding:.3rem .45rem;white-space:normal;text-align:left;min-height:2rem}
+.tr-card-share,.tr-card-change,.tr-card-equation{font-size:.82rem;line-height:1.55}
+.tr-card-physical{font-size:.8rem;margin:.8rem 0 0;color:#53675b}
+.tr-card-detail>summary{font-weight:600;cursor:pointer;padding:.45rem 0}
+.tr-card-boundaries{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin:1rem 0}
+.tr-card-boundaries dt{font-size:.78rem;color:#53675b}
+.tr-card-boundaries dd{font-weight:600;margin:.3rem 0}
+.tr-card-detail .tr-table{font-size:.8rem}
+@media(max-width:600px){
+ .tr-card-account>header{gap:.5rem}
+ .tr-card-account h3{font-size:.9rem;overflow-wrap:anywhere}
+ .tr-card-latest{font-size:.67rem;max-width:45%}
+ .tr-card-latest strong{font-size:1.03rem}
+ .tr-card-figures{gap:.45rem}
+ .tr-card-figures dt{font-size:.71rem}
+ .tr-card-figures dd{font-size:1.05rem;overflow-wrap:anywhere}
+ .tr-card-figures button{font-size:.67rem;padding:.25rem;min-height:2.6rem}
+}
