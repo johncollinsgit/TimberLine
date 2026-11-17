@@ -1,3 +1,12 @@
+## 2026-11-17 - Customer refunds and net recorded income (source candidate)
+
+Income by source shows positive receipts, a separate signed customer-refund row
+and net recorded income. Receipt doughnuts stay gross with an explicit refund/net
+caption. Reviewed negative income has its own Money flow outgoing branch and
+transaction evidence; it does not become overhead or a purchase refund. The same
+phone/desktop layouts and existing source actions are retained. See the
+[recorded money-flow contract](../operations/trajectory-money-flow.md).
+
 ## 2026-11-17 - Trajectory profit and loss statement (source candidate)
 
 Business Profit & loss now presents four accounting KPIs, gross/net margins,

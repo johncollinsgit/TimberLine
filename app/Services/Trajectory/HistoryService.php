@@ -21,7 +21,7 @@ class HistoryService
             $expense = app(EconomicActivityService::class)->expenses($rows);
             $months[] = [
                 'month' => $month, 'start' => $start->toDateString(), 'end' => min($end->toDateString(), $today->toDateString()),
-                'income_cents' => (int) $rows->whereIn('flow', self::INCOME)->where('amount_cents', '>', 0)->sum('amount_cents'),
+                'income_cents' => (int) app(IncomeSourceService::class)->incomeEntries($rows)->sum('amount_cents'),
                 'spending_cents' => app(EconomicActivityService::class)->total($rows), 'economic_coverage' => app(EconomicActivityService::class)->coverage($rows),
                 'one_time_cents' => -(int) $expense->where('face_punched', true)->sum('amount_cents'),
                 'review_count' => $rows->where('reviewed', false)->count(), 'transaction_count' => $rows->count(),

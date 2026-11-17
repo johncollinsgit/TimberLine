@@ -295,3 +295,10 @@ test('a draft role target overlapping a reviewed Payroll total also requires pla
     expect($result['monthly_needed_cents'])->toBeNull()->and($result['overlapping_budget_record_ids'])->toContain($role->id)
         ->and($result['basis'])->toContain('Review overlapping Payroll');
 });
+
+test('recorded income fallback nets customer refunds and preserves owner payroll and owner draw exclusions', function (): void {
+    $entry = fn (int $id, int $amount, string $flow) => ['id' => $id, 'date' => '2026-11-02', 'merchant' => 'Fictional source', 'category' => 'income', 'amount_cents' => $amount, 'flow' => $flow, 'reviewed' => true];
+    $entries = collect([$entry(1, 100000, 'income'), $entry(2, -6500, 'income'), $entry(3, -30000, 'owner_distribution'), $entry(4, -20000, 'owner_wages')]);
+    $result = $this->service->build($this->space, $entries, collect(), $this->planning, [], [], $this->today);
+    expect($result['month']['received_cents'])->toBe(93500)->and($result['month']['spent_cents'])->toBe(0);
+});

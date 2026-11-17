@@ -40,7 +40,7 @@ class DecisionSupportService
             $selected = $entries->where('date', '>=', $start->toDateString())->where('date', '<=', $through->toDateString());
             $reviewed = $selected->where('reviewed', true);
             $cards = app(HouseholdCardsService::class)->build($records, $start->toDateString(), $through->toDateString(), $today->toDateString(), $entries);
-            $received = $cards['take_home_income']['amount_cents'] ?? ($reviewed->isNotEmpty() ? (int) $reviewed->whereIn('flow', ['income', 'owner_wages', 'owner_distribution'])->where('amount_cents', '>', 0)->sum('amount_cents') : null);
+            $received = $cards['take_home_income']['amount_cents'] ?? ($reviewed->isNotEmpty() ? (int) app(IncomeSourceService::class)->incomeEntries($reviewed)->sum('amount_cents') : null);
             // Source observations replace matching ledger proceeds, never add to them.
             $metals = $cards['metals_sold']['amount_cents'] ?? null;
             $spent = $selected->isNotEmpty() ? app(EconomicActivityService::class)->total($selected) : null;

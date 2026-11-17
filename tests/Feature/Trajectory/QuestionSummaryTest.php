@@ -322,3 +322,15 @@ test('business operating answers and monthly actuals exclude sales tax principal
     expect(($this->answer)($unknown, 'recorded_operating_spend')['amount_cents'])->toBeNull()
         ->and(collect($unknown['monthly']['rows'])->firstWhere('month', '2026-11')['actual_spending_cents'])->toBeNull();
 });
+
+test('business monthly recorded income nets customer refunds without adding operating costs or subtracting owner distributions', function (): void {
+    $result = ($this->build)([
+        ($this->entry)(1, ['flow' => 'income', 'category' => 'income', 'amount_cents' => 100000]),
+        ($this->entry)(2, ['flow' => 'income', 'category' => 'income', 'amount_cents' => -6500]),
+        ($this->entry)(3, ['flow' => 'owner_distribution', 'amount_cents' => -50000]),
+        ($this->entry)(4, ['amount_cents' => -20000]),
+    ]);
+    $month = collect($result['monthly']['rows'])->firstWhere('month', '2026-11');
+    expect($month['actual_income_cents'])->toBe(93500)->and($month['actual_spending_cents'])->toBe(20000)
+        ->and(($this->answer)($result, 'recorded_operating_spend')['amount_cents'])->toBe(20000);
+});

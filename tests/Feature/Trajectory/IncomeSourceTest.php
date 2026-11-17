@@ -66,3 +66,34 @@ test('received medical shares remain in cash receipts and evidence but never bec
         ->and($sources->sum('amount_cents'))->toBe(50000)
         ->and($sources->has('Fictional income-looking label'))->toBeFalse();
 });
+
+test('reviewed customer refunds reduce net income while gross receipts and owner pay keep their meaning', function (): void {
+    $service = app(\App\Services\Trajectory\IncomeSourceService::class);
+    $entries = collect([
+        ['id' => 41, 'merchant' => 'Fictional processor collection', 'flow' => 'income', 'category' => 'net_sales', 'amount_cents' => 100000, 'reviewed' => true],
+        ['id' => 42, 'merchant' => 'Fictional processor refund debit', 'flow' => 'income', 'category' => 'net_sales', 'amount_cents' => -6500, 'reviewed' => true],
+        ['id' => 43, 'merchant' => 'Fictional uncertain debit', 'flow' => 'income', 'amount_cents' => -9000, 'reviewed' => false],
+        ['id' => 44, 'merchant' => 'Fictional owner draw', 'flow' => 'owner_distribution', 'amount_cents' => -20000, 'reviewed' => true],
+        ['id' => 45, 'merchant' => 'Fictional payroll payment', 'flow' => 'owner_wages', 'amount_cents' => -30000, 'reviewed' => true],
+        ['id' => 46, 'merchant' => 'Fictional returned purchase', 'flow' => 'refund', 'amount_cents' => 800, 'reviewed' => true],
+    ]);
+    $summary = $service->summarize($entries, ['net_sales' => 'Net bank sales collections']);
+    $sources = collect($summary['sources'])->keyBy('name');
+    expect($summary['earned_income_cents'])->toBe(93500)
+        ->and($summary['gross_earned_income_cents'])->toBe(100000)
+        ->and($summary['customer_refunds_cents'])->toBe(6500)
+        ->and($sources['Net bank sales collections']['amount_cents'])->toBe(100000)
+        ->and($sources['Net bank sales collections']['ids'])->toBe([41])
+        ->and($sources['Customer refunds / sales reversals']['amount_cents'])->toBe(-6500)
+        ->and($sources['Customer refunds / sales reversals']['ids'])->toBe([42])
+        ->and($sources['Refunds & reimbursements']['amount_cents'])->toBe(800)
+        ->and($service->incomeEntries($entries)->pluck('id')->all())->toBe([41, 42]);
+
+    $refundOnly = $service->summarize($entries->where('id', 42));
+    expect($refundOnly['earned_income_cents'])->toBe(-6500)
+        ->and($refundOnly['gross_earned_income_cents'])->toBe(0)
+        ->and($refundOnly['customer_refunds_cents'])->toBe(6500)
+        ->and($refundOnly['sources'][0]['ids'])->toBe([42]);
+    $fullRefund = $service->summarize($entries->whereIn('id', [41, 42])->map(fn ($entry) => [...$entry, 'amount_cents' => $entry['id'] === 41 ? 6500 : -6500]));
+    expect($fullRefund['earned_income_cents'])->toBe(0)->and($fullRefund['sources'])->toHaveCount(2);
+});

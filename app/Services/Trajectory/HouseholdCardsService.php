@@ -47,18 +47,19 @@ class HouseholdCardsService
         // Reviewed cash movements can support period-specific partial figures.
         // They never establish complete household coverage or qualifying income.
         if ($entries !== null) {
-            $selected = $entries->where('date', '>=', $from)->where('date', '<=', $through)->where('reviewed', true)->where('amount_cents', '>', 0);
+            $selected = $entries->where('date', '>=', $from)->where('date', '<=', $through)->where('reviewed', true);
             foreach (['take_home_income', 'owner_draws', 'metals_sold'] as $metric) {
                 if ($cards[$metric]) {
                     continue;
                 }
-                $rows = $selected->filter(fn ($r) => match ($metric) {
+                $eligible = $metric === 'take_home_income' ? app(IncomeSourceService::class)->incomeEntries($selected) : $selected->where('amount_cents', '>', 0);
+                $rows = $eligible->filter(fn ($r) => match ($metric) {
                     'take_home_income' => in_array($r['flow'], ['income', 'owner_wages', 'owner_distribution'], true),
                     'owner_draws' => $r['flow'] === 'owner_distribution' || (in_array($r['flow'], ['income', 'owner_wages'], true) && preg_match('/\bowners?\s+dra(?:w|ws)?\b/i', $r['merchant'])),
                     'metals_sold' => $r['flow'] === 'asset_sale' && $r['category'] === 'gold_and_silver',
                 });
                 if ($rows->isNotEmpty()) {
-                    $cards[$metric] = ['id' => null, 'name' => null, 'metric' => $metric, 'amount_cents' => (int) $rows->sum('amount_cents'), 'period_start' => $from, 'period_end' => $through, 'observed_on' => $today, 'complete' => false, 'current_period_complete' => false, 'source' => $metric === 'metals_sold' ? 'Reviewed metals-sale deposits only; cash retained outside the bank is not included.' : 'Reviewed household receipts only; company-paid personal costs and missing sources require review.', 'ids' => $rows->pluck('id')->all()];
+                    $cards[$metric] = ['id' => null, 'name' => null, 'metric' => $metric, 'amount_cents' => (int) $rows->sum('amount_cents'), 'period_start' => $from, 'period_end' => $through, 'observed_on' => $today, 'complete' => false, 'current_period_complete' => false, 'source' => $metric === 'metals_sold' ? 'Reviewed metals-sale deposits only; cash retained outside the bank is not included.' : ($metric === 'take_home_income' ? 'Reviewed income receipts net of customer refunds; company-paid personal costs and missing sources require review.' : 'Reviewed household receipts only; company-paid personal costs and missing sources require review.'), 'ids' => $rows->pluck('id')->all()];
                 }
             }
         }

@@ -18,10 +18,12 @@ class IncomeSourceService
             'unclassified_deposits' => $this->row('Deposits needing purpose', 'Cash received without enough evidence to call income.', false),
             'sales_tax_returns' => $this->row('Sales-tax returns & refunds', 'Agency cash credits settle or reverse tax remittances; excluded from income.', false),
             'refunds' => $this->row('Refunds & reimbursements', 'Returned or reimbursed money; excluded from earned income.', false),
+            'customer_refunds' => $this->row('Customer refunds / sales reversals', 'Reviewed withdrawals of income reduce recorded income; they are not operating expenses or purchase refunds.', true),
         ];
 
-        foreach ($entries->filter(fn (array $entry): bool => $entry['amount_cents'] > 0) as $entry) {
+        foreach ($entries->filter(fn (array $entry): bool => $entry['amount_cents'] > 0 || $this->isCustomerRefund($entry)) as $entry) {
             $key = match (true) {
+                $this->isCustomerRefund($entry) => 'customer_refunds',
                 $entry['flow'] === EconomicActivityService::TAX_FLOW => ($entry['tax_purpose']['valid'] ?? false) ? 'sales_tax_returns' : 'unclassified_deposits',
                 $entry['flow'] === 'asset_sale' => 'metals_sales',
                 $entry['flow'] === 'loan_draw' => 'loan_draws',
@@ -45,12 +47,26 @@ class IncomeSourceService
             $sources[$key]['ids'][] = $entry['id'];
         }
 
-        $sources = array_values(array_filter($sources, fn (array $source): bool => $source['amount_cents'] > 0));
+        $sources = array_values(array_filter($sources, fn (array $source): bool => $source['count'] > 0));
 
         return [
             'earned_income_cents' => (int) collect($sources)->where('counts_as_income', true)->sum('amount_cents'),
+            'gross_earned_income_cents' => (int) collect($sources)->where('counts_as_income', true)->where('amount_cents', '>', 0)->sum('amount_cents'),
+            'customer_refunds_cents' => -(int) collect($sources)->where('key', 'customer-refunds-sales-reversals')->sum('amount_cents'),
             'sources' => $sources,
         ];
+    }
+
+    /** Preserve positive receipt semantics; only reviewed income withdrawals are contra-revenue. */
+    public function incomeEntries(Collection $entries): Collection
+    {
+        return $entries->filter(fn ($entry) => in_array($entry['flow'], HistoryService::INCOME, true)
+            && ($entry['amount_cents'] > 0 || $this->isCustomerRefund($entry)));
+    }
+
+    public function isCustomerRefund(array $entry): bool
+    {
+        return ($entry['flow'] ?? null) === 'income' && ($entry['reviewed'] ?? false) === true && $entry['amount_cents'] < 0;
     }
 
     private function row(string $name, string $detail, bool $countsAsIncome): array
