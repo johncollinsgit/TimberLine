@@ -249,3 +249,25 @@ test('provider budget context permits only reviewed typed targets without free-t
             && ! str_contains($serialized, 'Private budget source-note canary') && ! str_contains($serialized, 'private-source-reference-');
     });
 });
+
+test('QuickBooks accounting transaction drill-down remains quarantined from unrelated external AI explanations', function (): void {
+    $private = ['source' => 'QuickBooks GL private account canary', 'account' => ['id' => 'private-qbo-account', 'label' => 'Private accounting account'],
+        'period' => $this->data['range'], 'basis' => 'accrual', 'currency' => 'USD',
+        'transactions' => [['id' => 'private-accounting-transaction', 'memo' => 'Private ledger memo canary', 'amount_cents' => 987654321]]];
+    $this->data['business'] = ['profit_loss' => ['snapshot_id' => 12, 'transactions' => $private]];
+    $this->data['accounting_transactions'] = $private;
+    $answer = $this->service->respond($this->owner, $this->space, 'Explain current cash.', $this->data, $this->uuid);
+    expect($answer['ai']['status'])->toBe('completed');
+    Http::assertSent(function ($request): bool {
+        $context = json_decode($request['input'][0]['content'], true)['untrusted_financial_context'];
+        $serialized = json_encode($context);
+
+        return ! isset($context['business']) && ! isset($context['accounting_transactions'])
+            && ! str_contains($serialized, 'QuickBooks GL private account canary')
+            && ! str_contains($serialized, 'private-qbo-account')
+            && ! str_contains($serialized, 'private-accounting-transaction')
+            && ! str_contains($serialized, 'Private ledger memo canary')
+            && ! str_contains($serialized, '987654321')
+            && $context['verified_bank_balances'][0]['balance_cents'] === 50000;
+    });
+});

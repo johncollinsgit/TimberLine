@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Trajectory\AccountLedgerController;
 use App\Http\Controllers\Trajectory\PlanningController as Planning;
+use App\Http\Controllers\Trajectory\ProfitLossExportController;
+use App\Http\Controllers\Trajectory\ProfitLossRefreshController;
 use App\Http\Controllers\Trajectory\TrajectoryController as Trajectory;
 use Illuminate\Support\Facades\Route;
 
@@ -26,6 +29,9 @@ Route::middleware(['auth', 'verified', 'throttle:120,1'])->prefix('trajectory')-
         Route::post('/sms/confirm', [Trajectory::class, 'confirmSms'])->name('trajectory.confirmSms')->middleware('throttle:5,10');
         Route::patch('/review-email', [Trajectory::class, 'reviewEmailPreferences'])->name('trajectory.reviewEmailPreferences');
         Route::get('/dashboard', [Trajectory::class, 'dashboard'])->name('trajectory.dashboard');
+        Route::get('/profit-loss/accounts/transactions', [AccountLedgerController::class, 'show'])->middleware('throttle:15,1,pnl-account-ledger')->name('trajectory.profit-loss.account-transactions');
+        Route::get('/profit-loss/export/{format}', [ProfitLossExportController::class, 'show'])->whereIn('format', ['csv', 'pdf', 'print'])->name('trajectory.profit-loss.export');
+        Route::post('/profit-loss/refresh', [ProfitLossRefreshController::class, 'store'])->middleware('throttle:5,1,pnl-refresh')->name('trajectory.profit-loss.refresh');
         Route::post('/evidence', [Trajectory::class, 'evidence'])->name('trajectory.evidence');
         Route::post('/accounts', [Trajectory::class, 'account'])->name('trajectory.account');
         Route::patch('/accounts/{account}', [Trajectory::class, 'updateAccount'])->name('trajectory.updateAccount');

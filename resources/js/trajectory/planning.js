@@ -1,8 +1,10 @@
-import { accountingComponentsHtml } from './accounting-report.js';
-export function planningUI({getData, spaces, esc, money, precise, panel, btn, plot, chart, line, dialog, field, api, endpoint, minor, load, navigate, evidence, reviewBudget}) {
+import {profitLossHtml,profitLossSeries,profitMoney,profitAccountLedgerHtml} from './profit-loss.js';
+export function planningUI({getData, spaces, esc, money, precise, panel, btn, plot, chart, line, dialog, field, api, endpoint, minor, load, navigate, evidence, reviewBudget, render, changeAccountingBasis, exportProfitLoss, refreshProfitLoss}) {
   const conversations=new Map(), questionRequests=new Map(), budgetDrafts=new Map();
-  let draftSequence=0;
-  const contextKey=()=>[getData().space.id,getData().range.start,getData().range.end,getData().scope_filter?.account_id||'all'].join(':');
+  let accountRequestSequence=0;
+  let draftSequence=0, profitComparison='previous_year', profitAggregation='monthly';
+  const contextKey=()=>[getData().space.id,getData().range.start,getData().range.end,getData().scope_filter?.account_id||'all',getData().business?.profit_loss?.requested_basis||'',getData().business?.profit_loss?.snapshot_id||'',getData().business?.profit_loss?.observed_at||'',getData().business?.profit_loss?profitComparison:''].join(':');
+  const refreshContextKey=()=>[getData().space.id,getData().range.start,getData().range.end,getData().scope_filter?.account_id||'all',getData().business?.profit_loss?.requested_basis||'',profitComparison].join(':');
   const label = key => getData().workspace_settings?.income_categories?.[key] || key.replaceAll('_',' ');
   const reviewButton = (text,ids) => ids?.length ? btn(text,'plan-evidence',`data-ids="${esc(JSON.stringify(ids))}"`) : '<span class="tr-subtle">No supporting records</span>';
   const jump = (text,tab) => btn(text,'plan-nav',`data-view="${tab}"`);
@@ -32,8 +34,17 @@ export function planningUI({getData, spaces, esc, money, precise, panel, btn, pl
     ${t.categories.map(c=>panel(label(c.category),`<div class="tr-labels"><strong>${precise(c.amount_cents)} · ${c.count} purchases</strong><span class="tr-pill">${c.readiness_score}/100 evidence readiness</span></div><p>${esc(c.rating)}</p><p class="tr-subtle">${esc(c.guidance)}</p><p class="tr-subtle">${c.reviewed_count} reviewed · ${c.receipt_count} with a linked receipt</p>${reviewButton('Inspect these purchases',c.ids)}`)).join('')}`;
   }
   function profit(){
-    const p=getData().business?.profit_loss;if(!p)return panel('Profit & loss','Select a business using the company menu.');
-    return panel('Profit & loss',`<p><strong>${esc(p.source)}</strong> · ${esc(getData().range.start)} – ${esc(getData().range.end)}</p><p class="tr-subtle">${esc(p.note)} ${p.basis?'Accounting basis: '+esc(p.basis):''}</p><div class="tr-metrics">${tile('Revenue',p.income_cents,p.authoritative?'QuickBooks report':'Provisional bank evidence',reviewButton('Supporting deposits',p.revenue_ids))}${tile(p.authoritative?'Total accounting costs':'Recorded expenses',p.authoritative?p.total_costs_cents:p.expenses_cents,p.authoritative?'COGS + expenses + other expenses':'Provisional bank evidence',jump('Review categories','tax'))}${tile(p.authoritative?'Reported QuickBooks net income':'Provisional net result',p.net_cents,p.authoritative?'Source net income; includes other income':'Incomplete bank activity',jump('Ask Bud','bud'))}</div>${p.economic_coverage?.complete===false?`<p class="tr-data-note">Economic transaction costs are incomplete because tax components or source evidence need review. Known categories below are a subset; unknown costs are not zero. ${reviewButton('Review tax cash',p.economic_coverage.unresolved_ids)}</p>`:''}${p.authoritative?accountingComponentsHtml({report:p,esc,precise}):''}<h3>Supporting transaction categories</h3>${p.transaction_expense_lines.map(c=>`<div class="tr-row"><span>${esc(label(c.category))}</span><strong>${precise(c.amount_cents)}</strong>${reviewButton('View records',c.ids)}</div>`).join('')}<p class="tr-subtle">${p.unreviewed_count} transactions in this period still need review.</p>`);
+    const data=getData();
+    return profitLossHtml({report:data.business?.profit_loss,space:data.space,range:data.range,comparison:profitComparison,aggregation:profitAggregation,esc,btn,insightThread:(conversations.get(contextKey())||[]).join('')});
+  }
+  function drawProfit(){
+    const report=getData().business?.profit_loss;if(!report)return;
+    const series=profitLossSeries(report,profitAggregation,profitComparison);
+    if(series.rows.length)chart('tr-pnl-trend-chart','line',series.labels,series.datasets.map(item=>({...line(item.label,item.data,item.color),pointRadius:3,pointHitRadius:24,hidden:!!item.hidden,...(item.comparison?{borderDash:[6,4]}:{})})),index=>{
+      const row=series.rows[index];
+      dialog('Accounting report · '+row.label,`<p class="tr-subtle">${esc(row.period?.start)} – ${esc(row.period?.end)} · ${esc(report.basis||'Basis unreported')} · ${esc(report.currency||'Currency unreported')}</p>${series.datasets.map(item=>`<div class="tr-row"><span>${esc(item.label)}</span><strong>${esc(profitMoney(item.data[index],report.currency))}</strong></div>`).join('')}<p class="tr-subtle">Saved report figures or complete nonoverlapping monthly totals. Missing components stay unavailable. Change the custom date range to open this period’s full statement.</p>`,null);
+    },{beginAtZero:true,formatMoney:value=>profitMoney(value,report.currency)});
+    document.querySelector('#tr-pnl-comparison')?.addEventListener('change',event=>{profitComparison=event.target.value;render?.();document.querySelector('#tr-pnl-comparison')?.focus();});
   }
   function companies(){return panel('Businesses & account ownership',`<p class="tr-subtle">Each company has separate books, access, and tax settings. Both shows your household with the company selected above. A shared bank login can feed accounts into different companies; only the connection owner can change those assignments.</p>${spaces.map(s=>`<div class="tr-row"><div><strong>${esc(s.name)}</strong><p class="tr-subtle">${s.kind==='household'?'Private household':'Business · separate financial access'}</p></div><a class="tr-link" href="/trajectory?space=${s.id}&tab=accounts">Open accounts</a></div>`).join('')}<div class="tr-actions tr-block">${btn('Add an entitled business','plan-add-business')}${btn('Edit current profile','plan-profile')}</div><p class="tr-subtle">New companies must have an Everbranch workspace, financial access, and Trajectory entitlement. Linking your household does not grant company access.</p>`);}
   function bud(){return panel('Ask Everbranch',`<p class="tr-subtle">Ask about ${esc(getData().space.name)} and the selected period. Each answer identifies whether it used enabled AI or calculated guidance, and shows missing coverage. Budget changes open a draft for your review; no money moves from this chat.</p><div class="tr-actions">${['What income do I need this month?','What bills are upcoming?','How do metals proceeds affect my gap?','Can the business pay us?','Compare debt payoff methods'].map(q=>btn(q,'plan-bud-prompt',`data-question="${esc(q)}"`)).join('')}</div><label class="tr-field full tr-block">Your question<textarea id="tr-bud-question" rows="3" maxlength="2000"></textarea></label>${btn('Ask Everbranch','plan-bud')}<div id="tr-bud-thread" role="log" aria-live="polite">${(conversations.get(contextKey())||[]).join('')}</div>`);}
@@ -46,7 +57,44 @@ export function planningUI({getData, spaces, esc, money, precise, panel, btn, pl
   async function handle(a,target){
     if(!a.startsWith('plan-'))return false;
     const data=getData(),p=data.planning;
-    if(a==='plan-nav'){document.querySelector('#tr-dialog').close();navigate(target.dataset.view);}
+    if(a==='plan-profit-basis'){await changeAccountingBasis?.(target.dataset.basis);}
+    else if(a==='plan-profit-trend'){profitAggregation=target.dataset.period;render?.();document.querySelector(`[data-action="plan-profit-trend"][data-period="${profitAggregation}"]`)?.focus();}
+    else if(a==='plan-profit-refresh'){
+      const report=data.business?.profit_loss;if(!report?.capabilities?.report_refresh)return true;
+      const period=target.dataset.target==='comparison'?report.comparison?.[profitComparison]?.period:report.period;
+      if(!period?.start||!period?.end)throw new Error('Choose an exact report period before loading accounting data.');
+      const key=refreshContextKey(),label=target.textContent;target.disabled=true;target.textContent='Loading…';
+      const status=document.querySelector('#tr-pnl-refresh-status');if(status)status.textContent='Loading the selected accounting report from QuickBooks…';
+      try{
+        await refreshProfitLoss?.({from:period.start,through:period.end,accounting_basis:report.requested_basis||report.basis||'accrual',...(target.dataset.target!=='comparison'&&report.snapshot_id?{snapshot_id:report.snapshot_id}:{})});
+        if(getData()?.space&&refreshContextKey()===key){const message=document.querySelector('#tr-pnl-refresh-status');if(message)message.textContent='The accounting report has been loaded. Saved figures are shown below.';}
+      }catch(error){if(getData()?.space&&refreshContextKey()===key){const message=document.querySelector('#tr-pnl-refresh-status');if(message)message.textContent='Report request could not be completed. '+error.message;}}
+      finally{if(target.isConnected){target.disabled=false;target.textContent=label;}}
+    }
+    else if(a==='plan-profit-export'){await exportProfitLoss?.(target.dataset.format,profitComparison);}
+    else if(a==='plan-profit-jump'){const node=document.querySelector(target.dataset.section==='net'?'#tr-pnl-net':'#tr-pnl-section-'+target.dataset.section);if(node){if(node.tagName==='DETAILS')node.open=true;node.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});(node.querySelector('summary')||node).focus({preventScroll:true});}}
+    else if(a==='plan-profit-account'){
+      const report=data.business?.profit_loss,find=rows=>{for(const row of rows||[]){if(String(row.key||row.id||row.label)===target.dataset.key)return row;const child=find(row.children);if(child)return child;}return null;},row=find([...(report?.statement?.sections||[]).flatMap(section=>section.lines||[]),...(report?.statement?.unclassified_lines||[])]);
+      if(row){
+        const source=`<p class="tr-subtle">${esc(report.period?.start||data.range.start)} – ${esc(report.period?.end||data.range.end)} · ${esc(report.basis||'Basis unreported')}<br>Source: ${esc(row.source||report.source)}.</p>`;
+        if(!report.snapshot_id||!row.id||row.transaction_detail_available===false){
+          dialog(row.label,source+'<p class="tr-data-note">Individual accounting transactions are unavailable for this saved account. Its source account identity, report section or original connection needs review. Bank activity is separate supporting evidence.</p>',null);
+        }else{
+          const request=++accountRequestSequence,key=contextKey(),snapshot=report.snapshot_id;
+          dialog(row.label,source+`<div class="tr-pnl-account-request" data-request="${request}" aria-busy="true"><p role="status" aria-live="polite">Loading accounting transactions…</p></div>`,null);
+          const container=document.querySelector(`.tr-pnl-account-request[data-request="${request}"]`);
+          const current=()=>{const latest=getData();return latest?.space&&container?.isConnected&&document.querySelector('#tr-dialog')?.open&&key===contextKey()&&latest.business?.profit_loss?.snapshot_id===snapshot;};
+          try{
+            const query=new URLSearchParams({snapshot_id:String(snapshot),account_key:String(row.key)});
+            const detail=await api(endpoint('/profit-loss/accounts/transactions')+'?'+query);
+            if(current())container.innerHTML=profitAccountLedgerHtml(detail,{esc});
+          }catch(error){if(current())container.innerHTML=`<div class="tr-pnl-ledger"><p class="tr-data-note" role="alert">${esc(error.message||'Accounting transactions could not be loaded. Try again after refreshing the report.')}</p>${btn('Try again','plan-profit-account',`data-key="${esc(row.key)}" type="button"`)}<p class="tr-pnl-detail-note">No bank rows have been substituted and no accounting entry has been changed.</p></div>`;}
+          finally{if(current())container.setAttribute('aria-busy','false');}
+        }
+      }
+    }
+    else if(a==='plan-profit-evidence'){await evidence({ids:JSON.parse(target.dataset.ids),economic_costs:true,economic_category:target.dataset.category});}
+    else if(a==='plan-nav'){document.querySelector('#tr-dialog').close();navigate(target.dataset.view);}
     else if(a==='plan-evidence'){document.querySelector('#tr-dialog').close();await evidence({ids:JSON.parse(target.dataset.ids)});}
     else if(a==='plan-income')dialog('Expected monthly income',`<p class="tr-subtle">Blank uses reviewed history. An amount replaces that source’s historical estimate. These are planning inputs, not bank transactions.</p>${p.sources.map(s=>field('income-'+s.category,s.label+' ($/month)','number',s.user_entered?s.expected_monthly_cents/100:'')).join('')}`,async v=>{const income_expectations={};p.sources.forEach(s=>{if(v.get('income-'+s.category)!=='')income_expectations[s.category]=minor(v.get('income-'+s.category));});await api(endpoint('/workspace'),'PATCH',{income_expectations});});
     else if(a==='plan-costs')dialog('Spending and debt scenario',field('flex','Adjustable spending / month ($)','number',p.flexible_monthly_cents/100)+field('extra','Extra debt payment / month ($)','number',(data.workspace_settings.debt_extra_cents||0)/100)+field('months','Debt payoff target (months)','number',data.workspace_settings.debt_target_months||36),async v=>{await api(endpoint('/workspace'),'PATCH',{flexible_monthly_cents:minor(v.get('flex')),debt_extra_cents:minor(v.get('extra')),debt_target_months:Number(v.get('months'))});});
@@ -71,7 +119,7 @@ export function planningUI({getData, spaces, esc, money, precise, panel, btn, pl
       if(requestId)questionRequests.set(requestKey,requestId);
       target.disabled=true;
       try{
-        const r=await api(endpoint('/bud'),'POST',{question,range,...(data.scope_filter?.account_id?{account_id:data.scope_filter.account_id}:{}),use_ai:!!requestId,...(requestId?{request_id:requestId}:{}),...(range==='custom'?{from:data.range.start,through:data.range.end}:{})});
+        const r=await api(endpoint('/bud'),'POST',{question,range,...(data.business?.profit_loss?{accounting_basis:data.business.profit_loss.requested_basis||data.business.profit_loss.basis||'accrual',comparison:profitComparison}:{}),...(data.scope_filter?.account_id?{account_id:data.scope_filter.account_id}:{}),use_ai:!!requestId,...(requestId?{request_id:requestId}:{}),...(range==='custom'?{from:data.range.start,through:data.range.end}:{})});
         const drafts=(r.proposals||[]).filter(proposal=>proposal.type==='budget'&&proposal.requires_review===true&&proposal.space_id===data.space.id);
         const draftActions=drafts.map((proposal,index)=>{const token=(requestId||'core-'+(++draftSequence))+':'+index;budgetDrafts.set(token,{context:key,proposal});return btn('Review budget draft','plan-budget-review',`data-draft="${esc(token)}"`);}).join('');
         const status=r.ai?.status?.replaceAll('_',' '),partial=r.ai?.source_coverage?.complete===false;
@@ -84,5 +132,5 @@ export function planningUI({getData, spaces, esc, money, precise, panel, btn, pl
 
     return true;
   }
-  return {summary,planning,anomalies,tax,profit,companies,bud,draw,handle};
+  return {summary,planning,anomalies,tax,profit,companies,bud,draw,drawProfit,handle};
 }

@@ -1,3 +1,23 @@
+## 2026-11-17 - Trajectory profit and loss statement (source candidate)
+
+Business Profit & loss now presents four accounting KPIs, gross/net margins,
+source-backed comparisons and historical sparklines above an interactive chart
+and expandable financial statement. Selected-period and prior-period amounts
+align in separate columns; account detail remains under its original report
+section. On phones the KPI cards stack and statement sections collapse without
+requiring horizontal panning. Supporting bank classifications, including owner,
+studio and event net payroll, remain separate from accounting totals.
+
+Basis controls appear only for available accounting evidence. Missing reports,
+unknown currency, gaps and incomplete cost sections remain explicit. CSV, PDF
+and printable statements reuse the same authorized report. Leaf accounts open
+on-demand accounting transactions with an explicit saved-report reconciliation.
+Load/Refresh report requests only the selected dates and accounting basis;
+passive dashboard reads remain cache-only. Financial Insights
+uses local source calculations through Ask Everbranch; accounting snapshots stay
+outside external AI context. See the
+[reporting contract](../operations/trajectory-profit-loss.md).
+
 ## 2026-11-16 - Trajectory payroll groups and cost allocations (source candidate)
 
 Money flow keeps owner, studio, event and unassigned Payroll branches distinct,

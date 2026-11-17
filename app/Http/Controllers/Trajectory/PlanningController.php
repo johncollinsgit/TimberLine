@@ -117,8 +117,9 @@ class PlanningController extends Controller
     {
         $access->authorize($request->user(), $space);
         abort_unless(config('bud.core_enabled', true), 503, 'Bud is currently unavailable.');
-        $data = $request->validate(['question' => 'required|string|max:2000', 'range' => 'sometimes|in:day,week,month,quarter,year,all,custom', 'account_id' => 'sometimes|nullable|integer|min:1', 'from' => 'required_if:range,custom|date_format:Y-m-d|before_or_equal:today', 'through' => 'required_if:range,custom|date_format:Y-m-d|after_or_equal:from|before_or_equal:today', 'use_ai' => 'sometimes|boolean', 'request_id' => 'required_if:use_ai,true|nullable|uuid']);
-        $context = $dashboard->build($space, $data['range'] ?? 'month', null, $data['from'] ?? null, $data['through'] ?? null, false, $request->user(), isset($data['account_id']) ? (int) $data['account_id'] : null);
+        $data = $request->validate(['question' => 'required|string|max:2000', 'range' => 'sometimes|in:day,week,month,quarter,year,all,custom', 'account_id' => 'sometimes|nullable|integer|min:1', 'from' => 'required_if:range,custom|date_format:Y-m-d|before_or_equal:today', 'through' => 'required_if:range,custom|date_format:Y-m-d|after_or_equal:from|before_or_equal:today', 'accounting_basis' => 'sometimes|in:cash,accrual', 'comparison' => 'sometimes|in:previous_period,previous_year', 'use_ai' => 'sometimes|boolean', 'request_id' => 'required_if:use_ai,true|nullable|uuid']);
+        $context = $dashboard->build($space, $data['range'] ?? 'month', null, $data['from'] ?? null, $data['through'] ?? null, false, $request->user(), isset($data['account_id']) ? (int) $data['account_id'] : null, $data['accounting_basis'] ?? 'accrual');
+        $context['profit_loss_comparison'] = $data['comparison'] ?? 'previous_period';
         $reply = ! empty($data['use_ai'])
             ? app(\App\Services\Trajectory\TrajectoryAiService::class)->respond($request->user(), $space, $data['question'], $context, $data['request_id'] ?? null)
             : app(\App\Services\Bud\TrajectoryBudService::class)->respond($data['question'], $context);

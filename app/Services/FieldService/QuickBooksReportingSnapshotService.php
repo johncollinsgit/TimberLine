@@ -20,10 +20,16 @@ class QuickBooksReportingSnapshotService
         CarbonInterface $start,
         CarbonInterface $end,
         string $accountingMethod = 'Accrual',
+        ?callable $beforePersist = null,
     ): QuickBooksReportingSnapshot {
         abort_unless($connection->tenant_id === (int) $tenant->id && $connection->provider === 'quickbooks', 422, 'Use this workspace’s QuickBooks connection.');
         abort_if($start->gt($end), 422, 'The report period must end on or after its start.');
         $accountingMethod = strcasecmp($accountingMethod, 'cash') === 0 ? 'Cash' : 'Accrual';
+        // Existing accrual cache keys stay compatible. Cash reports must never
+        // overwrite the same period's accrual report through its legacy key.
+        if ($accountingMethod === 'Cash') {
+            $rangeKey = substr($rangeKey, 0, 26).':'.substr(hash('sha256', $rangeKey), 0, 8).':cash';
+        }
         $payload = $client->report('ProfitAndLoss', [
             'accounting_method' => $accountingMethod,
             'start_date' => $start->toDateString(),
@@ -37,6 +43,9 @@ class QuickBooksReportingSnapshotService
             422, 'QuickBooks returned a different report period or accounting basis.');
         $rows = $this->unsupportedColumns($payload) ? [] : $this->reportRows($payload);
         $totals = $this->reportTotals($payload, $rows);
+        if ($beforePersist !== null) {
+            $beforePersist($payload);
+        }
 
         return QuickBooksReportingSnapshot::query()
             ->whereDate('period_start', $start->toDateString())->whereDate('period_end', $end->toDateString())->updateOrCreate(
@@ -53,11 +62,42 @@ class QuickBooksReportingSnapshotService
                         ...$totals,
                         'source_report' => array_intersect_key($header, array_flip(['Time', 'ReportName', 'ReportBasis', 'StartPeriod', 'EndPeriod', 'Currency', 'SummarizeColumnsBy'])),
                         'account_lines' => array_values(array_filter($rows, fn (array $row): bool => $row['row_type'] === 'data')),
+                        // Provider section identity is accounting evidence. Keep the
+                        // original hierarchy rather than guessing from account names.
+                        'account_sections' => $this->unsupportedColumns($payload) ? [] : $this->accountSections($payload),
                         'mapping_suggestions' => $this->mappingSuggestions($rows),
                     ],
                     'observed_at' => now(),
                 ]
             );
+    }
+
+    protected function accountSections(array $payload): array
+    {
+        $walk = function (array $nodes, string $path = '') use (&$walk): array {
+            $result = [];
+            foreach ($nodes as $index => $node) {
+                if (! is_array($node)) {
+                    continue;
+                }
+                $columns = (array) ($node['ColData'] ?? data_get($node, 'Header.ColData', []));
+                $summary = (array) data_get($node, 'Summary.ColData', []);
+                $label = trim((string) data_get($columns, '0.value', data_get($summary, '0.value', '')));
+                $amount = data_get($node, 'type') === 'Data' || isset($node['ColData'])
+                    ? data_get($columns, '1.value') : data_get($summary, '1.value');
+                $key = $path === '' ? (string) $index : $path.'.'.$index;
+                $result[] = [
+                    'key' => $key, 'id' => trim((string) data_get($columns, '0.id', '')) ?: null,
+                    'label' => $label, 'group' => $node['group'] ?? null,
+                    'amount' => $this->numeric($amount) ? round((float) $amount, 2) : null,
+                    'children' => $walk((array) data_get($node, 'Rows.Row', []), $key),
+                ];
+            }
+
+            return $result;
+        };
+
+        return $walk((array) data_get($payload, 'Rows.Row', []));
     }
 
     /** @return array<int,array{id:?string,label:string,normalized_label:string,amount:float,row_type:string}> */

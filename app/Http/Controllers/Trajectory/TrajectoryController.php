@@ -38,9 +38,9 @@ class TrajectoryController extends Controller
     public function dashboard(Request $request, Space $space, FinanceAccess $access, DashboardService $dashboard)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['range' => ['nullable', Rule::in(['day', 'week', 'month', 'quarter', 'year', 'all', 'custom'])], 'scenario_id' => ['nullable', 'integer'], 'account_id' => 'sometimes|nullable|integer|min:1', 'from' => 'required_if:range,custom|nullable|date_format:Y-m-d|before_or_equal:today|after_or_equal:1900-01-01', 'through' => 'required_if:range,custom|nullable|date_format:Y-m-d|after_or_equal:from|before_or_equal:today', 'seasonal' => 'sometimes|boolean']);
+        $data = $request->validate(['range' => ['nullable', Rule::in(['day', 'week', 'month', 'quarter', 'year', 'all', 'custom'])], 'scenario_id' => ['nullable', 'integer'], 'account_id' => 'sometimes|nullable|integer|min:1', 'from' => 'required_if:range,custom|nullable|date_format:Y-m-d|before_or_equal:today|after_or_equal:1900-01-01', 'through' => 'required_if:range,custom|nullable|date_format:Y-m-d|after_or_equal:from|before_or_equal:today', 'seasonal' => 'sometimes|boolean', 'accounting_basis' => ['sometimes', Rule::in(['cash', 'accrual'])]]);
 
-        return response()->json([...$dashboard->build($space, $data['range'] ?? 'month', $data['scenario_id'] ?? null, $data['from'] ?? null, $data['through'] ?? null, (bool) ($data['seasonal'] ?? false), $request->user(), isset($data['account_id']) ? (int) $data['account_id'] : null),
+        return response()->json([...$dashboard->build($space, $data['range'] ?? 'month', $data['scenario_id'] ?? null, $data['from'] ?? null, $data['through'] ?? null, (bool) ($data['seasonal'] ?? false), $request->user(), isset($data['account_id']) ? (int) $data['account_id'] : null, $data['accounting_basis'] ?? 'accrual'),
             'review_email' => app(\App\Services\Trajectory\ReviewEmailService::class)->preferences($request->user(), $space),
         ])->header('Cache-Control', 'private, no-store');
     }

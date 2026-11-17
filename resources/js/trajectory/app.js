@@ -9,6 +9,7 @@ import {reportNavigation} from './navigation-history.js';
 import {cardActivityHtml,cardMoney} from './card-activity.js';
 import {lenderInterestYtdHtml} from './lender-interest-ytd.js';
 import './lender-interest-ytd.css';
+import './profit-loss.css';
 import { accountingComponentsHtml } from './accounting-report.js';
 import { questionSummaryHtml, supportBusinessChoices, monthlyBudgetRecords } from './question-summary.js';
 import { budgetMappingPayload, budgetMappingHtml, budgetPreviewHtml } from './budget-import.js';
@@ -47,6 +48,7 @@ function boot() {
   const personalSpace = spaceFor('household');
   let businessSpace = spaceFor('business');
   let loadVersion = 0;
+  let accountingBasis = 'accrual';
   let reportingRange = 'year', incomingMode = 'cash', compareYear = false;
   let decisionMonth = '', forecastExpanded = false, overviewExpanded = false;
   let linkInProgress = false;
@@ -72,7 +74,7 @@ function boot() {
     return result;
   };
   const notice = (message) => {$('#tr-feedback').textContent=message;$('#tr-feedback').hidden=false;};
-  const dashboardPath = (spaceId) => `/trajectory/spaces/${spaceId}/dashboard?range=${reportingRange}${scope!=='both'&&accountFilter!==null?`&account_id=${accountFilter}`:''}${scenarioId?`&scenario_id=${scenarioId}`:''}${reportingRange==='custom'?`&from=${$('#tr-start').value}&through=${$('#tr-end').value}`:''}&seasonal=${seasonal?1:0}`;
+  const dashboardPath = (spaceId) => `/trajectory/spaces/${spaceId}/dashboard?range=${reportingRange}&accounting_basis=${accountingBasis}${scope!=='both'&&accountFilter!==null?`&account_id=${accountFilter}`:''}${scenarioId?`&scenario_id=${scenarioId}`:''}${reportingRange==='custom'?`&from=${$('#tr-start').value}&through=${$('#tr-end').value}`:''}&seasonal=${seasonal?1:0}`;
   const withSource = (rows, source) => (rows||[]).map(row=>({...row,space_id:source.id,space_label:source.name}));
   const combinedDashboard = (personal, business, combined) => ({
     combined:true,
@@ -112,9 +114,9 @@ function boot() {
         try {combined=await api(endpoint(`/combined?business_id=${businessSpace.id}&from=${personal.range.start}&through=${personal.range.end}`,personalSpace.id));} catch {}
         result=combinedDashboard(personal,business,combined);
       } else result=await api(dashboardPath(active));
-      if(requestedVersion!==loadVersion)return;data=result;accountFilter=data.scope_filter?.account_id??null;if(scope!=='both'&&(filter.ids||filter.date||filter.account_id)){const rows=await fetchEvidence(filter);if(requestedVersion!==loadVersion)return;evidenceRows=rows;}render();
+      if(requestedVersion!==loadVersion)return;data=result;accountFilter=data.scope_filter?.account_id??null;if(scope!=='both'&&(filter.ids||filter.date||filter.account_id)){const rows=await fetchEvidence(filter);if(requestedVersion!==loadVersion)return;evidenceRows=rows;}render();return true;
     }
-    catch(e){if(requestedVersion===loadVersion){accountFilter=data?.scope_filter?.account_id??null;if($('#tr-account-filter'))$('#tr-account-filter').value=accountFilter??'';notice(e.message);}}
+    catch(e){if(requestedVersion===loadVersion){accountFilter=data?.scope_filter?.account_id??null;if($('#tr-account-filter'))$('#tr-account-filter').value=accountFilter??'';notice(e.message);}return false;}
     finally {if(requestedVersion===loadVersion){$('#tr-content').classList.remove('tr-loading');$('#tr-content').setAttribute('aria-busy','false');}}
   };
   const metric = (label,value,sub) => `<div class="tr-metric"><div class="tr-kicker">${esc(label)}</div><div class="tr-number">${money(value)}</div><div class="tr-subtle">${esc(sub)}</div></div>`;
@@ -124,13 +126,14 @@ function boot() {
   const btn = (label,action,attrs='') => `<button data-action="${action}" ${attrs}>${esc(label)}</button>`;
   const chart = (id,type,labels,datasets,click,extra={}) => {
     const canvas=document.getElementById(id);if(!canvas)return;
-    chartTables[id]={labels,datasets,click,title:canvas.getAttribute('aria-label')};
-    const presentation=chartPresentation(canvas,precise,type,extra);
+    chartTables[id]={labels,datasets,click,formatMoney:extra.formatMoney||money,title:canvas.getAttribute('aria-label')};
+    const presentation=chartPresentation(canvas,extra.formatMoney||precise,type,extra);
+    if(extra.formatMoney&&presentation.options.scales?.y)presentation.options.scales.y.ticks.callback=value=>extra.formatMoney(value);
     const instance=new Chart(canvas,{type,data:{labels,datasets},plugins:presentation.plugins,options:{...presentation.options,onClick:(event,elements)=>{if(elements[0]&&click)click(elements[0].index,elements[0].datasetIndex);}}});charts.push(instance);
   };
   const line = (label,values,color,fill=false) => ({label,data:values,borderColor:color,backgroundColor:color+'0a',fill,tension:0,borderWidth:2.5,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#fff',pointHoverBorderWidth:2,pointHitRadius:16,spanGaps:false});
   const navigation=[];
-  const reportContext=()=>JSON.stringify([scope,active,businessSpace?.id,accountFilter,reportingRange,$('#tr-start').value,$('#tr-end').value,scenarioId,seasonal]);
+  const reportContext=()=>JSON.stringify([scope,active,businessSpace?.id,accountFilter,reportingRange,$('#tr-start').value,$('#tr-end').value,scenarioId,seasonal,accountingBasis]);
   const focusDescriptor=()=>{const node=document.activeElement?.closest?.('[data-action]');return node?{action:node.dataset.action,label:node.dataset.label||'',ids:node.dataset.ids||''}:null;};
   const captureNavigation=()=>({tab,filter:JSON.parse(JSON.stringify(filter)),scroll:window.scrollY,moneyFlowMode,depth:navigation.length,flowDialog:flowDialog?{...flowDialog}:null,focus:focusDescriptor()});
   const historyNavigation=reportNavigation({window,capture:captureNavigation,context:reportContext,enabled:()=>!new URLSearchParams(location.search).has('oauth_state_id'),
@@ -158,7 +161,14 @@ function boot() {
       remember();flowDialog=null;if($('#tr-dialog').open)$('#tr-dialog').close();evidenceRows=records;filter=next;tab='transactions';render();
     } catch(e){notice(e.message);}
   };
-  const planning=planningUI({getData:()=>data,spaces,esc,money,precise,panel,btn,plot,chart,line,dialog,field,api,endpoint,minor,load,navigate,evidence:showTransactions,reviewBudget:proposal=>{
+  const planning=planningUI({getData:()=>data,spaces,esc,money,precise,panel,btn,plot,chart,line,dialog,field,api,endpoint,minor,load,navigate,render,changeAccountingBasis:async basis=>{if(!['cash','accrual'].includes(basis))return;accountingBasis=basis;await load();},refreshProfitLoss:async payload=>{const requestedContext=reportContext(),spaceId=active;const result=await api(endpoint('/profit-loss/refresh',spaceId),'POST',payload);if(requestedContext===reportContext()&&!await load())throw new Error('The accounting report was saved, but this screen could not reload. Refresh the page to view it.');return result;},exportProfitLoss:async(format,comparison)=>{
+    if(!['csv','pdf','print'].includes(format))return;
+    const params=new URLSearchParams({range:reportingRange,accounting_basis:accountingBasis,comparison});
+    if(reportingRange==='custom'){params.set('from',$('#tr-start').value);params.set('through',$('#tr-end').value);}
+    const url=endpoint(`/profit-loss/export/${format}`)+'?'+params;
+    if(format==='csv'){const link=document.createElement('a');link.href=url;link.download='';document.body.append(link);link.click();link.remove();}
+    else window.open(url,'_blank','noopener');
+  },evidence:showTransactions,reviewBudget:proposal=>{
     if(proposal.space_id!==data.space.id)throw new Error('This proposal belongs to another financial space.');
     const current=proposal.record_id?data.records.find(r=>r.id===proposal.record_id&&r.kind==='budget'):null;
     if(proposal.record_id&&(!current||current.version!==proposal.version))throw new Error('Budget changed; refresh before reviewing this proposal.');
@@ -172,17 +182,18 @@ function boot() {
     if(moneyFlowMode==='inflows'&&!data.money_flow?.family_inflows)moneyFlowMode='spending';
     charts.forEach(c=>c.destroy());charts=[];chartTables={};
     root.querySelectorAll('[data-tab]').forEach(b=>{if(b.dataset.tab===tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
-    $('#tr-context').textContent=`${date(data.range.start)} – ${date(data.range.end)} · ${data.coverage.history_days} days of baseline history${data.scope_filter?.account_id?' · Account: '+data.scope_filter.label:''}${data.coverage.provisional?' · Provisional forecast':''}`;
-    $('#tr-add').disabled=scope==='both';$('#tr-compare').disabled=scope==='both';
+    $('#tr-context').textContent=tab==='profit'?`${date(data.range.start)} – ${date(data.range.end)} · ${data.business?.profit_loss?.source||'Choose a business and all its accounts'}${data.business?.profit_loss?.basis?' · '+data.business.profit_loss.basis:''}`:`${date(data.range.start)} – ${date(data.range.end)} · ${data.coverage.history_days} days of baseline history${data.scope_filter?.account_id?' · Account: '+data.scope_filter.label:''}${data.coverage.provisional?' · Provisional forecast':''}`;
+    $('#tr-add').disabled=scope==='both';$('#tr-compare').disabled=scope==='both';$('#tr-compare').hidden=tab==='profit';
     const accountSelect=$('#tr-account-filter');
     if(accountSelect){accountSelect.innerHTML='<option value="">All accounts</option>'+(data.account_options||[]).map(account=>`<option value="${account.id}"${account.id===accountFilter?' selected':''}>${esc(account.name)}</option>`).join('');accountSelect.disabled=scope==='both';}
     const moneyFlow=()=>scope==='both'?panel('Choose one financial space', '<p class="tr-subtle">Choose Personal or Business at the top to follow its money. A combined diagram could count company pay and household receipts twice.</p>'):moneyFlowHtml({report:data.money_flow,mode:moneyFlowMode,esc,precise,btn});
     const views=scope==='both'?{overview:bothOverview,transactions,'money-flow':moneyFlow}:{overview,welcome:welcome.render,accounts,history,budget,transactions,bills,medical,assets,business,planning:accountFilter===null?planning.planning:wholeSpacePlanNotice,anomalies:planning.anomalies,tax:planning.tax,'sales-tax':()=>salesTaxHtml({report:data.sales_tax,esc,precise,btn}),'money-flow':moneyFlow,profit:planning.profit,companies:planning.companies,bud:planning.bud};
     const labels={overview:'Your trajectory',accounts:'Accounts',history:'Cash flow & history',budget:'Your budget',transactions:'Review transactions',bills:'Bills & goals',medical:'Medical sharing',assets:'Wealth & debt',business:'Business',planning:'Income & scenarios',anomalies:'Category anomalies',tax:'Tax accountant review','sales-tax':'Sales tax payments','money-flow':'Money flow',profit:'Profit & loss',companies:'Businesses & accounts',bud:'Ask Bud'};
     $('#tr-page-title').textContent=tab==='welcome'?'Get started':labels[tab];
-    $('#tr-page-subtitle').textContent=scope==='both'?'Your household and company, side by side.':tab==='overview'?'A clearer picture of today. A better plan for tomorrow.':'Your money, with the context that matters.';
+    $('#tr-page-subtitle').textContent=scope==='both'?'Your household and company, side by side.':tab==='overview'?'A clearer picture of today. A better plan for tomorrow.':tab==='profit'?'Your income, costs and profit in one statement.':'Your money, with the context that matters.';
     $('#tr-content').innerHTML=(views[tab]||combinedOnly)();
     if(tab==='planning'&&scope!=='both'&&accountFilter===null) planning.draw();
+    if(tab==='profit'&&scope!=='both'&&accountFilter===null) planning.drawProfit();
     if(tab==='overview'&&scope!=='both') drawOverview();
     if(tab==='assets') drawAssets();
     if(tab==='business') drawBusiness();
@@ -619,7 +630,7 @@ function boot() {
       else if(a==='choose-kind'){$('#tr-dialog').close();recordForm(target.dataset.kind);}
       else if(a==='chart-data'){
         const table=chartTables[target.dataset.chart];
-        dialog(table.title,`<div class="tr-table-wrap"><table class="tr-table"><caption>${esc(table.title)}</caption><thead><tr><th>Period / category</th>${table.datasets.map(d=>`<th>${esc(d.label||'Value')}</th>`).join('')}<th></th></tr></thead><tbody>${table.labels.map((label,i)=>`<tr><td>${esc(label)}</td>${table.datasets.map(d=>`<td>${money(d.data[i]??null)}</td>`).join('')}<td>${table.click?`<button type="button" data-chart-row="${i}">Inspect</button>`:''}</td></tr>`).join('')}</tbody></table></div>`,null);
+        dialog(table.title,`<div class="tr-table-wrap"><table class="tr-table"><caption>${esc(table.title)}</caption><thead><tr><th>Period / category</th>${table.datasets.map(d=>`<th>${esc(d.label||'Value')}</th>`).join('')}<th></th></tr></thead><tbody>${table.labels.map((label,i)=>`<tr><td>${esc(label)}</td>${table.datasets.map(d=>`<td>${esc(table.formatMoney(d.data[i]??null))}</td>`).join('')}<td>${table.click?`<button type="button" data-chart-row="${i}">Inspect</button>`:''}</td></tr>`).join('')}</tbody></table></div>`,null);
         $('#tr-fields').querySelectorAll('[data-chart-row]').forEach(b=>b.onclick=()=>{$('#tr-dialog').close();table.click(Number(b.dataset.chartRow));});
       }
       else if(a==='edit')recordForm(r.kind,r);

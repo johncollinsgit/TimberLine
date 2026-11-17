@@ -9,6 +9,10 @@ class TrajectoryBudService
     /** The authorized controller supplies this context; never accept client figures. */
     public function respond(string $question, array $data): array
     {
+        $insights = app(\App\Services\Trajectory\FinancialInsightsService::class);
+        if ($insights->respondsTo($question, $data)) {
+            return $insights->answer($question, $data);
+        }
         $q = mb_strtolower($question);
         $p = $data['planning'];
         $support = $data['decision_support'] ?? [];
