@@ -1,6 +1,23 @@
 <?php
 
 return [
+    'tax_remittance' => [
+        'transaction_id' => ['label' => 'Bank transaction ID', 'type' => 'integer', 'required' => true],
+        'paid_on' => ['label' => 'Bank posting date', 'type' => 'date', 'required' => true],
+        'amount_cents' => ['label' => 'Signed bank amount (payment negative, credit positive)', 'type' => 'money', 'required' => true],
+        'tax_principal_cents' => ['label' => 'Tax principal (all components required if split supplied)', 'type' => 'money', 'required' => false],
+        'interest_cents' => ['label' => 'Interest (all components required if split supplied)', 'type' => 'money', 'required' => false],
+        'penalty_cents' => ['label' => 'Penalty (all components required if split supplied)', 'type' => 'money', 'required' => false],
+        'other_fees_cents' => ['label' => 'Other fees (all components required if split supplied)', 'type' => 'money', 'required' => false],
+        'agency' => ['label' => 'Tax agency', 'type' => 'text', 'required' => true],
+        'jurisdiction' => ['label' => 'State / jurisdiction (optional)', 'type' => 'text', 'required' => false],
+        'tax_type' => ['label' => 'Verified tax type', 'type' => 'select', 'required' => true, 'choices' => ['unknown', 'sales_tax', 'income_tax', 'payroll_tax', 'other_tax']],
+        'movement' => ['label' => 'Bank movement', 'type' => 'select', 'required' => true, 'choices' => ['payment', 'returned_payment', 'refund']],
+        'filing_start' => ['label' => 'Filing period starts (if verified)', 'type' => 'date', 'required' => false],
+        'filing_end' => ['label' => 'Filing period ends (if verified)', 'type' => 'date', 'required' => false],
+        'source' => ['label' => 'Receipt / filing evidence', 'type' => 'text', 'required' => true],
+        'reviewed' => ['label' => 'Tax type and bank match reviewed', 'type' => 'boolean', 'required' => true],
+    ],
     'company_support_source' => [
         'business_space_id' => ['label' => 'Linked business', 'type' => 'business_space', 'required' => true],
         'source_type' => ['label' => 'Match receipts by', 'type' => 'select', 'required' => true, 'choices' => ['category', 'merchant']],

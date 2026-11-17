@@ -1,0 +1,20 @@
+const types={sales_tax:'Sales tax',income_tax:'Income tax',payroll_tax:'Payroll tax',other_tax:'Other tax',unknown:'Unknown tax type'};
+const movements={payment:'Payment',returned_payment:'Returned payment',refund:'Refund',unverified_credit:'Credit · needs review'};
+
+export function taxRemittanceReview(record,row) {
+  if(!row||!Number.isSafeInteger(row.transaction_id)||!Number.isSafeInteger(row.amount_cents)||!/^[a-f0-9]{64}$/.test(row.bank_source_fingerprint||''))return null;
+  const unchanged=record?.data?.bank_source_fingerprint===row.bank_source_fingerprint;
+  const details=unchanged?record.data:{agency:row.merchant,tax_type:'unknown',movement:row.amount_cents<0?'payment':'',source:''};
+  return {...details,transaction_id:row.transaction_id,paid_on:row.date,amount_cents:row.amount_cents,reviewed:false,expected_bank_source_fingerprint:row.bank_source_fingerprint};
+}
+
+export function salesTaxHtml({report,esc,precise,btn}) {
+  if(!report)return '<div class="tr-empty">Sales-tax bank evidence is unavailable for this view.</div>';
+  const amount=value=>precise(Number.isSafeInteger(value)?value:null);
+  const rows=Array.isArray(report.rows)?report.rows:[];
+  return `<section class="tr-panel" aria-labelledby="tr-sales-tax-title"><header class="tr-panel-head"><h2 id="tr-sales-tax-title">Sales tax payments</h2>${btn('Add tax payment details','add','data-kind="tax_remittance"')}</header>
+    <p class="tr-subtle">Confirmed sales-tax cash is separate from income tax, payroll tax and agency payments needing review. Report dates and the account filter apply.</p>
+    <div class="tr-grid equal">${[['Confirmed sales-tax remittance cash',report.confirmed_payment_cents],['Returned sales-tax payments',report.returned_payment_cents],['Sales-tax refunds',report.refund_cents],['Net sales-tax remittances',report.net_remittance_cents]].map(([label,value])=>`<div class="tr-metric"><div class="tr-kicker">${label}</div><div class="tr-number">${amount(value)}</div></div>`).join('')}</div>
+    <p class="tr-subtle">Scroll across the table for filing details and source transactions.</p><div class="tr-table-wrap" tabindex="0" aria-label="Tax bank evidence; scroll horizontally for all columns"><table class="tr-table"><caption>Tax bank movements and filing evidence</caption><thead><tr><th scope="col">Posted</th><th scope="col">Agency / jurisdiction</th><th scope="col">Tax type</th><th scope="col">Movement</th><th scope="col">Bank amount</th><th scope="col">Payment components</th><th scope="col">Filing period</th><th scope="col">Account / evidence</th><th scope="col">Review</th></tr></thead><tbody>${rows.map(row=>`<tr><td>${esc(row.date)}</td><td>${esc(row.agency||row.merchant||'Unknown agency')}<div class="tr-subtle">${esc(row.jurisdiction||'Jurisdiction unknown')}</div></td><td>${esc(types[row.tax_type]||types.unknown)}</td><td>${esc(movements[row.movement]||'Needs review')}</td><td>${amount(row.amount_cents)}</td><td>${row.components?`Tax ${amount(row.components.tax_principal_cents)}<br>Interest ${amount(row.components.interest_cents)}<br>Penalty ${amount(row.components.penalty_cents)}<br>Other fees ${amount(row.components.other_fees_cents)}`:'Unknown split'}</td><td>${row.filing_start&&row.filing_end?`${esc(row.filing_start)} – ${esc(row.filing_end)}`:'Unknown'}</td><td>${esc(row.account)}${Number.isSafeInteger(row.transaction_id)?btn('View bank transaction','plan-evidence',`data-ids="${esc(JSON.stringify([row.transaction_id]))}"`):''}<div class="tr-subtle">${esc(row.source||'No filing receipt linked')}</div></td><td>${row.reviewed?'Tax evidence reviewed':'Needs review'}<div class="tr-subtle">${esc(row.issue||'')}${row.bank_reviewed?'':' · Bank category needs review'}</div>${Number.isSafeInteger(row.transaction_id)?btn('Review tax details','tax-annotate',`data-id="${row.transaction_id}"`):''}</td></tr>`).join('')||'<tr><td colspan="9">No tax bank movements identified in this scope. This does not establish that no tax is owed or paid elsewhere.</td></tr>'}</tbody></table></div>
+    ${(report.notes||[]).map(note=>`<p class="tr-subtle">${esc(note)}</p>`).join('')}</section>`;
+}

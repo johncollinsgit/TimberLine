@@ -77,7 +77,9 @@ class DashboardService
         $accounts = $scopeAccount ? $allAccounts->where('id', $accountId)->values() : $allAccounts;
         $records = Record::where('space_id', $space->id)->where('active', true)->whereNotIn('kind', ['sms'])->get();
         if ($scopeAccount) {
-            $records = $records->filter(fn ($record) => ($record->data['account_id'] ?? null) === $accountId || ($record->data['payment_account_id'] ?? null) === $accountId)->values();
+            $transactionIds = $entries->pluck('id')->all();
+            $records = $records->filter(fn ($record) => ($record->data['account_id'] ?? null) === $accountId || ($record->data['payment_account_id'] ?? null) === $accountId
+                || ($record->kind === 'tax_remittance' && in_array($record->data['transaction_id'] ?? null, $transactionIds, true)))->values();
         }
         $periodComparison['household_cards'] = $space->kind === 'household' ? app(HouseholdCardsService::class)->build($records, $priorStart->toDateString(), $priorEnd->toDateString(), $today->toDateString(), $entries) : null;
         $plans = fn ($kind) => $records->where('kind', $kind)->map(fn ($r) => [...$r->data, 'id' => $r->id, 'name' => $r->name])->values()->all();
@@ -337,6 +339,7 @@ class DashboardService
             'support_business_options' => $questionSummary['business_options'] ?? [],
             'debt_planner' => app(DebtScenarioSourceService::class)->build($space, 0, $accountId),
             'income_runway' => $incomeRunway,
+            'sales_tax' => app(SalesTaxService::class)->build($space, $selected, $records, $accounts),
             'tax_review' => app(TaxReviewService::class)->review($space, $selected, $records),
             'income_sources' => $incomeSources,
             'categories' => $categories, 'daily_series' => $dailySeries,

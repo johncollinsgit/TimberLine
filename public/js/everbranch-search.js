@@ -150,7 +150,9 @@
     function updateFilterLabel() {
       if (!filterToggle) return;
       const count = Object.values(selects).filter(select => select.value).length;
-      filterToggle.textContent = count ? `Filters (${count})` : 'Filters';
+      const label = count ? `Filters (${count})` : 'Filters';
+      // WebKit drops an in-flight click if its text node is replaced.
+      if (filterToggle.textContent !== label) filterToggle.textContent = label;
     }
     if (filterToggle) {
       filterToggle.type = 'button'; filterToggle.setAttribute('aria-controls', filters.id);

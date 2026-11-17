@@ -470,6 +470,9 @@ jobs:
     - name: Verify Trajectory mobile household navigation
       run: npm run test:trajectory:mobile
       if: matrix.group == 'workspace'
+    - name: Verify Trajectory sales tax desktop and mobile evidence
+      run: node tests/e2e/trajectory-sales-tax.browser.mjs
+      if: matrix.group == 'workspace'
     - name: Verify Fleet embedding and allowance in Chromium and WebKit
       run: npm run test:highlevel-fleet
       if: matrix.group == 'workspace'

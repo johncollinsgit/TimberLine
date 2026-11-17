@@ -1,3 +1,16 @@
+## 2026-11-16 - Trajectory sales-tax bank evidence (source candidate)
+
+Sales tax has a dedicated navigation view with scoped bank dates, agency and
+jurisdiction, tax type, payments/credits, optional payment components, filing
+periods, source notes and transaction drilldown. Reviewed sales-tax cash remains
+separate from income/payroll taxes and unknown agency payments. Returned payments
+and refunds reduce net remittances; unknown periods and components stay unknown.
+The existing Tax review screen remains available.
+
+Native record validation covers ownership, exact bank amounts/dates, credit signs,
+component sums, duplicate records and versioned corrections. Fictional browser
+checks cover escaped source text, keyboard access and desktop/mobile geometry.
+
 ## 2026-11-16 - Asana event acceptance tags (source candidate)
 
 Calendar and Applications share current source-backed acceptance. An exact

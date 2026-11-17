@@ -47,6 +47,11 @@ class RecordService
                 $rules[$key][] = 'after_or_equal:effective_on';
             }
         }
+        if ($kind === 'tax_remittance') {
+            // Admission token for the bank facts actually shown to the reviewer;
+            // distinct from the server-owned fingerprint stored with the record.
+            $rules['expected_bank_source_fingerprint'] = ['required', 'string', 'regex:/^[a-f0-9]{64}$/'];
+        }
         $data = Validator::make($input, $rules)->validate();
         foreach ($definition as $key => $field) {
             if (! isset($data[$key])) {
@@ -58,6 +63,10 @@ class RecordService
             if ($field['type'] === 'boolean') {
                 $data[$key] = (bool) $data[$key];
             }
+        }
+        if ($kind === 'tax_remittance') {
+            $data['bank_source_fingerprint'] = app(SalesTaxService::class)->validateRemittance($space, $data);
+            unset($data['expected_bank_source_fingerprint']);
         }
         if ($kind === 'company_support_source') {
             abort_unless(DB::table('trajectory_links')->where('household_id', $space->id)->where('business_id', $data['business_space_id'])->exists(), 422, 'Choose an explicitly linked business for this receipt source.');
@@ -159,6 +168,7 @@ class RecordService
     {
         app(FinanceAccess::class)->authorize($user, $space);
         $data = $this->validate($space, $kind, $input);
+        $admission = $kind === 'tax_remittance' ? ['expected_bank_source_fingerprint' => $input['expected_bank_source_fingerprint']] : [];
         if ($kind === 'company_support_source') {
             app(FinanceAccess::class)->authorize($user, Space::where('kind', 'business')->findOrFail($data['business_space_id']));
         }
@@ -168,14 +178,22 @@ class RecordService
             abort_unless($space->kind === 'household' && $data['asset_type'] === 'business_equity' && DB::table('trajectory_links')->where('household_id', $space->id)->where('business_id', $business->id)->exists(), 422, 'Choose a linked business for this equity valuation.');
         }
 
-        return DB::transaction(function () use ($user, $space, $kind, $name, $data, $record, $version) {
+        return DB::transaction(function () use ($user, $space, $kind, $name, $data, $admission, $record, $version) {
             Space::whereKey($space->id)->lockForUpdate()->firstOrFail();
             if ($record) {
                 $record = Record::where('space_id', $space->id)->whereKey($record->id)->lockForUpdate()->firstOrFail();
                 abort_unless($record->active && $record->kind === $kind && $record->version === $version, 409);
             }
+            if ($kind === 'tax_remittance') {
+                foreach (Record::where('space_id', $space->id)->where('kind', $kind)->where('active', true)->lockForUpdate()->get() as $other) {
+                    abort_if($other->id !== $record?->id && ($other->data['transaction_id'] ?? null) === $data['transaction_id'], 409, 'This bank transaction already has tax evidence. Edit the existing record.');
+                }
+            }
             // Revalidate references while holding the space lock, including concurrent archive changes.
-            $this->validate($space, $kind, $data);
+            $lockedData = $this->validate($space, $kind, [...$data, ...$admission]);
+            if ($kind === 'tax_remittance') {
+                $data = $lockedData;
+            }
             if ($kind === 'company_support_source') {
                 app(FinanceAccess::class)->authorize($user, Space::where('kind', 'business')->findOrFail($data['business_space_id']));
                 foreach (Record::where('space_id', $space->id)->where('kind', $kind)->where('active', true)->lockForUpdate()->get() as $other) {
