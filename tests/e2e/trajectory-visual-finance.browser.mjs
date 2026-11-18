@@ -9,6 +9,7 @@ const fixture = `<!doctype html><html><head><meta name="viewport" content="width
 import {createVisualFinance} from '/module.js';
 import {reportNavigation} from '/navigation.js';
 import {chartPresentation} from '/theme.js';
+import {canRefreshFinance,createForegroundRefresh} from '/foreground.js';
 const root=document.querySelector('#trajectory'), content=document.querySelector('#content'), calls=[], changes=[];
 const ctx={space_id:7,scope:'personal',account_id:null,from:'2028-02-01',through:'2028-02-15'};
 let tab='overview',charts=[],rows=[
@@ -26,10 +27,11 @@ function chart(id,type,labels,datasets,click,extra){const canvas=document.getEle
 const ui=createVisualFinance({root,getContext:()=>ctx,api,endpoint:p=>'/spaces/7'+p,esc,precise,chart,onBeforeChange:()=>nav.push(),onChange:()=>render(),onChanged:async()=>{await ui.refresh();render();},onNavigate:(view,remember=true)=>{if(remember)nav.push();tab=view;render();},onReviewTransaction:()=>{},onEditBudget:()=>{},onAddDefinition:()=>{},notice:x=>document.querySelector('#notice').textContent=x});
 function render(){charts.forEach(c=>c.destroy());charts=[];content.innerHTML=ui.render(tab);ui.draw();nav.sync();}
 root.addEventListener('click',async e=>{const t=e.target.closest('[data-action]');if(t)await ui.handleClick(t);});root.addEventListener('change',async e=>{if(e.target.matches('[data-vf-input],[data-vf-category]'))await ui.handleInput(e.target);});document.querySelector('#back').onclick=()=>nav.back();
-await ui.refresh();render();window.fixture={ui,calls,changes,charts:()=>charts};
+const foreground=createForegroundRefresh({eligible:()=>canRefreshFinance({visible:!document.hidden,online:true,hasData:!!ui.getReport(),tab,scope:ctx.scope,loading:ui.isBusy(),editing:!!document.querySelector('dialog[open]')||document.activeElement?.matches('input,select,textarea,[contenteditable="true"]')}),snapshot:()=>JSON.stringify([ctx,tab,ui.capture()]),refresh:async current=>{const position=scrollY,entry=document.activeElement?.dataset.entry;const changed=await ui.refresh({background:true,isCurrent:current});if(!changed||!current())return false;render();scrollTo(0,position);if(entry)root.querySelector('[data-entry="'+entry+'"]')?.focus({preventScroll:true});return true;}});
+await ui.refresh();render();window.fixture={ui,calls,changes,foreground,updateSource:()=>{rows[0].amount_cents=-32000;rows[0].version++;},charts:()=>charts};
 </script></body></html>`;
 
-const files = {'/module.js': 'resources/js/trajectory/visual-finance.js', '/navigation.js': 'resources/js/trajectory/navigation-history.js', '/theme.js': 'resources/js/trajectory/chart-theme.js', '/chart.js': 'node_modules/chart.js/dist/chart.umd.js', '/app.css': 'resources/js/trajectory/app.css', '/visual.css': 'resources/js/trajectory/visual-finance.css'};
+const files = {'/module.js': 'resources/js/trajectory/visual-finance.js', '/navigation.js': 'resources/js/trajectory/navigation-history.js', '/foreground.js':'resources/js/trajectory/foreground-refresh.js', '/theme.js': 'resources/js/trajectory/chart-theme.js', '/chart.js': 'node_modules/chart.js/dist/chart.umd.js', '/app.css': 'resources/js/trajectory/app.css', '/visual.css': 'resources/js/trajectory/visual-finance.css'};
 const server = createServer(async (req, res) => {
   if (req.url === '/fixture') {res.setHeader('content-type', 'text/html'); res.end(fixture); return;}
   const file = files[req.url]; if (!file) {res.statusCode = 404; res.end(); return;}
@@ -55,6 +57,22 @@ try {
       assert.match(await page.locator('.vf-table tbody tr').first().innerText(), /Fictional expensive market/);
       await page.locator('[data-vf-input="sort"]').selectOption('newest');
       assert.match(await page.locator('.vf-table tbody tr').first().innerText(), /refund/);
+      // Quiet shared-backend updates preserve a user's drilldown and Back stack,
+      // while form focus and the context-aware Ask/edit modal suppress polling.
+      await page.locator('[data-vf-input="query"]').focus();
+      const reads=await page.evaluate(()=>window.fixture.calls.length);
+      assert.equal(await page.evaluate(()=>window.fixture.foreground()),false);
+      assert.equal(await page.evaluate(()=>window.fixture.calls.length),reads);
+      await page.evaluate(()=>{document.activeElement.blur();const dialog=document.createElement('dialog');dialog.id='fictional-ask';document.body.append(dialog);dialog.showModal();});
+      assert.equal(await page.evaluate(()=>window.fixture.foreground()),false);
+      await page.evaluate(()=>{const dialog=document.querySelector('#fictional-ask');dialog.close();dialog.remove();});
+      await page.locator('[data-action="vf-select-row"][data-entry="one"]').focus();
+      const beforeRefresh=await page.evaluate(()=>({selection:window.fixture.ui.capture(),depth:history.length,scroll:scrollY}));
+      await page.evaluate(()=>window.fixture.updateSource());
+      assert.equal(await page.evaluate(()=>window.fixture.foreground()),true);
+      assert.deepEqual(await page.evaluate(()=>({selection:window.fixture.ui.capture(),depth:history.length,scroll:scrollY})),beforeRefresh);
+      assert.equal(await page.evaluate(()=>document.activeElement.dataset.entry),'one');
+      assert.match(await page.locator('.vf-table tbody tr').filter({hasText:'Fictional expensive market'}).innerText(),/320\.00/);
       await page.locator('[data-vf-category="one"]').selectOption('office');
       await page.waitForFunction(() => window.fixture.changes.length === 1);
       assert.match(await page.locator('#notice').innerText(), /Category saved/);

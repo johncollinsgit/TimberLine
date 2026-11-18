@@ -117,3 +117,21 @@ test('space/account context changes clear private selection and request the new 
   ctx.space_id = 8; ctx.scope = 'business'; ctx.account_id = 99; await ui.refresh();
   assert.equal(ui.capture().category, null);assert.match(calls.at(-2).path, /^\/spaces\/8\/analysis/);assert.match(calls.at(-2).path, /account_id=99/);
 });
+
+test('background figures retain exact drilldown and do not apply after an intervening edit or failed read', async () => {
+  let rejectBackground=false,approve=true,readReport=structuredClone(report);
+  const {ui}=fixture(async path=>{if(rejectBackground)throw Error('Offline');return path.includes('budget-envelopes')?{rows:[]}:structuredClone(readReport);});
+  await ui.refresh();await ui.handleClick({dataset:{action:'vf-category',direction:'out',key:'food'}});
+  await ui.handleClick({dataset:{action:'vf-subcategory',key:'groceries'}});
+  const selection=ui.capture();readReport.summary.spending_cents=90000;
+  approve=false;assert.equal(await ui.refresh({background:true,isCurrent:()=>approve}),false);
+  assert.equal(ui.getReport().summary.spending_cents,15000);assert.deepEqual(ui.capture(),selection);
+  approve=true;assert.equal(await ui.refresh({background:true,isCurrent:()=>approve}),true);
+  assert.equal(ui.getReport().summary.spending_cents,90000);assert.deepEqual(ui.capture(),selection);
+  rejectBackground=true;assert.equal(await ui.refresh({background:true}),false);
+  assert.equal(ui.getReport().summary.spending_cents,90000);assert.equal(ui.isBusy(),false);
+  assert.doesNotMatch(ui.render('analysis'),/Offline/);
+  await ui.refresh();assert.match(ui.render('analysis'),/Offline/);
+  rejectBackground=false;assert.equal(await ui.refresh({background:true}),true);
+  assert.doesNotMatch(ui.render('analysis'),/Offline/);
+});

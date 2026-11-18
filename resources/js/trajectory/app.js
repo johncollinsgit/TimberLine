@@ -26,6 +26,7 @@ import {saveBankLinkSession, restoreBankLinkSession, clearBankLinkSession, bankO
 import {createVisualFinance} from './visual-finance.js';
 import './visual-finance.css';
 import {initTrajectoryAssistant} from './assistant-ui.js';
+import {canRefreshFinance, createForegroundRefresh} from './foreground-refresh.js';
 
 const root = document.querySelector('#trajectory');
 if (root) boot();
@@ -757,8 +758,29 @@ function boot() {
   $('#tr-back').onclick=()=>{historyNavigation.back();};
   $('#tr-company').onchange=()=>{welcome.reset();debtPlanner.reset();decisionMonth='';forecastExpanded=false;overviewExpanded=false;accountFilter=null;businessSpace=spaces.find(s=>s.id===Number($('#tr-company').value));active=businessSpace.id;scenarioId='';navigation.length=0;$('#tr-back').hidden=true;renderSpaceTabs();load();};
   if(root.dataset.invite){$('#tr-invite').hidden=false;$('#tr-accept').onclick=async()=>{try{await api('/trajectory/invites/accept','POST',{token:root.dataset.invite});location.href='/trajectory';}catch(e){notice(e.message);}};}
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden && tab==='assets' && data?.metals.length && !$('#tr-dialog').open)load();});
-  setInterval(()=>{if(!document.hidden && tab==='assets' && data?.metals.length && !$('#tr-dialog').open)load();},60000);
+  let foregroundInteraction = 0;
+  for(const event of ['pointerdown','keydown','input','change'])document.addEventListener(event,()=>{foregroundInteraction++;},{capture:true,passive:true});
+  const foregroundEligible=()=>canRefreshFinance({visible:!document.hidden,online:navigator.onLine!==false,hasData:!!data,tab,scope,
+    loading:$('#tr-content').getAttribute('aria-busy')==='true'||visualFinance.isBusy(),
+    editing:!!document.querySelector('dialog[open],#tr-mobile-drawer[role="dialog"],#tr-content details[open]')||document.activeElement?.matches('input,select,textarea,[contenteditable="true"]'),
+    linking:linkInProgress,restoring:restoringNavigation,oauth:new URLSearchParams(location.search).has('oauth_state_id'),hasMetals:!!data?.metals?.length});
+  const refreshForeground=createForegroundRefresh({eligible:foregroundEligible,
+    snapshot:()=>JSON.stringify([reportContext(),tab,visualFinance.capture(),loadVersion,foregroundInteraction]),
+    refresh:async isCurrent=>{
+      const position=window.scrollY,focus=focusDescriptor(),tableScroll=[...root.querySelectorAll('#tr-content .vf-table-wrap,#tr-content .tr-table-wrap')].map(node=>({left:node.scrollLeft,top:node.scrollTop}));
+      try{
+        const [result,refreshed]=await Promise.all([api(dashboardPath(active)),tab==='assets'?Promise.resolve(true):visualFinance.refresh({background:true,isCurrent})]);
+        if(!refreshed||!isCurrent())return false;
+        if((result.scope_filter?.account_id??null)!==accountFilter)return false;
+        data=result;render();window.scrollTo(0,position);
+        root.querySelectorAll('#tr-content .vf-table-wrap,#tr-content .tr-table-wrap').forEach((node,index)=>{if(tableScroll[index]){node.scrollLeft=tableScroll[index].left;node.scrollTop=tableScroll[index].top;}});
+        const target=focus&&[...root.querySelectorAll('[data-action]')].find(node=>node.dataset.action===focus.action&&(node.dataset.label||'')===focus.label&&(node.dataset.ids||'')===focus.ids&&(!focus.key||(node.dataset.key||'')===focus.key)&&(!focus.entry||(node.dataset.entry||'')===focus.entry)&&node.getClientRects().length);
+        target?.focus({preventScroll:true});historyNavigation.sync();
+        return true;
+      }catch{return false;}
+    }});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refreshForeground();});
+  setInterval(()=>{void refreshForeground();},60000);
   load().finally(()=>mobile?.ready()).then(()=>{
     if(!oauthReturn)return;
     if(resumedBankLink&&receivedRedirectUri)void connect(resumedBankLink.connection_id,resumedBankLink,receivedRedirectUri).catch(error=>notice(error.message));

@@ -73,6 +73,15 @@ Personal and Business use separate install identities at `/trajectory/personal/`
 and `/trajectory/business/`. Business retains its authorized organization
 selector. Neither service worker caches authenticated finance data.
 
+While visible and online, Home, Analysis and Budget reread saved backend figures
+every minute and on return to the app. These are private network GETs, not Plaid
+or provider refresh requests. Hidden/offline pages, bank linking, navigation
+restoration, open Ask/edit dialogs or detail disclosures, the phone drawer, and focused form controls
+suppress refresh. Responses are discarded after an intervening interaction,
+scope/date/selection change or explicit reload. Successful updates retain the
+drilldown, Back history, sort, page/table scroll and focused chart control. Failed background
+reads retain the displayed dated snapshot; explicit Refresh shows request errors.
+
 Ask Everbranch receives the current space, account/program, dates, basis,
 category, selected source IDs and versions. The server resolves the figures and
 permissions. Explicit categorization uses audited native services with Undo;

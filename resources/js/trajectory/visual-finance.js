@@ -67,9 +67,10 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     report = envelopes = error = null; ownerContext = null; request++;
   }
 
-  async function refresh() {
+  async function refresh({background = false, isCurrent = () => true} = {}) {
     const c = getContext();
-    if (!c.space_id || c.scope === 'both') return;
+    if (!c.space_id || c.scope === 'both') return false;
+    if (background && (loading || busyRow || ownerContext !== contextKey())) return false;
     if (ownerContext !== contextKey()) { reset(); ownerContext = contextKey(); }
     const current = ++request, dateRange = dates();
     state.year ??= Number(dateRange.through.slice(0, 4));
@@ -79,14 +80,19 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     const budgetParams = new URLSearchParams({month: state.budgetMonth});
     if (c.account_id) params.set('account_id', String(c.account_id));
     if (state.program) { params.set('program_id', String(state.program)); budgetParams.set('program_id', String(state.program)); }
-    loading = true; error = null;
+    const selectedState = JSON.stringify(state);
+    if (!background) {loading = true; error = null;}
     const responses = await Promise.allSettled([api(endpoint(`/analysis?${params}`)), api(endpoint(`/budget-envelopes?${budgetParams}`))]);
-    if (current !== request || ownerContext !== contextKey()) return;
+    if (current !== request || ownerContext !== contextKey() || (background && selectedState !== JSON.stringify(state)) || !isCurrent()) return false;
+    // A failed quiet read retains the displayed, dated snapshot. An explicit
+    // reload continues to show a scoped error rather than substituting data.
+    if (background && responses.some(response => response.status !== 'fulfilled')) return false;
     loading = false;
-    if (responses[0].status === 'fulfilled') report = responses[0].value;
+    if (responses[0].status === 'fulfilled') {report = responses[0].value; error = null;}
     else {report = null; error = responses[0].reason.message;}
     if (responses[1].status === 'fulfilled') envelopes = responses[1].value;
     else envelopes = {error: responses[1].reason.message};
+    return true;
   }
 
   async function change(next, reload = true, remember = true) {
@@ -368,5 +374,6 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     capture: () => clone(state),
     restore(value) {if (value?.version === 1) state = {...state, ...clone(value)};},
     getReport: () => report,
+    isBusy: () => loading || busyRow !== null,
   };
 }

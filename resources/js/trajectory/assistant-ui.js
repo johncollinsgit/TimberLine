@@ -51,6 +51,12 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
   async function openInbox() {
     currentSpace=spaceId();if(!currentSpace){notice('Select one workspace to open its expense inbox.');return;}
     if(!dialog.open)dialog.showModal();
+    if(getContext?.()?.scope==='business'||root.dataset.surface==='business'){
+      view='inbox';host.querySelector('[data-assistant-form]').hidden=true;
+      host.querySelector('[data-assistant-scope]').textContent='Business workspace';
+      content.innerHTML='<div class="tr-assistant-preferences"><strong>Personal expense alerts live in the Personal app</strong><p>Open Trajectory Personal to review household purchases and manage your phone notifications. Ask Everbranch is available here for this business’s financial information.</p><a href="/trajectory/personal/">Open Trajectory Personal</a><button type="button" data-assistant-chat>Ask about this business</button></div>';
+      return;
+    }
     try{
       await loadInbox();view='inbox';host.querySelector('[data-assistant-form]').hidden=true;
       const prefs=inbox.preferences;

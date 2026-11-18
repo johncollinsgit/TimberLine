@@ -24,8 +24,18 @@ for(const engine of [chromium,webkit]){
   await page.locator('#tr-assistant-question').fill('groceries');await page.getByRole('button',{name:'Send',exact:true}).click();
   const captured=await page.evaluate(()=>({changed:window.changed,requests:window.requests.filter(r=>r.method==='POST'&&r.path.endsWith('/assistant')),width:document.querySelector('dialog').getBoundingClientRect().width,viewport:window.innerWidth}));
   expect(captured.changed).toBe(3);expect(captured.requests[0].payload.context.focused_transaction).toBe(true);expect(captured.requests[1].payload.context.transaction_versions['31']).toBe(2);expect(captured.width).toBeLessThanOrEqual(captured.viewport);
+  await page.evaluate(async()=>{window.ctx={...window.ctx,space_id:9,scope:'business'};await window.assistant.contextChanged();await window.assistant.openInbox();});
+  await expect(page.getByText('Personal expense alerts live in the Personal app',{exact:true})).toBeVisible();
+  await expect(page.getByRole('link',{name:'Open Trajectory Personal',exact:true})).toHaveAttribute('href','/trajectory/personal/');
+  await expect(page.locator('[data-alert-enabled]')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Enable phone notifications',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Ask about this business',exact:true}).click();
+  await expect(page.locator('#tr-assistant-question')).toBeVisible();
+  await page.locator('#tr-assistant-question').fill('Explain business costs');await page.getByRole('button',{name:'Send',exact:true}).click();
+  const businessQuestion=await page.evaluate(()=>window.requests.filter(r=>r.method==='POST'&&r.path.endsWith('/assistant')).at(-1));
+  expect(businessQuestion.path).toBe('/trajectory/spaces/9/assistant');
   expect(errors).toEqual([]);await page.close();
  }
  await browser.close();
 }
-console.log('Ask Everbranch: explicit category save, Undo, inbox reply and responsive dialog passed Chromium/WebKit at 390/1440px.');
+console.log('Ask Everbranch: category save, Undo, personal inbox reply, business Personal-app handoff, business conversation and responsive dialog passed Chromium/WebKit at 390/1440px.');

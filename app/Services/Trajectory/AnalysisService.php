@@ -59,7 +59,7 @@ class AnalysisService
             $cash = $economic->filter(fn ($e) => ($e['editable'] ?? false) && $cashAccounts->contains('id', $e['account_id'] ?? null));
         }
         $cash = $cash->map(function ($entry) use ($incomeMap, $outgoingMap, $receiptTypes) {
-            $entry['entry_key'] ??= 'cash:'.$entry['id'];
+            $entry['entry_key'] = 'cash:'.($entry['entry_key'] ?? 'transaction:'.$entry['id']);
             $entry['amount_basis'] = 'owned_bank_cash';
             $entry['analysis_source'] = $incomeMap[$entry['id']] ?? null;
             $entry['analysis_source_type'] = $receiptTypes[$entry['id']] ?? null;
@@ -69,7 +69,8 @@ class AnalysisService
             return $entry;
         });
         $expenses = app(EconomicActivityService::class)->expenses($economic)->map(function ($entry) {
-            $entry['entry_key'] ??= 'economic:'.$entry['id'].':'.($entry['economic_component'] ?? 'whole');
+            $entry['entry_key'] = 'economic:'.($entry['entry_key'] ?? 'transaction:'.$entry['id'])
+                .':'.($entry['economic_component'] ?? 'whole');
             $entry['amount_basis'] = 'economic_cost';
 
             return $entry;
