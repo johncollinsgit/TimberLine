@@ -20,7 +20,20 @@ class BudgetEnvelopeService
         $programs = Record::where('space_id', $space->id)->where('kind', 'program')->where('active', true)->get()->keyBy('id');
         abort_if($programId !== null && ! $programs->has($programId), 404);
         $records = Record::where('space_id', $space->id)->where('kind', 'budget')->where('active', true)->get();
-        $all = collect(app(AttributionService::class)->expandEntries($space, app(LedgerService::class)->entries($space, end: $end->min(CarbonImmutable::now($space->timezone))->toDateString()), $programId));
+        $targets = $this->targets($space, $records, $start, $programId);
+        $historyStart = $start->subMonth();
+        foreach ($targets as $target) {
+            if (! ($target['rollover'] ?? false) || empty($target['rollover_start_month']) || ! isset($target['opening_rollover_cents'])) {
+                continue;
+            }
+            $rolloverFrom = CarbonImmutable::parse($target['rollover_start_month'].'-01', $space->timezone)->startOfMonth();
+            if ($rolloverFrom->lt($start) && $rolloverFrom->diffInMonths($start) <= 120) {
+                $historyStart = $historyStart->min($rolloverFrom);
+            }
+        }
+        // Only prior-month suggestions and an explicit rolling fund need history
+        // before this month. Keep their full required interval, not all account years.
+        $all = collect(app(AttributionService::class)->expandEntries($space, app(LedgerService::class)->entries($space, start: $historyStart->toDateString(), end: $end->min(CarbonImmutable::now($space->timezone))->toDateString()), $programId));
         $economic = app(EconomicActivityService::class);
         $costs = $economic->expenses($all);
         $unresolved = $economic->unresolved($all);
@@ -32,10 +45,10 @@ class BudgetEnvelopeService
             && $account->history_start->toDateString() <= $start->toDateString() && $account->observed_at
             && $account->observed_at->toDateString() >= $actualThrough);
         $hasActuals = ! $future && ($covered || $monthEntries->isNotEmpty());
-        $pending = collect(app(AttributionService::class)->expandEntries($space, $this->pending($space), $programId));
+        $pending = collect(app(AttributionService::class)->expandEntries($space, $this->pending($space, $start, $end), $programId));
         $pending = app(EconomicActivityService::class)->expenses($pending)->where('amount_cents', '<', 0);
         $catalog = collect(app(AnalysisCategoryService::class)->definitions($space))->keyBy('key');
-        $targets = $this->targets($space, $records, $start, $programId);
+        $contexts = app(BudgetDefaultsService::class)->contextHashes($space, $records);
         $priorStart = $start->subMonth();
         $priorEnd = $priorStart->endOfMonth();
         $priorCosts = $costs->where('date', '>=', $priorStart->toDateString())->where('date', '<=', $priorEnd->toDateString());
@@ -171,7 +184,7 @@ class BudgetEnvelopeService
                 'target_cents' => $amount, 'planned_cents' => $target['planned_cents'] ?? null,
                 'target_status' => $targetStatus, 'reasons' => array_values(array_unique($reasons)),
                 'default_from' => $target['default_from'] ?? null,
-                'plan_context' => app(BudgetDefaultsService::class)->contextHash($space, $records, $category, $program),
+                'plan_context' => $contexts[($program ?? 0).'|'.$category] ?? hash('sha256', '[]'),
                 'suggestion' => ['month' => $priorStart->format('Y-m'), 'amount_cents' => $priorAmount,
                     'partial' => ! $priorCovered || ! $priorCashKnown || ($prior['category_review_pending'] ?? false) || $priorTaxPending],
                 'plan_period' => $target['plan_period'] ?? null, 'partial_period' => $target['partial_period'] ?? false,
@@ -343,10 +356,10 @@ class BudgetEnvelopeService
         $groups = $records->filter(fn ($r) => ($r->data['purpose'] ?? null) === 'spending' && ($programId === null || ($r->data['program_record_id'] ?? null) === $programId))
             ->groupBy(fn ($r) => (string) ($r->data['program_record_id'] ?? 0));
         foreach ($groups as $program => $cohort) {
-            $selected = app(MonthlyBudgetService::class)->build($space, $cohort, $month, false);
+            $selected = app(MonthlyBudgetService::class)->build($space, $cohort, $month, false, ['records' => $cohort, 'defaults' => $projection['defaults']]);
             $ids = $selected['record_ids'];
             foreach ($cohort->whereIn('id', $ids)->groupBy(fn ($r) => $r->data['category']) as $category => $rows) {
-                $categoryReport = app(MonthlyBudgetService::class)->build($space, $rows, $month, false);
+                $categoryReport = app(MonthlyBudgetService::class)->build($space, $rows, $month, false, ['records' => $rows, 'defaults' => $projection['defaults']]);
                 $known = $rows->every(fn ($r) => ($r->data['reviewed'] ?? false) === true);
                 $rollover = $rows->count() === 1 && ($rows->first()->data['rollover'] ?? false);
                 $from = $rows->max(fn ($r) => max($month->startOfMonth()->toDateString(), $r->data['effective_on']));
@@ -375,10 +388,11 @@ class BudgetEnvelopeService
         return $out;
     }
 
-    private function pending(Space $space): array
+    private function pending(Space $space, CarbonImmutable $start, CarbonImmutable $end): array
     {
         return DB::table('trajectory_allocations as a')->join('trajectory_transactions as t', 't.id', '=', 'a.transaction_id')
             ->where('a.space_id', $space->id)->where('t.pending', true)->where('t.removed', false)
+            ->whereDate('t.posted_on', '>=', $start->toDateString())->whereDate('t.posted_on', '<=', $end->toDateString())
             ->select(['t.*', 'a.amount_cents as allocated_cents'])->get()->map(function ($r) use ($space) {
                 $own = (int) $r->space_id === $space->id;
 

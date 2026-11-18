@@ -53,19 +53,19 @@ try{
     if(await button.evaluate(node=>Boolean(node.closest('.tr-nav-tools:not([open])'))))await drawer.locator('.tr-nav-tools > summary').click();
     await button.click();
    };
-   // A new authorized dashboard may finish before its visual projection. A
-   // primary-tab click at that boundary must neither clear it nor reread it.
+   // Real visuals finish before the small editing context. Primary navigation
+   // at that boundary must reuse the in-flight metadata, without a Dashboard.
    let held=false,releaseProjection;const projectionGate=new Promise(resolve=>{releaseProjection=resolve;});
    const holdProjection=async route=>{if(!held&&new URL(route.request().url()).searchParams.get('account_id')===String(fixture.other_cash_id)){held=true;await projectionGate;}await route.continue();};
-   await page.route('**/analysis?*',holdProjection);
+   await page.route('**/visual-context*',holdProjection);
    const dashboardBeforePending=dashboardReads.length;
    await selectReportAccount(page,fixture.other_cash_id);await expect.poll(()=>held).toBe(true);
-   await expect(page.locator('#tr-add')).toBeEnabled(); // The held request now starts concurrently; wait for the real Dashboard boundary.
+   await expect(page.locator('.vf-finance')).toBeVisible();await expect(page.locator('#tr-add')).toBeDisabled();
    await navigateSection('Analysis');await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
    await expect(page.locator('#tr-page-title')).toHaveText('Analysis');
-   assert.equal(dashboardReads.length,dashboardBeforePending+1,'A pending projection reuses the newly authorized dashboard');
-   const delayedResponse=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith('/analysis')&&new URL(response.url()).searchParams.get('account_id')===String(fixture.other_cash_id));
-   releaseProjection();await delayedResponse;await page.unroute('**/analysis?*',holdProjection);
+   assert.equal(dashboardReads.length,dashboardBeforePending,'A primary account change never starts the legacy Dashboard');
+   const delayedResponse=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith('/visual-context')&&new URL(response.url()).searchParams.get('account_id')===String(fixture.other_cash_id));
+   releaseProjection();await delayedResponse;await page.unroute('**/visual-context*',holdProjection);await expect(page.locator('#tr-add')).toBeEnabled();
    assert.equal(await page.locator('#tr-account-filter').inputValue(),String(fixture.other_cash_id));
    await selectReportAccount(page,'');await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
    await navigateSection('Home');await expect(page.locator('#tr-page-title')).toHaveText('Home');
@@ -79,10 +79,11 @@ try{
    // fixture categories stay unchanged, but its new source revision must reload.
    await navigateSection('Review transactions');
    await page.getByRole('row').filter({hasText:'Fictional employer'}).getByRole('button',{name:/^(Edit category|Categorize)$/}).click();
+   const beforeMutation=dashboardReads.length;
    const mutationDashboard=page.waitForRequest(request=>request.method()==='GET'&&new URL(request.url()).pathname.endsWith('/dashboard'));
    await page.locator('#tr-save').click();await mutationDashboard;
    await expect(page.locator('#tr-dialog')).not.toBeVisible();await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
-   assert.equal(dashboardReads.length,loadedCounts[0]+1,'A successful transaction edit forces a new dashboard revision');
+   assert.equal(dashboardReads.length,beforeMutation+1,'A successful legacy transaction edit forces a new dashboard revision');
    const beforeVisualOnly=readCounts(),freshProjection=page.waitForRequest(request=>new URL(request.url()).pathname.endsWith('/analysis'));
    await navigateSection('Analysis');await freshProjection;await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
    assert.equal(dashboardReads.length,beforeVisualOnly[0],'A missing visual revision fetches only Analysis/Budget, not the large dashboard');

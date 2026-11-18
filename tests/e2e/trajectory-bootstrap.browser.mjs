@@ -40,10 +40,10 @@ try{
    const page=await context.newPage(),errors=[],reads=[];page.setDefaultTimeout(12000);await page.setViewportSize({width,height:950});
    page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.method()==='GET')reads.push(new URL(request.url()).pathname);});
    let releaseDashboard,delivered=false;const dashboardGate=new Promise(done=>{releaseDashboard=done;});
-   await page.route('**/dashboard?*',async route=>{const response=await route.fetch();await dashboardGate;delivered=true;try{await route.fulfill({response});}catch{/* A later scope can abort the original request. */}});
+   await page.route('**/visual-context*',async route=>{const response=await route.fetch();await dashboardGate;delivered=true;try{await route.fulfill({response});}catch{/* A later scope can abort the original request. */}});
    const projection=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith('/analysis'));
    await page.goto(origin+'/trajectory');const initial=await(await projection).json();
-   await expect(page.locator('#vf-income-chart')).toBeVisible();assert.equal(delivered,false,'Real visual data paints before the blocked legacy Dashboard');
+   await expect(page.locator('#vf-income-chart')).toBeVisible();assert.equal(delivered,false,'Real visual data paints before the blocked editing metadata');
    await expect(page.locator('#tr-content')).toHaveAttribute('aria-busy','false');await expect(page.locator('#tr-add')).toBeDisabled();
    const expected=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(initial.summary.inflow_cents/100);
    await expect(page.locator('.vf-stat-row')).toContainText(expected);
@@ -56,16 +56,21 @@ try{
    const primary=async key=>{const phone=page.locator(`.vf-mobile-nav [data-tab="${key}"]`);await(await phone.isVisible()?phone:page.locator(`.tr-primary-navigation [data-tab="${key}"]`)).click();};
    await primary('analysis');await page.locator('[data-action="vf-ledger-all"]').click();
    const categories=page.locator('[data-vf-category]');assert.ok(await categories.count());
-   assert.equal(await categories.evaluateAll(nodes=>nodes.every(node=>node.disabled)),true,'Editing waits for native Dashboard metadata');
-   await primary('accounts');await expect(page.getByText('Loading account and planning details…',{exact:true})).toBeVisible();
+   assert.equal(await categories.evaluateAll(nodes=>nodes.every(node=>node.disabled)),true,'Editing waits for native editing metadata');
    await primary('budget');await expect(page.getByRole('heading',{name:'What’s left to spend',exact:true})).toBeVisible();
    await primary('overview');await expect(page.locator('#vf-income-chart')).toBeVisible();
-   assert.equal(reads.filter(path=>path.endsWith('/dashboard')).length,1);assert.equal(reads.filter(path=>path.endsWith('/analysis')).length,1);assert.equal(reads.filter(path=>path.endsWith('/budget-envelopes')).length,1);
+   assert.equal(reads.filter(path=>path.endsWith('/dashboard')).length,0,'Home, Analysis and Budget never request the expensive legacy Dashboard');assert.equal(reads.filter(path=>path.endsWith('/visual-context')).length,1);assert.equal(reads.filter(path=>path.endsWith('/analysis')).length,1);assert.equal(reads.filter(path=>path.endsWith('/budget-envelopes')).length,1);
    releaseDashboard();await expect(page.locator('#tr-add')).toBeEnabled();
    await primary('analysis');assert.equal(await categories.evaluateAll(nodes=>nodes.every(node=>!node.disabled)),true);
-   assert.equal(reads.filter(path=>path.endsWith('/analysis')).length,1,'The matching late Dashboard adopts the exact visual revision without a second projection');
+   assert.equal(reads.filter(path=>path.endsWith('/analysis')).length,1,'The matching late metadata adopts the exact visual revision without a second projection');
+   let releaseLegacy;const legacyGate=new Promise(done=>{releaseLegacy=done;});
+   await page.route('**/dashboard?*',async route=>{const response=await route.fetch();await legacyGate;try{await route.fulfill({response});}catch{}});
+   await primary('accounts');await expect(page.getByText('Loading account and planning details…',{exact:true})).toBeVisible();
+   assert.equal(reads.filter(path=>path.endsWith('/dashboard')).length,1,'Accounts explicitly loads the real legacy Dashboard');releaseLegacy();
+   await expect(page.getByRole('heading',{name:'Connections',exact:true})).toBeVisible();
+   await page.goBack();await expect(page.locator('#tr-page-title')).toHaveText('Analysis');await expect(page.locator('#tr-add')).toBeEnabled();
    let releaseReload,reloadDelivered=false;const reloadGate=new Promise(done=>{releaseReload=done;});
-   await page.route('**/dashboard?*',async route=>{const response=await route.fetch();await reloadGate;reloadDelivered=true;await route.fulfill({response});});
+   await page.route('**/visual-context*',async route=>{const response=await route.fetch();await reloadGate;reloadDelivered=true;await route.fulfill({response});});
    await page.reload();await expect(page.locator('#vf-income-chart')).toBeVisible();assert.equal(reloadDelivered,false,'A browser/pull reload also paints before legacy details');
    await expect(page.locator('#tr-add')).toBeDisabled();releaseReload();await expect(page.locator('#tr-add')).toBeEnabled();
    // Advanced import/setup stays on desktop; phone users adjust category budgets.
@@ -103,7 +108,7 @@ try{
    // requests finish; no larger/older range is fabricated from a smaller one.
    let releasePeriod,periodDelivered=false;const periodGate=new Promise(done=>{releasePeriod=done;});
    await page.route('**/analysis?*',async route=>{const key=new URL(route.request().url()).searchParams.get('range');if(!['day','week'].includes(key)){await route.fallback();return;}const response=await route.fetch();await periodGate;periodDelivered=true;try{await route.fulfill({response});}catch{}});
-   await page.route('**/dashboard?*',async route=>{const key=new URL(route.request().url()).searchParams.get('range');if(!['day','week'].includes(key)){await route.fallback();return;}const response=await route.fetch();await periodGate;try{await route.fulfill({response});}catch{}});
+   await page.route('**/visual-context*',async route=>{const key=new URL(route.request().url()).searchParams.get('range');if(!['day','week'].includes(key)){await route.fallback();return;}const response=await route.fetch();await periodGate;try{await route.fulfill({response});}catch{}});
    await selectReportRange(page,'day');await closeReportControls(page);
    await expect(page.locator('.vf-finance')).toBeVisible();assert.equal(periodDelivered,false,'Day paints from the authorized month before fresh reads');
    const shortDate=value=>new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',timeZone:'UTC'}).format(new Date(value+'T12:00:00Z'));
@@ -129,7 +134,7 @@ try{
 
    const failed=await context.newPage();await failed.setViewportSize({width,height:950});
    let releaseFailure;const failureGate=new Promise(done=>{releaseFailure=done;});
-   await failed.route('**/dashboard?*',async route=>{const response=await route.fetch();await failureGate;await route.fulfill({response});});
+   await failed.route('**/visual-context*',async route=>{const response=await route.fetch();await failureGate;await route.fulfill({response});});
    await failed.route('**/analysis?*',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({message:'Fictional projection is unavailable.'})}));
    await failed.goto(origin+'/trajectory');await expect(failed.locator('#tr-content [role="alert"]')).toContainText('Fictional projection is unavailable.');
    await expect(failed.locator('.vf-stat-row')).toHaveCount(0);assert.doesNotMatch(await failed.locator('#tr-content').innerText(),/\$0(?:\.00)?/);
@@ -137,14 +142,14 @@ try{
 
    const denied=await context.newPage();await denied.setViewportSize({width,height:950});
    let releaseDenied;const deniedGate=new Promise(done=>{releaseDenied=done;});
-   await denied.route('**/dashboard?*',async route=>{try{const response=await route.fetch();await deniedGate;await route.fulfill({response});}catch{}});
+   await denied.route('**/visual-context*',async route=>{try{const response=await route.fetch();await deniedGate;await route.fulfill({response});}catch{}});
    await denied.route('**/analysis?*',route=>route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({message:'Fictional financial access was revoked.'})}));
    await denied.goto(origin+'/trajectory');await expect(denied.locator('#tr-content [role="alert"]')).toContainText('revoked');releaseDenied();await denied.waitForTimeout(80);
    await expect(denied.locator('.vf-finance')).toHaveCount(0);await expect(denied.locator('#tr-content [role="alert"]')).toContainText('revoked');await denied.close();
 
    const switched=await context.newPage();await switched.setViewportSize({width,height:950});
    let releaseOld,held=false;const oldGate=new Promise(done=>{releaseOld=done;});
-   await switched.route('**/dashboard?*',async route=>{if(!new URL(route.request().url()).pathname.includes(`/spaces/${fixture.space_id}/`)){await route.continue();return;}const response=await route.fetch();held=true;await oldGate;try{await route.fulfill({response});}catch{/* The superseded fetch is aborted. */}});
+   await switched.route('**/visual-context*',async route=>{if(!new URL(route.request().url()).pathname.includes(`/spaces/${fixture.space_id}/`)){await route.continue();return;}const response=await route.fetch();held=true;await oldGate;try{await route.fulfill({response});}catch{/* The superseded fetch is aborted. */}});
    await switched.goto(origin+'/trajectory');await expect(switched.locator('#vf-income-chart')).toBeVisible();await expect.poll(()=>held).toBe(true);
    await selectReportScope(switched,'business');await expect(switched.locator('#tr-space-tabs [data-scope="business"]')).toHaveAttribute('aria-selected','true');
    await expect(switched.locator('#tr-add')).toBeEnabled();const before=await switched.locator('#tr-content').innerText();
@@ -154,7 +159,7 @@ try{
    if(width===390){
     const business=await context.newPage();await business.setViewportSize({width,height:950});
     let releaseBusiness,finished=false;const businessGate=new Promise(done=>{releaseBusiness=done;});
-    await business.route('**/dashboard?*',async route=>{const response=await route.fetch();await businessGate;finished=true;await route.fulfill({response});});
+    await business.route('**/visual-context*',async route=>{const response=await route.fetch();await businessGate;finished=true;await route.fulfill({response});});
     const businessProjection=business.waitForResponse(response=>new URL(response.url()).pathname.endsWith('/analysis'));
     await business.goto(origin+'/trajectory/business/');const actual=await(await businessProjection).json();assert.equal(actual.scope.space_id,fixture.company_id);
     await expect(business.locator('.vf-finance')).toBeVisible();assert.equal(finished,false);await expect(business.locator('#tr-add')).toBeDisabled();

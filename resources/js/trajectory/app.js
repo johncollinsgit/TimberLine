@@ -31,7 +31,7 @@ import './transaction-review.css';
 import './visual-finance.css';
 import {initTrajectoryAssistant} from './assistant-ui.js';
 import {canRefreshFinance, createForegroundRefresh} from './foreground-refresh.js';
-import {isVisualFinanceView,visualBootstrapMetadata,visualBootstrapRequest,createRangeSnapshotCache} from './bootstrap.js';
+import {isVisualFinanceView,isVisualContext,visualContextPath,validateVisualContext,visualBootstrapMetadata,visualBootstrapRequest,createRangeSnapshotCache} from './bootstrap.js';
 import {createDonutExplanation} from './donut-explanation.js';
 
 const root = document.querySelector('#trajectory');
@@ -113,16 +113,17 @@ function boot() {
     by_space:{[personal.space.id]:personal,[business.space.id]:business},
     combined_result:combined,
   });
-  const load = async ({reuse = false,periodChange = false} = {}) => {
+  const load = async ({reuse = false,periodChange = false,full = false} = {}) => {
+    const primary=scope!=='both'&&isVisualFinanceView(tab)&&!scenarioId&&!seasonal&&!oauthReturn&&!full;
     assistantFocusedTransaction=null;
     if(!reuse){if(periodChange)rememberRangeProjection();else rangeSnapshots.clear();}
     if (!active) {$('#tr-context').textContent='Your private financial workspace';$('#tr-content').innerHTML='<div class="tr-empty"><h2>Your next chapter starts here.</h2>Your Trajectory pilot has not been enabled yet.<br>Once enabled, connect an account or import a statement to begin.</div>';$('#tr-add').disabled=true;return;}
-    if(reuse&&!data&&(pendingDashboard?.context===reportContext()||visualMetadata&&displayedReportContext===reportContext())){
+    if(reuse&&primary&&!data&&(pendingDashboard?.context===reportContext()||visualMetadata&&displayedReportContext===reportContext())){
       if(visualMetadata&&isVisualFinanceView(tab)&&!visualFinance.hasCurrentSnapshot())await visualFinance.refresh();
       render();return true;
     }
     const requestedVersion = ++loadVersion;
-    const reuseDashboard=reuse&&!!data&&loadedDashboardContext===reportContext();
+    const reuseDashboard=reuse&&!!data&&loadedDashboardContext===reportContext()&&(primary||!isVisualContext(data));
     if(!reuseDashboard)loadedDashboardContext=null;
     if(!reuseDashboard&&displayedReportContext!==null&&displayedReportContext!==reportContext()){
       filter={};flowDialog=null;navigation.length=0;$('#tr-back').hidden=true;$('#tr-dialog').close();$('#tr-content').innerHTML='';data=null;
@@ -139,9 +140,9 @@ function boot() {
     if(!reuseDashboard){
       loadAbort?.abort();controller=new AbortController();loadAbort=controller;
       pendingDashboard={version:requestedVersion,context:reportContext()};dashboardError=null;
-      if(scope!=='both'&&isVisualFinanceView(tab)&&(!data||periodChange||basicProjection)&&!scenarioId&&!seasonal&&!oauthReturn){
-        // Every primary-view period starts the actual visual reads concurrently
-        // with legacy details. Only period changes may reuse a dated memory pair.
+      if(primary&&(!data||periodChange||basicProjection)){
+        // Primary screens do not start the legacy forecast/history Dashboard.
+        // Only period changes may reuse an exact, dated memory pair.
         data=null;visualMetadata=null;bootstrapError=null;
         $('#tr-add').disabled=true;$('#tr-compare').disabled=true;
         const context=reportContext(),space=spaces.find(row=>row.id===active),accountId=accountFilter,cohort=rangeCohort();
@@ -172,6 +173,11 @@ function boot() {
           let combined=null;
           try {combined=await api(endpoint(`/combined?business_id=${businessSpace.id}&from=${personal.range.start}&through=${personal.range.end}`,personalSpace.id));} catch {}
           result=combinedDashboard(personal,business,combined);
+        } else if(primary){
+          if(initialVisual)await initialVisual;
+          if(requestedVersion!==loadVersion||controller.signal.aborted)return false;
+          result=validateVisualContext(await api(endpoint(visualContextPath(accountFilter)),'GET',null,controller.signal),spaces.find(row=>row.id===active),accountFilter);
+          result={...result,range:{key:reportingRange,...(visualMetadata?.range??{start:result.today,end:result.today})}};
         } else result=await api(dashboardPath(active),'GET',null,controller.signal);
         if(requestedVersion!==loadVersion||controller.signal.aborted)return;
         const previousRevision=dashboardRevision;
@@ -228,12 +234,14 @@ function boot() {
       target?.focus({preventScroll:true});restoringNavigation=false;historyNavigation.sync();
     }});
   const remember=()=>{historyNavigation.push();navigation.push({});$('#tr-back').hidden=false;};
-  const navigate=(view)=>{remember();tab=view;filter={};evidenceRows=null;if(!data)render();else if(scope!=='both'&&isVisualFinanceView(view))void load({reuse:true});else render();window.scrollTo(0,0);};
+  const navigate=(view)=>{remember();tab=view;filter={};evidenceRows=null;if(!data||isVisualContext(data)||scope!=='both'&&isVisualFinanceView(view)){render();void load({reuse:true});}else render();window.scrollTo(0,0);};
+  const ensureFullDashboard=async()=>!isVisualContext(data)&&!!data||await load({reuse:true,full:true});
   const fetchEvidence=async next=>{const batches=next.ids?.length>5000?Array.from({length:Math.ceil(next.ids.length/5000)},(_,index)=>({...next,ids:next.ids.slice(index*5000,(index+1)*5000)})):[next];return (await Promise.all(batches.map(batch=>api(endpoint('/evidence'),'POST',batch)))).flat();};
   const showTransactions = async (next) => {
     const requestedContext=reportContext();
     try {
       let records=null;
+      if(!await ensureFullDashboard())return;
       if(next.ids||next.date||next.account_id)records=await fetchEvidence(next);
       if(requestedContext!==reportContext())return;
       remember();flowDialog=null;if($('#tr-dialog').open)$('#tr-dialog').close();evidenceRows=records;filter=next;tab='transactions';render();
@@ -281,12 +289,12 @@ function boot() {
   }
   function render() {
     budgetDetail?.contextChanged?.();
-    if(!data){renderBootstrap();return;}
+    if(!data||isVisualContext(data)&&!isVisualFinanceView(tab)){renderBootstrap();return;}
     if(moneyFlowMode==='inflows'&&!data.money_flow?.family_inflows)moneyFlowMode='spending';
     charts.forEach(c=>c.destroy());charts=[];chartTables={};
     sectionTabs().forEach(b=>{if(b.dataset.tab===tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
-    $('#tr-context').textContent=tab==='profit'?`${date(data.range.start)} – ${date(data.range.end)} · ${data.business?.profit_loss?.source||'Choose a business and all its accounts'}${data.business?.profit_loss?.basis?' · '+data.business.profit_loss.basis:''}`:`${date(data.range.start)} – ${date(data.range.end)} · ${data.coverage.history_days} days of baseline history${data.scope_filter?.account_id?' · Account: '+data.scope_filter.label:''}${data.coverage.provisional?' · Provisional forecast':''}`;
-    $('#tr-add').disabled=scope==='both';$('#tr-compare').disabled=scope==='both';$('#tr-compare').hidden=tab==='profit';
+    $('#tr-context').textContent=isVisualContext(data)?(visualMetadata?`${date(visualMetadata.range.start)} – ${date(visualMetadata.range.end)} · Recorded activity`:'Editing catalogs loaded; financial projection is unavailable'):tab==='profit'?`${date(data.range.start)} – ${date(data.range.end)} · ${data.business?.profit_loss?.source||'Choose a business and all its accounts'}${data.business?.profit_loss?.basis?' · '+data.business.profit_loss.basis:''}`:`${date(data.range.start)} – ${date(data.range.end)} · ${data.coverage.history_days} days of baseline history${data.scope_filter?.account_id?' · Account: '+data.scope_filter.label:''}${data.coverage.provisional?' · Provisional forecast':''}`;
+    $('#tr-add').disabled=scope==='both';$('#tr-compare').disabled=scope==='both'||isVisualContext(data);$('#tr-compare').hidden=tab==='profit';
     const accountSelect=$('#tr-account-filter');
     if(accountSelect){accountSelect.innerHTML='<option value="">All accounts</option>'+(data.account_options||[]).map(account=>`<option value="${account.id}"${account.id===accountFilter?' selected':''}>${esc(account.name)}</option>`).join('');accountSelect.disabled=scope==='both';}
     const moneyFlow=()=>scope==='both'?panel('Choose one financial space', '<p class="tr-subtle">Choose Personal or Business at the top to follow its money. A combined diagram could count company pay and household receipts twice.</p>'):moneyFlowHtml({report:data.money_flow,mode:moneyFlowMode,esc,precise,btn});
@@ -622,7 +630,7 @@ function boot() {
   }
   function chooseAdd() {
     if(scope==='both'){notice('Choose Personal or Business before adding to your plan.');return;}
-    const kinds=['recurring','goal','debt',...(data.definitions.debt_balance_observation?['debt_balance_observation']:[]),'asset','metal','scenario',...(data?.business?['payroll','reliance']:['financial_observation','medical_need','medical_bill','medical_payment','medical_share','medical_membership']),...(data.space.kind==='household'&&data.definitions.company_support_source?['company_support_source']:[])];
+    const kinds=['recurring','goal','debt',...(data.definitions.debt_balance_observation?['debt_balance_observation']:[]),'asset','metal','scenario',...(data.space.kind==='business'?['payroll','reliance']:['financial_observation','medical_need','medical_bill','medical_payment','medical_share','medical_membership']),...(data.space.kind==='household'&&data.definitions.company_support_source?['company_support_source']:[])];
     dialog('Add to your plan',`<div class="tr-choices tr-block">${kinds.map(k=>btn(title(k),'choose-kind',`data-kind="${k}"`)).join('')}</div>`,null);
   }
   function categoryChoiceForm(row) {
@@ -760,7 +768,7 @@ function boot() {
       if(['overview','accounts','history','budget','bills','assets','business','medical','sales-tax'].includes(a)){navigate(a);}
       else if(a==='tax-annotate'){const row=data.sales_tax?.rows?.find(row=>row.transaction_id===id);if(row){const record=data.records.find(r=>r.id===row.record_id);recordForm('tax_remittance',record||null,{transaction_id:id,paid_on:row.date,amount_cents:row.amount_cents,agency:row.agency||row.merchant,tax_type:row.tax_type||'unknown',movement:row.amount_cents<0?'payment':'',reviewed:false});}}
       else if(a==='review-email'){const p=data.review_email;dialog('Review email reminders',`<p class="tr-subtle tr-block">Send to ${esc(p.email)} for ${esc(data.space.name)}. Includes the total waiting for review and the four most recent transactions. Daily emails arrive around 9 AM; weekly emails arrive Monday around 9 AM. Empty queues do not generate email. These settings apply only to you.</p>${field('frequency','Frequency','text',p.frequency,[{value:'off',label:'Off'},{value:'daily',label:'Daily'},{value:'weekly',label:'Weekly · Mondays'}])}${field('timezone','Timezone','text',p.timezone,null,true)}`,async v=>{await api(endpoint('/review-email'),'PATCH',{frequency:v.get('frequency'),timezone:v.get('timezone')});notice('Your review email preference is saved.');});}
-      else if(a==='transactions'){remember();tab=a;filter={review:true};render();}
+      else if(a==='transactions'){remember();tab=a;filter={review:true};render();if(isVisualContext(data)||!data)await load({reuse:true});}
       else if(a==='subscription-add')recordForm('recurring',null,{category:'subscriptions',cadence:'monthly',expense_type:'fixed'});
       else if(a==='subscription-review'){const s=data.commitments.subscriptions[Number(target.dataset.index)];recordForm('recurring',null,{name:s.name,merchant:s.merchant,account_id:s.account_id,amount_cents:-s.amount_cents,category:'subscriptions',cadence:'monthly',expense_type:'fixed',confirmed:false});}
       else if(a==='payment-setup')recordForm('payment_notice',null,{account_id:id,confirmed:false});
@@ -864,7 +872,7 @@ function boot() {
     root.querySelector(`[data-action="outlook-view"][data-view="${next}"]`)?.click();
   });
   root.addEventListener('change',e=>{if(['year','comparison','basis','program','budget-month'].includes(e.target.dataset.vfInput))rangeSnapshots.clear();if(!data&&e.target.matches('[data-vf-category]')){notice('Editing details are still loading. Try again in a moment.');return;}if(e.target.matches('[data-vf-input],[data-vf-category]'))void visualFinance.handleInput(e.target).catch(error=>notice(error.message));});
-  $('#tr-add').onclick=()=>{if(data)chooseAdd();else notice('Editing details are still loading. Try again in a moment.');};$('#tr-refresh').onclick=load;
+  $('#tr-add').onclick=async()=>{if(data&&await ensureFullDashboard())chooseAdd();else notice('Editing details are still loading. Try again in a moment.');};$('#tr-refresh').onclick=load;
   $('#tr-space-tabs').addEventListener('click',e=>{const button=e.target.closest('[data-scope]');if(!button||button.dataset.scope===scope)return;navigation.length=0;$('#tr-back').hidden=true;welcome.reset();debtPlanner.reset();decisionMonth='';forecastExpanded=false;overviewExpanded=false;accountFilter=null;scope=button.dataset.scope;active=(scope==='personal'?personalSpace:businessSpace)?.id||personalSpace?.id||businessSpace?.id;scenarioId='';filter={};budgetSource=null;budgetMonth='';historyMonth='';evidenceRows=null;data=null;$('#tr-dialog').close();$('#tr-content').innerHTML='';renderSpaceTabs();load();});
   $('#tr-account-filter')?.addEventListener('change',async event=>{accountFilter=event.target.value===''?null:Number(event.target.value);decisionMonth='';scenarioId='';filter={};evidenceRows=null;navigation.length=0;$('#tr-back').hidden=true;debtPlanner.reset();await load();});
   $('#tr-compare').onclick=()=>{compareYear=!compareYear;$('#tr-compare').setAttribute('aria-pressed',String(compareYear));render();};
@@ -886,7 +894,9 @@ function boot() {
     refresh:async isCurrent=>{
       const position=window.scrollY,focus=focusDescriptor(),tableScroll=[...root.querySelectorAll('#tr-content .vf-table-wrap,#tr-content .tr-table-wrap')].map(node=>({left:node.scrollLeft,top:node.scrollTop}));
       try{
-        const [result,refreshed]=await Promise.all([api(dashboardPath(active)),tab==='assets'?Promise.resolve(true):visualFinance.refresh({background:true,isCurrent})]);
+        const primary=scope!=='both'&&isVisualFinanceView(tab);
+        const [raw,refreshed]=await Promise.all([api(primary?endpoint(visualContextPath(accountFilter)):dashboardPath(active)),tab==='assets'?Promise.resolve(true):visualFinance.refresh({background:true,isCurrent})]);
+        const result=primary?{...validateVisualContext(raw,spaces.find(row=>row.id===active),accountFilter),range:data.range}:raw;
         if(!refreshed||!isCurrent())return false;
         if((result.scope_filter?.account_id??null)!==accountFilter)return false;
         data=result;if(tab==='assets')dashboardRevision++;loadedDashboardContext=reportContext();rangeSnapshots.clear();rememberRangeProjection();render();window.scrollTo(0,position);

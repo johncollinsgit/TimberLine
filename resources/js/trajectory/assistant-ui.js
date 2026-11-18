@@ -43,10 +43,14 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
     host.querySelector('[data-assistant-scope]').textContent=selectedExpense?'Selected purchase':`Current financial view · ${getContext?.()?.category||getContext?.()?.level||'overview'}`;
     try{await loadHistory();renderChat();input.focus();}catch(error){showError(error);}
   }
-  async function loadInbox() {
-    currentSpace=spaceId(); if(!currentSpace)return;
-    inbox=await api(path('/notifications'));
-    const badge=host.querySelector('[data-assistant-badge]');badge.hidden=!inbox.unread_count;badge.textContent=inbox.unread_count || '';
+  async function loadInbox(summary=false) {
+    const requestedSpace=spaceId(); if(!requestedSpace)return;
+    currentSpace=requestedSpace;
+    const result=await api(endpoint(summary?'/notifications?summary=1':'/notifications',requestedSpace));
+    if(spaceId()!==requestedSpace)return false;
+    if(!summary)inbox=result;
+    const badge=host.querySelector('[data-assistant-badge]');badge.hidden=!result.unread_count;badge.textContent=result.unread_count || '';
+    return true;
   }
   const noticeRow = row => row.payload.unavailable ? '<div class="tr-expense-notice"><strong>Purchase no longer available in this household</strong><span>Its ownership, purpose or bank status changed.</span></div>' : `<button type="button" class="tr-expense-notice" data-open-expense="${row.id}"><strong>${esc(row.payload.merchant)} · ${money(row.payload.amount_cents)}</strong><span>${esc(row.payload.date)} · ${esc(row.payload.category_label)}${row.payload.pending?' · Pending':''}${row.payload.removed?' · Removed':''}</span><span>${row.payload.remaining_cents==null?'Budget not established':money(row.payload.remaining_cents)+' left in category'}${row.payload.needs_purpose?' · What was this for?':''}</span></button>`;
   async function openInbox() {
@@ -59,7 +63,7 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
       return;
     }
     try{
-      await loadInbox();view='inbox';host.querySelector('[data-assistant-form]').hidden=true;
+      if(!await loadInbox())return;view='inbox';host.querySelector('[data-assistant-form]').hidden=true;
       const prefs=inbox.preferences;
       content.innerHTML=`<div class="tr-assistant-preferences"><strong>Personal expense notifications</strong><label><input type="checkbox" data-alert-enabled ${prefs.enabled?'checked':''}> Notify me about new purchases</label><label><input type="checkbox" data-alert-pending ${prefs.include_pending?'checked':''}> Include pending purchases</label><label><input type="checkbox" data-alert-details ${prefs.show_details?'checked':''}> Show merchant, amount, category and budget left on lock screen</label><button type="button" data-save-alerts>Save preferences</button><button type="button" data-enable-push disabled>Enable phone notifications</button><small data-push-status role="status">Checking this device’s notification setup…</small><a href="/trajectory/personal/">Open Personal app</a> · <a href="/trajectory/business/">Open Business app</a><small>iPhone: open the app in Safari → Share → Add to Home Screen, then enable notifications from the installed app.</small></div>${(inbox.rows||[]).length?inbox.rows.map(noticeRow).join(''):'<p>No new expenses yet. New feed purchases will appear after you opt in; historical imports do not create a backlog of alerts.</p>'}${inbox.next_before?'<button type="button" data-load-expenses>Earlier expenses</button>':''}`;
       void checkPushState();
@@ -171,7 +175,7 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
   host.querySelector('form').addEventListener('submit',event=>{event.preventDefault();const q=input.value.trim();if(q)void send(q);});
   const surface=location.pathname.startsWith('/trajectory/personal/')?'personal':location.pathname.startsWith('/trajectory/business/')?'business':null;
   if(surface&&'serviceWorker'in navigator&&window.isSecureContext)navigator.serviceWorker.register(`/trajectory/${surface}/sw.js`,{scope:`/trajectory/${surface}/`}).catch(()=>{});
-  async function refresh(){if(transactionId&&!deepLinkOpened&&spaceId()){deepLinkOpened=true;await openInbox();let row=inbox?.rows.find(row=>row.payload.transaction_id===transactionId);if(!row){const result=await api(path(`/notifications?transaction_id=${transactionId}`));row=result.rows?.find(item=>item.payload.transaction_id===transactionId);}if(row)await chooseExpense(row);return;}if(dialog.open&&view==='inbox')await openInbox();else{try{await loadInbox();}catch{/* Availability is independent from finance navigation. */}}}
+  async function refresh(){if(transactionId&&!deepLinkOpened&&spaceId()){deepLinkOpened=true;await openInbox();let row=inbox?.rows.find(row=>row.payload.transaction_id===transactionId);if(!row){const result=await api(path(`/notifications?transaction_id=${transactionId}`));row=result.rows?.find(item=>item.payload.transaction_id===transactionId);}if(row)await chooseExpense(row);return;}if(dialog.open&&view==='inbox')await openInbox();else{try{await loadInbox(true);}catch{/* Availability is independent from finance navigation. */}}}
   async function contextChanged(){const next=spaceId();if(currentSpace&&next!==currentSpace){currentSpace=next;loadedSpace=null;selectedExpense=null;messages=[];if(dialog.open)await openChat();}await refresh();}
   if(transactionId&&spaceId())void refresh().catch(()=>{});
   return {openInbox,openChat,refresh,contextChanged,destroy(){dialog.close();host.remove();}};

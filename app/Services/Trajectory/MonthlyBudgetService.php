@@ -12,10 +12,23 @@ class MonthlyBudgetService
 {
     private const PURPOSES = ['spending', 'income', 'debt_payment', 'owner_support', 'savings'];
 
-    public function build(Space $space, Collection $records, CarbonImmutable $month, bool $includeIncomePolicies = true): array
+    public function build(Space $space, Collection $records, CarbonImmutable $month, bool $includeIncomePolicies = true, ?array $projection = null): array
     {
         $records = $records->filter(fn ($record) => $record instanceof Record && $record->kind === 'budget' && $record->active && (int) $record->space_id === (int) $space->id);
-        $projection = app(BudgetDefaultsService::class)->project($space, $records, $month);
+        if ($projection !== null) {
+            // Reuse only this call's owned record cohort. A prepared read model
+            // cannot widen space/program/category scope or replace native records.
+            $ids = $records->pluck('id')->all();
+            $projection['records'] = $projection['records']->filter(fn ($record) => $record instanceof Record && $record->kind === 'budget' && $record->active
+                && (int) $record->space_id === (int) $space->id && in_array($record->id, $ids, true));
+            $keys = $projection['records']->map(function ($record) {
+                $data = $record->data;
+
+                return ($data['program_record_id'] ?? 0).'|'.($data['category'] ?? '');
+            })->all();
+            $projection['defaults'] = array_intersect_key($projection['defaults'], array_fill_keys($keys, true));
+        }
+        $projection ??= app(BudgetDefaultsService::class)->project($space, $records, $month);
         $records = $projection['records'];
         $superseded = $records->filter(fn ($record) => $record instanceof Record && $record->kind === 'budget' && $record->active
             && (int) $record->space_id === (int) $space->id && (! empty($record->data['supersedes_record_id']) || ! empty($record->data['supersedes_record_ids']))

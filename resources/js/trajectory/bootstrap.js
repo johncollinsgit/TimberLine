@@ -1,4 +1,15 @@
 export const isVisualFinanceView = view => ['overview','analysis','budget'].includes(view);
+export const isVisualContext = value => value?.projection === 'visual_context';
+export function visualContextPath(accountId=null){return '/visual-context'+(accountId===null?'':`?account_id=${accountId}`);}
+/** Metadata is explicitly distinct from the full legacy Dashboard projection. */
+export function validateVisualContext(value,space,accountId=null){
+  if(!isVisualContext(value)||value.space?.id!==space?.id||value.space?.kind!==space?.kind
+    ||(value.scope_filter?.account_id??null)!==accountId||!Array.isArray(value.available)
+    ||!value.available.includes('editing_catalogs')||!Array.isArray(value.records)
+    ||!Array.isArray(value.category_options)||!Array.isArray(value.accounts)
+    ||!value.definitions||!isoDate(value.today))throw Error('Editing details did not match the selected financial workspace. Refresh to try again.');
+  return value;
+}
 const periods=new Set(['day','week','month','quarter','year','all','custom']);
 const isoDate=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value);
 

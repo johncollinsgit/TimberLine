@@ -12,11 +12,26 @@ class BudgetDefaultsService
 {
     public function contextHash(Space $space, Collection $records, string $category, ?int $program): string
     {
-        $versions = $records->filter(fn ($record) => $this->ownedBudget($space, $record) && ($record->data['purpose'] ?? null) === 'spending'
-            && ($record->data['category'] ?? null) === $category && (int) ($record->data['program_record_id'] ?? 0) === (int) $program)
-            ->sortBy('id')->map(fn ($record) => [$record->id, $record->version])->values()->all();
+        return $this->contextHashes($space, $records)[($program ?? 0).'|'.$category] ?? hash('sha256', '[]');
+    }
 
-        return hash('sha256', json_encode($versions));
+    /** Request-local hashes retain native record IDs/versions without re-reading encrypted data for every category. */
+    public function contextHashes(Space $space, Collection $records): array
+    {
+        $groups = [];
+        foreach ($records->sortBy('id') as $record) {
+            if (! $this->ownedBudget($space, $record)) {
+                continue;
+            }
+            $data = $record->data;
+            if (($data['purpose'] ?? null) !== 'spending') {
+                continue;
+            }
+            $key = (int) ($data['program_record_id'] ?? 0).'|'.($data['category'] ?? '');
+            $groups[$key][] = [$record->id, $record->version];
+        }
+
+        return array_map(fn ($versions) => hash('sha256', json_encode($versions)), $groups);
     }
 
     public function project(Space $space, Collection $records, CarbonImmutable $month): array
