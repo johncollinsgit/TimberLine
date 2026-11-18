@@ -160,3 +160,33 @@ blank-dump boot, and retain the ordinary protected PR/Forge exact-SHA release.
 Live acceptance checks Home → comparison bar → pie → category → ledger → edit
 → Back on desktop and mobile, verifies separate installations, and proves actual
 iPhone permission/background delivery independently of automated browser tests.
+
+
+Budget cards expose the reason a remaining allowance cannot be calculated. Draft and dated
+plans show their entered amount and effective dates, rather than an unavailable balance;
+a reviewed target remains a plan, never bank cash. Parent/child overlaps, shared parent
+allowances, missing rollover openings and missing history retain separate statuses.
+Future months show plans without claiming zero actual spending or an available allowance.
+
+Budget records may set `cash_spending_pending` or `category_review_pending` through the
+normal validated, versioned record service. These flags preserve the approved target and
+recorded costs but hold the exact remaining allowance until the actuals are resolved.
+Category-review amounts are labeled recorded/estimated; source notes explain their scope.
+Cash received is funding, not assumed spending. Clear a flag only after its source evidence
+has been reconciled; changing it does not create or modify any bank transaction.
+
+An unresolved sales-tax payment holds only interest, tax penalties, tax fees, and their
+configured category ancestors in the same program, including affected rollover history.
+Unrelated allowances keep their recorded remaining amounts; overall coverage and aggregate
+remaining stay incomplete until the tax cost split is known. Sales-tax principal is never
+reclassified as an operating cost by this display.
+
+
+An optional `reported_cash_spent_cents` / `reported_cash_as_of` pair records a cumulative
+owner cash-spending observation for that calendar month only. Native validation requires
+both fields, nonnegative cents, and a real as-of date within the plan's effective dates
+and no later than today. This is a budget observation, not a dated bank transaction.
+Cards show bank-recorded and reported cash costs separately; the allowance subtracts the
+report once. Later months never inherit the amount, multiple reports in one selected
+category cohort hold the allowance for review, and unresolved cash/category flags still
+hold exact remaining values. Transaction charts and account balances remain unchanged.

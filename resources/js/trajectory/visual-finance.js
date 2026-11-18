@@ -41,9 +41,32 @@ export function financeSelectionRows(report, state) {
 
 export function financeBudgetRows(report) {
   return (report?.rows ?? []).map(row => ({...row,
-    target_cents: number(row.target_cents), spent_cents: number(row.spent_cents), pending_cents: number(row.pending_cents),
+    target_cents: number(row.target_cents), planned_cents: number(row.planned_cents), spent_cents: number(row.spent_cents), pending_cents: number(row.pending_cents),
     remaining_cents: number(row.remaining_cents), label: row.label ?? financeLabel(row.category ?? row.key),
   }));
+}
+
+/** Plan amounts and recorded allowance are distinct; a missing amount is never a zero. */
+export function financeBudgetPresentation(row, {future = false} = {}) {
+  const reasons = new Set(row.reasons ?? []);
+  if (row.status && row.status !== 'reviewed_plan') reasons.add(row.status);
+  if (row.uses_parent_budget) reasons.add('uses_parent_budget');
+  if (future) reasons.add('future_period');
+  const messages = {
+    draft: 'Draft · needs confirmation', partial: 'Dated plan · not a full-month allowance', partial_period: 'Dated plan · not a full-month allowance',
+    overlapping_targets: 'Parent and child allowances overlap · review targets', needs_opening_balance: 'Reviewed rollover opening needed',
+    needs_prior_month_close: 'Previous month must close before rollover is known', tax_split_pending: 'Tax split pending', unresolved_costs: 'Tax split pending',
+    cash_not_recorded: 'Cash spending is not fully recorded', cash_reports_overlap: 'Cash reports overlap · review their scope', category_review_pending: 'Spending categories still need review',
+    missing_history: 'Spending history is not available for this month', future_period: 'Plan for a future month',
+  };
+  let value = null, text = 'Set budget', caption = 'No allowance set';
+  const plan = number(row.target_cents) ?? number(row.planned_cents);
+  if (row.uses_parent_budget) {text = 'Uses parent budget';caption = row.parent_budget_label ?? 'Shared allowance';}
+  else if (number(row.remaining_cents) !== null && !future) {value = Math.abs(row.remaining_cents);caption = row.remaining_cents < 0 ? 'over recorded allowance' : row.reported_cash_as_of ? 'left after bank and reported cash spending' : 'left after recorded spending';}
+  else if (plan !== null) {value = plan;caption = reasons.has('draft') ? 'Draft allowance' : reasons.has('overlapping_targets') ? 'Entered allowance · review overlap' : row.partial_period ? 'Dated allowance plan' : 'Approved monthly plan';}
+  else if (reasons.size && !reasons.has('not_budgeted')) {text = 'Review budget';caption = 'Allowance needs review';}
+  return {value, text, caption, messages: [...new Set([...reasons].filter(reason => !future || !['cash_not_recorded', 'category_review_pending', 'tax_split_pending', 'unresolved_costs', 'missing_history'].includes(reason)).map(reason => messages[reason]).filter(Boolean))],
+    action: row.uses_parent_budget ? null : reasons.has('draft') ? 'Confirm budget…' : plan === null ? 'Set budget…' : number(row.remaining_cents) === null && !future ? 'Review budget…' : null};
 }
 
 export function createVisualFinance({root, getContext, getSpaces = () => [], api, endpoint, esc, precise, chart, onBeforeChange, onChange, onChanged, onNavigate, onReviewTransaction, onEditBudget, onAddDefinition, onClearAccount, onAsk, notice}) {
@@ -172,9 +195,14 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     if (envelopes?.error) return `<div class="vf-error" role="status">Budgets could not load. ${esc(envelopes.error)} ${button('Try again', 'retry')}</div>`;
     if (!rows.length) return `<div class="vf-empty"><h3>Give each category a plan</h3><p>No reviewed budget targets are available for this month.</p>${button('Set up a budget', 'legacy-budget')}</div>`;
     return `<div class="vf-envelope-grid">${selected.map((row, index) => {
-      const status = {draft:'Draft target · needs review',overlapping_targets:'Parent and child targets overlap',needs_opening_balance:'Rollover opening needs review',unresolved_costs:'Some costs still need review',not_budgeted:'Budget not set'}[row.status];
-      const remaining = row.remaining_cents, target = row.target_cents, used = target === null || row.spent_cents === null ? null : target === 0 ? (row.spent_cents > 0 ? 100 : 0) : Math.min(100, Math.max(0, row.spent_cents / target * 100));
-      return `<button type="button" class="vf-envelope ${remaining !== null && remaining < 0 ? 'vf-over-budget' : ''}" data-action="vf-envelope" data-index="${index}"><span class="vf-envelope-label"><span class="vf-swatch" style="background:${financeColor(row.category ?? row.key)}"></span>${esc(row.label)}<span aria-hidden="true">›</span></span><strong>${precise(remaining === null ? null : Math.abs(remaining))}</strong><span>${remaining === null ? esc(row.uses_parent_budget ? 'Shares the parent budget' : status ?? 'Budget not set / incomplete') : remaining < 0 ? 'over budget' : 'left to spend'}</span><div class="vf-budget-track" ${used === null ? '' : `role="progressbar" aria-label="${esc(row.label)} budget used" aria-valuenow="${Math.round(used)}" aria-valuemin="0" aria-valuemax="100"`}><i style="width:${used ?? 0}%;background:${financeColor(row.category ?? row.key)}"></i></div><small>${precise(row.spent_cents)} spent · ${precise(target)} planned${row.pending_cents ? ` · ${precise(row.pending_cents)} pending` : ''}</small><small>${row.program_label ? esc(row.program_label) + ' · ' : ''}${row.rollover ? 'Rolling fund' : 'Resets monthly'}${row.carryover_cents ? ` · ${precise(row.carryover_cents)} carried forward` : ''}</small></button>`;
+      const presentation = financeBudgetPresentation(row, {future: envelopes?.future === true});
+      const remaining = row.remaining_cents, target = row.target_cents;
+      const used = remaining === null || target === null || row.spent_cents === null ? null : target === 0 ? (row.spent_cents > 0 ? 100 : 0) : Math.min(100, Math.max(0, row.spent_cents / target * 100));
+      const bank = row.bank_spent_cents === undefined ? row.spent_cents : number(row.bank_spent_cents);
+      const actual = bank === null ? (envelopes?.future ? 'Actual spending is not available yet' : 'Spending history not available') : `${precise(bank)} ${row.category_review_pending ? 'recorded / estimated spending' : row.bank_spent_cents === undefined ? 'recorded spending' : 'bank-recorded spending'}`;
+      const cash = row.reported_cash_as_of && number(row.reported_cash_spent_cents) !== null ? ` + ${precise(row.reported_cash_spent_cents)} reported cash through ${esc(row.reported_cash_as_of)}` : '';
+      const dates = row.partial_period && row.plan_period ? `${row.plan_period.from} – ${row.plan_period.through}` : row.rollover ? 'Rolling fund' : 'Resets monthly';
+      return `<article class="vf-envelope-shell"><button type="button" class="vf-envelope ${remaining !== null && remaining < 0 ? 'vf-over-budget' : ''}" data-action="vf-envelope" data-index="${index}"><span class="vf-envelope-label"><span class="vf-swatch" style="background:${financeColor(row.category ?? row.key)}"></span>${esc(row.label)}<span aria-hidden="true">›</span></span><strong>${presentation.value === null ? esc(presentation.text) : precise(presentation.value)}</strong><span>${esc(presentation.caption)}</span>${presentation.messages.map(message => `<small class="vf-envelope-reason">${esc(message)}</small>`).join('')}<div class="vf-budget-track" ${used === null ? '' : `role="progressbar" aria-label="${esc(row.label)} budget used" aria-valuenow="${Math.round(used)}" aria-valuemin="0" aria-valuemax="100"`}><i style="width:${used ?? 0}%;background:${financeColor(row.category ?? row.key)}"></i></div><small>${esc(actual)}${cash}${row.pending_cents ? ` · ${precise(row.pending_cents)} pending` : ''}</small><small>${row.program_label ? esc(row.program_label) + ' · ' : ''}${esc(dates)}${row.carryover_cents ? ` · ${precise(row.carryover_cents)} carried forward` : ''}</small>${cash ? '<small>Cash report is budget only; transaction charts exclude it.</small>' : ''}</button>${presentation.action ? `<div class="vf-envelope-actions">${button(presentation.action, 'legacy-budget')}</div>` : ''}${row.source_notes?.length ? `<details class="vf-envelope-notes"><summary>Plan notes</summary>${row.source_notes.map(note => `<p>${esc(note)}</p>`).join('')}</details>` : ''}</article>`;
     }).join('')}</div>`;
   }
 

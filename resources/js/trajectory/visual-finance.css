@@ -69,6 +69,14 @@
 .vf-error{color:#8f4a37;background:#fff7f2}
 .vf-error h2{font-size:17px}
 .vf-error .vf-button{margin-top:8px}
+ .vf-envelope-shell{display:flex;flex-direction:column;min-width:0;border:1px solid #e2e9ea;border-radius:12px;background:#fff;overflow:hidden}
+.tr-app .vf-envelope-shell>.vf-envelope{flex:1;border:0;border-radius:0;background:transparent;width:100%}
+.vf-envelope-actions{padding:0 14px 12px}
+.vf-envelope-actions .vf-button{font-size:12px;padding:6px 10px}
+.vf-envelope-notes{padding:0 14px 12px;font-size:11px;color:#627a82;line-height:1.5}
+.vf-envelope-notes summary{cursor:pointer}
+.vf-envelope-notes p{margin:7px 0 0;overflow-wrap:anywhere}
+.vf-envelope>.vf-envelope-reason{color:#8b6837}
 .vf-envelope-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
 .tr-app .vf-envelope{padding:17px 19px;display:flex;flex-direction:column;align-items:flex-start;gap:3px;border:1px solid #e2e9ea;border-radius:12px;background:#fff;text-align:left;min-width:0;box-shadow:none}
 .tr-app .vf-envelope:hover{background:#f8fbfb;border-color:#b8d6cf}
