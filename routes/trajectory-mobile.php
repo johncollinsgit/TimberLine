@@ -11,6 +11,7 @@ Route::middleware(['auth', 'verified', 'throttle:120,1'])->group(function (): vo
         Route::get('/notifications', [MobileController::class, 'inbox']);
         Route::patch('/notifications/preferences', [MobileController::class, 'preferences']);
         Route::patch('/notifications/{notice}/read', [MobileController::class, 'read'])->whereNumber('notice');
+        Route::get('/push-subscriptions', [MobileController::class, 'subscriptionStatus']);
         Route::post('/push-subscriptions', [MobileController::class, 'subscribe'])->middleware('throttle:10,1');
         Route::delete('/push-subscriptions', [MobileController::class, 'unsubscribe']);
     });

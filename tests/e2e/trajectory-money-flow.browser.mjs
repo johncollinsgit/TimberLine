@@ -34,6 +34,7 @@ try{
    await page.setViewportSize({width,height:950});await page.goto(origin+'/fictional-prior-404');await page.goto(origin+'/trajectory');
    if(await page.locator('#tr-splash-skip').isVisible())await page.locator('#tr-splash-skip').click();
    await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
+   await expect(page.locator('#tr-add')).toBeEnabled(); // Native-data tests begin after progressive visuals have hydrated.
    const minuteRead=()=>page.evaluate(()=>window.trajectoryMinuteReads.forEach(callback=>callback()));
    const initialReads=analysisReads.length;
    await openReportControls(page);await page.locator('#tr-account-filter').focus();await minuteRead();
@@ -59,6 +60,7 @@ try{
    await page.route('**/analysis?*',holdProjection);
    const dashboardBeforePending=dashboardReads.length;
    await selectReportAccount(page,fixture.other_cash_id);await expect.poll(()=>held).toBe(true);
+   await expect(page.locator('#tr-add')).toBeEnabled(); // The held request now starts concurrently; wait for the real Dashboard boundary.
    await navigateSection('Analysis');await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
    await expect(page.locator('#tr-page-title')).toHaveText('Analysis');
    assert.equal(dashboardReads.length,dashboardBeforePending+1,'A pending projection reuses the newly authorized dashboard');

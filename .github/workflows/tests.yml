@@ -481,6 +481,12 @@ jobs:
         node tests/e2e/trajectory-visual-finance.browser.mjs
         node tests/e2e/trajectory-assistant.browser.mjs
       if: matrix.group == 'workspace'
+    - name: Verify Trajectory progressive startup
+      run: node tests/e2e/trajectory-bootstrap.browser.mjs
+      if: matrix.group == 'workspace'
+    - name: Verify Trajectory chart explanations
+      run: node tests/e2e/trajectory-donut-explanation.browser.mjs
+      if: matrix.group == 'workspace'
     - name: Verify Fleet embedding and allowance in Chromium and WebKit
       run: npm run test:highlevel-fleet
       if: matrix.group == 'workspace'
