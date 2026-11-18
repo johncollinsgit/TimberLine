@@ -26,15 +26,16 @@ class RecordService
         foreach ($definition as $key => $field) {
             $rules[$key] = [$field['required'] ? 'required' : 'nullable'];
             $rules[$key] = [...$rules[$key], ...match ($field['type']) {
-                'money' => ['integer', 'between:-100000000000,100000000000'],
+                'money', 'signed_money' => ['integer', 'between:-100000000000,100000000000'],
                 'percent' => ['integer', 'between:0,10000'],
                 'rate' => ['integer', 'between:0,100000'],
                 'integer' => ['integer', 'min:0', 'max:1000000000'],
-                'debt_record', 'recurring_record', 'medical_need_record', 'medical_bill_record' => ['integer', Rule::exists('trajectory_records', 'id')->where('space_id', $space->id)->where('kind', substr($field['type'], 0, -7))->where('active', true)],
+                'debt_record', 'recurring_record', 'medical_need_record', 'medical_bill_record', 'program_record' => ['integer', Rule::exists('trajectory_records', 'id')->where('space_id', $space->id)->where('kind', substr($field['type'], 0, -7))->where('active', true)],
                 'account' => ['integer', Rule::exists('trajectory_accounts', 'id')->where('space_id', $space->id)],
                 'business_space' => ['integer', Rule::exists('trajectory_spaces', 'id')->where('kind', 'business')],
                 'decimal' => ['regex:/^\d{1,8}(\.\d{1,8})?$/', 'numeric', 'gt:0'],
                 'date' => ['date_format:Y-m-d', 'after_or_equal:1900-01-01', 'before:2200-01-01'],
+                'month' => ['regex:/^(?:19|20|21)\d{2}-(?:0[1-9]|1[0-2])$/'],
                 'boolean' => ['boolean'],
                 'category' => [Rule::in(app(WorkspaceService::class)->categories($space))],
                 'select' => [Rule::in($field['choices'])],
@@ -57,7 +58,7 @@ class RecordService
             if (! isset($data[$key])) {
                 continue;
             }
-            if (in_array($field['type'], ['money', 'percent', 'rate', 'integer', 'account', 'business_space', 'debt_record', 'recurring_record', 'medical_need_record', 'medical_bill_record'], true)) {
+            if (in_array($field['type'], ['money', 'signed_money', 'percent', 'rate', 'integer', 'account', 'business_space', 'debt_record', 'recurring_record', 'medical_need_record', 'medical_bill_record', 'program_record'], true)) {
                 $data[$key] = (int) $data[$key];
             }
             if ($field['type'] === 'boolean') {
@@ -83,6 +84,9 @@ class RecordService
         }
         if ($kind === 'budget') {
             abort_if($data['purpose'] === 'owner_support' && $space->kind !== 'business', 422, 'Owner-support budgets belong to a business space.');
+            abort_if(($data['rollover'] ?? false) && empty($data['rollover_start_month']), 422, 'Choose the first rollover month.');
+            abort_if(isset($data['opening_rollover_cents']) && ! ($data['rollover'] ?? false), 422, 'An opening rollover requires rollover to be enabled.');
+            abort_if(($data['rollover'] ?? false) && ($data['reviewed'] ?? false) !== true && ($data['opening_rollover_cents'] ?? 0) !== 0, 422, 'Review the opening rollover before using it.');
         }
         if ($kind === 'business_funding_plan') {
             abort_unless($data['reviewed_on'] <= now($space->timezone)->toDateString(), 422, 'Use an actual review date.');

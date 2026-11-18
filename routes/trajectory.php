@@ -55,3 +55,8 @@ Route::middleware(['auth', 'verified', 'throttle:120,1'])->prefix('trajectory')-
         Route::patch('/settings', [Trajectory::class, 'settings'])->name('trajectory.settings');
     });
 });
+
+require __DIR__.'/trajectory-analysis.php';
+require __DIR__.'/trajectory-attribution.php';
+require __DIR__.'/trajectory-assistant.php';
+require __DIR__.'/trajectory-mobile.php';

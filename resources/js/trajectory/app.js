@@ -23,6 +23,10 @@ import './money-flow.css';
 import './card-activity.css';
 import { minor, percentShare, rateMillis, recordedDifference } from './money.js';
 import {saveBankLinkSession, restoreBankLinkSession, clearBankLinkSession, bankOAuthReturnUrl, bankLinkExitMessage} from './bank-link-session.js';
+import {createVisualFinance} from './visual-finance.js';
+import './visual-finance.css';
+import {initTrajectoryAssistant} from './assistant-ui.js';
+import {canRefreshFinance, createForegroundRefresh} from './foreground-refresh.js';
 
 const root = document.querySelector('#trajectory');
 if (root) boot();
@@ -50,13 +54,13 @@ function boot() {
   let businessSpace = spaceFor('business');
   let loadVersion = 0;
   let accountingBasis = 'accrual';
-  let reportingRange = 'year', incomingMode = 'cash', compareYear = false;
+  let reportingRange = 'month', incomingMode = 'cash', compareYear = false;
   let decisionMonth = '', forecastExpanded = false, overviewExpanded = false;
   let linkInProgress = false;
   let scope = requestedSpace?.kind==='business' ? 'business' : personalSpace ? 'personal' : 'business';
   let active = (scope==='personal' ? personalSpace : businessSpace)?.id, data, evidenceRows=null, tab = 'overview', charts = [], chartTables = {}, filter = {}, scenarioId = '', historyMonth = '', budgetSource = null, budgetMonth = '', seasonal = false, moneyFlowMode = 'spending', lenderInterestYear = null, formAction;
-  let flowDialog=null,restoringNavigation=false,displayedReportContext=null;
-  if (['transactions','accounts','planning','anomalies','tax','sales-tax','profit','companies','bud'].includes(incoming.get('tab'))) {tab=incoming.get('tab');filter=tab==='transactions'?{review:true}:{};}
+  let flowDialog=null,restoringNavigation=false,displayedReportContext=null,assistantFocusedTransaction=null;
+  if (['overview','analysis','budget','transactions','accounts','planning','anomalies','tax','sales-tax','profit','companies','bud'].includes(incoming.get('tab'))) {tab=incoming.get('tab');filter=tab==='transactions'?{review:true}:{};}
   if (oauthReturn) tab = 'accounts';
   const endpoint = (path, spaceId=active) => `/trajectory/spaces/${spaceId}${path}`;
   const renderSpaceTabs = () => {
@@ -100,6 +104,7 @@ function boot() {
     combined_result:combined,
   });
   const load = async () => {
+    assistantFocusedTransaction=null;
     if (!active) {$('#tr-context').textContent='Your private financial workspace';$('#tr-content').innerHTML='<div class="tr-empty"><h2>Your next chapter starts here.</h2>Your Trajectory pilot has not been enabled yet.<br>Once enabled, connect an account or import a statement to begin.</div>';$('#tr-add').disabled=true;return;}
     const requestedVersion = ++loadVersion;
     if(displayedReportContext!==null&&displayedReportContext!==reportContext()){
@@ -115,7 +120,9 @@ function boot() {
         try {combined=await api(endpoint(`/combined?business_id=${businessSpace.id}&from=${personal.range.start}&through=${personal.range.end}`,personalSpace.id));} catch {}
         result=combinedDashboard(personal,business,combined);
       } else result=await api(dashboardPath(active));
-      if(requestedVersion!==loadVersion)return;data=result;accountFilter=data.scope_filter?.account_id??null;if(scope!=='both'&&(filter.ids||filter.date||filter.account_id)){const rows=await fetchEvidence(filter);if(requestedVersion!==loadVersion)return;evidenceRows=rows;}render();return true;
+      if(requestedVersion!==loadVersion)return;data=result;accountFilter=data.scope_filter?.account_id??null;if(scope!=='both'&&(filter.ids||filter.date||filter.account_id)){const rows=await fetchEvidence(filter);if(requestedVersion!==loadVersion)return;evidenceRows=rows;}
+      if(scope!=='both'&&['overview','analysis','budget'].includes(tab)){await visualFinance.refresh();if(requestedVersion!==loadVersion)return;}
+      render();void assistant.contextChanged?.().catch(error=>notice(error.message));return true;
     }
     catch(e){if(requestedVersion===loadVersion){accountFilter=data?.scope_filter?.account_id??null;if($('#tr-account-filter'))$('#tr-account-filter').value=accountFilter??'';notice(e.message);}return false;}
     finally {if(requestedVersion===loadVersion){$('#tr-content').classList.remove('tr-loading');$('#tr-content').setAttribute('aria-busy','false');}}
@@ -135,23 +142,23 @@ function boot() {
   const line = (label,values,color,fill=false) => ({label,data:values,borderColor:color,backgroundColor:color+'0a',fill,tension:0,borderWidth:2.5,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#fff',pointHoverBorderWidth:2,pointHitRadius:16,spanGaps:false});
   const navigation=[];
   const reportContext=()=>JSON.stringify([scope,active,businessSpace?.id,accountFilter,reportingRange,$('#tr-start').value,$('#tr-end').value,scenarioId,seasonal,accountingBasis]);
-  const focusDescriptor=()=>{const node=document.activeElement?.closest?.('[data-action]');return node?{action:node.dataset.action,label:node.dataset.label||'',ids:node.dataset.ids||''}:null;};
-  const captureNavigation=()=>({tab,filter:JSON.parse(JSON.stringify(filter)),scroll:window.scrollY,moneyFlowMode,depth:navigation.length,flowDialog:flowDialog?{...flowDialog}:null,focus:focusDescriptor()});
+  const focusDescriptor=()=>{const node=document.activeElement?.closest?.('[data-action]');return node?{action:node.dataset.action,label:node.dataset.label||'',ids:node.dataset.ids||'',key:node.dataset.key||'',entry:node.dataset.entry||''}:null;};
+  const captureNavigation=()=>({tab,filter:JSON.parse(JSON.stringify(filter)),scroll:window.scrollY,moneyFlowMode,visualFinance:visualFinance.capture(),depth:navigation.length,flowDialog:flowDialog?{...flowDialog}:null,focus:focusDescriptor()});
   const historyNavigation=reportNavigation({window,capture:captureNavigation,context:reportContext,enabled:()=>!new URLSearchParams(location.search).has('oauth_state_id'),
     invalidate:reason=>{navigation.length=0;filter={};evidenceRows=null;flowDialog=null;$('#tr-back').hidden=true;$('#tr-dialog').close();if(reason==='history'){tab='overview';data=null;$('#tr-content').innerHTML='';void load();}},
     restore:async(previous,isCurrent)=>{
-      restoringNavigation=true;flowDialog=null;$('#tr-dialog').close();tab=previous.tab;filter=previous.filter;evidenceRows=null;moneyFlowMode=previous.moneyFlowMode;navigation.length=previous.depth;
+      restoringNavigation=true;flowDialog=null;$('#tr-dialog').close();tab=previous.tab;filter=previous.filter;evidenceRows=null;moneyFlowMode=previous.moneyFlowMode;visualFinance.restore(previous.visualFinance);navigation.length=previous.depth;
       await load();if(!isCurrent()){restoringNavigation=false;return;}
       if(previous.flowDialog&&tab==='money-flow'){
         const node=[...root.querySelectorAll('[data-action="money-flow-category"]')].find(node=>node.dataset.label===previous.flowDialog.label&&node.dataset.ids===previous.flowDialog.ids&&node.getClientRects().length);
         if(node)openFlowCategory(node,false);
       }
       $('#tr-back').hidden=!navigation.length;window.scrollTo(0,previous.scroll);
-      const target=previous.focus&&[...root.querySelectorAll('[data-action]')].find(node=>node.dataset.action===previous.focus.action&&(node.dataset.label||'')===previous.focus.label&&(node.dataset.ids||'')===previous.focus.ids&&node.getClientRects().length);
+      const target=previous.focus&&[...root.querySelectorAll('[data-action]')].find(node=>node.dataset.action===previous.focus.action&&(node.dataset.label||'')===previous.focus.label&&(node.dataset.ids||'')===previous.focus.ids&&(!previous.focus.key||(node.dataset.key||'')===previous.focus.key)&&(!previous.focus.entry||(node.dataset.entry||'')===previous.focus.entry)&&node.getClientRects().length);
       target?.focus({preventScroll:true});restoringNavigation=false;historyNavigation.sync();
     }});
   const remember=()=>{historyNavigation.push();navigation.push({});$('#tr-back').hidden=false;};
-  const navigate=(view)=>{remember();tab=view;filter={};evidenceRows=null;render();window.scrollTo(0,0);};
+  const navigate=(view)=>{remember();tab=view;filter={};evidenceRows=null;if(scope!=='both'&&['overview','analysis','budget'].includes(view))void load();else render();window.scrollTo(0,0);};
   const fetchEvidence=async next=>{const batches=next.ids?.length>5000?Array.from({length:Math.ceil(next.ids.length/5000)},(_,index)=>({...next,ids:next.ids.slice(index*5000,(index+1)*5000)})):[next];return (await Promise.all(batches.map(batch=>api(endpoint('/evidence'),'POST',batch)))).flat();};
   const showTransactions = async (next) => {
     const requestedContext=reportContext();
@@ -178,6 +185,24 @@ function boot() {
   const outlook=outlookUI({getData:()=>data,esc,money,precise,date,plot,chart,line,btn,dialog,evidence:showTransactions,forecastDetail});
   const welcome=welcomeUI({getData:()=>data,esc,btn,navigate,render,budgetImportAction:'budget-import'});
   const debtPlanner=debtPlannerUI({getData:()=>data,esc,precise,btn,plot,chart,line,render,requestScenario:(extraCents,spaceId)=>api(endpoint('/debt-scenarios',spaceId),'POST',{extra_cents:extraCents,...(accountFilter!==null&&spaceId===active?{account_id:accountFilter}:{})})});
+  const visualFinance=createVisualFinance({root,getContext:()=>({space_id:active,scope,account_id:accountFilter,from:data?.range.start,through:data?.range.end,today:data?.decision_support?.as_of}),getSpaces:()=>spaces,api,endpoint,esc,precise,chart,
+    onBeforeChange:remember,onChange:()=>render(),onChanged:load,onNavigate:(view,rememberStep=true)=>{if(rememberStep)navigate(view);else{tab=view;filter={};evidenceRows=null;render();window.scrollTo(0,0);}},
+    onReviewTransaction:row=>{if(row.editable)transactionForm(row);else void showTransactions({ids:[row.id],economic_costs:true});},
+    onEditBudget:()=>navigate('budget-targets'),onAddDefinition:()=>void definitionForm().catch(error=>notice(error.message)),onAsk:()=>assistant.openChat(),onClearAccount:()=>{accountFilter=null;filter={};evidenceRows=null;navigation.length=0;$('#tr-back').hidden=true;void load();},notice});
+  const assistant=initTrajectoryAssistant({root,getContext:currentAssistantContext,api,endpoint,notice,onChanged:load});
+  function currentAssistantContext(){
+    const base={space_id:active,scope,...visualFinance.getAssistantContext()};
+    if(assistantFocusedTransaction){const tx=assistantFocusedTransaction;return {...base,from:tx.date,through:tx.date,level:'transaction',category:tx.category,subcategory:null,transaction_ids:[tx.source_transaction_id??tx.id],transaction_versions:{[tx.source_transaction_id??tx.id]:tx.version},selection_truncated:false,focused_transaction:true};}
+    if(tab==='transactions'){
+      let rows=evidenceRows??data?.transactions??[];
+      if(filter.ids)rows=rows.filter(r=>filter.ids.includes(r.id));
+      if(filter.category)rows=rows.filter(r=>r.category===filter.category);
+      if(filter.review)rows=rows.filter(r=>!r.reviewed);
+      return {...base,from:data?.range.start,through:data?.range.end,level:'transactions',category:filter.category??null,subcategory:null,transaction_ids:[...new Set(rows.map(r=>r.id))].slice(0,100),transaction_versions:Object.fromEntries(rows.slice(0,100).map(r=>[r.id,r.version])),selection_truncated:rows.length>100,focused_transaction:false};
+    }
+    if(!['overview','analysis','budget'].includes(tab))return {...base,from:data?.range.start,through:data?.range.end,level:tab,category:null,subcategory:null,transaction_ids:[],transaction_versions:{},selection_truncated:false,focused_transaction:false};
+    return base;
+  }
   function render() {
     if(!data)return;
     if(moneyFlowMode==='inflows'&&!data.money_flow?.family_inflows)moneyFlowMode='spending';
@@ -188,20 +213,22 @@ function boot() {
     const accountSelect=$('#tr-account-filter');
     if(accountSelect){accountSelect.innerHTML='<option value="">All accounts</option>'+(data.account_options||[]).map(account=>`<option value="${account.id}"${account.id===accountFilter?' selected':''}>${esc(account.name)}</option>`).join('');accountSelect.disabled=scope==='both';}
     const moneyFlow=()=>scope==='both'?panel('Choose one financial space', '<p class="tr-subtle">Choose Personal or Business at the top to follow its money. A combined diagram could count company pay and household receipts twice.</p>'):moneyFlowHtml({report:data.money_flow,mode:moneyFlowMode,esc,precise,btn});
-    const views=scope==='both'?{overview:bothOverview,transactions,'money-flow':moneyFlow}:{overview,welcome:welcome.render,accounts,history,budget,transactions,bills,medical,assets,business,planning:accountFilter===null?planning.planning:wholeSpacePlanNotice,anomalies:planning.anomalies,tax:planning.tax,'sales-tax':()=>salesTaxHtml({report:data.sales_tax,esc,precise,btn}),'money-flow':moneyFlow,profit:planning.profit,companies:planning.companies,bud:planning.bud};
-    const labels={overview:'Your trajectory',accounts:'Accounts',history:'Cash flow & history',budget:'Your budget',transactions:'Review transactions',bills:'Bills & goals',medical:'Medical sharing',assets:'Wealth & debt',business:'Business',planning:'Income & scenarios',anomalies:'Category anomalies',tax:'Tax accountant review','sales-tax':'Sales tax payments','money-flow':'Money flow',profit:'Profit & loss',companies:'Businesses & accounts',bud:'Ask Bud'};
+    const views=scope==='both'?{overview:bothOverview,transactions,'money-flow':moneyFlow}:{overview:()=>visualFinance.render('overview'),analysis:()=>visualFinance.render('analysis'),budget:()=>visualFinance.render('budget'),'budget-targets':budget,'legacy-overview':overview,welcome:welcome.render,accounts,history,transactions,bills,medical,assets,business,planning:accountFilter===null?planning.planning:wholeSpacePlanNotice,anomalies:planning.anomalies,tax:planning.tax,'sales-tax':()=>salesTaxHtml({report:data.sales_tax,esc,precise,btn}),'money-flow':moneyFlow,profit:planning.profit,companies:planning.companies,bud:planning.bud};
+    const labels={overview:'Home',analysis:'Analysis',accounts:'Accounts',history:'Cash flow & history',budget:'Your budget','budget-targets':'Manage budget targets','legacy-overview':'Detailed forecast',transactions:'Review transactions',bills:'Bills & goals',medical:'Medical sharing',assets:'Wealth & debt',business:'Business',planning:'Your plan',anomalies:'Category anomalies',tax:'Tax accountant review','sales-tax':'Sales tax payments','money-flow':'Money flow',profit:'Profit & loss',companies:'Businesses & accounts',bud:'Ask Everbranch'};
     $('#tr-page-title').textContent=tab==='welcome'?'Get started':labels[tab];
     $('#tr-page-subtitle').textContent=scope==='both'?'Your household and company, side by side.':tab==='overview'?'A clearer picture of today. A better plan for tomorrow.':tab==='profit'?'Your income, costs and profit in one statement.':'Your money, with the context that matters.';
     $('#tr-content').innerHTML=(views[tab]||combinedOnly)();
     if(tab==='planning'&&scope!=='both'&&accountFilter===null) planning.draw();
     if(tab==='profit'&&scope!=='both'&&accountFilter===null) planning.drawProfit();
-    if(tab==='overview'&&scope!=='both') drawOverview();
+    root.classList.toggle('tr-visual-view',['overview','analysis','budget'].includes(tab));
+    if(['overview','analysis','budget'].includes(tab)&&scope!=='both')visualFinance.draw();
+    if(tab==='legacy-overview'&&scope!=='both') drawOverview();
     if(tab==='assets') drawAssets();
     if(tab==='business') drawBusiness();
     if(tab==='medical') drawMedical();
     if(tab==='accounts') drawAccounts();
     if(tab==='history') drawHistory();
-    if(tab==='budget') drawBudget();
+    if(tab==='budget-targets') drawBudget();
     if(tab==='money-flow'&&scope!=='both'){
       const series=moneyFlowTrendSeries(data.money_flow,moneyFlowMode).filter(year=>year.values.some(value=>value!==null)),colors=['#a7834b','#527f94','#397d69'];
       const receipts=moneyFlowMode==='inflows',basis=receipts?'cash':moneyFlowMode;
@@ -443,10 +470,10 @@ function boot() {
     let html=field('name','Name','text',record?.name||preset.name||'',null,true);
     for(const [key,def] of Object.entries(data.definitions[kind])) {
       let value=d[key]??defaults[key]??(['money','percent'].includes(def.type)&&def.required&&!['business_funding_plan','lender_interest_ytd'].includes(kind)?0:'');
-      if(['money','percent'].includes(def.type)&&value!=='')value=value/100;
+      if(['money','signed_money','percent'].includes(def.type)&&value!=='')value=value/100;
       if(def.type==='rate'&&value!=='')value=value/1000;
       const choices=def.type.endsWith('_record')?[{value:'',label:'Choose a record'},...data.records.filter(r=>r.kind===def.type.slice(0,-7)).map(r=>({value:r.id,label:r.name}))]:def.type==='account'?[{value:'',label:'Select account'},...data.accounts.map(a=>({value:a.id,label:a.name}))]:def.type==='business_space'?supportBusinessChoices(data.support_business_options):def.type==='category'?(def.required?data.category_options:[{value:'',label:'All categories'},...data.category_options]):def.choices;
-      html+=field(key,def.label,def.type==='boolean'?'checkbox':def.type==='date'?'date':['money','percent','rate','decimal','integer'].includes(def.type)?'number':'text',value,choices);
+      html+=field(key,def.label,def.type==='boolean'?'checkbox':['date','month'].includes(def.type)?def.type:['money','signed_money','percent','rate','decimal','integer'].includes(def.type)?'number':'text',value,choices);
     }
     if(kind==='tax_remittance')html=`<p class="tr-data-note">Review this current bank evidence: ${esc(taxRow.date)} · ${esc(taxRow.account)} · ${esc(taxRow.merchant)} · ${precise(taxRow.amount_cents)}. Confirm the tax type and bank match again before marking it reviewed.</p>`+html;
     if(kind==='business_funding_plan')html='<p class="tr-data-note">Review remaining receipts and unpaid obligations using current balances. Confirm the complete plan again after balances or debt terms change. A capacity estimate does not schedule or guarantee a distribution.</p>'+html;
@@ -457,7 +484,7 @@ function boot() {
         let v=values.get(key);
         if(def.type==='boolean')v=v==='on';
         else if(v===''&&!def.required)continue;
-        else if(['money','percent'].includes(def.type))v=minor(v);
+        else if(['money','signed_money','percent'].includes(def.type))v=minor(v);
         else if(def.type==='rate')v=rateMillis(v);
         else if((['integer','account','business_space'].includes(def.type)||def.type.endsWith('_record')))v=Number(v);
         payload[key]=v;
@@ -466,12 +493,36 @@ function boot() {
       await api(endpoint(record?`/records/${record.id}`:'/records'),record?'PATCH':'POST',{kind,name:values.get('name'),data:payload,version:record?.version});
     });
   }
+  async function definitionForm(){
+    if(scope==='both'){notice('Choose one household or organization before organizing categories.');return;}
+    const spaceId=active,catalog=await api(endpoint('/attribution/definitions',spaceId));
+    if(active!==spaceId)return;
+    const definitions=visualFinance.getReport()?.category_definitions||[];
+    const parents=definitions.filter(d=>!d.parent_key);
+    dialog('Organize categories and programs',`<p class="tr-subtle">Categories describe what money was for. Programs keep activities within one organization separate without duplicating its bank account.</p>${field('kind','What are you adding?','text','category_definition',[{value:'category_definition',label:'Category or subcategory'},{value:'program',label:'Program'}])}${field('name','Name','text','',null,true)}${field('direction','Category type','text','expense',[{value:'expense',label:'Spending'},{value:'income',label:'Incoming source'}])}${field('parent','Parent category (optional)','text','',[{value:'',label:'Top-level category'},...parents.map(d=>({value:d.key,label:d.label}))])}`,async values=>{
+      if(active!==spaceId)throw new Error('Your financial workspace changed. Reopen this form.');
+      const kind=values.get('kind'),name=values.get('name').trim(),key=name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40);
+      if(!/^[a-z][a-z0-9_]{0,39}$/.test(key))throw new Error('Choose a name beginning with a letter.');
+      const payload={kind,name,key};
+      if(kind==='category_definition'){
+        payload.direction=values.get('direction');
+        const parentKey=values.get('parent');
+        if(parentKey){
+          let parent=catalog.category_definitions.find(d=>d.key===parentKey&&d.active&&!d.parent_record_id);
+          if(!parent){const choice=parents.find(d=>d.key===parentKey);const created=await api(endpoint('/attribution/definitions',spaceId),'POST',{kind:'category_definition',name:choice?.label||title(parentKey),key:parentKey,direction:payload.direction});parent={id:created.record.id};}
+          payload.parent_record_id=parent.id;
+        }
+      }
+      await api(endpoint('/attribution/definitions',spaceId),'POST',payload);notice(kind==='program'?'Program added.':'Category added.');
+    });
+  }
   function chooseAdd() {
     if(scope==='both'){notice('Choose Personal or Business before adding to your plan.');return;}
     const kinds=['recurring','goal','debt',...(data.definitions.debt_balance_observation?['debt_balance_observation']:[]),'asset','metal','scenario',...(data?.business?['payroll','reliance']:['financial_observation','medical_need','medical_bill','medical_payment','medical_share','medical_membership']),...(data.space.kind==='household'&&data.definitions.company_support_source?['company_support_source']:[])];
     dialog('Add to your plan',`<div class="tr-choices tr-block">${kinds.map(k=>btn(title(k),'choose-kind',`data-kind="${k}"`)).join('')}</div>`,null);
   }
   function transactionForm(tx) {
+    assistantFocusedTransaction=tx;
     const source=scope==='both'?data.by_space[tx.space_id]:data;
     const verifiedTax=source.sales_tax?.rows?.find(row=>row.transaction_id===tx.id&&row.reviewed&&row.tax_type==='sales_tax');
     if(verifiedTax)tx={...tx,category:'taxes',flow:'sales_tax_remittance',face_punched:false,bullshit_spending:false};
@@ -563,6 +614,8 @@ function boot() {
     const target=e.target.closest('[data-action]');if(!target)return;
     const a=target.dataset.action,id=Number(target.dataset.id),spaceId=Number(target.dataset.spaceId)||active,r=data?.records.find(r=>r.id===id),tx=[...(evidenceRows||[]),...(data?.review_transactions||[]),...(data?.transactions||[])].find(t=>t.id===id&&(!target.dataset.spaceId||(t.space_id||active)===spaceId));
     try {
+      if(a==='vf-inbox'){assistant.openInbox?.();return;}
+      if(await visualFinance.handleClick(target))return;
       if(welcome.handle(a,target))return;
       if(await debtPlanner.handle(a,target))return;
       if(a==='welcome-open'){navigate('welcome');return;}
@@ -683,7 +736,7 @@ function boot() {
   function smsForm(){dialog('Text reminders',field('phone','Your mobile number','tel','+1',null,true)+field('consent','I want bill reminders, cash alerts, and weekly summaries','checkbox',false),async v=>{await api(endpoint('/sms/verify'),'POST',{phone:v.get('phone'),consent:v.get('consent')==='on'});dialog('Verify your phone',field('code','Code from your text','text','',null,true),async v2=>{await api(endpoint('/sms/confirm'),'POST',{code:v2.get('code')});},'Verify');return false;},'Send verification code');}
   $('#tr-form').addEventListener('submit',async e=>{e.preventDefault();if(!formAction)return;$('#tr-save').disabled=true;$('#tr-form-error').hidden=true;try{const done=await formAction(new FormData($('#tr-form')));if(done!==false){$('#tr-dialog').close();await load();}}catch(e){$('#tr-form-error').textContent=e.message;$('#tr-form-error').hidden=false;}finally{$('#tr-save').disabled=false;}});
   $('#tr-close').onclick=$('#tr-cancel').onclick=()=>$('#tr-dialog').close();
-  $('#tr-dialog').addEventListener('close',()=>{if(flowDialog&&!restoringNavigation){const backed=historyNavigation.back();flowDialog=null;if(!backed)historyNavigation.sync();}});
+  $('#tr-dialog').addEventListener('close',()=>{assistantFocusedTransaction=null;if(flowDialog&&!restoringNavigation){const backed=historyNavigation.back();flowDialog=null;if(!backed)historyNavigation.sync();}});
   root.addEventListener('keydown',e=>{
     const flow=e.target.closest('.tr-flow-action');
     if(flow&&['Enter',' '].includes(e.key)){e.preventDefault();flow.dispatchEvent(new MouseEvent('click',{bubbles:true}));return;}
@@ -694,6 +747,7 @@ function boot() {
     const next=e.key==='Home'?views[0]:e.key==='End'?views.at(-1):views[(index+(e.key==='ArrowRight'?1:-1)+views.length)%views.length];
     root.querySelector(`[data-action="outlook-view"][data-view="${next}"]`)?.click();
   });
+  root.addEventListener('change',e=>{if(e.target.matches('[data-vf-input],[data-vf-category]'))void visualFinance.handleInput(e.target).catch(error=>notice(error.message));});
   $('#tr-add').onclick=chooseAdd;$('#tr-refresh').onclick=load;
   $('#tr-space-tabs').addEventListener('click',e=>{const button=e.target.closest('[data-scope]');if(!button||button.dataset.scope===scope)return;navigation.length=0;$('#tr-back').hidden=true;welcome.reset();debtPlanner.reset();decisionMonth='';forecastExpanded=false;overviewExpanded=false;accountFilter=null;scope=button.dataset.scope;active=(scope==='personal'?personalSpace:businessSpace)?.id||personalSpace?.id||businessSpace?.id;scenarioId='';filter={};budgetSource=null;budgetMonth='';historyMonth='';evidenceRows=null;data=null;$('#tr-dialog').close();$('#tr-content').innerHTML='';renderSpaceTabs();load();});
   $('#tr-account-filter')?.addEventListener('change',async event=>{accountFilter=event.target.value===''?null:Number(event.target.value);decisionMonth='';scenarioId='';filter={};evidenceRows=null;navigation.length=0;$('#tr-back').hidden=true;debtPlanner.reset();await load();});
@@ -704,8 +758,29 @@ function boot() {
   $('#tr-back').onclick=()=>{historyNavigation.back();};
   $('#tr-company').onchange=()=>{welcome.reset();debtPlanner.reset();decisionMonth='';forecastExpanded=false;overviewExpanded=false;accountFilter=null;businessSpace=spaces.find(s=>s.id===Number($('#tr-company').value));active=businessSpace.id;scenarioId='';navigation.length=0;$('#tr-back').hidden=true;renderSpaceTabs();load();};
   if(root.dataset.invite){$('#tr-invite').hidden=false;$('#tr-accept').onclick=async()=>{try{await api('/trajectory/invites/accept','POST',{token:root.dataset.invite});location.href='/trajectory';}catch(e){notice(e.message);}};}
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden && tab==='assets' && data?.metals.length && !$('#tr-dialog').open)load();});
-  setInterval(()=>{if(!document.hidden && tab==='assets' && data?.metals.length && !$('#tr-dialog').open)load();},60000);
+  let foregroundInteraction = 0;
+  for(const event of ['pointerdown','keydown','input','change'])document.addEventListener(event,()=>{foregroundInteraction++;},{capture:true,passive:true});
+  const foregroundEligible=()=>canRefreshFinance({visible:!document.hidden,online:navigator.onLine!==false,hasData:!!data,tab,scope,
+    loading:$('#tr-content').getAttribute('aria-busy')==='true'||visualFinance.isBusy(),
+    editing:!!document.querySelector('dialog[open],#tr-mobile-drawer[role="dialog"],#tr-content details[open]')||document.activeElement?.matches('input,select,textarea,[contenteditable="true"]'),
+    linking:linkInProgress,restoring:restoringNavigation,oauth:new URLSearchParams(location.search).has('oauth_state_id'),hasMetals:!!data?.metals?.length});
+  const refreshForeground=createForegroundRefresh({eligible:foregroundEligible,
+    snapshot:()=>JSON.stringify([reportContext(),tab,visualFinance.capture(),loadVersion,foregroundInteraction]),
+    refresh:async isCurrent=>{
+      const position=window.scrollY,focus=focusDescriptor(),tableScroll=[...root.querySelectorAll('#tr-content .vf-table-wrap,#tr-content .tr-table-wrap')].map(node=>({left:node.scrollLeft,top:node.scrollTop}));
+      try{
+        const [result,refreshed]=await Promise.all([api(dashboardPath(active)),tab==='assets'?Promise.resolve(true):visualFinance.refresh({background:true,isCurrent})]);
+        if(!refreshed||!isCurrent())return false;
+        if((result.scope_filter?.account_id??null)!==accountFilter)return false;
+        data=result;render();window.scrollTo(0,position);
+        root.querySelectorAll('#tr-content .vf-table-wrap,#tr-content .tr-table-wrap').forEach((node,index)=>{if(tableScroll[index]){node.scrollLeft=tableScroll[index].left;node.scrollTop=tableScroll[index].top;}});
+        const target=focus&&[...root.querySelectorAll('[data-action]')].find(node=>node.dataset.action===focus.action&&(node.dataset.label||'')===focus.label&&(node.dataset.ids||'')===focus.ids&&(!focus.key||(node.dataset.key||'')===focus.key)&&(!focus.entry||(node.dataset.entry||'')===focus.entry)&&node.getClientRects().length);
+        target?.focus({preventScroll:true});historyNavigation.sync();
+        return true;
+      }catch{return false;}
+    }});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refreshForeground();});
+  setInterval(()=>{void refreshForeground();},60000);
   load().finally(()=>mobile?.ready()).then(()=>{
     if(!oauthReturn)return;
     if(resumedBankLink&&receivedRedirectUri)void connect(resumedBankLink.connection_id,resumedBankLink,receivedRedirectUri).catch(error=>notice(error.message));

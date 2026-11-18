@@ -476,6 +476,11 @@ jobs:
     - name: Verify Trajectory money flow and owned cash evidence
       run: node tests/e2e/trajectory-money-flow.browser.mjs
       if: matrix.group == 'workspace'
+    - name: Verify Trajectory visual analysis and purchase conversations
+      run: |
+        node tests/e2e/trajectory-visual-finance.browser.mjs
+        node tests/e2e/trajectory-assistant.browser.mjs
+      if: matrix.group == 'workspace'
     - name: Verify Fleet embedding and allowance in Chromium and WebKit
       run: npm run test:highlevel-fleet
       if: matrix.group == 'workspace'
@@ -616,6 +621,11 @@ jobs:
         tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php
         tests/Integration/TeamFileEventTargetsMySqlRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php
         tests/Integration/ServiceProposalMySqlRecoveryTest.php tests/Integration/FieldMaterialReviewMySqlRecoveryTest.php --compact
+      if: matrix.group == 'schema'
+    - name: Verify Trajectory finance migration recovery
+      env:
+        TRAJECTORY_DISPOSABLE_MYSQL: '1'
+      run: php ./vendor/bin/pest tests/Integration/TrajectoryAttributionMySqlRecoveryTest.php tests/Integration/TrajectoryAssistantAlertsMySqlRecoveryTest.php --compact
       if: matrix.group == 'schema'
     - name: Verify native Teams search migration recovery
       env:

@@ -61,6 +61,26 @@ test('sales tax purpose is an explicit source backed review preserving bank cent
     expect($report['sales_tax']['confirmed_payment_cents'])->toBe(10000)->and($record->fresh()->data['amount_cents'])->toBe(-10000);
 });
 
+test('visual tax category drilldowns select only their exact economic component', function (): void {
+    [$tx] = ($this->postTax)();
+    ($this->classifyTax)($tx)->assertOk();
+    $report = app(\App\Services\Trajectory\AnalysisService::class)->build($this->owner, $this->space,
+        ['from' => '2028-07-01', 'through' => '2028-07-25']);
+    $entries = collect($report['entries'])->where('direction', 'out');
+    expect($report['summary']['spending_cents'])->toBe(1000)
+        ->and($entries)->toHaveCount(3)
+        ->and($entries->pluck('entry_key')->unique())->toHaveCount(3);
+    foreach (['interest' => 200, 'tax_penalties' => 700, 'tax_fees' => 100] as $category => $cents) {
+        $group = collect($report['categories'])->firstWhere('key', $category);
+        $selected = $entries->whereIn('entry_key', $group['entry_keys']);
+        expect($selected)->toHaveCount(1)
+            ->and($selected->first()['id'])->toBe($tx->id)
+            ->and($selected->first()['category'])->toBe($category)
+            ->and($selected->sum('amount_cents'))->toBe(-$cents);
+    }
+    expect($tx->fresh()->amount_cents)->toBe(-10000)->and(Transaction::count())->toBe(1);
+});
+
 test('principal only is a verified zero economic cost while unknown split remains unavailable and fully inspectable', function (): void {
     [$principal] = ($this->postTax)('principal', -12345, [12345, 0, 0, 0]);
     ($this->classifyTax)($principal)->assertOk();

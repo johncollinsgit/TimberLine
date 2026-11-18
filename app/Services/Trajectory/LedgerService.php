@@ -33,6 +33,12 @@ class LedgerService
                     $classification['bullshit_spending'] = $profileFlag && $classification['flow'] === 'expense';
                 }
                 $oldAmount = $tx?->amount_cents;
+                $oldPending = $tx?->pending ?? false;
+                $oldDate = $tx?->posted_on?->toDateString();
+                $oldFlow = $tx?->flow;
+                $oldAccountId = $tx?->account_id;
+                $oldSourceKey = $tx?->source_key;
+                $oldAttributionFingerprint = $tx ? app(AttributionService::class)->fingerprint($tx) : null;
                 // A historical source may have been intentionally hidden because
                 // live Plaid coverage now owns this period. Preserve that reversible
                 // reconciliation when an identical export is imported again.
@@ -48,6 +54,17 @@ class LedgerService
                     'pending' => $row['pending'] ?? false, 'removed' => (bool) $coverageSource,
                     'source' => [...$row, ...$coverageSource], ...$classification,
                 ]);
+                if ($tx->exists && $tx->isDirty(['account_id', 'source_key', 'posted_on', 'amount_cents', 'flow', 'pending', 'removed'])) {
+                    $stablePendingSettlement = $oldPending && ! $tx->pending && ! $tx->removed && $oldAmount === $tx->amount_cents
+                        && $oldDate === $tx->posted_on->toDateString() && $oldFlow === $tx->flow && $oldAccountId === $tx->account_id
+                        && ($oldSourceKey === $tx->source_key || $oldSourceKey === $pendingKey);
+                    if ($stablePendingSettlement) {
+                        app(AttributionService::class)->promotePending($tx, $oldAttributionFingerprint);
+                    } elseif (app(AttributionService::class)->invalidate($tx, 'bank_source_changed')) {
+                        $tx->reviewed = false;
+                        $tx->explanation = 'Bank source changed; review the retained attribution history before assigning new detail.';
+                    }
+                }
                 if ($tx->flow === EconomicActivityService::TAX_FLOW && $tx->isDirty(['account_id', 'posted_on', 'amount_cents', 'merchant'])) {
                     $tx->reviewed = false;
                     $tx->explanation = 'Sales-tax bank source changed; review its evidence and purpose again.';
@@ -84,6 +101,7 @@ class LedgerService
             $tx = Transaction::where('space_id', $space->id)->whereKey($tx->id)->lockForUpdate()->firstOrFail();
             app(MedicalSharingService::class)->assertUnbound($tx);
             abort_unless($tx->version === $data['version'], 409, 'This transaction changed. Refresh before editing.');
+            abort_if(app(AttributionService::class)->hasActiveDetails($tx), 422, 'Edit the attributed detail lines to change this transaction’s category.');
             $before = $tx->only(['category', 'flow', 'face_punched', 'bullshit_spending', 'reviewed', 'explanation', 'version']);
             app(SalesTaxService::class)->admitClassification($space, $tx, $data, $learn);
             $values = array_intersect_key($data, array_flip(['category', 'flow', 'face_punched', 'bullshit_spending']));
@@ -169,6 +187,7 @@ class LedgerService
             }
             abort_if($tx->flow === EconomicActivityService::TAX_FLOW, 422, 'Clear the sales-tax purpose before changing its allocation.');
             $before = Allocation::where('transaction_id', $tx->id)->get()->toArray();
+            app(AttributionService::class)->invalidate($tx, 'legacy_split_replaced');
             Allocation::where('transaction_id', $tx->id)->delete();
             foreach ($splits as $split) {
                 Allocation::create(['transaction_id' => $tx->id, ...$split]);
@@ -194,11 +213,11 @@ class LedgerService
             $query->whereDate('t.posted_on', '<=', $end);
         }
 
-        $entries = $query->select(['t.*', 'trajectory_allocations.amount_cents as allocated_cents'])->orderBy('t.posted_on')->get()->map(function ($row) use ($space): array {
+        $entries = $query->select(['t.*', 'trajectory_allocations.id as allocation_id', 'trajectory_allocations.amount_cents as allocated_cents'])->orderBy('t.posted_on')->get()->map(function ($row) use ($space): array {
             $own = (int) $row->space_id === $space->id;
 
             // Shared allocations disclose neither the source account nor the unsplit amount.
-            return ['id' => (int) $row->id, 'date' => substr($row->posted_on, 0, 10), 'amount_cents' => (int) $row->allocated_cents,
+            return ['id' => (int) $row->id, 'allocation_id' => (int) $row->allocation_id, 'date' => substr($row->posted_on, 0, 10), 'amount_cents' => (int) $row->allocated_cents,
                 'merchant' => $own ? decrypt($row->merchant, false) : 'Shared allocation',
                 'category' => $row->category, 'flow' => $row->flow, 'reviewed' => (bool) $row->reviewed,
                 'face_punched' => (bool) $row->face_punched, 'bullshit_spending' => (bool) $row->bullshit_spending,
@@ -206,6 +225,6 @@ class LedgerService
                 'explanation' => $own ? $row->explanation : 'Only your allocated amount is visible.'];
         })->all();
 
-        return app(SalesTaxService::class)->decorateEntries($space, $entries);
+        return app(AttributionService::class)->decorateEntries($space, app(SalesTaxService::class)->decorateEntries($space, $entries));
     }
 }

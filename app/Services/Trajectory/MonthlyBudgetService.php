@@ -39,7 +39,7 @@ class MonthlyBudgetService
             if ($data['effective_on'] > $end) {
                 continue;
             }
-            $key = $purpose.'|'.$category;
+            $key = $purpose.'|'.($data['program_record_id'] ?? 0).'|'.$category;
             $groups[$key][] = ['record' => $record, 'data' => $data];
         }
 
@@ -80,6 +80,7 @@ class MonthlyBudgetService
                     $purposeMissing[$purpose][] = $issue;
                 }
                 $selected[] = ['id' => $record->id, 'purpose' => $purpose, 'category' => $data['category'], 'monthly_cents' => $data['monthly_cents'],
+                    'program_record_id' => $data['program_record_id'] ?? null,
                     'effective_on' => $data['effective_on'], 'ends_on' => $endsOn, 'reviewed' => ($data['reviewed'] ?? false) === true];
             }
         }
@@ -127,6 +128,9 @@ class MonthlyBudgetService
         $ids = [];
         foreach ($rows->where('category', 'payroll') as $parent) {
             foreach ($rows->whereIn('category', ['owner_payroll', 'studio_payroll', 'event_payroll']) as $role) {
+                if ((int) ($parent['program_record_id'] ?? 0) !== (int) ($role['program_record_id'] ?? 0)) {
+                    continue;
+                }
                 if (max($start, $parent['effective_on'], $role['effective_on']) <= min($end, $parent['ends_on'] ?? $end, $role['ends_on'] ?? $end)) {
                     $ids[] = $parent['id'];
                     $ids[] = $role['id'];

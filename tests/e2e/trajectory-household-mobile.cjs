@@ -6,10 +6,18 @@ const { chromium } = require('playwright');
 const base = path.resolve(__dirname, '../..');
 function fixture() {
   let html = fs.readFileSync(path.join(base, 'resources/views/trajectory/index.blade.php'), 'utf8');
-  html = html.replace(/@vite\([^\n]+\)/, '<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/household-mobile.css">');
+  html = html.replace(/^@php\([^\n]+\)\n/, '').replace(/@if\(isset\(\$trajectorySurface\)[\s\S]*?@endif/, '');
+  html = html.replace(/@vite\([^\n]+\)/, '<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/household-mobile.css"><link rel="stylesheet" href="/visual-finance.css">');
   html = html.replace(/data-spaces="[^"]*"/, 'data-spaces="[]"');
-  html = html.replace(/@foreach\([\s\S]*?@endforeach/, ['overview', 'budget', 'assets', 'bud'].map(x => `<button data-tab="${x}">${x}</button>`).join(''));
-  html = html.replace(/@foreach\([\s\S]*?@endforeach/, ['day', 'month', 'quarter', 'year'].map(x => `<button data-range="${x}">${x}</button>`).join(''));
+  // Render each named Blade container, rather than depending on loop order.
+  // Both navigation surfaces exercise the same five production destinations.
+  const destinations = [['overview','Home'], ['analysis','Analysis'], ['budget','Budget'], ['planning','Plan'], ['accounts','Accounts']];
+  const primary = destinations.map(([key, label]) => `<button type="button" data-tab="${key}">${label}</button>`).join('');
+  html = html.replace(/(<nav class="tr-tabs tr-primary-navigation"[^>]*>)[\s\S]*?<\/nav>/, `$1${primary}</nav>`);
+  const tools = [['transactions','Review transactions'],['money-flow','Money flow'],['history','Cash flow & history'],['bills','Bills & goals'],['medical','Medical sharing'],['assets','Wealth & debt'],['business','Business'],['anomalies','Category anomalies'],['profit','Profit & loss'],['sales-tax','Sales tax'],['tax','Tax review'],['companies','Businesses'],['legacy-overview','Detailed forecast']];
+  html = html.replace(/(<details class="tr-nav-tools">)[\s\S]*?<\/details>/, `$1<summary>More tools</summary><nav class="tr-tabs" aria-label="Financial tools">${tools.map(([key,label])=>`<button data-tab="${key}">${label}</button>`).join('')}</nav></details>`);
+  html = html.replace(/(<div id="tr-range"[^>]*>)[\s\S]*?<\/div>/, `$1${['day','week','month','quarter','year','all','custom'].map(key => `<button type="button" data-range="${key}">${key}</button>`).join('')}</div>`);
+  html = html.replace(/(<nav class="vf-mobile-nav"[^>]*>)[\s\S]*?<\/nav>/, `$1${primary}</nav>`);
   html = html.replace(/\{\{\s*route\('([^']+)'\)[^}]*\}\}/g, (_, route) => `/${route}`);
   html = html.replace(/\{\{\s*asset\('([^']+)'\)\s*\}\}/g, (_, asset) => `/${asset}`);
   html = html.replace(/\{\{[\s\S]*?\}\}/g, 'Fictional');
@@ -28,7 +36,7 @@ async function main() {
         const landing = fs.readFileSync(path.join(base, 'resources/views/trajectory/welcome.blade.php'), 'utf8').replace(/\{\{\s*route\('([^']+)'\)[^}]*\}\}/g, (_, name) => '/' + name).replace(/\{\{\s*asset\('([^']+)'\)\s*\}\}/g, (_, name) => '/' + name);
         return route.fulfill({contentType: 'text/html', body: landing});
       }
-      if (['/app.css', '/household-mobile.css', '/household-mobile.js'].includes(name)) return route.fulfill({path: path.join(base, 'resources/js/trajectory', name.slice(1)), contentType: name.endsWith('.css') ? 'text/css' : 'application/javascript'});
+      if (['/app.css', '/household-mobile.css', '/visual-finance.css', '/household-mobile.js'].includes(name)) return route.fulfill({path: path.join(base, 'resources/js/trajectory', name.slice(1)), contentType: name.endsWith('.css') ? 'text/css' : 'application/javascript'});
       if (name === '/images/marketplace/studio.jpg') return route.fulfill({path: path.join(base, 'public', name)});
       return route.fulfill({status: 404, body: ''});
     });
@@ -52,10 +60,23 @@ async function main() {
     await page.locator('#tr-mobile-close').focus();
     await page.keyboard.press('Shift+Tab');
     assert.equal(await page.locator('#tr-mobile-drawer').evaluate(el => el.contains(document.activeElement)), true);
-    await page.locator('[data-tab="budget"]').click();
+    assert.deepEqual(await page.locator('.tr-primary-navigation [data-tab]').allTextContents(), ['Home','Analysis','Budget','Plan','Accounts']);
+    assert.deepEqual(await page.locator('.vf-mobile-nav [data-tab]').allTextContents(), ['Home','Analysis','Budget','Plan','Accounts']);
+    await page.locator('#tr-mobile-drawer [data-tab="budget"]').click();
     assert.equal(await page.locator('#tr-page-title').textContent(), 'budget');
     assert.equal(await page.locator('#tr-mobile-menu').getAttribute('aria-expanded'), 'false');
-    assert.equal(await page.locator('[data-range]').count(), 4);
+    assert.deepEqual(await page.locator('[data-range]').evaluateAll(nodes => nodes.map(node => node.dataset.range)), ['day','week','month','quarter','year','all','custom']);
+    await page.locator('.vf-mobile-nav [data-tab="analysis"]').click();
+    assert.equal(await page.locator('#tr-page-title').textContent(), 'analysis');
+    assert.equal(await page.locator('#tr-mobile-menu').getAttribute('aria-expanded'), 'false');
+    await page.locator('#tr-mobile-menu').click();
+    await page.locator('.tr-nav-tools > summary').click();
+    await page.locator('#tr-mobile-drawer [data-tab="legacy-overview"]').click();
+    assert.equal(await page.locator('#tr-page-title').textContent(), 'legacy-overview');
+    await page.locator('#tr-mobile-menu').click();
+    await page.locator('#tr-mobile-drawer [data-tab="accounts"]').click();
+    assert.equal(await page.locator('#tr-page-title').textContent(), 'accounts');
+    assert.equal(await page.locator('#tr-mobile-menu').getAttribute('aria-expanded'), 'false');
     await page.locator('#tr-mobile-menu').click();
     await page.mouse.click(383, 400);
     assert.equal(await page.locator('#tr-mobile-menu').getAttribute('aria-expanded'), 'false');
@@ -79,7 +100,7 @@ async function main() {
     assert.equal(await page.getByRole('link', {name: 'Contact us', exact: true}).getAttribute('href'), '/platform.contact');
     assert.equal(await page.locator('img').first().getAttribute('src'), '/images/marketplace/studio.jpg');
     assert.equal(await page.getByRole('link', {name: 'Privacy', exact: true}).getAttribute('href'), '/legal.privacy');
-    console.log('26 fictional mobile/landing browser assertions passed: splash, skip, drawer, focus, overlay, responsive controls, reduced motion, local image and genuine contact/legal links.');
+    console.log('Fictional mobile/landing assertions passed: five primary destinations, phone navigation, splash, skip, drawer, focus, overlay, reporting periods, reduced motion, local image and genuine contact/legal links.');
   } finally { await browser.close(); }
 }
 main().catch(error => {console.error(error);process.exitCode = 1;});

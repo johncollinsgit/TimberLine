@@ -3,11 +3,19 @@ import {expect} from '@playwright/test';
 import {join} from 'node:path';
 import {readFile} from 'node:fs/promises';
 
+async function selectAnnualRange(page){
+  await page.locator('#tr-range [data-range="year"]').click();
+  await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
+}
+
 export async function verifyProfitLoss({page,fixture,width,name,evidence}){
   const origin=new URL(page.url()).origin;
   await page.goto(`${origin}/trajectory?space=${fixture.company_id}&tab=profit`);
   if(await page.locator('#tr-splash-skip').isVisible())await page.locator('#tr-splash-skip').click();
   await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
+  // Home now defaults to this month. These fixture expectations intentionally
+  // verify the complete annual accounting statement, not the monthly snapshot.
+  await selectAnnualRange(page);
   const report=page.locator('.tr-pnl'),statement=report.locator('.tr-pnl-statement');
   await expect(report.locator('.tr-pnl-kpi')).toHaveCount(4);
   await expect(report.locator('.tr-pnl-kpi').last()).toContainText(fixture.pnl_net);
@@ -31,7 +39,7 @@ export async function verifyProfitLoss({page,fixture,width,name,evidence}){
     await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:join(evidence,`${name}-${width}-profit-loss-before.png`),fullPage:true});
     await page.locator('#tr-content').evaluate((node,original)=>node.innerHTML=original,original);
     // Restore the real component and Chart.js event state after baseline capture.
-    await page.reload();await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
+    await page.reload();await page.locator('#tr-content:not([aria-busy="true"])').waitFor();await selectAnnualRange(page);
   }
   await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:join(evidence,`${name}-${width}-profit-loss.png`),fullPage:true});
   await report.locator('.tr-pnl-kpis').screenshot({path:join(evidence,`${name}-${width}-profit-loss-kpis.png`),style:'.tr-toolbar{visibility:hidden!important}'});
@@ -73,7 +81,7 @@ export async function verifyProfitLoss({page,fixture,width,name,evidence}){
 
 
 export async function verifyProfitAccountLedger({page,fixture,width,name,evidence,navigate=true}){
-  if(navigate){await page.goto(new URL(`/trajectory?space=${fixture.company_id}&tab=profit`,page.url()).href);if(await page.locator('#tr-splash-skip').isVisible())await page.locator('#tr-splash-skip').click();await page.locator('#tr-content:not([aria-busy="true"])').waitFor();}
+  if(navigate){await page.goto(new URL(`/trajectory?space=${fixture.company_id}&tab=profit`,page.url()).href);if(await page.locator('#tr-splash-skip').isVisible())await page.locator('#tr-splash-skip').click();await page.locator('#tr-content:not([aria-busy="true"])').waitFor();await selectAnnualRange(page);}
   const report=page.locator('.tr-pnl'),modal=page.locator('#tr-dialog'),pattern='**/profit-loss/accounts/transactions?*';
   let mode='complete',release=null,requests=0;
   const base={snapshot_id:1,account_key:'sales',account:{id:'300',label:'Candle sales'},period:{start:fixture.pnl_year_start,end:fixture.today},basis:'accrual',currency:'USD',source:'QuickBooks General Ledger',statement_amount_cents:5050000,activity_cents:5050000,difference_cents:0,reconciles:true,status:'complete',notes:[],rows:[{date:fixture.today,transaction_type:'Invoice',document_number:'GL-1',name:'Fictional ledger customer',memo:'Candle sale <source>',amount_cents:6000000},{date:fixture.today,transaction_type:'Credit Memo',document_number:'GL-2',name:'Fictional ledger customer',memo:'Returned candles',amount_cents:-950000}]};

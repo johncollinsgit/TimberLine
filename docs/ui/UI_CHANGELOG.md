@@ -3728,3 +3728,14 @@ separate from selected-period charges, economic costs and projections. Coverage,
 different cutoffs, currency mismatches, conflicts and missing observations stay
 explicit. The three-column table fits enhanced phone and desktop layouts; source
 IDs and hashes are retained as backend metadata.
+# 2026-11-18 — Trajectory visual finance and purchase conversations
+
+Reorganized the financial workspace around Home, Analysis, Budget, Plan and
+Accounts, with existing accounting and review tools retained. Added coordinated
+source/category pies, annual/monthly/weekly comparisons, nested drilldowns,
+largest-first editable transactions, scoped program attribution and budget
+allowances including pending commitments. Added contextual Ask Everbranch,
+purchase conversations, an expense inbox and separate Personal/Business web-app
+installation surfaces. Category colors remain stable across views; uncertain
+history and budget targets stay visibly unavailable. See the visual-finance and
+attribution runbooks for financial definitions and physical-phone acceptance.

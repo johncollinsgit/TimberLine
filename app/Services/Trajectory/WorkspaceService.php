@@ -16,7 +16,10 @@ class WorkspaceService
 {
     public function categories(Space $space): array
     {
-        return array_values(array_unique([...config('trajectory.categories'), ...array_keys($space->settings['income_categories'] ?? [])]));
+        $defined = Record::where('space_id', $space->id)->where('kind', 'category_definition')->where('active', true)->get()
+            ->map(fn ($record) => $record->data['key'])->all();
+
+        return array_values(array_unique([...config('trajectory.categories'), ...array_keys($space->settings['income_categories'] ?? []), ...$defined]));
     }
 
     public function manage(User $user, Space $space): void

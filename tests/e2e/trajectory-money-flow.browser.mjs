@@ -24,11 +24,35 @@ try{
   await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
   const csrf=(await(await context.request.get(origin+'/login')).text()).match(/<meta name="csrf-token" content="([^"]+)"/)?.[1];assert.ok(csrf);
   assert.ok((await context.request.post(origin+'/login',{form:{email:'flow@fixture.invalid',password:'Fictional-flow-only-2028!',_token:csrf},headers:{Accept:'application/json'}})).ok());
-  const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(12000);
+  const page=await context.newPage(),errors=[],analysisReads=[];page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(12000);
+  page.on('request',request=>{if(request.method()==='GET'&&new URL(request.url()).pathname.endsWith('/analysis'))analysisReads.push(request.url());});
+  // Exercise the actual app's minute callback without sleeping or depending on
+  // wall-clock timing. Other timers and all authenticated reads remain real.
+  await page.addInitScript(()=>{window.trajectoryMinuteReads=[];const original=window.setInterval.bind(window);window.setInterval=(callback,delay,...args)=>{if(delay===60000){window.trajectoryMinuteReads.push(()=>callback(...args));return original(()=>{},delay);}return original(callback,delay,...args);};});
   for(const width of [390,1440]){
    await page.setViewportSize({width,height:950});await page.goto(origin+'/fictional-prior-404');await page.goto(origin+'/trajectory');
    if(await page.locator('#tr-splash-skip').isVisible())await page.locator('#tr-splash-skip').click();
    await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
+   const minuteRead=()=>page.evaluate(()=>window.trajectoryMinuteReads.forEach(callback=>callback()));
+   const initialReads=analysisReads.length;
+   await page.locator('#tr-account-filter').focus();await minuteRead();
+   await page.waitForTimeout(60);assert.equal(analysisReads.length,initialReads,'Focused account control suppresses the app background read');
+   await page.locator('.tr-assistant-launch').click();await minuteRead();
+   await page.waitForTimeout(60);assert.equal(analysisReads.length,initialReads,'Open context-aware Ask suppresses the app background read');
+   await page.locator('[data-assistant-close]').click();await page.evaluate(()=>document.activeElement.blur());
+   const oldHome=await page.locator('#tr-content > .vf-finance').elementHandle(),historyBefore=await page.evaluate(()=>({state:history.state,length:history.length,scroll:scrollY}));
+   await minuteRead();await expect.poll(()=>analysisReads.length).toBe(initialReads+1);
+   await expect.poll(()=>oldHome.evaluate(node=>node.isConnected)).toBe(false);
+   assert.deepEqual(await page.evaluate(()=>({state:history.state,length:history.length,scroll:scrollY})),historyBefore,'An actual foreground refresh preserves browser Back metadata and position');
+   const navigateSection=async label=>{
+    if(width<700&&await page.locator('#tr-mobile-menu').getAttribute('aria-expanded')!=='true')await page.locator('#tr-mobile-menu').click();
+    const drawer=page.locator('#tr-mobile-drawer'),button=drawer.locator('[data-tab]').filter({hasText:label});
+    if(await button.evaluate(node=>Boolean(node.closest('.tr-nav-tools:not([open])'))))await drawer.locator('.tr-nav-tools > summary').click();
+    await button.click();
+   };
+   // The compact Home is covered by the visual-finance browser. Preserve this
+   // older forecast's lazy-chart and details coverage under its new tool entry.
+   await navigateSection('Detailed forecast');
    await expect(page.locator('#tr-overview-explore')).not.toHaveAttribute('open','');
    await expect(page.getByRole('heading',{name:'What does your income need to cover?'})).toBeVisible();
    await page.locator('#tr-overview-explore > summary').click();
@@ -38,8 +62,7 @@ try{
    await expect(page.locator('#tr-overview-explore')).not.toHaveAttribute('open','');
    await page.evaluate(()=>scrollTo(0,0));
    await page.screenshot({path:join(evidence,`${name}-${width}-overview.png`),fullPage:true});
-   if(width<700)await page.locator('#tr-mobile-menu').click();
-   await page.getByRole('button',{name:'Money flow',exact:true}).click();
+   await navigateSection('Money flow');
    await page.getByRole('heading',{name:'Follow your money'}).waitFor();
    await page.getByRole('heading',{name:'Last year and the monthly trend'}).waitFor();
    await expect(page.locator('#tr-flow-trend')).not.toBeAttached(); // Unknown tax cost prevents a fabricated monthly economic total.
@@ -148,26 +171,26 @@ try{
    await page.locator('#tr-account-filter').selectOption('');await page.locator('#tr-range [data-range="month"]').click();
    await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
    await page.locator('#tr-space-tabs [data-scope="business"]').click();await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
-   if(width<700)await page.locator('#tr-mobile-menu').click();await page.getByRole('button',{name:'Money flow',exact:true}).click();
+   await navigateSection('Money flow');
    await expect(page.getByRole('button',{name:'Inflows',exact:true})).not.toBeAttached();
    await expect(page.locator('.tr-family-inflows')).not.toBeAttached();
    await expect(page.getByRole('button',{name:'Spending',exact:true})).toHaveAttribute('aria-pressed','true');
    await page.locator('#tr-space-tabs [data-scope="personal"]').click();await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
    await page.locator('#tr-range [data-range="year"]').click();await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
    // Account activity retains its original selector through fresh, scoped history restoration.
-   if(width<700)await page.locator('#tr-mobile-menu').click();await page.getByRole('button',{name:'Accounts',exact:true}).click();
+   await navigateSection('Accounts');
    await page.locator('.tr-row').filter({has:page.getByText('Fictional checking',{exact:true})}).getByRole('button',{name:'Activity',exact:true}).click();
    await page.getByRole('heading',{name:'Review transactions',level:1,exact:true}).waitFor();
    await expect(page.getByRole('row').filter({hasText:'Fictional employer'})).toBeVisible();
    await expect(page.getByRole('row').filter({hasText:'Fictional card purchase'})).not.toBeAttached();
-   if(width<700)await page.locator('#tr-mobile-menu').click();await page.getByRole('button',{name:'Money flow',exact:true}).click();
+   await navigateSection('Money flow');
    const accountRestore=page.waitForRequest(request=>request.method()==='POST'&&new URL(request.url()).pathname.endsWith('/evidence'));
    await page.locator('#tr-back').click();assert.equal((await accountRestore).postDataJSON().account_id,fixture.cash_id);
    await page.getByRole('heading',{name:'Review transactions',level:1,exact:true}).waitFor();
    await expect(page.getByRole('row').filter({hasText:'Fictional employer'})).toBeVisible();
    await expect(page.getByRole('row').filter({hasText:'Fictional card purchase'})).not.toBeAttached();
    // Per-card source activity uses full credit amounts and a separate economic allocation.
-   if(width<700)await page.locator('#tr-mobile-menu').click();await page.getByRole('button',{name:'Wealth & debt',exact:true}).click();
+   await navigateSection('Wealth & debt');
    await page.getByRole('heading',{name:'Credit card activity',exact:true}).waitFor();
    const annualPanel=page.locator('.tr-lender-ytd');
    await expect(annualPanel).toContainText(`Report cutoff: ${fixture.today}.`);
