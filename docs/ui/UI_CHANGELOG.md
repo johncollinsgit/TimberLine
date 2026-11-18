@@ -5,6 +5,7 @@ the full forecast/history Dashboard. A separate authorized context supplies edit
 catalogs and the same current monthly bill evidence. Accounts and advanced planning
 load their full details when opened. The closed expense badge requests only its
 unread count; opening the inbox still loads current expense and budget details.
+Phone budget details keep currency amounts on one line at narrow screen widths.
 
 ## 2026-11-18 · Simpler monthly budgets
 
