@@ -117,6 +117,7 @@ test('bank account ownership survives refresh without exposing sibling accounts'
     config(['trajectory.plaid.client_id' => 'test', 'trajectory.plaid.secret' => 'test']);
     Http::fake([
         '*/transactions/sync' => Http::response(['accounts' => [['account_id' => 'one', 'name' => 'Software', 'type' => 'depository', 'balances' => ['current' => 100, 'iso_currency_code' => 'USD']]], 'added' => [], 'modified' => [], 'removed' => [], 'next_cursor' => 'new', 'has_more' => false]),
+        '*/accounts/get' => Http::response(['accounts' => [['account_id' => 'one', 'name' => 'Software', 'type' => 'depository', 'balances' => ['current' => 100, 'iso_currency_code' => 'USD']]]]),
         '*/liabilities/get' => Http::response(['liabilities' => []]),
         '*/investments/holdings/get' => Http::response(['accounts' => []]),
     ]);

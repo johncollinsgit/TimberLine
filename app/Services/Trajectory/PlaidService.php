@@ -6,6 +6,7 @@ use App\Models\Trajectory\Account;
 use App\Models\Trajectory\Connection;
 use App\Models\Trajectory\Space;
 use App\Models\Trajectory\Transaction;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
@@ -198,13 +199,57 @@ class PlaidService
                 }
             }
             abort_if($response['has_more'], 503, 'Bank history exceeds this sync batch.');
-            DB::transaction(function () use ($connection, $changes, $accounts, $cursor): void {
+            $balanceOnly = ! collect($changes)->contains(fn (array $page): bool => ! empty($page['added']) || ! empty($page['modified']) || ! empty($page['removed']));
+            if ($balanceOnly) {
+                // A caught-up transaction cursor can return no accounts, even when
+                // balances have changed. Use the already-consented account census.
+                $census = $this->call('/accounts/get', ['access_token' => $connection->access_token]);
+                abort_unless(isset($census['accounts']) && is_array($census['accounts']), 503, 'Bank account balances are unavailable.');
+                $accounts = [];
+                foreach ($census['accounts'] as $account) {
+                    $id = $account['account_id'] ?? null;
+                    abort_unless(is_string($id) && $id !== '' && ! isset($accounts[$id]), 503, 'Bank account balances are unavailable.');
+                    $accounts[$id] = $account;
+                }
+            }
+            DB::transaction(function () use ($connection, $changes, $accounts, $cursor, $balanceOnly): void {
                 $connection = Connection::whereKey($connection->id)->lockForUpdate()->firstOrFail();
                 if ($connection->status === 'disconnected') {
                     return;
                 }
                 $unassigned = false;
+                $owner = $balanceOnly ? User::findOrFail($connection->coverage['owner_user_id'] ?? Space::findOrFail($connection->space_id)->owner_user_id) : null;
                 foreach ($accounts as $remoteId => $data) {
+                    if ($balanceOnly) {
+                        $sourceKey = 'plaid:'.$connection->id.':'.$remoteId;
+                        $account = Account::where('source_key', $sourceKey)->lockForUpdate()->first();
+                        $kind = match ($data['type'] ?? null) {
+                            'depository' => 'cash', 'credit' => 'credit', 'loan' => 'loan', 'investment' => 'investment', default => null,
+                        };
+                        if (! $account) {
+                            $targetId = $connection->coverage['account_spaces'][$remoteId] ?? null;
+                            if (! $targetId) {
+                                // A census cannot implicitly admit accounts from an older login.
+                                $unassigned = $unassigned || ($kind !== null && ($data['balances']['iso_currency_code'] ?? null) === 'USD');
+
+                                continue;
+                            }
+                            $account = new Account([
+                                'source_key' => $sourceKey, 'connection_id' => $connection->id, 'space_id' => $targetId,
+                                'name' => $data['name'].(empty($data['mask']) ? '' : ' (…'.$data['mask'].')'),
+                                'kind' => $kind, 'currency' => 'USD',
+                            ]);
+                        }
+                        abort_unless($account->source_key === $sourceKey && $account->connection_id === $connection->id, 409, 'Bank account connection changed. Review its mapping before syncing.');
+                        app(FinanceAccess::class)->authorize($owner, Space::findOrFail($account->space_id));
+                        abort_unless($kind === $account->kind && $account->currency === 'USD' && ($data['balances']['iso_currency_code'] ?? null) === 'USD', 409, 'Bank account type or currency changed. Review it before syncing.');
+                        $account->fill([
+                            'balance_cents' => isset($data['balances']['current']) ? Money::cents($data['balances']['current']) : null,
+                            'observed_at' => now(),
+                        ])->save();
+
+                        continue;
+                    }
                     if (($data['balances']['iso_currency_code'] ?? null) !== 'USD') {
                         continue;
                     }
@@ -244,9 +289,12 @@ class PlaidService
                     }
                     $account->update(['history_start' => Transaction::where('account_id', $account->id)->where('removed', false)->min('posted_on')]);
                 }
+                if ($balanceOnly && $unassigned) {
+                    $connection->coverage = [...($connection->coverage ?? []), 'require_account_mapping' => true];
+                }
                 $connection->update(['cursor' => $cursor, 'synced_at' => now(), 'status' => $unassigned ? 'mapping_required' : 'connected']);
             });
-            if ($space->kind === 'household') {
+            if ($space->kind === 'household' && $connection->refresh()->status !== 'disconnected') {
                 $this->liabilities($connection);
                 $this->investments($connection);
             }

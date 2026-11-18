@@ -170,6 +170,7 @@ try{
    if(width<700)await page.locator('#tr-mobile-menu').click();await page.getByRole('button',{name:'Wealth & debt',exact:true}).click();
    await page.getByRole('heading',{name:'Credit card activity',exact:true}).waitFor();
    const annualPanel=page.locator('.tr-lender-ytd');
+   await expect(annualPanel).toContainText(`Report cutoff: ${fixture.today}.`);
    await expect(annualPanel).toContainText('$69.12');await expect(annualPanel).toContainText('2 of 2');await expect(annualPanel).toContainText('different statement cutoffs');
    assert.ok(await annualPanel.locator('.tr-table-wrap').evaluate(node=>node.scrollWidth<=node.clientWidth+1),'Annual lender table fits enhanced phone/desktop without horizontal panning');
    await annualPanel.screenshot({path:join(evidence,`${name}-${width}-lender-interest-ytd.png`)});
