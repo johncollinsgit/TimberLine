@@ -1630,3 +1630,92 @@ PHP;
         } rmdir($dir);
     }
 });
+
+it('recovers exact Trajectory source identity after the account collation committed and preserves reviewed splits', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Requires disposable MySQL.');
+    }
+    if (! app()->environment('testing') || ! preg_match('/(^|_)(ci|test|testing)(_|$)/i', DB::connection()->getDatabaseName())
+        || ! in_array(DB::connection()->getConfig('host'), ['127.0.0.1', 'localhost'], true)) {
+        throw new RuntimeException('Refusing identity recovery outside disposable local MySQL.');
+    }
+    $foundation = require database_path('migrations/2026_09_14_120000_create_trajectory_tables.php');
+    $foundation->up();
+    $space = \App\Models\Trajectory\Space::create(['tenant_id' => 991819, 'owner_user_id' => 991819, 'kind' => 'household', 'name' => 'Fictional exact identity', 'timezone' => 'UTC']);
+    $foreign = \App\Models\Trajectory\Space::create(['tenant_id' => 991820, 'owner_user_id' => 991820, 'kind' => 'business', 'name' => 'Fictional shared allocation', 'timezone' => 'UTC']);
+    $prefix = 'plaid:fictional:'.bin2hex(random_bytes(5)).':';
+    DB::statement('ALTER TABLE trajectory_accounts MODIFY source_key VARCHAR(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL');
+    DB::statement('ALTER TABLE trajectory_transactions MODIFY source_key VARCHAR(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL, MODIFY pending_source_key VARCHAR(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL');
+    $account = \App\Models\Trajectory\Account::create(['space_id' => $space->id, 'source_key' => $prefix.'AccountAbC', 'kind' => 'cash', 'name' => 'Fictional checking', 'balance_cents' => 50000]);
+    $ledger = app(\App\Services\Trajectory\LedgerService::class);
+    $original = ['id' => 'TransactionAbC', 'date' => '2028-02-01', 'merchant' => 'Fictional reviewed purchase', 'amount_cents' => -1000];
+    $ledger->ingest($account, [$original]);
+    $reviewed = \App\Models\Trajectory\Transaction::where('account_id', $account->id)->firstOrFail();
+    $reviewed->update(['reviewed' => true, 'category' => 'materials', 'face_punched' => true, 'bullshit_spending' => true, 'explanation' => 'Fictional reviewed purpose', 'version' => 7]);
+    \App\Models\Trajectory\Allocation::where('transaction_id', $reviewed->id)->update(['amount_cents' => -250]);
+    \App\Models\Trajectory\Allocation::create(['transaction_id' => $reviewed->id, 'space_id' => $foreign->id, 'amount_cents' => -750]);
+    $before = $reviewed->fresh()->getRawOriginal();
+    $allocations = \App\Models\Trajectory\Allocation::where('transaction_id', $reviewed->id)->orderBy('id')->get()->toArray();
+    // Durable partial state: the first table altered, transactions still fold case.
+    DB::statement('ALTER TABLE trajectory_accounts MODIFY source_key VARCHAR(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL');
+    $migration = require database_path('migrations/2026_11_18_030000_make_trajectory_source_identity_exact.php');
+    $migration->up();
+    $migration->up();
+    $migration->down();
+    foreach (['trajectory_accounts' => ['source_key'], 'trajectory_transactions' => ['source_key', 'pending_source_key']] as $table => $columns) {
+        foreach ($columns as $column) {
+            expect(DB::selectOne('SELECT COLLATION_NAME AS name FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [$table, $column])->name)->toBe('utf8mb4_0900_bin');
+        }
+    }
+    expect(Schema::hasIndex('trajectory_accounts', 'traj_account_source'))->toBeTrue()
+        ->and(Schema::hasIndex('trajectory_transactions', 'traj_tx_source'))->toBeTrue();
+    $caseAccount = \App\Models\Trajectory\Account::firstOrCreate(['source_key' => $prefix.'accountAbC'], ['space_id' => $space->id, 'kind' => 'cash', 'name' => 'Fictional distinct account', 'balance_cents' => 60000]);
+    expect($caseAccount->id)->not->toBe($account->id)
+        ->and(\App\Models\Trajectory\Account::where('source_key', $account->source_key)->value('id'))->toBe($account->id);
+    $variant = ['id' => 'transactionAbC', 'date' => '2028-02-04', 'merchant' => 'Fictional distinct purchase', 'amount_cents' => -2200];
+    expect($ledger->ingest($account, [$variant]))->toBe(1);
+    $distinct = \App\Models\Trajectory\Transaction::where('source_key', $account->source_key.':'.$variant['id'])->firstOrFail();
+    expect($distinct->id)->not->toBe($reviewed->id)
+        ->and($reviewed->fresh()->getRawOriginal())->toBe($before)
+        ->and(\App\Models\Trajectory\Allocation::where('transaction_id', $reviewed->id)->orderBy('id')->get()->toArray())->toBe($allocations);
+    expect($ledger->ingest($account, [$original]))->toBe(0)
+        ->and($ledger->ingest($account, [[...$variant, 'amount_cents' => -2300]]))->toBe(1)
+        ->and($distinct->fresh()->amount_cents)->toBe(-2300)
+        ->and($reviewed->fresh()->getRawOriginal())->toBe($before);
+    // The exact same WHERE path used for provider removals cannot touch the case sibling.
+    \App\Models\Trajectory\Transaction::where('account_id', $account->id)->where('source_key', $account->source_key.':'.$variant['id'])->update(['removed' => true]);
+    expect($reviewed->fresh()->removed)->toBeFalse()->and($distinct->fresh()->removed)->toBeTrue();
+    DB::table('trajectory_allocations')->whereIn('transaction_id', [$reviewed->id, $distinct->id])->delete();
+    DB::table('trajectory_transactions')->where('account_id', $account->id)->delete();
+    DB::table('trajectory_accounts')->whereIn('id', [$account->id, $caseAccount->id])->delete();
+    DB::table('trajectory_spaces')->whereIn('id', [$space->id, $foreign->id])->delete();
+});
+
+it('posts only the exact case-sensitive pending Trajectory source and retains its case sibling', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Requires disposable MySQL.');
+    }
+    if (! app()->environment('testing') || ! preg_match('/(^|_)(ci|test|testing)(_|$)/i', DB::connection()->getDatabaseName())
+        || ! in_array(DB::connection()->getConfig('host'), ['127.0.0.1', 'localhost'], true)) {
+        throw new RuntimeException('Refusing pending-source test outside disposable local MySQL.');
+    }
+    $migration = require database_path('migrations/2026_11_18_030000_make_trajectory_source_identity_exact.php');
+    $migration->up();
+    $space = \App\Models\Trajectory\Space::create(['tenant_id' => 991821, 'owner_user_id' => 991821, 'kind' => 'household', 'name' => 'Fictional pending identity']);
+    $account = \App\Models\Trajectory\Account::create(['space_id' => $space->id, 'source_key' => 'plaid:fictional:'.bin2hex(random_bytes(5)), 'kind' => 'cash', 'name' => 'Fictional pending checking']);
+    $ledger = app(\App\Services\Trajectory\LedgerService::class);
+    $row = ['id' => 'PendingAbC', 'date' => '2028-02-01', 'merchant' => 'Fictional pending', 'amount_cents' => -500, 'pending' => true];
+    $ledger->ingest($account, [$row, [...$row, 'id' => 'pendingAbC', 'amount_cents' => -600]]);
+    $sibling = \App\Models\Trajectory\Transaction::where('source_key', $account->source_key.':PendingAbC')->firstOrFail();
+    $posted = \App\Models\Trajectory\Transaction::where('source_key', $account->source_key.':pendingAbC')->firstOrFail();
+    $before = $sibling->getRawOriginal();
+    expect($ledger->ingest($account, [[...$row, 'id' => 'PostedAbC', 'pending_id' => 'pendingAbC', 'amount_cents' => -650, 'pending' => false]]))->toBe(1)
+        ->and($posted->fresh()->source_key)->toBe($account->source_key.':PostedAbC')
+        ->and($posted->fresh()->pending_source_key)->toBe($account->source_key.':pendingAbC')
+        ->and($posted->fresh()->amount_cents)->toBe(-650)
+        ->and($sibling->fresh()->getRawOriginal())->toBe($before);
+    DB::table('trajectory_allocations')->whereIn('transaction_id', [$sibling->id, $posted->id])->delete();
+    DB::table('trajectory_transactions')->where('account_id', $account->id)->delete();
+    DB::table('trajectory_accounts')->where('id', $account->id)->delete();
+    DB::table('trajectory_spaces')->where('id', $space->id)->delete();
+});

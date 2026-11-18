@@ -12773,7 +12773,7 @@ CREATE TABLE `trajectory_accounts` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `space_id` bigint unsigned NOT NULL,
   `connection_id` bigint unsigned DEFAULT NULL,
-  `source_key` varchar(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_key` varchar(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
   `name` varchar(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `kind` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `balance_cents` bigint DEFAULT NULL,
@@ -12964,8 +12964,8 @@ CREATE TABLE `trajectory_transactions` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `space_id` bigint unsigned NOT NULL,
   `account_id` bigint unsigned NOT NULL,
-  `source_key` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `pending_source_key` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `source_key` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+  `pending_source_key` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
   `posted_on` date NOT NULL,
   `amount_cents` bigint NOT NULL,
   `merchant` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -14677,3 +14677,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (337,'2026_11_11_19
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (338,'2026_11_15_160000_create_team_event_performance_facts',54);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (339,'2026_11_16_030000_add_indexed_event_content_hashes',55);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (340,'2026_11_16_170000_add_event_customer_anchor_presence_indexes',56);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (341,'2026_11_18_030000_make_trajectory_source_identity_exact',57);

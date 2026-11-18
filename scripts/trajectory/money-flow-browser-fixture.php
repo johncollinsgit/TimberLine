@@ -8,6 +8,9 @@ if (! app()->environment('testing') || config('database.default') !== 'sqlite' |
 }
 $owner = App\Models\User::factory()->create(['name' => 'Fictional Flow Owner', 'email' => 'flow@fixture.invalid', 'email_verified_at' => now(), 'is_active' => true, 'password' => Illuminate\Support\Facades\Hash::make('Fictional-flow-only-2028!')]);
 [$space] = app(App\Services\Trajectory\PilotService::class)->prepare($owner, null, true);
+// Reload the database timezone default, just as the subsequent HTTP request does.
+// A newly created model otherwise uses UTC and authors future evidence after UTC midnight.
+$space->refresh();
 $cash = App\Models\Trajectory\Account::create(['space_id' => $space->id, 'source_key' => 'fictional:flow-cash', 'name' => 'Fictional checking', 'kind' => 'cash', 'balance_cents' => 500000, 'observed_at' => now(), 'history_start' => now()->subMonths(6)]);
 $card = App\Models\Trajectory\Account::create(['space_id' => $space->id, 'source_key' => 'fictional:flow-card', 'name' => 'Fictional card', 'kind' => 'credit', 'balance_cents' => 100000, 'observed_at' => now()]);
 $today = now($space->timezone)->startOfDay();

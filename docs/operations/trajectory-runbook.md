@@ -43,7 +43,11 @@ finance records are registered with global search or generic tenant exports.
   the provisioned Plaid environment before promising support. Relay uses this
   adapter, not an invented direct Relay API. Bank login occurs in Plaid Link.
 - Sync is queued, locked, idempotent, and commits its cursor only after a complete
-  pagination pass. Pending-to-posted changes retain corrections. An amended split
+  pagination pass. A caught-up pass also reads the existing consent’s account census
+  to refresh balances without rewriting transactions or allocations. New census
+  accounts require explicit mapping; changed account type/currency or lost financial
+  access stops the atomic update. An account-census failure leaves the cursor and
+  stored balances unchanged. Pending-to-posted changes retain corrections. An amended split
   amount returns to review. Disconnect removes the provider item and local token;
   it preserves transactions. Missing debt metadata remains manual setup.
 - Available debt metadata is a review suggestion. Mortgage principal/interest

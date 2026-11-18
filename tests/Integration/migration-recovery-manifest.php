@@ -260,6 +260,10 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['first encrypted Website column converted before the remaining JSON columns'],
     ],
+    '2026_11_18_030000_make_trajectory_source_identity_exact.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['account identity collation committed before transaction and pending identity conversion; reviewed allocations retained'],
+    ],
     '2026_09_14_120000_create_trajectory_tables.php' => [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['finance account tables retained before notification and valuation tables'],

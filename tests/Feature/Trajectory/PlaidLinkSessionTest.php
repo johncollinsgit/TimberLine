@@ -159,8 +159,12 @@ test('business sync does not request household investment or debt products', fun
     $space = ($this->business)();
     $connection = Connection::create(['space_id' => $space->id, 'external_id' => 'business-only-item', 'access_token' => 'private-existing-token', 'status' => 'connected']);
     config(['trajectory.plaid.link_space_ids' => []]);
-    Http::fake(['*/transactions/sync' => Http::response(['accounts' => [], 'added' => [], 'modified' => [], 'removed' => [], 'next_cursor' => 'next', 'has_more' => false])]);
+    Http::fake([
+        '*/transactions/sync' => Http::response(['accounts' => [], 'added' => [], 'modified' => [], 'removed' => [], 'next_cursor' => 'next', 'has_more' => false]),
+        '*/accounts/get' => Http::response(['accounts' => []]),
+    ]);
     app(PlaidService::class)->sync($connection);
-    Http::assertSentCount(1);
+    Http::assertSentCount(2);
     Http::assertSent(fn ($request) => str_ends_with($request->url(), '/transactions/sync'));
+    Http::assertSent(fn ($request) => str_ends_with($request->url(), '/accounts/get'));
 });
