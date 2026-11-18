@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createVisualFinance, financeBudgetRows, financeColor, financeSelectionRows, sortFinanceEntries} from '../../resources/js/trajectory/visual-finance.js';
+import {createVisualFinance, financeBudgetRows, financeBudgetPresentation, financeColor, financeSelectionRows, sortFinanceEntries} from '../../resources/js/trajectory/visual-finance.js';
 
 const esc = x => String(x ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');
 const precise = x => Number.isSafeInteger(x) ? `$${(x / 100).toFixed(2)}` : 'Unavailable';
@@ -173,4 +173,50 @@ test('background figures retain exact drilldown and do not apply after an interv
   await ui.refresh();assert.match(ui.render('analysis'),/Offline/);
   rejectBackground=false;assert.equal(await ui.refresh({background:true}),true);
   assert.doesNotMatch(ui.render('analysis'),/Offline/);
+});
+
+
+test('budget presentation explains each missing allowance without substituting zero or hiding a known plan', () => {
+  const row = {target_cents: null, planned_cents: 48000, remaining_cents: null, status: 'draft', reasons: ['draft', 'partial_period', 'tax_split_pending'], partial_period: true};
+  const draft = financeBudgetPresentation(row);
+  assert.equal(draft.value, 48000);assert.equal(draft.caption, 'Draft allowance');assert.equal(draft.action, 'Confirm budget…');
+  assert.deepEqual(draft.messages, ['Draft · needs confirmation', 'Dated plan · not a full-month allowance', 'Tax split pending']);
+  for (const [reason, message] of [['cash_not_recorded', 'Cash spending is not fully recorded'], ['category_review_pending', 'Spending categories still need review'], ['needs_opening_balance', 'Reviewed rollover opening needed'], ['needs_prior_month_close', 'Previous month must close before rollover is known'], ['overlapping_targets', 'Parent and child allowances overlap · review targets']]) {
+    const presentation = financeBudgetPresentation({target_cents: 35000, planned_cents: 35000, remaining_cents: null, reasons: [reason]});
+    assert.equal(presentation.value, 35000);assert.ok(presentation.messages.includes(message));
+  }
+  const unset = financeBudgetPresentation({status: 'not_budgeted', spent_cents: 700, remaining_cents: null});
+  assert.equal(unset.text, 'Set budget');assert.equal(unset.value, null);
+  const child = financeBudgetPresentation({uses_parent_budget: '0|food', parent_budget_label: 'Food', remaining_cents: null});
+  assert.equal(child.text, 'Uses parent budget');assert.equal(child.caption, 'Food');assert.equal(child.action, null);
+  const future = financeBudgetPresentation({target_cents: 35000, remaining_cents: null, reasons: ['cash_not_recorded', 'missing_history']}, {future: true});
+  assert.equal(future.value, 35000);assert.equal(future.caption, 'Approved monthly plan');assert.deepEqual(future.messages, ['Plan for a future month']);
+});
+
+test('budget cards show dated drafts and recorded-only grocery costs while preserving unknown remaining amounts', async () => {
+  const budgets = {future: false, rows: [
+    {key: '0|groceries', category: 'groceries', label: 'Groceries', target_cents: 140000, planned_cents: 140000, remaining_cents: null, spent_cents: 64000, reasons: ['cash_not_recorded'], source_notes: ['Cash <spending> is not yet known.']},
+    {key: '0|fuel', category: 'fuel', label: 'Fuel', target_cents: 35000, planned_cents: 35000, remaining_cents: null, spent_cents: 21000, category_review_pending: true, reasons: ['category_review_pending']},
+    {key: '0|materials', category: 'materials', label: 'Materials', target_cents: null, planned_cents: 45000, remaining_cents: null, spent_cents: 10000, status: 'draft', reasons: ['draft', 'partial_period'], partial_period: true, plan_period: {from: '2028-02-17', through: '2028-02-29'}},
+    {key: '0|education', category: 'education', label: 'Education', target_cents: null, remaining_cents: null, spent_cents: 5000, status: 'not_budgeted'},
+    {key: '0|travel', category: 'travel', label: 'Travel', target_cents: 50000, planned_cents: 50000, remaining_cents: null, spent_cents: null, reasons: ['missing_history']},
+  ]};
+  const {ui} = fixture(async path => path.includes('budget-envelopes') ? budgets : structuredClone(report));await ui.refresh();
+  const html = ui.render('budget');
+  assert.doesNotMatch(html, /Unavailable|\$0\.00/);assert.match(html, /\$1400\.00/);assert.match(html, /\$640\.00 recorded spending/);
+  assert.match(html, /Cash spending is not fully recorded/);assert.match(html, /\$210\.00 recorded \/ estimated spending/);
+  assert.match(html, /\$450\.00/);assert.match(html, /2028-02-17 – 2028-02-29/);assert.match(html, /Confirm budget…/);
+  assert.match(html, /Set budget…/);assert.match(html, /Spending history not available/);assert.match(html, /Cash &lt;spending> is not yet known/);
+  assert.equal(budgets.rows[0].remaining_cents, null);
+});
+
+test('owner reported monthly cash is visible separately and is not presented as a bank transaction', async () => {
+  const budgets = {rows: [{key: '0|groceries', category: 'groceries', label: 'Groceries', target_cents: 140000, planned_cents: 140000,
+    bank_spent_cents: 64000, reported_cash_spent_cents: 50000, reported_cash_as_of: '2028-02-15', spent_cents: 114000, remaining_cents: 26000}]};
+  const {ui} = fixture(async path => path.includes('budget-envelopes') ? budgets : structuredClone(report));await ui.refresh();
+  const html = ui.render('budget');
+  assert.match(html, /\$640\.00 bank-recorded spending \+ \$500\.00 reported cash through 2028-02-15/);
+  assert.match(html, /\$260\.00/);assert.match(html, /left after bank and reported cash spending/);
+  assert.match(html, /Cash report is budget only; transaction charts exclude it/);
+  assert.equal(ui.getReport().summary.spending_cents, 15000);
 });

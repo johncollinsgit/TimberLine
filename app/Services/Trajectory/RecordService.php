@@ -48,6 +48,14 @@ class RecordService
                 $rules[$key][] = 'after_or_equal:effective_on';
             }
         }
+        if ($kind === 'budget') {
+            $rules['reported_cash_spent_cents'][] = 'required_with:reported_cash_as_of';
+            $rules['reported_cash_as_of'] = [...$rules['reported_cash_as_of'], 'required_with:reported_cash_spent_cents',
+                'after_or_equal:effective_on', 'before_or_equal:'.now($space->timezone)->toDateString()];
+            if (filled($input['ends_on'] ?? null)) {
+                $rules['reported_cash_as_of'][] = 'before_or_equal:ends_on';
+            }
+        }
         if ($kind === 'tax_remittance') {
             // Admission token for the bank facts actually shown to the reviewer;
             // distinct from the server-owned fingerprint stored with the record.
@@ -83,6 +91,7 @@ class RecordService
             abort_unless($data['observed_on'] <= now($space->timezone)->toDateString(), 422, 'Use an actual balance date, not a future observation.');
         }
         if ($kind === 'budget') {
+            abort_if(isset($data['reported_cash_spent_cents']) && $data['purpose'] !== 'spending', 422, 'Cash spending reports belong to a spending budget.');
             abort_if($data['purpose'] === 'owner_support' && $space->kind !== 'business', 422, 'Owner-support budgets belong to a business space.');
             abort_if(($data['rollover'] ?? false) && empty($data['rollover_start_month']), 422, 'Choose the first rollover month.');
             abort_if(isset($data['opening_rollover_cents']) && ! ($data['rollover'] ?? false), 422, 'An opening rollover requires rollover to be enabled.');

@@ -115,6 +115,10 @@ return [
         'effective_on' => ['label' => 'Effective date', 'type' => 'date', 'required' => true],
         'ends_on' => ['label' => 'Last effective date (optional)', 'type' => 'date', 'required' => false],
         'source' => ['label' => 'Source / notes', 'type' => 'text', 'required' => false],
+        'reported_cash_spent_cents' => ['label' => 'Owner-reported cash spent this month', 'type' => 'money', 'required' => false],
+        'reported_cash_as_of' => ['label' => 'Cash report through date', 'type' => 'date', 'required' => false],
+        'cash_spending_pending' => ['label' => 'Cash spending is not fully recorded', 'type' => 'boolean', 'required' => false],
+        'category_review_pending' => ['label' => 'Category spending still needs review', 'type' => 'boolean', 'required' => false],
         'reviewed' => ['label' => 'Target reviewed', 'type' => 'boolean', 'required' => true],
     ],
     'medical_need' => [
