@@ -22,7 +22,7 @@ function fixture(apiOverride = null) {
   const ctx = {space_id: 7, scope: 'personal', account_id: null, from: '2028-02-01', through: '2028-02-15'};
   const budgets = {rows: [{key: 'food', category: 'food', label: 'Food', target_cents: 20000, spent_cents: 15000, pending_cents: 2000, remaining_cents: 3000}], summary: {remaining_cents: 3000}};
   const api = async (path, method = 'GET', body) => {calls.push({path, method, body}); if (apiOverride) return apiOverride(path, method, body); return path.includes('budget-envelopes') ? budgets : structuredClone(report);};
-  const ui = createVisualFinance({root: {querySelector: () => null}, getContext: () => ctx, api, endpoint: (path, id = ctx.space_id) => `/spaces/${id}${path}`, esc, precise, chart: () => {}, onBeforeChange: () => changes.push('remember'), onChange: () => changes.push('render'), onChanged: async () => changes.push('reload'), onNavigate: () => {}, onReviewTransaction: () => {}, onEditBudget: () => {}, onAddDefinition: () => {}, notice: x => notices.push(x)});
+  const ui = createVisualFinance({root: {querySelector: () => null}, getContext: () => ctx, api, endpoint: (path, id = ctx.space_id) => `/spaces/${id}${path}`, esc, precise, chart: () => {}, onBeforeChange: () => changes.push('remember'), onChange: () => changes.push('render'), onChanged: async () => changes.push('reload'), onNavigate: () => {}, onReviewTransaction: () => {}, onEditBudget: () => {}, onOpenBudget: row => changes.push({budget: row.key ?? row.category}), onAddDefinition: () => {}, notice: x => notices.push(x)});
   return {ui, calls, ctx, changes, notices};
 }
 
@@ -74,6 +74,31 @@ test('period → category → child → inline ledger remembers navigation and l
   assert.equal(ui.capture().ledgerSort, 'largest'); assert.equal(changes.filter(c => c === 'remember').length, 3);
   const saved = ui.capture(); await ui.handleClick({dataset: {action: 'vf-level', level: 'period'}}); ui.restore(saved);
   assert.equal(ui.capture().subcategory, 'groceries');
+});
+test('purpose → merchant → ledger keeps exact split keys, native Ask category and both Back levels', async () => {
+  const nested = structuredClone(report), food = nested.categories[0], groceries = food.children[0];
+  groceries.group_kind = 'subcategory';groceries.category_key = 'groceries';
+  groceries.children = [{key:'merchant:groceries:fictional',category_key:'groceries',group_kind:'merchant',label:'Fictional Market',amount_cents:12500,ids:[1],entry_keys:['line:1'],children:[]}];
+  food.children.push({key:'merchant:food:direct',category_key:'food',group_kind:'merchant',label:'Direct Food Shop',amount_cents:400,ids:[8],entry_keys:['direct:8'],children:[]});
+  nested.entries.push({id:8,entry_key:'direct:8',category:'food',merchant:'Direct Food Shop',date:'2028-02-04',amount_cents:-400,direction:'out',version:1});
+  const {ui,calls}=fixture(async path=>path.includes('budget-envelopes')?{rows:[]}:structuredClone(nested));await ui.refresh();
+  await ui.handleClick({dataset:{action:'vf-category',direction:'out',key:'food'}});
+  const parentState=ui.capture();await ui.handleClick({dataset:{action:'vf-subcategory',key:'groceries'}});
+  assert.equal(ui.capture().ledger,false);assert.match(ui.render('analysis'),/Merchant amounts/);assert.doesNotMatch(ui.render('analysis'),/data-vf-category=/);
+  const purposeState=ui.capture();await ui.handleClick({dataset:{action:'vf-subcategory',key:'merchant:groceries:fictional'}});
+  assert.equal(ui.capture().subcategory,'groceries');assert.equal(ui.capture().merchantGroup,'merchant:groceries:fictional');
+  assert.deepEqual(financeSelectionRows(ui.getReport(),ui.capture()).entries.map(row=>row.entry_key),['line:1']);
+  assert.match(ui.render('analysis'),/data-vf-category="line:1"/);assert.doesNotMatch(ui.render('analysis'),/data-vf-category="line:3"/);
+  assert.equal(ui.getAssistantContext().subcategory,'groceries');assert.deepEqual(ui.getAssistantContext().transaction_ids,[1]);
+  assert.doesNotMatch(JSON.stringify(ui.getAssistantContext()),/merchant:/);assert.ok(calls.every(call=>call.method==='GET'));
+  ui.restore(purposeState);assert.match(ui.render('analysis'),/Merchant amounts/);assert.equal(ui.capture().merchantGroup,null);
+  ui.restore(parentState);await ui.handleClick({dataset:{action:'vf-subcategory',key:'merchant:food:direct'}});
+  assert.equal(ui.capture().subcategory,null);assert.deepEqual(financeSelectionRows(ui.getReport(),ui.capture()).entries.map(row=>row.entry_key),['direct:8']);
+  assert.equal(ui.getAssistantContext().subcategory,null);assert.equal(ui.getAssistantContext().category,'food');
+  await ui.handleClick({dataset:{action:'vf-level',level:'category'}});assert.equal(ui.capture().merchantGroup,null);assert.match(ui.render('analysis'),/Subcategory and merchant amounts/);
+  ui.restore({...purposeState,merchantGroup:'merchant:groceries:removed',ledger:true});assert.deepEqual(financeSelectionRows(ui.getReport(),ui.capture()).entries,[]);
+  assert.match(ui.render('analysis'),/This category changed/);
+  await ui.handleInput({dataset:{vfInput:'basis'},value:'cash'});assert.equal(ui.capture().merchantGroup,null);
 });
 test('analysis failures show retry and never substitute old or zero financial data', async () => {
   const {ui} = fixture(async path => {if (path.includes('analysis')) throw Error('No access to this program'); return {rows: []};});
@@ -128,7 +153,10 @@ test('selecting a purchase gives Ask the exact source version, while clearing re
   await ui.handleClick({dataset: {action: 'vf-clear-selection'}});context=ui.getAssistantContext();assert.equal(context.focused_transaction,false);assert.deepEqual(context.transaction_ids,[1,2,3]);
 });
 test('budget category drilldown clamps its actual period to the workspace date', async () => {
-  const {ui, calls} = fixture(); await ui.refresh();await ui.handleClick({dataset: {action: 'vf-envelope', index: '0'}});
+  const {ui, calls, changes} = fixture(); await ui.refresh();const reads=calls.length;
+  await ui.handleClick({dataset: {action: 'vf-envelope', index: '0'}});
+  assert.equal(calls.length,reads,'Opening a budget uses its loaded row, not a ledger request');assert.deepEqual(changes.at(-1),{budget:'food'});
+  await ui.openBudgetEntries({category:'food'});
   const request = calls.filter(c => c.path.includes('/analysis?')).at(-1);
   assert.match(request.path, /from=2028-02-01&through=2028-02-15/);
 });
@@ -219,4 +247,17 @@ test('owner reported monthly cash is visible separately and is not presented as 
   assert.match(html, /\$260\.00/);assert.match(html, /left after bank and reported cash spending/);
   assert.match(html, /Cash report is budget only; transaction charts exclude it/);
   assert.equal(ui.getReport().summary.spending_cents, 15000);
+});
+
+
+test('fund cards show actual saved progress and contribution rather than a monthly spending cap',async()=>{
+ const {ui}=fixture(async path=>path.includes('budget-envelopes')?{month:'2028-02',rows:[{key:'0|travel',category:'travel',label:'Travel fund',mode:'fund',target_cents:null,planned_cents:30000,spent_cents:0,bank_spent_cents:0,remaining_cents:null,fund:{saved_cents:0,target_cents:100000,monthly_cents:16667}}],summary:{remaining_cents:null}}:structuredClone(report));await ui.refresh();const html=ui.render('budget');
+ assert.match(html,/\$0\.00<\/strong>/);assert.match(html,/saved toward \$1000\.00 fund target/);assert.match(html,/\$166\.67 planned per month/);assert.doesNotMatch(html,/\$300\.00|left after recorded spending/);
+});
+
+
+test('Today with known history and no new records explains the gap without inventing zero actuals',async()=>{
+ const today={...structuredClone(report),range:{from:'2028-02-15',through:'2028-02-15'},scope:{calendar_range:'day'},summary:{inflow_cents:null,spending_cents:null,recorded_spending_cents:null},entries:[],inflows:[],categories:[],coverage:{complete:false,history_available:true,latest_recorded_on:'2028-02-14',selected_range_has_evidence:false,selected_range_covered:false}};
+ const {ui}=fixture(async path=>path.includes('budget-envelopes')?{rows:[]}:today);await ui.refresh();const html=ui.render('overview');
+ assert.match(html,/No receipts recorded today/);assert.match(html,/No purchases recorded today/);assert.match(html,/Latest recorded activity: 2028-02-14/);assert.match(html,/Bank feeds may arrive later/);assert.doesNotMatch(html,/\$0\.00/);assert.equal(ui.getReport().summary.spending_cents,null);
 });

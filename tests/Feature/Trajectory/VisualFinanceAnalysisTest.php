@@ -140,3 +140,40 @@ test('explicit sinking funds carry allowance while ordinary categories reset and
         ->and($rows->firstWhere('category', 'shopping')['remaining_cents'])->toBeNull()
         ->and($rows->firstWhere('category', 'education')['status'])->toBe('not_budgeted');
 });
+
+test('calendar presets use workspace dates and expose authoritative ranges without waiting for dashboard planning', function (): void {
+    $this->space->update(['timezone' => 'America/Los_Angeles']);
+    $this->travelTo(CarbonImmutable::parse('2027-02-16 02:00:00', 'UTC'));
+    ($this->add)($this->cash, 'older', -1000, date: '2026-10-01');
+    ($this->add)($this->cash, 'this-month', -1200, date: '2027-02-10');
+    ($this->add)($this->card, 'today', -800, date: '2027-02-15');
+    foreach (['day' => '2027-02-15', 'week' => '2027-02-15', 'month' => '2027-02-01', 'quarter' => '2027-01-01', 'year' => '2027-01-01', 'all' => '2026-10-01'] as $range => $from) {
+        $data = $this->actingAs($this->owner)->getJson($this->base.'/analysis?range='.$range)->assertOk()->json();
+        expect($data['today'])->toBe('2027-02-15')
+            ->and($data['range']['from'])->toBe($from)
+            ->and($data['range']['through'])->toBe('2027-02-15')
+            ->and($data['calendar_ranges'][$range]['from'])->toBe($from)
+            ->and($data['scope']['calendar_range'])->toBe($range)
+            ->and($data['budget_context'])->toBe(['month' => '2027-02', 'actual_through' => '2027-02-15']);
+    }
+    $day = $this->getJson($this->base.'/analysis?range=day')->assertOk()->json();
+    expect($day['summary']['spending_cents'])->toBe(800)
+        ->and($day['coverage']['history_available'])->toBeTrue()
+        ->and($day['coverage']['latest_recorded_on'])->toBe('2027-02-15');
+    $this->getJson($this->base.'/analysis?range=day&from=2027-02-01&through=2027-02-15')->assertUnprocessable();
+    $this->getJson($this->base.'/analysis?range=unsupported')->assertUnprocessable();
+});
+
+test('an empty current day explains recorded history without inventing a complete zero spend', function (): void {
+    ($this->add)($this->cash, 'earlier-this-month', -1000, date: '2027-02-10');
+    $this->cash->update(['observed_at' => '2027-02-14 12:00:00']);
+    $this->card->update(['observed_at' => '2027-02-14 12:00:00']);
+    $data = $this->actingAs($this->owner)->getJson($this->base.'/analysis?range=day')->assertOk()->json();
+    expect($data['summary']['spending_cents'])->toBeNull()
+        ->and($data['summary']['inflow_cents'])->toBeNull()
+        ->and($data['summary']['recorded_spending_cents'])->toBeNull()
+        ->and($data['coverage']['history_available'])->toBeTrue()
+        ->and($data['coverage']['latest_recorded_on'])->toBe('2027-02-10')
+        ->and($data['calendar_ranges']['day']['has_evidence'])->toBeFalse()
+        ->and($data['calendar_ranges']['day']['covered'])->toBeFalse();
+});

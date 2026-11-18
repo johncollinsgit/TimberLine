@@ -197,7 +197,7 @@ class LedgerService
         });
     }
 
-    public function entries(Space $space, ?string $start = null, ?string $end = null, ?array $ids = null, ?int $accountId = null): array
+    public function entries(Space $space, ?string $start = null, ?string $end = null, ?array $ids = null, ?int $accountId = null, ?User $viewer = null): array
     {
         $query = Allocation::where('trajectory_allocations.space_id', $space->id)->join('trajectory_transactions as t', 't.id', '=', 'transaction_id')->where('t.removed', false)->where('t.pending', false);
         if ($accountId !== null) {
@@ -225,6 +225,8 @@ class LedgerService
                 'explanation' => $own ? $row->explanation : 'Only your allocated amount is visible.'];
         })->all();
 
-        return app(AttributionService::class)->decorateEntries($space, app(SalesTaxService::class)->decorateEntries($space, $entries));
+        $entries = app(AttributionService::class)->decorateEntries($space, app(SalesTaxService::class)->decorateEntries($space, $entries));
+
+        return $viewer ? app(TransactionIdentityService::class)->decorate($viewer, $space, $entries) : $entries;
     }
 }

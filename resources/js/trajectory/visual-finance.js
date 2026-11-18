@@ -1,4 +1,5 @@
-/** A single exploration path: period → source/category → subcategory → editable ledger. */
+import {transactionIdentityHtml} from './transaction-review.js';
+/** A single exploration path: period → source/category → purpose → merchant → editable ledger. */
 export const financeColors = ['#257c77', '#4c83c3', '#db8845', '#9170c4', '#ce668c', '#6e9e54', '#43a4b0', '#bb9a3d', '#6279a6', '#c16e52', '#829252', '#9e71a1'];
 export const financeColor = key => financeColors[[...String(key)].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 0) % financeColors.length];
 const number = n => Number.isSafeInteger(n) ? n : null;
@@ -24,19 +25,23 @@ export function sortFinanceEntries(entries, sort = 'largest', query = '') {
 export function financeSelectionRows(report, state) {
   const groups = state.direction === 'in' ? report?.inflows ?? [] : report?.categories ?? [];
   const parent = groups.find(row => row.key === state.category);
-  const selected = state.subcategory ? parent?.children?.find(row => row.key === state.subcategory) : parent;
-  if (!selected) return {parent, selected, entries: []};
+  const subcategory = state.subcategory ? parent?.children?.find(row => row.key === state.subcategory && row.group_kind !== 'merchant') : null;
+  const branch = state.subcategory ? subcategory : parent;
+  const merchant = state.merchantGroup ? branch?.children?.find(row => row.key === state.merchantGroup && row.group_kind === 'merchant') : null;
+  const selected = state.merchantGroup ? merchant : branch;
+  if (!selected) return {parent, subcategory, merchant, selected, entries: []};
   const detailKeys = selected.entry_keys ? new Set(selected.entry_keys.map(String)) : null;
   const ids = new Set(selected.ids ?? []);
   const entries = (report.entries ?? []).filter(row => {
     if (state.direction && row.direction !== state.direction) return false;
     if (detailKeys) return detailKeys.has(keyOf(row));
-    const categoryMatch = state.direction === 'in' || row.analysis_category === selected.key || (state.subcategory
-      ? row.category === selected.key || row.subcategory === selected.key
-      : row.category === selected.key || row.parent_category === selected.key || row.parent_key === selected.key || selected.children?.some(child => child.key === row.category));
+    const category = selected.category_key ?? selected.key;
+    const categoryMatch = state.direction === 'in' || row.analysis_category === category || (state.subcategory || merchant
+      ? row.category === category || row.subcategory === category
+      : row.category === category || row.parent_category === category || row.parent_key === category || selected.children?.some(child => child.key === row.category));
     return ids.has(row.id) && categoryMatch;
   });
-  return {parent, selected, entries};
+  return {parent, subcategory, merchant, selected, entries};
 }
 
 export function financeBudgetRows(report) {
@@ -69,19 +74,19 @@ export function financeBudgetPresentation(row, {future = false} = {}) {
     action: row.uses_parent_budget ? null : reasons.has('draft') ? 'Confirm budget…' : plan === null ? 'Set budget…' : number(row.remaining_cents) === null && !future ? 'Review budget…' : null};
 }
 
-export function createVisualFinance({root, getContext, getSpaces = () => [], api, endpoint, esc, precise, chart, onBeforeChange, onChange, onChanged, onNavigate, onReviewTransaction, onEditBudget, onAddDefinition, onClearAccount, onAsk, notice}) {
-  let state = {version: 1, year: null, comparisonYear: null, grain: 'month', basis: 'spending', period: null, direction: null, category: null, subcategory: null, ledger: false, program: null, ledgerSort: 'largest', query: '', page: 1, budgetMonth: null, focusedEntry: null};
+export function createVisualFinance({root, getContext, getSpaces = () => [], api, endpoint, esc, precise, chart, onBeforeChange, onChange, onChanged, onNavigate, onReviewTransaction, onEditBudget, onAddDefinition, onClearAccount, onAsk, notice, transactionReview = null, homeBills = () => '', onOpenBudget = null}) {
+  let state = {version: 1, year: null, comparisonYear: null, grain: 'month', basis: 'spending', period: null, direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false, program: null, ledgerSort: 'largest', query: '', page: 1, budgetMonth: null, focusedEntry: null};
   let report = null, envelopes = null, error = null, loading = false, request = 0, ownerContext = null, loadedProjection = null;
-  let busyRow = null;
+  let busyRow = null, visibleLedgerRows = [];
   const pageSize = 50;
-  const stats = (label, value, note, className = '') => `<div class="vf-stat ${className}"><span>${esc(label)}</span><strong>${precise(value)}</strong>${note ? `<small>${esc(note)}</small>` : ''}</div>`;
+  const stats = (label, value, note, className = '', unknown = null) => `<div class="vf-stat ${className}"><span>${esc(label)}</span><strong>${Number.isSafeInteger(value)||unknown===null?precise(value):esc(unknown)}</strong>${note ? `<small>${esc(note)}</small>` : ''}</div>`;
   const button = (label, action, attrs = '', style = '') => `<button type="button" class="vf-button ${style}" data-action="vf-${action}" ${attrs}>${esc(label)}</button>`;
   const attr = value => esc(JSON.stringify(value));
   const contextKey = () => {const c = getContext(); return JSON.stringify([c.space_id, c.account_id, c.from, c.through]);};
   const dates = () => state.period ?? {from: getContext().from, through: getContext().through};
   const projectionKey = (revision = getContext().revision ?? null) => JSON.stringify([contextKey(), revision, dates(), state.year, state.comparisonYear, state.grain, state.basis, state.program, state.budgetMonth]);
   const monthLabel = month => new Intl.DateTimeFormat('en-US', {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${month}-01T12:00:00Z`));
-  const rangeLabel = range => !range ? '' : range.from.slice(0, 7) === range.through.slice(0, 7) ? monthLabel(range.from.slice(0, 7)) : `${range.from} – ${range.through}`;
+  const rangeLabel = range => !range ? '' : range.from===range.through ? new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}).format(new Date(range.from+'T12:00:00Z')) : range.from.slice(0,7)===range.through.slice(0,7)&&range.from.endsWith('-01') ? monthLabel(range.from.slice(0,7)) : `${range.from} – ${range.through}`;
   const partialSpending = () => state.basis === 'spending' && report?.summary?.spending_cents == null
     && Number.isSafeInteger(report?.summary?.recorded_spending_cents) && report?.coverage?.spending?.complete === false;
   const spendingValue = () => partialSpending() ? report.summary.recorded_spending_cents : report?.summary?.spending_cents ?? report?.summary?.outflow_cents;
@@ -95,7 +100,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   const overviewActions = () => `<div class="vf-quick-actions">${button('Explore analysis', 'navigate', 'data-view="analysis"', 'vf-primary')}${button('Your budgets', 'navigate', 'data-view="budget"')}${button('Review transactions', 'navigate', 'data-view="transactions"')}</div>`;
 
   function reset() {
-    state = {...state, year: null, comparisonYear: null, period: null, direction: null, category: null, subcategory: null, ledger: false, program: null, query: '', page: 1, budgetMonth: null, focusedEntry: null};
+    state = {...state, year: null, comparisonYear: null, period: null, direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false, program: null, query: '', page: 1, budgetMonth: null, focusedEntry: null};
     report = envelopes = error = loadedProjection = null; ownerContext = null; request++;
   }
 
@@ -151,8 +156,8 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   }
 
   function breadcrumbs() {
-    const {parent, selected} = financeSelectionRows(report, state);
-    return `<nav class="vf-breadcrumbs" aria-label="Analysis path">${button('Analysis', 'level', 'data-level="overview"')}<span aria-hidden="true">›</span>${button(rangeLabel(report?.range ?? dates()), 'level', 'data-level="period"')}${parent ? `<span aria-hidden="true">›</span>${button(parent.label ?? categoryLabel(parent.key), 'level', 'data-level="category"')}` : ''}${state.subcategory && selected ? `<span aria-hidden="true">›</span><span>${esc(selected.label)}</span>` : ''}${state.ledger ? '<span aria-hidden="true">›</span><span aria-current="page">Transactions</span>' : ''}</nav>`;
+    const {parent, subcategory, merchant} = financeSelectionRows(report, state);
+    return `<nav class="vf-breadcrumbs" aria-label="Analysis path">${button('Analysis', 'level', 'data-level="overview"')}<span aria-hidden="true">›</span>${button(rangeLabel(report?.range ?? dates()), 'level', 'data-level="period"')}${parent ? `<span aria-hidden="true">›</span>${button(parent.label ?? categoryLabel(parent.key), 'level', 'data-level="category"')}` : ''}${subcategory ? `<span aria-hidden="true">›</span>${button(subcategory.label, 'level', 'data-level="subcategory"')}` : ''}${merchant ? `<span aria-hidden="true">›</span><span>${esc(merchant.label)}</span>` : ''}${state.ledger ? '<span aria-hidden="true">›</span><span aria-current="page">Transactions</span>' : ''}</nav>`;
   }
 
   function slicesHtml(rows, direction) {
@@ -177,8 +182,9 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     state.page = Math.min(state.page, pages);
     const focused = entries.find(r => keyOf(r) === state.focusedEntry);
     const rows = filtered.slice((state.page - 1) * pageSize, state.page * pageSize), options = report?.category_options ?? [];
+    visibleLedgerRows = rows;
     const select = row => (!row.editable && !row.attribution_editable) || row.category_editable === false || row.tax_purpose ? `<span>${esc(row.category_label ?? categoryLabel(row.category))}</span>${row.editable ? button('Review', 'review-row', `data-entry="${esc(keyOf(row))}"`) : '<small>Allocated · read only</small>'}` : `<label class="vf-inline-category"><span class="sr-only">Category for ${esc(row.merchant)}</span><select data-vf-category="${esc(keyOf(row))}" ${busyRow === keyOf(row) ? 'disabled' : ''}>${options.map(c => `<option value="${esc(c)}" ${c === row.category ? 'selected' : ''}>${esc(categoryLabel(c))}</option>`).join('')}</select></label>`;
-    return `<section class="vf-ledger"><div class="vf-section-heading"><div><span class="vf-eyebrow">${filtered.length} recorded entries</span><h2>${esc(heading)}</h2></div><strong>${precise(entries.reduce((sum, row) => sum + signedAmount(row), 0))}</strong></div><div class="vf-ledger-controls"><label>Find a transaction<input type="search" data-vf-input="query" value="${esc(state.query)}" placeholder="Merchant, date or category"></label><label>Sort<select data-vf-input="sort">${[['largest', 'Biggest first'], ['smallest', 'Smallest first'], ['newest', 'Newest first'], ['oldest', 'Oldest first'], ['merchant', 'Merchant'], ['category', 'Category']].map(([key, text]) => `<option value="${key}" ${state.ledgerSort === key ? 'selected' : ''}>${text}</option>`).join('')}</select></label></div>${focused ? `<div class="vf-selected-purchase"><span>Selected: <strong>${esc(focused.merchant)}</strong> · ${precise(signedAmount(focused))}</span>${button('Ask about this purchase', 'ask-selected')}${button('Clear selection', 'clear-selection')}</div>` : ''}<div class="vf-table-wrap"><table class="vf-table"><caption>${esc(heading)} · categories save individually. ${costMode ? 'Refunds reduce the cost shown.' : 'Positive amounts are money received; negative amounts are money paid.'}</caption><thead><tr><th scope="col">Date</th><th scope="col">Merchant / description</th><th scope="col">Category</th><th scope="col">${costMode ? 'Cost / refund' : 'Amount'}</th><th scope="col"><span class="sr-only">More detail</span></th></tr></thead><tbody>${rows.map(row => `<tr data-entry-key="${esc(keyOf(row))}" class="${keyOf(row) === state.focusedEntry ? 'vf-selected-row' : ''}"><td>${esc(row.date)}</td><td><button type="button" class="vf-merchant-select" data-action="vf-select-row" data-entry="${esc(keyOf(row))}">${esc(row.merchant)}</button><small>${esc(row.program_name ?? row.account_name ?? '')}${row.amount_basis === 'owned_bank_cash' ? ' · Bank cash' : ''}</small></td><td>${select(row)}</td><td class="vf-money">${precise(signedAmount(row))}</td><td>${button(row.editable ? 'Details' : 'View', 'review-row', `data-entry="${esc(keyOf(row))}"`)}${row.attribution_editable || row.editable ? button('Split / program', 'attribution', `data-entry="${esc(keyOf(row))}"`) : ''}</td></tr>`).join('') || '<tr><td colspan="5">No transactions match this view.</td></tr>'}</tbody></table></div><div class="vf-pagination">${button('Previous', 'page', `data-page="${state.page - 1}" ${state.page === 1 ? 'disabled' : ''}`)}<span>Page ${state.page} of ${pages}</span>${button('Next', 'page', `data-page="${state.page + 1}" ${state.page === pages ? 'disabled' : ''}`)}</div></section>`;
+    return `<section class="vf-ledger"><div class="vf-section-heading"><div><span class="vf-eyebrow">${filtered.length} recorded entries</span><h2>${esc(heading)}</h2></div><strong>${precise(entries.reduce((sum, row) => sum + signedAmount(row), 0))}</strong></div><div class="vf-ledger-controls"><label>Find a transaction<input type="search" data-vf-input="query" value="${esc(state.query)}" placeholder="Merchant, date or category"></label><label>Sort<select data-vf-input="sort">${[['largest', 'Biggest first'], ['smallest', 'Smallest first'], ['newest', 'Newest first'], ['oldest', 'Oldest first'], ['merchant', 'Merchant'], ['category', 'Category']].map(([key, text]) => `<option value="${key}" ${state.ledgerSort === key ? 'selected' : ''}>${text}</option>`).join('')}</select></label></div>${focused ? `<div class="vf-selected-purchase"><span>Selected: <strong>${esc(focused.merchant)}</strong> · ${precise(signedAmount(focused))}</span>${button('Ask about this purchase', 'ask-selected')}${button('Clear selection', 'clear-selection')}</div>` : ''}${transactionReview?.renderUndo() ?? ''}<div class="vf-table-wrap tr-review-table-wrap"><table class="vf-table tr-review-table"><caption>${esc(heading)} · categories save individually. ${costMode ? 'Refunds reduce the cost shown.' : 'Positive amounts are money received; negative amounts are money paid.'}</caption><thead><tr><th scope="col">Date</th><th scope="col">Merchant / description</th><th scope="col">Category</th><th scope="col">${costMode ? 'Cost / refund' : 'Amount'}</th><th scope="col"><span class="sr-only">More detail</span></th></tr></thead><tbody>${rows.map(row => `<tr data-entry-key="${esc(keyOf(row))}" class="${keyOf(row) === state.focusedEntry ? 'vf-selected-row' : ''}"><td data-label="Date" class="tr-review-date">${esc(row.date)}</td><td data-label="Merchant" class="tr-review-merchant"><button type="button" class="vf-merchant-select" data-action="vf-select-row" data-entry="${esc(keyOf(row))}">${esc(row.merchant)}</button>${transactionIdentityHtml(row, {esc})}<small>${esc(row.program_name ?? row.account_name ?? '')}${row.amount_basis === 'owned_bank_cash' ? ' · Bank cash' : ''}</small></td><td data-label="Category" class="tr-review-category">${select(row)}${transactionReview?.render(row) ?? ''}</td><td data-label="Amount" class="vf-money tr-review-amount">${precise(signedAmount(row))}</td><td data-label="Actions" class="tr-review-actions">${button(row.editable ? 'Details' : 'View', 'review-row', `data-entry="${esc(keyOf(row))}"`)}${row.attribution_editable || row.editable ? button('Split / program', 'attribution', `data-entry="${esc(keyOf(row))}"`) : ''}</td></tr>`).join('') || '<tr><td colspan="5">No transactions match this view.</td></tr>'}</tbody></table></div><div class="vf-pagination">${button('Previous', 'page', `data-page="${state.page - 1}" ${state.page === 1 ? 'disabled' : ''}`)}<span>Page ${state.page} of ${pages}</span>${button('Next', 'page', `data-page="${state.page + 1}" ${state.page === pages ? 'disabled' : ''}`)}</div></section>`;
   }
 
   function categoryHtml() {
@@ -186,7 +192,8 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     if (!selected) return `<section class="vf-empty"><h2>This category changed</h2><p>Its transactions may have moved after a review.</p>${button('Back to the period', 'level', 'data-level="period"')}</section>`;
     if (state.ledger || !selected.children?.length) return ledgerHtml(entries, selected.label ?? categoryLabel(selected.key));
     const children = selected.children;
-    return `<section><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(parent?.label ?? '')}</span><h2>${esc(selected.label)}</h2></div><strong>${precise(selected.amount_cents)}</strong>${button('View all transactions', 'ledger-category')}</div><div class="vf-category-explore"><div class="vf-chart vf-donut"><canvas id="vf-category-chart" role="img" aria-label="Subcategory amounts; select a slice to explore"></canvas></div><div class="vf-slice-list">${children.map(row => `<button type="button" data-action="vf-subcategory" data-key="${esc(row.key)}"><span class="vf-swatch" style="background:${financeColor(row.key)}" aria-hidden="true"></span><span>${esc(row.label)}</span><strong>${precise(row.amount_cents)}</strong><span aria-hidden="true">›</span></button>`).join('')}</div></div></section>`;
+    const amountsLabel = children.every(row => row.group_kind === 'merchant') ? 'Merchant amounts' : children.some(row => row.group_kind === 'merchant') ? 'Subcategory and merchant amounts' : 'Subcategory amounts';
+    return `<section><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(parent?.label ?? '')}</span><h2>${esc(selected.label)}</h2></div><strong>${precise(selected.amount_cents)}</strong>${button('View all transactions', 'ledger-category')}</div><div class="vf-category-explore"><div class="vf-chart vf-donut"><canvas id="vf-category-chart" role="img" aria-label="${amountsLabel}; select a slice to explore"></canvas></div><div class="vf-slice-list">${children.map(row => `<button type="button" data-action="vf-subcategory" data-key="${esc(row.key)}"><span class="vf-swatch" style="background:${financeColor(row.key)}" aria-hidden="true"></span><span>${esc(row.label)}</span><strong>${precise(row.amount_cents)}</strong><span aria-hidden="true">›</span></button>`).join('')}</div></div></section>`;
   }
 
   function envelopeCards(limit = null) {
@@ -195,6 +202,11 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     if (envelopes?.error) return `<div class="vf-error" role="status">Budgets could not load. ${esc(envelopes.error)} ${button('Try again', 'retry')}</div>`;
     if (!rows.length) return `<div class="vf-empty"><h3>Give each category a plan</h3><p>No reviewed budget targets are available for this month.</p>${button('Set up a budget', 'legacy-budget')}</div>`;
     return `<div class="vf-envelope-grid">${selected.map((row, index) => {
+      if (row.mode === 'fund' && row.fund) {
+        const fund=row.fund,saved=number(fund.saved_cents),cap=number(fund.target_cents),progress=saved===null||cap===null?null:cap===0?100:Math.min(100,Math.max(0,saved/cap*100));
+        return `<article class="vf-envelope-shell"><button type="button" class="vf-envelope vf-fund-envelope" data-action="vf-envelope" data-index="${index}"><span class="vf-envelope-label"><span class="vf-swatch" style="background:${financeColor(row.category)}"></span>${esc(row.label)}<span aria-hidden="true">›</span></span><strong>${saved===null?'Saved amount needs review':precise(saved)}</strong><span>${cap===null?'Fund target needs review':`saved toward ${precise(cap)} fund target`}</span><div class="vf-budget-track" ${progress===null?'':`role="progressbar" aria-label="${esc(row.label)} fund progress" aria-valuenow="${Math.round(progress)}" aria-valuemin="0" aria-valuemax="100"`}><i style="width:${progress??0}%;background:${financeColor(row.category)}"></i></div><small>${number(fund.monthly_cents)===null?'Monthly contribution needs review':`${precise(fund.monthly_cents)} planned per month`}</small><small>${row.bank_spent_cents===null?'Category spending history unavailable':`${precise(row.bank_spent_cents??row.spent_cents)} bank-recorded category spending`}</small><small>Saved progress is separate from category spending and bank cash.</small></button></article>`;
+      }
+
       const presentation = financeBudgetPresentation(row, {future: envelopes?.future === true});
       const remaining = row.remaining_cents, target = row.target_cents;
       const used = remaining === null || target === null || row.spent_cents === null ? null : target === 0 ? (row.spent_cents > 0 ? 100 : 0) : Math.min(100, Math.max(0, row.spent_cents / target * 100));
@@ -207,13 +219,16 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   }
 
   function render(view) {
+    visibleLedgerRows = [];
     if (getContext().scope === 'both') return '<div class="vf-empty">Choose Personal or one business to explore its money without counting transfers twice.</div>';
     if (error) return `<section class="vf-error" role="alert"><h2>This financial view could not load</h2><p>${esc(error)}</p>${button('Try again', 'retry')}</section>`;
     if (!report) return '<section class="vf-empty" role="status">Loading your financial picture…</section>';
     const covered = coverageHtml();
     if (view === 'budget') return `<div class="vf-finance" aria-busy="${loading}"><div class="vf-section-heading">${programPicker()}<div><span class="vf-eyebrow">Your monthly spending plan</span><h2>What’s left to spend</h2></div><label>Budget month<input type="month" data-vf-input="budget-month" value="${esc(state.budgetMonth)}"></label>${button('Manage targets', 'legacy-budget')}${button('Add category / program', 'definitions')}</div>${envelopeCards()}<p class="vf-caption">Purchases count when made. Card and loan repayments do not consume a purchase category a second time.</p>${covered}</div>`;
-    const metrics = `<div class="vf-stat-row">${stats('Money coming in', report.summary?.inflow_cents, 'Sources of funds')}${stats(partialSpending() ? 'Recorded costs' : state.basis === 'spending' ? 'Purchases & costs' : 'Bank cash out', spendingValue(), partialSpending() ? 'Tax payment split pending' : rangeLabel(report.range))}${!getContext().account_id && Number.isSafeInteger(envelopes?.summary?.remaining_cents) ? stats('Budget left this month', envelopes.summary.remaining_cents, monthLabel(state.budgetMonth), 'vf-budget-stat') : ''}</div>`;
-    if (view === 'overview') {const budgets = `<section class="vf-budget-preview"><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(monthLabel(state.budgetMonth))}</span><h2>What’s left in your budgets</h2></div>${programPicker()}${button('All budgets', 'navigate', 'data-view="budget"')}</div>${envelopeCards(6)}</section>`;return `<div class="vf-finance" aria-busy="${loading}">${metrics}${overviewActions()}${piesHtml()}${budgets}${trendHtml()}${covered}</div>`;}
+    const emptyToday = report.scope?.calendar_range==='day' && report.coverage?.history_available===true && report.coverage?.selected_range_has_evidence===false;
+    const latestNote = emptyToday ? `Latest recorded activity: ${report.coverage.latest_recorded_on??'date not recorded'}. Bank feeds may arrive later.` : null;
+    const metrics = `<div class="vf-stat-row">${stats('Money coming in', report.summary?.inflow_cents, latestNote??'Sources of funds','',emptyToday?'No receipts recorded today':null)}${stats(partialSpending() ? 'Recorded costs' : state.basis === 'spending' ? 'Purchases & costs' : 'Bank cash out', spendingValue(), partialSpending() ? 'Tax payment split pending' : latestNote??rangeLabel(report.range),'',emptyToday?'No purchases recorded today':null)}${!getContext().account_id && Number.isSafeInteger(envelopes?.summary?.remaining_cents) ? stats('Budget left this month', envelopes.summary.remaining_cents, monthLabel(state.budgetMonth), 'vf-budget-stat') : ''}</div>`;
+    if (view === 'overview') {const budgets = `<section class="vf-budget-preview"><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(monthLabel(state.budgetMonth))}</span><h2>What’s left in your budgets</h2></div>${programPicker()}${button('All budgets', 'navigate', 'data-view="budget"')}</div>${envelopeCards(6)}</section>`;return `<div class="vf-finance" aria-busy="${loading}">${metrics}${overviewActions()}${piesHtml()}${budgets}${trendHtml()}${homeBills()}${covered}</div>`;}
     return `<div class="vf-finance" aria-busy="${loading}">${controls()}${breadcrumbs()}${state.category ? categoryHtml() : state.ledger ? ledgerHtml(report.entries ?? [], 'Period transactions') : `${metrics}${trendHtml()}${piesHtml()}`}${covered}</div>`;
   }
 
@@ -227,7 +242,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     donut('vf-income-chart', report.inflows ?? [], 'in');
     donut('vf-spending-chart', report.categories ?? [], 'out');
     const {selected} = financeSelectionRows(report, state);
-    if (selected?.children) donut('vf-category-chart', selected.children, state.direction, row => change({subcategory: row.key, ledger: true, page: 1}, false));
+    if (selected?.children) donut('vf-category-chart', selected.children, state.direction, row => selectChild(row.key));
     const periods = report.periods ?? [];
     if (root.querySelector('#vf-period-chart')) chart('vf-period-chart', 'bar', periods.map(p => p.label), [
       {label: 'Money in', data: periods.map(p => p.inflow_cents), backgroundColor: '#348e84', borderRadius: 4},
@@ -239,12 +254,22 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   async function selectPeriod(index, dataset = 0) {
     const p = report?.periods?.[index], selected = dataset === 2 ? p?.comparison : p;
     if (!selected?.from || !selected?.through || selected.future) return;
-    if (!await change({period: {from: selected.from, through: selected.through}, direction: null, category: null, subcategory: null, ledger: false, page: 1})) return;
+    if (!await change({period: {from: selected.from, through: selected.through}, direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false, page: 1})) return;
     onNavigate('analysis', false);
   }
   async function selectCategory(category, direction) {
-    await change({direction, category, subcategory: null, ledger: false, page: 1}, false);
+    const groups = direction === 'in' ? report?.inflows : report?.categories;
+    if (!groups?.some(row => row.key === category)) return;
+    await change({direction, category, subcategory: null, merchantGroup: null, ledger: false, page: 1}, false);
     onNavigate('analysis', false);
+  }
+
+  async function selectChild(key) {
+    const {selected} = financeSelectionRows(report, state);
+    const child = selected?.children?.find(row => row.key === key);
+    if (!child) return;
+    const next = child.group_kind === 'merchant' ? {merchantGroup: child.key} : {subcategory: child.key, merchantGroup: null};
+    await change({...next, ledger: !child.children?.length, page: 1}, false);
   }
 
   async function saveAttributedCategory(row, category) {
@@ -343,14 +368,14 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     const action = target.dataset.action;
     if (!action?.startsWith('vf-')) return false;
     if (action === 'vf-navigate') onNavigate(target.dataset.view);
-    else if (action === 'vf-grain') await change({grain: target.dataset.grain, category: null, subcategory: null, ledger: false});
+    else if (action === 'vf-grain') await change({grain: target.dataset.grain, category: null, subcategory: null, merchantGroup: null, ledger: false});
     else if (action === 'vf-period') await selectPeriod(Number(target.dataset.periodIndex));
     else if (action === 'vf-category') await selectCategory(target.dataset.key, target.dataset.direction);
-    else if (action === 'vf-subcategory') await change({subcategory: target.dataset.key, ledger: true, page: 1}, false);
+    else if (action === 'vf-subcategory') await selectChild(target.dataset.key);
     else if (action === 'vf-ledger-category') await change({ledger: true, page: 1}, false);
-    else if (action === 'vf-ledger-all') {await change({category: null, subcategory: null, ledger: true, direction: null, page: 1}, false); onNavigate('analysis', false);}
+    else if (action === 'vf-ledger-all') {await change({category: null, subcategory: null, merchantGroup: null, ledger: true, direction: null, page: 1}, false); onNavigate('analysis', false);}
     else if (action === 'vf-page') await change({page: Number(target.dataset.page)}, false, false);
-    else if (action === 'vf-level') await change(target.dataset.level === 'category' ? {subcategory: null, ledger: false} : target.dataset.level === 'period' ? {direction: null, category: null, subcategory: null, ledger: false} : {period: null, direction: null, category: null, subcategory: null, ledger: false}, target.dataset.level === 'overview');
+    else if (action === 'vf-level') await change(target.dataset.level === 'subcategory' ? {merchantGroup: null, ledger: false} : target.dataset.level === 'category' ? {subcategory: null, merchantGroup: null, ledger: false} : target.dataset.level === 'period' ? {direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false} : {period: null, direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false}, target.dataset.level === 'overview');
     else if (action === 'vf-retry') {await refresh(); onChange();}
     else if (action === 'vf-select-row') {state.focusedEntry = target.dataset.entry; onChange();}
     else if (action === 'vf-clear-selection') {state.focusedEntry = null; onChange();}
@@ -361,13 +386,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     else if (action === 'vf-attribution') {const row = report?.entries?.find(r => keyOf(r) === target.dataset.entry); if (row) await openAttribution(row);}
     else if (action === 'vf-envelope') {
       const row = financeBudgetRows(envelopes)[Number(target.dataset.index)];
-      if (row) {
-        const monthEnd = envelopes?.actual_through ?? envelopes?.range?.through ?? new Date(Date.UTC(Number(state.budgetMonth.slice(0, 4)), Number(state.budgetMonth.slice(5)), 0)).toISOString().slice(0, 10);
-        const today = report?.today ?? getContext().today ?? getContext().through;
-        if (`${state.budgetMonth}-01` > today) {notice('This is a future budget. Open Plan or Manage targets to review it; there is no actual spending period yet.');return true;}
-        const through = monthEnd < today ? monthEnd : today;
-        if (await change({period: {from: `${state.budgetMonth}-01`, through}, direction: 'out', category: row.parent_key ?? row.category ?? row.key, subcategory: row.parent_key ? row.category : null, ledger: true, page: 1})) onNavigate('analysis', false);
-      }
+      if (row) onOpenBudget?.(row,envelopes);
     } else if (action === 'vf-review-row') {
       const row = report?.entries?.find(r => keyOf(r) === target.dataset.entry);
       if (row) {state.focusedEntry = keyOf(row); if (row.attribution_detail_id && row.attribution_editable) await openAttribution(row); else onReviewTransaction(row);}
@@ -375,6 +394,15 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     return true;
   }
 
+  async function openBudgetEntries(row, budgetReport = envelopes) {
+    const month = budgetReport?.month ?? state.budgetMonth;
+    const monthEnd = budgetReport?.actual_through ?? budgetReport?.range?.through ?? new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5)),0)).toISOString().slice(0,10);
+    const today = report?.today ?? getContext().today ?? getContext().through;
+    if (`${month}-01` > today) {notice('This is a future plan. There is no actual spending period yet.');return false;}
+    const through = monthEnd < today ? monthEnd : today;
+    if (await change({period:{from:`${month}-01`,through},direction:'out',category:row.parent_key??row.category??row.key,subcategory:row.parent_key?row.category:null,merchantGroup:null,ledger:true,page:1})) {onNavigate('analysis',false);return true;}
+    return false;
+  }
   async function handleInput(target) {
     if (target.dataset.vfCategory) {
       const row = report?.entries?.find(r => keyOf(r) === target.dataset.vfCategory);
@@ -391,10 +419,10 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
       return;
     }
     const input = target.dataset.vfInput;
-    if (input === 'year') {const y = Number(target.value), through = getContext().through; await change({year: y, comparisonYear: y - 1, period: {from: `${y}-01-01`, through: Number(through.slice(0, 4)) === y ? through : `${y}-12-31`}, category: null, subcategory: null, ledger: false});}
+    if (input === 'year') {const y = Number(target.value), through = getContext().through; await change({year: y, comparisonYear: y - 1, period: {from: `${y}-01-01`, through: Number(through.slice(0, 4)) === y ? through : `${y}-12-31`}, category: null, subcategory: null, merchantGroup: null, ledger: false});}
     else if (input === 'comparison') await change({comparisonYear: Number(target.value)});
-    else if (input === 'basis') await change({basis: target.value, category: null, subcategory: null, ledger: false});
-    else if (input === 'program') await change({program: target.value ? Number(target.value) : null, category: null, subcategory: null, ledger: false});
+    else if (input === 'basis') await change({basis: target.value, category: null, subcategory: null, merchantGroup: null, ledger: false});
+    else if (input === 'program') await change({program: target.value ? Number(target.value) : null, category: null, subcategory: null, merchantGroup: null, ledger: false});
     else if (input === 'budget-month') await change({budgetMonth: target.value});
     else if (input === 'sort') await change({ledgerSort: target.value, page: 1}, false, false);
     else if (input === 'query') {state.query = target.value; state.page = 1; onChange(); const inputNode = root.querySelector('[data-vf-input="query"]'); inputNode?.focus({preventScroll: true}); inputNode?.setSelectionRange(state.query.length, state.query.length);}
@@ -404,12 +432,12 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     const selection = financeSelectionRows(report, state), scopedEntries = state.category ? selection.entries : state.ledger ? report?.entries ?? [] : [], focused = state.focusedEntry ? (report?.entries ?? []).find(row => keyOf(row) === state.focusedEntry) : null, entries = focused ? [focused] : scopedEntries;
     return {...dates(), account_id: getContext().account_id ?? null, program_id: state.program,
       level: state.ledger ? 'transactions' : state.category ? 'category' : state.period ? 'period' : 'overview', direction: state.direction,
-      category: state.category, subcategory: state.subcategory, basis: state.basis,
+      category: state.category, subcategory: selection.subcategory?.category_key ?? selection.subcategory?.key ?? null, basis: state.basis,
       transaction_ids: [...new Set(entries.map(r => r.source_transaction_id ?? r.id))].slice(0, 100), transaction_versions: Object.fromEntries(entries.slice(0, 100).map(r => [r.source_transaction_id ?? r.id, r.version])), selection_truncated: entries.length > 100, focused_transaction: !!focused,
     };
   }
 
-  return {render, draw, refresh, reset, handleClick, handleInput, getAssistantContext: assistantContext,
+  return {render, draw, refresh, reset, openAttribution, openBudgetEntries, getVisibleLedgerRows: () => visibleLedgerRows, handleClick, handleInput, getAssistantContext: assistantContext,
     adoptSnapshot(initialReport, initialBudgets) {
       reset();ownerContext=contextKey();report=initialReport;envelopes=initialBudgets;
       loading=false;busyRow=null;
@@ -421,8 +449,9 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
       loadedProjection=projectionKey();return true;
     },
     capture: () => clone(state),
-    restore(value) {if (value?.version === 1) state = {...state, ...clone(value)};},
+    restore(value) {if (value?.version === 1) state = {...state, merchantGroup: null, ...clone(value)};},
     getReport: () => report,
+    getBudgets: () => envelopes,
     hasCurrentSnapshot: () => !!report && !!envelopes && !error && !envelopes.error && !loading && loadedProjection === projectionKey(),
     isBusy: () => loading || busyRow !== null,
   };

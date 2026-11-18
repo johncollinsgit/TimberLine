@@ -44,6 +44,7 @@ class AnalysisCategoryService
     {
         $catalog = collect($definitions)->keyBy('key');
         $groups = [];
+        $direct = $childMerchants = [];
         foreach ($entries as $entry) {
             $leaf = $entry['analysis_category'] ?? $entry['category'] ?? 'uncategorized';
             $definition = $catalog->get($leaf);
@@ -60,15 +61,26 @@ class AnalysisCategoryService
                 $groups[$key]['children'][$leaf]['amount_cents'] += $amount;
                 $groups[$key]['children'][$leaf]['ids'][] = $entry['id'];
                 $groups[$key]['children'][$leaf]['entry_keys'][] = $entry['entry_key'];
+                $childMerchants[$key][$leaf] ??= [];
+                $this->addMerchant($childMerchants[$key][$leaf], $entry, $leaf);
+            } else {
+                $direct[$key] ??= [];
+                $this->addMerchant($direct[$key], $entry, $leaf);
             }
         }
-        foreach ($groups as &$group) {
+        foreach ($groups as $key => &$group) {
             $group['ids'] = array_values(array_unique($group['ids']));
             $group['children'] = array_values($group['children']);
             foreach ($group['children'] as &$child) {
                 $child['ids'] = array_values(array_unique($child['ids']));
+                $child['group_kind'] = 'subcategory';
+                $child['category_key'] = $child['key'];
+                $child['children'] = $this->merchantValues($childMerchants[$key][$child['key']] ?? []);
             }
             unset($child);
+            // Direct parent purchases must remain visible after a custom child
+            // is added; otherwise that child's subtotal hides the rest of the pie.
+            $group['children'] = [...$group['children'], ...$this->merchantValues($direct[$key] ?? [])];
             usort($group['children'], fn ($a, $b) => $b['amount_cents'] <=> $a['amount_cents']);
         }
         unset($group);
@@ -76,5 +88,46 @@ class AnalysisCategoryService
         usort($groups, fn ($a, $b) => $b['amount_cents'] <=> $a['amount_cents']);
 
         return $groups;
+    }
+
+    private function addMerchant(array &$groups, array $entry, string $category): void
+    {
+        // Ledger identity is already scoped to this viewer's current permissions.
+        $merchant = $this->merchantLabel((string) ($entry['merchant'] ?? ''));
+        $key = 'merchant:'.$category.':'.substr(hash('sha256', ClassificationService::merchant($merchant)), 0, 16);
+        $groups[$key] ??= ['key' => $key, 'label' => $merchant, 'group_kind' => 'merchant', 'category_key' => $category,
+            'amount_cents' => 0, 'ids' => [], 'entry_keys' => [], 'children' => []];
+        $groups[$key]['amount_cents'] -= (int) $entry['amount_cents'];
+        $groups[$key]['ids'][] = $entry['id'];
+        $groups[$key]['entry_keys'][] = $entry['entry_key'];
+    }
+
+    private function merchantValues(array $groups): array
+    {
+        foreach ($groups as &$group) {
+            $group['ids'] = array_values(array_unique($group['ids']));
+        }
+        unset($group);
+        $groups = array_values($groups);
+        usort($groups, fn ($a, $b) => $b['amount_cents'] <=> $a['amount_cents']);
+
+        return $groups;
+    }
+
+    private function merchantLabel(string $merchant): string
+    {
+        $normalized = ClassificationService::merchant($merchant);
+        $normalized = str_replace(['’', "'"], '', $normalized);
+        foreach (['costco' => 'Costco', 'sams club' => 'Sam’s Club', 'samsclub' => 'Sam’s Club',
+            'amazon' => 'Amazon', 'amzn' => 'Amazon', 'walmart' => 'Walmart', 'wal mart' => 'Walmart', 'wal-mart' => 'Walmart'] as $needle => $label) {
+            if (preg_match('/\b'.preg_quote($needle, '/').'\b/u', $normalized)) {
+                return $label;
+            }
+        }
+        if ($normalized === '' || $normalized === 'shared allocation') {
+            return $normalized === '' ? 'Merchant not recorded' : 'Shared cost';
+        }
+
+        return trim(preg_replace('/\s+/', ' ', $merchant));
     }
 }

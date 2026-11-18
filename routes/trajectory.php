@@ -60,3 +60,6 @@ require __DIR__.'/trajectory-analysis.php';
 require __DIR__.'/trajectory-attribution.php';
 require __DIR__.'/trajectory-assistant.php';
 require __DIR__.'/trajectory-mobile.php';
+
+require __DIR__.'/trajectory-classification.php';
+require __DIR__.'/trajectory-budget-details.php';

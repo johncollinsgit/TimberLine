@@ -16,10 +16,12 @@ class AnalysisController extends Controller
         app(FinanceAccess::class)->authorize($request->user(), $space);
         $data = $request->validate(['year' => 'sometimes|integer|between:1902,2199', 'comparison_year' => 'sometimes|integer|between:1900,2199',
             'grain' => 'sometimes|in:year,month,week', 'basis' => 'sometimes|in:spending,cash',
+            'range' => 'sometimes|in:day,week,month,quarter,year,all',
             'from' => 'sometimes|required_with:through|date_format:Y-m-d|after_or_equal:1900-01-01|before:2200-01-01',
             'through' => 'sometimes|required_with:from|date_format:Y-m-d|after_or_equal:from|before:2200-01-01',
             'account_id' => 'sometimes|nullable|integer|min:1', 'program_id' => 'sometimes|nullable|integer|min:1']);
         abort_if(isset($data['through']) && $data['through'] > now($space->timezone)->toDateString(), 422, 'Actual analysis cannot include future dates.');
+        abort_if(isset($data['range']) && (isset($data['from']) || isset($data['through'])), 422, 'Choose a calendar period or explicit dates.');
 
         return response()->json($analysis->build($request->user(), $space, $data))->header('Cache-Control', 'private, no-store');
     }

@@ -6,7 +6,7 @@ import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
 import {createServer} from 'node:net';
 import {chromium,webkit,expect} from '@playwright/test';
-import {selectReportScope} from './trajectory-controls.browser-helpers.mjs';
+import {selectReportScope,selectReportRange,closeReportControls,openReportControls} from './trajectory-controls.browser-helpers.mjs';
 const exec=promisify(execFile),base=resolve(),probe=createServer();
 await new Promise(done=>probe.listen(0,'127.0.0.1',done));const port=probe.address().port;await new Promise(done=>probe.close(done));
 const dir=await mkdtemp(join(tmpdir(),'codex-money-flow-bootstrap-')),origin=`http://127.0.0.1:${port}`;
@@ -56,6 +56,24 @@ try{
    await page.route('**/dashboard?*',async route=>{const response=await route.fetch();await reloadGate;reloadDelivered=true;await route.fulfill({response});});
    await page.reload();await expect(page.locator('#vf-income-chart')).toBeVisible();assert.equal(reloadDelivered,false,'A browser/pull reload also paints before legacy details');
    await expect(page.locator('#tr-add')).toBeDisabled();releaseReload();await expect(page.locator('#tr-add')).toBeEnabled();
+   // Period changes render the exact canonical in-memory subset before fresh
+   // requests finish; no larger/older range is fabricated from a smaller one.
+   let releasePeriod,periodDelivered=false;const periodGate=new Promise(done=>{releasePeriod=done;});
+   await page.route('**/analysis?*',async route=>{const key=new URL(route.request().url()).searchParams.get('range');if(!['day','week'].includes(key)){await route.fallback();return;}const response=await route.fetch();await periodGate;periodDelivered=true;try{await route.fulfill({response});}catch{}});
+   await page.route('**/dashboard?*',async route=>{const key=new URL(route.request().url()).searchParams.get('range');if(!['day','week'].includes(key)){await route.fallback();return;}const response=await route.fetch();await periodGate;try{await route.fulfill({response});}catch{}});
+   await selectReportRange(page,'day');await closeReportControls(page);
+   await expect(page.locator('.vf-finance')).toBeVisible();assert.equal(periodDelivered,false,'Day paints from the authorized month before fresh reads');
+   const shortDate=value=>new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',timeZone:'UTC'}).format(new Date(value+'T12:00:00Z'));
+   const day=initial.calendar_ranges.day;await expect(page.locator('#tr-context')).toContainText(shortDate(day.from)+' – '+shortDate(day.through));
+   const week=initial.calendar_ranges.week,contained=week.from>=initial.range.from&&week.through<=initial.range.through;
+   await selectReportRange(page,'week');await closeReportControls(page);
+   if(contained){await expect(page.locator('.vf-finance')).toBeVisible();assert.equal(periodDelivered,false,'A contained Week uses exact month entry keys');await expect(page.locator('#tr-context')).toContainText(shortDate(week.from)+' – '+shortDate(week.through));}
+   else await expect(page.locator('.vf-finance')).toHaveCount(0);
+   releasePeriod();await expect(page.locator('#tr-add')).toBeEnabled();await expect(page.locator('#tr-context')).toContainText(shortDate(week.from)+' – '+shortDate(week.through));
+   // A refresh invalidates the dated memory cohort instead of presenting it as fresh.
+   let releaseExplicit;const explicitGate=new Promise(done=>{releaseExplicit=done;});
+   await page.route('**/analysis?*',async route=>{const response=await route.fetch();await explicitGate;try{await route.fulfill({response});}catch{}});
+   await openReportControls(page);await page.locator('#tr-refresh').click();await closeReportControls(page);await expect(page.locator('.vf-finance')).toHaveCount(0);releaseExplicit();await expect(page.locator('.vf-finance')).toBeVisible();await expect(page.locator('#tr-add')).toBeEnabled();
    assert.deepEqual(errors,[]);await page.close();
 
    const failed=await context.newPage();await failed.setViewportSize({width,height:950});
@@ -65,6 +83,13 @@ try{
    await failed.goto(origin+'/trajectory');await expect(failed.locator('#tr-content [role="alert"]')).toContainText('Fictional projection is unavailable.');
    await expect(failed.locator('.vf-stat-row')).toHaveCount(0);assert.doesNotMatch(await failed.locator('#tr-content').innerText(),/\$0(?:\.00)?/);
    releaseFailure();await expect(failed.locator('#tr-add')).toBeEnabled();await expect(failed.locator('#tr-content [role="alert"]')).toContainText('Fictional projection is unavailable.');await failed.close();
+
+   const denied=await context.newPage();await denied.setViewportSize({width,height:950});
+   let releaseDenied;const deniedGate=new Promise(done=>{releaseDenied=done;});
+   await denied.route('**/dashboard?*',async route=>{try{const response=await route.fetch();await deniedGate;await route.fulfill({response});}catch{}});
+   await denied.route('**/analysis?*',route=>route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({message:'Fictional financial access was revoked.'})}));
+   await denied.goto(origin+'/trajectory');await expect(denied.locator('#tr-content [role="alert"]')).toContainText('revoked');releaseDenied();await denied.waitForTimeout(80);
+   await expect(denied.locator('.vf-finance')).toHaveCount(0);await expect(denied.locator('#tr-content [role="alert"]')).toContainText('revoked');await denied.close();
 
    const switched=await context.newPage();await switched.setViewportSize({width,height:950});
    let releaseOld,held=false;const oldGate=new Promise(done=>{releaseOld=done;});

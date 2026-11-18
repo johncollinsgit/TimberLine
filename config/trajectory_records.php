@@ -1,6 +1,27 @@
 <?php
 
 return [
+    'bill_observation' => [
+        'reference' => ['label' => 'Stable invoice / sharing reference', 'type' => 'text', 'required' => true],
+        'obligation_month' => ['label' => 'Month this obligation belongs to (due month when known)', 'type' => 'month', 'required' => true],
+        'service_month' => ['label' => 'Service / sharing month (only if the source states it)', 'type' => 'month', 'required' => false],
+        'category' => ['label' => 'Bill category', 'type' => 'category', 'required' => true],
+        'amount_cents' => ['label' => 'Amount owed / paid after credits (optional if unknown)', 'type' => 'money', 'required' => false],
+        'status' => ['label' => 'Payment evidence', 'type' => 'select', 'required' => true, 'choices' => ['due', 'processing', 'paid', 'estimated', 'unknown', 'needs_review']],
+        'due_on' => ['label' => 'Exact due date (if verified)', 'type' => 'date', 'required' => false],
+        'initiated_on' => ['label' => 'Payment initiated (does not establish bank posting)', 'type' => 'date', 'required' => false],
+        'paid_on' => ['label' => 'Actual payment date (if verified)', 'type' => 'date', 'required' => false],
+        'recurring_record_id' => ['label' => 'Existing recurring schedule (optional)', 'type' => 'recurring_record', 'required' => false],
+        'debt_record_id' => ['label' => 'Existing debt terms (optional)', 'type' => 'debt_record', 'required' => false],
+        'medical_bill_record_id' => ['label' => 'Existing medical bill (optional)', 'type' => 'medical_bill_record', 'required' => false],
+        'account_id' => ['label' => 'Associated owned account (optional)', 'type' => 'account', 'required' => false],
+        'payment_account_id' => ['label' => 'Paid / pays from (optional)', 'type' => 'account', 'required' => false],
+        'transaction_id' => ['label' => 'Exact owned bank/card source (optional; no transaction is created)', 'type' => 'integer', 'required' => false],
+        'future_amount_unknown' => ['label' => 'This source does not establish future recurring amounts', 'type' => 'boolean', 'required' => false],
+        'observed_on' => ['label' => 'Source verified on', 'type' => 'date', 'required' => true],
+        'source' => ['label' => 'Invoice / receipt / bank evidence', 'type' => 'text', 'required' => true],
+        'reviewed' => ['label' => 'Obligation month, amount and payment status reviewed', 'type' => 'boolean', 'required' => true],
+    ],
     'tax_remittance' => [
         'transaction_id' => ['label' => 'Bank transaction ID', 'type' => 'integer', 'required' => true],
         'paid_on' => ['label' => 'Bank posting date', 'type' => 'date', 'required' => true],
@@ -64,6 +85,15 @@ return [
         'source_reference' => ['label' => 'Source message or order reference', 'type' => 'text', 'required' => true],
         'summary' => ['label' => 'Items / fees / purpose', 'type' => 'text', 'required' => true],
         'transaction_id' => ['label' => 'Matching transaction ID (optional)', 'type' => 'integer', 'required' => false],
+    ],
+    'transaction_source_identity' => [
+        'transaction_id' => ['label' => 'Bank transaction', 'type' => 'integer', 'required' => true],
+        'card_last4' => ['label' => 'Verified physical card last four', 'type' => 'last_four', 'required' => true],
+        'card_type' => ['label' => 'Verified card type', 'type' => 'select', 'required' => true, 'choices' => ['debit', 'credit', 'unknown']],
+        'card_label' => ['label' => 'Card label (optional)', 'type' => 'text', 'required' => false],
+        'observed_on' => ['label' => 'Evidence observed on', 'type' => 'date', 'required' => true],
+        'source' => ['label' => 'Statement, receipt or owner evidence', 'type' => 'text', 'required' => true],
+        'reviewed' => ['label' => 'Physical card evidence reviewed', 'type' => 'boolean', 'required' => true],
     ],
     'interest_statement' => [
         'account_id' => ['label' => 'Debt account', 'type' => 'account', 'required' => true],
@@ -224,6 +254,11 @@ return [
         ],
     ],
     'goal' => [
+        'budget_category' => [
+            'label' => 'Spending category for this reserve fund (optional)',
+            'type' => 'category',
+            'required' => false,
+        ],
         'target_cents' => [
             'label' => 'Target amount',
             'type' => 'money',

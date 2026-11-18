@@ -1,0 +1,75 @@
+import {readFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import {chromium, webkit} from '@playwright/test';
+
+const raw = await readFile('resources/js/trajectory/budget-detail.js', 'utf8');
+const script = raw.replace("import './budget-detail.css';", '').replaceAll('export function ', 'function ') + '\nwindow.createBudgetDetail=createBudgetDetail;';
+const css = await readFile('resources/js/trajectory/budget-detail.css', 'utf8');
+for (const engine of [chromium, webkit]) {
+  const browser = await engine.launch();
+  try {
+    for (const width of [1180, 390]) {
+      const page = await browser.newPage({viewport: {width, height: 900}}), errors = [];
+      page.on('pageerror', error => errors.push(error.message));
+      await page.setContent('<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><main id="trajectory"></main></body></html>');
+      await page.addStyleTag({content: css}); await page.addScriptTag({content: script});
+      await page.evaluate(() => {
+        window.requests = []; window.changes = 0; window.entries = 0; window.ctx = {space_id: 7};
+        window.budget = {id: 11, kind: 'budget', name: 'Groceries', version: 1, data: {category: 'groceries', monthly_cents: 140000, effective_on: '2026-11-01', ends_on: '2026-11-30', cash_spending_pending: false, category_review_pending: true, reported_cash_spent_cents: 50000, reported_cash_as_of: '2026-11-18', source: 'Fictional evidence'}};
+        window.goal = {id: 12, kind: 'goal', name: 'Travel reserve', version: 1, data: {target_cents: 100000, saved_cents: 0, monthly_cents: 16667, target_on: '2027-05-18', goal_type: 'savings', budget_category: 'travel'}};
+        const api = async (path, method = 'GET', data) => {
+          window.requests.push({path, method, data});
+          if (method === 'GET') return new Promise(resolve => {window.resolveRead = () => resolve({record: structuredClone(path.endsWith('/12') ? window.goal : window.budget)});});
+          if (path.endsWith('/undo')) return {record: {...window.budget, version: 3}, undo: null};
+          const record = structuredClone(path.endsWith('/12') ? window.goal : window.budget);
+          record.version++; record.data = {...record.data, ...data.changes};
+          return {record, undo: {event_id: 900, version: record.version}};
+        };
+        window.detail = window.createBudgetDetail({root: document.querySelector('#trajectory'), api,
+          endpoint: (path, id) => `/spaces/${id}${path}`, getContext: () => window.ctx,
+          esc: value => String(value ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c])),
+          precise: value => '$' + (value / 100).toFixed(2), onChanged: () => window.changes++, onEntries: () => window.entries++});
+        window.row = {label: 'Groceries', category: 'groceries', record_id: 11, record_ids: [11], target_cents: 140000,
+          bank_spent_cents: 30000, reported_cash_spent_cents: 50000, reported_cash_as_of: '2026-11-18', pending_cents: 0, category_review_pending: true, reasons: ['category_review_pending']};
+        window.detail.open(window.row, {month: '2026-11'});
+      });
+      await page.getByRole('heading', {name: 'Groceries', exact: true}).waitFor();
+      assert.equal(await page.getByRole('dialog').isVisible(), true);
+      await page.locator('[data-budget-money="monthly_cents"]').fill('1500');
+      assert.match(await page.locator('[data-budget-preview]').innerText(), /\$1500.00 planned/);
+      assert.equal((await page.evaluate(() => window.requests.filter(r => r.method !== 'GET'))).length, 0);
+      await page.evaluate(() => window.resolveRead());
+      await page.getByRole('button', {name: 'Save plan', exact: true}).click();
+      await page.getByRole('button', {name: 'Undo last edit'}).waitFor();
+      assert.deepEqual(await page.evaluate(() => window.requests.find(r => r.method === 'PATCH').data), {version: 1, changes: {monthly_cents: 150000}});
+      await page.getByRole('button', {name: 'Undo last edit'}).click();
+      await page.waitForFunction(() => window.changes === 2);
+      const geometry = await page.getByRole('dialog').evaluate(element => ({width: element.getBoundingClientRect().width, scroll: element.scrollWidth, client: element.clientWidth}));
+      assert.ok(geometry.width <= width); assert.ok(geometry.scroll <= geometry.client + 1);
+      assert.equal(await page.evaluate(() => window.requests.some(r => /analysis|dashboard/.test(r.path))), false);
+      await page.getByRole('button', {name: 'View recorded entries'}).click();
+      assert.equal(await page.evaluate(() => window.entries), 1);
+      await page.evaluate(() => window.detail.open({mode: 'fund', category: 'travel', label: 'Travel reserve', record_id: 12, record_ids: [12], bank_spent_cents: 5000, pending_cents: 0,
+        fund: {record_id: 12, version: 1, target_cents: 100000, saved_cents: 0, monthly_cents: 16667, target_on: '2027-05-18'}}, {month: '2026-11'}));
+      assert.match(await page.locator('[data-budget-preview]').innerText(), /\$0.00 saved/);
+      await page.locator('[data-budget-money="monthly_cents"]').fill('200');
+      await page.locator('[data-budget-money="target_cents"]').fill('1200');
+      assert.match(await page.locator('[data-budget-preview]').innerText(), /\$1200.00 still to build/);
+      await page.evaluate(() => window.resolveRead());
+      await page.getByRole('button', {name: 'Save plan', exact: true}).click();
+      await page.getByRole('button', {name: 'Undo last edit'}).waitFor();
+      const fundSave = await page.evaluate(() => window.requests.filter(r => r.method === 'PATCH').at(-1));
+      assert.deepEqual(fundSave.data.changes, {monthly_cents: 20000, target_cents: 120000, target_on: '2027-05-18'});
+      assert.equal('saved_cents' in fundSave.data.changes, false);
+      assert.match(await page.locator('[data-budget-preview]').innerText(), /\$0.00 saved/);
+      await page.evaluate(() => {
+        window.detail.close(); window.ctx.month = '2026-11'; window.detail.open(window.row, {month: '2026-11'});
+        const oldRead = window.resolveRead;
+        window.ctx.month = '2026-12'; window.detail.contextChanged(); oldRead();
+      });
+      assert.equal(await page.getByRole('dialog').isVisible(), false);
+      assert.deepEqual(errors, []); await page.close();
+    }
+  } finally {await browser.close();}
+}
+console.log('Budget detail: immediate desktop/mobile detail, plan-only preview/save/undo, and fund separation passed in Chromium and WebKit.');

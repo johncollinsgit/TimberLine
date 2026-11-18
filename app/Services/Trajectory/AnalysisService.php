@@ -17,9 +17,6 @@ class AnalysisService
     {
         app(FinanceAccess::class)->authorize($viewer, $space);
         $today = CarbonImmutable::now($space->timezone)->startOfDay();
-        $from = $options['from'] ?? $today->startOfMonth()->toDateString();
-        $through = $options['through'] ?? $today->toDateString();
-        $year = (int) ($options['year'] ?? substr($from, 0, 4));
         $grain = $options['grain'] ?? 'month';
         $basis = $options['basis'] ?? 'spending';
         $programId = isset($options['program_id']) ? (int) $options['program_id'] : null;
@@ -28,9 +25,17 @@ class AnalysisService
         abort_if($accountId !== null && ! $accounts->contains('id', $accountId), 404);
         $programs = Record::where('space_id', $space->id)->where('kind', 'program')->where('active', true)->get();
         abort_if($programId !== null && ! $programs->contains('id', $programId), 404);
-        $entries = collect(app(LedgerService::class)->entries($space, null, $today->toDateString(), accountId: $accountId));
+        $entries = collect(app(LedgerService::class)->entries($space, null, $today->toDateString(), accountId: $accountId, viewer: $viewer));
         $economic = app(AttributionService::class)->expandEntries($space, $entries->all(), $programId, $viewer);
         $economic = collect($economic);
+        $calendarRange = $options['range'] ?? (isset($options['from']) ? 'custom' : 'month');
+        $calendarStarts = ['day' => $today, 'week' => $today->startOfWeek(), 'month' => $today->startOfMonth(),
+            'quarter' => $today->startOfQuarter(), 'year' => $today->startOfYear(),
+            'all' => $entries->isNotEmpty() ? CarbonImmutable::parse($entries->min('date'), $space->timezone) : $today->startOfMonth()];
+        abort_unless($calendarRange === 'custom' || isset($calendarStarts[$calendarRange]), 422, 'Choose a supported calendar period.');
+        $from = $options['from'] ?? $calendarStarts[$calendarRange]->toDateString();
+        $through = $options['through'] ?? $today->toDateString();
+        $year = (int) ($options['year'] ?? ($calendarRange === 'custom' ? substr($from, 0, 4) : $today->year));
         $cashAccounts = $accounts->where('kind', 'cash')->when($accountId, fn ($q) => $q->where('id', $accountId));
         $cashIds = Transaction::where('space_id', $space->id)->whereIn('account_id', $cashAccounts->pluck('id'))
             ->whereDate('posted_on', '<=', $today->toDateString())->where('pending', false)->where('removed', false)->pluck('id')->all();
@@ -81,6 +86,16 @@ class AnalysisService
             && $account->history_start->toDateString() <= $from && $account->observed_at && $account->observed_at->toDateString() >= $through);
         $selectedHasEvidence = $selected['cash']->isNotEmpty() || $selected['economic']->isNotEmpty();
         $selectedAvailable = $selectedCovered || $selectedHasEvidence;
+        $calendarRanges = [];
+        foreach ($calendarStarts as $key => $date) {
+            $rangeFrom = $date->toDateString();
+            $calendarRanges[$key] = ['from' => $rangeFrom, 'through' => $today->toDateString(),
+                'covered' => $selectedAccounts->isNotEmpty() && $selectedAccounts->every(fn ($account) => $account->history_start
+                    && $account->history_start->toDateString() <= $rangeFrom && $account->observed_at
+                    && $account->observed_at->toDateString() >= $today->toDateString()),
+                'has_evidence' => $cash->contains(fn ($entry) => $entry['date'] >= $rangeFrom)
+                    || $economic->contains(fn ($entry) => $entry['date'] >= $rangeFrom)];
+        }
         $spendingCoverage = $basis === 'spending' ? app(EconomicActivityService::class)->coverage($selected['economic']) : null;
         if ($spendingCoverage !== null) {
             $spendingCoverage['review_rows'] = app(EconomicActivityService::class)->unresolved($selected['economic'])->map(fn ($row) => [
@@ -134,8 +149,10 @@ class AnalysisService
             ...$selected['receipts']->map(fn ($e) => [...$e, 'direction' => 'in'])->values()->all()];
 
         return ['range' => ['from' => $from, 'through' => $through, 'start' => $from, 'end' => $through],
-            'scope' => ['space_id' => $space->id, 'space_name' => $space->name, 'kind' => $space->kind, 'account_id' => $accountId, 'program_id' => $programId, 'basis' => $basis],
+            'scope' => ['space_id' => $space->id, 'space_name' => $space->name, 'kind' => $space->kind, 'account_id' => $accountId, 'program_id' => $programId, 'basis' => $basis, 'calendar_range' => $calendarRange],
             'currency' => 'USD', 'today' => $today->toDateString(), 'year' => $year, 'grain' => $grain,
+            'calendar_ranges' => $calendarRanges,
+            'budget_context' => ['month' => substr($through, 0, 7), 'actual_through' => CarbonImmutable::parse($through, $space->timezone)->endOfMonth()->min($today)->toDateString()],
             'summary' => ['inflow_cents' => $selectedAvailable ? (int) $selected['receipts']->sum('amount_cents') : null,
                 'recorded_spending_cents' => $selectedAvailable ? -(int) $selected['expenses']->sum('amount_cents') : null,
                 'spending_cents' => $selectedAvailable && $selected['complete'] ? -(int) $selected['expenses']->sum('amount_cents') : null],
@@ -144,6 +161,8 @@ class AnalysisService
             'program_options' => $programs->map(fn ($r) => ['id' => $r->id, 'name' => $r->name])->all(),
             'account_options' => $accounts->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'kind' => $a->kind])->all(),
             'coverage' => ['complete' => false, 'status' => $selectedAvailable ? 'partial' : 'unavailable',
+                'history_available' => $entries->isNotEmpty() || $economic->isNotEmpty(),
+                'latest_recorded_on' => collect([$entries->max('date'), $economic->max('date')])->filter()->max(),
                 'spending' => $spendingCoverage,
                 'selected_range_covered' => $selectedCovered, 'selected_range_has_evidence' => $selectedHasEvidence, 'notes' => array_values(array_unique([
                     'Recorded activity only. Missing accounts or history can change these amounts.',

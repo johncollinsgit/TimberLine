@@ -80,7 +80,8 @@ test('spending includes only the authorized shared allocation while cash uses ow
     expect(json_encode($view))->not->toContain('Private foreign')->and(collect($view['spending']['outflows'])->firstWhere('key', 'clothing')['merchants'][0]['label'])->toBe('Shared allocation');
     expect(collect($view['cash']['excluded'])->firstWhere('key', 'noncash')['ids'])->toContain($shared->id);
     $this->actingAs($this->owner)->postJson('/trajectory/spaces/'.$this->space->id.'/evidence', ['ids' => [$shared->id], 'cash_movement' => true])->assertOk()->assertExactJson([]);
-    $this->postJson('/trajectory/spaces/'.$this->space->id.'/evidence', ['ids' => [$shared->id]])->assertOk()->assertJsonPath('0.amount_cents', -1500)->assertJsonPath('0.merchant', 'Shared allocation');
+    $this->postJson('/trajectory/spaces/'.$this->space->id.'/evidence', ['ids' => [$shared->id]])->assertOk()->assertJsonPath('0.amount_cents', -1500)->assertJsonPath('0.merchant', 'Household purchase paid from another space')
+        ->assertJsonPath('0.source_identity.authorized_source', false)->assertJsonPath('0.source_identity.account_name', null);
 });
 
 test('empty coverage stays unknown zero records remain inspectable and duplicated inputs never count twice', function (): void {
