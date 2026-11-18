@@ -209,3 +209,50 @@ test('original ledger remains usable before the additive attribution schema is i
     $this->attribution->save($this->owner, $this->space, $tx, [['space_id' => $this->space->id, 'category' => 'groceries', 'amount_cents' => -11001]], $tx->fresh()->version);
     expect(AllocationDetail::where('active', true)->count())->toBe(1)->and(Allocation::sum('amount_cents'))->toBe(-11701);
 });
+
+test('economic projection authorization queries scale with distinct spaces rather than history rows', function (): void {
+    $rows = [];
+    for ($index = 1; $index <= 60; $index++) {
+        $rows[] = [...$this->bankRow, 'id' => 'history-'.$index, 'amount_cents' => -1000 - $index];
+    }
+    app(LedgerService::class)->ingest($this->account, $rows);
+    $entries = app(LedgerService::class)->entries($this->space);
+    $factsBefore = Transaction::where('account_id', $this->account->id)->orderBy('id')->get()->map(fn ($row) => $row->getRawOriginal())->all();
+    $connection = \Illuminate\Support\Facades\DB::connection();
+    $connection->enableQueryLog();
+    try {
+        $connection->flushQueryLog();
+        $single = $this->attribution->expandEntries($this->space, [$entries[0]], viewer: $this->owner);
+        $singleQueries = count($connection->getQueryLog());
+        $connection->flushQueryLog();
+        $history = $this->attribution->expandEntries($this->space, $entries, viewer: $this->owner);
+        $historyQueries = count($connection->getQueryLog());
+    } finally {
+        $connection->disableQueryLog();
+        $connection->flushQueryLog();
+    }
+    expect($history)->toHaveCount(61)->and($historyQueries)->toBeLessThanOrEqual($singleQueries + 1)
+        ->and($single[0]['attribution_editable'])->toBeTrue()
+        ->and(collect($history)->every(fn ($entry) => $entry['attribution_editable'] === true))->toBeTrue()
+        ->and(array_sum(array_column($history, 'amount_cents')))->toBe(array_sum(array_column($entries, 'amount_cents')))
+        ->and(Transaction::where('account_id', $this->account->id)->orderBy('id')->get()->map(fn ($row) => $row->getRawOriginal())->all())->toBe($factsBefore);
+});
+
+test('economic projection rechecks revoked business access on the next invocation', function (): void {
+    $business = attributionBusiness($this);
+    $program = $this->attribution->saveDefinition($this->owner, $business, 'program', 'Soccer', ['key' => 'soccer']);
+    $this->attribution->save($this->owner, $this->space, $this->tx,
+        [['space_id' => $business->id, 'amount_cents' => -10001, 'category' => 'shopping', 'program_record_id' => $program->id]], $this->tx->version);
+    $entries = app(LedgerService::class)->entries($business);
+    $authorized = $this->attribution->expandEntries($business, $entries, $program->id, $this->owner);
+    expect($authorized[0]['attribution_editable'])->toBeTrue()->and($authorized[0]['source_space_id'])->toBe($this->space->id);
+    $this->space->update(['enabled' => false]);
+    $sourceRevoked = $this->attribution->expandEntries($business, $entries, $program->id, $this->owner);
+    expect($sourceRevoked[0]['attribution_editable'])->toBeFalse()->and($sourceRevoked[0]['source_space_id'])->toBeNull();
+    $this->space->update(['enabled' => true]);
+    $this->owner->tenants()->updateExistingPivot($business->tenant_id, ['membership_active' => false]);
+    $revoked = $this->attribution->expandEntries($business, $entries, $program->id, $this->owner);
+    expect($revoked[0]['attribution_editable'])->toBeFalse()->and($revoked[0]['source_space_id'])->toBeNull()
+        ->and($revoked[0]['merchant'])->toBe('Shared allocation')->and($revoked[0]['account_id'])->toBeNull()
+        ->and($revoked[0]['amount_cents'])->toBe(-10001);
+});

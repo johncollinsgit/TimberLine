@@ -22,7 +22,7 @@ function fixture() {
   html = html.replace(/\{\{\s*asset\('([^']+)'\)\s*\}\}/g, (_, asset) => `/${asset}`);
   html = html.replace(/\{\{[\s\S]*?\}\}/g, 'Fictional');
   html = html.replace('Loading your finance spaces…', '<section class="tr-panel"><h2>Fictional source review</h2><div class="tr-table-wrap"><table class="tr-table"><tr><th>Source</th><th>Observation date</th><th>Coverage status</th><th>Review action</th></tr><tr><td>Sample statement</td><td>Example date</td><td>Needs review</td><td>Open source</td></tr></table></div></section>');
-  return html.replace('</body>', `<script type="module">import {initHouseholdMobile} from '/household-mobile.js';window.mobile=initHouseholdMobile(document.querySelector('#trajectory'));document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>document.querySelector('#tr-page-title').textContent=b.dataset.tab);</script></body>`);
+  return html.replace('</body>', `<script type="module">import {initHouseholdMobile} from '/household-mobile.js';window.mobile=initHouseholdMobile(document.querySelector('#trajectory'));document.querySelector('#tr-context').textContent='Nov 1 – Nov 18 · Fictional baseline';document.querySelector('.tr-toolbar>.tr-actions').insertAdjacentHTML('afterbegin','<label class="tr-account-picker">Account<select id="tr-account-filter"><option value="">All accounts</option><option value="4">Fictional checking</option></select></label>');document.querySelector('#tr-content').insertAdjacentHTML('afterbegin','<div class="vf-controls"><label>Year<select data-vf-input="year"><option>2028</option><option>2027</option></select></label></div>');window.mobile.syncControls();document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>document.querySelector('#tr-page-title').textContent=b.dataset.tab);document.querySelector('#tr-range').onclick=e=>{if(e.target.dataset.range)document.querySelector('#tr-date-fields').hidden=e.target.dataset.range!=='custom';};</script></body>`);
 }
 async function main() {
   const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
@@ -36,7 +36,7 @@ async function main() {
         const landing = fs.readFileSync(path.join(base, 'resources/views/trajectory/welcome.blade.php'), 'utf8').replace(/\{\{\s*route\('([^']+)'\)[^}]*\}\}/g, (_, name) => '/' + name).replace(/\{\{\s*asset\('([^']+)'\)\s*\}\}/g, (_, name) => '/' + name);
         return route.fulfill({contentType: 'text/html', body: landing});
       }
-      if (['/app.css', '/household-mobile.css', '/visual-finance.css', '/household-mobile.js'].includes(name)) return route.fulfill({path: path.join(base, 'resources/js/trajectory', name.slice(1)), contentType: name.endsWith('.css') ? 'text/css' : 'application/javascript'});
+      if (['/app.css', '/household-mobile.css', '/visual-finance.css', '/household-mobile.js','/report-controls.js'].includes(name)) return route.fulfill({path: path.join(base, 'resources/js/trajectory', name.slice(1)), contentType: name.endsWith('.css') ? 'text/css' : 'application/javascript'});
       if (name === '/images/marketplace/studio.jpg') return route.fulfill({path: path.join(base, 'public', name)});
       return route.fulfill({status: 404, body: ''});
     });
@@ -46,6 +46,39 @@ async function main() {
     assert.equal(await page.locator('#tr-mobile-splash').isVisible(), true);
     await page.locator('#tr-splash-skip').click();
     assert.equal(await page.locator('#tr-mobile-splash').isVisible(), false);
+    assert.ok(await page.locator('#tr-content').evaluate(node=>node.getBoundingClientRect().top<140),'Phone content begins below a compact header, not a filter stack');
+    assert.equal(await page.locator('#tr-report-controls').isVisible(),false);
+    assert.equal(await page.locator('#tr-mobile-top-actions #tr-add').count(),1);
+    assert.equal(await page.locator('#tr-mobile-top-actions [data-action="vf-inbox"]').count(),1);
+    assert.equal(await page.locator('#tr-content .vf-controls').count(),0);
+    await page.evaluate(()=>{document.querySelector('#tr-company-label').hidden=false;document.querySelector('#tr-company').innerHTML='<option>Fictional Candle Co</option>';window.mobile.syncControls();});
+    assert.match(await page.locator('#tr-mobile-period-label').textContent(),/^Fictional Candle Co · Nov 1/);
+    await page.evaluate(()=>{document.querySelector('#tr-company-label').hidden=true;window.mobile.syncControls();});
+    await page.getByRole('button',{name:'Dates and view options',exact:true}).click();
+    assert.equal(await page.getByRole('dialog',{name:'Dates & view',exact:true}).isVisible(),true);
+    assert.equal(await page.locator('#tr-analysis-controls [data-vf-input="year"]').isVisible(),true);
+    await page.locator('[data-vf-input="year"]').selectOption('2027');
+    await page.locator('[data-range="custom"]').click();
+    await page.locator('#tr-start').fill('2028-01-01');await page.locator('#tr-end').fill('2028-01-31');
+    await page.locator('#tr-account-filter').selectOption('4');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#tr-report-controls').isVisible(),false);
+    assert.equal(await page.locator('#tr-date-toggle').evaluate(node=>node===document.activeElement),true);
+    await page.locator('#tr-date-toggle').click();
+    assert.equal(await page.locator('#tr-start').inputValue(),'2028-01-01');
+    assert.equal(await page.locator('#tr-account-filter').inputValue(),'4');
+    await page.mouse.click(4,400);assert.equal(await page.locator('#tr-report-controls').isVisible(),false);
+    await page.locator('#tr-date-toggle').click();await page.locator('[data-range="month"]').click();
+    assert.equal(await page.locator('#tr-report-controls').isVisible(),false);
+    await page.locator('#tr-date-toggle').focus();await page.evaluate(()=>window.mobile.syncControls());
+    assert.equal(await page.locator('#tr-date-toggle').evaluate(node=>node===document.activeElement),true);
+    for(const width of [320,768]){
+      await page.setViewportSize({width,height:844});
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+      assert.ok(await page.locator('#tr-content').evaluate(node=>node.getBoundingClientRect().top<140));
+      assert.equal(await page.locator('#tr-date-toggle').isVisible(),true);
+    }
+    await page.setViewportSize({width:390,height:844});
     assert.equal(await page.locator('.tr-table-wrap').evaluate(el => el.scrollWidth > el.clientWidth), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.equal(await page.locator('#tr-mobile-drawer').getAttribute('inert'), '');
@@ -88,6 +121,10 @@ async function main() {
     await page.waitForFunction(() => !document.querySelector('#tr-mobile-drawer').hasAttribute('inert'));
     assert.equal(await page.locator('#tr-mobile-menu').isVisible(), false);
     assert.equal(await page.locator('#tr-mobile-drawer').getAttribute('inert'), null);
+    assert.equal(await page.locator('#tr-report-controls').isVisible(),true);
+    assert.equal(await page.locator('#tr-date-toggle').isVisible(),false);
+    assert.equal(await page.locator('#tr-content .vf-controls [data-vf-input="year"]').count(),1);
+    assert.equal(await page.locator('#tr-account-filter').inputValue(),'');
     await page.setViewportSize({width: 390, height: 844});
     await page.emulateMedia({reducedMotion: 'reduce'});
     await page.evaluate(() => { sessionStorage.clear(); });

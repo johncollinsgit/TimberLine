@@ -3739,3 +3739,8 @@ purchase conversations, an expense inbox and separate Personal/Business web-app
 installation surfaces. Category colors remain stable across views; uncertain
 history and budget targets stay visibly unavailable. See the visual-finance and
 attribution runbooks for financial definitions and physical-phone acceptance.
+
+Phone actions now share one compact header with labeled notification, add and
+calendar icons. Date, account, workspace and analysis options open in the calendar
+popover; the selected business and date remain visible. The same controls return
+to their full desktop positions on resize, preserving values and handlers.

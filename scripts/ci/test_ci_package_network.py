@@ -11,6 +11,112 @@ spec.loader.exec_module(network)
 
 
 class PackageNetworkTest(unittest.TestCase):
+    def test_unused_microsoft_list_entries_only_are_disabled_and_replay_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'sources.list.d').mkdir()
+            ubuntu = b'deb https://archive.ubuntu.com/ubuntu noble main\n'
+            (root / 'sources.list').write_bytes(ubuntu)
+            source = root / 'sources.list.d/microsoft-prod.list'
+            disabled = '# deb https://packages.microsoft.com/ubuntu/24.04/prod noble main\n'
+            targeted = ('deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] '
+                        'https://packages.microsoft.com/ubuntu/24.04/prod noble main\n'
+                        '  deb-src https://packages.microsoft.com/ubuntu/24.04/prod/ noble main\n')
+            unrelated = ''.join('deb ' + uri + ' noble main\n' for uri in (
+                'https://packages.microsoft.com/ubuntu/22.04/prod',
+                'https://packages.microsoft.com/ubuntu/24.04/prod-extra',
+                'https://packages.microsoft.com/ubuntu/24.04/prod?query=1',
+                'https://packages.microsoft.com.evil.invalid/ubuntu/24.04/prod',
+                'https://user@packages.microsoft.com/ubuntu/24.04/prod',
+                'https://packages.microsoft.com:8443/ubuntu/24.04/prod',
+                'https://security.ubuntu.com/ubuntu/'))
+            source.write_text(disabled + targeted + unrelated)
+            messages = []
+            self.assertTrue(network.disable_unused_microsoft_sources(root, messages.append))
+            expected = disabled + ''.join('# everbranch-ci: unused Microsoft source: ' + line
+                                           for line in targeted.splitlines(keepends=True)) + unrelated
+            self.assertEqual(source.read_text(), expected)
+            self.assertEqual((root / 'sources.list').read_bytes(), ubuntu)
+            self.assertFalse(network.disable_unused_microsoft_sources(root, messages.append))
+            self.assertEqual(source.read_text(), expected)
+            self.assertEqual(len(messages), 1)
+            self.assertIn('APT::Update::Error-Mode "any";', network.APT_OPTIONS)
+
+    def test_deb822_mixed_uris_keep_ubuntu_fields_comments_and_inline_key(self):
+        before = ('# retained comment\r\nTypes: deb\r\nURIs: https://packages.microsoft.com/ubuntu/24.04/prod\r\n'
+                  ' https://packages.microsoft.com/ubuntu/24.04/prod/\r\n'
+                  ' https://security.ubuntu.com/ubuntu/ https://another.invalid/apt\r\n'
+                  'Suites: noble noble-security\r\nComponents: main\r\nSigned-By:\r\n'
+                  ' -----BEGIN PGP PUBLIC KEY BLOCK-----\r\n .\r\n key-data\r\n'
+                  ' -----END PGP PUBLIC KEY BLOCK-----\r\n')
+        expected = before.replace('URIs: https://packages.microsoft.com/ubuntu/24.04/prod\r\n', 'URIs: \r\n').replace(
+            ' https://packages.microsoft.com/ubuntu/24.04/prod/\r\n', '')
+        after = network.without_unused_microsoft_deb822(before)
+        self.assertEqual(after, expected)
+        self.assertEqual(network.without_unused_microsoft_deb822(after), expected)
+        self.assertNotIn('Enabled: no', after)
+
+    def test_deb822_disables_only_microsoft_stanza_and_preserves_other_stanzas(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'sources.list.d').mkdir()
+            source = root / 'sources.list.d/packages.sources'
+            microsoft = ('Types: deb\nURIs: https://packages.microsoft.com/ubuntu/24.04/prod\n'
+                         'Suites: noble\nComponents: main\nSigned-By: /known/microsoft.gpg\n')
+            ubuntu = ('Types: deb\nURIs: https://archive.ubuntu.com/ubuntu\n'
+                      'Suites: noble\nComponents: main\nSigned-By: /known/ubuntu.gpg\n')
+            old_release = microsoft.replace('24.04', '22.04')
+            before = microsoft + '\n' + ubuntu + '\n' + old_release
+            source.write_text(before)
+            expected = microsoft + 'Enabled: no\n\n' + ubuntu + '\n' + old_release
+            self.assertTrue(network.disable_unused_microsoft_sources(root, lambda _: None))
+            self.assertEqual(source.read_text(), expected)
+            self.assertFalse(network.disable_unused_microsoft_sources(root, lambda _: None))
+            self.assertEqual(source.read_text(), expected)
+
+    def test_deb822_existing_enabled_and_missing_final_newline_are_safe(self):
+        before = ('Types: deb\nURIs: https://packages.microsoft.com/ubuntu/24.04/prod\n'
+                  'Enabled:\n yes\nSigned-By: /known/key')
+        after = before.replace('Enabled:\n yes\n', 'Enabled:no\n')
+        self.assertEqual(network.without_unused_microsoft_deb822(before), after)
+        no_enabled = before.replace('Enabled:\n yes\n', '')
+        expected = no_enabled + '\nEnabled: no'
+        self.assertEqual(network.without_unused_microsoft_deb822(no_enabled), expected)
+        self.assertEqual(network.without_unused_microsoft_deb822(expected), expected)
+
+    def test_source_symlinks_fail_before_any_source_is_rewritten(self):
+        for name in ('sources.list', 'sources.list.d/z-linked.list', 'sources.list.d/z-linked.sources'):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / 'sources.list.d').mkdir()
+                source = root / 'sources.list.d/a-microsoft.list'
+                before = b'deb https://packages.microsoft.com/ubuntu/24.04/prod noble main\n'
+                source.write_bytes(before)
+                external = root / 'untouched'
+                external.write_bytes(before)
+                (root / name).symlink_to(external)
+                with self.assertRaises(ValueError):
+                    network.disable_unused_microsoft_sources(root, lambda _: None)
+                self.assertEqual(source.read_bytes(), before)
+                self.assertEqual(external.read_bytes(), before)
+
+    def test_source_directory_symlinks_and_dangling_links_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            linked_root = root / 'linked-root'
+            linked_root.symlink_to(root, target_is_directory=True)
+            with self.assertRaises(ValueError):
+                network.disable_unused_microsoft_sources(linked_root, lambda _: None)
+            sources = root / 'sources.list.d'
+            sources.symlink_to(root, target_is_directory=True)
+            with self.assertRaises(ValueError):
+                network.disable_unused_microsoft_sources(root, lambda _: None)
+            sources.unlink()
+            sources.mkdir()
+            (sources / 'dangling.list').symlink_to(root / 'missing')
+            with self.assertRaises(ValueError):
+                network.disable_unused_microsoft_sources(root, lambda _: None)
+
     def test_healthy_or_missing_primary_probe_never_changes_sources(self):
         run = Mock()
         for diagnostics in ({}, {'https archive.ubuntu.com': True, 'https security.ubuntu.com': False}):

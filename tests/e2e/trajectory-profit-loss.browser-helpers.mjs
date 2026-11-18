@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import {expect} from '@playwright/test';
 import {join} from 'node:path';
 import {readFile} from 'node:fs/promises';
+import {selectReportRange} from './trajectory-controls.browser-helpers.mjs';
 
 async function selectAnnualRange(page){
-  await page.locator('#tr-range [data-range="year"]').click();
+  await selectReportRange(page,'year');
   await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
 }
 

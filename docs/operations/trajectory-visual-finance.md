@@ -73,6 +73,13 @@ Personal and Business use separate install identities at `/trajectory/personal/`
 and `/trajectory/business/`. Business retains its authorized organization
 selector. Neither service worker caches authenticated finance data.
 
+On phones, Add, expense notifications and Dates & view are icons in the top bar.
+The calendar opens one accessible popover for the existing period, custom dates,
+account, workspace and Analysis comparison/basis/program controls. Escape, Done
+and outside interaction close it; selections retain their native handlers and
+values. Desktop retains the full toolbar and inline Analysis controls. Foreground
+updates pause while this popover is open.
+
 While visible and online, Home, Analysis and Budget reread saved backend figures
 every minute and on return to the app. These are private network GETs, not Plaid
 or provider refresh requests. Hidden/offline pages, bank linking, navigation
