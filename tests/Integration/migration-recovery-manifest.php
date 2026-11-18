@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_18_120000_create_trajectory_allocation_details.php' => [
+        'test' => 'tests/Integration/TrajectoryAttributionMySqlRecoveryTest.php',
+        'scenarios' => ['encrypted category/program attribution survives creation before trailing indexes, repeated recovery and retained-data rollback; duplicate transaction/revision/line and incompatible named indexes reject without replacing source or historical allocations'],
+    ],
     '2026_11_16_170000_add_event_customer_anchor_presence_indexes.php' => [
         'test' => 'tests/Integration/EventCustomerAnchorMySqlRecoveryTest.php',
         'scenarios' => ['original customer source rows survive column-only and partially indexed DDL, retry and app rollback; exact generated path literals, invisible columns and visible full BTREE definitions reject drift; JSON null and typed residual comparison semantics remain unchanged'],
@@ -263,6 +267,10 @@ return [
     '2026_11_18_030000_make_trajectory_source_identity_exact.php' => [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['account identity collation committed before transaction and pending identity conversion; reviewed allocations retained'],
+    ],
+    '2026_11_18_051000_create_trajectory_assistant_and_alerts.php' => [
+        'test' => 'tests/Integration/TrajectoryAssistantAlertsMySqlRecoveryTest.php',
+        'scenarios' => ['each complete assistant, preference, subscription and expense-inbox table retained with private sentinel evidence before the next table DDL'],
     ],
     '2026_09_14_120000_create_trajectory_tables.php' => [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
