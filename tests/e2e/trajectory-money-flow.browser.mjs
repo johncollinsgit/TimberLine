@@ -8,6 +8,7 @@ import {createServer} from 'node:net';
 import {chromium,webkit} from 'playwright';
 import {expect} from '@playwright/test';
 import {verifyProfitLoss} from './trajectory-profit-loss.browser-helpers.mjs';
+import {openReportControls,closeReportControls,selectReportRange,selectReportAccount,selectReportScope} from './trajectory-controls.browser-helpers.mjs';
 const exec=promisify(execFile),base=resolve(),probe=createServer();
 await new Promise(done=>probe.listen(0,'127.0.0.1',done));const port=probe.address().port;await new Promise(done=>probe.close(done));
 const dir=await mkdtemp(join(tmpdir(),'codex-money-flow-')),origin=`http://127.0.0.1:${port}`,evidence=resolve(process.env.TRAJECTORY_FLOW_EVIDENCE||'test-results/trajectory-money-flow');
@@ -35,21 +36,33 @@ try{
    await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
    const minuteRead=()=>page.evaluate(()=>window.trajectoryMinuteReads.forEach(callback=>callback()));
    const initialReads=analysisReads.length;
-   await page.locator('#tr-account-filter').focus();await minuteRead();
+   await openReportControls(page);await page.locator('#tr-account-filter').focus();await minuteRead();
    await page.waitForTimeout(60);assert.equal(analysisReads.length,initialReads,'Focused account control suppresses the app background read');
-   await page.locator('.tr-assistant-launch').click();await minuteRead();
+   await closeReportControls(page);await page.locator('.tr-assistant-launch').click();await minuteRead();
    await page.waitForTimeout(60);assert.equal(analysisReads.length,initialReads,'Open context-aware Ask suppresses the app background read');
    await page.locator('[data-assistant-close]').click();await page.evaluate(()=>document.activeElement.blur());
    const oldHome=await page.locator('#tr-content > .vf-finance').elementHandle(),historyBefore=await page.evaluate(()=>({state:history.state,length:history.length,scroll:scrollY}));
    await minuteRead();await expect.poll(()=>analysisReads.length).toBe(initialReads+1);
    await expect.poll(()=>oldHome.evaluate(node=>node.isConnected)).toBe(false);
    assert.deepEqual(await page.evaluate(()=>({state:history.state,length:history.length,scroll:scrollY})),historyBefore,'An actual foreground refresh preserves browser Back metadata and position');
+   if(width<700){assert.ok(await page.locator('#tr-content').evaluate(node=>node.getBoundingClientRect().top<140),'Saved figures appear immediately below the compact phone header');await page.screenshot({path:join(evidence,`${name}-${width}-compact-home.png`)});}
    const navigateSection=async label=>{
     if(width<700&&await page.locator('#tr-mobile-menu').getAttribute('aria-expanded')!=='true')await page.locator('#tr-mobile-menu').click();
     const drawer=page.locator('#tr-mobile-drawer'),button=drawer.locator('[data-tab]').filter({hasText:label});
     if(await button.evaluate(node=>Boolean(node.closest('.tr-nav-tools:not([open])'))))await drawer.locator('.tr-nav-tools > summary').click();
     await button.click();
    };
+   await navigateSection('Analysis');await page.locator('#vf-period-chart').waitFor();
+   if(width<700){
+    await expect(page.locator('#tr-content .vf-controls')).toHaveCount(0);
+    await openReportControls(page);await expect(page.locator('#tr-analysis-controls .vf-controls')).toBeVisible();
+    await page.locator('[data-action="vf-grain"][data-grain="week"]').click();
+    await expect(page.locator('[data-action="vf-grain"][data-grain="week"]')).toHaveAttribute('aria-pressed','true');
+    await expect(page.locator('#tr-content>.vf-finance')).toHaveAttribute('aria-busy','false');
+    await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
+    await page.screenshot({path:join(evidence,`${name}-${width}-date-popover.png`)});
+    await closeReportControls(page);await page.screenshot({path:join(evidence,`${name}-${width}-compact-analysis.png`)});
+   }else await expect(page.locator('#tr-content .vf-controls')).toBeVisible();
    // The compact Home is covered by the visual-finance browser. Preserve this
    // older forecast's lazy-chart and details coverage under its new tool entry.
    await navigateSection('Detailed forecast');
@@ -163,20 +176,21 @@ try{
    await page.getByRole('heading',{name:'Review transactions',level:1,exact:true}).waitFor();await page.locator('#tr-back').click();
    await expect(page.getByRole('button',{name:'Inflows',exact:true})).toHaveAttribute('aria-pressed','true');
    // Account/date/scope changes invalidate private historical evidence and normalize unsupported modes.
-   await page.locator('#tr-account-filter').selectOption(String(fixture.other_cash_id));
+   await selectReportAccount(page,fixture.other_cash_id);
    await expect(page.locator('.tr-family-inflows')).toContainText('No included receipts');
    await page.goBack();await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
    await expect(page.getByRole('heading',{name:'Review transactions',level:1,exact:true})).not.toBeVisible();
    assert.equal(await page.locator('#tr-account-filter').inputValue(),String(fixture.other_cash_id));
-   await page.locator('#tr-account-filter').selectOption('');await page.locator('#tr-range [data-range="month"]').click();
+   await selectReportAccount(page,'');await selectReportRange(page,'month');
    await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
-   await page.locator('#tr-space-tabs [data-scope="business"]').click();await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
+   await selectReportScope(page,'business');await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
+   if(width<700)await expect(page.locator('#tr-mobile-period-label')).toContainText((await page.locator('#tr-company option:checked').textContent()).trim());
    await navigateSection('Money flow');
    await expect(page.getByRole('button',{name:'Inflows',exact:true})).not.toBeAttached();
    await expect(page.locator('.tr-family-inflows')).not.toBeAttached();
    await expect(page.getByRole('button',{name:'Spending',exact:true})).toHaveAttribute('aria-pressed','true');
-   await page.locator('#tr-space-tabs [data-scope="personal"]').click();await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
-   await page.locator('#tr-range [data-range="year"]').click();await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
+   await selectReportScope(page,'personal');await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
+   await selectReportRange(page,'year');await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
    // Account activity retains its original selector through fresh, scoped history restoration.
    await navigateSection('Accounts');
    await page.locator('.tr-row').filter({has:page.getByText('Fictional checking',{exact:true})}).getByRole('button',{name:'Activity',exact:true}).click();
@@ -202,7 +216,7 @@ try{
    const annualYear=Number(fixture.today.slice(0,4));await page.locator('#tr-lender-ytd-year').selectOption(String(annualYear-1));
    await expect(annualPanel).toContainText('$0.00');await expect(annualPanel).not.toContainText('$69.12');
    await page.locator('#tr-lender-ytd-year').selectOption(String(annualYear));await expect(annualPanel).toContainText('$69.12');
-   await page.locator('#tr-account-filter').selectOption(String(fixture.detail_card_id));
+   await selectReportAccount(page,fixture.detail_card_id);
    await expect(annualPanel).toContainText('1 of 1');await expect(annualPanel).toContainText('$12.34');await expect(annualPanel).not.toContainText('$56.78');
    const cardPanel=page.locator('.tr-card-activity'),cardDetail=cardPanel.locator('.tr-card-account');
    await expect(cardDetail).toHaveCount(1);await expect(cardDetail).toContainText('Fictional detail card');
@@ -224,17 +238,17 @@ try{
    await expect(clientEquipment).toContainText('-$123.45');await expect(clientEquipment).toContainText('Economic allocation $0.00');await expect(clientEquipment).toContainText('Full card amount');
    await expect(page.locator('.tr-table caption').first()).toContainText('Positive credits reduce the card balance');
    await page.locator('#tr-back').click();await expect(page.getByRole('heading',{name:'Credit card activity',exact:true})).toBeVisible();
-   await page.locator('#tr-range [data-range="all"]').click();
+   await selectReportRange(page,'all');
    await expect(cardDetail.locator('.tr-card-figures')).toContainText('$298.46');await expect(cardDetail.locator('.tr-card-share')).toContainText('Unavailable');
    const allCardRequest=page.waitForRequest(request=>request.method()==='POST'&&new URL(request.url()).pathname.endsWith('/evidence'));
    await cardDetail.getByRole('button',{name:'View other card purchases, net',exact:true}).click();
    assert.ok((await allCardRequest).postDataJSON().ids.includes(fixture.detail_card_ids['older-unallocated']));
    const olderUnallocated=page.getByRole('row').filter({hasText:'Fictional older unallocated card purchase'});
    await expect(olderUnallocated).toContainText('-$75.00');await expect(olderUnallocated).toContainText('Economic allocation Unavailable');
-   await page.locator('#tr-back').click();await page.locator('#tr-range [data-range="year"]').click();
+   await page.locator('#tr-back').click();await selectReportRange(page,'year');
    await expect(cardDetail.locator('.tr-card-figures')).toContainText('$223.46');
-   await page.locator('#tr-account-filter').selectOption(String(fixture.cash_id));await expect(page.locator('.tr-card-activity')).toContainText('No owned credit cards');
-   await page.locator('#tr-account-filter').selectOption('');
+   await selectReportAccount(page,fixture.cash_id);await expect(page.locator('.tr-card-activity')).toContainText('No owned credit cards');
+   await selectReportAccount(page,'');
    await verifyProfitLoss({page,fixture,width,name,evidence});
    checks.push(`${name} ${width}: native/browser Back from prior 404, category menu/detail restoration, scoped family receipt sources, incoming-only trends, keyboard/touch evidence, allocation privacy and horizontal containment`);
   }

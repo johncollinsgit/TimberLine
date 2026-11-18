@@ -15,6 +15,113 @@ CLOUD_HOST = 'azure.archive.ubuntu.com'
 CLOUD_URI = 'https://' + CLOUD_HOST + '/ubuntu/'
 KERNEL_HOST = 'mirrors.edge.kernel.org'
 KERNEL_URI = 'https://' + KERNEL_HOST + '/ubuntu/'
+UNUSED_MICROSOFT_URIS = {'https://packages.microsoft.com/ubuntu/24.04/prod',
+                         'https://packages.microsoft.com/ubuntu/24.04/prod/'}
+
+
+def without_unused_microsoft_list(content):
+    result = []
+    for line in content.splitlines(keepends=True):
+        source = re.match(r'^\s*deb(?:-src)?\s+(?:\[[^\]\r\n]*\]\s+)?(\S+)(?=\s|$)', line)
+        if source and source[1] in UNUSED_MICROSOFT_URIS:
+            line = '# everbranch-ci: unused Microsoft source: ' + line
+        result.append(line)
+    return ''.join(result)
+
+
+def without_unused_microsoft_stanza(lines):
+    """Remove only the exact unused URI; mixed stanzas keep all other sources."""
+    current = None
+    uri_lines, enabled_lines = [], []
+    for index, line in enumerate(lines):
+        if line.lstrip().startswith('#'):
+            continue
+        field = re.match(r'^([A-Za-z][A-Za-z0-9-]*):([ \t]*)(.*?)(\r?\n)?$', line)
+        if field:
+            current = field[1].lower()
+            value_start = field.start(3)
+        elif line[:1].isspace() and current:
+            value_start = len(line) - len(line.lstrip(' \t'))
+        else:
+            current = None
+            continue
+        if current == 'uris':
+            uri_lines.append((index, value_start))
+        elif current == 'enabled':
+            enabled_lines.append((index, value_start))
+    uris = [uri for index, start in uri_lines for uri in lines[index][start:].split()]
+    if not any(uri in UNUSED_MICROSOFT_URIS for uri in uris):
+        return lines
+    enabled = [word for index, start in enabled_lines for word in lines[index][start:].split()]
+    if enabled == ['no']:
+        return lines
+    result = list(lines)
+    newline = '\r\n' if any(line.endswith('\r\n') for line in lines) else '\n'
+    if any(uri not in UNUSED_MICROSOFT_URIS for uri in uris):
+        for index, start in uri_lines:
+            line = lines[index]
+            value = re.sub(r'\S+', lambda match: '' if match[0] in UNUSED_MICROSOFT_URIS else match[0], line[start:])
+            # A whitespace-only continuation would terminate the stanza in APT.
+            result[index] = '' if line[:1].isspace() and not value.strip() else line[:start] + value
+    elif enabled_lines:
+        first, start = enabled_lines[0]
+        ending = newline if lines[first].endswith('\n') else ''
+        result[first] = lines[first][:start] + 'no' + ending
+        for index, _ in enabled_lines[1:]:
+            result[index] = ''
+    else:
+        ending = newline if result[-1].endswith('\n') else ''
+        if not ending:
+            result[-1] += newline
+        result.append('Enabled: no' + ending)
+    return result
+
+
+def without_unused_microsoft_deb822(content):
+    result, stanza = [], []
+    for line in content.splitlines(keepends=True):
+        if not line.strip():
+            result.extend(without_unused_microsoft_stanza(stanza))
+            stanza = []
+            result.append(line)
+        else:
+            stanza.append(line)
+    result.extend(without_unused_microsoft_stanza(stanza))
+    return ''.join(result)
+
+
+def disable_unused_microsoft_sources(root=Path('/etc/apt'), emit=print):
+    # GitHub's disposable Ubuntu image includes this repository, but no package
+    # used by these jobs needs it. Its rate limits must not block Ubuntu/Playwright.
+    directory = root / 'sources.list.d'
+    if root.is_symlink() or not root.is_dir() or directory.is_symlink():
+        raise ValueError('Unsupported CI APT source directory.')
+    if directory.exists() and not directory.is_dir():
+        raise ValueError('Unsupported CI APT source directory.')
+    sources = [root / 'sources.list']
+    if directory.is_dir():
+        sources.extend(sorted(path for path in directory.iterdir() if path.suffix in ('.list', '.sources')))
+    changes = []
+    # Validate every file before any rewrite, including dangling symlinks.
+    for source in sources:
+        if source.is_symlink():
+            raise ValueError('Unsupported CI APT source file.')
+        if not source.exists():
+            continue
+        if not source.is_file():
+            raise ValueError('Unsupported CI APT source file.')
+        before = source.read_bytes()
+        transform = without_unused_microsoft_deb822 if source.suffix == '.sources' else without_unused_microsoft_list
+        after = transform(before.decode('utf-8')).encode('utf-8')
+        if after != before:
+            changes.append((source, after))
+    for source, after in changes:
+        source.write_bytes(after)
+        if source.read_bytes() != after:
+            raise ValueError('CI APT source verification failed.')
+    if changes:
+        emit('Disabled unused Microsoft Ubuntu 24.04 package sources on this disposable runner; Ubuntu and unrelated sources unchanged.')
+    return bool(changes)
 
 
 def configure(root=Path('/etc/apt/apt.conf.d')):
@@ -104,6 +211,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if not args.diagnose_only:
         configure()
+        disable_unused_microsoft_sources()
     diagnostics = diagnose()
     if not args.diagnose_only:
         use_verified_mirror_fallback(diagnostics)

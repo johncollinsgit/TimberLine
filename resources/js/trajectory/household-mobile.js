@@ -1,3 +1,4 @@
+import {initReportControls} from './report-controls.js';
 const instances = new WeakMap();
 
 /** Responsive presentation only. Existing navigation, periods and permissions stay authoritative. */
@@ -127,12 +128,15 @@ export function initHouseholdMobile(root, options = {}) {
   }
   sync();
   if (!introducing && content?.getAttribute('aria-busy') === 'false') finish();
+  const reportControls=initReportControls(root);
   const api = {
     ready: finish,
     open: show,
     close,
+    syncControls:reportControls.sync,
     destroy() {
       observer.disconnect();
+      reportControls.destroy();
       cleanup.forEach(fn => fn());
       open = false;
       introducing = false;

@@ -218,6 +218,7 @@ function boot() {
     $('#tr-page-title').textContent=tab==='welcome'?'Get started':labels[tab];
     $('#tr-page-subtitle').textContent=scope==='both'?'Your household and company, side by side.':tab==='overview'?'A clearer picture of today. A better plan for tomorrow.':tab==='profit'?'Your income, costs and profit in one statement.':'Your money, with the context that matters.';
     $('#tr-content').innerHTML=(views[tab]||combinedOnly)();
+    mobile?.syncControls();
     if(tab==='planning'&&scope!=='both'&&accountFilter===null) planning.draw();
     if(tab==='profit'&&scope!=='both'&&accountFilter===null) planning.drawProfit();
     root.classList.toggle('tr-visual-view',['overview','analysis','budget'].includes(tab));
@@ -762,7 +763,7 @@ function boot() {
   for(const event of ['pointerdown','keydown','input','change'])document.addEventListener(event,()=>{foregroundInteraction++;},{capture:true,passive:true});
   const foregroundEligible=()=>canRefreshFinance({visible:!document.hidden,online:navigator.onLine!==false,hasData:!!data,tab,scope,
     loading:$('#tr-content').getAttribute('aria-busy')==='true'||visualFinance.isBusy(),
-    editing:!!document.querySelector('dialog[open],#tr-mobile-drawer[role="dialog"],#tr-content details[open]')||document.activeElement?.matches('input,select,textarea,[contenteditable="true"]'),
+    editing:!!document.querySelector('dialog[open],#tr-mobile-drawer[role="dialog"],#tr-report-controls[data-open],#tr-content details[open]')||document.activeElement?.matches('input,select,textarea,[contenteditable="true"]'),
     linking:linkInProgress,restoring:restoringNavigation,oauth:new URLSearchParams(location.search).has('oauth_state_id'),hasMetals:!!data?.metals?.length});
   const refreshForeground=createForegroundRefresh({eligible:foregroundEligible,
     snapshot:()=>JSON.stringify([reportContext(),tab,visualFinance.capture(),loadVersion,foregroundInteraction]),
