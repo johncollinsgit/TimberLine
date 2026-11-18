@@ -146,6 +146,35 @@ test('push subscriptions reject arbitrary network URLs and stay user-private and
     $this->actingAs($other)->getJson($base.'/notifications')->assertForbidden();
 });
 
+test('device subscription status is read only and private to the exact active member household and endpoint', function (): void {
+    $base = '/trajectory/spaces/'.$this->space->id;
+    $endpoint = 'https://fcm.googleapis.com/fcm/send/fictional-device-status';
+    $keys = ['p256dh' => rtrim(strtr(base64_encode(str_repeat('a', 65)), '+/', '-_'), '='), 'auth' => rtrim(strtr(base64_encode(str_repeat('b', 16)), '+/', '-_'), '=')];
+    $this->actingAs($this->owner)->postJson($base.'/push-subscriptions', ['endpoint' => $endpoint, 'keys' => $keys])->assertCreated();
+    $statusUrl = $base.'/push-subscriptions?endpoint_hash='.hash('sha256', $endpoint);
+    $before = DB::table('trajectory_push_subscriptions')->first();
+    $response = $this->getJson($statusUrl)->assertOk()->assertExactJson(['registered' => true]);
+    expect($response->headers->get('Cache-Control'))->toContain('no-store');
+    $this->getJson($base.'/push-subscriptions?endpoint_hash='.hash('sha256', $endpoint.'-other-device'))->assertOk()->assertExactJson(['registered' => false]);
+    $this->getJson($base.'/push-subscriptions?endpoint_hash=not-a-hash')->assertUnprocessable();
+
+    $member = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    DB::table('trajectory_members')->insert(['space_id' => $this->space->id, 'user_id' => $member->id, 'created_at' => now(), 'updated_at' => now()]);
+    $this->actingAs($member)->getJson($statusUrl)->assertOk()->assertExactJson(['registered' => false]);
+    DB::table('trajectory_members')->where('user_id', $member->id)->delete();
+    $this->getJson($statusUrl)->assertForbidden();
+
+    [$otherHousehold] = app(PilotService::class)->prepare($member, null, true);
+    DB::table('trajectory_members')->insert(['space_id' => $otherHousehold->id, 'user_id' => $this->owner->id, 'created_at' => now(), 'updated_at' => now()]);
+    $this->actingAs($this->owner)->getJson('/trajectory/spaces/'.$otherHousehold->id.'/push-subscriptions?endpoint_hash='.hash('sha256', $endpoint))
+        ->assertOk()->assertExactJson(['registered' => false]);
+    expect(DB::table('trajectory_push_subscriptions')->first())->toEqual($before);
+
+    PushSubscription::first()->update(['disabled_at' => now()]);
+    $this->getJson($statusUrl)->assertOk()->assertExactJson(['registered' => false]);
+    expect(PushSubscription::count())->toBe(1)->and(PushSubscription::first()->disabled_at)->not->toBeNull();
+});
+
 test('Ask answers the selected category and basis rather than the whole household', function (): void {
     $food = ($this->entry)('scoped-food', -1234);
     $food->update(['category' => 'groceries']);

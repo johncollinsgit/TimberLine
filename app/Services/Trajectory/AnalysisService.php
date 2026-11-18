@@ -81,6 +81,12 @@ class AnalysisService
             && $account->history_start->toDateString() <= $from && $account->observed_at && $account->observed_at->toDateString() >= $through);
         $selectedHasEvidence = $selected['cash']->isNotEmpty() || $selected['economic']->isNotEmpty();
         $selectedAvailable = $selectedCovered || $selectedHasEvidence;
+        $spendingCoverage = $basis === 'spending' ? app(EconomicActivityService::class)->coverage($selected['economic']) : null;
+        if ($spendingCoverage !== null) {
+            $spendingCoverage['review_rows'] = app(EconomicActivityService::class)->unresolved($selected['economic'])->map(fn ($row) => [
+                'id' => $row['id'], 'date' => $row['date'], 'merchant' => $row['merchant'], 'bank_amount_cents' => $row['amount_cents'],
+            ])->values()->all();
+        }
         $definitions = app(AnalysisCategoryService::class)->definitions($space);
         $categories = app(AnalysisCategoryService::class)->group($selected['expenses']->all(), $definitions, $basis === 'cash');
         $inflows = [];
@@ -131,12 +137,14 @@ class AnalysisService
             'scope' => ['space_id' => $space->id, 'space_name' => $space->name, 'kind' => $space->kind, 'account_id' => $accountId, 'program_id' => $programId, 'basis' => $basis],
             'currency' => 'USD', 'today' => $today->toDateString(), 'year' => $year, 'grain' => $grain,
             'summary' => ['inflow_cents' => $selectedAvailable ? (int) $selected['receipts']->sum('amount_cents') : null,
+                'recorded_spending_cents' => $selectedAvailable ? -(int) $selected['expenses']->sum('amount_cents') : null,
                 'spending_cents' => $selectedAvailable && $selected['complete'] ? -(int) $selected['expenses']->sum('amount_cents') : null],
             'inflows' => $inflows, 'categories' => $categories, 'periods' => $periods, 'entries' => $selectedRows,
             'category_options' => app(WorkspaceService::class)->categories($space), 'category_definitions' => $definitions,
             'program_options' => $programs->map(fn ($r) => ['id' => $r->id, 'name' => $r->name])->all(),
             'account_options' => $accounts->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'kind' => $a->kind])->all(),
             'coverage' => ['complete' => false, 'status' => $selectedAvailable ? 'partial' : 'unavailable',
+                'spending' => $spendingCoverage,
                 'selected_range_covered' => $selectedCovered, 'selected_range_has_evidence' => $selectedHasEvidence, 'notes' => array_values(array_unique([
                     'Recorded activity only. Missing accounts or history can change these amounts.',
                     $basis === 'cash' ? 'Cash movement includes card and loan payments; it is not household consumption.' : 'Spending counts purchases and refunds, including card purchases. Repayments and investments are separate cash movements.',

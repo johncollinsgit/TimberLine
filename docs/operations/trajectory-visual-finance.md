@@ -16,6 +16,11 @@ does not become a negative pie slice. Missing history is unavailable rather than
 zero. Partial comparison periods end at the equivalent elapsed date; absent ISO
 week 53 remains unavailable. No chart difference establishes savings or funding.
 
+Tapping a donut slice first explains its recorded amount, share of visible slices,
+period, financial basis and source. Only View recorded entries invokes the chart’s
+existing drilldown. Balance-only charts have no fabricated transaction action;
+navigation or a superseded chart closes the explanation without adding history.
+
 `AnalysisService` builds one authorized projection for selected-period pies and
 the largest-first ledger. The annual/monthly/weekly comparison buckets remain
 independent of the nested selected period. `AnalysisCategoryService` provides
@@ -87,6 +92,17 @@ multi-period cache. Back to another period fetches its visual projection only.
 Explicit Refresh, context changes and successful edits invalidate the dashboard
 revision; a failed reload cannot mark an older snapshot fresh. A current dashboard
 with missing visual data fetches Analysis/Budget without downloading it again.
+
+An initial current-month visual view requests its authorized Analysis/Budget pair
+alongside the legacy Dashboard. It paints the real visual response and source
+metadata first; no Dashboard financial fields are synthesized. Editing and legacy
+views wait for native metadata. Space/account/server-date checks associate a late
+Dashboard only with its matching visual cohort. Context changes abort superseded
+initial requests, and failed projections remain errors rather than zero totals.
+
+Notifications confirms this device is enabled only after browser permission, a
+local push subscription and authenticated server association agree. Failed checks
+remain unknown with Retry; the member’s purchase-alert opt-in stays separate.
 
 While visible and online, Home, Analysis and Budget reread saved backend figures
 every minute and on return to the app. These are private network GETs, not Plaid

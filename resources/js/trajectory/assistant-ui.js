@@ -10,6 +10,7 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
   root.append(host);
   const dialog = host.querySelector('dialog'), content = host.querySelector('[data-assistant-content]'), input = host.querySelector('input');
   let currentSpace = null, loadedSpace = null, messages = [], inbox = null, selectedExpense = null, busy = false, view = 'chat';
+  let pushCheckVersion = 0;
   const requestIds = new Map();
   const transactionId=Number(new URLSearchParams(location.search).get('transaction'));
   let deepLinkOpened=false;
@@ -60,7 +61,8 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
     try{
       await loadInbox();view='inbox';host.querySelector('[data-assistant-form]').hidden=true;
       const prefs=inbox.preferences;
-      content.innerHTML=`<div class="tr-assistant-preferences"><strong>Personal expense notifications</strong><label><input type="checkbox" data-alert-enabled ${prefs.enabled?'checked':''}> Notify me about new purchases</label><label><input type="checkbox" data-alert-pending ${prefs.include_pending?'checked':''}> Include pending purchases</label><label><input type="checkbox" data-alert-details ${prefs.show_details?'checked':''}> Show merchant, amount, category and budget left on lock screen</label><button type="button" data-save-alerts>Save preferences</button><button type="button" data-enable-push ${inbox.push.ready?'':'disabled'}>Enable phone notifications</button><small>${inbox.push.ready?'Notifications arrive when the bank feed reports a purchase.':'Push delivery needs server setup. Your expense inbox still works.'}</small><a href="/trajectory/personal/">Open Personal app</a> · <a href="/trajectory/business/">Open Business app</a><small>iPhone: open the app in Safari → Share → Add to Home Screen, then enable notifications from the installed app.</small></div>${(inbox.rows||[]).length?inbox.rows.map(noticeRow).join(''):'<p>No new expenses yet. New feed purchases will appear after you opt in; historical imports do not create a backlog of alerts.</p>'}${inbox.next_before?'<button type="button" data-load-expenses>Earlier expenses</button>':''}`;
+      content.innerHTML=`<div class="tr-assistant-preferences"><strong>Personal expense notifications</strong><label><input type="checkbox" data-alert-enabled ${prefs.enabled?'checked':''}> Notify me about new purchases</label><label><input type="checkbox" data-alert-pending ${prefs.include_pending?'checked':''}> Include pending purchases</label><label><input type="checkbox" data-alert-details ${prefs.show_details?'checked':''}> Show merchant, amount, category and budget left on lock screen</label><button type="button" data-save-alerts>Save preferences</button><button type="button" data-enable-push disabled>Enable phone notifications</button><small data-push-status role="status">Checking this device’s notification setup…</small><a href="/trajectory/personal/">Open Personal app</a> · <a href="/trajectory/business/">Open Business app</a><small>iPhone: open the app in Safari → Share → Add to Home Screen, then enable notifications from the installed app.</small></div>${(inbox.rows||[]).length?inbox.rows.map(noticeRow).join(''):'<p>No new expenses yet. New feed purchases will appear after you opt in; historical imports do not create a backlog of alerts.</p>'}${inbox.next_before?'<button type="button" data-load-expenses>Earlier expenses</button>':''}`;
+      void checkPushState();
     }catch(error){showError(error);}
   }
   async function chooseExpense(row) {
@@ -82,17 +84,72 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
     }catch(error){messages.push({role:'assistant',reply:error.message});}
     finally{busy=false;input.disabled=false;input.value='';renderChat();input.focus();}
   }
+  const pushSupported = () => 'serviceWorker'in navigator && 'PushManager'in window && 'Notification'in window;
+  function pushFeedback(button, text, label = 'Enable phone notifications', disabled = false, action = 'enable') {
+    if(!button?.isConnected)return;
+    button.textContent=label;button.disabled=disabled;button.dataset.pushAction=action;
+    content.querySelector('[data-push-status]').textContent=text;
+  }
+  const enabledPushMessage = () => inbox.preferences.enabled
+    ? 'Phone notifications are enabled on this device. Alerts arrive when the bank feed reports a purchase.'
+    : 'Phone notifications are enabled on this device. Turn on “Notify me about new purchases” and save to receive alerts.';
+  async function checkPushState() {
+    const button=content.querySelector('[data-enable-push]'), checkedSpace=currentSpace, checkVersion=++pushCheckVersion;
+    const current=()=>button?.isConnected && currentSpace===checkedSpace && checkVersion===pushCheckVersion && view==='inbox';
+    if(!button)return;
+    if(!inbox.push.ready){pushFeedback(button,'Push delivery needs server setup. Your expense inbox still works.','Server setup needed',true);return;}
+    if(!pushSupported()){pushFeedback(button,'Install the Personal app on a supported phone/browser to enable push. Your expense inbox still works.','Phone notifications unavailable',true);return;}
+    if(!location.pathname.startsWith('/trajectory/personal/')){pushFeedback(button,'Open the Personal app to enable phone notifications on this device.','Open Personal app to enable',true);return;}
+    if(Notification.permission==='denied'){pushFeedback(button,'Notifications are blocked on this device. Allow them in your device settings, then check again.','Check notification permission',false,'check');return;}
+    if(Notification.permission!=='granted'){pushFeedback(button,'Phone notifications are not enabled on this device.');return;}
+    pushFeedback(button,'Checking this device’s notification setup…','Checking notifications…',true,'check');
+    try{
+      const registration=await navigator.serviceWorker.getRegistration('/trajectory/personal/');
+      const subscription=registration?.scope===new URL('/trajectory/personal/',location.origin).href?await registration.pushManager.getSubscription():null;
+      if(!current())return;
+      if(!subscription){pushFeedback(button,'Phone notifications are not enabled on this device.');return;}
+      const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(subscription.endpoint))),byte=>byte.toString(16).padStart(2,'0')).join('');
+      const result=await api(endpoint(`/push-subscriptions?endpoint_hash=${hash}`,checkedSpace));
+      if(!current())return;
+      if(result.registered===true)pushFeedback(button,enabledPushMessage(),'Phone notifications enabled',true);
+      else pushFeedback(button,'This device is not registered for your personal workspace. Enable phone notifications to finish setup.');
+    }catch{
+      if(current())pushFeedback(button,'Couldn’t confirm this device’s notification setup. Try again.','Retry notification check',false,'check');
+    }
+  }
   async function enablePush() {
-    if(!('serviceWorker'in navigator)||!('PushManager'in window)||!('Notification'in window))throw new Error('Install the Personal app on a supported phone/browser to enable push. The inbox remains available.');
-    const surface=location.pathname.startsWith('/trajectory/personal/')?'personal':null;
-    if(!surface)throw new Error('Open the Personal app, add it to your Home Screen, then enable phone notifications there.');
-    if(await Notification.requestPermission()!=='granted')throw new Error('Notification permission was not granted. Expenses remain in your inbox.');
-    const registration=await navigator.serviceWorker.register('/trajectory/personal/sw.js',{scope:'/trajectory/personal/'});
-    await navigator.serviceWorker.ready;
-    const bytes=Uint8Array.from(atob(inbox.push.public_key.replaceAll('-','+').replaceAll('_','/')),c=>c.charCodeAt(0));
-    const subscription=await registration.pushManager.getSubscription()||await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytes});
-    await api(path('/push-subscriptions'),'POST',subscription.toJSON());
-    notice('Phone notifications enabled for your personal workspace.');
+    const button=content.querySelector('[data-enable-push]'), enabledSpace=currentSpace, checkVersion=++pushCheckVersion;
+    const current=()=>button?.isConnected && currentSpace===enabledSpace && checkVersion===pushCheckVersion && view==='inbox';
+    pushFeedback(button,'Enabling phone notifications on this device…','Enabling notifications…',true);
+    try{
+      if(!pushSupported())throw new Error('Install the Personal app on a supported phone/browser to enable push. The inbox remains available.');
+      if(!location.pathname.startsWith('/trajectory/personal/'))throw new Error('Open the Personal app, add it to your Home Screen, then enable phone notifications there.');
+      if(await Notification.requestPermission()!=='granted'){if(current())await checkPushState();return;}
+      const registration=await navigator.serviceWorker.register('/trajectory/personal/sw.js',{scope:'/trajectory/personal/'});
+      await navigator.serviceWorker.ready;
+      const bytes=Uint8Array.from(atob(inbox.push.public_key.replaceAll('-','+').replaceAll('_','/')),c=>c.charCodeAt(0));
+      const subscription=await registration.pushManager.getSubscription()||await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytes});
+      if(!current())return;
+      const result=await api(endpoint('/push-subscriptions',enabledSpace),'POST',subscription.toJSON());
+      if(!current())return;
+      if(!result.id||result.ready!==true)throw new Error('This device was saved, but phone notification delivery could not be confirmed. Try again.');
+      pushFeedback(button,enabledPushMessage(),'Phone notifications enabled',true);
+      notice('Phone notifications enabled for your personal workspace.');
+    }catch(error){
+      if(current())pushFeedback(button,error.message||'Phone notification setup failed. Try again.','Retry enabling notifications');
+    }
+  }
+  async function saveAlertPreferences(button) {
+    const savedSpace=currentSpace, savedInbox=inbox;
+    const current=()=>button.isConnected && dialog.open && view==='inbox' && currentSpace===savedSpace && spaceId()===savedSpace && inbox===savedInbox;
+    const preferences={enabled:content.querySelector('[data-alert-enabled]').checked,include_pending:content.querySelector('[data-alert-pending]').checked,show_details:content.querySelector('[data-alert-details]').checked};
+    button.disabled=true;
+    try{
+      const result=await api(endpoint('/notifications/preferences',savedSpace),'PATCH',preferences);
+      if(!current())return;
+      savedInbox.preferences=result;notice('Your personal expense notification preferences were saved.');await checkPushState();
+    }catch(error){if(current())showError(error);}
+    finally{if(button.isConnected)button.disabled=false;}
   }
   host.addEventListener('click',async event=>{
     const button=event.target.closest('button');if(!button)return;
@@ -107,8 +164,8 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
         const action=button.hasAttribute('data-assistant-apply')?'apply':'undo',id=button.dataset[action==='apply'?'assistantApply':'assistantUndo'];
         const result=await api(path(`/assistant/${id}/${action}`),'POST',{});messages=messages.map(message=>message.id===Number(id)?{role:'assistant',...result}:message);await onChanged();renderChat();
       }else if(button.hasAttribute('data-save-alerts')){
-        await api(path('/notifications/preferences'),'PATCH',{enabled:content.querySelector('[data-alert-enabled]').checked,include_pending:content.querySelector('[data-alert-pending]').checked,show_details:content.querySelector('[data-alert-details]').checked});notice('Your personal expense notification preferences were saved.');
-      }else if(button.hasAttribute('data-enable-push'))await enablePush();
+        await saveAlertPreferences(button);
+      }else if(button.hasAttribute('data-enable-push')){if(button.dataset.pushAction==='check')await checkPushState();else await enablePush();}
     }catch(error){showError(error);}
   });
   host.querySelector('form').addEventListener('submit',event=>{event.preventDefault();const q=input.value.trim();if(q)void send(q);});

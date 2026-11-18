@@ -1,4 +1,5 @@
 import {readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
 import {chromium,webkit} from 'playwright';
 import {expect} from '@playwright/test';
 
@@ -36,6 +37,94 @@ for(const engine of [chromium,webkit]){
   expect(businessQuestion.path).toBe('/trajectory/spaces/9/assistant');
   expect(errors).toEqual([]);await page.close();
  }
- await browser.close();
+ const page=await browser.newPage({viewport:{width:390,height:900}}),errors=[];
+ page.on('pageerror',error=>errors.push(error.message));
+ await page.route('**/*',route=>route.fulfill({status:200,contentType:'text/html',body:'<html><body><main id="trajectory" data-surface="personal"></main></body></html>'}));
+ await page.goto('https://trajectory.test/trajectory/personal/');await page.addStyleTag({content:css});await page.addScriptTag({content:script});
+ await page.evaluate(()=>{
+  window.requests=[];window.notices=[];window.pushState={permission:'default',local:false,registered:false,failCheck:false,failPost:false,enabled:true};
+  const subscription={endpoint:'https://fcm.googleapis.com/fcm/send/fictional-status-phone',toJSON(){return{endpoint:this.endpoint,keys:{p256dh:'fictional',auth:'fictional'}};}};
+  const registration={scope:'https://trajectory.test/trajectory/personal/',pushManager:{getSubscription:async()=>window.pushState.local?subscription:null,subscribe:async()=>{window.pushState.local=true;return subscription;}}};
+  Object.defineProperty(window,'Notification',{configurable:true,value:class{static get permission(){return window.pushState.permission;}static async requestPermission(){if(window.pushState.permission!=='denied')window.pushState.permission='granted';return window.pushState.permission;}}});
+  Object.defineProperty(window,'PushManager',{configurable:true,value:class{}});
+  Object.defineProperty(navigator,'serviceWorker',{configurable:true,value:{register:async()=>registration,ready:Promise.resolve(registration),getRegistration:async()=>registration}});
+  window.ctx={space_id:7,scope:'personal'};
+  window.api=async(path,method='GET',payload)=>{
+   window.requests.push({path,method,payload});
+   if(path.endsWith('/notifications'))return{rows:[],unread_count:0,preferences:{enabled:window.pushState.enabled,include_pending:true,show_details:true},push:{ready:true,public_key:btoa(String.fromCharCode(...new Uint8Array(65).fill(1)))}};
+   if(path.endsWith('/notifications/preferences')&&method==='PATCH'){
+    if(window.pushState.deferPreferences)return new Promise((resolve,reject)=>{window.finishPreferences=()=>resolve(payload);window.failPreferences=()=>reject(new Error('Previous workspace save failed'));});
+    window.pushState.enabled=payload.enabled;return payload;
+   }
+   if(path.includes('/push-subscriptions?')){if(window.pushState.failCheck)throw new Error('Check failed');return{registered:window.pushState.registered};}
+   if(path.endsWith('/push-subscriptions')&&method==='POST'){if(window.pushState.failPost)throw new Error('Unable to save this device. Try again.');window.pushState.registered=true;return{id:1,ready:true};}
+   return{ok:true};
+  };
+  window.assistant=window.initTrajectoryAssistant({root:document.querySelector('#trajectory'),getContext:()=>window.ctx,api:window.api,endpoint:(path,space)=>`/trajectory/spaces/${space}${path}`,notice:message=>window.notices.push(message)});
+ });
+ const status=page.locator('[data-push-status]');
+ const reopen=()=>page.evaluate(()=>window.assistant.openInbox());
+ await reopen();await expect(status).toHaveText('Phone notifications are not enabled on this device.');
+ await page.getByRole('button',{name:'Enable phone notifications',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Phone notifications enabled',exact:true})).toBeDisabled();
+ await expect(status).toContainText('Phone notifications are enabled on this device.');
+ await reopen();await expect(status).toContainText('Phone notifications are enabled on this device.');
+ let requests=await page.evaluate(()=>window.requests);
+ expect(requests.filter(row=>row.method==='POST')).toHaveLength(1);
+ expect(requests.find(row=>row.path.includes('/push-subscriptions?')).path).toBe(`/trajectory/spaces/7/push-subscriptions?endpoint_hash=${createHash('sha256').update('https://fcm.googleapis.com/fcm/send/fictional-status-phone').digest('hex')}`);
+
+ await page.evaluate(()=>{window.pushState.registered=false;});await reopen();
+ await expect(status).toContainText('This device is not registered for your personal workspace.');
+ await expect(page.getByRole('button',{name:'Phone notifications enabled',exact:true})).toHaveCount(0);
+ await page.evaluate(()=>{window.pushState.failCheck=true;});await reopen();
+ await expect(page.getByRole('button',{name:'Retry notification check',exact:true})).toBeEnabled();
+ await expect(status).toContainText('Couldn’t confirm this device’s notification setup.');
+ await page.evaluate(()=>{window.pushState.failCheck=false;window.pushState.registered=true;});
+ await page.getByRole('button',{name:'Retry notification check',exact:true}).click();
+ await expect(status).toContainText('Phone notifications are enabled on this device.');
+ expect(await page.evaluate(()=>window.requests.filter(row=>row.method==='POST').length)).toBe(1);
+
+ await page.evaluate(()=>{window.pushState.permission='denied';});await reopen();
+ await expect(status).toContainText('Notifications are blocked on this device.');
+ await expect(page.getByRole('button',{name:'Check notification permission',exact:true})).toBeEnabled();
+ await page.evaluate(()=>{window.pushState.permission='granted';});
+ await page.getByRole('button',{name:'Check notification permission',exact:true}).click();
+ await expect(status).toContainText('Phone notifications are enabled on this device.');
+ await page.evaluate(()=>{delete window.PushManager;});await reopen();
+ await expect(page.getByRole('button',{name:'Phone notifications unavailable',exact:true})).toBeDisabled();
+ await expect(status).toContainText('supported phone/browser');
+
+ await page.evaluate(()=>{Object.defineProperty(window,'PushManager',{configurable:true,value:class{}});window.pushState.local=false;window.pushState.registered=true;});await reopen();
+ await expect(status).toHaveText('Phone notifications are not enabled on this device.');
+ expect(await page.evaluate(()=>window.requests.filter(row=>row.method==='POST').length)).toBe(1);
+ await page.evaluate(()=>{window.pushState.permission='default';window.pushState.registered=false;window.pushState.failPost=true;});await reopen();
+ await page.getByRole('button',{name:'Enable phone notifications',exact:true}).click();
+ await expect(status).toHaveText('Unable to save this device. Try again.');
+ await expect(page.getByRole('button',{name:'Retry enabling notifications',exact:true})).toBeEnabled();
+ await expect(page.getByRole('button',{name:'Phone notifications enabled',exact:true})).toHaveCount(0);
+ await reopen();await expect(status).toContainText('This device is not registered');
+ await page.evaluate(()=>{window.pushState.failPost=false;});
+ await page.getByRole('button',{name:'Enable phone notifications',exact:true}).click();
+ await expect(status).toContainText('Phone notifications are enabled on this device.');
+ await page.evaluate(()=>{window.pushState.enabled=false;});await reopen();
+ await expect(status).toContainText('Turn on “Notify me about new purchases” and save to receive alerts.');
+ await page.locator('[data-alert-enabled]').check();await page.getByRole('button',{name:'Save preferences',exact:true}).click();
+ await expect(status).not.toContainText('Turn on “Notify me');
+ await page.evaluate(()=>{window.pushState.deferPreferences=true;window.notices=[];});
+ await page.locator('[data-alert-enabled]').uncheck();await page.getByRole('button',{name:'Save preferences',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>typeof window.finishPreferences)).toBe('function');
+ await page.evaluate(async()=>{window.ctx={space_id:8,scope:'personal'};window.pushState.enabled=true;await window.assistant.contextChanged();await window.assistant.openInbox();});
+ await expect(status).toContainText('Phone notifications are enabled on this device.');
+ await page.evaluate(async()=>{window.finishPreferences();await new Promise(resolve=>setTimeout(resolve,0));});
+ await expect(page.locator('[data-alert-enabled]')).toBeChecked();
+ await expect(status).not.toContainText('Turn on “Notify me');
+ expect(await page.evaluate(()=>window.notices)).toEqual([]);
+ const savedRequests=await page.evaluate(()=>window.requests.filter(row=>row.method==='PATCH'));
+ expect(savedRequests.at(-1).path).toBe('/trajectory/spaces/7/notifications/preferences');
+ await page.locator('[data-alert-enabled]').uncheck();await page.getByRole('button',{name:'Save preferences',exact:true}).click();
+ await page.evaluate(async()=>{window.ctx={space_id:9,scope:'business'};await window.assistant.contextChanged();await window.assistant.openInbox();window.failPreferences();await new Promise(resolve=>setTimeout(resolve,0));});
+ await expect(page.getByText('Personal expense alerts live in the Personal app',{exact:true})).toBeVisible();
+ await expect(page.getByText('Previous workspace save failed',{exact:true})).toHaveCount(0);
+ expect(errors).toEqual([]);await page.close();await browser.close();
 }
-console.log('Ask Everbranch: category save, Undo, personal inbox reply, business Personal-app handoff, business conversation and responsive dialog passed Chromium/WebKit at 390/1440px.');
+console.log('Ask Everbranch: categorization, Undo, inbox/business handoff, responsive dialog and device-specific push status/permission/error/reopen checks passed Chromium/WebKit.');

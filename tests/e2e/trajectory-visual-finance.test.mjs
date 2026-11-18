@@ -79,6 +79,21 @@ test('analysis failures show retry and never substitute old or zero financial da
   const {ui} = fixture(async path => {if (path.includes('analysis')) throw Error('No access to this program'); return {rows: []};});
   await ui.refresh();const html = ui.render('analysis'); assert.match(html, /No access to this program/); assert.match(html, /Try again/); assert.ok(!html.includes('$0.00'));
 });
+test('an unsplit tax payment shows recorded costs separately while missing history stays unavailable', async () => {
+  const partial=structuredClone(report);
+  partial.summary.spending_cents=null;partial.summary.recorded_spending_cents=15000;
+  partial.coverage.spending={complete:false,unresolved_gross_cents:62411,review_rows:[{id:42,date:'2028-02-05',merchant:'Fictional <tax> agency',bank_amount_cents:-62411}]};
+  const {ui}=fixture(async path=>path.includes('budget-envelopes')?{rows:[]}:structuredClone(partial));await ui.refresh();
+  const html=ui.render('overview');
+  assert.match(html,/Recorded costs<\/span><strong>\$150\.00/);
+  assert.match(html,/\$624\.11 in tax payments is separate/);
+  assert.match(html,/Fictional &lt;tax> agency/);
+  assert.match(html,/1 tax payment to review/);
+  assert.equal(ui.getReport().summary.spending_cents,null);
+  partial.summary.recorded_spending_cents=null;await ui.refresh();
+  assert.match(ui.render('overview'),/Purchases &amp; costs<\/span><strong>Unavailable/);
+  assert.doesNotMatch(ui.render('overview'),/Recorded costs · tax split pending/);
+});
 test('inline whole-source category change preserves purpose, flags and exact version; no merchant learning', async () => {
   const {ui, calls} = fixture(); await ui.refresh();
   const target = {dataset: {vfCategory: 'line:1'}, value: 'office', disabled: false, isConnected: true};
@@ -131,6 +146,15 @@ test('one authorized snapshot is reusable only for its exact server inputs and d
   ui.restore(original);ctx.revision=2;assert.equal(ui.hasCurrentSnapshot(),false);await ui.refresh();assert.equal(ui.hasCurrentSnapshot(),true);
   ui.restore({...original,period:{from:'2028-01-01',through:'2028-01-31'}});await ui.refresh();
   ui.restore(original);assert.equal(ui.hasCurrentSnapshot(),false,'Another period is not retained in a second cache');
+});
+
+test('an early visual cohort associates with its real dashboard revision only for the same exact projection',()=>{
+  const {ui,ctx}=fixture();ctx.revision=0;
+  ui.adoptSnapshot({...structuredClone(report),year:2028,grain:'month',scope:{basis:'spending'}},{month:'2028-02',rows:[]});
+  assert.equal(ui.hasCurrentSnapshot(),true);ctx.revision=1;assert.equal(ui.hasCurrentSnapshot(),false);
+  assert.equal(ui.associateRevision(0),true);assert.equal(ui.hasCurrentSnapshot(),true);
+  ui.restore({...ui.capture(),period:{from:'2028-01-01',through:'2028-01-31'}});ctx.revision=2;
+  assert.equal(ui.associateRevision(1),false);assert.equal(ui.hasCurrentSnapshot(),false);
 });
 
 test('background figures retain exact drilldown and do not apply after an intervening edit or failed read', async () => {

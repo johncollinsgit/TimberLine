@@ -56,9 +56,17 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   const attr = value => esc(JSON.stringify(value));
   const contextKey = () => {const c = getContext(); return JSON.stringify([c.space_id, c.account_id, c.from, c.through]);};
   const dates = () => state.period ?? {from: getContext().from, through: getContext().through};
-  const projectionKey = () => JSON.stringify([contextKey(), getContext().revision ?? null, dates(), state.year, state.comparisonYear, state.grain, state.basis, state.program, state.budgetMonth]);
+  const projectionKey = (revision = getContext().revision ?? null) => JSON.stringify([contextKey(), revision, dates(), state.year, state.comparisonYear, state.grain, state.basis, state.program, state.budgetMonth]);
   const monthLabel = month => new Intl.DateTimeFormat('en-US', {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${month}-01T12:00:00Z`));
   const rangeLabel = range => !range ? '' : range.from.slice(0, 7) === range.through.slice(0, 7) ? monthLabel(range.from.slice(0, 7)) : `${range.from} – ${range.through}`;
+  const partialSpending = () => state.basis === 'spending' && report?.summary?.spending_cents == null
+    && Number.isSafeInteger(report?.summary?.recorded_spending_cents) && report?.coverage?.spending?.complete === false;
+  const spendingValue = () => partialSpending() ? report.summary.recorded_spending_cents : report?.summary?.spending_cents ?? report?.summary?.outflow_cents;
+  function spendingReviewHtml() {
+    if (!partialSpending()) return '';
+    const review=report.coverage.spending,rows=review.review_rows??[];
+    return `<aside class="vf-data-status"><div><strong>Recorded costs · tax split pending</strong><p>${precise(review.unresolved_gross_cents)} in tax payments is separate from the recorded-cost subtotal above. Sales tax principal settles tax collected; any interest or fees still need to be identified before the full cost total is final.</p><details><summary>${rows.length} tax payment${rows.length===1?'':'s'} to review</summary>${rows.map(row=>`<p>${esc(row.date)} · ${esc(row.merchant)} · ${precise(Math.abs(row.bank_amount_cents))}</p>`).join('')}</details></div></aside>`;
+  }
   const categoryLabel = key => report?.category_definitions?.find(row => row.key === key)?.label ?? financeLabel(key);
   const programPicker = () => (report?.program_options ?? []).length ? `<label>Program<select data-vf-input="program"><option value="">All programs</option>${report.program_options.map(p => `<option value="${p.id}" ${Number(state.program) === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>` : '';
   const overviewActions = () => `<div class="vf-quick-actions">${button('Explore analysis', 'navigate', 'data-view="analysis"', 'vf-primary')}${button('Your budgets', 'navigate', 'data-view="budget"')}${button('Review transactions', 'navigate', 'data-view="transactions"')}</div>`;
@@ -110,7 +118,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   function coverageHtml() {
     const status = report?.coverage;
     const notes = Array.isArray(status?.notes) ? status.notes : status?.note ? [status.note] : [];
-    return `<div class="vf-data-status"><span class="vf-status-dot" aria-hidden="true"></span><span>${status?.complete === true ? 'Recorded activity' : 'Recorded activity · history may be incomplete'}</span><details><summary>Sources &amp; timing</summary><p>${esc(report?.basis_label ?? (state.basis === 'spending' ? 'Purchases when made, including on credit cards. Repayments and investment transfers are separate.' : 'Money actually moving through owned bank accounts.'))}</p>${notes.map(n => `<p>${esc(n)}</p>`).join('')}<p>Amounts remain in their source currency. Missing history is unavailable; a chart difference is not a bank balance.</p></details></div>`;
+    return `${spendingReviewHtml()}<div class="vf-data-status"><span class="vf-status-dot" aria-hidden="true"></span><span>${status?.complete === true ? 'Recorded activity' : 'Recorded activity · history may be incomplete'}</span><details><summary>Sources &amp; timing</summary><p>${esc(report?.basis_label ?? (state.basis === 'spending' ? 'Purchases when made, including on credit cards. Repayments and investment transfers are separate.' : 'Money actually moving through owned bank accounts.'))}</p>${notes.map(n => `<p>${esc(n)}</p>`).join('')}<p>Amounts remain in their source currency. Missing history is unavailable; a chart difference is not a bank balance.</p></details></div>`;
   }
 
   function controls() {
@@ -133,7 +141,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
 
   function piesHtml() {
     const inflows = report?.inflows ?? [], categories = report?.categories ?? [];
-    return `<section class="vf-period-panel"><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(rangeLabel(report?.range ?? dates()))}</span><h2>Where your money goes</h2></div>${button('View all transactions', 'ledger-all')}</div><div class="vf-pie-pair"><section class="vf-pie-panel"><div class="vf-pie-heading"><h3>Money coming in</h3><strong>${precise(report?.summary?.inflow_cents)}</strong></div><p class="vf-caption">Sources of funds · borrowing and reimbursements stay distinct.</p>${inflows.some(r => r.amount_cents > 0) ? '<div class="vf-chart vf-donut"><canvas id="vf-income-chart" role="img" aria-label="Incoming funds by source; select a source to explore"></canvas></div>' : '<p class="vf-empty">No recorded incoming funds.</p>'}${slicesHtml(inflows, 'in')}</section><section class="vf-pie-panel"><div class="vf-pie-heading"><h3>${state.basis === 'spending' ? 'Money spent' : 'Money leaving accounts'}</h3><strong>${precise(report?.summary?.spending_cents ?? report?.summary?.outflow_cents)}</strong></div><p class="vf-caption">${state.basis === 'spending' ? 'Purchases when made · card and loan repayments excluded.' : 'Actual cash payments · repayments are included.'}</p>${categories.some(r => r.amount_cents > 0) ? '<div class="vf-chart vf-donut"><canvas id="vf-spending-chart" role="img" aria-label="Outgoing categories; select a category to explore"></canvas></div>' : '<p class="vf-empty">No recorded outgoing costs.</p>'}${slicesHtml(categories, 'out')}${categories.some(r => r.amount_cents < 0) ? '<p class="vf-caption">Net-refund categories remain in the list and totals; negative amounts are not pie slices.</p>' : ''}</section></div></section>`;
+    return `<section class="vf-period-panel"><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(rangeLabel(report?.range ?? dates()))}</span><h2>Where your money goes</h2></div>${button('View all transactions', 'ledger-all')}</div><div class="vf-pie-pair"><section class="vf-pie-panel"><div class="vf-pie-heading"><h3>Money coming in</h3><strong>${precise(report?.summary?.inflow_cents)}</strong></div><p class="vf-caption">Sources of funds · borrowing and reimbursements stay distinct.</p>${inflows.some(r => r.amount_cents > 0) ? '<div class="vf-chart vf-donut"><canvas id="vf-income-chart" role="img" aria-label="Incoming funds by source; select a source to explore"></canvas></div>' : '<p class="vf-empty">No recorded incoming funds.</p>'}${slicesHtml(inflows, 'in')}</section><section class="vf-pie-panel"><div class="vf-pie-heading"><h3>${partialSpending() ? 'Recorded costs' : state.basis === 'spending' ? 'Money spent' : 'Money leaving accounts'}</h3><strong>${precise(spendingValue())}</strong></div><p class="vf-caption">${partialSpending() ? 'Recorded purchases and refunds · tax payment split pending.' : state.basis === 'spending' ? 'Purchases when made · card and loan repayments excluded.' : 'Actual cash payments · repayments are included.'}</p>${categories.some(r => r.amount_cents > 0) ? '<div class="vf-chart vf-donut"><canvas id="vf-spending-chart" role="img" aria-label="Outgoing categories; select a category to explore"></canvas></div>' : '<p class="vf-empty">No recorded outgoing costs.</p>'}${slicesHtml(categories, 'out')}${categories.some(r => r.amount_cents < 0) ? '<p class="vf-caption">Net-refund categories remain in the list and totals; negative amounts are not pie slices.</p>' : ''}</section></div></section>`;
   }
 
   function trendHtml() {
@@ -176,7 +184,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     if (!report) return '<section class="vf-empty" role="status">Loading your financial picture…</section>';
     const covered = coverageHtml();
     if (view === 'budget') return `<div class="vf-finance" aria-busy="${loading}"><div class="vf-section-heading">${programPicker()}<div><span class="vf-eyebrow">Your monthly spending plan</span><h2>What’s left to spend</h2></div><label>Budget month<input type="month" data-vf-input="budget-month" value="${esc(state.budgetMonth)}"></label>${button('Manage targets', 'legacy-budget')}${button('Add category / program', 'definitions')}</div>${envelopeCards()}<p class="vf-caption">Purchases count when made. Card and loan repayments do not consume a purchase category a second time.</p>${covered}</div>`;
-    const metrics = `<div class="vf-stat-row">${stats('Money coming in', report.summary?.inflow_cents, 'Sources of funds')}${stats(state.basis === 'spending' ? 'Purchases & costs' : 'Bank cash out', report.summary?.spending_cents ?? report.summary?.outflow_cents, rangeLabel(report.range))}${!getContext().account_id && Number.isSafeInteger(envelopes?.summary?.remaining_cents) ? stats('Budget left this month', envelopes.summary.remaining_cents, monthLabel(state.budgetMonth), 'vf-budget-stat') : ''}</div>`;
+    const metrics = `<div class="vf-stat-row">${stats('Money coming in', report.summary?.inflow_cents, 'Sources of funds')}${stats(partialSpending() ? 'Recorded costs' : state.basis === 'spending' ? 'Purchases & costs' : 'Bank cash out', spendingValue(), partialSpending() ? 'Tax payment split pending' : rangeLabel(report.range))}${!getContext().account_id && Number.isSafeInteger(envelopes?.summary?.remaining_cents) ? stats('Budget left this month', envelopes.summary.remaining_cents, monthLabel(state.budgetMonth), 'vf-budget-stat') : ''}</div>`;
     if (view === 'overview') {const budgets = `<section class="vf-budget-preview"><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(monthLabel(state.budgetMonth))}</span><h2>What’s left in your budgets</h2></div>${programPicker()}${button('All budgets', 'navigate', 'data-view="budget"')}</div>${envelopeCards(6)}</section>`;return `<div class="vf-finance" aria-busy="${loading}">${metrics}${overviewActions()}${piesHtml()}${budgets}${trendHtml()}${covered}</div>`;}
     return `<div class="vf-finance" aria-busy="${loading}">${controls()}${breadcrumbs()}${state.category ? categoryHtml() : state.ledger ? ledgerHtml(report.entries ?? [], 'Period transactions') : `${metrics}${trendHtml()}${piesHtml()}`}${covered}</div>`;
   }
@@ -186,7 +194,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     const donut = (id, rows, direction, action) => {
       const positive = rows.filter(r => r.amount_cents > 0);
       if (!root.querySelector(`#${id}`) || !positive.length) return;
-      chart(id, 'doughnut', positive.map(r => r.label ?? categoryLabel(r.key)), [{data: positive.map(r => r.amount_cents), backgroundColor: positive.map(r => financeColor(r.key)), borderWidth: 3, borderColor: '#fff', hoverOffset: 8}], i => action ? action(positive[i]) : void selectCategory(positive[i].key, direction), {cutout: '68%'});
+      chart(id, 'doughnut', positive.map(r => r.label ?? categoryLabel(r.key)), [{data: positive.map(r => r.amount_cents), backgroundColor: positive.map(r => financeColor(r.key)), borderWidth: 3, borderColor: '#fff', hoverOffset: 8}], i => action ? action(positive[i]) : void selectCategory(positive[i].key, direction), {cutout: '68%',explanation:{period:`${report.range.from} – ${report.range.through}`,basis:direction==='in'?'Cash received':state.basis==='spending'?'Purchases when made':'Bank cash movements',source:report.scope?.space_name??getSpaces().find(space=>space.id===getContext().space_id)?.name??'Recorded activity',description:direction==='in'?'Cash received by source. Borrowing, asset sales, company support and reimbursements remain distinct; receipts are not all earned income.':state.basis==='spending'?`${partialSpending()?'Recorded costs only; the complete spending total is pending tax-payment splits. ':''}Recorded purchases and refunds include purchases on cards. Repayments and transfers are excluded. Shares compare the positive categories displayed; refunds can reduce the net total.`:'Actual cash leaving owned bank accounts. Loan principal, card repayments and investments are separate cash uses rather than household consumption.'}});
     };
     donut('vf-income-chart', report.inflows ?? [], 'in');
     donut('vf-spending-chart', report.categories ?? [], 'out');
@@ -374,6 +382,16 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   }
 
   return {render, draw, refresh, reset, handleClick, handleInput, getAssistantContext: assistantContext,
+    adoptSnapshot(initialReport, initialBudgets) {
+      reset();ownerContext=contextKey();report=initialReport;envelopes=initialBudgets;
+      loading=false;busyRow=null;
+      state.year=report.year;state.comparisonYear=state.year-1;state.grain=report.grain;state.basis=report.scope.basis;state.budgetMonth=envelopes.month;
+      loadedProjection=projectionKey();
+    },
+    associateRevision(previousRevision) {
+      if(!report||!envelopes||error||loading||envelopes.error||loadedProjection!==projectionKey(previousRevision))return false;
+      loadedProjection=projectionKey();return true;
+    },
     capture: () => clone(state),
     restore(value) {if (value?.version === 1) state = {...state, ...clone(value)};},
     getReport: () => report,

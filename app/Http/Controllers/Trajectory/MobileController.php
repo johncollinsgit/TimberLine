@@ -120,6 +120,17 @@ class MobileController extends Controller
         return response()->json(['id' => $subscription->id, 'ready' => $push->ready()], 201);
     }
 
+    public function subscriptionStatus(Request $request, Space $space, FinanceAccess $access)
+    {
+        $access->authorize($request->user(), $space);
+        abort_unless($space->kind === 'household', 422);
+        $data = $request->validate(['endpoint_hash' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/D']);
+        $registered = PushSubscription::where('space_id', $space->id)->where('user_id', $request->user()->id)
+            ->where('endpoint_hash', $data['endpoint_hash'])->whereNull('disabled_at')->exists();
+
+        return response()->json(['registered' => $registered])->header('Cache-Control', 'private, no-store');
+    }
+
     public function unsubscribe(Request $request, Space $space, FinanceAccess $access)
     {
         $access->authorize($request->user(), $space);

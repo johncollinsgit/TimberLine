@@ -1,0 +1,19 @@
+.tr-donut-explanation{box-sizing:border-box;width:min(440px,calc(100vw - 28px));max-height:calc(100dvh - 32px);overflow:auto;border:1px solid #d7e6e3;border-radius:20px;padding:22px;background:#fff;color:#203e3a;box-shadow:0 18px 70px #102f3e38;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.tr-donut-explanation::backdrop{background:#122d3b70;backdrop-filter:blur(3px)}
+.tr-donut-explanation header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.tr-donut-explanation-chart{font-size:12px;color:#58716f;line-height:1.5;margin:0 0 8px;max-width:320px}
+.tr-donut-explanation button{font:inherit;cursor:pointer;min-height:44px;border:1px solid #d5e3df;border-radius:10px;background:#fff;color:#285e54;padding:10px 14px}
+.tr-donut-explanation header button{flex:0 0 44px;padding:4px;font-size:26px;line-height:1;margin-top:-8px;margin-right:-8px}
+.tr-donut-explanation h2{font-size:23px;line-height:1.25;margin:6px 0 14px;overflow-wrap:anywhere}
+.tr-donut-explanation-amount{font-size:32px;line-height:1.2;letter-spacing:-.7px;overflow-wrap:anywhere}
+.tr-donut-explanation-share{font-size:13px;color:#48766a;margin:8px 0 18px}
+.tr-donut-explanation-description{font-size:14px;line-height:1.6;margin:0 0 18px}
+.tr-donut-explanation dl{margin:0;padding:14px 0;border-top:1px solid #e3ece9;border-bottom:1px solid #e3ece9}
+.tr-donut-explanation dl>div{display:grid;grid-template-columns:95px minmax(0,1fr);gap:10px;margin:6px 0;font-size:12px;line-height:1.5}
+.tr-donut-explanation dt{color:#637c77}.tr-donut-explanation dd{margin:0;overflow-wrap:anywhere}
+.tr-donut-explanation footer{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px}
+.tr-donut-explanation footer button{flex:1;white-space:nowrap;font-size:13px}
+.tr-donut-explanation .tr-donut-explanation-entries{background:#26786a;border-color:#26786a;color:#fff}
+.tr-donut-explanation-note{width:100%;margin:0 0 5px;color:#667f79;font-size:12px;line-height:1.5}
+.tr-donut-explanation button:focus-visible{outline:3px solid #83bdd0;outline-offset:3px}
+@media(max-width:420px){.tr-donut-explanation{padding:18px}.tr-donut-explanation footer{flex-direction:column}.tr-donut-explanation footer button{width:100%}.tr-donut-explanation dl>div{grid-template-columns:78px minmax(0,1fr)}}

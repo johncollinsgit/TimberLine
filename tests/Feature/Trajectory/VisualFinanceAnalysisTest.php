@@ -63,6 +63,31 @@ test('comparison bars retain year context after selecting a month and preserve m
     expect($old['periods'][0]['spending_cents'])->toBeNull();
 });
 
+test('an unresolved tax split preserves the recorded cost subtotal and identifies its exact scoped payment', function (): void {
+    ($this->add)($this->cash, 'known-purchase', -12000);
+    ($this->add)($this->card, 'known-card-purchase', -8000);
+    ($this->add)($this->card, 'known-refund', 1000, 'refund');
+    ($this->add)($this->cash, 'repayment', -5000, 'card_payment');
+    $tax = ($this->add)($this->cash, 'unsplit-tax', -62411, 'sales_tax_remittance', 'taxes');
+    $before = $tax->refresh()->getAttributes();
+    $data = $this->actingAs($this->owner)->getJson($this->base.'/analysis')->assertOk()->json();
+    expect($data['summary']['spending_cents'])->toBeNull()
+        ->and($data['summary']['recorded_spending_cents'])->toBe(19000)
+        ->and($data['coverage']['spending']['complete'])->toBeFalse()
+        ->and($data['coverage']['spending']['unresolved_gross_cents'])->toBe(62411)
+        ->and($data['coverage']['spending']['unresolved_ids'])->toBe([$tax->id])
+        ->and($data['coverage']['spending']['review_rows'])->toHaveCount(1)
+        ->and($data['coverage']['spending']['review_rows'][0]['bank_amount_cents'])->toBe(-62411)
+        ->and(collect($data['categories'])->sum('amount_cents'))->toBe(19000)
+        ->and($tax->fresh()->getAttributes())->toBe($before);
+    $card = $this->getJson($this->base.'/analysis?account_id='.$this->card->id)->assertOk()->json();
+    expect($card['summary']['spending_cents'])->toBe(7000)
+        ->and($card['coverage']['spending']['complete'])->toBeTrue()
+        ->and($card['coverage']['spending']['review_rows'])->toBeEmpty();
+    $unknown = $this->getJson($this->base.'/analysis?from=2025-01-01&through=2025-01-15')->assertOk()->json();
+    expect($unknown['summary']['recorded_spending_cents'])->toBeNull();
+});
+
 test('analysis authorizes account programs and spaces and sends no private cacheable results', function (): void {
     $stranger = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
     [$foreign] = app(PilotService::class)->prepare($stranger, null, true);
