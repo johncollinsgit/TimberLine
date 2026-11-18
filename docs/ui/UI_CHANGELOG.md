@@ -1,3 +1,18 @@
+## 2026-11-18 - Trajectory phone review, budgets and bills (source candidate)
+
+Phone transaction ledgers use readable cards with source labels and explicit
+Confirm/Change category suggestions. Budget cards open native allowance or savings
+fund details with editable plans and versioned Undo. Saved funds remain separate
+from purchase allowances and category spending. Category exploration adds a merchant
+chart before exact transaction rows, with Back and breadcrumbs at every level.
+
+Home adds partial calendar-month bill totals, payment status and source explanations;
+paid-in-advance bills, card-funded charges and weekly cash schedules are not counted
+twice. Known plans stay visible while specific missing amounts or source facts are
+explained. Calendar changes load charts independently of advanced details, with only
+short-lived, exact-scope memory reuse and fresh permission/error fences. See the
+[visual finance contract](../operations/trajectory-visual-finance.md).
+
 ## 2026-11-17 - Retail checkout and receipt guidance (source candidate)
 
 Payment setup shows a short Website checkout checklist with the next owner

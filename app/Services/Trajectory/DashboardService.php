@@ -36,7 +36,7 @@ class DashboardService
         $start = match ($range) {
             'day' => $today, 'week' => $today->startOfWeek(), 'quarter' => $today->startOfQuarter(), 'year' => $today->startOfYear(), default => $today->startOfMonth()
         };
-        $entries = collect(app(LedgerService::class)->entries($space, null, $today->toDateString()));
+        $entries = collect(app(LedgerService::class)->entries($space, null, $today->toDateString(), viewer: $viewer));
         if ($scopeAccount) {
             $entries = $entries->where('account_id', $accountId)->values();
         }
@@ -311,6 +311,7 @@ class DashboardService
         $questionSummary = $scopeAccount ? null : app(QuestionSummaryService::class)->build($space, $entries, $records, $accounts, $planning, $start, $end, $today, $viewer, $decisionSupport ?? [], $business['ledger'] ?? []);
 
         return [
+            'monthly_bills' => app(MonthlyBillsService::class)->build($space, $records, $entries, $allAccounts, $today, $viewer, $accountId),
             'space' => $space->only(['id', 'name', 'kind', 'currency', 'timezone']), 'range' => ['key' => $range, 'start' => $start->toDateString(), 'end' => $end->toDateString()],
             'account_options' => $allAccounts->map(fn ($account) => $account->only(['id', 'name', 'kind']))->values()->all(),
             'scope_filter' => ['account_id' => $accountId, 'label' => $scopeAccount?->name ?? 'All accounts'],

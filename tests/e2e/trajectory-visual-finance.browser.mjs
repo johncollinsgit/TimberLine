@@ -18,20 +18,22 @@ let budgetOverride=null,budgetReviews=0;let tab='overview',charts=[],rows=[
 {id:3,entry_key:'three',date:'2028-02-05',merchant:'Fictional cafe',category:'dining',parent_category:'food',amount_cents:-5000,version:1,flow:'expense',editable:true,direction:'out',face_punched:false,bullshit_spending:false},
 {id:4,entry_key:'refund',date:'2028-02-06',merchant:'Fictional market refund',category:'groceries',parent_category:'food',amount_cents:2000,version:1,flow:'refund',editable:true,direction:'out',face_punched:false,bullshit_spending:false}];
 function report(params){const food=rows.filter(r=>['groceries','dining'].includes(r.category)),office=rows.filter(r=>r.category==='office');const amount=rs=>-rs.reduce((n,r)=>n+r.amount_cents,0);return {today:'2028-02-15',range:{from:params.get('from'),through:params.get('through')},summary:{inflow_cents:100000,spending_cents:amount(rows)},inflows:[{key:'company',label:'Fictional business',amount_cents:100000,ids:[99]}],categories:[...(food.length?[{key:'food',label:'Food',amount_cents:amount(food),ids:food.map(r=>r.id),children:['groceries','dining'].map(c=>({key:c,label:c==='groceries'?'Groceries':'Dining',amount_cents:amount(food.filter(r=>r.category===c)),ids:food.filter(r=>r.category===c).map(r=>r.id)}))}]:[]),...(office.length?[{key:'office',label:'Office',amount_cents:amount(office),ids:office.map(r=>r.id)}]:[])],entries:rows,periods:[{label:'Jan',from:'2028-01-01',through:'2028-01-31',inflow_cents:80000,spending_cents:30000,comparison:{from:'2027-01-01',through:'2027-01-31',spending_cents:22000}},{label:'Feb',from:'2028-02-01',through:'2028-02-15',inflow_cents:100000,spending_cents:43000,comparison:{from:'2027-02-01',through:'2027-02-15',spending_cents:null}},{label:'Mar',from:'2028-03-01',through:'2028-03-31',future:true,inflow_cents:null,spending_cents:null,comparison:{from:'2027-03-01',through:'2027-03-31',spending_cents:null}}],category_options:['food','groceries','dining','office'],category_definitions:[{key:'food',label:'Food'},{key:'groceries',label:'Groceries',parent_key:'food'},{key:'dining',label:'Dining',parent_key:'food'},{key:'office',label:'Office'}],program_options:[{id:13,name:'Fictional Soccer'}],coverage:{complete:false,notes:['Fictional testing history.']}};}
+const originalRows=structuredClone(rows);let merchantGroups=false;const legacyReport=report;
+report=params=>{const r=legacyReport(params);if(!merchantGroups)return r;const food=r.categories.find(row=>row.key==='food');for(const child of food.children){child.group_kind='subcategory';child.category_key=child.key;child.entry_keys=rows.filter(row=>row.category===child.key).map(row=>row.entry_key);child.children=rows.filter(row=>row.category===child.key).map(row=>({key:'merchant:'+child.key+':'+row.entry_key,category_key:child.key,group_kind:'merchant',label:row.merchant,amount_cents:-row.amount_cents,ids:[row.id],entry_keys:[row.entry_key],children:[]}));}const direct={id:5,entry_key:'direct-food',date:'2028-02-07',merchant:'Direct Food Shop',category:'food',amount_cents:-1500,direction:'out',version:1};r.entries=[...rows,direct,{...rows[1],entry_key:'different-split',category:'office',amount_cents:-50}];food.entry_keys=[...rows.filter(row=>['groceries','dining'].includes(row.category)).map(row=>row.entry_key),direct.entry_key];food.children.push({key:'merchant:food:direct',category_key:'food',group_kind:'merchant',label:direct.merchant,amount_cents:1500,ids:[5],entry_keys:[direct.entry_key],children:[]});food.amount_cents+=1500;return r;};
 const api=async(url,method='GET',body)=>{calls.push({url,method,body});const params=new URL('http://fixture'+url).searchParams;if(url.includes('budget-envelopes'))return budgetOverride??{month:'2028-02',actual_through:'2028-02-15',rows:[{key:'food',category:'food',label:'Food',target_cents:50000,spent_cents:43000,pending_cents:2000,remaining_cents:5000}],summary:{remaining_cents:5000}};if(method==='PATCH'){const row=rows.find(r=>r.id===Number(url.split('/').at(-1)));assertVersion(row,body);row.category=body.category;row.parent_category=null;row.version++;changes.push(body);return {ok:true};}return report(params);};
 function assertVersion(row,body){if(row.version!==body.version)throw Error('Changed source');}
 const precise=x=>Number.isSafeInteger(x)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(x/100):'Unavailable';
 const esc=x=>String(x??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
 const nav=reportNavigation({window,capture:()=>({tab,state:ui.capture(),scroll:scrollY}),context:()=>JSON.stringify(ctx),restore:async(value,current)=>{tab=value.tab;ui.restore(value.state);await ui.refresh();if(current()){render();scrollTo(0,value.scroll);}}});
 function chart(id,type,labels,datasets,click,extra){const canvas=document.getElementById(id);if(!canvas)return;const presentation=chartPresentation(canvas,precise,type,extra);const c=new Chart(canvas,{type,data:{labels,datasets},plugins:presentation.plugins,options:{...presentation.options,onClick:(event,elements)=>{if(elements[0])click(elements[0].index,elements[0].datasetIndex);}}});charts.push(c);}
-const ui=createVisualFinance({root,getContext:()=>ctx,api,endpoint:p=>'/spaces/7'+p,esc,precise,chart,onBeforeChange:()=>nav.push(),onChange:()=>render(),onChanged:async()=>{await ui.refresh();render();},onNavigate:(view,remember=true)=>{if(remember)nav.push();tab=view;render();},onReviewTransaction:()=>{},onEditBudget:()=>{budgetReviews++;},onAddDefinition:()=>{},notice:x=>document.querySelector('#notice').textContent=x});
+const ui=createVisualFinance({root,getContext:()=>ctx,api,endpoint:p=>'/spaces/7'+p,esc,precise,chart,onBeforeChange:()=>nav.push(),onChange:()=>render(),onChanged:async()=>{await ui.refresh();render();},onNavigate:(view,remember=true)=>{if(remember)nav.push();tab=view;render();},onReviewTransaction:()=>{},onEditBudget:()=>{budgetReviews++;},onOpenBudget:(row,envelopes)=>{const node=document.createElement('dialog');node.innerHTML='<h2>Budget details</h2><button>View recorded entries</button>';node.querySelector('button').onclick=async()=>{node.close();node.remove();await ui.openBudgetEntries(row,envelopes);};document.body.append(node);node.showModal();},onAddDefinition:()=>{},notice:x=>document.querySelector('#notice').textContent=x});
 function render(){charts.forEach(c=>c.destroy());charts=[];content.innerHTML=ui.render(tab);ui.draw();nav.sync();}
 root.addEventListener('click',async e=>{const t=e.target.closest('[data-action]');if(t)await ui.handleClick(t);});root.addEventListener('change',async e=>{if(e.target.matches('[data-vf-input],[data-vf-category]'))await ui.handleInput(e.target);});document.querySelector('#back').onclick=()=>nav.back();
 const foreground=createForegroundRefresh({eligible:()=>canRefreshFinance({visible:!document.hidden,online:true,hasData:!!ui.getReport(),tab,scope:ctx.scope,loading:ui.isBusy(),editing:!!document.querySelector('dialog[open]')||document.activeElement?.matches('input,select,textarea,[contenteditable="true"]')}),snapshot:()=>JSON.stringify([ctx,tab,ui.capture()]),refresh:async current=>{const position=scrollY,entry=document.activeElement?.dataset.entry;const changed=await ui.refresh({background:true,isCurrent:current});if(!changed||!current())return false;render();scrollTo(0,position);if(entry)root.querySelector('[data-entry="'+entry+'"]')?.focus({preventScroll:true});return true;}});
-await ui.refresh();render();window.fixture={ui,calls,changes,foreground,setBudgets:async value=>{budgetOverride=value;tab='budget';await ui.refresh();render();},budgetReviews:()=>budgetReviews,updateSource:()=>{rows[0].amount_cents=-32000;rows[0].version++;},charts:()=>charts};
+await ui.refresh();render();window.fixture={ui,calls,changes,foreground,setMerchantGroups:async()=>{merchantGroups=true;rows=structuredClone(originalRows);ui.reset();tab='analysis';await ui.refresh();render();},setBudgets:async value=>{budgetOverride=value;tab='budget';await ui.refresh();render();},budgetReviews:()=>budgetReviews,updateSource:()=>{rows[0].amount_cents=-32000;rows[0].version++;},charts:()=>charts};
 </script></body></html>`;
 
-const files = {'/module.js': 'resources/js/trajectory/visual-finance.js', '/navigation.js': 'resources/js/trajectory/navigation-history.js', '/foreground.js':'resources/js/trajectory/foreground-refresh.js', '/theme.js': 'resources/js/trajectory/chart-theme.js', '/chart.js': 'node_modules/chart.js/dist/chart.umd.js', '/app.css': 'resources/js/trajectory/app.css', '/visual.css': 'resources/js/trajectory/visual-finance.css'};
+const files = {'/transaction-review.js':'resources/js/trajectory/transaction-review.js', '/module.js': 'resources/js/trajectory/visual-finance.js', '/navigation.js': 'resources/js/trajectory/navigation-history.js', '/foreground.js':'resources/js/trajectory/foreground-refresh.js', '/theme.js': 'resources/js/trajectory/chart-theme.js', '/chart.js': 'node_modules/chart.js/dist/chart.umd.js', '/app.css': 'resources/js/trajectory/app.css', '/visual.css': 'resources/js/trajectory/visual-finance.css'};
 const server = createServer(async (req, res) => {
   if (req.url === '/fixture') {res.setHeader('content-type', 'text/html'); res.end(fixture); return;}
   const file = files[req.url]; if (!file) {res.statusCode = 404; res.end(); return;}
@@ -86,7 +88,11 @@ try {
       await page.waitForFunction(() => window.fixture.ui.capture().period === null);
       await page.locator('#back').click();
       await page.waitForSelector('.vf-budget-preview');
+      const beforeBudgetReads=await page.evaluate(()=>window.fixture.calls.length);
       await page.locator('.vf-envelope').click();
+      await page.getByRole('heading',{name:'Budget details',exact:true}).waitFor();
+      assert.equal(await page.evaluate(()=>window.fixture.calls.length),beforeBudgetReads);
+      await page.getByRole('button',{name:'View recorded entries',exact:true}).click();
       await page.waitForSelector('.vf-ledger');
       const request = await page.evaluate(() => window.fixture.calls.filter(c => c.url.includes('/analysis?')).at(-1));
       assert.match(request.url, /through=2028-02-15/);
@@ -113,8 +119,34 @@ try {
       await page.evaluate(()=>window.fixture.setBudgets({rows:[{key:'0|groceries',category:'groceries',label:'Groceries',target_cents:140000,planned_cents:140000,bank_spent_cents:64000,reported_cash_spent_cents:50000,reported_cash_as_of:'2028-02-15',spent_cents:114000,remaining_cents:26000}]}));
       assert.match(await page.locator('.vf-envelope').innerText(),/\$640\.00 bank-recorded spending \+ \$500\.00 reported cash through 2028-02-15/);
       assert.match(await page.locator('.vf-envelope').innerText(),/\$260\.00/);assert.match(await page.locator('.vf-envelope').innerText(),/transaction charts exclude it/);
+      await page.evaluate(()=>window.fixture.setMerchantGroups());
+      await page.locator('[data-action="vf-category"][data-key="food"]').click();
+      await page.locator('[data-action="vf-subcategory"][data-key="groceries"]').click();
+      await page.locator('#vf-category-chart[aria-label^="Merchant amounts"]').waitFor();
+      assert.equal(await page.locator('.vf-ledger').count(),0);
+      const purpose=await page.evaluate(()=>window.fixture.ui.capture());
+      // A real merchant slice enters only its scoped economic line, even if
+      // another allocation has the same underlying bank transaction id.
+      await page.waitForFunction(()=>Chart.getChart(document.querySelector('#vf-category-chart'))?.getDatasetMeta(0).data[1]?.circumference>1.4);
+      const merchantPoint=await page.locator('#vf-category-chart').evaluate(canvas=>{const c=Chart.getChart(canvas),el=c.getDatasetMeta(0).data[1],p=el.getCenterPoint(),b=canvas.getBoundingClientRect();return{x:b.x+p.x,y:b.y+p.y};});
+      await page.mouse.click(merchantPoint.x,merchantPoint.y);
+      await page.waitForSelector('.vf-ledger');
+      assert.equal(await page.locator('.vf-table tbody tr').count(),1);
+      assert.match(await page.locator('.vf-table tbody tr').innerText(),/Fictional small market/);
+      const ask=await page.evaluate(()=>window.fixture.ui.getAssistantContext());
+      assert.equal(ask.category,'food');assert.equal(ask.subcategory,'groceries');assert.deepEqual(ask.transaction_ids,[2]);assert.doesNotMatch(JSON.stringify(ask),/merchant:/);
+      assert.match(await page.locator('.vf-breadcrumbs').innerText(),/Groceries.*Fictional small market.*Transactions/s);
+      await page.locator('#back').click();await page.locator('#vf-category-chart[aria-label^="Merchant amounts"]').waitFor();
+      assert.deepEqual(await page.evaluate(()=>window.fixture.ui.capture()),purpose);
+      await page.locator('#back').click();await page.locator('#vf-category-chart[aria-label^="Subcategory and merchant amounts"]').waitFor();
+      await page.locator('[data-action="vf-subcategory"][data-key="merchant:food:direct"]').click();
+      assert.equal(await page.locator('.vf-table tbody tr').count(),1);assert.match(await page.locator('.vf-table tbody tr').innerText(),/Direct Food Shop/);
+      assert.equal(await page.evaluate(()=>window.fixture.ui.getAssistantContext().subcategory),null);
+      await page.locator('[data-action="vf-level"][data-level="category"]').click();
+      await page.locator('#vf-category-chart[aria-label^="Subcategory and merchant amounts"]').waitFor();
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
       assert.deepEqual(errors,[]);
-      results.push({browser: name, width, chartDrilldown: true, inlineSave: true, backNavigation: true, budgetDateClamped: true, noPageOverflow: true, causeSpecificBudgets: true, nativeBudgetReview: true});
+      results.push({browser: name, width, chartDrilldown: true, inlineSave: true, backNavigation: true, budgetDateClamped: true, noPageOverflow: true, causeSpecificBudgets: true, nativeBudgetReview: true, merchantPath: true, merchantSplitIsolation: true});
       await page.close();
     }
     await browser.close();

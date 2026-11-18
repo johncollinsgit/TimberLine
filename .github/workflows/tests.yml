@@ -487,6 +487,12 @@ jobs:
     - name: Verify Trajectory chart explanations
       run: node tests/e2e/trajectory-donut-explanation.browser.mjs
       if: matrix.group == 'workspace'
+    - name: Verify Trajectory phone review and native budget details
+      run: |
+        node tests/e2e/trajectory-phone-ledger.browser.mjs
+        node tests/e2e/trajectory-budget-detail.browser.mjs
+        node tests/e2e/trajectory-bills-home.browser.mjs
+      if: matrix.group == 'workspace'
     - name: Verify Fleet embedding and allowance in Chromium and WebKit
       run: npm run test:highlevel-fleet
       if: matrix.group == 'workspace'

@@ -68,7 +68,7 @@ class TrajectoryController extends Controller
 
             return response()->json(app(\App\Services\Trajectory\CardActivityService::class)->evidence($request->user(), $space, (int) $data['account_id'], $data['ids'] ?? null, $data['date'] ?? null))->header('Cache-Control', 'private, no-store');
         }
-        $entries = $ledger->entries($space, $data['date'] ?? null, $data['date'] ?? null, $data['ids'] ?? null, $data['account_id'] ?? null);
+        $entries = $ledger->entries($space, $data['date'] ?? null, $data['date'] ?? null, $data['ids'] ?? null, $data['account_id'] ?? null, $request->user());
         if ($data['economic_costs'] ?? false) {
             $entries = app(\App\Services\Trajectory\EconomicActivityService::class)->evidence(collect($entries), $data['economic_category'] ?? null, $data['economic_categories'] ?? null);
         }

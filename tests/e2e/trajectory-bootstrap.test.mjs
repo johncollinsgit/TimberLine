@@ -18,3 +18,55 @@ test('cross-space, wrong-account, mismatched dates/programs and stale bootstrap 
   const account=visualBootstrapMetadata({...report,scope:{...report.scope,account_id:9}},budget,space,9);
   assert.equal(account.scope_filter.label,'Fictional checking');
 });
+
+const {visualBootstrapRequest,deriveVisualPeriod,createRangeSnapshotCache}=await import('../../resources/js/trajectory/bootstrap.js');
+const monthReport={...structuredClone(report),year:2028,scope:{...report.scope,calendar_range:'month'},
+ budget_context:{month:'2028-02',actual_through:'2028-02-15'},
+ calendar_ranges:{day:{from:'2028-02-15',through:'2028-02-15',covered:false,has_evidence:true},week:{from:'2028-02-14',through:'2028-02-15',covered:false,has_evidence:true},month:{from:'2028-02-01',through:'2028-02-15',covered:false,has_evidence:true},year:{from:'2028-01-01',through:'2028-02-15',covered:false,has_evidence:true}},
+ summary:{inflow_cents:40000,spending_cents:null,recorded_spending_cents:16000},
+ entries:[{id:1,entry_key:'e:1:food',date:'2028-02-02',amount_cents:-12500,direction:'out'},
+  {id:1,entry_key:'e:1:office',date:'2028-02-02',amount_cents:-1000,direction:'out'},
+  {id:2,entry_key:'e:2',date:'2028-02-15',amount_cents:-3000,direction:'out'},
+  {id:3,entry_key:'e:3:refund',date:'2028-02-15',amount_cents:500,direction:'out'},
+  {id:10,entry_key:'cash:10',date:'2028-02-14',amount_cents:40000,direction:'in'}],
+ categories:[{key:'food',amount_cents:15000,ids:[1,2,3],entry_keys:['e:1:food','e:2','e:3:refund'],children:[
+  {key:'groceries',amount_cents:12500,ids:[1],entry_keys:['e:1:food']},
+  {key:'dining',amount_cents:2500,ids:[2,3],entry_keys:['e:2','e:3:refund']}]},
+  {key:'office',amount_cents:1000,ids:[1],entry_keys:['e:1:office'],children:[]}],
+ inflows:[{key:'business',amount_cents:40000,ids:[10],entry_keys:['cash:10'],children:[]}],
+ coverage:{history_available:true,latest_recorded_on:'2028-02-15',selected_range_has_evidence:true,spending:{complete:false,known_cost_cents:16000,unresolved_ids:[20],unresolved_gross_cents:12345,review_rows:[{id:20,date:'2028-02-03',merchant:'Fictional tax',bank_amount_cents:-12345}]}}
+};
+test('period requests use canonical server presets and explicitly dated historical budget months',()=>{
+ assert.equal(visualBootstrapRequest({range:'day',accountId:9}).analysisPath,'/analysis?grain=month&basis=spending&range=day&account_id=9');
+ assert.equal(visualBootstrapRequest({range:'custom',from:'2028-01-01',through:'2028-01-31'}).budgetPath,'/budget-envelopes?month=2028-01');
+ assert.throws(()=>visualBootstrapRequest({range:'custom',from:'2028-02-15',through:'2028-02-01'}));
+ assert.throws(()=>visualBootstrapRequest({range:'unsupported'}));
+});
+test('a current month snapshot produces exact day/week subsets without duplicate attributed cents or a data request',()=>{
+ const before=structuredClone(monthReport),day=deriveVisualPeriod(monthReport,budget,{range:'day'});
+ assert.deepEqual(day.report.summary,{inflow_cents:0,spending_cents:2500,recorded_spending_cents:2500});
+ assert.equal(day.report.categories[0].children.length,1);assert.equal(day.report.categories[0].children[0].key,'dining');
+ assert.equal(day.report.categories.reduce((sum,row)=>sum+row.amount_cents,0),2500);
+ assert.equal(day.report.coverage.spending.complete,true);assert.deepEqual(day.report.coverage.spending.review_rows,[]);
+ const week=deriveVisualPeriod(monthReport,budget,{range:'week'});assert.equal(week.report.summary.inflow_cents,40000);
+ assert.equal(visualBootstrapMetadata(day.report,day.budgets,space,null,{range:'day'}).range.start,'2028-02-15');
+ assert.deepEqual(monthReport,before);assert.deepEqual(day.budgets,budget);
+ assert.equal(deriveVisualPeriod(monthReport,budget,{range:'year'}),null);
+});
+test('no recorded activity with incomplete history remains unknown rather than becoming a fake zero',()=>{
+ const empty=structuredClone(monthReport);empty.entries=empty.entries.filter(row=>row.date!=='2028-02-15');
+ empty.calendar_ranges.day.has_evidence=false;
+ const day=deriveVisualPeriod(empty,budget,{range:'day'}).report;
+ assert.equal(day.summary.spending_cents,null);assert.equal(day.summary.inflow_cents,null);assert.equal(day.summary.recorded_spending_cents,null);
+ assert.equal(day.coverage.history_available,true);assert.deepEqual(day.entries,[]);
+ const exact=deriveVisualPeriod(monthReport,budget,{range:'month'}).report;assert.equal(exact.summary.spending_cents,null);assert.equal(exact.coverage.spending.unresolved_gross_cents,12345);
+});
+test('range snapshots are memory-only, scoped, bounded by age, and fully cleared by a real refresh',()=>{
+ let at=0;const cache=createRangeSnapshotCache({now:()=>at});cache.remember('household:7:all:spending',monthReport,budget);
+ assert.equal(cache.find('business:8:all:spending',{range:'day'}),null);
+ assert.equal(cache.find('household:7:account9:spending',{range:'day'}),null);
+ assert.equal(cache.find('household:7:all:spending',{range:'day'}).report.summary.spending_cents,2500);
+ at=60000;assert.equal(cache.find('household:7:all:spending',{range:'day'}),null);
+ at=-1;assert.equal(cache.find('household:7:all:spending',{range:'day'}),null);
+ at=1;cache.clear();assert.equal(cache.find('household:7:all:spending',{range:'day'}),null);
+});

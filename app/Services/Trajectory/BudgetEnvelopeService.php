@@ -161,12 +161,13 @@ class BudgetEnvelopeService
                 'record_id' => count($target['record_ids'] ?? []) === 1 ? $target['record_ids'][0] : null,
                 'version' => $target['version'] ?? null, 'record_ids' => $target['record_ids'] ?? []];
         }
+        $rows = $this->funds($space, $rows, $start, $end, $catalog, $current, $committed, $hasActuals, $programId);
         // If a parent has a target, its children share that allowance; do not add them twice.
         foreach ($rows as &$row) {
-            if (! $row['parent_key']) {
+            if (! $row['parent_key'] || ($row['mode'] ?? null) === 'fund') {
                 continue;
             }
-            $parent = collect($rows)->first(fn ($p) => $p['category'] === $row['parent_key'] && $p['program_id'] === $row['program_id'] && $p['planned_cents'] !== null);
+            $parent = collect($rows)->first(fn ($p) => ($p['mode'] ?? null) !== 'fund' && $p['category'] === $row['parent_key'] && $p['program_id'] === $row['program_id'] && $p['planned_cents'] !== null);
             if ($parent) {
                 if ($row['planned_cents'] !== null) {
                     $row['remaining_cents'] = null;
@@ -195,7 +196,7 @@ class BudgetEnvelopeService
             $row['reasons'] = array_values(array_unique($row['reasons']));
         }
         unset($row);
-        $summaryRows = collect($rows)->reject(fn ($r) => isset($r['uses_parent_budget']));
+        $summaryRows = collect($rows)->reject(fn ($r) => isset($r['uses_parent_budget']) || ($r['mode'] ?? null) === 'fund');
         $cashReportsOverlap = $summaryRows->contains(fn ($row) => in_array('cash_reports_overlap', $row['reasons'], true)
             || ($row['status'] === 'overlapping_targets' && $row['reported_cash_as_of'] !== null));
         $reportedCashTotal = $cashReportsOverlap ? null : (int) $summaryRows->sum('reported_cash_spent_cents');
@@ -208,6 +209,47 @@ class BudgetEnvelopeService
                 'remaining_cents' => ! $complete || $summaryRows->isEmpty() || $summaryRows->contains('remaining_cents', null) ? null : (int) $summaryRows->sum('remaining_cents')],
             'coverage' => ['complete' => false, 'costs_resolved' => $complete, 'range_covered' => $covered, 'has_recorded_activity' => $monthEntries->isNotEmpty(), 'notes' => ['Category allowances are plans, not available bank cash.', 'Pending purchases reserve budget until settled or removed. Missing history can change remaining amounts.', 'Ordinary categories reset monthly. Explicit funds carry their approved opening allowance and recorded activity.']],
             'program_options' => $programs->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->values()->all()];
+    }
+
+    /** A mapped native goal is a reserve plan, never a monthly purchase allowance or invented cash. */
+    private function funds(Space $space, array $rows, CarbonImmutable $start, CarbonImmutable $end, Collection $catalog, Collection $current, Collection $committed, bool $hasActuals, ?int $programId): array
+    {
+        if ($programId !== null) {
+            return $rows;
+        }
+        $goals = Record::where('space_id', $space->id)->where('kind', 'goal')->where('active', true)->whereDate('created_at', '<=', $end->toDateString())->get()
+            ->filter(fn ($goal) => filled($goal->data['budget_category'] ?? null) && in_array($goal->data['goal_type'] ?? null, ['savings', 'emergency'], true))
+            ->groupBy(fn ($goal) => $goal->data['budget_category']);
+        foreach ($goals as $category => $group) {
+            $existing = collect($rows)->first(fn ($row) => $row['category'] === $category && $row['program_id'] === null);
+            $keepSpendingPlan = $existing && $existing['planned_cents'] !== null && $existing['target_status'] !== 'draft';
+            if (! $keepSpendingPlan) {
+                $rows = array_values(array_filter($rows, fn ($row) => $row['category'] !== $category || $row['program_id'] !== null));
+            }
+            $keys = $this->categoryKeys($category, $catalog);
+            $matches = fn ($entry) => empty($entry['program_record_id']) && in_array($entry['category'], $keys, true);
+            $spent = $current->filter($matches);
+            $holds = $committed->filter($matches);
+            $goal = $group->count() === 1 ? $group->first() : null;
+            $rows[] = ['key' => ($keepSpendingPlan ? 'fund|' : '0|').$category, 'category' => $category, 'label' => $goal?->name ?? ($catalog->get($category)['label'] ?? ucfirst(str_replace('_', ' ', $category))),
+                'program_id' => null, 'program_label' => null, 'parent_key' => $catalog->get($category)['parent_key'] ?? null,
+                'mode' => 'fund', 'fund' => $goal ? ['record_id' => $goal->id, 'version' => $goal->version, 'goal_type' => $goal->data['goal_type'],
+                    'target_cents' => $goal->data['target_cents'], 'saved_cents' => $goal->data['saved_cents'],
+                    'monthly_cents' => $goal->data['monthly_cents'], 'target_on' => $goal->data['target_on'], 'plan_only' => true] : null,
+                'target_cents' => null, 'planned_cents' => null, 'remaining_cents' => null, 'carryover_cents' => null,
+                'target_status' => 'reserve_fund', 'status' => $goal ? 'reserve_fund' : 'multiple_funds',
+                'reasons' => [$goal ? 'reserve_fund' : 'multiple_funds'], 'plan_period' => null, 'partial_period' => false,
+                'source_notes' => ['Saved is the amount actually recorded as set aside. Contributions and targets are plans; category purchases do not establish fund withdrawals.'],
+                'cash_spending_pending' => false, 'category_review_pending' => false, 'tax_review_ids' => [],
+                'bank_spent_cents' => $hasActuals ? -(int) $spent->sum('amount_cents') : null,
+                'reported_cash_spent_cents' => 0, 'reported_cash_as_of' => null,
+                'spent_cents' => $hasActuals ? -(int) $spent->sum('amount_cents') : null, 'pending_cents' => -(int) $holds->sum('amount_cents'),
+                'rollover' => false, 'ids' => $spent->pluck('id')->unique()->values()->all(), 'pending_ids' => $holds->pluck('id')->unique()->values()->all(),
+                'record_id' => $goal?->id, 'version' => $goal?->version, 'record_ids' => $group->pluck('id')->all(),
+                'replaced_budget_record_ids' => $keepSpendingPlan ? [] : ($existing['record_ids'] ?? [])];
+        }
+
+        return $rows;
     }
 
     /** Include configured ancestors' descendants without assuming a one-level catalog. */

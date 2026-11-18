@@ -37,6 +37,7 @@ class RecordService
                 'date' => ['date_format:Y-m-d', 'after_or_equal:1900-01-01', 'before:2200-01-01'],
                 'month' => ['regex:/^(?:19|20|21)\d{2}-(?:0[1-9]|1[0-2])$/'],
                 'boolean' => ['boolean'],
+                'last_four' => ['string', 'regex:/^\d{4}$/'],
                 'category' => [Rule::in(app(WorkspaceService::class)->categories($space))],
                 'select' => [Rule::in($field['choices'])],
                 default => ['string', 'max:160'],
@@ -55,6 +56,9 @@ class RecordService
             if (filled($input['ends_on'] ?? null)) {
                 $rules['reported_cash_as_of'][] = 'before_or_equal:ends_on';
             }
+        }
+        if ($kind === 'transaction_source_identity') {
+            $rules['expected_bank_source_fingerprint'] = ['required', 'string', 'regex:/^[a-f0-9]{64}$/'];
         }
         if ($kind === 'tax_remittance') {
             // Admission token for the bank facts actually shown to the reviewer;
@@ -75,6 +79,14 @@ class RecordService
         }
         if ($kind === 'tax_remittance') {
             $data['bank_source_fingerprint'] = app(SalesTaxService::class)->validateRemittance($space, $data);
+            unset($data['expected_bank_source_fingerprint']);
+        }
+        if ($kind === 'transaction_source_identity') {
+            $tx = Transaction::where('space_id', $space->id)->where('removed', false)->findOrFail($data['transaction_id']);
+            abort_unless($data['observed_on'] >= $tx->posted_on->toDateString() && $data['observed_on'] <= now($space->timezone)->toDateString(), 422, 'Use an actual observation date for this bank transaction.');
+            $fingerprint = app(SalesTaxService::class)->bankFingerprint($space->id, $tx->account_id, $tx->id, $tx->posted_on->toDateString(), $tx->amount_cents, $tx->merchant);
+            abort_unless(hash_equals($fingerprint, $data['expected_bank_source_fingerprint']), 409, 'Bank source changed; review the card evidence again.');
+            $data['bank_source_fingerprint'] = $fingerprint;
             unset($data['expected_bank_source_fingerprint']);
         }
         if ($kind === 'company_support_source') {
@@ -137,6 +149,9 @@ class RecordService
             abort_unless(($data['currency'] ?? null) === $lenderAccount->currency, 422, 'Statement currency must match its owned credit account.');
             abort_unless(app(LenderInterestYtdService::class)->valid($data, now($space->timezone)->toDateString()), 422, 'Use a completed calendar-year lender observation, its original source hash and nonempty statement reference.');
         }
+        if ($kind === 'bill_observation') {
+            $data = app(MonthlyBillsService::class)->validateObservation($space, $data);
+        }
         if ($kind === 'payment_notice') {
             abort_unless(in_array(Account::findOrFail($data['account_id'])->kind, ['credit', 'loan'], true), 422, 'Choose a loan or credit account.');
             abort_unless($data['amount_cents'] > 0, 422, 'Payment must be positive.');
@@ -168,6 +183,15 @@ class RecordService
         }
         if ($kind === 'goal') {
             abort_unless($data['saved_cents'] <= $data['target_cents'], 422, 'Saved amount exceeds the target.');
+            if (! empty($data['budget_category'])) {
+                $category = $data['budget_category'];
+                $definition = Record::where('space_id', $space->id)->where('kind', 'category_definition')->where('active', true)->get()
+                    ->first(fn ($record) => ($record->data['key'] ?? null) === $category);
+                abort_unless(in_array($data['goal_type'], ['savings', 'emergency'], true)
+                    && ! in_array($category, ['income', 'uncategorized'], true)
+                    && ! array_key_exists($category, $space->settings['income_categories'] ?? [])
+                    && (! $definition || ($definition->data['direction'] ?? null) === 'expense'), 422, 'Map a savings reserve to an expense category.');
+            }
         }
         if ($kind === 'payroll') {
             abort_unless($data['period_end'] >= $data['period_start'], 422);
@@ -187,7 +211,7 @@ class RecordService
     {
         app(FinanceAccess::class)->authorize($user, $space);
         $data = $this->validate($space, $kind, $input);
-        $admission = $kind === 'tax_remittance' ? ['expected_bank_source_fingerprint' => $input['expected_bank_source_fingerprint']] : [];
+        $admission = in_array($kind, ['tax_remittance', 'transaction_source_identity'], true) ? ['expected_bank_source_fingerprint' => $input['expected_bank_source_fingerprint']] : [];
         if ($kind === 'company_support_source') {
             app(FinanceAccess::class)->authorize($user, Space::where('kind', 'business')->findOrFail($data['business_space_id']));
         }
@@ -210,7 +234,7 @@ class RecordService
             }
             // Revalidate references while holding the space lock, including concurrent archive changes.
             $lockedData = $this->validate($space, $kind, [...$data, ...$admission]);
-            if ($kind === 'tax_remittance') {
+            if (in_array($kind, ['tax_remittance', 'transaction_source_identity'], true)) {
                 $data = $lockedData;
             }
             if ($kind === 'company_support_source') {
@@ -222,6 +246,15 @@ class RecordService
                     }
                     if ($other->id !== $record?->id && ($other->data['source_type'] ?? null) === $data['source_type'] && $value === $data['source_value']) {
                         abort_unless($record === null && $other->name === $name && $other->data == $data, 409, 'This receipt source already exists. Correct it with a versioned edit.');
+
+                        return $other;
+                    }
+                }
+            }
+            if ($kind === 'bill_observation') {
+                foreach (Record::where('space_id', $space->id)->where('kind', $kind)->where('active', true)->lockForUpdate()->get() as $other) {
+                    if ($other->id !== $record?->id && (($other->data['reference'] ?? null) === $data['reference'] || (! empty($data['transaction_id']) && ($other->data['transaction_id'] ?? null) === $data['transaction_id']))) {
+                        abort_unless($record === null && $other->name === $name && $other->data == $data, 409, 'This bill reference or bank payment already has an observation. Correct the existing record with a versioned edit.');
 
                         return $other;
                     }

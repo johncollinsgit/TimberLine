@@ -24,10 +24,14 @@ import './card-activity.css';
 import { minor, percentShare, rateMillis, recordedDifference } from './money.js';
 import {saveBankLinkSession, restoreBankLinkSession, clearBankLinkSession, bankOAuthReturnUrl, bankLinkExitMessage} from './bank-link-session.js';
 import {createVisualFinance} from './visual-finance.js';
+import {createBillsHome} from './bills-home.js';
+import {createBudgetDetail} from './budget-detail.js';
+import {createTransactionReview,transactionIdentityHtml,normalizedReviewRow,saveTransactionCategory,renderLegacyTransactionLedger} from './transaction-review.js';
+import './transaction-review.css';
 import './visual-finance.css';
 import {initTrajectoryAssistant} from './assistant-ui.js';
 import {canRefreshFinance, createForegroundRefresh} from './foreground-refresh.js';
-import {isVisualFinanceView,visualBootstrapMetadata} from './bootstrap.js';
+import {isVisualFinanceView,visualBootstrapMetadata,visualBootstrapRequest,createRangeSnapshotCache} from './bootstrap.js';
 import {createDonutExplanation} from './donut-explanation.js';
 
 const root = document.querySelector('#trajectory');
@@ -78,7 +82,7 @@ function boot() {
     if (body && !(body instanceof FormData)) headers['Content-Type']='application/json';
     const response = await fetch(path,{method,headers,body:body ? body instanceof FormData ? body : JSON.stringify(body) : null,signal});
     let result; try {result=await response.json();} catch {throw new Error('The server could not complete this request. Please refresh and try again.');}
-    if (!response.ok) throw new Error(result.errors ? Object.values(result.errors).flat().join('\n') : result.message || 'Request failed.');
+    if (!response.ok) {const error=new Error(result.errors ? Object.values(result.errors).flat().join('\n') : result.message || 'Request failed.');error.status=response.status;throw error;}
     return result;
   };
   const notice = (message) => {$('#tr-feedback').textContent=message;$('#tr-feedback').hidden=false;};
@@ -106,8 +110,9 @@ function boot() {
     by_space:{[personal.space.id]:personal,[business.space.id]:business},
     combined_result:combined,
   });
-  const load = async ({reuse = false} = {}) => {
+  const load = async ({reuse = false,periodChange = false} = {}) => {
     assistantFocusedTransaction=null;
+    if(!reuse){if(periodChange)rememberRangeProjection();else rangeSnapshots.clear();}
     if (!active) {$('#tr-context').textContent='Your private financial workspace';$('#tr-content').innerHTML='<div class="tr-empty"><h2>Your next chapter starts here.</h2>Your Trajectory pilot has not been enabled yet.<br>Once enabled, connect an account or import a statement to begin.</div>';$('#tr-add').disabled=true;return;}
     if(reuse&&!data&&(pendingDashboard?.context===reportContext()||visualMetadata&&displayedReportContext===reportContext())){
       if(visualMetadata&&isVisualFinanceView(tab)&&!visualFinance.hasCurrentSnapshot())await visualFinance.refresh();
@@ -123,21 +128,38 @@ function boot() {
     if(!data){$('#tr-add').disabled=true;$('#tr-compare').disabled=true;}
     $('#tr-content').classList.add('tr-loading');$('#tr-content').setAttribute('aria-busy','true');
     let initialVisual=null,controller=null;
+    const priorSelection=visualFinance.capture(),priorReport=visualFinance.getReport();
+    const basicProjection=!!data&&!priorSelection.period&&(priorSelection.program??null)===null&&priorSelection.grain==='month'
+      &&priorSelection.year===Number(data.range.end.slice(0,4))&&priorSelection.comparisonYear===priorSelection.year-1
+      &&priorSelection.budgetMonth===data.range.end.slice(0,7)&&priorReport?.range.from===data.range.start&&priorReport?.range.through===data.range.end;
+    const savedClientSelection=!periodChange&&basicProjection?Object.fromEntries(['direction','category','subcategory','merchantGroup','ledger','ledgerSort','query','page','focusedEntry'].filter(key=>priorSelection[key]!==undefined).map(key=>[key,priorSelection[key]])):null;
     if(!reuseDashboard){
       loadAbort?.abort();controller=new AbortController();loadAbort=controller;
       pendingDashboard={version:requestedVersion,context:reportContext()};dashboardError=null;
-      if(!data){
-        visualMetadata=null;bootstrapError=null;
-        if(scope!=='both'&&isVisualFinanceView(tab)&&reportingRange==='month'&&!scenarioId&&!seasonal&&!oauthReturn){
-          const context=reportContext(),space=spaces.find(row=>row.id===active),accountId=accountFilter;
-          const current=()=>requestedVersion===loadVersion&&context===reportContext()&&!controller.signal.aborted;
-          initialVisual=Promise.all([api(endpoint(`/analysis?grain=month&basis=spending${accountId?`&account_id=${accountId}`:''}`),'GET',null,controller.signal),api(endpoint('/budget-envelopes'),'GET',null,controller.signal)])
-            .then(([report,budgets])=>{if(!current())return false;const metadata=visualBootstrapMetadata(report,budgets,space,accountId);
-              if(data&&(data.space.id!==metadata.space.id||data.range.start!==metadata.range.start||data.range.end!==metadata.range.end))return false;
-              visualMetadata={...metadata,ownerVersion:requestedVersion};visualFinance.adoptSnapshot(report,budgets);render();return true;})
-            .catch(error=>{if(current()){bootstrapError=error.message;render();}return false;});
-        }
-      }
+      if(scope!=='both'&&isVisualFinanceView(tab)&&(!data||periodChange||basicProjection)&&!scenarioId&&!seasonal&&!oauthReturn){
+        // Every primary-view period starts the actual visual reads concurrently
+        // with legacy details. Only period changes may reuse a dated memory pair.
+        data=null;visualMetadata=null;bootstrapError=null;
+        $('#tr-add').disabled=true;$('#tr-compare').disabled=true;
+        const context=reportContext(),space=spaces.find(row=>row.id===active),accountId=accountFilter,cohort=rangeCohort();
+        const current=()=>requestedVersion===loadVersion&&context===reportContext()&&!controller.signal.aborted;
+        try{
+          const request=visualBootstrapRequest({range:reportingRange,from:$('#tr-start').value||null,through:$('#tr-end').value||null,accountId,basis:visualFinance.capture().basis});
+          const adopt=(pair,cached=false)=>{
+            const metadata=visualBootstrapMetadata(pair.report,pair.budgets,space,accountId,request);
+            visualMetadata={...metadata,ownerVersion:requestedVersion,cached};visualFinance.adoptSnapshot(pair.report,pair.budgets);if(savedClientSelection)visualFinance.restore({...visualFinance.capture(),...savedClientSelection});render();
+          };
+          const cached=periodChange?rangeSnapshots.find(cohort,request):null;
+          if(cached)adopt(cached,true);else render();
+          initialVisual=Promise.all([api(endpoint(request.analysisPath),'GET',null,controller.signal),api(endpoint(request.budgetPath),'GET',null,controller.signal)])
+            .then(([report,budgets])=>{if(!current())return false;
+              const pair={report,budgets};visualBootstrapMetadata(report,budgets,space,accountId,request);
+              if(data&&(data.space.id!==space.id||data.range.start!==report.range.from||data.range.end!==report.range.through))return false;
+              rangeSnapshots.remember(cohort,report,budgets);adopt(pair);return true;})
+            .catch(error=>{if(current()){bootstrapError=error.message;if([401,403,404].includes(error.status)){controller.abort();pendingDashboard=null;rangeSnapshots.clear();visualMetadata=null;visualFinance.reset();data=null;}render();}return false;});
+        }catch(error){bootstrapError=error.message;render();}
+      }else if(!data){visualMetadata=null;bootstrapError=null;}
+
     }
     try {
       if(!reuseDashboard){
@@ -148,18 +170,18 @@ function boot() {
           try {combined=await api(endpoint(`/combined?business_id=${businessSpace.id}&from=${personal.range.start}&through=${personal.range.end}`,personalSpace.id));} catch {}
           result=combinedDashboard(personal,business,combined);
         } else result=await api(dashboardPath(active),'GET',null,controller.signal);
-        if(requestedVersion!==loadVersion)return;
+        if(requestedVersion!==loadVersion||controller.signal.aborted)return;
         const previousRevision=dashboardRevision;
         data=result;accountFilter=data.scope_filter?.account_id??null;dashboardRevision++;loadedDashboardContext=reportContext();
         $('#tr-add').disabled=scope==='both';
-        if(visualMetadata?.ownerVersion===requestedVersion&&visualMetadata.space.id===data.space.id&&visualMetadata.range.start===data.range.start&&visualMetadata.range.end===data.range.end)visualFinance.associateRevision(previousRevision);
+        if(visualMetadata?.cached!==true&&visualMetadata?.ownerVersion===requestedVersion&&visualMetadata.space.id===data.space.id&&visualMetadata.range.start===data.range.start&&visualMetadata.range.end===data.range.end)visualFinance.associateRevision(previousRevision);
       }
       if(initialVisual)await initialVisual;if(requestedVersion!==loadVersion)return;
       if(scope!=='both'&&(filter.ids||filter.date||filter.account_id)){const rows=await fetchEvidence(filter);if(requestedVersion!==loadVersion)return;evidenceRows=rows;}
-      if(scope!=='both'&&isVisualFinanceView(tab)&&!visualFinance.hasCurrentSnapshot()){await visualFinance.refresh();if(requestedVersion!==loadVersion)return;}
+      if(scope!=='both'&&isVisualFinanceView(tab)&&!initialVisual&&!visualFinance.hasCurrentSnapshot()){await visualFinance.refresh();if(requestedVersion!==loadVersion)return;}
       render();if(!reuseDashboard)void assistant.contextChanged?.().catch(error=>notice(error.message));return true;
     }
-    catch(e){if(requestedVersion===loadVersion){dashboardError=e.message;accountFilter=data?.scope_filter?.account_id??accountFilter;if($('#tr-account-filter'))$('#tr-account-filter').value=accountFilter??'';notice(e.message);if(!data)render();}return false;}
+    catch(e){if(requestedVersion===loadVersion){dashboardError=controller?.signal.aborted&&bootstrapError?bootstrapError:e.message;if([401,403,404].includes(e.status)){controller?.abort();pendingDashboard=null;rangeSnapshots.clear();visualMetadata=null;visualFinance.reset();data=null;}accountFilter=data?.scope_filter?.account_id??accountFilter;if($('#tr-account-filter'))$('#tr-account-filter').value=accountFilter??'';notice(dashboardError);if(!data)render();}return false;}
     finally {if(requestedVersion===loadVersion){pendingDashboard=null;$('#tr-content').classList.remove('tr-loading');$('#tr-content').setAttribute('aria-busy','false');}}
   };
   const metric = (label,value,sub) => `<div class="tr-metric"><div class="tr-kicker">${esc(label)}</div><div class="tr-number">${money(value)}</div><div class="tr-subtle">${esc(sub)}</div></div>`;
@@ -179,6 +201,14 @@ function boot() {
   const line = (label,values,color,fill=false) => ({label,data:values,borderColor:color,backgroundColor:color+'0a',fill,tension:0,borderWidth:2.5,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#fff',pointHoverBorderWidth:2,pointHitRadius:16,spanGaps:false});
   const navigation=[];
   const reportContext=()=>JSON.stringify([scope,active,businessSpace?.id,accountFilter,reportingRange,$('#tr-start').value,$('#tr-end').value,scenarioId,seasonal,accountingBasis]);
+  const rangeSnapshots=createRangeSnapshotCache({ttl:60000});
+  const rangeCohort=()=>JSON.stringify([scope,active,businessSpace?.id,accountFilter,visualFinance.capture().basis,accountingBasis,scenarioId,seasonal]);
+  function rememberRangeProjection(){
+    const report=visualFinance.getReport(),budgets=visualFinance.getBudgets(),selection=visualFinance.capture();
+    if(visualFinance.hasCurrentSnapshot()&&selection.grain==='month'&&selection.comparisonYear===selection.year-1&&report?.scope?.space_id===active
+      &&(report.scope.account_id??null)===accountFilter&&(report.scope.program_id??null)===null&&budgets?.month===report.budget_context?.month)rangeSnapshots.remember(rangeCohort(),report,budgets);
+  }
+
   const focusDescriptor=()=>{const node=document.activeElement?.closest?.('[data-action]');return node?{action:node.dataset.action,label:node.dataset.label||'',ids:node.dataset.ids||'',key:node.dataset.key||'',entry:node.dataset.entry||''}:null;};
   const captureNavigation=()=>({tab,filter:JSON.parse(JSON.stringify(filter)),scroll:window.scrollY,moneyFlowMode,visualFinance:visualFinance.capture(),depth:navigation.length,flowDialog:flowDialog?{...flowDialog}:null,focus:focusDescriptor()});
   const historyNavigation=reportNavigation({window,capture:captureNavigation,context:reportContext,enabled:()=>!new URLSearchParams(location.search).has('oauth_state_id'),
@@ -222,7 +252,13 @@ function boot() {
   const outlook=outlookUI({getData:()=>data,esc,money,precise,date,plot,chart,line,btn,dialog,evidence:showTransactions,forecastDetail});
   const welcome=welcomeUI({getData:()=>data,esc,btn,navigate,render,budgetImportAction:'budget-import'});
   const debtPlanner=debtPlannerUI({getData:()=>data,esc,precise,btn,plot,chart,line,render,requestScenario:(extraCents,spaceId)=>api(endpoint('/debt-scenarios',spaceId),'POST',{extra_cents:extraCents,...(accountFilter!==null&&spaceId===active?{account_id:accountFilter}:{})})});
-  const visualFinance=createVisualFinance({root,getContext:()=>({space_id:active,scope,account_id:accountFilter,from:data?.range.start??visualMetadata?.range.start,through:data?.range.end??visualMetadata?.range.end,today:data?.decision_support?.as_of??visualMetadata?.today,revision:dashboardRevision}),getSpaces:()=>spaces,api,endpoint,esc,precise,chart,
+  let legacyReviewRows=[];
+  const reviewDefinitions=()=>{if(!data)return visualFinance.getReport()?.category_definitions??[];const source=data.records??[];return source.filter(record=>record.kind==='category_definition').map(record=>({id:record.id,record_id:record.id,key:record.data.key,label:record.name,parent_key:source.find(parent=>parent.id===record.data.parent_record_id)?.data.key}));};
+  const transactionReview=createTransactionReview({canRefine:row=>reviewDefinitions().some(definition=>definition.parent_key===row.category),getContext:()=>({space_id:active,account_id:accountFilter,from:data?.range.start??visualMetadata?.range.start,through:data?.range.end??visualMetadata?.range.end,program_id:tab==='analysis'?visualFinance.capture().program:null,view:tab}),api,endpoint,esc,precise,onRender:render,onChanged:load,notice,
+    onChangeCategory:categoryChoiceForm,onSaved:(row,category,isCurrent)=>saveTransactionCategory({row,category,targetSpace:active,categoryDefinitions:reviewDefinitions(),api,endpoint,isCurrent})});
+  const billsHome=createBillsHome({getReport:()=>data?.monthly_bills??null,esc,precise,onEdit:row=>{const record=data?.records.find(record=>record.id===row.record_id&&record.kind===row.record_kind);if(!record||record.version!==row.version){notice('These bill details changed. Refresh to review them.');return;}remember();recordForm(record.kind,record);},onEvidence:row=>showTransactions({ids:row.evidence_ids}),onManage:()=>navigate('bills'),isCurrent:report=>report?.space_id===active&&scope!=='both'});
+  const budgetDetail=createBudgetDetail({root,api,endpoint,getContext:()=>({space_id:active,scope,account_id:accountFilter,month:visualFinance.capture().budgetMonth,program_id:visualFinance.capture().program}),esc,precise,onChanged:load,notice,onEntries:(row,envelopes)=>visualFinance.openBudgetEntries(row,envelopes)});
+  const visualFinance=createVisualFinance({root,getContext:()=>({space_id:active,scope,account_id:accountFilter,from:data?.range.start??visualMetadata?.range.start,through:data?.range.end??visualMetadata?.range.end,today:data?.decision_support?.as_of??visualMetadata?.today,revision:dashboardRevision}),getSpaces:()=>spaces,api,endpoint,esc,precise,chart,transactionReview,homeBills:()=>billsHome.render(),onOpenBudget:(row,envelopes)=>budgetDetail.open(row,envelopes),
     onBeforeChange:remember,onChange:()=>render(),onChanged:load,onNavigate:(view,rememberStep=true)=>{if(rememberStep)navigate(view);else{tab=view;filter={};evidenceRows=null;render();window.scrollTo(0,0);}},
     onReviewTransaction:row=>{if(!data){notice('Editing details are still loading. Try again in a moment.');return;}if(row.editable)transactionForm(row);else void showTransactions({ids:[row.id],economic_costs:true});},
     onEditBudget:()=>navigate('budget-targets'),onAddDefinition:()=>void definitionForm().catch(error=>notice(error.message)),onAsk:()=>assistant.openChat(),onClearAccount:()=>{accountFilter=null;filter={};evidenceRows=null;navigation.length=0;$('#tr-back').hidden=true;void load();},notice});
@@ -241,6 +277,7 @@ function boot() {
     return base;
   }
   function render() {
+    budgetDetail?.contextChanged?.();
     if(!data){renderBootstrap();return;}
     if(moneyFlowMode==='inflows'&&!data.money_flow?.family_inflows)moneyFlowMode='spending';
     charts.forEach(c=>c.destroy());charts=[];chartTables={};
@@ -253,7 +290,9 @@ function boot() {
     const views=scope==='both'?{overview:bothOverview,transactions,'money-flow':moneyFlow}:{overview:()=>visualFinance.render('overview'),analysis:()=>visualFinance.render('analysis'),budget:()=>visualFinance.render('budget'),'budget-targets':budget,'legacy-overview':overview,welcome:welcome.render,accounts,history,transactions,bills,medical,assets,business,planning:accountFilter===null?planning.planning:wholeSpacePlanNotice,anomalies:planning.anomalies,tax:planning.tax,'sales-tax':()=>salesTaxHtml({report:data.sales_tax,esc,precise,btn}),'money-flow':moneyFlow,profit:planning.profit,companies:planning.companies,bud:planning.bud};
     const labels={overview:'Home',analysis:'Analysis',accounts:'Accounts',history:'Cash flow & history',budget:'Your budget','budget-targets':'Manage budget targets','legacy-overview':'Detailed forecast',transactions:'Review transactions',bills:'Bills & goals',medical:'Medical sharing',assets:'Wealth & debt',business:'Business',planning:'Your plan',anomalies:'Category anomalies',tax:'Tax accountant review','sales-tax':'Sales tax payments','money-flow':'Money flow',profit:'Profit & loss',companies:'Businesses & accounts',bud:'Ask Everbranch'};
     $('#tr-page-title').textContent=tab==='welcome'?'Get started':labels[tab];
-    $('#tr-content').innerHTML=(views[tab]||combinedOnly)();
+    const visualFailure=scope!=='both'&&isVisualFinanceView(tab)&&bootstrapError;
+    const viewContent=visualFailure&&!visualFinance.getReport()?`<section class="vf-error" role="alert"><h2>This financial view could not update</h2><p>${esc(bootstrapError)}</p>${btn('Try again','bootstrap-retry')}</section>`:(views[tab]||combinedOnly)();
+    $('#tr-content').innerHTML=(visualFailure&&visualFinance.getReport()?`<p class="tr-data-note" role="status">The figures could not update: ${esc(bootstrapError)}. Showing the previously loaded, dated projection. ${btn('Try again','bootstrap-retry')}</p>`:'')+viewContent;
     mobile?.syncControls();
     if(tab==='planning'&&scope!=='both'&&accountFilter===null) planning.draw();
     if(tab==='profit'&&scope!=='both'&&accountFilter===null) planning.drawProfit();
@@ -272,8 +311,10 @@ function boot() {
       chart('tr-flow-trend','line',['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],series.map((year,index)=>({...line(`${year.year} · recorded ${receipts?'receipts':'outflows'}`,year.values,colors[index]),pointRadius:4,pointHoverRadius:6,pointHitRadius:24,pointBackgroundColor:colors[index],pointBorderColor:'#fff',pointBorderWidth:1})),(month,year)=>{const ids=series[year]?.months[month]?.views?.[basis]?.[receipts?'inflow_ids':'outflow_ids'];if(ids?.length)showTransactions({ids,...(basis==='cash'?{cash_movement:true}:{economic_costs:true})});},{beginAtZero:true});
     }
     displayedReportContext=reportContext();historyNavigation.sync();
+    transactionReview.synchronize(tab==='transactions'?legacyReviewRows:tab==='analysis'?visualFinance.getVisibleLedgerRows():[]);
   }
   function renderBootstrap(){
+    budgetDetail?.contextChanged?.();
     const visual=isVisualFinanceView(tab),ready=visual&&!!visualMetadata;
     charts.forEach(c=>c.destroy());charts=[];chartTables={};
     root.querySelectorAll('[data-tab]').forEach(button=>{if(button.dataset.tab===tab)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
@@ -282,11 +323,12 @@ function boot() {
     $('#tr-context').textContent=visualMetadata?`${date(visualMetadata.range.start)} – ${date(visualMetadata.range.end)} · Recorded activity`:'Loading account details…';
     if(visualMetadata){const select=$('#tr-account-filter');select.innerHTML='<option value="">All accounts</option>'+visualMetadata.account_options.map(account=>`<option value="${account.id}"${account.id===accountFilter?' selected':''}>${esc(account.name)}</option>`).join('');}
     const error=visual?bootstrapError:dashboardError;
-    $('#tr-content').innerHTML=ready?visualFinance.render(tab):error?`<section class="vf-error" role="alert"><h2>This ${visual?'financial view':'account detail'} could not load</h2><p>${esc(error)}</p>${btn('Try again','bootstrap-retry')}</section>`:'<div class="tr-empty" role="status">'+(visual?'Loading your financial picture…':'Loading account and planning details…')+'</div>';
+    $('#tr-content').innerHTML=ready?((bootstrapError||dashboardError)?`<p class="tr-data-note" role="status">The figures could not update: ${esc(bootstrapError||dashboardError)}. Showing the previously loaded, dated projection.</p>`:'')+visualFinance.render(tab):error?`<section class="vf-error" role="alert"><h2>This ${visual?'financial view':'account detail'} could not load</h2><p>${esc(error)}</p>${btn('Try again','bootstrap-retry')}</section>`:'<div class="tr-empty" role="status">'+(visual?'Loading your financial picture…':'Loading account and planning details…')+'</div>';
     mobile?.syncControls();root.classList.toggle('tr-visual-view',visual);
     if(ready){
       root.querySelectorAll('[data-vf-category],[data-action="vf-review-row"],[data-action="vf-attribution"],[data-action="vf-definitions"],[data-action="vf-legacy-budget"]').forEach(control=>{control.disabled=true;control.title='Editing details are still loading';});
       visualFinance.draw();
+      transactionReview.synchronize(tab==='analysis'?visualFinance.getVisibleLedgerRows():[]);
     }
     $('#tr-content').classList.toggle('tr-loading',!ready&&!error);$('#tr-content').setAttribute('aria-busy',String(!ready&&!error));
     displayedReportContext=reportContext();historyNavigation.sync();
@@ -393,12 +435,13 @@ function boot() {
     return `<div class="tr-review-suggestions"><div class="tr-labels"><div><h3>Suggested bulk reviews</h3><p class="tr-subtle">Built from your past choices and clear merchant-title context. Nothing changes until you apply a suggestion.</p></div><span class="tr-pill">${suggestions.reduce((total,s)=>total+s.count,0)} ready</span></div>${suggestions.map((s,i)=>`<div class="tr-row tr-suggestion"><div><strong>${esc(s.merchant)} → ${esc(title(s.category))}</strong><div class="tr-subtle">${s.count} purchases · ${precise(s.amount_cents)} total · ${esc(s.evidence)}</div></div>${btn(`Review ${s.count} together`,'bulk-suggestion',`data-index="${i}"`)}</div>`).join('')}</div>`;
   }
   function transactions() {
-    let rows=filter.review?(data.review_transactions||[]):(evidenceRows??data.transactions);
+    let rows=(filter.review?(data.review_transactions||[]):(evidenceRows??data.transactions)).map(row=>normalizedReviewRow(row,reviewDefinitions()));
     if(filter.category)rows=rows.filter(t=>t.category===filter.category);
     if(filter.date)rows=rows.filter(t=>t.date===filter.date);
-    if(filter.review)rows=rows.filter(t=>!t.reviewed);
+    if(filter.review){rows=rows.filter(t=>!t.reviewed);if(!filter.ids&&!filter.date)rows=rows.filter(t=>t.date>=data.range.start&&t.date<=data.range.end);}
     if(filter.ids)rows=rows.filter(t=>filter.ids.includes(t.id));
-    const body=rows.length?`<div class="tr-table-wrap"><table class="tr-table"><caption>${rows.length} transactions${filter.review?' needing review':''}${Object.keys(filter).length&&!filter.review?' · Filtered':''}. ${filter.credit_movement?'Full posted card amounts. Positive credits reduce the card balance; negative charges increase it.':'Positive amounts are money in.'}</caption><thead><tr><th>Date</th>${scope==='both'?'<th>Space</th>':''}<th>Merchant</th><th>Category</th><th>Classification</th><th>Amount</th><th>Review</th></tr></thead><tbody>${rows.map(t=>`<tr><td>${date(t.date)}</td>${scope==='both'?`<td><span class="tr-pill">${esc(t.space_label)}</span></td>`:''}<td>${esc(t.merchant)}<div class="tr-subtle">${esc(title(t.flow))}</div></td><td>${esc(title(t.category))}</td><td>${t.face_punched?'<span class="tr-pill">Face Punched</span> ':''}${t.bullshit_spending?'<span class="tr-pill">Bullshit Spending</span>':''}</td><td class="tr-money ${t.amount_cents>0?'tr-positive':''}">${evidenceMoney(t,t.amount_cents)}${t.tax_purpose?`<div class="tr-subtle">${!['tax_economic_cost','sales_tax_principal','owned_bank_cash'].includes(t.amount_basis)?'Full bank amount; components below<br>':''}${['tax_economic_cost','sales_tax_principal'].includes(t.amount_basis)?`Bank amount ${evidenceMoney(t,t.bank_amount_cents)}<br>Shown: ${t.economic_category?esc(title(t.economic_category)):t.economic_categories?.length?t.economic_categories.map(c=>esc(title(c))).join(', '):'known economic costs'}<br>`:''}${t.tax_purpose.valid&&t.tax_purpose.components?`Sales-tax principal ${evidenceMoney(t,t.tax_purpose.components.tax_principal_cents)}<br>Interest ${evidenceMoney(t,t.tax_purpose.components.interest_cents)} · Penalty ${evidenceMoney(t,t.tax_purpose.components.penalty_cents)} · Fees ${evidenceMoney(t,t.tax_purpose.components.other_fees_cents)}`:esc(t.tax_purpose.issue||'Tax purpose / economic split needs review')}</div>`:''}${t.amount_basis==='owned_bank_cash'?`<div class="tr-subtle">Full bank cash<br>Economic allocation ${evidenceMoney(t,t.allocated_amount_cents)}</div>`:''}${t.amount_basis==='owned_credit_activity'?`<div class="tr-subtle">Full card amount<br>Economic allocation ${evidenceMoney(t,t.allocated_amount_cents)}<br>${esc(t.currency||'Currency unavailable')}</div>`:''}</td><td>${t.editable?btn(t.reviewed?'Edit category':'Categorize','classify',`data-id="${t.id}" data-space-id="${t.space_id||active}"`):'Allocated'}</td></tr>`).join('')}</tbody></table></div>`:empty(filter.review?'Everything in this space is reviewed.':'No transactions match this view.');
+    legacyReviewRows=rows;
+    const body=renderLegacyTransactionLedger({rows,scope,active,filter,transactionReview,esc,title,date,evidenceMoney,btn,empty});
     const receipts=scope==='both'?[]:data.records.filter(r=>r.kind==='receipt');
     return panel('Review transactions',`<p class="tr-subtle">Pick a transaction to set its category and money movement. You can flag one-time surprises as Face Punched, mark your own Bullshit Spending, split a card purchase, or teach Trajectory an exact merchant rule.</p>${reviewSuggestions()}${body}`,`<div class="tr-actions">${scope!=='both'?btn('Match transfers','reconciliation'):''}${btn('Needs review','review')}${btn('All selected-period transactions','clear')}${scope!=='both'?btn('Import statement','import'):''}</div>`)+(scope!=='both'?panel('Receipt research',receipts.map(r=>`<div class="tr-row"><div><strong>${esc(r.name)}</strong><p class="tr-subtle">${esc(r.data.summary)}</p><div class="tr-source">${esc(r.data.source)} · ${esc(r.data.purchased_on)} · ${r.data.transaction_id?'Matched statement #'+r.data.transaction_id:'Not matched to a posted purchase'}</div></div><div>${money(r.data.amount_cents)} ${btn('Review receipt','edit',`data-id="${r.id}"`)}</div></div>`).join('')||empty('Receipts explain existing purchases; they never create a second expense.'),btn('Add receipt evidence','add','data-kind="receipt"')):'');
   }
@@ -577,14 +620,21 @@ function boot() {
     const kinds=['recurring','goal','debt',...(data.definitions.debt_balance_observation?['debt_balance_observation']:[]),'asset','metal','scenario',...(data?.business?['payroll','reliance']:['financial_observation','medical_need','medical_bill','medical_payment','medical_share','medical_membership']),...(data.space.kind==='household'&&data.definitions.company_support_source?['company_support_source']:[])];
     dialog('Add to your plan',`<div class="tr-choices tr-block">${kinds.map(k=>btn(title(k),'choose-kind',`data-kind="${k}"`)).join('')}</div>`,null);
   }
+  function categoryChoiceForm(row) {
+    const source=scope==='both'?data.by_space[row.space_id]:data??visualFinance.getReport();
+    const labels=Object.fromEntries(reviewDefinitions().map(definition=>[definition.key,definition.label]));
+    dialog('Choose a category',`<p class="tr-subtle">${esc(row.date)} · ${esc(row.merchant)} · ${precise(row.amount_cents)}</p>${transactionIdentityHtml(row,{esc})}${field('category','Category','text',row.category,source.category_options.map(category=>({value:category,label:labels[category]??title(category)})))}<p class="tr-subtle">This changes this purchase’s category only. Its amount, money movement and flags stay the same.</p>`,async values=>{await transactionReview.saveChoice(row,values.get('category'));notice('Category confirmed.');},'Confirm category');
+  }
   function transactionForm(tx) {
+    tx=normalizedReviewRow(tx,reviewDefinitions());
+    if(tx.allocation_details?.length||tx.attribution_detail_id||!tx.editable&&tx.attribution_editable){void visualFinance.openAttribution(tx).catch(error=>notice(error.message));return;}
     assistantFocusedTransaction=tx;
     const source=scope==='both'?data.by_space[tx.space_id]:data;
     const verifiedTax=source.sales_tax?.rows?.find(row=>row.transaction_id===tx.id&&row.reviewed&&row.tax_type==='sales_tax');
     if(verifiedTax)tx={...tx,category:'taxes',flow:'sales_tax_remittance',face_punched:false,bullshit_spending:false};
     const matched=source.records.find(r=>['medical_payment','medical_share','medical_membership'].includes(r.kind)&&r.data.transaction_id===tx.id);
     if(matched){recordForm(matched.kind,matched);return;}
-    dialog('Categorize transaction',`<p class="tr-subtle">${scope==='both'?esc(tx.space_label)+' · ':''}${esc(tx.merchant)} · ${evidenceMoney(tx,tx.amount_cents)}<br>${esc(tx.explanation)}</p>${tx.flow==='sales_tax_remittance'?'<p class="tr-data-note">This receipt-backed purpose keeps the full bank cash movement and separates principal from known costs. It cannot be learned as an agency merchant rule.</p>':''}${field('category','Category','text',tx.category,source.category_options.map(c=>({value:c,label:source.workspace_settings?.income_categories?.[c]||title(c)})))}${field('flow','Money movement','text',tx.flow,['expense','income','refund','transfer','card_payment','asset_transfer','asset_sale','loan_draw','unclassified_deposit','owner_wages','owner_distribution','reimbursement','debt_payment','duplicate','sales_tax_remittance'])}${field('face_punched','Face Punched · unexpected, one time','checkbox',tx.face_punched)}${field('bullshit_spending','Bullshit Spending · unnecessary to me','checkbox',tx.bullshit_spending)}${field('learn','Remember an exact merchant rule','checkbox',false)}<div class="tr-actions tr-block">${btn('Allocate across spaces','split',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`)}${btn('Undo last review','undo',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`)}${source.space.kind==='household'&&tx.amount_cents<0?btn('Match monthly sharing contribution','membership-match',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`):''}${source.space.kind==='household'?btn('Match medical payment / share','medical-match',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`):''}</div>`,async v=>{await api(endpoint(`/transactions/${tx.id}`,tx.space_id||active),'PATCH',{version:tx.version,category:v.get('category'),flow:v.get('flow'),face_punched:v.get('face_punched')==='on',bullshit_spending:v.get('bullshit_spending')==='on',learn:v.get('learn')==='on'});});
+    dialog('Categorize transaction',`<p class="tr-subtle">${scope==='both'?esc(tx.space_label)+' · ':''}${esc(tx.merchant)} · ${evidenceMoney(tx,tx.amount_cents)}<br>${esc(tx.explanation)}</p>${transactionIdentityHtml(tx,{esc})}${tx.flow==='sales_tax_remittance'?'<p class="tr-data-note">This receipt-backed purpose keeps the full bank cash movement and separates principal from known costs. It cannot be learned as an agency merchant rule.</p>':''}${field('category','Category','text',tx.category,source.category_options.map(c=>({value:c,label:source.workspace_settings?.income_categories?.[c]||title(c)})))}${field('flow','Money movement','text',tx.flow,['expense','income','refund','transfer','card_payment','asset_transfer','asset_sale','loan_draw','unclassified_deposit','owner_wages','owner_distribution','reimbursement','debt_payment','duplicate','sales_tax_remittance'])}${field('face_punched','Face Punched · unexpected, one time','checkbox',tx.face_punched)}${field('bullshit_spending','Bullshit Spending · unnecessary to me','checkbox',tx.bullshit_spending)}${field('learn','Remember an exact merchant rule','checkbox',false)}<div class="tr-actions tr-block">${btn('Allocate across spaces','split',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`)}${btn('Undo last review','undo',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`)}${source.space.kind==='household'&&tx.amount_cents<0?btn('Match monthly sharing contribution','membership-match',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`):''}${source.space.kind==='household'?btn('Match medical payment / share','medical-match',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`):''}</div>`,async v=>{await api(endpoint(`/transactions/${tx.id}`,tx.space_id||active),'PATCH',{version:tx.version,category:v.get('category'),flow:v.get('flow'),face_punched:v.get('face_punched')==='on',bullshit_spending:v.get('bullshit_spending')==='on',learn:v.get('learn')==='on'});});
   }
   function budgetImportForm() {
     if(scope==='both'||accountFilter!==null){notice('Choose one financial space and all accounts before importing budget targets.');return;}
@@ -673,6 +723,9 @@ function boot() {
       if(a==='bootstrap-retry'){await load();return;}
       if(!data&&['vf-review-row','vf-attribution','vf-definitions','vf-legacy-budget'].includes(a)){notice('Editing details are still loading. Try again in a moment.');return;}
       if(a==='vf-inbox'){assistant.openInbox?.();return;}
+      if(await billsHome.handleClick(a,target))return;
+      if(await transactionReview.handleClick(a,target))return;
+      if(a==='vf-grain')rangeSnapshots.clear();
       if(await visualFinance.handleClick(target))return;
       if(welcome.handle(a,target))return;
       if(await debtPlanner.handle(a,target))return;
@@ -805,13 +858,13 @@ function boot() {
     const next=e.key==='Home'?views[0]:e.key==='End'?views.at(-1):views[(index+(e.key==='ArrowRight'?1:-1)+views.length)%views.length];
     root.querySelector(`[data-action="outlook-view"][data-view="${next}"]`)?.click();
   });
-  root.addEventListener('change',e=>{if(!data&&e.target.matches('[data-vf-category]')){notice('Editing details are still loading. Try again in a moment.');return;}if(e.target.matches('[data-vf-input],[data-vf-category]'))void visualFinance.handleInput(e.target).catch(error=>notice(error.message));});
+  root.addEventListener('change',e=>{if(['year','comparison','basis','program','budget-month'].includes(e.target.dataset.vfInput))rangeSnapshots.clear();if(!data&&e.target.matches('[data-vf-category]')){notice('Editing details are still loading. Try again in a moment.');return;}if(e.target.matches('[data-vf-input],[data-vf-category]'))void visualFinance.handleInput(e.target).catch(error=>notice(error.message));});
   $('#tr-add').onclick=()=>{if(data)chooseAdd();else notice('Editing details are still loading. Try again in a moment.');};$('#tr-refresh').onclick=load;
   $('#tr-space-tabs').addEventListener('click',e=>{const button=e.target.closest('[data-scope]');if(!button||button.dataset.scope===scope)return;navigation.length=0;$('#tr-back').hidden=true;welcome.reset();debtPlanner.reset();decisionMonth='';forecastExpanded=false;overviewExpanded=false;accountFilter=null;scope=button.dataset.scope;active=(scope==='personal'?personalSpace:businessSpace)?.id||personalSpace?.id||businessSpace?.id;scenarioId='';filter={};budgetSource=null;budgetMonth='';historyMonth='';evidenceRows=null;data=null;$('#tr-dialog').close();$('#tr-content').innerHTML='';renderSpaceTabs();load();});
   $('#tr-account-filter')?.addEventListener('change',async event=>{accountFilter=event.target.value===''?null:Number(event.target.value);decisionMonth='';scenarioId='';filter={};evidenceRows=null;navigation.length=0;$('#tr-back').hidden=true;debtPlanner.reset();await load();});
   $('#tr-compare').onclick=()=>{compareYear=!compareYear;$('#tr-compare').setAttribute('aria-pressed',String(compareYear));render();};
-  $('#tr-range').onclick=e=>{const button=e.target.closest('[data-range]');if(!button||button.dataset.range===reportingRange)return;reportingRange=button.dataset.range;filter={};evidenceRows=null;$('#tr-range').querySelectorAll('[data-range]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.range===reportingRange)));$('#tr-date-fields').hidden=reportingRange!=='custom';if(reportingRange!=='custom'||($('#tr-start').value&&$('#tr-end').value))load();};
-  for(const selector of ['#tr-start','#tr-end'])$(selector).onchange=()=>{if($('#tr-start').value&&$('#tr-end').value)load();};
+  $('#tr-range').onclick=e=>{const button=e.target.closest('[data-range]');if(!button||button.dataset.range===reportingRange)return;reportingRange=button.dataset.range;filter={};evidenceRows=null;$('#tr-range').querySelectorAll('[data-range]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.range===reportingRange)));$('#tr-date-fields').hidden=reportingRange!=='custom';if(reportingRange!=='custom'||($('#tr-start').value&&$('#tr-end').value))load({periodChange:true});};
+  for(const selector of ['#tr-start','#tr-end'])$(selector).onchange=()=>{if($('#tr-start').value&&$('#tr-end').value)load({periodChange:true});};
   root.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(data||visualMetadata||pendingDashboard)navigate(b.dataset.tab);});
   $('#tr-back').onclick=()=>{historyNavigation.back();};
   $('#tr-company').onchange=()=>{welcome.reset();debtPlanner.reset();decisionMonth='';forecastExpanded=false;overviewExpanded=false;accountFilter=null;businessSpace=spaces.find(s=>s.id===Number($('#tr-company').value));active=businessSpace.id;scenarioId='';navigation.length=0;$('#tr-back').hidden=true;renderSpaceTabs();load();};
@@ -831,7 +884,7 @@ function boot() {
         const [result,refreshed]=await Promise.all([api(dashboardPath(active)),tab==='assets'?Promise.resolve(true):visualFinance.refresh({background:true,isCurrent})]);
         if(!refreshed||!isCurrent())return false;
         if((result.scope_filter?.account_id??null)!==accountFilter)return false;
-        data=result;if(tab==='assets')dashboardRevision++;loadedDashboardContext=reportContext();render();window.scrollTo(0,position);
+        data=result;if(tab==='assets')dashboardRevision++;loadedDashboardContext=reportContext();rangeSnapshots.clear();rememberRangeProjection();render();window.scrollTo(0,position);
         root.querySelectorAll('#tr-content .vf-table-wrap,#tr-content .tr-table-wrap').forEach((node,index)=>{if(tableScroll[index]){node.scrollLeft=tableScroll[index].left;node.scrollTop=tableScroll[index].top;}});
         const target=focus&&[...root.querySelectorAll('[data-action]')].find(node=>node.dataset.action===focus.action&&(node.dataset.label||'')===focus.label&&(node.dataset.ids||'')===focus.ids&&(!focus.key||(node.dataset.key||'')===focus.key)&&(!focus.entry||(node.dataset.entry||'')===focus.entry)&&node.getClientRects().length);
         target?.focus({preventScroll:true});historyNavigation.sync();

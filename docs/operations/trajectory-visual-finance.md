@@ -190,3 +190,59 @@ Cards show bank-recorded and reported cash costs separately; the allowance subtr
 report once. Later months never inherit the amount, multiple reports in one selected
 category cohort hold the allowance for review, and unresolved cash/category flags still
 hold exact remaining values. Transaction charts and account balances remain unchanged.
+
+
+Transaction review uses the same real source rows in a desktop ledger and stacked mobile
+cards. Phone category controls, source details and Confirm/Change actions remain inside
+the viewport. Proposed categories are read-only, based on exact reviewed native merchant
+history in the current entity/account/program or a low-confidence title hint. Mixed-use
+and conflicting history remain explicit. A user must Confirm or choose a different
+category; Decline leaves the purchase unreviewed. No proposal writes, learns a rule or
+changes bank cash. Confirm uses the original versioned classification or complete native
+attribution bridge, preserving source amount, flow, flags and other split lines. Undo
+uses the returned source version/event; stale source or revoked access requires a fresh
+review. Requests/responses from a previous scope cannot paint or save in a new context.
+
+When the viewer currently has financial access to both sides of a shared cost, the
+merchant, paying entity and actual source account are readable. Restricted sources retain
+a meaningful shared-cost/payment label with account/card details hidden. Bank account
+masks stay account labels. A physical card's last four requires a reviewed native
+`transaction_source_identity` record bound to the current bank fingerprint; duplicate or
+stale evidence displays as needing review. This evidence never changes ownership, money
+movement or the allocated amount. Source access is rechecked per projection in batches.
+
+Primary-view calendar changes reuse only a short-lived, in-memory authorized projection
+when the server's canonical range lies inside its exact recorded rows. Dates come from
+the server; entry keys preserve economic split identity. Fresh Analysis, budget and
+legacy detail reads run concurrently for every supported period, and advanced details
+wait for real metadata. The cache clears after edits, explicit refresh, source/account
+changes or denied access; a late response cannot restore a denied projection. An empty
+Today view explains that no purchases/receipts are recorded yet and shows the latest
+recorded date instead of inventing zero actuals.
+
+
+Home’s bills card reuses the background Dashboard cohort; it never delays the early
+charts or reloads ledger history. Its partial monthly cash total uses calendar-month
+obligations, with paid, processing, estimated and payment-status-review amounts kept
+separate. A receipt’s obligation/due month, optional verified service month and actual
+bank-posting month are distinct. Paid-in-advance invoices do not become due again;
+older shares paid now are cash paid now, not new current-month obligations. Card-funded
+service charges and lender requirements beside a reviewed weekly cash schedule are
+listed separately rather than added to the same cash payment twice. Giving commitments
+sit inside the Giving allowance; savings goals and asset transfers are not bills.
+
+Versioned `bill_observation` records bind reviewed invoice/receipt evidence to an
+existing recurring schedule, debt or medical plan and optionally an exact owned bank
+source. Saving validates ownership, amount, dates and pending/posted status under locks;
+replaying identical evidence is idempotent, and conflicting duplicate references or
+bank-source links require review. These records never create a bank transaction or
+initiate a payment. A stale variable schedule needs an explicit unknown-future flag or
+reviewed schedule change, so a credit-adjusted share is not repeated at its old amount.
+Missing dates/amounts remain named review items. Cross-scope details and late modal
+handoffs are rejected; ordinary native record/evidence navigation preserves Back.
+
+Analysis category charts preserve a purpose level before merchant groups. Merchant
+keys are presentation-only; exact economic entry keys determine the final editable
+ledger, and native category/program edits and Ask context never receive synthetic
+merchant categories. Direct parent-category purchases remain available alongside
+subcategories, and either path can return through its own chart and breadcrumb.

@@ -167,7 +167,8 @@ test('sales tax allocation guards preserve source cash and never disclose foreig
     [$foreign] = app(PilotService::class)->prepare($other, null, true);
     Allocation::create(['transaction_id' => $tx->id, 'space_id' => $foreign->id, 'amount_cents' => -50]);
     $this->actingAs($other)->postJson('/trajectory/spaces/'.$foreign->id.'/evidence', ['ids' => [$tx->id], 'economic_costs' => true])->assertOk()
-        ->assertJsonPath('0.amount_cents', null)->assertJsonPath('0.merchant', 'Shared allocation')->assertJsonMissingPath('0.tax_purpose.record_id');
+        ->assertJsonPath('0.amount_cents', null)->assertJsonPath('0.merchant', 'Shared payment')->assertJsonMissingPath('0.tax_purpose.record_id')
+        ->assertJsonPath('0.source_identity.authorized_source', false)->assertJsonPath('0.source_identity.account_name', null);
 });
 
 test('economic branch evidence reconciles each component to the original bank without adding a transaction', function (): void {
