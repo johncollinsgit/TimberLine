@@ -51,12 +51,17 @@ test('unknown budget allowance is not zero; real zero and overspending are retai
   assert.equal(rows[0].remaining_cents, null); assert.equal(rows[1].remaining_cents, -100); assert.equal(rows[2].remaining_cents, 0);
   assert.equal(financeColor('groceries'), financeColor('groceries'));
 });
-test('default month requests exact scope and home puts budget remaining before charts', async () => {
-  const {ui, calls} = fixture(); await ui.refresh();
+test('default month requests exact scope and home puts incoming/spending charts before budget cards', async () => {
+  const {ui, calls, ctx} = fixture(); await ui.refresh();
   assert.match(calls[0].path, /analysis\?year=2028&grain=month&from=2028-02-01&through=2028-02-15&basis=spending/);
   assert.match(calls[1].path, /budget-envelopes\?month=2028-02/);
+  for(const scope of ['personal','business']){
+    ctx.scope=scope;const home=ui.render('overview'),budgets=home.indexOf('class="vf-budget-preview"');
+    assert.ok(budgets>=0);
+    for(const marker of ['class="vf-stat-row"','id="vf-income-chart"','id="vf-spending-chart"'])assert.ok(home.indexOf(marker)>=0&&home.indexOf(marker)<budgets,`${scope}: ${marker} precedes budget cards`);
+    assert.equal((home.match(/class="vf-budget-preview"/g)||[]).length,1);
+  }
   const html = ui.render('overview');
-  assert.ok(html.indexOf('What’s left in your budgets') < html.indexOf('Money coming in'));
   assert.ok(html.includes('Purchases when made')); assert.ok(!html.includes('funding-gap'));
 });
 test('period → category → child → inline ledger remembers navigation and largest sort', async () => {
