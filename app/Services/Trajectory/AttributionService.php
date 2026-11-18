@@ -271,12 +271,23 @@ class AttributionService
         $entries = $this->decorateEntries($space, $entries);
         $categories = collect($this->categoryDefinitions($space))->keyBy('id');
         $sources = Transaction::whereIn('id', array_column($entries, 'id'))->get(['id', 'space_id'])->keyBy('id');
-        $spaces = Space::whereIn('id', $sources->pluck('space_id'))->get()->keyBy('id');
+        $spaceIds = $sources->pluck('space_id')->push($space->id)->unique()->values();
+        $spaces = Space::whereIn('id', $spaceIds)->get()->keyBy('id');
         $access = app(FinanceAccess::class);
+        // Financial access can query entitlements and membership. Check each
+        // distinct space once for this projection, never once per history row.
+        // The map is local: the next invocation rechecks current access.
+        $allowedSpaces = [];
+        if ($viewer) {
+            foreach ($spaces as $authorizationSpace) {
+                $allowedSpaces[$authorizationSpace->id] = $access->allows($viewer, $authorizationSpace);
+            }
+        }
+        $targetAllowed = $allowedSpaces[$space->id] ?? false;
         $expanded = [];
         foreach ($entries as $entry) {
             $source = $spaces->get($sources->get($entry['id'])?->space_id);
-            $canAttribute = $viewer && $source && $access->allows($viewer, $space) && $access->allows($viewer, $source);
+            $canAttribute = $viewer && $source && $targetAllowed && ($allowedSpaces[$source->id] ?? false);
             $entry['source_space_id'] = ($entry['editable'] ?? false) ? $space->id : ($canAttribute ? $source->id : null);
             $entry['attribution_editable'] = (bool) $canAttribute;
             if (empty($entry['allocation_details'])) {
