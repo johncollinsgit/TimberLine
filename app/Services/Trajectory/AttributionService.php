@@ -10,12 +10,25 @@ use App\Models\Trajectory\Space;
 use App\Models\Trajectory\Transaction;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
 /** Economic detail never replaces the original bank row or invents reimbursement cash. */
 class AttributionService
 {
+    public function available(): bool
+    {
+        // Older durable recovery steps and rolling code upgrades may have only
+        // the original ledger schema. Do not cache a pre-migration false result.
+        return Schema::hasTable('trajectory_allocation_details');
+    }
+
+    public function hasActiveDetails(Transaction $transaction): bool
+    {
+        return $this->available() && AllocationDetail::where('transaction_id', $transaction->id)->where('active', true)->exists();
+    }
+
     public function categoryDefinitions(Space $space): array
     {
         return Record::where('space_id', $space->id)->where('kind', 'category_definition')->orderBy('id')->get()->map(fn ($r) => [
@@ -34,6 +47,7 @@ class AttributionService
     public function saveDefinition(User $user, Space $space, string $kind, string $name, array $data, ?Record $record = null, ?int $version = null): Record
     {
         app(FinanceAccess::class)->authorize($user, $space);
+        abort_unless($this->available(), 503, 'Economic attribution is not available until its schema upgrade completes.');
         abort_unless(in_array($kind, ['category_definition', 'program'], true), 422);
         $validated = Validator::make(['name' => $name, ...$data], [
             'name' => 'required|string|max:160', 'key' => 'required|string|regex:/^[a-z][a-z0-9_]{0,39}$/',
@@ -81,6 +95,7 @@ class AttributionService
     {
         app(FinanceAccess::class)->authorize($user, $source);
         abort_unless($tx->space_id === $source->id, 404);
+        abort_unless($this->available(), 503, 'Economic attribution is not available until its schema upgrade completes.');
         $allocations = Allocation::where('transaction_id', $tx->id)->orderBy('space_id')->get();
         foreach ($allocations->where('amount_cents', '!=', 0) as $allocation) {
             app(FinanceAccess::class)->authorize($user, Space::findOrFail($allocation->space_id));
@@ -107,6 +122,9 @@ class AttributionService
 
     public function save(User $user, Space $source, Transaction $tx, array $lines, int $version): array
     {
+        app(FinanceAccess::class)->authorize($user, $source);
+        abort_unless($tx->space_id === $source->id, 404);
+        abort_unless($this->available(), 503, 'Economic attribution is not available until its schema upgrade completes.');
         $data = Validator::make(['lines' => $lines], [
             'lines' => 'required|array|min:1|max:50', 'lines.*.space_id' => 'required|integer|min:1',
             'lines.*' => 'array:space_id,amount_cents,category,subcategory_record_id,program_record_id,settlement_status,settlement_note,detail_id',
@@ -157,6 +175,7 @@ class AttributionService
     public function undo(User $user, Space $source, Transaction $tx, int $version, int $eventId): array
     {
         app(FinanceAccess::class)->authorize($user, $source);
+        abort_unless($this->available(), 503, 'Economic attribution is not available until its schema upgrade completes.');
 
         return DB::transaction(function () use ($user, $source, $tx, $version, $eventId) {
             $event = Event::where('space_id', $source->id)->where('record_id', $tx->id)->where('action', 'attribution')->findOrFail($eventId);
@@ -191,12 +210,19 @@ class AttributionService
     /** Retain invalidated detail history; an amended bank source requires a fresh review. */
     public function invalidate(Transaction $tx, string $reason): int
     {
+        if (! $this->available()) {
+            return 0;
+        }
+
         return AllocationDetail::where('transaction_id', $tx->id)->where('active', true)->update(['active' => false, 'invalidated_at' => now(), 'invalidation_reason' => $reason]);
     }
 
     /** Called only after LedgerService proves a stable provider pending-to-posted identity. */
     public function promotePending(Transaction $tx, string $previousFingerprint): void
     {
+        if (! $this->available()) {
+            return;
+        }
         $rows = AllocationDetail::where('transaction_id', $tx->id)->where('active', true)->get();
         if ($rows->isEmpty()) {
             return;
@@ -220,6 +246,9 @@ class AttributionService
 
     public function decorateEntries(Space $space, array $entries): array
     {
+        if (! $this->available()) {
+            return array_map(fn ($entry) => [...$entry, 'allocation_details' => [], 'attribution_status' => 'unavailable'], $entries);
+        }
         $details = AllocationDetail::where('space_id', $space->id)->whereIn('transaction_id', array_column($entries, 'id'))->where('active', true)->orderBy('line_index')->get()->groupBy('transaction_id');
         $sources = Transaction::whereIn('id', $details->keys())->get()->keyBy('id');
         foreach ($entries as &$entry) {

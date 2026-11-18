@@ -101,7 +101,7 @@ class LedgerService
             $tx = Transaction::where('space_id', $space->id)->whereKey($tx->id)->lockForUpdate()->firstOrFail();
             app(MedicalSharingService::class)->assertUnbound($tx);
             abort_unless($tx->version === $data['version'], 409, 'This transaction changed. Refresh before editing.');
-            abort_if(\App\Models\Trajectory\AllocationDetail::where('transaction_id', $tx->id)->where('active', true)->exists(), 422, 'Edit the attributed detail lines to change this transaction’s category.');
+            abort_if(app(AttributionService::class)->hasActiveDetails($tx), 422, 'Edit the attributed detail lines to change this transaction’s category.');
             $before = $tx->only(['category', 'flow', 'face_punched', 'bullshit_spending', 'reviewed', 'explanation', 'version']);
             app(SalesTaxService::class)->admitClassification($space, $tx, $data, $learn);
             $values = array_intersect_key($data, array_flip(['category', 'flow', 'face_punched', 'bullshit_spending']));

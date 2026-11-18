@@ -187,3 +187,25 @@ test('personal app keeps its household scope while authorized attribution offers
         expect(array_keys($target))->toBe(['id', 'name', 'kind']);
     }
 });
+
+test('original ledger remains usable before the additive attribution schema is installed', function (): void {
+    \Illuminate\Support\Facades\Schema::drop('trajectory_allocation_details');
+    expect($this->attribution->available())->toBeFalse();
+    app(LedgerService::class)->ingest($this->account, [[...$this->bankRow, 'amount_cents' => -11001]]);
+    $tx = $this->tx->fresh();
+    app(LedgerService::class)->classify($this->owner, $this->space, $tx, ['version' => $tx->version, 'category' => 'groceries', 'flow' => 'expense', 'face_punched' => false, 'bullshit_spending' => false]);
+    $entries = app(LedgerService::class)->entries($this->space);
+    expect($entries)->toHaveCount(1)->and($entries[0]['amount_cents'])->toBe(-11001)->and($entries[0]['category'])->toBe('groceries')
+        ->and($entries[0]['allocation_details'])->toBe([])->and($entries[0]['attribution_status'])->toBe('unavailable');
+    $pending = ['id' => 'before-schema-pending', 'date' => now()->toDateString(), 'merchant' => 'Fictional pending', 'amount_cents' => -700, 'pending' => true];
+    app(LedgerService::class)->ingest($this->account, [$pending]);
+    app(LedgerService::class)->ingest($this->account, [[...$pending, 'id' => 'before-schema-posted', 'pending_id' => 'before-schema-pending', 'pending' => false]]);
+    expect(Transaction::where('account_id', $this->account->id)->count())->toBe(2);
+    $this->actingAs($this->owner)->putJson('/trajectory/spaces/'.$this->space->id.'/transactions/'.$tx->id.'/attribution',
+        ['version' => $tx->fresh()->version, 'lines' => [['space_id' => $this->space->id, 'category' => 'groceries', 'amount_cents' => -11001]]])->assertStatus(503);
+    $migration = require database_path('migrations/2026_11_18_120000_create_trajectory_allocation_details.php');
+    $migration->up();
+    expect($this->attribution->available())->toBeTrue();
+    $this->attribution->save($this->owner, $this->space, $tx, [['space_id' => $this->space->id, 'category' => 'groceries', 'amount_cents' => -11001]], $tx->fresh()->version);
+    expect(AllocationDetail::where('active', true)->count())->toBe(1)->and(Allocation::sum('amount_cents'))->toBe(-11701);
+});
