@@ -48,7 +48,7 @@ export function financeBudgetRows(report) {
 
 export function createVisualFinance({root, getContext, getSpaces = () => [], api, endpoint, esc, precise, chart, onBeforeChange, onChange, onChanged, onNavigate, onReviewTransaction, onEditBudget, onAddDefinition, onClearAccount, onAsk, notice}) {
   let state = {version: 1, year: null, comparisonYear: null, grain: 'month', basis: 'spending', period: null, direction: null, category: null, subcategory: null, ledger: false, program: null, ledgerSort: 'largest', query: '', page: 1, budgetMonth: null, focusedEntry: null};
-  let report = null, envelopes = null, error = null, loading = false, request = 0, ownerContext = null;
+  let report = null, envelopes = null, error = null, loading = false, request = 0, ownerContext = null, loadedProjection = null;
   let busyRow = null;
   const pageSize = 50;
   const stats = (label, value, note, className = '') => `<div class="vf-stat ${className}"><span>${esc(label)}</span><strong>${precise(value)}</strong>${note ? `<small>${esc(note)}</small>` : ''}</div>`;
@@ -56,6 +56,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   const attr = value => esc(JSON.stringify(value));
   const contextKey = () => {const c = getContext(); return JSON.stringify([c.space_id, c.account_id, c.from, c.through]);};
   const dates = () => state.period ?? {from: getContext().from, through: getContext().through};
+  const projectionKey = () => JSON.stringify([contextKey(), getContext().revision ?? null, dates(), state.year, state.comparisonYear, state.grain, state.basis, state.program, state.budgetMonth]);
   const monthLabel = month => new Intl.DateTimeFormat('en-US', {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${month}-01T12:00:00Z`));
   const rangeLabel = range => !range ? '' : range.from.slice(0, 7) === range.through.slice(0, 7) ? monthLabel(range.from.slice(0, 7)) : `${range.from} – ${range.through}`;
   const categoryLabel = key => report?.category_definitions?.find(row => row.key === key)?.label ?? financeLabel(key);
@@ -64,7 +65,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
 
   function reset() {
     state = {...state, year: null, comparisonYear: null, period: null, direction: null, category: null, subcategory: null, ledger: false, program: null, query: '', page: 1, budgetMonth: null, focusedEntry: null};
-    report = envelopes = error = null; ownerContext = null; request++;
+    report = envelopes = error = loadedProjection = null; ownerContext = null; request++;
   }
 
   async function refresh({background = false, isCurrent = () => true} = {}) {
@@ -81,9 +82,10 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     if (c.account_id) params.set('account_id', String(c.account_id));
     if (state.program) { params.set('program_id', String(state.program)); budgetParams.set('program_id', String(state.program)); }
     const selectedState = JSON.stringify(state);
+    const requestedProjection = projectionKey();
     if (!background) {loading = true; error = null;}
     const responses = await Promise.allSettled([api(endpoint(`/analysis?${params}`)), api(endpoint(`/budget-envelopes?${budgetParams}`))]);
-    if (current !== request || ownerContext !== contextKey() || (background && selectedState !== JSON.stringify(state)) || !isCurrent()) return false;
+    if (current !== request || ownerContext !== contextKey() || requestedProjection !== projectionKey() || (background && selectedState !== JSON.stringify(state)) || !isCurrent()) return false;
     // A failed quiet read retains the displayed, dated snapshot. An explicit
     // reload continues to show a scoped error rather than substituting data.
     if (background && responses.some(response => response.status !== 'fulfilled')) return false;
@@ -92,6 +94,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     else {report = null; error = responses[0].reason.message;}
     if (responses[1].status === 'fulfilled') envelopes = responses[1].value;
     else envelopes = {error: responses[1].reason.message};
+    loadedProjection=responses.every(response=>response.status==='fulfilled')?requestedProjection:null;
     return true;
   }
 
@@ -374,6 +377,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     capture: () => clone(state),
     restore(value) {if (value?.version === 1) state = {...state, ...clone(value)};},
     getReport: () => report,
+    hasCurrentSnapshot: () => !!report && !!envelopes && !error && !envelopes.error && !loading && loadedProjection === projectionKey(),
     isBusy: () => loading || busyRow !== null,
   };
 }

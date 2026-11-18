@@ -25,8 +25,8 @@ try{
   await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
   const csrf=(await(await context.request.get(origin+'/login')).text()).match(/<meta name="csrf-token" content="([^"]+)"/)?.[1];assert.ok(csrf);
   assert.ok((await context.request.post(origin+'/login',{form:{email:'flow@fixture.invalid',password:'Fictional-flow-only-2028!',_token:csrf},headers:{Accept:'application/json'}})).ok());
-  const page=await context.newPage(),errors=[],analysisReads=[];page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(12000);
-  page.on('request',request=>{if(request.method()==='GET'&&new URL(request.url()).pathname.endsWith('/analysis'))analysisReads.push(request.url());});
+  const page=await context.newPage(),errors=[],analysisReads=[],dashboardReads=[],budgetReads=[];page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(12000);
+  page.on('request',request=>{if(request.method()!=='GET')return;const path=new URL(request.url()).pathname;if(path.endsWith('/analysis'))analysisReads.push(request.url());if(path.endsWith('/dashboard'))dashboardReads.push(request.url());if(path.endsWith('/budget-envelopes'))budgetReads.push(request.url());});
   // Exercise the actual app's minute callback without sleeping or depending on
   // wall-clock timing. Other timers and all authenticated reads remain real.
   await page.addInitScript(()=>{window.trajectoryMinuteReads=[];const original=window.setInterval.bind(window);window.setInterval=(callback,delay,...args)=>{if(delay===60000){window.trajectoryMinuteReads.push(()=>callback(...args));return original(()=>{},delay);}return original(callback,delay,...args);};});
@@ -52,7 +52,40 @@ try{
     if(await button.evaluate(node=>Boolean(node.closest('.tr-nav-tools:not([open])'))))await drawer.locator('.tr-nav-tools > summary').click();
     await button.click();
    };
-   await navigateSection('Analysis');await page.locator('#vf-period-chart').waitFor();
+   // A new authorized dashboard may finish before its visual projection. A
+   // primary-tab click at that boundary must neither clear it nor reread it.
+   let held=false,releaseProjection;const projectionGate=new Promise(resolve=>{releaseProjection=resolve;});
+   const holdProjection=async route=>{if(!held&&new URL(route.request().url()).searchParams.get('account_id')===String(fixture.other_cash_id)){held=true;await projectionGate;}await route.continue();};
+   await page.route('**/analysis?*',holdProjection);
+   const dashboardBeforePending=dashboardReads.length;
+   await selectReportAccount(page,fixture.other_cash_id);await expect.poll(()=>held).toBe(true);
+   await navigateSection('Analysis');await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
+   await expect(page.locator('#tr-page-title')).toHaveText('Analysis');
+   assert.equal(dashboardReads.length,dashboardBeforePending+1,'A pending projection reuses the newly authorized dashboard');
+   const delayedResponse=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith('/analysis')&&new URL(response.url()).searchParams.get('account_id')===String(fixture.other_cash_id));
+   releaseProjection();await delayedResponse;await page.unroute('**/analysis?*',holdProjection);
+   assert.equal(await page.locator('#tr-account-filter').inputValue(),String(fixture.other_cash_id));
+   await selectReportAccount(page,'');await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
+   await navigateSection('Home');await expect(page.locator('#tr-page-title')).toHaveText('Home');
+   const readCounts=()=>[dashboardReads.length,analysisReads.length,budgetReads.length],loadedCounts=readCounts();
+   for(const [section,title] of [['Analysis','Analysis'],['Budget','Your budget'],['Home','Home']]){await navigateSection(section);await expect(page.locator('#tr-page-title')).toHaveText(title);}
+   assert.deepEqual(readCounts(),loadedCounts,'Home → Analysis → Budget → Home reuses one authorized snapshot without backend reads');
+   await page.goBack();await expect(page.locator('#tr-page-title')).toHaveText('Your budget');
+   await page.goBack();await expect(page.locator('#tr-page-title')).toHaveText('Analysis');
+   assert.deepEqual(readCounts(),loadedCounts,'Back between equivalent primary views reuses the same projection');
+   // Save the same confirmed purpose through the real editor. The amounts and
+   // fixture categories stay unchanged, but its new source revision must reload.
+   await navigateSection('Review transactions');
+   await page.getByRole('row').filter({hasText:'Fictional employer'}).getByRole('button',{name:/^(Edit category|Categorize)$/}).click();
+   const mutationDashboard=page.waitForRequest(request=>request.method()==='GET'&&new URL(request.url()).pathname.endsWith('/dashboard'));
+   await page.locator('#tr-save').click();await mutationDashboard;
+   await expect(page.locator('#tr-dialog')).not.toBeVisible();await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
+   assert.equal(dashboardReads.length,loadedCounts[0]+1,'A successful transaction edit forces a new dashboard revision');
+   const beforeVisualOnly=readCounts(),freshProjection=page.waitForRequest(request=>new URL(request.url()).pathname.endsWith('/analysis'));
+   await navigateSection('Analysis');await freshProjection;await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
+   assert.equal(dashboardReads.length,beforeVisualOnly[0],'A missing visual revision fetches only Analysis/Budget, not the large dashboard');
+   assert.equal(analysisReads.length,beforeVisualOnly[1]+1);assert.equal(budgetReads.length,beforeVisualOnly[2]+1);
+   await page.locator('#vf-period-chart').waitFor();
    if(width<700){
     await expect(page.locator('#tr-content .vf-controls')).toHaveCount(0);
     await openReportControls(page);await expect(page.locator('#tr-analysis-controls .vf-controls')).toBeVisible();
@@ -62,6 +95,11 @@ try{
     await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
     await page.screenshot({path:join(evidence,`${name}-${width}-date-popover.png`)});
     await closeReportControls(page);await page.screenshot({path:join(evidence,`${name}-${width}-compact-analysis.png`)});
+    const beforeBack=readCounts();await page.locator('#tr-back').click();
+    await expect(page.locator('[data-action="vf-grain"][data-grain="month"]')).toHaveAttribute('aria-pressed','true');
+    await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
+    assert.equal(dashboardReads.length,beforeBack[0],'Restoring another visual period/grain never reloads the dashboard');
+    assert.equal(analysisReads.length,beforeBack[1]+1,'A different restored projection is fetched, rather than relabeling stale data');
    }else await expect(page.locator('#tr-content .vf-controls')).toBeVisible();
    // The compact Home is covered by the visual-finance browser. Preserve this
    // older forecast's lazy-chart and details coverage under its new tool entry.
@@ -176,7 +214,8 @@ try{
    await page.getByRole('heading',{name:'Review transactions',level:1,exact:true}).waitFor();await page.locator('#tr-back').click();
    await expect(page.getByRole('button',{name:'Inflows',exact:true})).toHaveAttribute('aria-pressed','true');
    // Account/date/scope changes invalidate private historical evidence and normalize unsupported modes.
-   await selectReportAccount(page,fixture.other_cash_id);
+   const beforeAccountChange=dashboardReads.length;await selectReportAccount(page,fixture.other_cash_id);
+   await page.locator('#tr-content:not([aria-busy="true"])').waitFor();assert.equal(dashboardReads.length,beforeAccountChange+1,'An account change fetches a fresh scoped dashboard');
    await expect(page.locator('.tr-family-inflows')).toContainText('No included receipts');
    await page.goBack();await expect(page.locator('#tr-content:not([aria-busy="true"])')).toBeVisible();
    await expect(page.getByRole('heading',{name:'Review transactions',level:1,exact:true})).not.toBeVisible();

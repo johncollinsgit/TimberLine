@@ -118,6 +118,16 @@ test('space/account context changes clear private selection and request the new 
   assert.equal(ui.capture().category, null);assert.match(calls.at(-2).path, /^\/spaces\/8\/analysis/);assert.match(calls.at(-2).path, /account_id=99/);
 });
 
+test('one authorized snapshot is reusable only for its exact server inputs and data revision', async () => {
+  const {ui,ctx}=fixture();assert.equal(ui.hasCurrentSnapshot(),false);await ui.refresh();
+  const original=ui.capture();assert.equal(ui.hasCurrentSnapshot(),true);
+  for(const changed of [{category:'food',subcategory:'groceries',ledger:true},{query:'market',ledgerSort:'newest',page:2,focusedEntry:'line:1'}]){ui.restore({...original,...changed});assert.equal(ui.hasCurrentSnapshot(),true);}
+  for(const changed of [{period:{from:'2028-01-01',through:'2028-01-31'}},{year:2027},{comparisonYear:2026},{grain:'week'},{basis:'cash'},{program:13},{budgetMonth:'2028-01'}]){ui.restore({...original,...changed});assert.equal(ui.hasCurrentSnapshot(),false);}
+  ui.restore(original);ctx.revision=2;assert.equal(ui.hasCurrentSnapshot(),false);await ui.refresh();assert.equal(ui.hasCurrentSnapshot(),true);
+  ui.restore({...original,period:{from:'2028-01-01',through:'2028-01-31'}});await ui.refresh();
+  ui.restore(original);assert.equal(ui.hasCurrentSnapshot(),false,'Another period is not retained in a second cache');
+});
+
 test('background figures retain exact drilldown and do not apply after an intervening edit or failed read', async () => {
   let rejectBackground=false,approve=true,readReport=structuredClone(report);
   const {ui}=fixture(async path=>{if(rejectBackground)throw Error('Offline');return path.includes('budget-envelopes')?{rows:[]}:structuredClone(readReport);});

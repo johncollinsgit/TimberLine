@@ -29,3 +29,9 @@ test('a completed or failed poll invalidates callbacks from still-outstanding re
   const run=createForegroundRefresh({eligible:()=>true,snapshot:()=>7,refresh:async check=>{current=check;throw Error('Network read failed');}});
   await assert.rejects(run,/Network read failed/);assert.equal(current(),false);
 });
+
+test('scrolling during a quiet read discards it instead of restoring the old position', async () => {
+  let position=0,release,applied=0;
+  const run=createForegroundRefresh({eligible:()=>true,snapshot:()=>JSON.stringify({position}),refresh:async current=>{await new Promise(done=>{release=done;});if(!current())return false;applied++;return true;}});
+  const pending=run();position=240;release();assert.equal(await pending,false);assert.equal(applied,0);assert.equal(position,240);
+});
