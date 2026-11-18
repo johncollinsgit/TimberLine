@@ -99,26 +99,29 @@ try {
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
       if (overflow) console.error(JSON.stringify({browser:name,width,layout:await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,client:document.documentElement.clientWidth,wrap:[...document.querySelectorAll('.vf-table-wrap')].map(e=>({width:e.getBoundingClientRect().width,right:e.getBoundingClientRect().right,overflow:getComputedStyle(e).overflowX})),wide:[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1).map(e=>({tag:e.tagName,cl:e.className,right:e.getBoundingClientRect().right})).slice(0,15)}))}));
       assert.equal(overflow, false);assert.deepEqual(errors, []);
-      await page.evaluate(()=>window.fixture.setBudgets({future:false,rows:[
-        {key:'0|groceries',category:'groceries',label:'Groceries',target_cents:140000,planned_cents:140000,spent_cents:64000,remaining_cents:null,reasons:['cash_not_recorded'],source_notes:['Fictional cash grocery amount still unknown.']},
+      await page.evaluate(()=>{document.querySelector('#trajectory').classList.add('tr-app');return window.fixture.setBudgets({future:false,rows:[
+        {key:'0|groceries',category:'groceries',label:'Groceries',target_cents:140000,planned_cents:140000,spent_cents:64000,remaining_cents:null,estimated_remaining_cents:76000,reasons:['cash_not_recorded'],source_notes:['Fictional cash grocery amount still unknown.']},
         {key:'0|fuel',category:'fuel',label:'Fuel',target_cents:35000,planned_cents:35000,spent_cents:21000,remaining_cents:null,category_review_pending:true,reasons:['category_review_pending']},
         {key:'0|materials',category:'materials',label:'Materials',target_cents:null,planned_cents:45000,spent_cents:10000,remaining_cents:null,status:'draft',partial_period:true,plan_period:{from:'2028-02-17',through:'2028-02-29'},reasons:['draft','partial_period','tax_split_pending']},
         {key:'0|education',category:'education',label:'Education',target_cents:null,spent_cents:5000,remaining_cents:null,status:'not_budgeted'},
         {key:'0|travel',category:'travel',label:'Travel',target_cents:50000,planned_cents:50000,spent_cents:null,remaining_cents:null,reasons:['needs_opening_balance','missing_history']},
         {key:'0|dining',category:'dining',label:'Dining',uses_parent_budget:'0|food',parent_budget_label:'Food',spent_cents:3000,remaining_cents:null,reasons:['uses_parent_budget']},
-      ]}));
-      const budgetCards=page.locator('.vf-envelope-grid');
-      assert.doesNotMatch(await budgetCards.innerText(),/Unavailable|\$0\.00|left after recorded spending/);
-      assert.match(await budgetCards.innerText(),/\$1,400\.00/);assert.match(await budgetCards.innerText(),/\$640\.00 recorded spending/);
-      assert.match(await budgetCards.innerText(),/recorded \/ estimated spending/);assert.match(await budgetCards.innerText(),/2028-02-17 – 2028-02-29/);
-      assert.match(await budgetCards.innerText(),/Draft · needs confirmation/);assert.match(await budgetCards.innerText(),/Tax split pending/);
-      assert.match(await budgetCards.innerText(),/Uses parent budget/);assert.match(await budgetCards.innerText(),/Spending history not available/);
-      await page.getByRole('button',{name:'Confirm budget…',exact:true}).click();assert.equal(await page.evaluate(()=>window.fixture.budgetReviews()),1);
-      await page.locator('.vf-envelope-notes summary').click();assert.match(await page.locator('.vf-envelope-notes').innerText(),/cash grocery amount still unknown/);
+      ]});});
+      const budgetCards=page.locator('.vf-budget-list');
+      assert.doesNotMatch(await budgetCards.innerText(),/Unavailable|\$0\.00|left after recorded spending|Resets monthly|Tax split pending/);
+      assert.match(await budgetCards.innerText(),/\$1,400\.00 budget/);assert.match(await budgetCards.innerText(),/\$640\.00 spent/);assert.match(await budgetCards.innerText(),/\$760\.00 left · est./);
+      assert.deepEqual((await budgetCards.locator('.vf-envelope-label').allTextContents()).map(value=>value.trim()),['Groceries','Travel','Materials','Fuel','Dining','Education']);
+      assert.equal(await budgetCards.locator('small,details,.vf-envelope-actions,.vf-envelope-notes').count(),0,'List rows contain no notes/setup prose');
+      assert.equal(await page.getByRole('button',{name:'Confirm budget…',exact:true}).count(),0);
+      const listGeometry=await budgetCards.evaluate(node=>({display:getComputedStyle(node).display,children:[...node.children].map(row=>({top:row.getBoundingClientRect().top,left:row.getBoundingClientRect().left,width:row.getBoundingClientRect().width,height:row.getBoundingClientRect().height}))}));
+      assert.equal(listGeometry.display,'flex');assert.ok(listGeometry.children.every(row=>Math.abs(row.left-listGeometry.children[0].left)<1),'Budgets form one vertical list');
+      if(width===390)assert.ok(listGeometry.children[0].height<130,'Phone budget rows stay compact');
+      await page.locator('.vf-envelope').first().click();await page.getByRole('heading',{name:'Budget details',exact:true}).waitFor();await page.evaluate(()=>document.querySelector('dialog').remove());
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
       await page.evaluate(()=>window.fixture.setBudgets({rows:[{key:'0|groceries',category:'groceries',label:'Groceries',target_cents:140000,planned_cents:140000,bank_spent_cents:64000,reported_cash_spent_cents:50000,reported_cash_as_of:'2028-02-15',spent_cents:114000,remaining_cents:26000}]}));
-      assert.match(await page.locator('.vf-envelope').innerText(),/\$640\.00 bank-recorded spending \+ \$500\.00 reported cash through 2028-02-15/);
-      assert.match(await page.locator('.vf-envelope').innerText(),/\$260\.00/);assert.match(await page.locator('.vf-envelope').innerText(),/transaction charts exclude it/);
+      assert.match(await page.locator('.vf-envelope').innerText(),/\$1,140\.00 spent/);
+      assert.match(await page.locator('.vf-envelope').innerText(),/\$260\.00/);
+      assert.doesNotMatch(await page.locator('.vf-envelope').innerText(),/bank-recorded spending|reported cash through/);
       await page.evaluate(()=>window.fixture.setMerchantGroups());
       await page.locator('[data-action="vf-category"][data-key="food"]').click();
       await page.locator('[data-action="vf-subcategory"][data-key="groceries"]').click();

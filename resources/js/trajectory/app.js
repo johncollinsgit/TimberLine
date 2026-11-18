@@ -37,6 +37,9 @@ import {createDonutExplanation} from './donut-explanation.js';
 const root = document.querySelector('#trajectory');
 if (root) boot();
 function boot() {
+  const phoneNavigation = root.querySelector('.vf-mobile-nav');
+  if (phoneNavigation) root.after(phoneNavigation);
+  const sectionTabs = () => [...root.querySelectorAll('[data-tab]'), ...(phoneNavigation?.querySelectorAll('[data-tab]') ?? [])];
   const mobile = initHouseholdMobile(root);
   const $ = (s) => root.querySelector(s);
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -201,7 +204,7 @@ function boot() {
   const line = (label,values,color,fill=false) => ({label,data:values,borderColor:color,backgroundColor:color+'0a',fill,tension:0,borderWidth:2.5,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#fff',pointHoverBorderWidth:2,pointHitRadius:16,spanGaps:false});
   const navigation=[];
   const reportContext=()=>JSON.stringify([scope,active,businessSpace?.id,accountFilter,reportingRange,$('#tr-start').value,$('#tr-end').value,scenarioId,seasonal,accountingBasis]);
-  const rangeSnapshots=createRangeSnapshotCache({ttl:60000});
+  const rangeSnapshots=createRangeSnapshotCache();
   const rangeCohort=()=>JSON.stringify([scope,active,businessSpace?.id,accountFilter,visualFinance.capture().basis,accountingBasis,scenarioId,seasonal]);
   function rememberRangeProjection(){
     const report=visualFinance.getReport(),budgets=visualFinance.getBudgets(),selection=visualFinance.capture();
@@ -281,7 +284,7 @@ function boot() {
     if(!data){renderBootstrap();return;}
     if(moneyFlowMode==='inflows'&&!data.money_flow?.family_inflows)moneyFlowMode='spending';
     charts.forEach(c=>c.destroy());charts=[];chartTables={};
-    root.querySelectorAll('[data-tab]').forEach(b=>{if(b.dataset.tab===tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
+    sectionTabs().forEach(b=>{if(b.dataset.tab===tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
     $('#tr-context').textContent=tab==='profit'?`${date(data.range.start)} – ${date(data.range.end)} · ${data.business?.profit_loss?.source||'Choose a business and all its accounts'}${data.business?.profit_loss?.basis?' · '+data.business.profit_loss.basis:''}`:`${date(data.range.start)} – ${date(data.range.end)} · ${data.coverage.history_days} days of baseline history${data.scope_filter?.account_id?' · Account: '+data.scope_filter.label:''}${data.coverage.provisional?' · Provisional forecast':''}`;
     $('#tr-add').disabled=scope==='both';$('#tr-compare').disabled=scope==='both';$('#tr-compare').hidden=tab==='profit';
     const accountSelect=$('#tr-account-filter');
@@ -317,7 +320,7 @@ function boot() {
     budgetDetail?.contextChanged?.();
     const visual=isVisualFinanceView(tab),ready=visual&&!!visualMetadata;
     charts.forEach(c=>c.destroy());charts=[];chartTables={};
-    root.querySelectorAll('[data-tab]').forEach(button=>{if(button.dataset.tab===tab)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
+    sectionTabs().forEach(button=>{if(button.dataset.tab===tab)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
     const names={overview:'Home',analysis:'Analysis',budget:'Your budget',accounts:'Accounts',planning:'Your plan',transactions:'Review transactions','money-flow':'Money flow',assets:'Wealth & debt',profit:'Profit & loss'};
     $('#tr-page-title').textContent=names[tab]??'Financial details';$('#tr-add').disabled=true;$('#tr-compare').disabled=true;
     $('#tr-context').textContent=visualMetadata?`${date(visualMetadata.range.start)} – ${date(visualMetadata.range.end)} · Recorded activity`:'Loading account details…';
@@ -536,11 +539,11 @@ function boot() {
     const months=(data.question_summary?.monthly?.rows||[]).filter(row=>row.month>=data.question_summary.plan_month);
     const sources=[...new Set(budgetPlans(null).map(record=>record.data.source||''))];
     const sum=purpose=>{const rows=plans.filter(record=>record.data.purpose===purpose);return rows.length?rows.reduce((total,record)=>total+record.data.monthly_cents,0):null;};
-    return `<div class="tr-actions tr-block"><label for="tr-budget-month">Budget month</label><select id="tr-budget-month">${months.map(row=>`<option value="${esc(row.month)}" ${row.month===month?'selected':''}>${esc(row.label)}</option>`).join('')}</select><label for="tr-budget-source">Source</label><select id="tr-budget-source"><option value="" ${budgetSource===null?'selected':''}>All sources for this month</option>${sources.map(source=>`<option value="${esc(source)}" ${source===budgetSource?'selected':''}>${esc(source||'Entered in Trajectory')}</option>`).join('')}</select></div>
-      <div class="tr-data-note">Latest effective targets for ${esc(month)}. These are plans; review amounts and coverage before relying on them. Additional owner distributions, debt reserves and savings stay separate from operating spending.</div>
-      ${panel('Give every category a direction',plans.length?`<div class="tr-metrics">${metric('Planned monthly income',sum('income'),'Budget target, not received earnings')}${metric('Monthly spending targets',sum('spending'),'Includes drafts requiring review')}${metric('Savings contributions',sum('savings'),'Transfers, not spending')}${metric('Debt cash reserve',sum('debt_payment'),'Allowance, not additional to scheduled debt cash')}${data.space.kind==='business'?metric('Additional owner distributions',sum('owner_support'),'Separate from employee payroll; affordability unverified'):''}</div>`:empty('No targets selected for this month. Add or import your plan.'),`<div class="tr-actions">${btn('Import budget CSV','budget-import')}${btn('Add budget target','add','data-kind="budget"')}</div>`)}
+    return `<div class="tr-budget-phone-setup">${btn('View category budgets','budget')}<p class="tr-subtle">Tap a category to adjust its budget.</p></div><div class="tr-budget-desktop-setup"><div class="tr-actions tr-block"><label for="tr-budget-month">Budget month</label><select id="tr-budget-month">${months.map(row=>`<option value="${esc(row.month)}" ${row.month===month?'selected':''}>${esc(row.label)}</option>`).join('')}</select><label for="tr-budget-source">Source</label><select id="tr-budget-source"><option value="" ${budgetSource===null?'selected':''}>All sources for this month</option>${sources.map(source=>`<option value="${esc(source)}" ${source===budgetSource?'selected':''}>${esc(source||'Entered in Trajectory')}</option>`).join('')}</select></div>
+      <div class="tr-data-note">Latest effective targets for ${esc(month)}. Additional owner distributions, planned loan and card payments, and savings stay separate from operating spending.</div>
+      ${panel('Give every category a direction',plans.length?`<div class="tr-metrics">${metric('Planned monthly income',sum('income'),'Budget target, not received earnings')}${metric('Monthly spending targets',sum('spending'),'Includes drafts requiring review')}${metric('Savings contributions',sum('savings'),'Transfers, not spending')}${metric('Planned debt payments',sum('debt_payment'),'Loan and credit-card payments; not savings or a bank balance')}${data.space.kind==='business'?metric('Additional owner distributions',sum('owner_support'),'Separate from employee payroll; affordability unverified'):''}</div>`:empty('No targets selected for this month. Add or import your plan.'),`<div class="tr-actions">${btn('Import budget CSV','budget-import')}${btn('Add budget target','add','data-kind="budget"')}</div>`)}
       ${panel('Spending against your plan',plot('tr-budget-chart','Monthly spending target and selected-period actuals')+`<p class="tr-subtle">Targets refer to ${esc(month)}; actuals follow the report dates at the top. Change the report dates for a matching comparison.</p>`)}
-      ${panel('Your targets',plans.map(record=>`<div class="tr-row"><div><strong>${esc(record.name)}</strong><div class="tr-source">${esc(title(record.data.purpose))} · ${esc(record.data.source||'Entered in Trajectory')} · ${esc(record.data.effective_on)}${record.data.ends_on?' through '+esc(record.data.ends_on):''} · ${record.data.reviewed?'Reviewed target':'Needs review'}</div></div><div>${precise(record.data.monthly_cents)} / month ${btn('Edit','edit',`data-id="${record.id}"`)}</div></div>`).join('')||empty('Your saved targets appear here.'))}`;
+      ${panel('Your targets',plans.map(record=>`<div class="tr-row"><div><strong>${esc(record.name)}</strong><div class="tr-source">${esc(title(record.data.purpose))} · ${esc(record.data.source||'Entered in Trajectory')} · ${esc(record.data.effective_on)}${record.data.ends_on?' through '+esc(record.data.ends_on):''} · ${record.data.reviewed?'Reviewed target':'Needs review'}</div></div><div>${precise(record.data.monthly_cents)} / month ${btn('Edit','edit',`data-id="${record.id}"`)}</div></div>`).join('')||empty('Your saved targets appear here.'))}</div>`;
   }
   function drawBudget(){$('#tr-budget-month')?.addEventListener('change',e=>{budgetMonth=e.target.value;budgetSource=null;render();});$('#tr-budget-source')?.addEventListener('change',e=>{budgetSource=e.target.value||null;render();});const plans=budgetPlans().filter(r=>r.data.purpose==='spending');const cats=[...new Set([...plans.map(r=>r.data.category),...data.categories.map(r=>r.category)])];chart('tr-budget-chart','bar',cats.map(title),[{label:'Monthly target',data:cats.map(c=>plans.filter(r=>r.data.category===c).reduce((s,r)=>s+r.data.monthly_cents,0)),backgroundColor:'#c1d4c4'},{label:'Selected-period actual',data:cats.map(c=>data.economic_coverage?.complete===false?null:(data.categories.find(r=>r.category===c)?.amount_cents??0)),backgroundColor:'#4398ab'}],i=>showTransactions({category:cats[i]}));}
 
@@ -568,7 +571,8 @@ function boot() {
     const defaults={ministry:'Samaritan Ministries',provider:'Prisma Health',reserve_shares:true,confirmed:false,reviewed:false,priority:1,purity_bps:9999,quantity:1,weight:1,distribution_retention_bps:10000};
     let html=field('name','Name','text',record?.name||preset.name||'',null,true);
     for(const [key,def] of Object.entries(data.definitions[kind])) {
-      let value=d[key]??defaults[key]??(['money','percent'].includes(def.type)&&def.required&&!['business_funding_plan','lender_interest_ytd'].includes(kind)?0:'');
+      if(def.internal)continue;
+      let value=d[key]??def.default??defaults[key]??(['money','percent'].includes(def.type)&&def.required&&!['business_funding_plan','lender_interest_ytd'].includes(kind)?0:'');
       if(['money','signed_money','percent'].includes(def.type)&&value!=='')value=value/100;
       if(def.type==='rate'&&value!=='')value=value/1000;
       const choices=def.type.endsWith('_record')?[{value:'',label:'Choose a record'},...data.records.filter(r=>r.kind===def.type.slice(0,-7)).map(r=>({value:r.id,label:r.name}))]:def.type==='account'?[{value:'',label:'Select account'},...data.accounts.map(a=>({value:a.id,label:a.name}))]:def.type==='business_space'?supportBusinessChoices(data.support_business_options):def.type==='category'?(def.required?data.category_options:[{value:'',label:'All categories'},...data.category_options]):def.choices;
@@ -580,6 +584,7 @@ function boot() {
     dialog(`${record?'Edit':'Add'} ${title(kind)}`,html,async values=>{
       const payload={};
       for(const [key,def] of Object.entries(data.definitions[kind])) {
+        if(def.internal){if(record&&Object.hasOwn(record.data,key))payload[key]=structuredClone(record.data[key]);continue;}
         let v=values.get(key);
         if(def.type==='boolean')v=v==='on';
         else if(v===''&&!def.required)continue;
@@ -865,7 +870,7 @@ function boot() {
   $('#tr-compare').onclick=()=>{compareYear=!compareYear;$('#tr-compare').setAttribute('aria-pressed',String(compareYear));render();};
   $('#tr-range').onclick=e=>{const button=e.target.closest('[data-range]');if(!button||button.dataset.range===reportingRange)return;reportingRange=button.dataset.range;filter={};evidenceRows=null;$('#tr-range').querySelectorAll('[data-range]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.range===reportingRange)));$('#tr-date-fields').hidden=reportingRange!=='custom';if(reportingRange!=='custom'||($('#tr-start').value&&$('#tr-end').value))load({periodChange:true});};
   for(const selector of ['#tr-start','#tr-end'])$(selector).onchange=()=>{if($('#tr-start').value&&$('#tr-end').value)load({periodChange:true});};
-  root.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{if(data||visualMetadata||pendingDashboard)navigate(b.dataset.tab);});
+  sectionTabs().forEach(b=>b.onclick=()=>{if(data||visualMetadata||pendingDashboard)navigate(b.dataset.tab);});
   $('#tr-back').onclick=()=>{historyNavigation.back();};
   $('#tr-company').onchange=()=>{welcome.reset();debtPlanner.reset();decisionMonth='';forecastExpanded=false;overviewExpanded=false;accountFilter=null;businessSpace=spaces.find(s=>s.id===Number($('#tr-company').value));active=businessSpace.id;scenarioId='';navigation.length=0;$('#tr-back').hidden=true;renderSpaceTabs();load();};
   if(root.dataset.invite){$('#tr-invite').hidden=false;$('#tr-accept').onclick=async()=>{try{await api('/trajectory/invites/accept','POST',{token:root.dataset.invite});location.href='/trajectory';}catch(e){notice(e.message);}};}

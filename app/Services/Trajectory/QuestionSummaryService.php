@@ -31,7 +31,7 @@ class QuestionSummaryService
         $cashPlan = $this->cashPlan($budget, $debt, $space->kind === 'business');
         $spendingPlan = $budget['draft_spending_cents'] ?? $budget['reviewed_spending_cents'];
         $planMissing = [...$budget['missing'], 'This is a category plan, not a complete cost claim or historical spending.'];
-        if ($spendingPlan === null && empty($budget['purposes']['spending']['overlapping_record_ids'])) {
+        if ($spendingPlan === null && empty($budget['income_percentage_policies']) && empty($budget['purposes']['spending']['overlapping_record_ids'])) {
             $planMissing[] = 'Add monthly spending targets for this month.';
         }
         $answers = [];
@@ -44,9 +44,19 @@ class QuestionSummaryService
             $answers[] = $this->answer('company_cash_received', 'How much did our family receive from the business in this period?', $receipts['amount_cents'], 'partial',
                 'Reviewed bank receipts only: net payroll, owner draws and other configured support. Accounting payroll and separate observations are not added.', $receipts['missing'], $receipts['evidence_ids']);
             $need = $cashPlan['amount_cents'];
-            $answers[] = $this->answer('monthly_household_plan', 'How much is our family planning to need this month?', $need,
+            $householdPlan = $this->answer('monthly_household_plan', 'How much is our family planning to need this month?', $need,
                 $budget['status'] === 'draft' ? 'draft' : 'partial',
-                'This month’s spending target, debt cash reserve and any savings target. The debt reserve is the larger of known scheduled payments and the total debt budget allowance, counted once.', [...$planMissing, ...$cashPlan['missing'], ...$debt['missing']]);
+                'This month’s spending target, planned loan and credit-card payments, and any savings target. Planned debt payments use the larger of known scheduled payments and the total debt budget allowance, counted once. This does not mean cash is set aside in a bank account.', [...$planMissing, ...$cashPlan['missing'], ...$debt['missing']]);
+            if ($budget['income_percentage_policies'] !== []) {
+                $householdPlan = $this->answer('monthly_household_plan', 'What reviewed fixed spending is planned before income-based Giving?', $budget['reviewed_fixed_spending_cents'], 'partial',
+                    'Reviewed fixed category spending targets only. Draft targets, income-based Giving, planned loan and credit-card payments, and savings targets are separate; this subtotal is not the full family cash need.',
+                    [...$planMissing, ...($budget['fixed_spending_includes_drafts'] ? ['Additional fixed targets remain draft and are excluded from this reviewed subtotal.'] : []), 'The full monthly cash total and funding gaps remain open until the income-based allowance and other required plans are established.'], [],
+                    $this->policyFormula($budget['income_percentage_policies']).' varies with received household take-home. This amount is a fixed spending-plan subtotal; no future income or Giving amount is assumed.');
+                $householdPlan['amount_basis'] = 'fixed_spending_subtotal';
+                $householdPlan['total_cash_need_cents'] = $need;
+                $householdPlan['income_percentage_policies'] = $budget['income_percentage_policies'];
+            }
+            $answers[] = $householdPlan;
             $supportPlan = $this->plannedSupport($businessPlans, $today);
             $incomeSources = $this->plannedIncomeSources($budget, $records, $options);
             $overlap = $incomeSources['owner_draw_present'] && $supportPlan['amount_cents'] !== null;
@@ -169,7 +179,7 @@ class QuestionSummaryService
             $missing[] = 'Add a debt budget allowance or establish the scheduled debt cash; missing obligations are not assumed to be zero.';
         }
         if ($budget['debt_budget_cents'] !== null) {
-            $missing[] = 'The debt allowance is treated as a total cash reserve. Whether any amount is intended as extra principal has not been established.';
+            $missing[] = 'The debt allowance is a payment plan, not saved cash. Whether any amount is intended as extra principal has not been established.';
         }
 
         return ['amount_cents' => $spending !== null && $reserve !== null
@@ -399,7 +409,7 @@ class QuestionSummaryService
                 ? max(0, $cashPlan['amount_cents'] - $supportPlan['amount_cents']) : null;
             $receipts = $space->kind === 'household' && ! $future
                 ? app(SupportReceiptService::class)->build($space, $selected->reject(fn ($e) => ($e['editable'] ?? true) === false), $records, array_column($options, 'value')) : null;
-            $hasPlan = $budget['record_ids'] !== [] || $debt['amount_cents'] !== null;
+            $hasPlan = $budget['record_ids'] !== [] || $debt['amount_cents'] !== null || $budget['income_percentage_policies'] !== [];
             $rows[] = ['label' => $month->format('M Y'), 'month' => $month->format('Y-m'),
                 'budget_record_ids' => $offset >= 0 ? $budget['record_ids'] : [],
                 'status' => $future ? ($hasPlan ? 'draft' : 'unavailable') : ($reviewed->isNotEmpty() || $offset === 0 && $hasPlan ? 'partial' : 'unavailable'),
@@ -414,6 +424,8 @@ class QuestionSummaryService
                 'planned_cash_need_cents' => $offset >= 0 ? $cashPlan['amount_cents'] : null,
                 'debt_reserve_cents' => $offset >= 0 ? $cashPlan['debt_reserve_cents'] : null,
                 'reviewed_spending_plan_cents' => $offset >= 0 ? $budget['reviewed_spending_cents'] : null,
+                'fixed_spending_plan_cents' => $offset >= 0 ? $budget['reviewed_fixed_spending_cents'] : null,
+                'income_percentage_policies' => $offset >= 0 ? $budget['income_percentage_policies'] : [],
                 'draft_spending_plan_cents' => $offset >= 0 ? $budget['draft_spending_cents'] : null,
                 'planned_income_cents' => $offset >= 0 ? $budget['planned_income_cents'] : null,
                 'known_debt_cash_cents' => $debt['amount_cents'],
@@ -430,10 +442,13 @@ class QuestionSummaryService
             $columns[] = ['key' => 'business_income_plan_cents', 'label' => 'Identified business income target', 'type' => 'money'];
             $columns[] = ['key' => 'outside_business_need_cents', 'label' => 'Needed outside business under plan', 'type' => 'money'];
             $columns[] = ['key' => 'after_owner_draw_need_cents', 'label' => 'Need before payroll and other income', 'type' => 'money'];
+            if (collect($rows)->contains(fn ($row) => $row['income_percentage_policies'] !== [])) {
+                $columns[] = ['key' => 'fixed_spending_plan_cents', 'label' => 'Reviewed fixed subtotal · variable Giving separate', 'type' => 'money'];
+            }
         }
         foreach (['reviewed_spending_plan_cents' => 'Reviewed spending plan', 'draft_spending_plan_cents' => 'Draft-inclusive spending plan',
             'planned_income_cents' => 'Total income target', 'known_debt_cash_cents' => 'Known scheduled debt cash', 'debt_budget_cents' => 'Debt budget allowance',
-            'debt_reserve_cents' => 'Debt cash reserve', 'owner_support_budget_cents' => 'Extra owner distributions', 'savings_budget_cents' => 'Savings target',
+            'debt_reserve_cents' => 'Planned debt payments', 'owner_support_budget_cents' => 'Extra owner distributions', 'savings_budget_cents' => 'Savings target',
             'planned_cash_need_cents' => 'Planned cash need', 'planning_gap_cents' => $space->kind === 'household' ? 'Additional earnings required' : 'Overall planning shortfall'] as $key => $label) {
             if ($space->kind === 'household' && $key === 'owner_support_budget_cents') {
                 continue;
@@ -444,8 +459,9 @@ class QuestionSummaryService
         return ['title' => 'Month by month', 'columns' => $columns, 'rows' => $rows, 'notes' => [
             'Six recorded calendar months, including the current partial month, followed by six planning months. Missing history stays unavailable; recorded zero is only a reviewed subset.',
             'Future income uses explicit dated targets. Holiday sales are not annualized, and targets are not verified receipts or business distribution capacity.',
-            'Reviewed and draft-inclusive spending plans are alternative views of one plan; do not add them. Debt cash reserve is the larger of known scheduled debt cash and the total debt budget allowance, counted once. Extra principal is not separately identified.',
-            'Planned cash need includes spending, the debt cash reserve, extra owner distributions for businesses and any savings target. Overall planning shortfall subtracts the total income target; draft inputs remain in the plan. Missing costs can still make the shortfall too low.',
+            'Where an income-percentage policy applies, fixed spending remains a separate subtotal. Giving varies with received take-home; the full cash need and funding gaps are not inferred from that fixed subtotal.',
+            'Reviewed and draft-inclusive spending plans are alternative views of one plan; do not add them. Planned debt payments use the larger of known scheduled loan and card payments and the total debt budget allowance, counted once. Extra principal is not separately identified. This is a plan, not a savings balance.',
+            'Planned cash need includes spending, planned debt payments, extra owner distributions for businesses and any savings target. Overall planning shortfall subtracts the total income target; draft inputs remain in the plan. Missing costs can still make the shortfall too low.',
             'Household income targets include planned net payroll and other household income but must exclude the separate extra owner distribution plan. If a draw category is mapped in both places, gap calculations stay unavailable until reconciled.',
             'Business income targets require confirmed category sources; merchant-only historical sources do not establish future payroll. Outside-business need does not deduct other household income. Additional earnings required deducts all household income targets and conditional extra owner distributions; it is a requirement, not an earnings forecast.',
             'Current payment terms are not backfilled as past debt payments. Plans may cover only part of a month and are not prorated. No savings balance or additional borrowing is assumed to cover a shortfall.',
@@ -457,6 +473,18 @@ class QuestionSummaryService
     {
         return ['key' => $key, 'question' => $question, 'status' => $amount === null ? 'unavailable' : $status,
             'amount_cents' => $amount, 'text' => $text, 'basis' => $basis, 'missing' => array_values(array_unique($missing)), 'evidence_ids' => $evidence];
+    }
+
+    private function policyFormula(array $policies): string
+    {
+        return implode(' + ', array_map(function ($policy) {
+            $label = ucfirst(str_replace('_', ' ', $policy['category']));
+            if (! is_int($policy['rate_bps']) || ! $policy['reviewed']) {
+                return $label.' percentage needs review';
+            }
+
+            return rtrim(rtrim(number_format($policy['rate_bps'] / 100, 2, '.', ''), '0'), '.').'% '.$label;
+        }, $policies));
     }
 
     private function evidence(Collection $entries): array

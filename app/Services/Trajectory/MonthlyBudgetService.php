@@ -12,8 +12,49 @@ class MonthlyBudgetService
 {
     private const PURPOSES = ['spending', 'income', 'debt_payment', 'owner_support', 'savings'];
 
-    public function build(Space $space, Collection $records, CarbonImmutable $month): array
+    public function build(Space $space, Collection $records, CarbonImmutable $month, bool $includeIncomePolicies = true): array
     {
+        $records = $records->filter(fn ($record) => $record instanceof Record && $record->kind === 'budget' && $record->active && (int) $record->space_id === (int) $space->id);
+        $projection = app(BudgetDefaultsService::class)->project($space, $records, $month);
+        $records = $projection['records'];
+        $superseded = $records->filter(fn ($record) => $record instanceof Record && $record->kind === 'budget' && $record->active
+            && (int) $record->space_id === (int) $space->id && (! empty($record->data['supersedes_record_id']) || ! empty($record->data['supersedes_record_ids']))
+            && $record->data['effective_on'] <= $month->endOfMonth()->toDateString() && ($record->data['ends_on'] ?? '9999') >= $month->toDateString())
+            ->flatMap(fn ($record) => [...($record->data['supersedes_record_ids'] ?? []), ...(isset($record->data['supersedes_record_id']) ? [$record->data['supersedes_record_id']] : [])])->unique()->all();
+        $records = $records->reject(fn ($record) => $record instanceof Record && in_array($record->id, $superseded, true));
+        $policyIds = [];
+        $policyPlans = [];
+        if ($includeIncomePolicies && $space->kind === 'household') {
+            $policies = Record::where('space_id', $space->id)->where('kind', 'income_percentage_budget')->where('active', true)->get()
+                ->filter(fn ($record) => ($record->data['effective_on'] ?? '9999') <= $month->endOfMonth()->toDateString())
+                ->groupBy(fn ($record) => ($record->data['program_record_id'] ?? 0).'|'.$record->data['category']);
+            foreach ($policies as $key => $group) {
+                $latest = $group->max(fn ($record) => $record->data['effective_on']);
+                $active = $group->filter(fn ($record) => $record->data['effective_on'] === $latest
+                    && (empty($record->data['ends_on']) || $record->data['ends_on'] >= $month->toDateString()));
+                if ($active->isEmpty()) {
+                    continue;
+                }
+                $same = fn ($record) => ($record->data['purpose'] ?? null) === 'spending' && (($record->data['program_record_id'] ?? 0).'|'.($record->data['category'] ?? '')) === $key;
+                $fixed = $records->filter(fn ($record) => $same($record) && $this->validDate($record->data['effective_on'] ?? null)
+                    && $record->data['effective_on'] <= $month->endOfMonth()->toDateString());
+                $latestFixed = $fixed->max(fn ($record) => $record->data['effective_on']);
+                $hasReviewedCurrent = empty($projection['defaults'][$key]) && $fixed->contains(fn ($record) => $record->data['effective_on'] === $latestFixed
+                    && ($record->data['reviewed'] ?? false) === true && is_int($record->data['monthly_cents'] ?? null) && $record->data['monthly_cents'] >= 0
+                    && (empty($record->data['ends_on']) || ($this->validDate($record->data['ends_on']) && $record->data['ends_on'] >= $month->toDateString())));
+                if ($hasReviewedCurrent) {
+                    continue;
+                }
+                $records = $records->reject($same);
+                $policyIds = [...$policyIds, ...$active->pluck('id')->all()];
+                $policy = $active->count() === 1 ? $active->first() : null;
+                $policyPlans[] = ['key' => $key, 'category' => $active->first()->data['category'],
+                    'program_id' => $active->first()->data['program_record_id'] ?? null,
+                    'rate_bps' => $policy?->data['rate_bps'], 'basis' => 'household_take_home',
+                    'reviewed' => $policy && ($policy->data['reviewed'] ?? false) === true,
+                    'record_ids' => $active->pluck('id')->all()];
+            }
+        }
         $start = $month->startOfMonth()->toDateString();
         $end = $month->endOfMonth()->toDateString();
         $groups = [];
@@ -37,6 +78,9 @@ class MonthlyBudgetService
                 continue;
             }
             if ($data['effective_on'] > $end) {
+                continue;
+            }
+            if (($data['month_only'] ?? false) && ($data['ends_on'] ?? '') < $start) {
                 continue;
             }
             $key = $purpose.'|'.($data['program_record_id'] ?? 0).'|'.$category;
@@ -97,9 +141,9 @@ class MonthlyBudgetService
                 $purposeMissing[$purpose][] = $issue;
             }
             $purposes[$purpose] = [
-                'amount_cents' => $overlapIds ? null : $this->total($rows),
-                'reviewed_cents' => $overlapIds ? null : $this->total($reviewed),
-                'status' => $this->status($rows, $purposeMissing[$purpose]),
+                'amount_cents' => $overlapIds || ($purpose === 'spending' && $policyIds) ? null : $this->total($rows),
+                'reviewed_cents' => $overlapIds || ($purpose === 'spending' && $policyIds) ? null : $this->total($reviewed),
+                'status' => $purpose === 'spending' && $policyIds ? 'income_percentage' : $this->status($rows, $purposeMissing[$purpose]),
                 'record_ids' => $rows->pluck('id')->values()->all(),
                 'overlapping_record_ids' => $overlapIds,
             ];
@@ -108,13 +152,19 @@ class MonthlyBudgetService
 
         return [
             'month' => $month->format('Y-m'), 'from' => $start, 'through' => $end,
+            'defaults' => $projection['defaults'],
+            'income_percentage_policy_ids' => $policyIds,
+            'income_percentage_policies' => $policyPlans,
+            'fixed_spending_cents' => $purposes['spending']['overlapping_record_ids'] ? null : $this->total($spending),
+            'reviewed_fixed_spending_cents' => $purposes['spending']['overlapping_record_ids'] ? null : $this->total($spending->where('reviewed', true)),
+            'fixed_spending_includes_drafts' => $spending->contains('reviewed', false),
             'reviewed_spending_cents' => $purposes['spending']['reviewed_cents'],
             'draft_spending_cents' => $spending->contains('reviewed', false) ? $purposes['spending']['amount_cents'] : null,
             'planned_income_cents' => $purposes['income']['amount_cents'],
             'debt_budget_cents' => $purposes['debt_payment']['amount_cents'],
             'owner_support_cents' => $purposes['owner_support']['amount_cents'],
             'savings_cents' => $purposes['savings']['amount_cents'],
-            'status' => $this->status($selected, $missing),
+            'status' => $policyIds ? 'income_percentage' : $this->status($selected, $missing),
             'record_ids' => $selected->pluck('id')->values()->all(),
             'expired_record_ids' => array_values(array_filter($expiredIds)),
             'missing' => array_values(array_unique($missing)),

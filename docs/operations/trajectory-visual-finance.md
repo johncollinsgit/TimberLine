@@ -99,6 +99,9 @@ metadata first; no Dashboard financial fields are synthesized. Editing and legac
 views wait for native metadata. Space/account/server-date checks associate a late
 Dashboard only with its matching visual cohort. Context changes abort superseded
 initial requests, and failed projections remain errors rather than zero totals.
+Canonical period snapshots stay in memory for five minutes during exploration;
+each period switch still requests fresh source figures. Explicit refresh, edits,
+source changes and lost access invalidate them. Nothing is cached in persistent storage.
 
 Notifications confirms this device is enabled only after browser permission, a
 local push subscription and authenticated server association agree. Failed checks
@@ -246,3 +249,28 @@ keys are presentation-only; exact economic entry keys determine the final editab
 ledger, and native category/program edits and Ask context never receive synthetic
 merchant categories. Direct parent-category purchases remain available alongside
 subcategories, and either path can return through its own chart and breadcrumb.
+
+Ordinary spending allowances use the latest eligible previous monthly cap when a
+month has no explicit plan. This is a read-only default shared by monthly planning
+and the category envelopes. Explicit current plans win; `carry_forward: false`,
+partial-period plans, rollover funds, mapped reserve goals and later parent/child
+replacements do not revive old caps. Owner cash reports never repeat into a new
+month. The previous calendar month's recorded spending is a separate suggestion,
+marked partial when coverage is incomplete; using it previews an amount and only
+Save creates or edits a native versioned target. Current-month overrides preserve
+the original plan, with `supersedes_record_id` / `supersedes_record_ids` preventing additive double
+counting of single or combined source lines and `month_only` retaining explicitly
+planned future months. Undo removes that
+override or restores the exact prior version. No budget read or edit moves cash.
+
+Budget rows form a single list sorted by numeric allowance, highest first, on phone and desktop. Each clickable row shows its name, limit, one progress bar and spent/left figures, with no inline notes or setup actions. Estimated allowance
+differences are distinct from exact remaining amounts; unresolved parent spending
+shows Needs split rather than asserting a child's empty category proves zero costs.
+Detailed coverage, reported-cash timing and source notes are collapsed in the tapped
+plan. Desktop retains advanced import/setup. Typed household income-percentage
+policies replace inherited/imported fixed caps, count recorded giving within the
+same allowance, and exclude borrowing, internal transfers, medical shares and asset
+principal from take-home. Other currencies are not silently added. A current reviewed
+fixed cap retains precedence over the formula. Future receipts and unobserved cash
+income remain unknown; known fixed plans remain separate from the variable formula.
+Inherited typed source-quality flags stay explicit rather than being silently cleared.

@@ -66,7 +66,8 @@ test('range snapshots are memory-only, scoped, bounded by age, and fully cleared
  assert.equal(cache.find('business:8:all:spending',{range:'day'}),null);
  assert.equal(cache.find('household:7:account9:spending',{range:'day'}),null);
  assert.equal(cache.find('household:7:all:spending',{range:'day'}).report.summary.spending_cents,2500);
- at=60000;assert.equal(cache.find('household:7:all:spending',{range:'day'}),null);
+ at=120000;assert.equal(cache.find('household:7:all:spending',{range:'day'}).report.summary.spending_cents,2500,'Returning after reading a category still uses the exact dated snapshot');
+ at=300000;assert.equal(cache.find('household:7:all:spending',{range:'day'}),null);
  at=-1;assert.equal(cache.find('household:7:all:spending',{range:'day'}),null);
  at=1;cache.clear();assert.equal(cache.find('household:7:all:spending',{range:'day'}),null);
 });

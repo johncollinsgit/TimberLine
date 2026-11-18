@@ -1,6 +1,17 @@
 <?php
 
 return [
+    'income_percentage_budget' => [
+        'category' => ['label' => 'Spending category', 'type' => 'category', 'required' => true],
+        'program_record_id' => ['label' => 'Program (optional)', 'type' => 'program_record', 'required' => false],
+        'rate_bps' => ['label' => 'Share of received take-home income (%)', 'type' => 'percent', 'required' => true],
+        'basis' => ['label' => 'Income basis', 'type' => 'select', 'required' => true, 'choices' => ['household_take_home']],
+        'effective_on' => ['label' => 'Starts on', 'type' => 'date', 'required' => true],
+        'ends_on' => ['label' => 'Ends on (optional)', 'type' => 'date', 'required' => false],
+        'cash_income_pending' => ['label' => 'Income received outside bank accounts still needs review', 'type' => 'boolean', 'required' => true],
+        'source' => ['label' => 'Policy and source evidence', 'type' => 'text', 'required' => true],
+        'reviewed' => ['label' => 'Percentage policy reviewed', 'type' => 'boolean', 'required' => true],
+    ],
     'bill_observation' => [
         'reference' => ['label' => 'Stable invoice / sharing reference', 'type' => 'text', 'required' => true],
         'obligation_month' => ['label' => 'Month this obligation belongs to (due month when known)', 'type' => 'month', 'required' => true],
@@ -139,6 +150,10 @@ return [
         'monthly_cents' => ['label' => 'Monthly target', 'type' => 'money', 'required' => true],
         'program_record_id' => ['label' => 'Program (optional)', 'type' => 'program_record', 'required' => false],
         'rollover' => ['label' => 'Carry unused or overspent budget forward', 'type' => 'boolean', 'required' => false],
+        'carry_forward' => ['label' => 'Use this allowance as the next month’s default', 'type' => 'boolean', 'required' => false, 'default' => true],
+        'month_only' => ['label' => 'Override only the dated month', 'type' => 'boolean', 'required' => false, 'internal' => true],
+        'supersedes_record_id' => ['label' => 'Original allowance overridden for these dates', 'type' => 'integer', 'required' => false, 'internal' => true],
+        'supersedes_record_ids' => ['label' => 'Original allowance lines overridden for these dates', 'type' => 'budget_record_ids', 'required' => false, 'internal' => true],
         'rollover_start_month' => ['label' => 'Rollover starts (YYYY-MM)', 'type' => 'month', 'required' => false],
         'opening_rollover_cents' => ['label' => 'Reviewed opening rollover', 'type' => 'signed_money', 'required' => false],
         'purpose' => ['label' => 'Purpose', 'type' => 'select', 'required' => true, 'choices' => ['spending', 'savings', 'debt_payment', 'income', 'owner_support']],

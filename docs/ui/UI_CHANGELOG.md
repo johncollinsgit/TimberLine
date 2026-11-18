@@ -1,3 +1,13 @@
+## 2026-11-18 · Simpler monthly budgets
+
+Budgets form one compact list, highest allowance first. Each clickable row shows
+its name, progress bar, spending and amount left; notes stay inside the tapped detail. Imports and advanced setup remain on desktop. Missing
+monthly allowances default to the previous ordinary budget, with a separate
+previous-month spending suggestion that saves only on request. Native month edits
+preserve historical plans and support Undo. “Planned debt payments” distinguishes
+the payment plan from saved cash. Income-based giving uses its typed take-home
+percentage rule, with estimates identified briefly rather than an invented fixed cap.
+
 ## 2026-11-18 - Trajectory phone review, budgets and bills (source candidate)
 
 Phone transaction ledgers use readable cards with source labels and explicit

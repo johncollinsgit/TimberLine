@@ -17,11 +17,12 @@ for (const engine of [chromium, webkit]) {
         window.requests = []; window.changes = 0; window.entries = 0; window.ctx = {space_id: 7};
         window.budget = {id: 11, kind: 'budget', name: 'Groceries', version: 1, data: {category: 'groceries', monthly_cents: 140000, effective_on: '2026-11-01', ends_on: '2026-11-30', cash_spending_pending: false, category_review_pending: true, reported_cash_spent_cents: 50000, reported_cash_as_of: '2026-11-18', source: 'Fictional evidence'}};
         window.goal = {id: 12, kind: 'goal', name: 'Travel reserve', version: 1, data: {target_cents: 100000, saved_cents: 0, monthly_cents: 16667, target_on: '2027-05-18', goal_type: 'savings', budget_category: 'travel'}};
+        window.utilities = {id:21,kind:'budget',name:'Utilities line',version:1,data:{category:'utilities',monthly_cents:35000,effective_on:'2026-10-01',ends_on:null,reviewed:true}};
         const api = async (path, method = 'GET', data) => {
           window.requests.push({path, method, data});
-          if (method === 'GET') return new Promise(resolve => {window.resolveRead = () => resolve({record: structuredClone(path.endsWith('/12') ? window.goal : window.budget)});});
+          if (method === 'GET') return new Promise(resolve => {window.resolveRead = () => resolve({record: structuredClone(path.endsWith('/12') ? window.goal : path.includes('/21') ? window.utilities : window.budget), plan_context: 'a'.repeat(64), ...(path.includes('/21') ? {aggregate:{record_ids:[21,22,23],monthly_cents:57100,cash_spending_pending:false,category_review_pending:false}} : {})});});
           if (path.endsWith('/undo')) return {record: {...window.budget, version: 3}, undo: null};
-          const record = structuredClone(path.endsWith('/12') ? window.goal : window.budget);
+          const record = structuredClone(path.endsWith('/12') ? window.goal : path.includes('/21') ? window.utilities : window.budget);
           record.version++; record.data = {...record.data, ...data.changes};
           return {record, undo: {event_id: 900, version: record.version}};
         };
@@ -30,18 +31,24 @@ for (const engine of [chromium, webkit]) {
           esc: value => String(value ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c])),
           precise: value => '$' + (value / 100).toFixed(2), onChanged: () => window.changes++, onEntries: () => window.entries++});
         window.row = {label: 'Groceries', category: 'groceries', record_id: 11, record_ids: [11], target_cents: 140000,
-          bank_spent_cents: 30000, reported_cash_spent_cents: 50000, reported_cash_as_of: '2026-11-18', pending_cents: 0, category_review_pending: true, reasons: ['category_review_pending']};
+          bank_spent_cents: 30000, reported_cash_spent_cents: 50000, reported_cash_as_of: '2026-11-18', pending_cents: 0, category_review_pending: true, reasons: ['category_review_pending'], suggestion: {month: '2026-10', amount_cents: 125000, partial: true}};
         window.detail.open(window.row, {month: '2026-11'});
       });
       await page.getByRole('heading', {name: 'Groceries', exact: true}).waitFor();
       assert.equal(await page.getByRole('dialog').isVisible(), true);
+      await page.getByRole('button', {name: 'Use amount', exact: true}).click();
+      assert.equal(await page.locator('[data-budget-money="monthly_cents"]').inputValue(), '1250.00');
+      assert.match(await page.locator('.tr-budget-suggestion').innerText(), /partial/);
+      assert.equal((await page.evaluate(() => window.requests.filter(r => r.method !== 'GET'))).length, 0);
       await page.locator('[data-budget-money="monthly_cents"]').fill('1500');
-      assert.match(await page.locator('[data-budget-preview]').innerText(), /\$1500.00 planned/);
+      assert.match(await page.locator('[data-budget-preview]').innerText(), /Budget\s+\$1500.00/);
+      assert.match(await page.locator('[data-budget-preview]').innerText(), /Left · est.\s+\$700.00/);
+      assert.equal(await page.locator('.tr-budget-evidence').getAttribute('open'), null);
       assert.equal((await page.evaluate(() => window.requests.filter(r => r.method !== 'GET'))).length, 0);
       await page.evaluate(() => window.resolveRead());
       await page.getByRole('button', {name: 'Save plan', exact: true}).click();
       await page.getByRole('button', {name: 'Undo last edit'}).waitFor();
-      assert.deepEqual(await page.evaluate(() => window.requests.find(r => r.method === 'PATCH').data), {version: 1, changes: {monthly_cents: 150000}});
+      assert.deepEqual(await page.evaluate(() => window.requests.find(r => r.method === 'PATCH').data), {version: 1, changes: {monthly_cents: 150000}, month: '2026-11', plan_context: 'a'.repeat(64)});
       await page.getByRole('button', {name: 'Undo last edit'}).click();
       await page.waitForFunction(() => window.changes === 2);
       const geometry = await page.getByRole('dialog').evaluate(element => ({width: element.getBoundingClientRect().width, scroll: element.scrollWidth, client: element.clientWidth}));
@@ -62,6 +69,18 @@ for (const engine of [chromium, webkit]) {
       assert.deepEqual(fundSave.data.changes, {monthly_cents: 20000, target_cents: 120000, target_on: '2027-05-18'});
       assert.equal('saved_cents' in fundSave.data.changes, false);
       assert.match(await page.locator('[data-budget-preview]').innerText(), /\$0.00 saved/);
+      await page.evaluate(() => window.detail.open({category:'utilities',label:'Utilities',record_id:null,record_ids:[21,22,23],target_cents:57100,planned_cents:57100,bank_spent_cents:10000,reported_cash_spent_cents:0,pending_cents:0,remaining_cents:47100},{month:'2026-11'}));
+      assert.match(await page.locator('[data-budget-preview]').innerText(), /\$571.00/);
+      await page.evaluate(() => window.resolveRead());
+      assert.equal(await page.locator('[data-budget-money="monthly_cents"]').inputValue(), '571.00');
+      assert.equal(await page.getByRole('button',{name:'Save plan',exact:true}).isEnabled(), true);
+      assert.doesNotMatch(await page.getByRole('dialog').innerText(), /more than one plan|individual targets/);
+      await page.locator('[data-budget-money="monthly_cents"]').fill('600');
+      await page.getByRole('button',{name:'Save plan',exact:true}).click();
+      await page.getByRole('button',{name:'Undo last edit'}).waitFor();
+      const aggregateSave=await page.evaluate(()=>window.requests.filter(request=>request.method==='PATCH').at(-1));
+      assert.match(aggregateSave.path,/\/21$/);assert.equal(aggregateSave.data.month,'2026-11');assert.equal(aggregateSave.data.changes.monthly_cents,60000);
+      assert.equal(await page.evaluate(()=>window.utilities.data.monthly_cents),35000,'Preview/save never mutates a source line locally');
       await page.evaluate(() => {
         window.detail.close(); window.ctx.month = '2026-11'; window.detail.open(window.row, {month: '2026-11'});
         const oldRead = window.resolveRead;
