@@ -31,6 +31,7 @@ test('latest dated cohorts are selected independently for each program', functio
 test('expired program replacement does not remove another program or revive its own older target', function (): void {
     $soccerOld = ($this->target)('shopping', 10000, '2027-01-01', 101);
     $soccerExpired = ($this->target)('shopping', 12000, '2027-02-01', 101, '2027-02-28');
+    $soccerExpired->update(['data' => [...$soccerExpired->data, 'carry_forward' => false]]);
     $coop = ($this->target)('shopping', 20000, '2027-01-01', 102);
     $report = app(MonthlyBudgetService::class)->build($this->space, Record::all(), CarbonImmutable::parse('2027-03-01'));
     expect($report['reviewed_spending_cents'])->toBe(20000)->and($report['record_ids'])->toBe([$coop->id])

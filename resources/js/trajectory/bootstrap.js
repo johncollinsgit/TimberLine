@@ -72,7 +72,7 @@ export function deriveVisualPeriod(report,budgets,request){
 }
 
 /** Memory only; every edit/explicit refresh or source-scope change clears the cohort. */
-export function createRangeSnapshotCache({now=()=>Date.now(),ttl=60000,maxEntries=8}={}){
+export function createRangeSnapshotCache({now=()=>Date.now(),ttl=300000,maxEntries=8}={}){
   const snapshots=[];
   return {
     clear(){snapshots.length=0;},

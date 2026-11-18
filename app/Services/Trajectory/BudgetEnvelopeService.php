@@ -36,9 +36,17 @@ class BudgetEnvelopeService
         $pending = app(EconomicActivityService::class)->expenses($pending)->where('amount_cents', '<', 0);
         $catalog = collect(app(AnalysisCategoryService::class)->definitions($space))->keyBy('key');
         $targets = $this->targets($space, $records, $start, $programId);
+        $priorStart = $start->subMonth();
+        $priorEnd = $priorStart->endOfMonth();
+        $priorCosts = $costs->where('date', '>=', $priorStart->toDateString())->where('date', '<=', $priorEnd->toDateString());
+        $priorTargets = $this->targets($space, $records, $priorStart, $programId);
+        $priorCovered = $priorEnd->lt($today) && $accounts->isNotEmpty() && $accounts->every(fn ($account) => $account->history_start
+            && $account->history_start->toDateString() <= $priorStart->toDateString() && $account->observed_at
+            && $account->observed_at->toDateString() >= $priorEnd->toDateString());
+        $priorEvidence = $all->where('date', '>=', $priorStart->toDateString())->where('date', '<=', $priorEnd->toDateString())->isNotEmpty();
         $current = $costs->where('date', '>=', $start->toDateString())->where('date', '<=', $end->toDateString());
         $committed = $pending->where('date', '>=', $start->toDateString())->where('date', '<=', $end->toDateString());
-        $keys = array_values(array_unique([...array_keys($targets), ...$current->map(fn ($e) => $this->entryKey($e))->all(), ...$committed->map(fn ($e) => $this->entryKey($e))->all()]));
+        $keys = array_values(array_unique([...array_keys($targets), ...$current->map(fn ($e) => $this->entryKey($e))->all(), ...$committed->map(fn ($e) => $this->entryKey($e))->all(), ...$priorCosts->map(fn ($e) => $this->entryKey($e))->all()]));
         $rows = [];
         foreach ($keys as $key) {
             [$program, $category] = explode('|', $key, 2);
@@ -48,6 +56,13 @@ class BudgetEnvelopeService
             $matches = fn ($e) => (int) ($e['program_record_id'] ?? 0) === (int) $program && in_array($e['category'], $categoryKeys, true);
             $spent = $current->filter($matches);
             $holds = $committed->filter($matches);
+            $prior = $priorTargets[$key] ?? null;
+            $priorReport = ($prior['cash_report_count'] ?? 0) === 1 ? ($prior['reported_cash_spent_cents'] ?? 0) : 0;
+            $priorCashKnown = ($prior['cash_report_count'] ?? 0) <= 1 && ! ($prior['cash_spending_pending'] ?? false)
+                && (empty($prior['reported_cash_as_of']) || $prior['reported_cash_as_of'] >= $priorEnd->toDateString());
+            $priorTaxPending = count(array_intersect($categoryKeys, ['interest', 'tax_penalties', 'tax_fees'])) > 0
+                && $unresolved->where('date', '>=', $priorStart->toDateString())->where('date', '<=', $priorEnd->toDateString())->contains(fn ($entry) => (int) ($entry['program_record_id'] ?? 0) === (int) $program);
+            $priorAmount = $priorCovered || $priorEvidence ? -(int) $priorCosts->filter($matches)->sum('amount_cents') + $priorReport : null;
             $carry = 0;
             $carryMissing = false;
             $carryUnresolved = false;
@@ -62,6 +77,12 @@ class BudgetEnvelopeService
             }
             $cashPending = $target['cash_spending_pending'] ?? false;
             $categoryPending = $target['category_review_pending'] ?? false;
+            $parentCategory = $catalog->get($category)['parent_key'] ?? null;
+            $unassignedParent = $parentCategory ? -(int) $current->filter(fn ($entry) => (int) ($entry['program_record_id'] ?? 0) === (int) $program && $entry['category'] === $parentCategory)->sum('amount_cents') : 0;
+            if ($unassignedParent > 0) {
+                $categoryPending = true;
+                $reasons[] = 'needs_split';
+            }
             if ($target && ($target['rollover'] ?? false)) {
                 $rolloverStart = $target['rollover_start_month'] ?? null;
                 if (! $rolloverStart || ! isset($target['opening_rollover_cents'])) {
@@ -149,19 +170,62 @@ class BudgetEnvelopeService
                 'program_id' => $program, 'program_label' => $programs->get($program)?->name, 'parent_key' => $catalog->get($category)['parent_key'] ?? null,
                 'target_cents' => $amount, 'planned_cents' => $target['planned_cents'] ?? null,
                 'target_status' => $targetStatus, 'reasons' => array_values(array_unique($reasons)),
+                'default_from' => $target['default_from'] ?? null,
+                'plan_context' => app(BudgetDefaultsService::class)->contextHash($space, $records, $category, $program),
+                'suggestion' => ['month' => $priorStart->format('Y-m'), 'amount_cents' => $priorAmount,
+                    'partial' => ! $priorCovered || ! $priorCashKnown || ($prior['category_review_pending'] ?? false) || $priorTaxPending],
                 'plan_period' => $target['plan_period'] ?? null, 'partial_period' => $target['partial_period'] ?? false,
                 'source_notes' => $target['source_notes'] ?? [], 'cash_spending_pending' => $cashPending, 'category_review_pending' => $categoryPending,
+                'unassigned_parent_cents' => $unassignedParent,
                 'tax_review_ids' => $taxPending ? $taxRows->pluck('id')->unique()->values()->all() : [],
                 'bank_spent_cents' => $hasActuals ? $bankUsed : null, 'reported_cash_spent_cents' => $cashReportConflict ? null : $reportedCash,
                 'reported_cash_as_of' => $target['reported_cash_as_of'] ?? null,
                 'spent_cents' => $hasActuals && ! $cashReportConflict ? $used : null, 'pending_cents' => $reserved, 'carryover_cents' => $carryMissing || $carryUnresolved ? null : $carry,
                 'remaining_cents' => $amount === null || $carryMissing || $cashPending || $categoryPending || $cashReportConflict || $taxPending || ! $hasActuals ? null : $amount + $carry - $used - $reserved,
+                'estimated_remaining_cents' => ($target['planned_cents'] ?? null) === null || $carryMissing || $cashReportConflict || ! $hasActuals || ($target['partial_period'] ?? false) || $taxPending ? null : $target['planned_cents'] + $carry - $used - $reserved,
                 'rollover' => $target['rollover'] ?? false, 'status' => $carryMissing ? $carryStatus : ($target['status'] ?? 'not_budgeted'),
                 'ids' => $spent->pluck('id')->unique()->values()->all(), 'pending_ids' => $holds->pluck('id')->unique()->values()->all(),
                 'record_id' => count($target['record_ids'] ?? []) === 1 ? $target['record_ids'][0] : null,
                 'version' => $target['version'] ?? null, 'record_ids' => $target['record_ids'] ?? []];
         }
+        if ($space->kind === 'household') {
+            $policies = app(IncomePercentageBudgetService::class)->build($space, $month, entries: $all->all(), accounts: $accounts);
+            foreach ($policies['rows'] as $policy) {
+                if ($programId !== null && (int) $policy['program_id'] !== $programId) {
+                    continue;
+                }
+                $existing = collect($rows)->firstWhere('key', $policy['key']);
+                if ($existing && empty($existing['default_from']) && $existing['planned_cents'] !== null && $existing['target_status'] !== 'draft') {
+                    continue;
+                }
+                $rows = array_values(array_filter($rows, fn ($row) => $row['key'] !== $policy['key']));
+                $reserved = -(int) $committed->filter(fn ($entry) => $entry['category'] === $policy['category'] && (int) ($entry['program_record_id'] ?? 0) === (int) $policy['program_id'])->sum('amount_cents');
+                $rows[] = [...$policy, 'program_label' => $programs->get($policy['program_id'])?->name,
+                    'parent_key' => $catalog->get($policy['category'])['parent_key'] ?? null,
+                    'target_cents' => $policy['provisional'] ? null : $policy['estimated_target_cents'], 'planned_cents' => $policy['estimated_target_cents'],
+                    'remaining_cents' => $policy['provisional'] || $policy['recorded_remaining_cents'] === null ? null : $policy['recorded_remaining_cents'] - $reserved,
+                    'estimated_remaining_cents' => $policy['recorded_remaining_cents'] === null ? null : $policy['recorded_remaining_cents'] - $reserved,
+                    'status' => 'income_percentage', 'plan_period' => ['from' => $policy['effective_on'], 'through' => $policy['ends_on'] ?? $end->toDateString()],
+                    'default_from' => null, 'partial_period' => false, 'rollover' => false, 'carryover_cents' => 0,
+                    'bank_spent_cents' => $policy['spent_cents'], 'reported_cash_spent_cents' => 0, 'reported_cash_as_of' => null,
+                    'cash_spending_pending' => false, 'category_review_pending' => false, 'pending_cents' => $reserved,
+                    'ids' => $policy['spent_ids'], 'record_id' => null, 'version' => null];
+            }
+        }
         $rows = $this->funds($space, $rows, $start, $end, $catalog, $current, $committed, $hasActuals, $programId);
+        // A new child plan supersedes an inherited generic parent, rather than
+        // silently adding both allowances. The parent's recorded costs remain visible.
+        foreach ($rows as &$row) {
+            if (! empty($row['default_from']) && collect($rows)->contains(fn ($child) => ($child['parent_key'] ?? null) === $row['category']
+                && $child['program_id'] === $row['program_id'] && empty($child['default_from']) && ($child['planned_cents'] ?? null) !== null)) {
+                $row['planned_cents'] = $row['target_cents'] = $row['remaining_cents'] = $row['estimated_remaining_cents'] = null;
+                $row['default_from'] = null;
+                $row['record_id'] = null;
+                $row['record_ids'] = [];
+                $row['status'] = $row['target_status'] = 'not_budgeted';
+            }
+        }
+        unset($row);
         // If a parent has a target, its children share that allowance; do not add them twice.
         foreach ($rows as &$row) {
             if (! $row['parent_key'] || ($row['mode'] ?? null) === 'fund') {
@@ -171,6 +235,7 @@ class BudgetEnvelopeService
             if ($parent) {
                 if ($row['planned_cents'] !== null) {
                     $row['remaining_cents'] = null;
+                    $row['estimated_remaining_cents'] = null;
                     $row['target_cents'] = null;
                     $row['status'] = 'overlapping_targets';
                     $row['reasons'][] = 'overlapping_targets';
@@ -185,6 +250,7 @@ class BudgetEnvelopeService
         foreach ($rows as &$row) {
             if (collect($rows)->contains(fn ($child) => ($child['parent_key'] ?? null) === $row['category'] && $child['program_id'] === $row['program_id'] && $child['status'] === 'overlapping_targets')) {
                 $row['remaining_cents'] = null;
+                $row['estimated_remaining_cents'] = null;
                 $row['target_cents'] = null;
                 $row['status'] = 'overlapping_targets';
                 $row['reasons'][] = 'overlapping_targets';
@@ -222,7 +288,7 @@ class BudgetEnvelopeService
             ->groupBy(fn ($goal) => $goal->data['budget_category']);
         foreach ($goals as $category => $group) {
             $existing = collect($rows)->first(fn ($row) => $row['category'] === $category && $row['program_id'] === null);
-            $keepSpendingPlan = $existing && $existing['planned_cents'] !== null && $existing['target_status'] !== 'draft';
+            $keepSpendingPlan = $existing && (($existing['mode'] ?? null) === 'income_percentage' || ($existing['planned_cents'] !== null && $existing['target_status'] !== 'draft'));
             if (! $keepSpendingPlan) {
                 $rows = array_values(array_filter($rows, fn ($row) => $row['category'] !== $category || $row['program_id'] !== null));
             }
@@ -272,13 +338,15 @@ class BudgetEnvelopeService
     private function targets(Space $space, Collection $records, CarbonImmutable $month, ?int $programId): array
     {
         $out = [];
+        $projection = app(BudgetDefaultsService::class)->project($space, $records, $month);
+        $records = $projection['records'];
         $groups = $records->filter(fn ($r) => ($r->data['purpose'] ?? null) === 'spending' && ($programId === null || ($r->data['program_record_id'] ?? null) === $programId))
             ->groupBy(fn ($r) => (string) ($r->data['program_record_id'] ?? 0));
         foreach ($groups as $program => $cohort) {
-            $selected = app(MonthlyBudgetService::class)->build($space, $cohort, $month);
+            $selected = app(MonthlyBudgetService::class)->build($space, $cohort, $month, false);
             $ids = $selected['record_ids'];
             foreach ($cohort->whereIn('id', $ids)->groupBy(fn ($r) => $r->data['category']) as $category => $rows) {
-                $categoryReport = app(MonthlyBudgetService::class)->build($space, $rows, $month);
+                $categoryReport = app(MonthlyBudgetService::class)->build($space, $rows, $month, false);
                 $known = $rows->every(fn ($r) => ($r->data['reviewed'] ?? false) === true);
                 $rollover = $rows->count() === 1 && ($rows->first()->data['rollover'] ?? false);
                 $from = $rows->max(fn ($r) => max($month->startOfMonth()->toDateString(), $r->data['effective_on']));
@@ -286,6 +354,7 @@ class BudgetEnvelopeService
                 $cashReports = $rows->filter(fn ($r) => isset($r->data['reported_cash_as_of'], $r->data['reported_cash_spent_cents'])
                     && substr($r->data['reported_cash_as_of'], 0, 7) === $month->format('Y-m'));
                 $out[$program.'|'.$category] = [
+                    'default_from' => $projection['defaults'][$program.'|'.$category] ?? null,
                     'cash_report_count' => $cashReports->count(),
                     'reported_cash_spent_cents' => $cashReports->count() === 1 ? $cashReports->first()->data['reported_cash_spent_cents'] : 0,
                     'reported_cash_as_of' => $cashReports->count() === 1 ? $cashReports->first()->data['reported_cash_as_of'] : null,

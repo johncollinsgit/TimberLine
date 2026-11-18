@@ -22,6 +22,7 @@ class RecordService
         abort_if(str_starts_with($kind, 'medical_') && $space->kind !== 'household', 422, 'Medical sharing belongs to a private household.');
         abort_if($kind === 'financial_observation' && $space->kind !== 'household', 422, 'Household financial observations belong to a private household.');
         abort_if($kind === 'company_support_source' && $space->kind !== 'household', 422, 'Company support sources belong to a private household.');
+        abort_if($kind === 'income_percentage_budget' && $space->kind !== 'household', 422, 'Received take-home income policies belong to a household.');
         $rules = [];
         foreach ($definition as $key => $field) {
             $rules[$key] = [$field['required'] ? 'required' : 'nullable'];
@@ -30,6 +31,7 @@ class RecordService
                 'percent' => ['integer', 'between:0,10000'],
                 'rate' => ['integer', 'between:0,100000'],
                 'integer' => ['integer', 'min:0', 'max:1000000000'],
+                'budget_record_ids' => ['array', 'min:1', 'max:50'],
                 'debt_record', 'recurring_record', 'medical_need_record', 'medical_bill_record', 'program_record' => ['integer', Rule::exists('trajectory_records', 'id')->where('space_id', $space->id)->where('kind', substr($field['type'], 0, -7))->where('active', true)],
                 'account' => ['integer', Rule::exists('trajectory_accounts', 'id')->where('space_id', $space->id)],
                 'business_space' => ['integer', Rule::exists('trajectory_spaces', 'id')->where('kind', 'business')],
@@ -50,12 +52,16 @@ class RecordService
             }
         }
         if ($kind === 'budget') {
+            $rules['supersedes_record_ids.*'] = ['required', 'integer', 'min:1', 'distinct', Rule::exists('trajectory_records', 'id')->where('space_id', $space->id)->where('kind', 'budget')->where('active', true)];
             $rules['reported_cash_spent_cents'][] = 'required_with:reported_cash_as_of';
             $rules['reported_cash_as_of'] = [...$rules['reported_cash_as_of'], 'required_with:reported_cash_spent_cents',
                 'after_or_equal:effective_on', 'before_or_equal:'.now($space->timezone)->toDateString()];
             if (filled($input['ends_on'] ?? null)) {
                 $rules['reported_cash_as_of'][] = 'before_or_equal:ends_on';
             }
+        }
+        if ($kind === 'income_percentage_budget') {
+            $rules['ends_on'][] = 'after_or_equal:effective_on';
         }
         if ($kind === 'transaction_source_identity') {
             $rules['expected_bank_source_fingerprint'] = ['required', 'string', 'regex:/^[a-f0-9]{64}$/'];
@@ -76,6 +82,17 @@ class RecordService
             if ($field['type'] === 'boolean') {
                 $data[$key] = (bool) $data[$key];
             }
+            if ($field['type'] === 'budget_record_ids') {
+                $data[$key] = array_map('intval', $data[$key]);
+            }
+        }
+        if ($kind === 'income_percentage_budget') {
+            $category = $data['category'];
+            $categoryDefinition = Record::where('space_id', $space->id)->where('kind', 'category_definition')->where('active', true)->get()
+                ->first(fn ($record) => ($record->data['key'] ?? null) === $category);
+            abort_if(in_array($category, ['income', 'uncategorized'], true)
+                || array_key_exists($category, $space->settings['income_categories'] ?? [])
+                || ($categoryDefinition && ($categoryDefinition->data['direction'] ?? null) !== 'expense'), 422, 'Choose an expense category for this income-percentage allowance.');
         }
         if ($kind === 'tax_remittance') {
             $data['bank_source_fingerprint'] = app(SalesTaxService::class)->validateRemittance($space, $data);
@@ -103,6 +120,14 @@ class RecordService
             abort_unless($data['observed_on'] <= now($space->timezone)->toDateString(), 422, 'Use an actual balance date, not a future observation.');
         }
         if ($kind === 'budget') {
+            abort_if(($data['month_only'] ?? false) && (empty($data['ends_on']) || substr($data['effective_on'], 0, 7) !== substr($data['ends_on'], 0, 7)), 422, 'A month-only override needs dates within one calendar month.');
+            $supersedes = array_unique([...($data['supersedes_record_ids'] ?? []), ...(isset($data['supersedes_record_id']) ? [$data['supersedes_record_id']] : [])]);
+            foreach ($supersedes as $originalId) {
+                $original = Record::where('space_id', $space->id)->where('kind', 'budget')->where('active', true)->findOrFail($originalId);
+                abort_unless(($original->data['purpose'] ?? null) === $data['purpose'] && $original->data['category'] === $data['category']
+                    && (int) ($original->data['program_record_id'] ?? 0) === (int) ($data['program_record_id'] ?? 0)
+                    && ! empty($data['ends_on']) && substr($data['effective_on'], 0, 7) === substr($data['ends_on'], 0, 7), 422, 'A monthly override must keep the original category and program.');
+            }
             abort_if(isset($data['reported_cash_spent_cents']) && $data['purpose'] !== 'spending', 422, 'Cash spending reports belong to a spending budget.');
             abort_if($data['purpose'] === 'owner_support' && $space->kind !== 'business', 422, 'Owner-support budgets belong to a business space.');
             abort_if(($data['rollover'] ?? false) && empty($data['rollover_start_month']), 422, 'Choose the first rollover month.');

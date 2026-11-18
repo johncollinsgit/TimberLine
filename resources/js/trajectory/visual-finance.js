@@ -47,8 +47,12 @@ export function financeSelectionRows(report, state) {
 export function financeBudgetRows(report) {
   return (report?.rows ?? []).map(row => ({...row,
     target_cents: number(row.target_cents), planned_cents: number(row.planned_cents), spent_cents: number(row.spent_cents), pending_cents: number(row.pending_cents),
-    remaining_cents: number(row.remaining_cents), label: row.label ?? financeLabel(row.category ?? row.key),
-  }));
+    remaining_cents: number(row.remaining_cents), estimated_remaining_cents: number(row.estimated_remaining_cents), label: row.label ?? financeLabel(row.category ?? row.key),
+  })).sort((a,b) => {
+    const amount = row => row.mode === 'fund' ? number(row.fund?.target_cents) : number(row.target_cents) ?? number(row.planned_cents);
+    const left = amount(a), right = amount(b);
+    return left === right ? a.label.localeCompare(b.label) : left === null ? 1 : right === null ? -1 : right-left;
+  });
 }
 
 /** Plan amounts and recorded allowance are distinct; a missing amount is never a zero. */
@@ -58,7 +62,7 @@ export function financeBudgetPresentation(row, {future = false} = {}) {
   if (row.uses_parent_budget) reasons.add('uses_parent_budget');
   if (future) reasons.add('future_period');
   const messages = {
-    draft: 'Draft · needs confirmation', partial: 'Dated plan · not a full-month allowance', partial_period: 'Dated plan · not a full-month allowance',
+    draft: 'Estimated plan', partial: 'Dated plan · not a full-month allowance', partial_period: 'Dated plan · not a full-month allowance',
     overlapping_targets: 'Parent and child allowances overlap · review targets', needs_opening_balance: 'Reviewed rollover opening needed',
     needs_prior_month_close: 'Previous month must close before rollover is known', tax_split_pending: 'Tax split pending', unresolved_costs: 'Tax split pending',
     cash_not_recorded: 'Cash spending is not fully recorded', cash_reports_overlap: 'Cash reports overlap · review their scope', category_review_pending: 'Spending categories still need review',
@@ -68,10 +72,21 @@ export function financeBudgetPresentation(row, {future = false} = {}) {
   const plan = number(row.target_cents) ?? number(row.planned_cents);
   if (row.uses_parent_budget) {text = 'Uses parent budget';caption = row.parent_budget_label ?? 'Shared allowance';}
   else if (number(row.remaining_cents) !== null && !future) {value = Math.abs(row.remaining_cents);caption = row.remaining_cents < 0 ? 'over recorded allowance' : row.reported_cash_as_of ? 'left after bank and reported cash spending' : 'left after recorded spending';}
+  else if (number(row.estimated_remaining_cents) !== null && !future) {value = Math.abs(row.estimated_remaining_cents);caption = row.estimated_remaining_cents < 0 ? 'over budget · est.' : 'left · est.';}
   else if (plan !== null) {value = plan;caption = reasons.has('draft') ? 'Draft allowance' : reasons.has('overlapping_targets') ? 'Entered allowance · review overlap' : row.partial_period ? 'Dated allowance plan' : 'Approved monthly plan';}
   else if (reasons.size && !reasons.has('not_budgeted')) {text = 'Review budget';caption = 'Allowance needs review';}
   return {value, text, caption, messages: [...new Set([...reasons].filter(reason => !future || !['cash_not_recorded', 'category_review_pending', 'tax_split_pending', 'unresolved_costs', 'missing_history'].includes(reason)).map(reason => messages[reason]).filter(Boolean))],
-    action: row.uses_parent_budget ? null : reasons.has('draft') ? 'Confirm budget…' : plan === null ? 'Set budget…' : number(row.remaining_cents) === null && !future ? 'Review budget…' : null};
+    action: row.uses_parent_budget ? null : plan === null ? 'Set budget…' : null};
+}
+
+export function financeBudgetCompact(row, {future = false} = {}) {
+  const plan = number(row.target_cents) ?? number(row.planned_cents);
+  const exact = number(row.remaining_cents);
+  const estimate = number(row.estimated_remaining_cents);
+  const needsSplit = (row.reasons ?? []).includes('needs_split');
+  return {plan, spent: future ? null : number(row.spent_cents), left: future ? null : exact ?? estimate,
+    needsSplit, estimated: exact === null && estimate !== null,
+    tag: row.mode === 'income_percentage' ? Number.isSafeInteger(row.rate_bps) ? `${row.rate_bps / 100}% of take-home · est.` : 'Review income rule' : row.partial_period ? 'Dated plan' : future ? 'Planned' : needsSplit ? 'Needs split' : row.uses_parent_budget ? 'Shares parent budget' : exact === null && estimate !== null ? 'Est.' : row.default_from ? 'Previous budget' : row.target_status === 'draft' ? 'Est.' : ''};
 }
 
 export function createVisualFinance({root, getContext, getSpaces = () => [], api, endpoint, esc, precise, chart, onBeforeChange, onChange, onChanged, onNavigate, onReviewTransaction, onEditBudget, onAddDefinition, onClearAccount, onAsk, notice, transactionReview = null, homeBills = () => '', onOpenBudget = null}) {
@@ -90,6 +105,8 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   const partialSpending = () => state.basis === 'spending' && report?.summary?.spending_cents == null
     && Number.isSafeInteger(report?.summary?.recorded_spending_cents) && report?.coverage?.spending?.complete === false;
   const spendingValue = () => partialSpending() ? report.summary.recorded_spending_cents : report?.summary?.spending_cents ?? report?.summary?.outflow_cents;
+  const emptyRecordedPeriod = () => report?.coverage?.history_available === true && report.coverage.selected_range_has_evidence === false;
+  const periodMoney = value => Number.isSafeInteger(value) || !emptyRecordedPeriod() ? precise(value) : 'None recorded';
   function spendingReviewHtml() {
     if (!partialSpending()) return '';
     const review=report.coverage.spending,rows=review.review_rows??[];
@@ -169,7 +186,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
 
   function piesHtml() {
     const inflows = report?.inflows ?? [], categories = report?.categories ?? [];
-    return `<section class="vf-period-panel"><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(rangeLabel(report?.range ?? dates()))}</span><h2>Where your money goes</h2></div>${button('View all transactions', 'ledger-all')}</div><div class="vf-pie-pair"><section class="vf-pie-panel"><div class="vf-pie-heading"><h3>Money coming in</h3><strong>${precise(report?.summary?.inflow_cents)}</strong></div><p class="vf-caption">Sources of funds · borrowing and reimbursements stay distinct.</p>${inflows.some(r => r.amount_cents > 0) ? '<div class="vf-chart vf-donut"><canvas id="vf-income-chart" role="img" aria-label="Incoming funds by source; select a source to explore"></canvas></div>' : '<p class="vf-empty">No recorded incoming funds.</p>'}${slicesHtml(inflows, 'in')}</section><section class="vf-pie-panel"><div class="vf-pie-heading"><h3>${partialSpending() ? 'Recorded costs' : state.basis === 'spending' ? 'Money spent' : 'Money leaving accounts'}</h3><strong>${precise(spendingValue())}</strong></div><p class="vf-caption">${partialSpending() ? 'Recorded purchases and refunds · tax payment split pending.' : state.basis === 'spending' ? 'Purchases when made · card and loan repayments excluded.' : 'Actual cash payments · repayments are included.'}</p>${categories.some(r => r.amount_cents > 0) ? '<div class="vf-chart vf-donut"><canvas id="vf-spending-chart" role="img" aria-label="Outgoing categories; select a category to explore"></canvas></div>' : '<p class="vf-empty">No recorded outgoing costs.</p>'}${slicesHtml(categories, 'out')}${categories.some(r => r.amount_cents < 0) ? '<p class="vf-caption">Net-refund categories remain in the list and totals; negative amounts are not pie slices.</p>' : ''}</section></div></section>`;
+    return `<section class="vf-period-panel"><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(rangeLabel(report?.range ?? dates()))}</span><h2>Where your money goes</h2></div>${button('View all transactions', 'ledger-all')}</div><div class="vf-pie-pair"><section class="vf-pie-panel"><div class="vf-pie-heading"><h3>Money coming in</h3><strong>${periodMoney(report?.summary?.inflow_cents)}</strong></div><p class="vf-caption">Sources of funds · borrowing and reimbursements stay distinct.</p>${inflows.some(r => r.amount_cents > 0) ? '<div class="vf-chart vf-donut"><canvas id="vf-income-chart" role="img" aria-label="Incoming funds by source; select a source to explore"></canvas></div>' : '<p class="vf-empty">No recorded incoming funds.</p>'}${slicesHtml(inflows, 'in')}</section><section class="vf-pie-panel"><div class="vf-pie-heading"><h3>${partialSpending() ? 'Recorded costs' : state.basis === 'spending' ? 'Money spent' : 'Money leaving accounts'}</h3><strong>${periodMoney(spendingValue())}</strong></div><p class="vf-caption">${partialSpending() ? 'Recorded purchases and refunds · tax payment split pending.' : state.basis === 'spending' ? 'Purchases when made · card and loan repayments excluded.' : 'Actual cash payments · repayments are included.'}</p>${categories.some(r => r.amount_cents > 0) ? '<div class="vf-chart vf-donut"><canvas id="vf-spending-chart" role="img" aria-label="Outgoing categories; select a category to explore"></canvas></div>' : '<p class="vf-empty">No recorded outgoing costs.</p>'}${slicesHtml(categories, 'out')}${categories.some(r => r.amount_cents < 0) ? '<p class="vf-caption">Net-refund categories remain in the list and totals; negative amounts are not pie slices.</p>' : ''}</section></div></section>`;
   }
 
   function trendHtml() {
@@ -197,24 +214,27 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   }
 
   function envelopeCards(limit = null) {
-    if (getContext().account_id) return `<div class="vf-empty"><h3>Your budgets cover all accounts</h3><p>A single account cannot show what remains across your whole spending plan.</p>${button('Show all accounts', 'all-accounts')}</div>`;
+    if (getContext().account_id) return `<div class="vf-empty"><h3>Your budgets cover all accounts</h3>${button('Show all accounts', 'all-accounts')}</div>`;
     const rows = financeBudgetRows(envelopes), selected = limit ? rows.slice(0, limit) : rows;
     if (envelopes?.error) return `<div class="vf-error" role="status">Budgets could not load. ${esc(envelopes.error)} ${button('Try again', 'retry')}</div>`;
-    if (!rows.length) return `<div class="vf-empty"><h3>Give each category a plan</h3><p>No reviewed budget targets are available for this month.</p>${button('Set up a budget', 'legacy-budget')}</div>`;
-    return `<div class="vf-envelope-grid">${selected.map((row, index) => {
-      if (row.mode === 'fund' && row.fund) {
-        const fund=row.fund,saved=number(fund.saved_cents),cap=number(fund.target_cents),progress=saved===null||cap===null?null:cap===0?100:Math.min(100,Math.max(0,saved/cap*100));
-        return `<article class="vf-envelope-shell"><button type="button" class="vf-envelope vf-fund-envelope" data-action="vf-envelope" data-index="${index}"><span class="vf-envelope-label"><span class="vf-swatch" style="background:${financeColor(row.category)}"></span>${esc(row.label)}<span aria-hidden="true">›</span></span><strong>${saved===null?'Saved amount needs review':precise(saved)}</strong><span>${cap===null?'Fund target needs review':`saved toward ${precise(cap)} fund target`}</span><div class="vf-budget-track" ${progress===null?'':`role="progressbar" aria-label="${esc(row.label)} fund progress" aria-valuenow="${Math.round(progress)}" aria-valuemin="0" aria-valuemax="100"`}><i style="width:${progress??0}%;background:${financeColor(row.category)}"></i></div><small>${number(fund.monthly_cents)===null?'Monthly contribution needs review':`${precise(fund.monthly_cents)} planned per month`}</small><small>${row.bank_spent_cents===null?'Category spending history unavailable':`${precise(row.bank_spent_cents??row.spent_cents)} bank-recorded category spending`}</small><small>Saved progress is separate from category spending and bank cash.</small></button></article>`;
+    if (!rows.length) return `<div class="vf-empty"><h3>No category budgets yet</h3>${button('Set up a budget', 'legacy-budget')}</div>`;
+    const money = amount => amount === null ? '—' : precise(amount);
+    return `<div class="vf-envelope-grid vf-budget-list">${selected.map((row, index) => {
+      const color = financeColor(row.category ?? row.key), compact = financeBudgetCompact(row, {future: envelopes?.future === true});
+      let used = compact.plan === null || compact.spent === null ? null : compact.plan === 0 ? (compact.spent > 0 ? 100 : 0) : Math.min(100, Math.max(0, compact.spent / compact.plan * 100));
+      let allowance = compact.plan === null ? row.uses_parent_budget ? 'Shared budget' : '— budget' : `${money(compact.plan)}${row.target_status === 'draft' ? ' est.' : ''} ${row.partial_period ? 'dated budget' : 'budget'}`;
+      let spent = compact.needsSplit && compact.spent === 0 ? 'Needs split' : `${money(compact.spent)} spent`;
+      let left = `${compact.needsSplit && compact.left !== null && compact.left >= 0 ? '≤ ' : ''}${money(compact.left)} left${compact.estimated ? ' · est.' : ''}`;
+      if(row.mode === 'income_percentage') allowance = Number.isSafeInteger(row.rate_bps) ? `${row.rate_bps / 100}% of take-home` : 'Income rule';
+      if(row.mode === 'fund') {
+        const saved = number(row.fund?.saved_cents), cap = number(row.fund?.target_cents);
+        allowance = `${money(cap)} fund target`;
+        spent = `${money(saved)} saved`;
+        left = cap === null || saved === null ? '— to save' : `${money(Math.max(0,cap-saved))} to save`;
+        used = saved === null || cap === null ? null : cap === 0 ? 100 : Math.min(100,Math.max(0,saved/cap*100));
       }
-
-      const presentation = financeBudgetPresentation(row, {future: envelopes?.future === true});
-      const remaining = row.remaining_cents, target = row.target_cents;
-      const used = remaining === null || target === null || row.spent_cents === null ? null : target === 0 ? (row.spent_cents > 0 ? 100 : 0) : Math.min(100, Math.max(0, row.spent_cents / target * 100));
-      const bank = row.bank_spent_cents === undefined ? row.spent_cents : number(row.bank_spent_cents);
-      const actual = bank === null ? (envelopes?.future ? 'Actual spending is not available yet' : 'Spending history not available') : `${precise(bank)} ${row.category_review_pending ? 'recorded / estimated spending' : row.bank_spent_cents === undefined ? 'recorded spending' : 'bank-recorded spending'}`;
-      const cash = row.reported_cash_as_of && number(row.reported_cash_spent_cents) !== null ? ` + ${precise(row.reported_cash_spent_cents)} reported cash through ${esc(row.reported_cash_as_of)}` : '';
-      const dates = row.partial_period && row.plan_period ? `${row.plan_period.from} – ${row.plan_period.through}` : row.rollover ? 'Rolling fund' : 'Resets monthly';
-      return `<article class="vf-envelope-shell"><button type="button" class="vf-envelope ${remaining !== null && remaining < 0 ? 'vf-over-budget' : ''}" data-action="vf-envelope" data-index="${index}"><span class="vf-envelope-label"><span class="vf-swatch" style="background:${financeColor(row.category ?? row.key)}"></span>${esc(row.label)}<span aria-hidden="true">›</span></span><strong>${presentation.value === null ? esc(presentation.text) : precise(presentation.value)}</strong><span>${esc(presentation.caption)}</span>${presentation.messages.map(message => `<small class="vf-envelope-reason">${esc(message)}</small>`).join('')}<div class="vf-budget-track" ${used === null ? '' : `role="progressbar" aria-label="${esc(row.label)} budget used" aria-valuenow="${Math.round(used)}" aria-valuemin="0" aria-valuemax="100"`}><i style="width:${used ?? 0}%;background:${financeColor(row.category ?? row.key)}"></i></div><small>${esc(actual)}${cash}${row.pending_cents ? ` · ${precise(row.pending_cents)} pending` : ''}</small><small>${row.program_label ? esc(row.program_label) + ' · ' : ''}${esc(dates)}${row.carryover_cents ? ` · ${precise(row.carryover_cents)} carried forward` : ''}</small>${cash ? '<small>Cash report is budget only; transaction charts exclude it.</small>' : ''}</button>${presentation.action ? `<div class="vf-envelope-actions">${button(presentation.action, 'legacy-budget')}</div>` : ''}${row.source_notes?.length ? `<details class="vf-envelope-notes"><summary>Plan notes</summary>${row.source_notes.map(note => `<p>${esc(note)}</p>`).join('')}</details>` : ''}</article>`;
+      const over = row.mode !== 'fund' && compact.left !== null && compact.left < 0;
+      return `<article class="vf-envelope-shell"><button type="button" class="vf-envelope vf-budget-list-row ${over ? 'vf-over-budget' : ''}" data-action="vf-envelope" data-index="${index}"><span class="vf-budget-row-heading"><span class="vf-envelope-label"><span class="vf-swatch" style="background:${color}"></span>${esc(row.label)}</span><span class="vf-budget-row-limit">${esc(allowance)}</span></span><span class="vf-budget-track ${used === null ? 'vf-budget-track-unknown' : ''}" ${used === null ? '' : `role="progressbar" aria-label="${esc(row.label)} ${row.mode === 'fund' ? 'fund progress' : 'budget used'}" aria-valuenow="${Math.round(used)}" aria-valuemin="0" aria-valuemax="100"`}><i style="width:${used ?? 0}%;background:${over ? '#b4533d' : color}"></i></span><span class="vf-budget-row-amounts"><span>${esc(spent)}</span><b>${esc(left)}</b></span></button></article>`;
     }).join('')}</div>`;
   }
 
@@ -224,10 +244,11 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     if (error) return `<section class="vf-error" role="alert"><h2>This financial view could not load</h2><p>${esc(error)}</p>${button('Try again', 'retry')}</section>`;
     if (!report) return '<section class="vf-empty" role="status">Loading your financial picture…</section>';
     const covered = coverageHtml();
-    if (view === 'budget') return `<div class="vf-finance" aria-busy="${loading}"><div class="vf-section-heading">${programPicker()}<div><span class="vf-eyebrow">Your monthly spending plan</span><h2>What’s left to spend</h2></div><label>Budget month<input type="month" data-vf-input="budget-month" value="${esc(state.budgetMonth)}"></label>${button('Manage targets', 'legacy-budget')}${button('Add category / program', 'definitions')}</div>${envelopeCards()}<p class="vf-caption">Purchases count when made. Card and loan repayments do not consume a purchase category a second time.</p>${covered}</div>`;
-    const emptyToday = report.scope?.calendar_range==='day' && report.coverage?.history_available===true && report.coverage?.selected_range_has_evidence===false;
-    const latestNote = emptyToday ? `Latest recorded activity: ${report.coverage.latest_recorded_on??'date not recorded'}. Bank feeds may arrive later.` : null;
-    const metrics = `<div class="vf-stat-row">${stats('Money coming in', report.summary?.inflow_cents, latestNote??'Sources of funds','',emptyToday?'No receipts recorded today':null)}${stats(partialSpending() ? 'Recorded costs' : state.basis === 'spending' ? 'Purchases & costs' : 'Bank cash out', spendingValue(), partialSpending() ? 'Tax payment split pending' : latestNote??rangeLabel(report.range),'',emptyToday?'No purchases recorded today':null)}${!getContext().account_id && Number.isSafeInteger(envelopes?.summary?.remaining_cents) ? stats('Budget left this month', envelopes.summary.remaining_cents, monthLabel(state.budgetMonth), 'vf-budget-stat') : ''}</div>`;
+    if (view === 'budget') return `<div class="vf-finance" aria-busy="${loading}"><div class="vf-section-heading">${programPicker()}<div><span class="vf-eyebrow">Your monthly spending plan</span><h2>What’s left to spend</h2></div><label>Budget month<input type="month" data-vf-input="budget-month" value="${esc(state.budgetMonth)}"></label>${button('Manage targets', 'legacy-budget')}${button('Add category / program', 'definitions')}</div>${envelopeCards()}</div>`;
+    const emptyToday = emptyRecordedPeriod();
+    const latest = report.coverage?.latest_recorded_on;
+    const latestNote = emptyToday ? latest && /^\d{4}-\d{2}-\d{2}$/.test(latest) ? `Bank activity through ${new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',timeZone:'UTC'}).format(new Date(latest+'T12:00:00Z'))}` : 'No bank activity yet' : null;
+    const metrics = `<div class="vf-stat-row">${stats('Money coming in', report.summary?.inflow_cents, latestNote??'Sources of funds','',emptyToday?'None recorded':null)}${stats(partialSpending() ? 'Recorded costs' : state.basis === 'spending' ? 'Purchases & costs' : 'Bank cash out', spendingValue(), partialSpending() ? 'Tax payment split pending' : latestNote??rangeLabel(report.range),'',emptyToday?'None recorded':null)}${!getContext().account_id && Number.isSafeInteger(envelopes?.summary?.remaining_cents) ? stats('Budget left this month', envelopes.summary.remaining_cents, monthLabel(state.budgetMonth), 'vf-budget-stat') : ''}</div>`;
     if (view === 'overview') {const budgets = `<section class="vf-budget-preview"><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(monthLabel(state.budgetMonth))}</span><h2>What’s left in your budgets</h2></div>${programPicker()}${button('All budgets', 'navigate', 'data-view="budget"')}</div>${envelopeCards(6)}</section>`;return `<div class="vf-finance" aria-busy="${loading}">${metrics}${overviewActions()}${piesHtml()}${budgets}${trendHtml()}${homeBills()}${covered}</div>`;}
     return `<div class="vf-finance" aria-busy="${loading}">${controls()}${breadcrumbs()}${state.category ? categoryHtml() : state.ledger ? ledgerHtml(report.entries ?? [], 'Period transactions') : `${metrics}${trendHtml()}${piesHtml()}`}${covered}</div>`;
   }

@@ -17,6 +17,18 @@ const checks=[];
 try{
  await exec('php',['artisan','migrate','--force','--no-interaction'],{cwd:base,env,maxBuffer:2e6});
  const fixture=JSON.parse((await exec('php',['scripts/trajectory/profit-loss-browser-fixture.php'],{cwd:base,env})).stdout);
+ const seed=join(dir,'budget-plan.php');
+ await writeFile(seed,`<?php
+ require ${JSON.stringify(join(base,'vendor/autoload.php'))};
+ $app=require ${JSON.stringify(join(base,'bootstrap/app.php'))};$app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();
+ if(!app()->environment('testing')||config('database.default')!=='sqlite'||realpath(config('database.connections.sqlite.database'))!==realpath(${JSON.stringify(join(dir,'db.sqlite'))}))throw new RuntimeException('Disposable fixture only');
+ $space=App\\Models\\Trajectory\\Space::findOrFail(${Number(fixture.space_id)});$owner=App\\Models\\User::where('email','flow@fixture.invalid')->firstOrFail();
+ app(App\\Services\\Trajectory\\RecordService::class)->save($owner,$space,'budget','Fictional planned debt payments',['category'=>'transport','monthly_cents'=>10000,'purpose'=>'debt_payment','effective_on'=>now($space->timezone)->startOfMonth()->toDateString(),'reviewed'=>true]);
+ $service=app(App\\Services\\Trajectory\\RecordService::class);$start=now($space->timezone)->startOfMonth()->toDateString();$end=now($space->timezone)->endOfMonth()->toDateString();$parts=[];
+ foreach([1000,2000] as $amount){$parts[]=$service->save($owner,$space,'budget','Fictional utility source',['category'=>'utilities','purpose'=>'spending','monthly_cents'=>$amount,'effective_on'=>$start,'reviewed'=>true])->id;}
+ $merged=$service->save($owner,$space,'budget','Fictional combined utilities',['category'=>'utilities','purpose'=>'spending','monthly_cents'=>3000,'effective_on'=>$start,'ends_on'=>$end,'reviewed'=>true,'month_only'=>true,'supersedes_record_ids'=>$parts]);
+ echo json_encode(['id'=>$merged->id,'sources'=>$parts]);
+ `);const combinedBudget=JSON.parse((await exec('php',[seed],{cwd:base,env})).stdout);
  server=spawn('php',['artisan','serve','--host=127.0.0.1',`--port=${port}`,'--no-reload'],{cwd:base,env,stdio:'ignore'});
  await expect.poll(async()=>{try{return(await fetch(origin+'/up')).ok;}catch{return false;}}).toBe(true);
  for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
@@ -56,6 +68,37 @@ try{
    await page.route('**/dashboard?*',async route=>{const response=await route.fetch();await reloadGate;reloadDelivered=true;await route.fulfill({response});});
    await page.reload();await expect(page.locator('#vf-income-chart')).toBeVisible();assert.equal(reloadDelivered,false,'A browser/pull reload also paints before legacy details');
    await expect(page.locator('#tr-add')).toBeDisabled();releaseReload();await expect(page.locator('#tr-add')).toBeEnabled();
+   // Advanced import/setup stays on desktop; phone users adjust category budgets.
+   await primary('budget');await openReportControls(page);
+   try{await page.getByRole('button',{name:'Manage targets',exact:true}).click();}
+   catch(error){console.error(JSON.stringify({engine:name,width,budgetNavigation:await page.locator('#tr-content').innerText(),errors,recentReads:reads.slice(-12)}));throw error;}
+   await closeReportControls(page);
+   const setup=page.locator('.tr-budget-desktop-setup'),phoneBudget=page.getByRole('button',{name:'View category budgets',exact:true});
+   if(width===390){
+    await expect(setup).toBeHidden();await expect(page.getByRole('button',{name:'Import budget CSV',exact:true})).toBeHidden();await expect(phoneBudget).toBeVisible();
+    assert.ok(await phoneBudget.evaluate(node=>node.getBoundingClientRect().right<=innerWidth),'Phone budget action fits the viewport');
+    await phoneBudget.click();await expect(page.getByRole('heading',{name:'What’s left to spend',exact:true})).toBeVisible();
+   }else{
+    await expect(setup).toBeVisible();await expect(page.getByRole('button',{name:'Import budget CSV',exact:true})).toBeVisible();await expect(phoneBudget).toBeHidden();
+    await expect(setup).toContainText('Planned debt payments');assert.doesNotMatch(await setup.innerText(),/Debt cash reserve/);
+    await page.locator(`[data-action="edit"][data-id="${combinedBudget.id}"]`).click();
+    await expect(page.locator('#tr-dialog')).toBeVisible();assert.equal(await page.locator('#tr-dialog [name="supersedes_record_ids"],#tr-dialog [name="month_only"]').count(),0);
+    await page.locator('#tr-dialog [name="name"]').fill('Fictional combined utilities edited');
+    const nativeEdit=page.waitForRequest(request=>request.method()==='PATCH'&&new URL(request.url()).pathname.endsWith(`/records/${combinedBudget.id}`));
+    await page.locator('#tr-save').click();const savedPayload=(await nativeEdit).postDataJSON();assert.deepEqual(savedPayload.data.supersedes_record_ids,combinedBudget.sources);assert.equal(savedPayload.data.month_only,true);assert.equal(savedPayload.data.carry_forward,true);
+    await expect(page.locator('#tr-dialog')).toBeHidden();await expect(page.locator('#tr-add')).toBeEnabled();
+   }
+   await primary('overview');
+   if(width===390){
+    const navigation=page.locator('.vf-mobile-nav'),before=await navigation.boundingBox();
+    assert.equal(await navigation.evaluate(node=>node.parentElement===document.body),true,'Phone tabs are independent of the scrolling app content');
+    await page.evaluate(()=>window.scrollTo(0,600));await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBeGreaterThan(0);
+    const after=await navigation.boundingBox();assert.ok(Math.abs(before.y-after.y)<1,'The bottom tabs stay pinned while content scrolls');
+    await primary('budget');await expect(navigation.locator('[data-tab="budget"]')).toHaveAttribute('aria-current','page');
+    await expect(page.getByRole('heading',{name:'What’s left to spend',exact:true})).toBeVisible();
+    await primary('overview');
+   }
+   await expect(page.locator('#vf-income-chart')).toBeVisible();await expect(page.locator('#tr-content')).toHaveAttribute('aria-busy','false');
    // Period changes render the exact canonical in-memory subset before fresh
    // requests finish; no larger/older range is fabricated from a smaller one.
    let releasePeriod,periodDelivered=false;const periodGate=new Promise(done=>{releasePeriod=done;});
@@ -70,6 +113,14 @@ try{
    if(contained){await expect(page.locator('.vf-finance')).toBeVisible();assert.equal(periodDelivered,false,'A contained Week uses exact month entry keys');await expect(page.locator('#tr-context')).toContainText(shortDate(week.from)+' – '+shortDate(week.through));}
    else await expect(page.locator('.vf-finance')).toHaveCount(0);
    releasePeriod();await expect(page.locator('#tr-add')).toBeEnabled();await expect(page.locator('#tr-context')).toContainText(shortDate(week.from)+' – '+shortDate(week.through));
+   const freshDay=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith('/analysis')&&new URL(response.url()).searchParams.get('range')==='day');
+   await selectReportRange(page,'day');await closeReportControls(page);
+   const freshDayReport=await(await freshDay).json();await expect(page.locator('#tr-add')).toBeEnabled();await expect(page.locator('#tr-content')).toHaveAttribute('aria-busy','false');
+   if(freshDayReport.coverage.history_available&&freshDayReport.coverage.selected_range_has_evidence===false){
+    await expect(page.locator('.vf-pie-heading strong')).toHaveText(['None recorded','None recorded']);
+    await expect(page.locator('.vf-stat-row')).toContainText('None recorded');
+    assert.doesNotMatch(await page.locator('.vf-stat-row').innerText(),/Unavailable|No receipts recorded today|No purchases recorded today/);
+   }
    // A refresh invalidates the dated memory cohort instead of presenting it as fresh.
    let releaseExplicit;const explicitGate=new Promise(done=>{releaseExplicit=done;});
    await page.route('**/analysis?*',async route=>{const response=await route.fetch();await explicitGate;try{await route.fulfill({response});}catch{}});

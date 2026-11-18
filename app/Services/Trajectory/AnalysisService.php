@@ -25,7 +25,7 @@ class AnalysisService
         abort_if($accountId !== null && ! $accounts->contains('id', $accountId), 404);
         $programs = Record::where('space_id', $space->id)->where('kind', 'program')->where('active', true)->get();
         abort_if($programId !== null && ! $programs->contains('id', $programId), 404);
-        $entries = collect(app(LedgerService::class)->entries($space, null, $today->toDateString(), accountId: $accountId, viewer: $viewer));
+        $entries = collect(app(LedgerService::class)->entries($space, null, $today->toDateString(), accountId: $accountId));
         $economic = app(AttributionService::class)->expandEntries($space, $entries->all(), $programId, $viewer);
         $economic = collect($economic);
         $calendarRange = $options['range'] ?? (isset($options['from']) ? 'custom' : 'month');
@@ -81,6 +81,7 @@ class AnalysisService
             return $entry;
         });
         $selected = $this->selection($cash, $expenses, $economic, $from, $through, $basis);
+        $selected = $this->decorateSelectedIdentity($viewer, $space, $entries, $selected);
         $selectedAccounts = $accountId ? $accounts->where('id', $accountId) : $accounts;
         $selectedCovered = $selectedAccounts->isNotEmpty() && $selectedAccounts->every(fn ($account) => $account->history_start
             && $account->history_start->toDateString() <= $from && $account->observed_at && $account->observed_at->toDateString() >= $through);
@@ -173,9 +174,35 @@ class AnalysisService
                 ]))]];
     }
 
+    /** Historical rows support numeric comparisons; private identity is needed only for this period's DTOs. */
+    private function decorateSelectedIdentity(User $viewer, Space $space, Collection $history, array $selected): array
+    {
+        $ids = collect([...$selected['cash']->all(), ...$selected['economic']->all(), ...$selected['expenses']->all()])
+            ->pluck('id')->unique()->values()->all();
+        if ($ids === []) {
+            return $selected;
+        }
+        // Preserve the original source classification for identity wording. A tax
+        // cost component or full cash projection may have a different flow/amount.
+        $base = $history->whereIn('id', $ids)->unique('id')->values()->all();
+        if ($base === []) {
+            return $selected;
+        }
+        $identity = collect(app(TransactionIdentityService::class)->decorate($viewer, $space, $base))->keyBy('id');
+        foreach (['cash', 'economic', 'receipts', 'expenses'] as $kind) {
+            $selected[$kind] = $selected[$kind]->map(function ($entry) use ($identity) {
+                $source = $identity->get($entry['id']);
+
+                return $source ? [...$entry, 'merchant' => $source['merchant'], 'source_identity' => $source['source_identity']] : $entry;
+            });
+        }
+
+        return $selected;
+    }
+
     private function selection(Collection $cash, Collection $expenses, Collection $economic, string $from, string $through, string $basis): array
     {
-        $slice = fn ($rows) => $rows->where('date', '>=', $from)->where('date', '<=', $through)->values();
+        $slice = fn ($rows) => $rows->filter(fn ($row) => $row['date'] >= $from && $row['date'] <= $through)->values();
         $c = $slice($cash);
         $e = $slice($economic);
 

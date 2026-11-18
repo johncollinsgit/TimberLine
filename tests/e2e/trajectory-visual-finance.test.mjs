@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createVisualFinance, financeBudgetRows, financeBudgetPresentation, financeColor, financeSelectionRows, sortFinanceEntries} from '../../resources/js/trajectory/visual-finance.js';
+import {createVisualFinance, financeBudgetRows, financeBudgetPresentation, financeBudgetCompact, financeColor, financeSelectionRows, sortFinanceEntries} from '../../resources/js/trajectory/visual-finance.js';
 
 const esc = x => String(x ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');
 const precise = x => Number.isSafeInteger(x) ? `$${(x / 100).toFixed(2)}` : 'Unavailable';
@@ -48,7 +48,7 @@ test('incoming refund receipts and economic refunds remain separate drilldown po
 });
 test('unknown budget allowance is not zero; real zero and overspending are retained', () => {
   const rows = financeBudgetRows({rows: [{category: 'a', target_cents: null, spent_cents: 100, remaining_cents: null}, {category: 'b', target_cents: 0, remaining_cents: -100}, {category: 'c', target_cents: 100, remaining_cents: 0}]});
-  assert.equal(rows[0].remaining_cents, null); assert.equal(rows[1].remaining_cents, -100); assert.equal(rows[2].remaining_cents, 0);
+  assert.equal(rows.find(row=>row.category==='a').remaining_cents, null); assert.equal(rows.find(row=>row.category==='b').remaining_cents, -100); assert.equal(rows.find(row=>row.category==='c').remaining_cents, 0);
   assert.equal(financeColor('groceries'), financeColor('groceries'));
 });
 test('default month requests exact scope and home puts incoming/spending charts before budget cards', async () => {
@@ -207,8 +207,8 @@ test('background figures retain exact drilldown and do not apply after an interv
 test('budget presentation explains each missing allowance without substituting zero or hiding a known plan', () => {
   const row = {target_cents: null, planned_cents: 48000, remaining_cents: null, status: 'draft', reasons: ['draft', 'partial_period', 'tax_split_pending'], partial_period: true};
   const draft = financeBudgetPresentation(row);
-  assert.equal(draft.value, 48000);assert.equal(draft.caption, 'Draft allowance');assert.equal(draft.action, 'Confirm budget…');
-  assert.deepEqual(draft.messages, ['Draft · needs confirmation', 'Dated plan · not a full-month allowance', 'Tax split pending']);
+  assert.equal(draft.value, 48000);assert.equal(draft.caption, 'Draft allowance');assert.equal(draft.action, null);
+  assert.deepEqual(draft.messages, ['Estimated plan', 'Dated plan · not a full-month allowance', 'Tax split pending']);
   for (const [reason, message] of [['cash_not_recorded', 'Cash spending is not fully recorded'], ['category_review_pending', 'Spending categories still need review'], ['needs_opening_balance', 'Reviewed rollover opening needed'], ['needs_prior_month_close', 'Previous month must close before rollover is known'], ['overlapping_targets', 'Parent and child allowances overlap · review targets']]) {
     const presentation = financeBudgetPresentation({target_cents: 35000, planned_cents: 35000, remaining_cents: null, reasons: [reason]});
     assert.equal(presentation.value, 35000);assert.ok(presentation.messages.includes(message));
@@ -221,6 +221,22 @@ test('budget presentation explains each missing allowance without substituting z
   assert.equal(future.value, 35000);assert.equal(future.caption, 'Approved monthly plan');assert.deepEqual(future.messages, ['Plan for a future month']);
 });
 
+test('compact budgets distinguish estimated left from exact allowance and never certify an empty unsplit child', () => {
+  const row = {target_cents:35000, planned_cents:35000, spent_cents:0, remaining_cents:null, estimated_remaining_cents:35000, reasons:['needs_split'], category_review_pending:true};
+  const compact = financeBudgetCompact(row);
+  assert.equal(compact.needsSplit,true);assert.equal(compact.estimated,true);assert.equal(compact.tag,'Needs split');assert.equal(compact.left,35000);
+  assert.equal(row.remaining_cents,null);
+  const future = financeBudgetCompact(row,{future:true});assert.equal(future.spent,null);assert.equal(future.left,null);
+  const missing = financeBudgetCompact({target_cents:35000,spent_cents:null,remaining_cents:null});assert.equal(missing.left,null);
+});
+
+test('budget list orders numeric allowances highest first without reordering native evidence or inventing missing caps', () => {
+  const source={rows:[{key:'small',label:'Clothes',planned_cents:10000},{key:'unknown',label:'Missing',planned_cents:null},{key:'large',label:'Groceries',target_cents:140000},{key:'fund',label:'Travel fund',mode:'fund',fund:{target_cents:100000}},{key:'zero',label:'Zero',target_cents:0}]};
+  const before=structuredClone(source);
+  assert.deepEqual(financeBudgetRows(source).map(row=>row.key),['large','fund','small','zero','unknown']);
+  assert.deepEqual(source,before);
+});
+
 test('budget cards show dated drafts and recorded-only grocery costs while preserving unknown remaining amounts', async () => {
   const budgets = {future: false, rows: [
     {key: '0|groceries', category: 'groceries', label: 'Groceries', target_cents: 140000, planned_cents: 140000, remaining_cents: null, spent_cents: 64000, reasons: ['cash_not_recorded'], source_notes: ['Cash <spending> is not yet known.']},
@@ -231,10 +247,10 @@ test('budget cards show dated drafts and recorded-only grocery costs while prese
   ]};
   const {ui} = fixture(async path => path.includes('budget-envelopes') ? budgets : structuredClone(report));await ui.refresh();
   const html = ui.render('budget');
-  assert.doesNotMatch(html, /Unavailable|\$0\.00/);assert.match(html, /\$1400\.00/);assert.match(html, /\$640\.00 recorded spending/);
-  assert.match(html, /Cash spending is not fully recorded/);assert.match(html, /\$210\.00 recorded \/ estimated spending/);
-  assert.match(html, /\$450\.00/);assert.match(html, /2028-02-17 – 2028-02-29/);assert.match(html, /Confirm budget…/);
-  assert.match(html, /Set budget…/);assert.match(html, /Spending history not available/);assert.match(html, /Cash &lt;spending> is not yet known/);
+  assert.doesNotMatch(html, /Unavailable|\$0\.00/);assert.match(html, /\$1400\.00/);assert.match(html, /\$640\.00 spent/);
+  assert.match(html, /\$210\.00 spent/);assert.match(html, /— left/);
+  assert.match(html, /\$450\.00/);assert.match(html, /dated budget/);assert.doesNotMatch(html, /Confirm budget…/);
+  assert.match(html, /vf-budget-list/);assert.doesNotMatch(html, /vf-envelope-notes|vf-envelope-actions|Confirm budget|Set budget…|Cash &lt;spending>/);
   assert.equal(budgets.rows[0].remaining_cents, null);
 });
 
@@ -243,21 +259,23 @@ test('owner reported monthly cash is visible separately and is not presented as 
     bank_spent_cents: 64000, reported_cash_spent_cents: 50000, reported_cash_as_of: '2028-02-15', spent_cents: 114000, remaining_cents: 26000}]};
   const {ui} = fixture(async path => path.includes('budget-envelopes') ? budgets : structuredClone(report));await ui.refresh();
   const html = ui.render('budget');
-  assert.match(html, /\$640\.00 bank-recorded spending \+ \$500\.00 reported cash through 2028-02-15/);
-  assert.match(html, /\$260\.00/);assert.match(html, /left after bank and reported cash spending/);
-  assert.match(html, /Cash report is budget only; transaction charts exclude it/);
+  assert.match(html, /\$1140\.00 spent/);
+  assert.match(html, /\$260\.00 left/);
+  assert.match(html, /vf-budget-list/);
   assert.equal(ui.getReport().summary.spending_cents, 15000);
 });
 
 
 test('fund cards show actual saved progress and contribution rather than a monthly spending cap',async()=>{
  const {ui}=fixture(async path=>path.includes('budget-envelopes')?{month:'2028-02',rows:[{key:'0|travel',category:'travel',label:'Travel fund',mode:'fund',target_cents:null,planned_cents:30000,spent_cents:0,bank_spent_cents:0,remaining_cents:null,fund:{saved_cents:0,target_cents:100000,monthly_cents:16667}}],summary:{remaining_cents:null}}:structuredClone(report));await ui.refresh();const html=ui.render('budget');
- assert.match(html,/\$0\.00<\/strong>/);assert.match(html,/saved toward \$1000\.00 fund target/);assert.match(html,/\$166\.67 planned per month/);assert.doesNotMatch(html,/\$300\.00|left after recorded spending/);
+ assert.match(html,/\$0\.00 saved/);assert.match(html,/\$1000\.00 fund target/);assert.match(html,/\$1000\.00 to save/);assert.doesNotMatch(html,/\$300\.00|\$166\.67|\$0\.00 spent/);
 });
 
 
 test('Today with known history and no new records explains the gap without inventing zero actuals',async()=>{
  const today={...structuredClone(report),range:{from:'2028-02-15',through:'2028-02-15'},scope:{calendar_range:'day'},summary:{inflow_cents:null,spending_cents:null,recorded_spending_cents:null},entries:[],inflows:[],categories:[],coverage:{complete:false,history_available:true,latest_recorded_on:'2028-02-14',selected_range_has_evidence:false,selected_range_covered:false}};
  const {ui}=fixture(async path=>path.includes('budget-envelopes')?{rows:[]}:today);await ui.refresh();const html=ui.render('overview');
- assert.match(html,/No receipts recorded today/);assert.match(html,/No purchases recorded today/);assert.match(html,/Latest recorded activity: 2028-02-14/);assert.match(html,/Bank feeds may arrive later/);assert.doesNotMatch(html,/\$0\.00/);assert.equal(ui.getReport().summary.spending_cents,null);
+ assert.match(html,/None recorded/);assert.match(html,/Bank activity through Feb 14/);
+ assert.match(html,/<h3>Money coming in<\/h3><strong>None recorded<\/strong>/);assert.match(html,/<h3>Money spent<\/h3><strong>None recorded<\/strong>/);
+ assert.doesNotMatch(html,/No receipts recorded today|No purchases recorded today|Latest recorded activity:/);assert.doesNotMatch(html,/\$0\.00/);assert.equal(ui.getReport().summary.spending_cents,null);
 });

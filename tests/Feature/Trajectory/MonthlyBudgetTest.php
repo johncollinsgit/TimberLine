@@ -47,7 +47,7 @@ test('same-date line items add within their category and purpose instead of losi
 
 test('latest expired targets do not revive older holiday budgets', function (): void {
     $old = ($this->target)(['monthly_cents' => 70000, 'effective_on' => '2026-11-01']);
-    $holiday = ($this->target)(['monthly_cents' => 90000, 'effective_on' => '2026-12-01', 'ends_on' => '2026-12-31']);
+    $holiday = ($this->target)(['monthly_cents' => 90000, 'effective_on' => '2026-12-01', 'ends_on' => '2026-12-31', 'carry_forward' => false]);
     $result = ($this->build)([$old, $holiday]);
     expect($result['reviewed_spending_cents'])->toBeNull()
         ->and($result['draft_spending_cents'])->toBeNull()
