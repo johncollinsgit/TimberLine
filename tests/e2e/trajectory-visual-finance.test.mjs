@@ -51,12 +51,17 @@ test('unknown budget allowance is not zero; real zero and overspending are retai
   assert.equal(rows[0].remaining_cents, null); assert.equal(rows[1].remaining_cents, -100); assert.equal(rows[2].remaining_cents, 0);
   assert.equal(financeColor('groceries'), financeColor('groceries'));
 });
-test('default month requests exact scope and home puts budget remaining before charts', async () => {
-  const {ui, calls} = fixture(); await ui.refresh();
+test('default month requests exact scope and home puts incoming/spending charts before budget cards', async () => {
+  const {ui, calls, ctx} = fixture(); await ui.refresh();
   assert.match(calls[0].path, /analysis\?year=2028&grain=month&from=2028-02-01&through=2028-02-15&basis=spending/);
   assert.match(calls[1].path, /budget-envelopes\?month=2028-02/);
+  for(const scope of ['personal','business']){
+    ctx.scope=scope;const home=ui.render('overview'),budgets=home.indexOf('class="vf-budget-preview"');
+    assert.ok(budgets>=0);
+    for(const marker of ['class="vf-stat-row"','id="vf-income-chart"','id="vf-spending-chart"'])assert.ok(home.indexOf(marker)>=0&&home.indexOf(marker)<budgets,`${scope}: ${marker} precedes budget cards`);
+    assert.equal((home.match(/class="vf-budget-preview"/g)||[]).length,1);
+  }
   const html = ui.render('overview');
-  assert.ok(html.indexOf('What’s left in your budgets') < html.indexOf('Money coming in'));
   assert.ok(html.includes('Purchases when made')); assert.ok(!html.includes('funding-gap'));
 });
 test('period → category → child → inline ledger remembers navigation and largest sort', async () => {
@@ -116,6 +121,16 @@ test('space/account context changes clear private selection and request the new 
   const {ui, ctx, calls} = fixture();await ui.refresh();await ui.handleClick({dataset: {action: 'vf-category', direction: 'out', key: 'food'}});
   ctx.space_id = 8; ctx.scope = 'business'; ctx.account_id = 99; await ui.refresh();
   assert.equal(ui.capture().category, null);assert.match(calls.at(-2).path, /^\/spaces\/8\/analysis/);assert.match(calls.at(-2).path, /account_id=99/);
+});
+
+test('one authorized snapshot is reusable only for its exact server inputs and data revision', async () => {
+  const {ui,ctx}=fixture();assert.equal(ui.hasCurrentSnapshot(),false);await ui.refresh();
+  const original=ui.capture();assert.equal(ui.hasCurrentSnapshot(),true);
+  for(const changed of [{category:'food',subcategory:'groceries',ledger:true},{query:'market',ledgerSort:'newest',page:2,focusedEntry:'line:1'}]){ui.restore({...original,...changed});assert.equal(ui.hasCurrentSnapshot(),true);}
+  for(const changed of [{period:{from:'2028-01-01',through:'2028-01-31'}},{year:2027},{comparisonYear:2026},{grain:'week'},{basis:'cash'},{program:13},{budgetMonth:'2028-01'}]){ui.restore({...original,...changed});assert.equal(ui.hasCurrentSnapshot(),false);}
+  ui.restore(original);ctx.revision=2;assert.equal(ui.hasCurrentSnapshot(),false);await ui.refresh();assert.equal(ui.hasCurrentSnapshot(),true);
+  ui.restore({...original,period:{from:'2028-01-01',through:'2028-01-31'}});await ui.refresh();
+  ui.restore(original);assert.equal(ui.hasCurrentSnapshot(),false,'Another period is not retained in a second cache');
 });
 
 test('background figures retain exact drilldown and do not apply after an intervening edit or failed read', async () => {

@@ -52,7 +52,7 @@ function boot() {
   const spaceFor = (kind) => requestedSpace?.kind===kind ? requestedSpace : spaces.find(s=>s.kind===kind);
   const personalSpace = spaceFor('household');
   let businessSpace = spaceFor('business');
-  let loadVersion = 0;
+  let loadVersion = 0, dashboardRevision = 0, loadedDashboardContext = null;
   let accountingBasis = 'accrual';
   let reportingRange = 'month', incomingMode = 'cash', compareYear = false;
   let decisionMonth = '', forecastExpanded = false, overviewExpanded = false;
@@ -103,26 +103,32 @@ function boot() {
     by_space:{[personal.space.id]:personal,[business.space.id]:business},
     combined_result:combined,
   });
-  const load = async () => {
+  const load = async ({reuse = false} = {}) => {
     assistantFocusedTransaction=null;
     if (!active) {$('#tr-context').textContent='Your private financial workspace';$('#tr-content').innerHTML='<div class="tr-empty"><h2>Your next chapter starts here.</h2>Your Trajectory pilot has not been enabled yet.<br>Once enabled, connect an account or import a statement to begin.</div>';$('#tr-add').disabled=true;return;}
     const requestedVersion = ++loadVersion;
-    if(displayedReportContext!==null&&displayedReportContext!==reportContext()){
+    const reuseDashboard=reuse&&!!data&&loadedDashboardContext===reportContext();
+    if(!reuseDashboard)loadedDashboardContext=null;
+    if(!reuseDashboard&&displayedReportContext!==null&&displayedReportContext!==reportContext()){
       filter={};flowDialog=null;navigation.length=0;$('#tr-back').hidden=true;$('#tr-dialog').close();$('#tr-content').innerHTML='';data=null;
     }
     evidenceRows=null;
     $('#tr-content').classList.add('tr-loading');$('#tr-content').setAttribute('aria-busy','true');
     try {
-      let result;
-      if(scope==='both'&&personalSpace&&businessSpace){
-        const [personal,business]=await Promise.all([api(dashboardPath(personalSpace.id)),api(dashboardPath(businessSpace.id))]);
-        let combined=null;
-        try {combined=await api(endpoint(`/combined?business_id=${businessSpace.id}&from=${personal.range.start}&through=${personal.range.end}`,personalSpace.id));} catch {}
-        result=combinedDashboard(personal,business,combined);
-      } else result=await api(dashboardPath(active));
-      if(requestedVersion!==loadVersion)return;data=result;accountFilter=data.scope_filter?.account_id??null;if(scope!=='both'&&(filter.ids||filter.date||filter.account_id)){const rows=await fetchEvidence(filter);if(requestedVersion!==loadVersion)return;evidenceRows=rows;}
-      if(scope!=='both'&&['overview','analysis','budget'].includes(tab)){await visualFinance.refresh();if(requestedVersion!==loadVersion)return;}
-      render();void assistant.contextChanged?.().catch(error=>notice(error.message));return true;
+      if(!reuseDashboard){
+        let result;
+        if(scope==='both'&&personalSpace&&businessSpace){
+          const [personal,business]=await Promise.all([api(dashboardPath(personalSpace.id)),api(dashboardPath(businessSpace.id))]);
+          let combined=null;
+          try {combined=await api(endpoint(`/combined?business_id=${businessSpace.id}&from=${personal.range.start}&through=${personal.range.end}`,personalSpace.id));} catch {}
+          result=combinedDashboard(personal,business,combined);
+        } else result=await api(dashboardPath(active));
+        if(requestedVersion!==loadVersion)return;
+        data=result;accountFilter=data.scope_filter?.account_id??null;dashboardRevision++;loadedDashboardContext=reportContext();
+      }
+      if(scope!=='both'&&(filter.ids||filter.date||filter.account_id)){const rows=await fetchEvidence(filter);if(requestedVersion!==loadVersion)return;evidenceRows=rows;}
+      if(scope!=='both'&&['overview','analysis','budget'].includes(tab)&&(!reuseDashboard||!visualFinance.hasCurrentSnapshot())){await visualFinance.refresh();if(requestedVersion!==loadVersion)return;}
+      render();if(!reuseDashboard)void assistant.contextChanged?.().catch(error=>notice(error.message));return true;
     }
     catch(e){if(requestedVersion===loadVersion){accountFilter=data?.scope_filter?.account_id??null;if($('#tr-account-filter'))$('#tr-account-filter').value=accountFilter??'';notice(e.message);}return false;}
     finally {if(requestedVersion===loadVersion){$('#tr-content').classList.remove('tr-loading');$('#tr-content').setAttribute('aria-busy','false');}}
@@ -148,7 +154,7 @@ function boot() {
     invalidate:reason=>{navigation.length=0;filter={};evidenceRows=null;flowDialog=null;$('#tr-back').hidden=true;$('#tr-dialog').close();if(reason==='history'){tab='overview';data=null;$('#tr-content').innerHTML='';void load();}},
     restore:async(previous,isCurrent)=>{
       restoringNavigation=true;flowDialog=null;$('#tr-dialog').close();tab=previous.tab;filter=previous.filter;evidenceRows=null;moneyFlowMode=previous.moneyFlowMode;visualFinance.restore(previous.visualFinance);navigation.length=previous.depth;
-      await load();if(!isCurrent()){restoringNavigation=false;return;}
+      await load({reuse:true});if(!isCurrent()){restoringNavigation=false;return;}
       if(previous.flowDialog&&tab==='money-flow'){
         const node=[...root.querySelectorAll('[data-action="money-flow-category"]')].find(node=>node.dataset.label===previous.flowDialog.label&&node.dataset.ids===previous.flowDialog.ids&&node.getClientRects().length);
         if(node)openFlowCategory(node,false);
@@ -158,7 +164,7 @@ function boot() {
       target?.focus({preventScroll:true});restoringNavigation=false;historyNavigation.sync();
     }});
   const remember=()=>{historyNavigation.push();navigation.push({});$('#tr-back').hidden=false;};
-  const navigate=(view)=>{remember();tab=view;filter={};evidenceRows=null;if(scope!=='both'&&['overview','analysis','budget'].includes(view))void load();else render();window.scrollTo(0,0);};
+  const navigate=(view)=>{remember();tab=view;filter={};evidenceRows=null;if(scope!=='both'&&['overview','analysis','budget'].includes(view))void load({reuse:true});else render();window.scrollTo(0,0);};
   const fetchEvidence=async next=>{const batches=next.ids?.length>5000?Array.from({length:Math.ceil(next.ids.length/5000)},(_,index)=>({...next,ids:next.ids.slice(index*5000,(index+1)*5000)})):[next];return (await Promise.all(batches.map(batch=>api(endpoint('/evidence'),'POST',batch)))).flat();};
   const showTransactions = async (next) => {
     const requestedContext=reportContext();
@@ -185,7 +191,7 @@ function boot() {
   const outlook=outlookUI({getData:()=>data,esc,money,precise,date,plot,chart,line,btn,dialog,evidence:showTransactions,forecastDetail});
   const welcome=welcomeUI({getData:()=>data,esc,btn,navigate,render,budgetImportAction:'budget-import'});
   const debtPlanner=debtPlannerUI({getData:()=>data,esc,precise,btn,plot,chart,line,render,requestScenario:(extraCents,spaceId)=>api(endpoint('/debt-scenarios',spaceId),'POST',{extra_cents:extraCents,...(accountFilter!==null&&spaceId===active?{account_id:accountFilter}:{})})});
-  const visualFinance=createVisualFinance({root,getContext:()=>({space_id:active,scope,account_id:accountFilter,from:data?.range.start,through:data?.range.end,today:data?.decision_support?.as_of}),getSpaces:()=>spaces,api,endpoint,esc,precise,chart,
+  const visualFinance=createVisualFinance({root,getContext:()=>({space_id:active,scope,account_id:accountFilter,from:data?.range.start,through:data?.range.end,today:data?.decision_support?.as_of,revision:dashboardRevision}),getSpaces:()=>spaces,api,endpoint,esc,precise,chart,
     onBeforeChange:remember,onChange:()=>render(),onChanged:load,onNavigate:(view,rememberStep=true)=>{if(rememberStep)navigate(view);else{tab=view;filter={};evidenceRows=null;render();window.scrollTo(0,0);}},
     onReviewTransaction:row=>{if(row.editable)transactionForm(row);else void showTransactions({ids:[row.id],economic_costs:true});},
     onEditBudget:()=>navigate('budget-targets'),onAddDefinition:()=>void definitionForm().catch(error=>notice(error.message)),onAsk:()=>assistant.openChat(),onClearAccount:()=>{accountFilter=null;filter={};evidenceRows=null;navigation.length=0;$('#tr-back').hidden=true;void load();},notice});
@@ -760,6 +766,7 @@ function boot() {
   if(root.dataset.invite){$('#tr-invite').hidden=false;$('#tr-accept').onclick=async()=>{try{await api('/trajectory/invites/accept','POST',{token:root.dataset.invite});location.href='/trajectory';}catch(e){notice(e.message);}};}
   let foregroundInteraction = 0;
   for(const event of ['pointerdown','keydown','input','change'])document.addEventListener(event,()=>{foregroundInteraction++;},{capture:true,passive:true});
+  document.addEventListener('scroll',()=>{foregroundInteraction++;},{capture:true,passive:true});
   const foregroundEligible=()=>canRefreshFinance({visible:!document.hidden,online:navigator.onLine!==false,hasData:!!data,tab,scope,
     loading:$('#tr-content').getAttribute('aria-busy')==='true'||visualFinance.isBusy(),
     editing:!!document.querySelector('dialog[open],#tr-mobile-drawer[role="dialog"],#tr-report-controls[data-open],#tr-content details[open]')||document.activeElement?.matches('input,select,textarea,[contenteditable="true"]'),
@@ -772,7 +779,7 @@ function boot() {
         const [result,refreshed]=await Promise.all([api(dashboardPath(active)),tab==='assets'?Promise.resolve(true):visualFinance.refresh({background:true,isCurrent})]);
         if(!refreshed||!isCurrent())return false;
         if((result.scope_filter?.account_id??null)!==accountFilter)return false;
-        data=result;render();window.scrollTo(0,position);
+        data=result;if(tab==='assets')dashboardRevision++;loadedDashboardContext=reportContext();render();window.scrollTo(0,position);
         root.querySelectorAll('#tr-content .vf-table-wrap,#tr-content .tr-table-wrap').forEach((node,index)=>{if(tableScroll[index]){node.scrollLeft=tableScroll[index].left;node.scrollTop=tableScroll[index].top;}});
         const target=focus&&[...root.querySelectorAll('[data-action]')].find(node=>node.dataset.action===focus.action&&(node.dataset.label||'')===focus.label&&(node.dataset.ids||'')===focus.ids&&(!focus.key||(node.dataset.key||'')===focus.key)&&(!focus.entry||(node.dataset.entry||'')===focus.entry)&&node.getClientRects().length);
         target?.focus({preventScroll:true});historyNavigation.sync();

@@ -80,6 +80,14 @@ and outside interaction close it; selections retain their native handlers and
 values. Desktop retains the full toolbar and inline Analysis controls. Foreground
 updates pause while this popover is open.
 
+Home, Analysis and Budget reuse one successful, authorized in-memory snapshot
+when only the screen or client drilldown changes. The key includes the financial
+context, data revision and every visual server input; there is no persistent or
+multi-period cache. Back to another period fetches its visual projection only.
+Explicit Refresh, context changes and successful edits invalidate the dashboard
+revision; a failed reload cannot mark an older snapshot fresh. A current dashboard
+with missing visual data fetches Analysis/Budget without downloading it again.
+
 While visible and online, Home, Analysis and Budget reread saved backend figures
 every minute and on return to the app. These are private network GETs, not Plaid
 or provider refresh requests. Hidden/offline pages, bank linking, navigation
