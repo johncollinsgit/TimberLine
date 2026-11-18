@@ -274,3 +274,19 @@ principal from take-home. Other currencies are not silently added. A current rev
 fixed cap retains precedence over the formula. Future receipts and unobserved cash
 income remain unknown; known fixed plans remain separate from the variable formula.
 Inherited typed source-quality flags stay explicit rather than being silently cleared.
+
+Primary Home/Analysis/Budget reads use Analysis and BudgetEnvelope projections,
+followed by the explicit `visual_context` metadata endpoint. This context supplies
+owned editing catalogs and the unchanged MonthlyBills evidence builder, not a
+partial imitation of Dashboard totals or forecasts. Full Dashboard is loaded only
+when a legacy view or advanced action needs it. Context responses recheck current
+space authorization and selected-account ownership, are private/no-store, and are
+discarded after a context change or revocation. Primary foreground refreshes use
+the same bounded metadata route. The closed assistant badge uses the authorized
+current member's unread-count summary; it does not rebuild historical expense
+budget payloads until the inbox or a deep-linked expense is opened.
+
+Budget envelopes reuse request-local monthly projections and native-version context
+hashes. Ordinary plans read the current and prior month needed for spending and
+suggestions; an explicit rollover keeps its full required history. No global cache,
+budget default, source record or financial calculation changes as part of this reuse.

@@ -52,7 +52,14 @@ class MobileController extends Controller
     public function inbox(Request $request, Space $space, FinanceAccess $access, WebPushService $push, ExpenseNotificationService $expenses)
     {
         $access->authorize($request->user(), $space);
-        $before = $request->validate(['before' => 'sometimes|integer|min:1', 'transaction_id' => 'sometimes|integer|min:1']);
+        $before = $request->validate(['before' => 'sometimes|integer|min:1', 'transaction_id' => 'sometimes|integer|min:1', 'summary' => 'sometimes|boolean']);
+        // The closed assistant only needs its badge. Do not rebuild historical
+        // purchase budgets merely to count this user's unread notices.
+        if ($request->boolean('summary')) {
+            return response()->json([
+                'unread_count' => ExpenseNotice::where('space_id', $space->id)->where('user_id', $request->user()->id)->whereNull('read_at')->count(),
+            ])->header('Cache-Control', 'private, no-store');
+        }
         $notices = ExpenseNotice::where('space_id', $space->id)->where('user_id', $request->user()->id)
             ->when(isset($before['before']), fn ($q) => $q->where('id', '<', $before['before']))
             ->when(isset($before['transaction_id']), fn ($q) => $q->where('transaction_id', $before['transaction_id']))->orderByDesc('id')->limit(51)->get();

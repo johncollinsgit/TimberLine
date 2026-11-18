@@ -1,3 +1,11 @@
+## 2026-11-18 · Faster primary financial screens
+
+Home, Analysis and Budget load their chart and budget projections without starting
+the full forecast/history Dashboard. A separate authorized context supplies editing
+catalogs and the same current monthly bill evidence. Accounts and advanced planning
+load their full details when opened. The closed expense badge requests only its
+unread count; opening the inbox still loads current expense and budget details.
+
 ## 2026-11-18 · Simpler monthly budgets
 
 Budgets form one compact list, highest allowance first. Each clickable row shows

@@ -7,10 +7,18 @@ use App\Models\Trajectory\Space;
 use App\Services\Trajectory\AnalysisService;
 use App\Services\Trajectory\BudgetEnvelopeService;
 use App\Services\Trajectory\FinanceAccess;
+use App\Services\Trajectory\VisualContextService;
 use Illuminate\Http\Request;
 
 class AnalysisController extends Controller
 {
+    public function context(Request $request, Space $space, VisualContextService $context)
+    {
+        $data = $request->validate(['account_id' => 'sometimes|nullable|integer|min:1']);
+
+        return response()->json($context->build($request->user(), $space, isset($data['account_id']) ? (int) $data['account_id'] : null))->header('Cache-Control', 'private, no-store');
+    }
+
     public function show(Request $request, Space $space, AnalysisService $analysis)
     {
         app(FinanceAccess::class)->authorize($request->user(), $space);

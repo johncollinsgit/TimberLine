@@ -1,10 +1,17 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {visualBootstrapMetadata} from '../../resources/js/trajectory/bootstrap.js';
+import {visualBootstrapMetadata,isVisualContext,visualContextPath,validateVisualContext} from '../../resources/js/trajectory/bootstrap.js';
 
 const space={id:7,name:'Fictional household',kind:'household'};
 const report={today:'2028-02-15',range:{from:'2028-02-01',through:'2028-02-15'},scope:{space_id:7,kind:'household',account_id:null,program_id:null,basis:'spending'},account_options:[{id:9,name:'Fictional checking'}]};
 const budget={month:'2028-02',actual_through:'2028-02-15'};
+test('primary catalogs are explicitly metadata, scoped and never mistaken for a full Dashboard',()=>{
+ const value={projection:'visual_context',available:['editing_catalogs','monthly_bills'],space,today:'2028-02-15',scope_filter:{account_id:null},records:[],category_options:[],accounts:[],definitions:{}};
+ assert.equal(isVisualContext(value),true);assert.equal(isVisualContext({summary:{}}),false);
+ assert.equal(visualContextPath(),'/visual-context');assert.equal(visualContextPath(9),'/visual-context?account_id=9');
+ assert.equal(validateVisualContext(value,space),value);
+ for(const changed of [{projection:'dashboard'},{space:{...space,id:8}},{scope_filter:{account_id:9}},{today:null},{available:[]}])assert.throws(()=>validateVisualContext({...value,...changed},space));
+});
 test('progressive metadata uses only authorized server context and contains no invented financial fields',()=>{
   const value=visualBootstrapMetadata(report,budget,space);
   assert.deepEqual(value.range,{start:'2028-02-01',end:'2028-02-15'});

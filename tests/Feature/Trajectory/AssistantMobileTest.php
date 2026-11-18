@@ -135,6 +135,22 @@ test('personal PWA manifests are distinct and financial pages are never cached o
     expect($worker)->not->toContain('caches.open', 'cache.put')->and($worker)->toContain('notificationclick');
 });
 
+test('closed expense badge counts private notices without rebuilding purchase budgets', function (): void {
+    $transaction = ($this->entry)('badge');
+    $other = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    foreach ([$this->owner, $other] as $recipient) {
+        ExpenseNotice::create(['space_id' => $this->space->id, 'user_id' => $recipient->id, 'transaction_id' => $transaction->id,
+            'payload' => ['merchant' => 'Private purchase details'], 'delivery_status' => 'inbox_only']);
+    }
+    $this->mock(ExpenseNotificationService::class)->shouldNotReceive('payload');
+    $url = '/trajectory/spaces/'.$this->space->id.'/notifications?summary=1';
+    $response = $this->actingAs($this->owner)->getJson($url)->assertOk()->assertExactJson(['unread_count' => 1]);
+    expect($response->headers->get('Cache-Control'))->toContain('no-store');
+    $this->actingAs($other)->getJson($url)->assertForbidden();
+    ExpenseNotice::where('user_id', $this->owner->id)->update(['read_at' => now()]);
+    $this->actingAs($this->owner)->getJson($url)->assertOk()->assertExactJson(['unread_count' => 0]);
+});
+
 test('push subscriptions reject arbitrary network URLs and stay user-private and encrypted', function (): void {
     $base = '/trajectory/spaces/'.$this->space->id;
     $keys = ['p256dh' => rtrim(strtr(base64_encode(str_repeat('a', 65)), '+/', '-_'), '='), 'auth' => rtrim(strtr(base64_encode(str_repeat('b', 16)), '+/', '-_'), '=')];
