@@ -511,14 +511,11 @@ class MarketingPublicEventController extends Controller
                     );
                 } catch (\Throwable $e) {
                     $discountSyncStatus = 'sync_failed';
-                    $restore = $candleCashService->cancelIssuedRedemptionAndRestoreBalance(
-                        $redemption,
-                        'Canceled automatically because Shopify could not prepare the reward discount yet.'
-                    );
+                    $restore = $candleCashService->recordShopifySyncFailure($redemption, $e);
                     $result['balance'] = round((float) ($restore['balance'] ?? $candleCashService->currentBalance($profile)), 3);
                     $ok = false;
                     $state = 'discount_not_ready';
-                    $message = 'Your reward balance is safe. We could not prepare the Shopify discount yet.';
+                    $message = 'Your reward code is reserved. Please retry to prepare the same Shopify discount.';
                     $eventStatus = 'error';
                     $eventIssue = 'shopify_discount_sync_failed';
                 }

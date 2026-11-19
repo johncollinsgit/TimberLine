@@ -5,12 +5,14 @@ namespace App\Services\Marketing;
 use App\Models\CandleCashRedemption;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\MarketingStorefrontEvent;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Shopify\ShopifyStores;
 use App\Services\Tenancy\TenantMarketingSettingsResolver;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class CandleCashShopifyDiscountService
@@ -25,7 +27,11 @@ query CandleCashDiscountByCode($code: String!) {
         title
         startsAt
         endsAt
-        customerGets { appliesOnOneTimePurchase appliesOnSubscription }
+        customerGets {
+          appliesOnOneTimePurchase
+          appliesOnSubscription
+          value { __typename ... on DiscountAmount { amount { amount } appliesOnEachItem } }
+        }
         combinesWith {
           orderDiscounts
           productDiscounts
@@ -33,6 +39,15 @@ query CandleCashDiscountByCode($code: String!) {
         }
       }
     }
+  }
+}
+GRAPHQL;
+
+    protected const DEACTIVATE_DISCOUNT_MUTATION = <<<'GRAPHQL'
+mutation CandleCashDiscountDeactivate($id: ID!) {
+  discountCodeDeactivate(id: $id) {
+    codeDiscountNode { id codeDiscount { ... on DiscountCodeBasic { status } } }
+    userErrors { field message }
   }
 }
 GRAPHQL;
@@ -105,6 +120,31 @@ GRAPHQL;
      */
     public function ensureDiscountForRedemption(CandleCashRedemption $redemption, ?string $preferredStoreKey = null): array
     {
+        // Status reads and redeem requests can arrive together. Serialize the
+        // lookup/create pair so they cannot create (or cancel) the same code twice.
+        return DB::transaction(function () use ($redemption, $preferredStoreKey): array {
+            $current = CandleCashRedemption::query()->lockForUpdate()->findOrFail($redemption->id);
+            if ($current->status !== 'issued' || ($current->expires_at && $current->expires_at->isPast())) {
+                throw new RuntimeException('This reward redemption is no longer available for Shopify checkout.');
+            }
+
+            $result = $this->syncDiscountForRedemption($current, $preferredStoreKey);
+            $context = (array) $current->redemption_context;
+            if (isset($context['shopify_sync_failure'])) {
+                unset($context['shopify_sync_failure']);
+                $current->forceFill(['redemption_context' => $context])->save();
+                MarketingStorefrontEvent::query()->where('candle_cash_redemption_id', $current->id)
+                    ->where('tenant_id', $this->tenantIdForRedemption($current))
+                    ->where('event_type', 'redemption_shopify_sync_failed')
+                    ->update(['resolution_status' => 'resolved', 'resolved_at' => now()]);
+            }
+
+            return $result;
+        });
+    }
+
+    protected function syncDiscountForRedemption(CandleCashRedemption $redemption, ?string $preferredStoreKey): array
+    {
         if ($redemption->platform === 'square' || app(CandleCashChannelPolicy::class)->isInPersonCode($redemption)) {
             throw new RuntimeException('An in-person Candle Cash code cannot be used for an online Shopify discount.');
         }
@@ -125,6 +165,11 @@ GRAPHQL;
         );
         $desiredCombinesWith = $this->combinesWithInput($redemption);
         $purchaseEligibility = $this->purchaseEligibilityInput($redemption);
+        $amount = $this->candleCashService->redemptionAmountForIssuedCode($redemption, $redemption->reward);
+        $channelRules = app(CandleCashChannelPolicy::class)->rules($this->tenantIdForRedemption($redemption));
+        if ($channelRules !== null && $amount !== (float) $channelRules['online_amount']) {
+            throw new RuntimeException('This online reward does not match the tenant per-order amount.');
+        }
 
         $lookup = $client->query(self::LOOKUP_BY_CODE_QUERY, [
             'code' => $rewardCode,
@@ -132,13 +177,20 @@ GRAPHQL;
 
         $existing = $this->discountIdentifiersFromPayload($lookup['codeDiscountNodeByCode'] ?? null);
         if ($existing !== null) {
+            $amountChanged = ($existing['value_type'] ?? null) !== null && (
+                $existing['value_type'] !== 'DiscountAmount'
+                || $existing['discount_amount'] !== $amount
+                || $existing['applies_on_each_item'] !== false
+            );
             if (! $this->combinesWithMatches($existing['combines_with'] ?? null, $desiredCombinesWith)
-                || ($purchaseEligibility !== [] && ($existing['purchase_eligibility'] ?? null) !== $purchaseEligibility)) {
+                || ($purchaseEligibility !== [] && ($existing['purchase_eligibility'] ?? null) !== $purchaseEligibility)
+                || $amountChanged) {
                 $existing = $this->updateDiscountCombinesWith(
                     $client,
                     $existing,
                     $desiredCombinesWith,
-                    $purchaseEligibility
+                    $purchaseEligibility,
+                    $amountChanged ? $amount : null
                 );
             }
 
@@ -177,6 +229,41 @@ GRAPHQL;
             'starts_at' => $created['starts_at'],
             'ends_at' => $created['ends_at'],
         ];
+    }
+
+    /** Refund only after Shopify has confirmed that the same code cannot be used. */
+    public function releaseDiscountForRedemption(CandleCashRedemption $redemption, ?string $preferredStoreKey = null): array
+    {
+        return DB::transaction(function () use ($redemption, $preferredStoreKey): array {
+            $current = CandleCashRedemption::query()->lockForUpdate()->with('profile')->findOrFail($redemption->id);
+            if ($current->status !== 'issued') {
+                return ['restored' => false, 'balance' => $this->candleCashService->currentBalance($current->profile)];
+            }
+            $store = $this->resolveStoreConfig($current, $preferredStoreKey);
+            if (! $store || $current->platform === 'square' || app(CandleCashChannelPolicy::class)->isInPersonCode($current)) {
+                throw new RuntimeException('No online Shopify reward could be resolved for cancellation.');
+            }
+            $client = new ShopifyGraphqlClient($store['shop'], $store['token'], $store['api_version'] ?: '2026-01');
+            $lookup = $client->query(self::LOOKUP_BY_CODE_QUERY, ['code' => $current->redemption_code]);
+            $existing = $this->discountIdentifiersFromPayload($lookup['codeDiscountNodeByCode'] ?? null);
+            // A missing/failed lookup can follow a timed-out create. It is not proof of cancellation.
+            if (! $existing || ! $existing['discount_node_id']) {
+                throw new RuntimeException('Shopify reward cancellation is not confirmed. Please retry the same code.');
+            }
+            $data = $client->query(self::DEACTIVATE_DISCOUNT_MUTATION, ['id' => $existing['discount_node_id']]);
+            $payload = $data['discountCodeDeactivate'] ?? [];
+            if (($payload['userErrors'] ?? []) !== []
+                || data_get($payload, 'codeDiscountNode.id') !== $existing['discount_node_id']
+                || data_get($payload, 'codeDiscountNode.codeDiscount.status') !== 'EXPIRED') {
+                throw new RuntimeException('Shopify did not confirm reward deactivation. The reward remains reserved.');
+            }
+
+            return $this->candleCashService->cancelIssuedRedemptionAndRestoreBalance(
+                $current,
+                'Unused mobile checkout reward deactivated in Shopify before the balance was restored.',
+                'shopify_discount_deactivated'
+            );
+        });
     }
 
     /**
@@ -401,6 +488,10 @@ GRAPHQL;
                 'appliesOnOneTimePurchase' => $discount['customerGets']['appliesOnOneTimePurchase'] ?? null,
                 'appliesOnSubscription' => $discount['customerGets']['appliesOnSubscription'] ?? null,
             ] : null,
+            'value_type' => data_get($discount, 'customerGets.value.__typename'),
+            'discount_amount' => is_numeric(data_get($discount, 'customerGets.value.amount.amount'))
+                ? round((float) data_get($discount, 'customerGets.value.amount.amount'), 2) : null,
+            'applies_on_each_item' => data_get($discount, 'customerGets.value.appliesOnEachItem'),
         ];
     }
 
@@ -453,7 +544,7 @@ GRAPHQL;
             ];
         }
 
-        return match ($stackingMode) {
+        $combinesWith = match ($stackingMode) {
             'shipping_only' => [
                 'orderDiscounts' => false,
                 'productDiscounts' => false,
@@ -464,6 +555,14 @@ GRAPHQL;
             ),
             default => $default,
         };
+
+        // Shopify combines discount classes, not our reward-code identities.
+        // Allowing ORDER combinations also allows two Candle Cash codes together.
+        if ($this->isFlagshipTenant($tenantId) || (int) ($redemptionRules['max_codes_per_order'] ?? 1) === 1) {
+            $combinesWith['orderDiscounts'] = false;
+        }
+
+        return $combinesWith;
     }
 
     /**
@@ -531,7 +630,8 @@ GRAPHQL;
         ShopifyGraphqlClient $client,
         array $existingDiscount,
         array $desiredCombinesWith,
-        array $purchaseEligibility = []
+        array $purchaseEligibility = [],
+        ?float $amount = null
     ): array {
         $discountNodeId = trim((string) ($existingDiscount['discount_node_id'] ?? ''));
         if ($discountNodeId === '') {
@@ -542,7 +642,12 @@ GRAPHQL;
             'id' => $discountNodeId,
             'basicCodeDiscount' => [
                 'combinesWith' => $this->normalizedCombinesWith($desiredCombinesWith),
-                ...($purchaseEligibility !== [] ? ['customerGets' => $purchaseEligibility] : []),
+                ...($purchaseEligibility !== [] || $amount !== null ? ['customerGets' => [
+                    ...$purchaseEligibility,
+                    ...($amount !== null ? ['value' => ['discountAmount' => [
+                        'amount' => number_format($amount, 2, '.', ''), 'appliesOnEachItem' => false,
+                    ]]] : []),
+                ]] : []),
             ],
         ]);
 

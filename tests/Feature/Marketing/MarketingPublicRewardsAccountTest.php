@@ -1,10 +1,10 @@
 <?php
 
 use App\Models\CandleCashBalance;
+use App\Models\CandleCashRedemption;
 use App\Models\CandleCashReward;
 use App\Models\CandleCashTask;
 use App\Models\CandleCashTaskCompletion;
-use App\Models\CandleCashRedemption;
 use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
@@ -12,8 +12,8 @@ use App\Models\MarketingReviewHistory;
 use App\Models\MarketingReviewSummary;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
-use App\Services\Marketing\CandleCashShopifyDiscountService;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\CandleCashShopifyDiscountService;
 
 test('public rewards account lookup shows balance, referral, reviews, and transaction history', function () {
     $tenant = publicRewardsRetailTenant();
@@ -156,7 +156,7 @@ test('public rewards account prefers native review and reward signals when avail
         'candle_cash_task_id' => $task->id,
         'marketing_profile_id' => $profile->id,
         'status' => 'awarded',
-        'completion_key' => 'task:product-review|profile:' . $profile->id . '|source:product_review_platform_event:native-test',
+        'completion_key' => 'task:product-review|profile:'.$profile->id.'|source:product_review_platform_event:native-test',
         'reward_amount' => 5.00,
         'reward_candle_cash' => 5,
         'source_type' => 'product_review_platform_event',
@@ -172,7 +172,7 @@ test('public rewards account prefers native review and reward signals when avail
         'provider' => 'backstage',
         'integration' => 'native',
         'store_key' => 'retail',
-        'external_customer_id' => 'profile:' . $profile->id,
+        'external_customer_id' => 'profile:'.$profile->id,
         'external_review_id' => 'native-review-991',
         'candle_cash_task_completion_id' => $completion->id,
         'rating' => 5,
@@ -508,7 +508,7 @@ test('public rewards account prefers data-rich Growave projection when duplicate
         ->assertSeeText('GRO-RICH-8101');
 });
 
-test('public rewards account redeem restores balance when Shopify discount sync fails', function () {
+test('public rewards account retains the original code and balance hold when Shopify sync fails', function () {
     config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
     config()->set('marketing.candle_cash.temporary_storefront_live_email_allowlist', ['recover.balance@example.com']);
     $tenant = publicRewardsRetailTenant('public-sync-fail-tenant', 'modernforestry.myshopify.com');
@@ -556,14 +556,14 @@ test('public rewards account redeem restores balance when Shopify discount sync 
     ])
         ->assertOk()
         ->assertSeeText('Redemption Failed')
-        ->assertSeeText('Your reward balance is safe. We could not prepare the Shopify discount yet.')
+        ->assertSeeText('Your reward code is reserved. Please retry to prepare the same Shopify discount.')
         ->assertSeeText('Discount: SYNC_FAILED');
 
     $redemption = CandleCashRedemption::query()->where('marketing_profile_id', $profile->id)->latest('id')->first();
 
     expect($redemption)->not->toBeNull()
-        ->and((string) $redemption->status)->toBe('canceled')
-        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(300.0);
+        ->and((string) $redemption->status)->toBe('issued')
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(290.0);
 });
 
 test('public rewards redeem fails closed when store context is missing', function () {

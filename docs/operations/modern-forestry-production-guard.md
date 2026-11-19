@@ -110,6 +110,30 @@ stores cannot open wholesale operations. Managed Website work is separately
 forbidden from calling or changing Modern Forestry Shopify, Checkout, customer,
 rewards, import, connection, or webhook lanes.
 
+## Candle Cash single-code and sync recovery — 2026-11-19
+
+- Online Candle Cash is one $10 discount across an order. Shopify's ORDER
+  combination flag must be false even when selected promotional classes include
+  order discounts: Shopify cannot distinguish another Candle Cash code from
+  another order discount. Configured product/shipping combinations remain allowed.
+- `CandleCashShopifyDiscountService` repairs combination/amount drift on existing
+  issued codes. After release, run its tenant-scoped
+  `syncIssuedDiscountsForTenant($tenantId, $storeKey, 2000)` and verify there are
+  no failed or unprocessed issued codes. Do not recreate canceled/redeemed codes.
+- Issuance holds the canonical customer's database lock through the open-code
+  check and debit. Shopify lookup/create holds the redemption lock, serializing
+  status/redeem requests for the same code.
+- A timeout, API error or unsuccessful sync read leaves the original redemption
+  issued and the wallet debit reserved. Retries reuse that code; they do not
+  refund or issue a replacement. The scoped storefront event records the error
+  and resolves when synchronization recovers.
+- An explicit mobile release requires confirmed Shopify deactivation before
+  restoring the wallet, and fails closed on uncertain/missing provider evidence.
+- Preserve the actual historical order/ledger evidence. The reported double-code
+  purchase reconciled both $10 redemptions and must not receive another wallet
+  adjustment. Historical canceled-but-live codes require separate Shopify
+  deactivation; never treat a local cancellation as provider confirmation.
+
 ## Read-only production checks
 
 Run these only when a production status check is needed. They do not import,
