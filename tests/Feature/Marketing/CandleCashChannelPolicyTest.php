@@ -11,6 +11,10 @@ use App\Services\Marketing\CandleClubMembershipService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 
+afterEach(function () {
+    $this->travelBack();
+});
+
 function channelRewardFixture(string $slug = 'modern-forestry', int $balance = 40): array
 {
     Http::preventStrayRequests();
@@ -27,6 +31,7 @@ function channelRewardFixture(string $slug = 'modern-forestry', int $balance = 4
 test('modern forestry members redeem five in person and ten online without affecting recurring terms', function () {
     [$tenant, $profile, $reward, $service] = channelRewardFixture();
     $square = $service->redeemReward($profile, $reward, 'square');
+    $this->travel(1)->days();
     $online = $service->redeemReward($profile, $reward, 'modern_forestry_ios');
     $inPersonCode = CandleCashRedemption::findOrFail($square['redemption_id']);
     $onlineCode = CandleCashRedemption::findOrFail($online['redemption_id']);
@@ -95,6 +100,7 @@ test('manual and ingested in person use converge and a second reward on the same
     $first = CandleCashRedemption::findOrFail($service->redeemReward($profile, $reward, 'square')['redemption_id']);
     $policy->consumeInPerson($first, 'square_manual', 'fictional-order-1', 'manual_reconcile');
     expect($policy->consumeInPerson($first, 'square_order', 'fictional-order-1', 'square_sync')->id)->toBe($first->id);
+    $this->travel(1)->days();
     $second = CandleCashRedemption::findOrFail($service->redeemReward($profile, $reward, 'square')['redemption_id']);
     expect(fn () => $policy->consumeInPerson($second, 'square_order', 'fictional-order-1', 'square_sync'))->toThrow(ValidationException::class);
     expect($second->fresh()->status)->toBe('issued');
@@ -105,6 +111,7 @@ test('manual and ingested in person use converge and a second reward on the same
 test('Square reconciliation uses the same channel guards and a preview leaves the code unused', function () {
     [$tenant, $profile, $reward, $service] = channelRewardFixture();
     $square = CandleCashRedemption::findOrFail($service->redeemReward($profile, $reward, 'square')['redemption_id']);
+    $this->travel(1)->days();
     $online = CandleCashRedemption::findOrFail($service->redeemReward($profile, $reward, 'shopify')['redemption_id']);
     $reconcile = app(\App\Services\Marketing\CandleCashRedemptionReconciliationService::class);
     $args = [[$square->redemption_code], 'square_order', 'fictional-order', [$profile->id], 'square_sync', [], $tenant->id];

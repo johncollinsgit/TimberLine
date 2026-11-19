@@ -290,8 +290,13 @@ class CandleCashService
         if ($channels !== null) {
             $payload['in_person_max_redeemable_per_order_dollars'] = (float) $channels['in_person_amount'];
             $payload['recurring_charges_allowed'] = false;
+            $daily = app(CandleCashDailyRedemptionLimit::class)->rules($tenantId);
+            $payload['max_redemptions_per_customer_per_day'] = $daily['maximum'];
+            $payload['redemption_timezone'] = $daily['timezone'];
+            $payload['daily_limit_message'] = 'Candle Cash can only be redeemed once per customer per day (Eastern Time).';
             $payload['channel_summary'] = 'Use up to '.$this->formatRewardCurrency($channels['in_person_amount']).' Candle Cash per in-person purchase or '
-                .$this->fixedRedemptionFormatted($tenantId).' online. Rewards apply to other purchases, excluding recurring Candle Club charges.';
+                .$this->fixedRedemptionFormatted($tenantId).' online. Rewards apply to other purchases, excluding recurring Candle Club charges. '
+                .$payload['daily_limit_message'];
         }
 
         return $payload;
@@ -875,6 +880,12 @@ class CandleCashService
                         'code' => $samePolicy ? $active->redemption_code : null, 'error' => $samePolicy ? null : 'existing_in_person_redemption'];
                 }
             }
+            $daily = app(CandleCashDailyRedemptionLimit::class)->status($profile);
+            if ($daily['reached']) {
+                return ['ok' => false, 'balance' => (float) $balance->balance, 'redemption_id' => null,
+                    'code' => null, 'error' => 'daily_limit_reached', 'reset_at' => $daily['reset_at']];
+            }
+
             $cost = in_array($normalizedPlatform, ['shopify', 'public_lookup', 'modern_forestry_ios'], true)
                 ? $this->storefrontRewardPointsCost($reward, $tenantId)
                 : (int) $reward->candle_cash_cost;
@@ -989,6 +1000,13 @@ class CandleCashService
             ];
         }
 
+        $daily = app(CandleCashDailyRedemptionLimit::class)->status($profile, usesOnly: true);
+        if ($daily['reached']) {
+            return ['ok' => false, 'balance' => $this->currentBalance($profile), 'redemption_id' => null,
+                'code' => null, 'error' => 'daily_limit_reached', 'state' => 'daily_limit_reached',
+                'reset_at' => $daily['reset_at']];
+        }
+
         $this->cancelStaleStorefrontRedemptions($profile, $reward, $platform, $tenantId);
 
         if ($reuseActiveCode) {
@@ -1036,11 +1054,13 @@ class CandleCashService
                 'error' => match ($error) {
                     'insufficient_balance' => 'insufficient_candle_cash',
                     'inactive_reward' => 'reward_unavailable',
+                    'daily_limit_reached' => 'daily_limit_reached',
                     default => 'redemption_failed',
                 },
                 'state' => match ($error) {
                     'insufficient_balance' => 'insufficient_candle_cash',
                     'inactive_reward' => 'reward_unavailable',
+                    'daily_limit_reached' => 'daily_limit_reached',
                     default => 'try_again_later',
                 },
             ];

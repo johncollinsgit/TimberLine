@@ -73,6 +73,10 @@ class CandleCashChannelPolicy
             if ($used) {
                 throw ValidationException::withMessages(['external_order_id' => 'This purchase already used Candle Cash. Only one reward is allowed per purchase.']);
             }
+            $profile = $current->profile()->lockForUpdate()->firstOrFail();
+            if (app(CandleCashDailyRedemptionLimit::class)->status($profile, usesOnly: true, exceptRedemptionId: $current->id)['reached']) {
+                throw ValidationException::withMessages(['redemption' => CandleCashDailyRedemptionLimit::MESSAGE]);
+            }
             $current->forceFill([
                 'status' => 'redeemed', 'redeemed_channel' => $channel, 'external_order_source' => $source,
                 'external_order_id' => $orderId, 'redeemed_at' => now(), 'redeemed_by' => $context['redeemed_by'] ?? null,

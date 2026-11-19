@@ -1372,6 +1372,7 @@ class ModernForestryMobileAccountService
             'already_has_active_code' => 'Your active reward code is ready.',
             'insufficient_candle_cash' => 'You need a little more Candle Cash before this reward is ready.',
             'reward_unavailable' => 'This reward is not available right now.',
+            'daily_limit_reached' => \App\Services\Marketing\CandleCashDailyRedemptionLimit::MESSAGE,
             'redemption_blocked' => 'You already have an unused Candle Cash code on your account. Use that code first or wait for it to expire before creating another one.',
             default => 'Reward redemption is temporarily unavailable.',
         };

@@ -11,12 +11,11 @@ class MarketingStorefrontWidgetService
 {
     public function __construct(
         protected MarketingProfileAnalyticsService $analyticsService
-    ) {
-    }
+    ) {}
 
     /**
-     * @param Collection<int,\App\Models\CandleCashReward> $rewards
-     * @param Collection<int,\App\Models\CandleCashRedemption> $redemptions
+     * @param  Collection<int,\App\Models\CandleCashReward>  $rewards
+     * @param  Collection<int,\App\Models\CandleCashRedemption>  $redemptions
      * @return array<int,string>
      */
     public function rewardWidgetStates(
@@ -88,7 +87,7 @@ class MarketingStorefrontWidgetService
     }
 
     /**
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $context
      * @return array<int,string>
      */
     public function customerStatusStates(?MarketingProfile $profile, string $identityStatus, array $context = []): array
@@ -133,7 +132,7 @@ class MarketingStorefrontWidgetService
     }
 
     /**
-     * @param array<string,mixed> $result
+     * @param  array<string,mixed>  $result
      * @return array<int,string>
      */
     public function redemptionStates(array $result): array
@@ -179,12 +178,13 @@ class MarketingStorefrontWidgetService
             'code_already_used' => ['already_redeemed'],
             'code_expired' => ['try_again_later'],
             'redemption_blocked' => ['unresolved_reconciliation_pending', 'contact_support'],
+            'daily_limit_reached' => ['try_again_tomorrow'],
             default => ['try_again_later'],
         };
     }
 
     /**
-     * @param array<int,string> $states
+     * @param  array<int,string>  $states
      * @return array<int,string>
      */
     protected function clean(array $states): array
