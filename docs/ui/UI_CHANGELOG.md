@@ -1,3 +1,13 @@
+## 2026-11-19 · Compact finance views and visual planning
+
+Budget totals lead the page; category icons and labeled progress bars replace
+separate amount lines. Savings goals are separate and collapsed. Phone transactions
+use a compact list with native details/edit controls in a pop-up. The header has a
+small integrated Back control, and returning to Analysis starts its overview.
+Plan uses income-source and monthly funding charts, surplus-limited goals, and a
+focused planning read. Ask reviews one uncategorized purchase with Yes/No/Explain.
+A smooth diagonal background sheen respects reduced motion and never blocks input.
+
 ## 2026-11-18 · Faster primary financial screens
 
 Home, Analysis and Budget load their chart and budget projections without starting

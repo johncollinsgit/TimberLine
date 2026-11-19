@@ -298,3 +298,43 @@ comma-formatted direct-entry field. Steps stop at zero, preserve existing cents,
 and update the preview only; Save retains the native version/context guards.
 No slider remains. The category list omits repeated budget wording, while dated
 and estimated amounts and fund goals stay distinct. Evidence stays under Details.
+
+### Compact budgets, transaction lists and visual Plan (November 19)
+
+The budget page starts with Total budget and Budget left. Both exclude native
+savings goals and shared-parent duplicate rows. Known-only subtotals show Partial;
+estimates retain their tag. Category icons replace dots, and spent/allowance/left
+figures are inside each bar. Savings goals live in their own collapsed section
+below the monthly budget and are absent from Home's allowance preview. Saving a
+plan no longer leaves a persistent explanatory banner.
+
+Phone ledgers are compact merchant/date/amount lists. A row opens a native dialog
+containing the existing category/suggestion/split controls. The dialog reuses the
+rendered authorized row, closes when its source version or view changes, and adds
+no mutation path. Unknown physical-card boilerplate and repetitive ledger captions
+are hidden. Desktop retains the table. Back is compact and integrated with the
+page title. Selecting Analysis starts its overview; Back from a Budget-originated
+transaction view returns to Analysis's overview rather than bouncing to Budget.
+
+Plan uses `GET /trajectory/spaces/{space}/plan-context`, a private/no-store
+projection of the same existing planning calculation and editing catalogs. It
+stops before unrelated dashboard history, tax, metals, and reconciliation reports.
+The response is marked `plan_context`, never a full Dashboard. Actions requiring
+full evidence still fetch that evidence through the existing full-data guard.
+
+Plan presents expected income, core expenses, funding gap, income-source donut,
+monthly income/expense stacks and three monthly funding tiles. Current monthly
+assumptions remain explicit; seasonal or confirmed income is not invented.
+Optional extra debt and goals are displayed only within projected surplus. This
+is a display allocation, not a changed saved forecast, automatic transfer or new
+budget target. Donuts retain explanation-first behavior, and chart/metric taps
+open details and existing edits. Advanced assumptions and debt options are collapsed.
+
+The diagonal page sheen is CSS-only and pointer-transparent, behind the content.
+Reduced motion stops its animation. It introduces no network or data requests.
+
+Ask recognizes requests to review uncategorized purchases before destination
+parsing. It presents one owned, posted purchase and the existing classification
+service's grounded suggestion. Yes sends the explicit, versioned category command
+with Undo; No asks for purpose; Explain presents the suggestion evidence without
+writing. Empty or uncertain suggestions never become automatic classifications.

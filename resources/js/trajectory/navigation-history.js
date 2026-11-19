@@ -34,5 +34,5 @@ export function reportNavigation({window:win,capture,restore,context,enabled=()=
     await restore(frames.get(target).value,()=>current===target&&sequence===request&&scope===context());
   }
   win.addEventListener('popstate',pop);
-  return {sync,push,back,dispose:()=>win.removeEventListener('popstate',pop)};
+  return {sync,push,back,previous:()=>frames.get(frames.get(current)?.parent)?.value??null,dispose:()=>win.removeEventListener('popstate',pop)};
 }

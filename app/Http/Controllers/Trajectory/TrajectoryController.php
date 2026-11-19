@@ -45,6 +45,15 @@ class TrajectoryController extends Controller
         ])->header('Cache-Control', 'private, no-store');
     }
 
+    public function planContext(Request $request, Space $space, FinanceAccess $access, DashboardService $dashboard)
+    {
+        $access->authorize($request->user(), $space);
+        $data = $request->validate(['range' => ['nullable', Rule::in(['day', 'week', 'month', 'quarter', 'year', 'all', 'custom'])], 'scenario_id' => ['nullable', 'integer'], 'account_id' => 'sometimes|nullable|integer|min:1', 'from' => 'required_if:range,custom|nullable|date_format:Y-m-d|before_or_equal:today|after_or_equal:1900-01-01', 'through' => 'required_if:range,custom|nullable|date_format:Y-m-d|after_or_equal:from|before_or_equal:today', 'seasonal' => 'sometimes|boolean']);
+
+        return response()->json($dashboard->build($space, $data['range'] ?? 'month', $data['scenario_id'] ?? null, $data['from'] ?? null, $data['through'] ?? null, (bool) ($data['seasonal'] ?? false), $request->user(), isset($data['account_id']) ? (int) $data['account_id'] : null, planningOnly: true))
+            ->header('Cache-Control', 'private, no-store');
+    }
+
     public function reviewEmailPreferences(Request $request, Space $space, FinanceAccess $access, \App\Services\Trajectory\ReviewEmailService $emails)
     {
         $access->authorize($request->user(), $space);

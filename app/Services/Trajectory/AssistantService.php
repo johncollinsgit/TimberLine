@@ -29,6 +29,16 @@ class AssistantService
         }
         try {
             $destination = $this->destination($space, $question);
+            $reviewRequest = preg_match('/\b(?:categorize|classify|review|suggest)\b.*\b(?:uncategorized|needing a category|need(?:ing)? categor|transactions? needing|next transaction)\b|\b(?:next|uncategorized) transaction\b/i', $question);
+            $followup = preg_match('/\b(?:what do you mean|why are you asking)\b/i', $question)
+                && (AssistantTurn::where('space_id', $space->id)->where('user_id', $user->id)->where('id', '<', $turn->id)->latest('id')->first()?->response['choices'] ?? []);
+            if (($reviewRequest || $followup) && count($destination['matches']) === 0) {
+                $reply = $this->nextCategoryReview($user, $space, $context);
+                $turn->update(['response' => $reply, 'state' => 'answered']);
+
+                return ['id' => $turn->id, ...$reply];
+            }
+
             if (! $destination['intent'] && $this->hasAnalysisContext($context) && ! preg_match('/\b(half|50\s*%|split)\b/i', $question)) {
                 $reply = $this->analysisAnswer($user, $space, $context);
                 $turn->update(['response' => $reply, 'state' => 'answered']);
@@ -100,6 +110,44 @@ class AssistantService
             }
             throw $exception;
         }
+    }
+
+    private function nextCategoryReview(User $user, Space $space, array $context): array
+    {
+        $selected = $this->selection($user, $space, $context);
+        $query = Transaction::where('space_id', $space->id)->where('removed', false)->where('pending', false)
+            ->whereIn('flow', ['expense', 'refund'])->where(fn ($q) => $q->where('category', 'uncategorized')->orWhere('reviewed', false));
+        if (! empty($context['transaction_ids'])) {
+            $query->whereIn('id', $selected->pluck('id'));
+        } elseif (! empty($context['program_id'])) {
+            return ['reply' => 'Open the program’s transaction list first so I can review its exact purchases.', 'clarification' => true];
+        }
+        if (! empty($context['account_id'])) {
+            $query->where('account_id', $context['account_id']);
+        }
+        if (isset($context['from'], $context['through'])) {
+            $query->whereDate('posted_on', '>=', $context['from'])->whereDate('posted_on', '<=', $context['through']);
+        }
+        $transaction = $query->orderByRaw('ABS(amount_cents) DESC')->orderBy('id')->first();
+        if (! $transaction) {
+            return ['reply' => 'No uncategorized or unreviewed posted purchases remain in this selection.', 'mode' => 'Category review'];
+        }
+        $attribution = app(AttributionService::class)->describe($user, $space, $transaction);
+        $line = count($attribution['lines']) === 1 && $attribution['lines'][0]['space_id'] === $space->id ? $attribution['lines'][0] : null;
+        if (! $line) {
+            return ['reply' => 'This transaction has multiple allocations. Open its split details to review the intended portion.', 'clarification' => true];
+        }
+        $suggestions = app(ClassificationSuggestionService::class)->preview($user, $space, ['rows' => [['id' => $transaction->id, 'version' => $transaction->version, 'attribution_detail_id' => $line['detail_id'] ?? null]],
+            'account_id' => $context['account_id'] ?? null, 'program_id' => $context['program_id'] ?? null]);
+        $suggestion = $suggestions['rows'][0];
+        $target = $suggestion['editable'] && $suggestion['category'] !== null
+            ? collect($this->destinations($space))->first(fn ($destination) => $destination['key'] === $suggestion['category'] && in_array($destination['type'], ['category', 'subcategory'], true)) : null;
+        app(FinanceAccess::class)->authorize($user->fresh(), $space->fresh());
+
+        return ['reply' => $target ? 'I think this goes in '.$target['label'].'. Is that right?' : 'What was this purchase for?', 'mode' => 'Category review',
+            'review_transaction' => ['transaction_id' => $transaction->id, 'version' => $transaction->version, 'date' => $transaction->posted_on->toDateString(),
+                'merchant' => $transaction->merchant, 'amount_cents' => abs($transaction->amount_cents),
+                'suggestion' => $target, 'reason' => $suggestion['reason']]];
     }
 
     public function apply(User $user, Space $space, AssistantTurn $turn): array

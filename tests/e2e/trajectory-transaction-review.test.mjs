@@ -50,7 +50,7 @@ test('pending promotions require a fresh version and confidence never changes pe
 });
 test('bank account masks are shown only as account details and physical cards need verified evidence',()=>{
   const html=transactionIdentityHtml({...row,source_identity:source},{esc});
-  assert.match(html,/Account: Operating account/);assert.match(html,/1527/);assert.match(html,/Physical card not recorded/);assert.doesNotMatch(html,/card ••••1527/);
+  assert.match(html,/Account: Operating account/);assert.match(html,/1527/);assert.doesNotMatch(html,/Physical card not recorded|evidence needs review/);assert.doesNotMatch(html,/card ••••1527/);
   const verified=transactionIdentityHtml({...row,source_identity:{...source,card_last4:'7851',card_type:'debit',card_label:'Fictional staff card',card_evidence_status:'verified'}},{esc});
   assert.match(verified,/Debit card ••••7851/);
   const hidden=transactionIdentityHtml({...row,source_identity:{...source,authorized_source:false,paid_by_label:'Household purchase paid from another space',card_last4:'7851',card_evidence_status:'verified'}},{esc});

@@ -1,4 +1,4 @@
-import {transactionIdentityHtml} from './transaction-review.js';
+import {transactionIdentityHtml, reviewRowKey} from './transaction-review.js';
 /** A single exploration path: period → source/category → purpose → merchant → editable ledger. */
 export const financeColors = ['#257c77', '#4c83c3', '#db8845', '#9170c4', '#ce668c', '#6e9e54', '#43a4b0', '#bb9a3d', '#6279a6', '#c16e52', '#829252', '#9e71a1'];
 export const financeColor = key => financeColors[[...String(key)].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 0) % financeColors.length];
@@ -53,6 +53,50 @@ export function financeBudgetRows(report) {
     const left = amount(a), right = amount(b);
     return left === right ? a.label.localeCompare(b.label) : left === null ? 1 : right === null ? -1 : right-left;
   });
+}
+
+/** Summarize only spending allowances; savings goals never consume the monthly budget. */
+export function financeBudgetTotals(report) {
+  const rows = financeBudgetRows(report).filter(row => row.mode !== 'fund' && !row.uses_parent_budget);
+  const overlapping = row => row.status === 'overlapping_targets' || (row.reasons ?? []).includes('overlapping_targets');
+  const plans = rows.map(row => overlapping(row) ? null : number(row.target_cents) ?? number(row.planned_cents));
+  const remaining = rows.map(row => overlapping(row) ? null : number(row.remaining_cents) ?? number(row.estimated_remaining_cents));
+  const sumKnown = values => values.some(value => value !== null) ? values.reduce((sum, value) => sum + (value ?? 0), 0) : null;
+  return {
+    total: number(report?.summary?.target_cents) ?? sumKnown(plans),
+    left: report?.future ? null : number(report?.summary?.remaining_cents) ?? sumKnown(remaining),
+    partialTotal: number(report?.summary?.target_cents) === null && plans.some(value => value === null),
+    partialLeft: number(report?.summary?.remaining_cents) === null && remaining.some(value => value === null),
+    estimated: rows.some(row => number(row.target_cents) === null && number(row.planned_cents) !== null || number(row.remaining_cents) === null && number(row.estimated_remaining_cents) !== null),
+  };
+}
+
+const budgetIconPaths = {
+  groceries: '<path d="m3 3 2 2 2 12h11l3-9H6M9 21h.01M18 21h.01M9 3v5M14 3v5"/>',
+  food: '<path d="M5 3v7a3 3 0 0 0 6 0V3M8 3v18M20 21V3c-4 3-4 10 0 10"/>',
+  fuel: '<path d="M3 21h12M5 21V4h8v17M5 8h8M13 11h3v6a2 2 0 0 0 4 0V8l-3-3"/>',
+  home: '<path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8"/>',
+  repairs: '<path d="m14 6 4 4M7 17l-3 3M14 3a6 6 0 0 0-7 7L2 15l7 7 5-5a6 6 0 0 0 7-7l-5 3-5-5Z"/>',
+  travel: '<path d="m3 11 7-1 6-7 3 1-3 7 5 3v2l-7-1-4 6H8l2-7-7-1Z"/>',
+  gifts: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9M12 8v13M12 8C5 8 5 2 8 3c3 0 4 5 4 5Zm0 0c7 0 7-6 4-5-3 0-4 5-4 5Z"/>',
+  health: '<path d="M20 13 12 21 4 13C-2 6 7-1 12 6c5-7 14 0 8 7Z"/>',
+  giving: '<path d="m2 16 4-3h5a2 2 0 0 1 0 4H8m4 0 7-4a2 2 0 0 1 3 2l-9 6H7l-5-2M13 8c-6-4 0-8 2-4 2-4 8 0 2 4l-2 2Z"/>',
+  education: '<path d="m2 8 10-5 10 5-10 5Zm4 2v7c4 3 8 3 12 0v-7M22 8v8"/>',
+  clothes: '<path d="m8 3-6 4 3 5 3-2v11h8V10l3 2 3-5-6-4a4 4 0 0 1-8 0Z"/>',
+  utilities: '<path d="m13 2-9 12h7l-1 8 10-12h-7Z"/>',
+  payroll: '<circle cx="9" cy="7" r="4"/><path d="M2 21v-3a7 7 0 0 1 14 0v3M17 3a4 4 0 0 1 0 8M22 21v-3a7 7 0 0 0-4-6"/>',
+  debt: '<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20M6 15h4"/>',
+  shopping: '<path d="M4 7h16l1 14H3ZM8 7V6a4 4 0 0 1 8 0v1"/>',
+  default: '<rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 8h18M16 12h5v5h-5Z"/>',
+};
+function budgetIcon(row) {
+  const value = `${row.category ?? ''} ${row.label}`.toLowerCase();
+  const key = /grocer/.test(value) ? 'groceries' : /fuel|gasoline|transport/.test(value) ? 'fuel' : /repair|tools|maintenance/.test(value) ? 'repairs'
+    : /travel|holiday|vacation/.test(value) ? 'travel' : /gift/.test(value) ? 'gifts' : /health|medical|insurance/.test(value) ? 'health'
+    : /giving|donat|church/.test(value) ? 'giving' : /school|education|books/.test(value) ? 'education' : /clothes|clothing/.test(value) ? 'clothes'
+    : /utilities|electric|phone|internet/.test(value) ? 'utilities' : /payroll|wages|staff/.test(value) ? 'payroll' : /debt|loan|credit|interest/.test(value) ? 'debt'
+    : /dining|food|meal|date night|eating/.test(value) ? 'food' : /home|household|housing|rent/.test(value) ? 'home' : /shopping|supplies|materials/.test(value) ? 'shopping' : 'default';
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${budgetIconPaths[key]}</svg>`;
 }
 
 /** Plan amounts and recorded allowance are distinct; a missing amount is never a zero. */
@@ -201,7 +245,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     const rows = filtered.slice((state.page - 1) * pageSize, state.page * pageSize), options = report?.category_options ?? [];
     visibleLedgerRows = rows;
     const select = row => (!row.editable && !row.attribution_editable) || row.category_editable === false || row.tax_purpose ? `<span>${esc(row.category_label ?? categoryLabel(row.category))}</span>${row.editable ? button('Review', 'review-row', `data-entry="${esc(keyOf(row))}"`) : '<small>Allocated · read only</small>'}` : `<label class="vf-inline-category"><span class="sr-only">Category for ${esc(row.merchant)}</span><select data-vf-category="${esc(keyOf(row))}" ${busyRow === keyOf(row) ? 'disabled' : ''}>${options.map(c => `<option value="${esc(c)}" ${c === row.category ? 'selected' : ''}>${esc(categoryLabel(c))}</option>`).join('')}</select></label>`;
-    return `<section class="vf-ledger"><div class="vf-section-heading"><div><span class="vf-eyebrow">${filtered.length} recorded entries</span><h2>${esc(heading)}</h2></div><strong>${precise(entries.reduce((sum, row) => sum + signedAmount(row), 0))}</strong></div><div class="vf-ledger-controls"><label>Find a transaction<input type="search" data-vf-input="query" value="${esc(state.query)}" placeholder="Merchant, date or category"></label><label>Sort<select data-vf-input="sort">${[['largest', 'Biggest first'], ['smallest', 'Smallest first'], ['newest', 'Newest first'], ['oldest', 'Oldest first'], ['merchant', 'Merchant'], ['category', 'Category']].map(([key, text]) => `<option value="${key}" ${state.ledgerSort === key ? 'selected' : ''}>${text}</option>`).join('')}</select></label></div>${focused ? `<div class="vf-selected-purchase"><span>Selected: <strong>${esc(focused.merchant)}</strong> · ${precise(signedAmount(focused))}</span>${button('Ask about this purchase', 'ask-selected')}${button('Clear selection', 'clear-selection')}</div>` : ''}${transactionReview?.renderUndo() ?? ''}<div class="vf-table-wrap tr-review-table-wrap"><table class="vf-table tr-review-table"><caption>${esc(heading)} · categories save individually. ${costMode ? 'Refunds reduce the cost shown.' : 'Positive amounts are money received; negative amounts are money paid.'}</caption><thead><tr><th scope="col">Date</th><th scope="col">Merchant / description</th><th scope="col">Category</th><th scope="col">${costMode ? 'Cost / refund' : 'Amount'}</th><th scope="col"><span class="sr-only">More detail</span></th></tr></thead><tbody>${rows.map(row => `<tr data-entry-key="${esc(keyOf(row))}" class="${keyOf(row) === state.focusedEntry ? 'vf-selected-row' : ''}"><td data-label="Date" class="tr-review-date">${esc(row.date)}</td><td data-label="Merchant" class="tr-review-merchant"><button type="button" class="vf-merchant-select" data-action="vf-select-row" data-entry="${esc(keyOf(row))}">${esc(row.merchant)}</button>${transactionIdentityHtml(row, {esc})}<small>${esc(row.program_name ?? row.account_name ?? '')}${row.amount_basis === 'owned_bank_cash' ? ' · Bank cash' : ''}</small></td><td data-label="Category" class="tr-review-category">${select(row)}${transactionReview?.render(row) ?? ''}</td><td data-label="Amount" class="vf-money tr-review-amount">${precise(signedAmount(row))}</td><td data-label="Actions" class="tr-review-actions">${button(row.editable ? 'Details' : 'View', 'review-row', `data-entry="${esc(keyOf(row))}"`)}${row.attribution_editable || row.editable ? button('Split / program', 'attribution', `data-entry="${esc(keyOf(row))}"`) : ''}</td></tr>`).join('') || '<tr><td colspan="5">No transactions match this view.</td></tr>'}</tbody></table></div><div class="vf-pagination">${button('Previous', 'page', `data-page="${state.page - 1}" ${state.page === 1 ? 'disabled' : ''}`)}<span>Page ${state.page} of ${pages}</span>${button('Next', 'page', `data-page="${state.page + 1}" ${state.page === pages ? 'disabled' : ''}`)}</div></section>`;
+    return `<section class="vf-ledger"><div class="vf-section-heading"><div><span class="vf-eyebrow">${filtered.length} recorded entries</span><h2>${esc(heading)}</h2></div><strong>${precise(entries.reduce((sum, row) => sum + signedAmount(row), 0))}</strong></div><div class="vf-ledger-controls"><label>Find a transaction<input type="search" data-vf-input="query" value="${esc(state.query)}" placeholder="Merchant, date or category"></label><label>Sort<select data-vf-input="sort">${[['largest', 'Biggest first'], ['smallest', 'Smallest first'], ['newest', 'Newest first'], ['oldest', 'Oldest first'], ['merchant', 'Merchant'], ['category', 'Category']].map(([key, text]) => `<option value="${key}" ${state.ledgerSort === key ? 'selected' : ''}>${text}</option>`).join('')}</select></label></div>${focused ? `<div class="vf-selected-purchase"><span>Selected: <strong>${esc(focused.merchant)}</strong> · ${precise(signedAmount(focused))}</span>${button('Ask about this purchase', 'ask-selected')}${button('Clear selection', 'clear-selection')}</div>` : ''}${transactionReview?.renderUndo() ?? ''}<div class="vf-table-wrap tr-review-table-wrap"><table class="vf-table tr-review-table"><caption>${esc(heading)}</caption><thead><tr><th scope="col">Date</th><th scope="col">Merchant / description</th><th scope="col">Category</th><th scope="col">${costMode ? 'Cost / refund' : 'Amount'}</th><th scope="col"><span class="sr-only">More detail</span></th></tr></thead><tbody>${rows.map(row => `<tr data-list-key="${esc(reviewRowKey(row))}" data-entry-key="${esc(keyOf(row))}" class="${keyOf(row) === state.focusedEntry ? 'vf-selected-row' : ''}"><td data-label="Date" class="tr-review-date">${esc(row.date)}</td><td data-label="Merchant" class="tr-review-merchant"><button type="button" class="tr-list-merchant-mobile" data-action="transaction-list-detail">${esc(row.merchant)}</button><button type="button" class="vf-merchant-select tr-list-merchant-desktop" data-action="vf-select-row" data-entry="${esc(keyOf(row))}">${esc(row.merchant)}</button>${transactionIdentityHtml(row, {esc})}<small>${esc(row.program_name ?? row.account_name ?? '')}${row.amount_basis === 'owned_bank_cash' ? ' · Bank cash' : ''}</small></td><td data-label="Category" class="tr-review-category">${select(row)}${transactionReview?.render(row) ?? ''}</td><td data-label="Amount" class="vf-money tr-review-amount">${precise(signedAmount(row))}</td><td data-label="Actions" class="tr-review-actions">${button(row.editable ? 'Details' : 'View', 'review-row', `data-entry="${esc(keyOf(row))}"`)}${row.attribution_editable || row.editable ? button('Split / program', 'attribution', `data-entry="${esc(keyOf(row))}"`) : ''}</td></tr>`).join('') || '<tr><td colspan="5">No transactions match this view.</td></tr>'}</tbody></table></div><div class="vf-pagination">${button('Previous', 'page', `data-page="${state.page - 1}" ${state.page === 1 ? 'disabled' : ''}`)}<span>Page ${state.page} of ${pages}</span>${button('Next', 'page', `data-page="${state.page + 1}" ${state.page === pages ? 'disabled' : ''}`)}</div></section>`;
   }
 
   function categoryHtml() {
@@ -213,29 +257,43 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     return `<section><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(parent?.label ?? '')}</span><h2>${esc(selected.label)}</h2></div><strong>${precise(selected.amount_cents)}</strong>${button('View all transactions', 'ledger-category')}</div><div class="vf-category-explore"><div class="vf-chart vf-donut"><canvas id="vf-category-chart" role="img" aria-label="${amountsLabel}; select a slice to explore"></canvas></div><div class="vf-slice-list">${children.map(row => `<button type="button" data-action="vf-subcategory" data-key="${esc(row.key)}"><span class="vf-swatch" style="background:${financeColor(row.key)}" aria-hidden="true"></span><span>${esc(row.label)}</span><strong>${precise(row.amount_cents)}</strong><span aria-hidden="true">›</span></button>`).join('')}</div></div></section>`;
   }
 
-  function envelopeCards(limit = null) {
+  function envelopeCards(limit = null, funds = false) {
     if (getContext().account_id) return `<div class="vf-empty"><h3>Your budgets cover all accounts</h3>${button('Show all accounts', 'all-accounts')}</div>`;
-    const rows = financeBudgetRows(envelopes), selected = limit ? rows.slice(0, limit) : rows;
+    const rows = financeBudgetRows(envelopes);
+    const matching = rows.map((row, index) => ({row, index})).filter(({row}) => (row.mode === 'fund') === funds);
+    const selected = limit ? matching.slice(0, limit) : matching;
     if (envelopes?.error) return `<div class="vf-error" role="status">Budgets could not load. ${esc(envelopes.error)} ${button('Try again', 'retry')}</div>`;
-    if (!rows.length) return `<div class="vf-empty"><h3>No category budgets yet</h3>${button('Set up a budget', 'legacy-budget')}</div>`;
+    if (!selected.length) return funds ? '' : `<div class="vf-empty"><h3>No category budgets yet</h3>${button('Set up a budget', 'legacy-budget')}</div>`;
     const money = amount => amount === null ? '—' : precise(amount);
-    return `<div class="vf-envelope-grid vf-budget-list">${selected.map((row, index) => {
+    return `<div class="vf-envelope-grid vf-budget-list${funds ? ' vf-goal-list' : ''}">${selected.map(({row, index}) => {
       const color = financeColor(row.category ?? row.key), compact = financeBudgetCompact(row, {future: envelopes?.future === true});
-      let used = compact.plan === null || compact.spent === null ? null : compact.plan === 0 ? (compact.spent > 0 ? 100 : 0) : Math.min(100, Math.max(0, compact.spent / compact.plan * 100));
-      let allowance = compact.plan === null ? row.uses_parent_budget ? 'Shared' : 'Set budget' : `${money(compact.plan)}${row.target_status === 'draft' ? ' est.' : ''} ${row.partial_period ? 'dated' : ''}`;
+      let used = compact.plan === null || compact.spent === null || compact.needsSplit ? null : compact.plan === 0 ? (compact.spent > 0 ? 100 : 0) : Math.min(100, Math.max(0, compact.spent / compact.plan * 100));
+      let allowance = compact.plan === null ? row.uses_parent_budget ? 'Shared' : 'Set budget' : `${money(compact.plan)}${row.target_status === 'draft' ? ' est.' : ''}${row.partial_period ? ' dated' : ''}`;
       let spent = compact.needsSplit && compact.spent === 0 ? 'Needs split' : `${money(compact.spent)} spent`;
       let left = `${compact.needsSplit && compact.left !== null && compact.left >= 0 ? '≤ ' : ''}${money(compact.left)} left${compact.estimated ? ' · est.' : ''}`;
-      if(row.mode === 'income_percentage') allowance = Number.isSafeInteger(row.rate_bps) ? `${row.rate_bps / 100}% of take-home` : 'Income rule';
-      if(row.mode === 'fund') {
+      if (row.mode === 'income_percentage' && Number.isSafeInteger(row.rate_bps)) allowance += ` · ${row.rate_bps / 100}%`;
+      if (funds) {
         const saved = number(row.fund?.saved_cents), cap = number(row.fund?.target_cents);
         allowance = `${money(cap)} goal`;
         spent = `${money(saved)} saved`;
-        left = cap === null || saved === null ? '— to save' : `${money(Math.max(0,cap-saved))} to save`;
-        used = saved === null || cap === null ? null : cap === 0 ? 100 : Math.min(100,Math.max(0,saved/cap*100));
+        left = cap === null || saved === null ? '— to save' : `${money(Math.max(0, cap-saved))} to save`;
+        used = saved === null || cap === null ? null : cap === 0 ? 100 : Math.min(100, Math.max(0, saved/cap*100));
       }
-      const over = row.mode !== 'fund' && compact.left !== null && compact.left < 0;
-      return `<article class="vf-envelope-shell"><button type="button" class="vf-envelope vf-budget-list-row ${over ? 'vf-over-budget' : ''}" data-action="vf-envelope" data-index="${index}"><span class="vf-budget-row-heading"><span class="vf-envelope-label"><span class="vf-swatch" style="background:${color}"></span>${esc(row.label)}</span><span class="vf-budget-row-limit">${esc(allowance)}</span></span><span class="vf-budget-track ${used === null ? 'vf-budget-track-unknown' : ''}" ${used === null ? '' : `role="progressbar" aria-label="${esc(row.label)} ${row.mode === 'fund' ? 'fund progress' : 'budget used'}" aria-valuenow="${Math.round(used)}" aria-valuemin="0" aria-valuemax="100"`}><i style="width:${used ?? 0}%;background:${over ? '#b4533d' : color}"></i></span><span class="vf-budget-row-amounts"><span>${esc(spent)}</span><b>${esc(left)}</b></span></button></article>`;
+      const over = !funds && compact.left !== null && compact.left < 0;
+      return `<article class="vf-envelope-shell"><button type="button" class="vf-envelope vf-budget-list-row ${over ? 'vf-over-budget' : ''}" data-action="vf-envelope" data-index="${index}" style="--budget-color:${color}"><span class="vf-budget-row-heading"><span class="vf-budget-icon">${budgetIcon(row)}</span><span class="vf-envelope-label">${esc(row.label)}</span><span class="vf-budget-chevron" aria-hidden="true">›</span></span><span class="vf-budget-track ${used === null ? 'vf-budget-track-unknown' : ''}" ${used === null ? '' : `role="progressbar" aria-label="${esc(row.label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(used)}" aria-valuetext="${esc(spent)} of ${esc(allowance)}; ${esc(left)}"`}><i style="width:${used ?? 0}%;background:${over ? '#b4533d' : color}" aria-hidden="true"></i><span class="vf-budget-row-amounts"><span>${esc(spent)}<span class="vf-budget-row-limit"> / ${esc(allowance)}</span></span><b>${esc(left)}</b></span></span></button></article>`;
     }).join('')}</div>`;
+  }
+
+  function budgetSummary() {
+    if (getContext().account_id || envelopes?.error) return '';
+    const totals = financeBudgetTotals(envelopes);
+    const metric = (label, value, partial) => `<div><span>${label}</span><strong>${value === null ? '—' : precise(value)}</strong>${partial ? '<small>Partial</small>' : totals.estimated ? '<small>Est.</small>' : ''}</div>`;
+    return `<section class="vf-budget-totals" aria-label="Monthly budget totals">${metric('Total budget', totals.total, totals.partialTotal)}${metric('Budget left', totals.left, totals.partialLeft)}</section>`;
+  }
+
+  function savingsGoals() {
+    if (getContext().account_id || !envelopes?.rows?.some(row => row.mode === 'fund')) return '';
+    return `<details class="vf-savings-goals"><summary>Savings goals <span>After monthly expenses</span></summary>${envelopeCards(null, true)}</details>`;
   }
 
   function render(view) {
@@ -244,7 +302,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     if (error) return `<section class="vf-error" role="alert"><h2>This financial view could not load</h2><p>${esc(error)}</p>${button('Try again', 'retry')}</section>`;
     if (!report) return '<section class="vf-empty" role="status">Loading your financial picture…</section>';
     const covered = coverageHtml();
-    if (view === 'budget') return `<div class="vf-finance" aria-busy="${loading}"><div class="vf-section-heading">${programPicker()}<h2>Categories</h2><label>Budget month<input type="month" data-vf-input="budget-month" value="${esc(state.budgetMonth)}"></label>${button('Manage targets', 'legacy-budget')}${button('Add category / program', 'definitions')}</div>${envelopeCards()}</div>`;
+    if (view === 'budget') return `<div class="vf-finance" aria-busy="${loading}">${budgetSummary()}<div class="vf-section-heading vf-budget-tools">${programPicker()}<label>Budget month<input type="month" data-vf-input="budget-month" value="${esc(state.budgetMonth)}"></label>${button('Manage targets', 'legacy-budget')}${button('Add category / program', 'definitions')}</div>${envelopeCards()}${savingsGoals()}</div>`;
     const emptyToday = emptyRecordedPeriod();
     const latest = report.coverage?.latest_recorded_on;
     const latestNote = emptyToday ? latest && /^\d{4}-\d{2}-\d{2}$/.test(latest) ? `Bank activity through ${new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',timeZone:'UTC'}).format(new Date(latest+'T12:00:00Z'))}` : 'No bank activity yet' : null;
@@ -468,6 +526,10 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     associateRevision(previousRevision) {
       if(!report||!envelopes||error||loading||envelopes.error||loadedProjection!==projectionKey(previousRevision))return false;
       loadedProjection=projectionKey();return true;
+    },
+    clearExploration() {
+      const through = getContext().through, year = Number(through.slice(0,4));
+      state = {...state, year, comparisonYear: year-1, grain: 'month', period: null, direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false, program: null, query: '', page: 1, focusedEntry: null};
     },
     capture: () => clone(state),
     restore(value) {if (value?.version === 1) state = {...state, merchantGroup: null, ...clone(value)};},

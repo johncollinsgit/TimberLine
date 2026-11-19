@@ -54,8 +54,8 @@ export function chartPresentation(canvas, money, type, extra = {}) {
       tooltip.style.top=`${Math.max(0,Math.min(model.caretY-tooltip.offsetHeight-12,wrapper.clientHeight-tooltip.offsetHeight))}px`;
     }}},
     scales:type==='doughnut'?{}:{
-      x:{grid:{display:false},border:{display:false},ticks:{...(extra.tickLabels?{callback:v=>extra.tickLabels[v]}:{}),maxTicksLimit:extra.showAllTicks?12:6,maxRotation:0,autoSkip:!extra.showAllTicks,color:'#667580',padding:12,font:{family:font,size:11}}},
-      y:{beginAtZero:extra.beginAtZero??false,border:{display:false},grid:{color:ctx=>ctx.tick.value===0?'#b8c4cc':'#edf0f3',drawTicks:false},ticks:{maxTicksLimit:6,padding:12,color:'#667580',callback:v=>compact.format(v/100),font:{family:font,size:11}}},
+      x:{...(extra.stacked?{stacked:true}:{}),grid:{display:false},border:{display:false},ticks:{...(extra.tickLabels?{callback:v=>extra.tickLabels[v]}:{}),maxTicksLimit:extra.showAllTicks?12:6,maxRotation:0,autoSkip:!extra.showAllTicks,color:'#667580',padding:12,font:{family:font,size:11}}},
+      y:{...(extra.stacked?{stacked:true}:{}),beginAtZero:extra.beginAtZero??false,border:{display:false},grid:{color:ctx=>ctx.tick.value===0?'#b8c4cc':'#edf0f3',drawTicks:false},ticks:{maxTicksLimit:6,padding:12,color:'#667580',callback:v=>compact.format(v/100),font:{family:font,size:11}}},
     },
   }};
 }

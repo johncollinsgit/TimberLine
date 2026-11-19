@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createVisualFinance, financeBudgetRows, financeBudgetPresentation, financeBudgetCompact, financeColor, financeSelectionRows, sortFinanceEntries} from '../../resources/js/trajectory/visual-finance.js';
+import {createVisualFinance, financeBudgetRows, financeBudgetTotals, financeBudgetPresentation, financeBudgetCompact, financeColor, financeSelectionRows, sortFinanceEntries} from '../../resources/js/trajectory/visual-finance.js';
 
 const esc = x => String(x ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');
 const precise = x => Number.isSafeInteger(x) ? `$${(x / 100).toFixed(2)}` : 'Unavailable';
@@ -278,4 +278,22 @@ test('Today with known history and no new records explains the gap without inven
  assert.match(html,/None recorded/);assert.match(html,/Bank activity through Feb 14/);
  assert.match(html,/<h3>Money coming in<\/h3><strong>None recorded<\/strong>/);assert.match(html,/<h3>Money spent<\/h3><strong>None recorded<\/strong>/);
  assert.doesNotMatch(html,/No receipts recorded today|No purchases recorded today|Latest recorded activity:/);assert.doesNotMatch(html,/\$0\.00/);assert.equal(ui.getReport().summary.spending_cents,null);
+});
+
+
+test('budget totals exclude savings goals and parent-shared lines, retaining estimates and unknown coverage', () => {
+ const rows=[{category:'food',target_cents:140000,remaining_cents:60000},{category:'dining',uses_parent_budget:'food',remaining_cents:60000},{category:'travel',mode:'fund',fund:{target_cents:100000,saved_cents:0}},{category:'fuel',planned_cents:35000,estimated_remaining_cents:10000}];
+ assert.deepEqual(financeBudgetTotals({rows}),{total:175000,left:70000,partialTotal:false,partialLeft:false,estimated:true});
+ const missing=financeBudgetTotals({rows:[...rows,{category:'medical',target_cents:null,remaining_cents:null}]});
+ assert.equal(missing.total,175000);assert.equal(missing.left,70000);assert.equal(missing.partialTotal,true);assert.equal(missing.partialLeft,true);
+ assert.equal(financeBudgetTotals({rows,future:true}).left,null);
+ assert.equal(financeBudgetTotals({rows:[{category:'food',status:'overlapping_targets',target_cents:10000,remaining_cents:5000}]}).total,null);
+});
+test('goals are separate, collapsed and absent from the home budget preview; list indexes still open the original row', async () => {
+ const budgets={rows:[{key:'goal',category:'repairs',label:'Repair goal',mode:'fund',fund:{target_cents:150000,saved_cents:0}},{key:'food',category:'groceries',label:'Groceries',target_cents:140000,spent_cents:100000,remaining_cents:40000}]};
+ const {ui,changes}=fixture(async path=>path.includes('budget-envelopes')?budgets:structuredClone(report));await ui.refresh();
+ const html=ui.render('budget');assert.match(html,/Total budget/);assert.match(html,/Budget left/);assert.match(html,/<details class="vf-savings-goals">/);assert.doesNotMatch(html,/<h2>Categories|vf-swatch/);
+ assert.ok(html.indexOf('Groceries')<html.indexOf('Repair goal'));assert.doesNotMatch(ui.render('overview'),/Repair goal/);
+ await ui.handleClick({dataset:{action:'vf-envelope',index:'1'}});assert.deepEqual(changes.at(-1),{budget:'food'});
+ await ui.handleClick({dataset:{action:'vf-envelope',index:'0'}});assert.deepEqual(changes.at(-1),{budget:'goal'});
 });

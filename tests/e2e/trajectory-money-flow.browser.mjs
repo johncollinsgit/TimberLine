@@ -78,7 +78,8 @@ try{
    // Save the same confirmed purpose through the real editor. The amounts and
    // fixture categories stay unchanged, but its new source revision must reload.
    await navigateSection('Review transactions');
-   await page.getByRole('row').filter({hasText:'Fictional employer'}).getByRole('button',{name:/^(Edit category|Categorize)$/}).click();
+   if(width<700)await page.getByRole('row').filter({hasText:'Fictional employer'}).locator('.tr-list-merchant-mobile').click();
+   await (width<700?page.locator('.tr-transaction-detail-dialog'):page.getByRole('row').filter({hasText:'Fictional employer'})).getByRole('button',{name:/^(Edit category|Categorize)$/}).click();
    const beforeMutation=dashboardReads.length;
    const mutationDashboard=page.waitForRequest(request=>request.method()==='GET'&&new URL(request.url()).pathname.endsWith('/dashboard'));
    await page.locator('#tr-save').click();await mutationDashboard;
@@ -278,7 +279,7 @@ try{
    await page.getByRole('heading',{name:'Review transactions',level:1,exact:true}).waitFor();
    const clientEquipment=page.getByRole('row').filter({hasText:'Fictional detail client-equipment'});
    await expect(clientEquipment).toContainText('-$123.45');await expect(clientEquipment).toContainText('Economic allocation $0.00');await expect(clientEquipment).toContainText('Full card amount');
-   await expect(page.locator('.tr-table caption').first()).toContainText('Positive credits reduce the card balance');
+   await expect(page.locator('.tr-table caption').first()).toContainText('2 transactions');
    await page.locator('#tr-back').click();await expect(page.getByRole('heading',{name:'Credit card activity',exact:true})).toBeVisible();
    await selectReportRange(page,'all');
    await expect(cardDetail.locator('.tr-card-figures')).toContainText('$298.46');await expect(cardDetail.locator('.tr-card-share')).toContainText('Unavailable');
