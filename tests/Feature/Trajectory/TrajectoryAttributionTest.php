@@ -14,6 +14,8 @@ use App\Services\Trajectory\RecordService;
 
 beforeEach(function (): void {
     $this->withoutVite();
+    // Keep UTC fixture dates and the finance space's calendar on the same day.
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-11-18T12:00:00Z'));
     config(['trajectory.enabled' => true]);
     $this->owner = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
     [$this->space] = app(PilotService::class)->prepare($this->owner, null, true);
@@ -34,6 +36,14 @@ function attributionBusiness($test): \App\Models\Trajectory\Space
 
     return $business;
 }
+
+test('future-dated bank sources remain ineligible for economic attribution', function (): void {
+    $this->tx->update(['posted_on' => now($this->space->timezone)->addDay()->toDateString()]);
+    $this->actingAs($this->owner)->putJson('/trajectory/spaces/'.$this->space->id.'/transactions/'.$this->tx->id.'/attribution', [
+        'version' => 1, 'lines' => [['space_id' => $this->space->id, 'amount_cents' => -10001, 'category' => 'groceries']],
+    ])->assertUnprocessable()->assertJsonPath('message', 'Use an actual nonzero bank transaction.');
+    expect(AllocationDetail::count())->toBe(0)->and($this->tx->fresh()->version)->toBe(1);
+});
 
 test('multiple economic lines in one space preserve the unique allocation and source cents', function (): void {
     $category = $this->attribution->saveDefinition($this->owner, $this->space, 'category_definition', 'Shopping', ['key' => 'shopping', 'direction' => 'expense']);
