@@ -297,3 +297,11 @@ test('goals are separate, collapsed and absent from the home budget preview; lis
  await ui.handleClick({dataset:{action:'vf-envelope',index:'1'}});assert.deepEqual(changes.at(-1),{budget:'food'});
  await ui.handleClick({dataset:{action:'vf-envelope',index:'0'}});assert.deepEqual(changes.at(-1),{budget:'goal'});
 });
+
+
+test('known fuel spending retains a proportional bar when other parent costs still need splitting',async()=>{
+ const budgets={rows:[{key:'0|fuel',category:'fuel',label:'Fuel',target_cents:65000,planned_cents:65000,spent_cents:51083,bank_spent_cents:51083,estimated_remaining_cents:13917,remaining_cents:null,category_review_pending:true,reasons:['needs_split','category_review_pending']}]};
+ const {ui}=fixture(async path=>path.includes('budget-envelopes')?budgets:structuredClone(report));await ui.refresh();const html=ui.render('budget');
+ assert.match(html,/aria-valuenow="79"/);assert.match(html,/\$510.83\+ spent/);assert.match(html,/≤ \$139.17 left · est./);assert.doesNotMatch(html,/vf-budget-track-unknown/);
+ budgets.rows[0].spent_cents=0;budgets.rows[0].bank_spent_cents=0;await ui.refresh();const unknown=ui.render('budget');assert.match(unknown,/Needs split/);assert.match(unknown,/vf-budget-track-unknown/);assert.doesNotMatch(unknown,/aria-valuenow="0"/);
+});

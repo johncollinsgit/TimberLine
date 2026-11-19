@@ -104,6 +104,12 @@ for (const engine of [chromium, webkit]) {
       });
       assert.match(await page.locator('[data-budget-preview]').innerText(), /Needs split/);
       assert.equal(await page.getByRole('progressbar',{name:'Budget spent',exact:true}).count(),0,'Unresolved category spending cannot announce zero percent spent');
+      await page.evaluate(() => window.detail.open({category:'fuel',label:'Fuel',record_ids:[],target_cents:35000,bank_spent_cents:51083,reported_cash_spent_cents:0,pending_cents:0,category_review_pending:true,reasons:['needs_split','category_review_pending']},{month:'2026-11'}));
+      assert.equal(await page.getByRole('progressbar',{name:'Budget spent',exact:true}).getAttribute('aria-valuenow'),'100');
+      await page.locator('[data-budget-money="monthly_cents"]').fill('650');
+      assert.equal(await page.getByRole('progressbar',{name:'Budget spent',exact:true}).getAttribute('aria-valuenow'),'79');
+      assert.match(await page.locator('[data-budget-preview]').innerText(),/\$510.83\+/);
+      assert.match(await page.locator('[data-budget-preview]').innerText(),/≤ \$139.17/);
       await page.evaluate(() => window.detail.open({category:'fuel',label:'Fuel',record_ids:[],target_cents:35000,bank_spent_cents:0,reported_cash_spent_cents:0,pending_cents:0,reasons:[]},{month:'2026-11'}));
       assert.equal(await page.getByRole('progressbar',{name:'Budget spent',exact:true}).getAttribute('aria-valuenow'),'0','Known zero spending retains its real zero progress');
       assert.deepEqual(errors, []); await page.close();
