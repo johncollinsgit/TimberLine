@@ -434,10 +434,7 @@ class MarketingShopifyIntegrationController extends Controller
                     : null;
             } catch (\Throwable $e) {
                 $syncState = 'sync_failed';
-                $restore = $candleCashService->cancelIssuedRedemptionAndRestoreBalance(
-                    $redemption,
-                    'Canceled automatically because Shopify could not prepare the reward discount yet.'
-                );
+                $restore = $candleCashService->recordShopifySyncFailure($redemption, $e);
                 $restoredBalance = round((float) ($restore['balance'] ?? $candleCashService->currentBalance($profile)), 3);
                 $balancePayload = $this->storefrontBalancePayload($candleCashService, $restoredBalance);
 
@@ -1387,7 +1384,6 @@ class MarketingShopifyIntegrationController extends Controller
         $rewardCreditLabelTitle = Str::title($rewardCreditLabel);
         $voteLockedJoinUrl = trim((string) data_get($integrationConfig, 'vote_locked_join_url', '')) ?: null;
         $rewardCodeRows = [];
-        $restoredFailedSyncRedemption = false;
 
         foreach ($activeCodes as $row) {
             $platform = trim((string) ($row->platform ?? ''));
@@ -1406,11 +1402,7 @@ class MarketingShopifyIntegrationController extends Controller
                     $applyPath = $this->candleCashApplyPath((string) $row->redemption_code);
                 } catch (\Throwable $e) {
                     $discountSyncStatus = 'sync_failed';
-                    $candleCashService->cancelIssuedRedemptionAndRestoreBalance(
-                        $row,
-                        'Canceled automatically because Shopify could not prepare the reward discount yet.'
-                    );
-                    $restoredFailedSyncRedemption = true;
+                    $candleCashService->recordShopifySyncFailure($row, $e);
 
                     continue;
                 }
@@ -1439,13 +1431,6 @@ class MarketingShopifyIntegrationController extends Controller
                     'reward_value' => $row->reward?->reward_value !== null ? (string) $row->reward->reward_value : null,
                 ],
             ];
-        }
-
-        if ($restoredFailedSyncRedemption && $profile) {
-            $summary = array_merge($summary, [
-                'current_balance' => $candleCashService->currentBalance($profile),
-                'current_balance_amount' => $candleCashService->amountFromPoints($candleCashService->currentBalance($profile)),
-            ]);
         }
 
         $summary = $this->normalizeCandleCashSummary($summary);

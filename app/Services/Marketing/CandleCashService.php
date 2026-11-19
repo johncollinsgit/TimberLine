@@ -420,6 +420,33 @@ class CandleCashService
             ]);
     }
 
+    /** A failed response does not prove Shopify rejected the discount. Keep the original hold and code for retry. */
+    public function recordShopifySyncFailure(CandleCashRedemption $redemption, \Throwable $exception): array
+    {
+        return DB::transaction(function () use ($redemption, $exception): array {
+            $current = CandleCashRedemption::query()->lockForUpdate()->with('profile')->findOrFail($redemption->id);
+            $error = mb_substr($exception->getMessage(), 0, 1000);
+            if ($current->status === 'issued') {
+                $current->forceFill(['redemption_context' => $this->mergeRedemptionContext(
+                    (array) $current->redemption_context,
+                    ['shopify_sync_failure' => ['message' => $error, 'occurred_at' => now()->toIso8601String()]]
+                )])->save();
+            }
+
+            app(MarketingStorefrontEventLogger::class)->log('redemption_shopify_sync_failed', [
+                'profile' => $current->profile,
+                'candle_cash_redemption_id' => $current->id,
+                'status' => 'error',
+                'issue_type' => 'shopify_discount_sync_failed',
+                'source_surface' => 'shopify_discount_sync',
+                'dedupe_key' => 'shopify_sync_failed:'.$current->id,
+                'meta' => ['error' => $error, 'balance_reserved' => $current->status === 'issued'],
+            ]);
+
+            return ['balance' => $this->currentBalance($current->profile)];
+        });
+    }
+
     public function cancelIssuedRedemptionAndRestoreBalance(
         CandleCashRedemption $redemption,
         string $reason = 'Canceled automatically because Shopify could not prepare the reward discount.',
@@ -922,6 +949,20 @@ class CandleCashService
         string $platform = 'shopify',
         bool $reuseActiveCode = true,
         ?int $tenantId = null
+    ): array {
+        return DB::transaction(function () use ($profile, $reward, $platform, $reuseActiveCode, $tenantId): array {
+            $current = MarketingProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+
+            return $this->requestLockedStorefrontRedemption($current, $reward, $platform, $reuseActiveCode, $tenantId);
+        });
+    }
+
+    protected function requestLockedStorefrontRedemption(
+        MarketingProfile $profile,
+        CandleCashReward $reward,
+        string $platform,
+        bool $reuseActiveCode,
+        ?int $tenantId
     ): array {
         $platform = strtolower(trim($platform)) ?: 'shopify';
         $tenantId = $this->resolvedTenantId($tenantId, $profile);

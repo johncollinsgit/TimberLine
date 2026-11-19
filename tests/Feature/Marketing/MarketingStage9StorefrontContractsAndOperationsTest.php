@@ -11,6 +11,46 @@ use App\Models\User;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\CandleCashShopifyDiscountService;
 
+test('a status sync failure cannot refund a live code or allow a replacement redemption', function () {
+    config()->set('marketing.shopify.signing_secret', 'stage9-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
+    $tenant = stage9MapStore('retail', 'modernforestry.myshopify.com', 'status-recovery-tenant');
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => $tenant->id, 'email' => 'status-recovery@example.com', 'normalized_email' => 'status-recovery@example.com',
+        'phone' => '5553339911', 'normalized_phone' => '+15553339911',
+    ]);
+    $cash = app(CandleCashService::class);
+    $cash->addPoints($profile, 30, 'earn', 'test', 'seed');
+    $reward = $cash->storefrontReward($tenant->id);
+    $calls = 0;
+    $sync = \Mockery::mock(CandleCashShopifyDiscountService::class);
+    $sync->shouldReceive('ensureDiscountForRedemption')->times(3)->andReturnUsing(function () use (&$calls) {
+        if (++$calls === 2) {
+            throw new RuntimeException('Fictional status lookup timeout.');
+        }
+
+        return ['store_key' => 'retail'];
+    });
+    app()->instance(CandleCashShopifyDiscountService::class, $sync);
+    $identity = ['email' => $profile->email, 'phone' => $profile->phone, 'shop' => 'modernforestry.myshopify.com'];
+    $payload = [...$identity, 'reward_id' => $reward->id];
+    $headers = stage9SignedHeaders('POST', '/shopify/marketing/rewards/redeem', [], json_encode($payload), 'stage9-secret');
+    $first = $this->withHeaders($headers)->postJson(route('marketing.shopify.rewards.redeem'), $payload)
+        ->assertOk()->json('data.redemption_code');
+    $statusHeaders = stage9SignedHeaders('GET', '/shopify/marketing/candle-cash/status', $identity, '', 'stage9-secret');
+    $this->withHeaders($statusHeaders)->getJson(route('marketing.shopify.candle-cash.status', $identity))->assertOk();
+    expect($cash->currentBalance($profile))->toBe(20.0)
+        ->and(CandleCashRedemption::where('marketing_profile_id', $profile->id)->sole()->status)->toBe('issued');
+    $this->withHeaders($headers)->postJson(route('marketing.shopify.rewards.redeem'), $payload)
+        ->assertOk()->assertJsonPath('data.redemption_code', $first)
+        ->assertJsonPath('data.state', 'already_has_active_code');
+    expect(CandleCashRedemption::where('marketing_profile_id', $profile->id)->count())->toBe(1)
+        ->and($cash->currentBalance($profile))->toBe(20.0)
+        ->and(MarketingStorefrontEvent::where('event_type', 'redemption_shopify_sync_failed')->value('issue_type'))->toBe('shopify_discount_sync_failed');
+});
+
 test('storefront contract responses include standardized envelope states and recovery states', function () {
     config()->set('marketing.shopify.signing_secret', 'stage9-secret');
     config()->set('marketing.shopify.allow_legacy_token', false);
@@ -662,7 +702,7 @@ function stage9MapStore(string $storeKey, string $shopDomain, string $slug): Ten
         ['store_key' => $storeKey],
         [
             'shop_domain' => $shopDomain,
-            'access_token' => 'stage9-token-' . $storeKey,
+            'access_token' => 'stage9-token-'.$storeKey,
             'tenant_id' => $tenant->id,
             'installed_at' => now(),
         ]
@@ -704,7 +744,7 @@ test('reconciliation dashboard remains restricted to marketing roles', function 
 });
 
 /**
- * @param array<string,mixed> $query
+ * @param  array<string,mixed>  $query
  * @return array<string,string>
  */
 function stage9SignedHeaders(
@@ -728,7 +768,7 @@ function stage9SignedHeaders(
 }
 
 /**
- * @param array<string,mixed> $query
+ * @param  array<string,mixed>  $query
  */
 function stage9CanonicalQuery(array $query): string
 {
@@ -749,14 +789,14 @@ function stage9CanonicalQuery(array $query): string
             $value = (string) $value;
         }
 
-        $parts[] = rawurlencode((string) $key) . '=' . rawurlencode((string) $value);
+        $parts[] = rawurlencode((string) $key).'='.rawurlencode((string) $value);
     }
 
     return implode('&', $parts);
 }
 
 /**
- * @param array<string,mixed> $params
+ * @param  array<string,mixed>  $params
  * @return array<string,mixed>
  */
 function stage9AppProxySignedQuery(array $params, string $secret): array
@@ -768,7 +808,7 @@ function stage9AppProxySignedQuery(array $params, string $secret): array
 }
 
 /**
- * @param array<string,mixed> $params
+ * @param  array<string,mixed>  $params
  */
 function stage9AppProxyCanonical(array $params): string
 {
@@ -789,7 +829,7 @@ function stage9AppProxyCanonical(array $params): string
             $value = (string) $value;
         }
 
-        $parts[] = (string) $key . '=' . (string) $value;
+        $parts[] = (string) $key.'='.(string) $value;
     }
 
     return implode('', $parts);

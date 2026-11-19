@@ -476,10 +476,11 @@ class ModernForestryMobileAccountService
             ];
         }
 
-        $restore = $this->candleCashService->cancelIssuedRedemptionAndRestoreBalance(
-            $redemption,
-            'Canceled automatically because the mobile checkout was dismissed before the Candle Cash code was used.'
-        );
+        try {
+            $restore = $this->shopifyDiscounts->releaseDiscountForRedemption($redemption, self::MOBILE_STOREFRONT_STORE_KEY);
+        } catch (Throwable $exception) {
+            $restore = $this->candleCashService->recordShopifySyncFailure($redemption, $exception);
+        }
 
         $released = (bool) ($restore['restored'] ?? false);
         $freshRedemption = $redemption->fresh('reward') ?? $redemption;
@@ -635,16 +636,9 @@ class ModernForestryMobileAccountService
                 'message' => $exception->getMessage(),
             ]);
 
-            $balance = $this->candleCashService->currentBalance($profile);
-            $message = 'We could not prepare your reward code for checkout. Please try again in a moment.';
-
-            if ($state === 'code_issued') {
-                $restore = $this->candleCashService->cancelIssuedRedemptionAndRestoreBalance($redemption);
-                $balance = $restore['balance'] ?? $balance;
-                if ((bool) ($restore['restored'] ?? false)) {
-                    $message = 'We could not prepare your reward code for checkout. Your Candle Cash is available again, so please try once more in a moment.';
-                }
-            }
+            $failure = $this->candleCashService->recordShopifySyncFailure($redemption, $exception);
+            $balance = $failure['balance'];
+            $message = 'Your Candle Cash code is reserved. Please try again to prepare the same code for checkout.';
 
             return [
                 'ok' => false,

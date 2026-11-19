@@ -1281,15 +1281,15 @@ test('mobile rewards redeem returns a clean failure when Shopify discount sync c
         ->assertJsonPath('data.redemption', null)
         ->assertJsonPath(
             'data.message',
-            'We could not prepare your reward code for checkout. Your Candle Cash is available again, so please try once more in a moment.'
+            'Your Candle Cash code is reserved. Please try again to prepare the same code for checkout.'
         )
-        ->assertJsonPath('data.balance.amount', 25);
+        ->assertJsonPath('data.balance.amount', 15);
 
     $redemption = \App\Models\CandleCashRedemption::query()->latest('id')->first();
 
     expect($redemption)->not->toBeNull()
-        ->and($redemption?->status)->toBe('canceled')
-        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(25.0);
+        ->and($redemption?->status)->toBe('issued')
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(15.0);
 });
 
 test('mobile account message endpoint accepts signed in native support messages', function (): void {
