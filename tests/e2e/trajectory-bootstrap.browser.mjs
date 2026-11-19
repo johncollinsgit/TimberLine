@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {mkdtemp,writeFile,rm,mkdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {execFile,spawn} from 'node:child_process';
@@ -13,7 +13,7 @@ const dir=await mkdtemp(join(tmpdir(),'codex-money-flow-bootstrap-')),origin=`ht
 await writeFile(join(dir,'db.sqlite'),'');
 const env={...process.env,APP_ENV:'testing',APP_DEBUG:'false',APP_URL:origin,APP_KEY:'base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=',APP_CONFIG_CACHE:join(dir,'config.php'),DB_CONNECTION:'sqlite',DB_DATABASE:join(dir,'db.sqlite'),DB_URL:'',DATABASE_URL:'',CACHE_STORE:'array',SESSION_DRIVER:'database',SESSION_SECURE_COOKIE:'false',SESSION_DOMAIN:'',MAIL_MAILER:'array',QUEUE_CONNECTION:'sync',LOG_CHANNEL:'null',BCRYPT_ROUNDS:'4',TRAJECTORY_ENABLED:'true',TRAJECTORY_AI_ENABLED:'false',GOLDAPI_KEY:'',NIGHTWATCH_ENABLED:'false',TELESCOPE_ENABLED:'false',PULSE_ENABLED:'false'};
 let server,browser;
-const checks=[];
+const checks=[];await mkdir('/tmp/trajectory-clarity-qa',{recursive:true});
 try{
  await exec('php',['artisan','migrate','--force','--no-interaction'],{cwd:base,env,maxBuffer:2e6});
  const fixture=JSON.parse((await exec('php',['scripts/trajectory/profit-loss-browser-fixture.php'],{cwd:base,env})).stdout);
@@ -57,7 +57,7 @@ try{
    await primary('analysis');await page.locator('[data-action="vf-ledger-all"]').click();
    const categories=page.locator('[data-vf-category]');assert.ok(await categories.count());
    assert.equal(await categories.evaluateAll(nodes=>nodes.every(node=>node.disabled)),true,'Editing waits for native editing metadata');
-   await primary('budget');await expect(page.getByRole('heading',{name:'Categories',exact:true})).toBeVisible();
+   await primary('budget');await expect(page.getByRole('region',{name:'Monthly budget totals',exact:true})).toBeVisible();
    await primary('overview');await expect(page.locator('#vf-income-chart')).toBeVisible();
    assert.equal(reads.filter(path=>path.endsWith('/dashboard')).length,0,'Home, Analysis and Budget never request the expensive legacy Dashboard');assert.equal(reads.filter(path=>path.endsWith('/visual-context')).length,1);assert.equal(reads.filter(path=>path.endsWith('/analysis')).length,1);assert.equal(reads.filter(path=>path.endsWith('/budget-envelopes')).length,1);
    releaseDashboard();await expect(page.locator('#tr-add')).toBeEnabled();
@@ -82,7 +82,7 @@ try{
    if(width===390){
     await expect(setup).toBeHidden();await expect(page.getByRole('button',{name:'Import budget CSV',exact:true})).toBeHidden();await expect(phoneBudget).toBeVisible();
     assert.ok(await phoneBudget.evaluate(node=>node.getBoundingClientRect().right<=innerWidth),'Phone budget action fits the viewport');
-    await phoneBudget.click();await expect(page.getByRole('heading',{name:'Categories',exact:true})).toBeVisible();
+    await phoneBudget.click();await expect(page.getByRole('region',{name:'Monthly budget totals',exact:true})).toBeVisible();
    }else{
     await expect(setup).toBeVisible();await expect(page.getByRole('button',{name:'Import budget CSV',exact:true})).toBeVisible();await expect(phoneBudget).toBeHidden();
     await expect(setup).toContainText('Planned debt payments');assert.doesNotMatch(await setup.innerText(),/Debt cash reserve/);
@@ -100,7 +100,7 @@ try{
     await page.evaluate(()=>window.scrollTo(0,600));await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBeGreaterThan(0);
     const after=await navigation.boundingBox();assert.ok(Math.abs(before.y-after.y)<1,'The bottom tabs stay pinned while content scrolls');
     await primary('budget');await expect(navigation.locator('[data-tab="budget"]')).toHaveAttribute('aria-current','page');
-    await expect(page.getByRole('heading',{name:'Categories',exact:true})).toBeVisible();
+    await expect(page.getByRole('region',{name:'Monthly budget totals',exact:true})).toBeVisible();
     await primary('overview');
    }
    await expect(page.locator('#vf-income-chart')).toBeVisible();await expect(page.locator('#tr-content')).toHaveAttribute('aria-busy','false');
@@ -130,7 +130,20 @@ try{
    let releaseExplicit;const explicitGate=new Promise(done=>{releaseExplicit=done;});
    await page.route('**/analysis?*',async route=>{const response=await route.fetch();await explicitGate;try{await route.fulfill({response});}catch{}});
    await openReportControls(page);await page.locator('#tr-refresh').click();await closeReportControls(page);await expect(page.locator('.vf-finance')).toHaveCount(0);releaseExplicit();await expect(page.locator('.vf-finance')).toBeVisible();await expect(page.locator('#tr-add')).toBeEnabled();
+   // Analysis tab is a section home, not a link back to Budget's drilldown.
+   await primary('budget');await primary('analysis');await expect(page.locator('#tr-page-title')).toHaveText('Analysis');await expect(page.locator('#vf-period-chart')).toBeVisible();await expect(page.locator('#tr-back')).toBeHidden();
    assert.deepEqual(errors,[]);await page.close();
+   const planPage=await context.newPage();await planPage.setViewportSize({width,height:950});const planReads=[];
+   planPage.on('request',request=>{if(request.method()==='GET')planReads.push(new URL(request.url()).pathname);});
+   await planPage.route('**/dashboard?*',route=>route.abort());
+   await planPage.goto(origin+'/trajectory?tab=planning');await expect(planPage.locator('#tr-plan-outlook')).toBeVisible();await expect(planPage.locator('.tr-plan-stats')).toBeVisible();
+   assert.equal(planReads.filter(path=>path.endsWith('/plan-context')).length,1);assert.equal(planReads.filter(path=>path.endsWith('/dashboard')).length,0);
+   assert.equal(await planPage.evaluate(()=>getComputedStyle(document.querySelector('.tr-workspace'),'::after').animationName),'none','Reduced motion stops the page sheen');
+   assert.equal(await planPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+   await planPage.screenshot({path:`/tmp/trajectory-clarity-qa/plan-${name}-${width}.png`,fullPage:true});
+   await planPage.locator('.tr-plan-stats [data-kind="costs"]').click();await expect(planPage.locator('#tr-dialog')).toBeVisible();await planPage.locator('#tr-close').click();
+   await planPage.emulateMedia({reducedMotion:'no-preference'});assert.equal(await planPage.evaluate(()=>getComputedStyle(document.querySelector('.tr-workspace'),'::after').animationName),'tr-page-sheen');
+   assert.equal(await planPage.evaluate(()=>getComputedStyle(document.querySelector('.tr-workspace'),'::after').pointerEvents),'none');await planPage.close();
 
    const failed=await context.newPage();await failed.setViewportSize({width,height:950});
    let releaseFailure;const failureGate=new Promise(done=>{releaseFailure=done;});

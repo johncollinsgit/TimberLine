@@ -1,5 +1,7 @@
 export const isVisualFinanceView = view => ['overview','analysis','budget'].includes(view);
 export const isVisualContext = value => value?.projection === 'visual_context';
+export const isPlanContext = value => value?.projection === 'plan_context';
+export const isMetadataContext = value => isVisualContext(value) || isPlanContext(value);
 export function visualContextPath(accountId=null){return '/visual-context'+(accountId===null?'':`?account_id=${accountId}`);}
 /** Metadata is explicitly distinct from the full legacy Dashboard projection. */
 export function validateVisualContext(value,space,accountId=null){
@@ -8,6 +10,14 @@ export function validateVisualContext(value,space,accountId=null){
     ||!value.available.includes('editing_catalogs')||!Array.isArray(value.records)
     ||!Array.isArray(value.category_options)||!Array.isArray(value.accounts)
     ||!value.definitions||!isoDate(value.today))throw Error('Editing details did not match the selected financial workspace. Refresh to try again.');
+  return value;
+}
+export function validatePlanContext(value, space, accountId = null, request = {}) {
+  if (!isPlanContext(value)) throw Error('The plan did not match the selected workspace.');
+  validateVisualContext({...value, projection: 'visual_context'}, space, accountId);
+  if (!value.available.includes('planning') || !value.planning || value.range?.key !== (request.range ?? 'month')
+    || !isoDate(value.range?.start) || !isoDate(value.range?.end) || value.range.start > value.range.end || value.range.end > value.today
+    || request.range === 'custom' && (value.range.start !== request.from || value.range.end !== request.through)) throw Error('The plan did not match the selected period.');
   return value;
 }
 const periods=new Set(['day','week','month','quarter','year','all','custom']);

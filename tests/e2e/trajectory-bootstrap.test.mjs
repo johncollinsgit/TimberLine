@@ -78,3 +78,12 @@ test('range snapshots are memory-only, scoped, bounded by age, and fully cleared
  at=-1;assert.equal(cache.find('household:7:all:spending',{range:'day'}),null);
  at=1;cache.clear();assert.equal(cache.find('household:7:all:spending',{range:'day'}),null);
 });
+
+
+test('planning metadata cannot be reused as a full dashboard or cross a financial scope',async()=>{
+ const {isMetadataContext,isPlanContext,validatePlanContext}=await import('../../resources/js/trajectory/bootstrap.js');
+ const value={projection:'plan_context',available:['editing_catalogs','monthly_bills','planning'],space,today:'2028-02-15',range:{key:'month',start:'2028-02-01',end:'2028-02-15'},scope_filter:{account_id:null},records:[],category_options:[],accounts:[],definitions:{},planning:{expected_monthly_cents:10000}};
+ assert.equal(isVisualContext(value),false);assert.equal(isMetadataContext(value),true);assert.equal(isPlanContext(value),true);assert.equal(validatePlanContext(value,space),value);
+ for(const changed of [{space:{...space,id:8}},{scope_filter:{account_id:9}},{planning:null},{range:{...value.range,end:'2028-02-16'}}])assert.throws(()=>validatePlanContext({...value,...changed},space));
+ assert.throws(()=>validatePlanContext({...value,range:{key:'custom',start:'2028-02-01',end:'2028-02-15'}},space,null,{range:'custom',from:'2028-02-03',through:'2028-02-15'}));
+});

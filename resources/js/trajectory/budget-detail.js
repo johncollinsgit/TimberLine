@@ -170,7 +170,6 @@ export function createBudgetDetail({root, api, endpoint, getContext, esc, precis
       row.target_cents = record.kind === 'budget' ? record.data.monthly_cents : null;
       row.planned_cents = row.target_cents;
       if (record.kind === 'goal') row.fund = {...row.fund, ...record.data, record_id: record.id, version: record.version};
-      notice('Plan saved. Bank balances and spending are unchanged.');
       refreshAfterSave(token);
     } catch (error) {if (current(token)) notice(error.message || 'The plan could not save.');}
     finally {if (current(token)) {busy = false; render();}}

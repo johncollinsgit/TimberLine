@@ -15,7 +15,7 @@ use Carbon\CarbonImmutable;
 
 class DashboardService
 {
-    public function build(Space $space, string $range = 'month', ?int $scenarioId = null, ?string $from = null, ?string $through = null, bool $seasonal = false, ?User $viewer = null, ?int $accountId = null, string $accountingBasis = 'accrual'): array
+    public function build(Space $space, string $range = 'month', ?int $scenarioId = null, ?string $from = null, ?string $through = null, bool $seasonal = false, ?User $viewer = null, ?int $accountId = null, string $accountingBasis = 'accrual', bool $planningOnly = false): array
     {
         $economic = app(EconomicActivityService::class);
         $today = CarbonImmutable::now($space->timezone)->startOfDay();
@@ -80,7 +80,7 @@ class DashboardService
             $records = $records->filter(fn ($record) => ($record->data['account_id'] ?? null) === $accountId || ($record->data['payment_account_id'] ?? null) === $accountId
                 || ($record->kind === 'tax_remittance' && in_array($record->data['transaction_id'] ?? null, $transactionIds, true)))->values();
         }
-        $periodComparison['household_cards'] = $space->kind === 'household' ? app(HouseholdCardsService::class)->build($records, $priorStart->toDateString(), $priorEnd->toDateString(), $today->toDateString(), $entries) : null;
+        $periodComparison['household_cards'] = $space->kind === 'household' && ! $planningOnly ? app(HouseholdCardsService::class)->build($records, $priorStart->toDateString(), $priorEnd->toDateString(), $today->toDateString(), $entries) : null;
         $plans = fn ($kind) => $records->where('kind', $kind)->map(fn ($r) => [...$r->data, 'id' => $r->id, 'name' => $r->name])->values()->all();
         $schedules = array_values(array_filter($plans('recurring'), fn ($r) => $r['confirmed']));
         foreach ($schedules as &$schedule) {
@@ -234,6 +234,18 @@ class DashboardService
             }
         }
         usort($bills, fn ($a, $b) => strcmp($a['date'], $b['date']));
+        if ($planningOnly) {
+            abort_unless($viewer, 403);
+            $context = app(VisualContextService::class)->build($viewer, $space, $accountId);
+
+            return [...$context,
+                'projection' => 'plan_context',
+                'available' => [...$context['available'], 'planning'],
+                'range' => ['key' => $range, 'start' => $start->toDateString(), 'end' => $end->toDateString()],
+                'planning' => app(PlanningService::class)->build($space, $entries, $records, $accounts, $start, $end, $baseline),
+                'workspace_settings' => array_intersect_key($space->settings ?? [], array_flip(['income_categories', 'flexible_monthly_cents', 'debt_extra_cents', 'debt_target_months'])),
+            ];
+        }
         $spending = $economic->expenses($selected);
         $incomeSources = app(IncomeSourceService::class)->summarize($selected, $space->settings['income_categories'] ?? []);
         $income = $incomeSources['earned_income_cents'];
@@ -403,7 +415,7 @@ class DashboardService
         return array_slice($suggestions, 0, 30);
     }
 
-    private function business(Space $space, CarbonImmutable $start, CarbonImmutable $end, $records, $entries, string $accountingBasis = 'accrual'): array
+    private function business(Space $space, CarbonImmutable $start, CarbonImmutable $end, $records, $entries, string $accountingBasis = 'accrual', bool $planningOnly = false): array
     {
         $accounting = app(ProfitLossReportService::class)->build($space, $start, $end, $entries, $accountingBasis);
         $ledger = $accounting['ledger'];

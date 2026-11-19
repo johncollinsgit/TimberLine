@@ -28,6 +28,7 @@ Route::middleware(['auth', 'verified', 'throttle:120,1'])->prefix('trajectory')-
         Route::post('/sms/verify', [Trajectory::class, 'verifySms'])->name('trajectory.verifySms')->middleware('throttle:3,10');
         Route::post('/sms/confirm', [Trajectory::class, 'confirmSms'])->name('trajectory.confirmSms')->middleware('throttle:5,10');
         Route::patch('/review-email', [Trajectory::class, 'reviewEmailPreferences'])->name('trajectory.reviewEmailPreferences');
+        Route::get('/plan-context', [Trajectory::class, 'planContext'])->name('trajectory.plan-context');
         Route::get('/dashboard', [Trajectory::class, 'dashboard'])->name('trajectory.dashboard');
         Route::get('/profit-loss/accounts/transactions', [AccountLedgerController::class, 'show'])->middleware('throttle:15,1,pnl-account-ledger')->name('trajectory.profit-loss.account-transactions');
         Route::get('/profit-loss/export/{format}', [ProfitLossExportController::class, 'show'])->whereIn('format', ['csv', 'pdf', 'print'])->name('trajectory.profit-loss.export');

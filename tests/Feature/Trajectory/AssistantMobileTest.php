@@ -339,3 +339,31 @@ test('configured Web Push requires member opt in and submits one current Ask pur
     $service->send($notice);
     expect($notice->fresh()->delivery_status)->toBe('suppressed');
 });
+
+test('Ask reviews one uncategorized purchase with a grounded suggestion and waits for Yes', function (): void {
+    $transaction = ($this->entry)('review-one');
+    $transaction->update(['category' => 'uncategorized', 'reviewed' => false]);
+    $this->mock(\App\Services\Trajectory\ClassificationSuggestionService::class)->shouldReceive('preview')->once()->andReturn(['rows' => [['editable' => true, 'category' => 'groceries', 'reason' => 'Four reviewed purchases from the same merchant were groceries.']]]);
+    $service = app(AssistantService::class);
+    $reply = $service->respond($this->owner, $this->space, 'Can you categorize transactions that are needing a category? Ask me any questions if you need to.', ($this->context)($transaction), (string) Str::uuid());
+    expect($reply['review_transaction']['transaction_id'])->toBe($transaction->id)
+        ->and($reply['review_transaction']['suggestion']['key'])->toBe('groceries')
+        ->and($reply['review_transaction']['reason'])->toContain('Four reviewed')
+        ->and(isset($reply['choices']))->toBeFalse()
+        ->and($transaction->fresh()->category)->toBe('uncategorized');
+    $confirmed = $service->respond($this->owner, $this->space, 'Move this to category Groceries', ($this->context)($transaction), (string) Str::uuid());
+    expect($confirmed['undo']['available'])->toBeTrue()->and($transaction->fresh()->category)->toBe('groceries');
+    $service->undo($this->owner, $this->space, AssistantTurn::findOrFail($confirmed['id']));
+    expect($transaction->fresh()->category)->toBe('uncategorized');
+});
+
+test('Ask does not invent a category when reviewing an unfamiliar purchase and stays inside the selected period', function (): void {
+    $a = ($this->entry)('unfamiliar-review');
+    $a->update(['category' => 'uncategorized', 'reviewed' => false]);
+    $this->mock(\App\Services\Trajectory\ClassificationSuggestionService::class)->shouldReceive('preview')->once()->andReturn(['rows' => [['editable' => true, 'category' => null, 'reason' => 'No consistent history.']]]);
+    $context = ['from' => '2027-02-01', 'through' => '2027-02-12'];
+    $reply = app(AssistantService::class)->respond($this->owner, $this->space, 'Review the next uncategorized transaction', $context, (string) Str::uuid());
+    expect($reply['review_transaction']['suggestion'])->toBeNull()->and($reply['reply'])->toBe('What was this purchase for?')->and($a->fresh()->reviewed)->toBeFalse();
+    $empty = app(AssistantService::class)->respond($this->owner, $this->space, 'Review the next uncategorized transaction', ['from' => '2027-01-01', 'through' => '2027-01-31'], (string) Str::uuid());
+    expect(isset($empty['review_transaction']))->toBeFalse()->and($empty['reply'])->toContain('No uncategorized');
+});

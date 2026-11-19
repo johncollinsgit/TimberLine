@@ -2,7 +2,7 @@ import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import {chromium, webkit} from '@playwright/test';
+import {chromium, webkit, expect} from '@playwright/test';
 
 const base = process.cwd();
 const fixture = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/visual.css"><script src="/chart.js"></script></head><body class="trajectory-site"><main id="trajectory"><div class="tr-workspace"><button id="back">Back</button><div id="content"></div><p id="notice" role="status"></p></div></main><script type="module">
@@ -122,6 +122,14 @@ try {
       assert.match(await page.locator('.vf-envelope').innerText(),/\$1,140\.00 spent/);
       assert.match(await page.locator('.vf-envelope').innerText(),/\$260\.00/);
       assert.doesNotMatch(await page.locator('.vf-envelope').innerText(),/bank-recorded spending|reported cash through/);
+      await page.evaluate(()=>window.fixture.setBudgets({rows:[{key:'goal',category:'repairs',label:'Repair goal',mode:'fund',fund:{target_cents:150000,saved_cents:0}},{key:'food',category:'groceries',label:'Groceries',target_cents:140000,spent_cents:100000,remaining_cents:40000}]}));
+      assert.equal(await page.locator('.vf-budget-list:not(.vf-goal-list) .vf-envelope').count(),1);
+      await expect(page.getByText('Repair goal',{exact:true})).not.toBeVisible();
+      await page.locator('.vf-savings-goals>summary').click();await expect(page.getByText('Repair goal',{exact:true})).toBeVisible();
+      assert.equal(await page.locator('.vf-budget-icon svg').count(),2);assert.equal(await page.locator('.vf-budget-list .vf-swatch').count(),0);
+      const bar=page.locator('.vf-budget-list:not(.vf-goal-list) .vf-budget-track');
+      assert.match(await bar.innerText(),/\$1,000.00 spent.*\$1,400.00/s);assert.match(await bar.innerText(),/\$400.00 left/);
+      assert.ok(await bar.locator('.vf-budget-row-amounts').evaluate(node=>{const b=node.parentElement.getBoundingClientRect(),n=node.getBoundingClientRect();return n.top>=b.top&&n.bottom<=b.bottom+1;}));
       await page.evaluate(()=>window.fixture.setMerchantGroups());
       await page.locator('[data-action="vf-category"][data-key="food"]').click();
       await page.locator('[data-action="vf-subcategory"][data-key="groceries"]').click();
