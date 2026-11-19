@@ -67,9 +67,9 @@ export function createBudgetDetail({root, api, endpoint, getContext, esc, precis
     const left = result.remaining_cents ?? result.estimated_remaining_cents;
     const split = (row.reasons || []).includes('needs_split');
     const spent = result.bank_spent_cents === null || result.reported_cash_spent_cents === null ? null : result.bank_spent_cents + result.reported_cash_spent_cents;
-    const used = split || spent === null || result.target_cents === null ? null : result.target_cents === 0 ? (spent > 0 ? 100 : 0) : Math.min(100, Math.max(0, spent / result.target_cents * 100));
+    const used = spent === null || result.target_cents === null || split && spent <= 0 ? null : result.target_cents === 0 ? (spent > 0 ? 100 : 0) : Math.min(100, Math.max(0, spent / result.target_cents * 100));
     const bar = used === null ? '' : `<div class="tr-budget-usage" role="progressbar" aria-label="Budget spent" aria-valuenow="${Math.round(used)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${used}%"></i></div>`;
-    return `<div class="tr-budget-detail-trio"><span><small>Budget</small><b>${money(result.target_cents)}</b></span><span><small>Spent</small><b>${split && result.bank_spent_cents === 0 ? 'Needs split' : money(result.bank_spent_cents === null || result.reported_cash_spent_cents === null ? null : result.bank_spent_cents + result.reported_cash_spent_cents)}</b></span><span><small>Left${estimate ? ' · est.' : ''}</small><b>${split && left !== null && left >= 0 ? '≤ ' : ''}${money(left)}</b></span></div>${bar}`;
+    return `<div class="tr-budget-detail-trio"><span><small>Budget</small><b>${money(result.target_cents)}</b></span><span><small>Spent</small><b>${split && result.bank_spent_cents === 0 ? 'Needs split' : money(spent) + (split && spent > 0 ? '+' : '')}</b></span><span><small>Left${estimate ? ' · est.' : ''}</small><b>${split && left !== null && left >= 0 ? '≤ ' : ''}${money(left)}</b></span></div>${bar}`;
   }
   function refreshPreview() {
     const preview = body.querySelector('[data-budget-preview]');

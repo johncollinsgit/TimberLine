@@ -1,3 +1,9 @@
+## 2026-11-19 · Fuel budget progress after editing
+
+Known fuel spending stays visible in the progress bar when other transportation
+costs still need splitting. The bar responds to allowance changes while + spent
+and ≤ estimated remaining preserve the incomplete classification.
+
 ## 2026-11-19 · Compact finance views and visual planning
 
 Budget totals lead the page; category icons and labeled progress bars replace

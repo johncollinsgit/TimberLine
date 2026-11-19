@@ -267,9 +267,9 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     const money = amount => amount === null ? '—' : precise(amount);
     return `<div class="vf-envelope-grid vf-budget-list${funds ? ' vf-goal-list' : ''}">${selected.map(({row, index}) => {
       const color = financeColor(row.category ?? row.key), compact = financeBudgetCompact(row, {future: envelopes?.future === true});
-      let used = compact.plan === null || compact.spent === null || compact.needsSplit ? null : compact.plan === 0 ? (compact.spent > 0 ? 100 : 0) : Math.min(100, Math.max(0, compact.spent / compact.plan * 100));
+      let used = compact.plan === null || compact.spent === null || compact.needsSplit && compact.spent <= 0 ? null : compact.plan === 0 ? (compact.spent > 0 ? 100 : 0) : Math.min(100, Math.max(0, compact.spent / compact.plan * 100));
       let allowance = compact.plan === null ? row.uses_parent_budget ? 'Shared' : 'Set budget' : `${money(compact.plan)}${row.target_status === 'draft' ? ' est.' : ''}${row.partial_period ? ' dated' : ''}`;
-      let spent = compact.needsSplit && compact.spent === 0 ? 'Needs split' : `${money(compact.spent)} spent`;
+      let spent = compact.needsSplit && compact.spent === 0 ? 'Needs split' : `${money(compact.spent)}${compact.needsSplit && compact.spent > 0 ? '+' : ''} spent`;
       let left = `${compact.needsSplit && compact.left !== null && compact.left >= 0 ? '≤ ' : ''}${money(compact.left)} left${compact.estimated ? ' · est.' : ''}`;
       if (row.mode === 'income_percentage' && Number.isSafeInteger(row.rate_bps)) allowance += ` · ${row.rate_bps / 100}%`;
       if (funds) {

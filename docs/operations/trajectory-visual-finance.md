@@ -338,3 +338,12 @@ parsing. It presents one owned, posted purchase and the existing classification
 service's grounded suggestion. Yes sends the explicit, versioned category command
 with Undo; No asks for purpose; Explain presents the suggestion evidence without
 writing. Empty or uncertain suggestions never become automatic classifications.
+
+### Recorded progress with unresolved parent costs
+
+A category with known positive spending retains its proportional progress bar even
+when other parent-category costs need splitting. The displayed spending has a +
+marker and remaining stays an estimated upper bound (≤); changing the allowance
+updates that bar immediately. A zero/unknown child under an unresolved parent still
+has no zero-percent progress claim. This is presentation only; no spending, review
+flags or saved allowance is changed.
