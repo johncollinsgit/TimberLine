@@ -35,8 +35,10 @@ export function budgetDetailPreview(row, values = {}) {
 }
 
 export function budgetInputCents(value) {
-  if (!/^(?:\d{1,9})(?:\.\d{0,2})?$/.test(String(value).trim())) return null;
-  return Math.round(Number(value) * 100);
+  const text = String(value).trim();
+  if (!/^(?:\d{1,9}|\d{1,3}(?:,\d{3}){1,2})(?:\.\d{0,2})?$/.test(text)) return null;
+  const amount = Math.round(Number(text.replaceAll(',', '')) * 100);
+  return amount <= 99999999900 ? amount : null;
 }
 
 /** Open the known envelope immediately; only its exact editable native record is fetched. */
@@ -55,29 +57,33 @@ export function createBudgetDetail({root, api, endpoint, getContext, esc, precis
   const money = amount => cents(amount) === null ? 'Not yet known' : precise(amount);
   const url = suffix => endpoint(suffix, spaceId);
   const refreshAfterSave = token => {void Promise.resolve().then(() => onChanged()).catch(() => {if(current(token))notice('The plan saved. Reopen the budget if its totals have not refreshed yet.');});};
-  const field = (label, name, value) => `<label>${esc(label)}<span class="tr-budget-dollar">$<input type="number" min="0" max="999999999" step="0.01" inputmode="decimal" data-budget-money="${name}" value="${(value / 100).toFixed(2)}"></span></label>`;
+  const formatInput = value => new Intl.NumberFormat('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value / 100);
+  const field = (label, name, value) => `<div class="tr-budget-field"><label for="tr-budget-${name}">${esc(label)}</label><span class="tr-budget-stepper">${name === 'monthly_cents' ? '<button type="button" data-budget-step="-1" aria-label="Decrease monthly budget by $10">−</button>' : ''}<span class="tr-budget-dollar">$<input id="tr-budget-${name}" type="text" inputmode="decimal" autocomplete="off" data-budget-money="${name}" value="${formatInput(value)}"></span>${name === 'monthly_cents' ? '<button type="button" data-budget-step="1" aria-label="Increase monthly budget by $10">+</button>' : ''}</span></div>`;
+
   function previewHtml() {
     const result = budgetDetailPreview(row, values);
-    if (result.mode === 'fund') return `<strong>${money(result.saved_cents)} saved <small>of ${money(result.target_cents)}</small></strong><p>${money(result.still_to_save_cents)} still to build · ${money(result.monthly_cents)} planned per month${result.months_needed ? ` · about ${result.months_needed} contributions` : ''}</p><small>Changing the plan does not move money or change the amount saved.</small>`;
+    if (result.mode === 'fund') return `<strong>${money(result.saved_cents)} saved <small>of ${money(result.target_cents)}</small></strong><p>${money(result.still_to_save_cents)} to save · ${money(result.monthly_cents)}/month</p>`;
     const estimate = result.remaining_cents === null && result.estimated_remaining_cents !== null;
     const left = result.remaining_cents ?? result.estimated_remaining_cents;
     const split = (row.reasons || []).includes('needs_split');
-    return `<div class="tr-budget-detail-trio"><span><small>Budget</small><b>${money(result.target_cents)}</b></span><span><small>Spent</small><b>${split && result.bank_spent_cents === 0 ? 'Needs split' : money(result.bank_spent_cents === null || result.reported_cash_spent_cents === null ? null : result.bank_spent_cents + result.reported_cash_spent_cents)}</b></span><span><small>Left${estimate ? ' · est.' : ''}</small><b>${split && left !== null && left >= 0 ? '≤ ' : ''}${money(left)}</b></span></div>`;
+    const spent = result.bank_spent_cents === null || result.reported_cash_spent_cents === null ? null : result.bank_spent_cents + result.reported_cash_spent_cents;
+    const used = split || spent === null || result.target_cents === null ? null : result.target_cents === 0 ? (spent > 0 ? 100 : 0) : Math.min(100, Math.max(0, spent / result.target_cents * 100));
+    const bar = used === null ? '' : `<div class="tr-budget-usage" role="progressbar" aria-label="Budget spent" aria-valuenow="${Math.round(used)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${used}%"></i></div>`;
+    return `<div class="tr-budget-detail-trio"><span><small>Budget</small><b>${money(result.target_cents)}</b></span><span><small>Spent</small><b>${split && result.bank_spent_cents === 0 ? 'Needs split' : money(result.bank_spent_cents === null || result.reported_cash_spent_cents === null ? null : result.bank_spent_cents + result.reported_cash_spent_cents)}</b></span><span><small>Left${estimate ? ' · est.' : ''}</small><b>${split && left !== null && left >= 0 ? '≤ ' : ''}${money(left)}</b></span></div>${bar}`;
   }
   function refreshPreview() {
     const preview = body.querySelector('[data-budget-preview]');
     if (preview) preview.innerHTML = previewHtml();
-    const amount = body.querySelector('[data-budget-money="monthly_cents"]');
-    const slider = body.querySelector('[data-budget-slider]');
-    if (slider && amount) {
-      slider.max = String(Math.max(50000, (values.monthly_cents || 0) * 2, row.fund?.target_cents || 0));
-      slider.value = String(values.monthly_cents || 0);
-    }
+    const minus = body.querySelector('[data-budget-step="-1"]');
+    const plus = body.querySelector('[data-budget-step="1"]');
+    if (minus) minus.disabled = values.monthly_cents === 0;
+    if (plus) plus.disabled = values.monthly_cents >= 99999999900;
+
   }
   function render() {
     if (row.mode === 'income_percentage') {
       const left = cents(row.remaining_cents) ?? cents(row.estimated_remaining_cents);
-      body.innerHTML = `<header><div><span>Income-based budget · ${esc(envelopes?.month || '')}</span><h2 id="tr-budget-detail-title">${esc(row.label)}</h2></div><button type="button" data-budget-close aria-label="Close budget details">×</button></header><section class="tr-budget-preview"><div class="tr-budget-detail-trio"><span><small>Budget · est.</small><b>${money(row.planned_cents)}</b></span><span><small>Spent</small><b>${money(row.spent_cents)}</b></span><span><small>Left · est.</small><b>${money(left)}</b></span></div></section><p>${Number.isSafeInteger(row.rate_bps) ? esc(row.rate_bps / 100) + '% of recorded household take-home.' : 'The income rule needs review.'}</p><details class="tr-budget-evidence"><summary>Income and spending details</summary><p>${money(row.bank_receipt_basis_cents)} recorded take-home so far. This updates with receipts; borrowing and transfers are excluded.</p>${(row.source_notes || []).map(note => `<p>${esc(note)}</p>`).join('')}${row.reasons?.includes('cash_income_unrecorded') ? '<p>Cash income is not fully recorded, so the budget is an estimate.</p>' : ''}</details><div class="tr-budget-detail-actions"><button type="button" data-budget-entries>View recorded entries</button></div>`;
+      body.innerHTML = `<header><div><span>Income-based budget · ${esc(envelopes?.month || '')}</span><h2 id="tr-budget-detail-title">${esc(row.label)}</h2></div><button type="button" data-budget-close aria-label="Close budget details">×</button></header><section class="tr-budget-preview"><div class="tr-budget-detail-trio"><span><small>Budget · est.</small><b>${money(row.planned_cents)}</b></span><span><small>Spent</small><b>${money(row.spent_cents)}</b></span><span><small>Left · est.</small><b>${money(left)}</b></span></div></section><p>${Number.isSafeInteger(row.rate_bps) ? esc(row.rate_bps / 100) + '% of recorded household take-home.' : 'The income rule needs review.'}</p><details class="tr-budget-evidence"><summary>Income and spending details</summary><p>${money(row.bank_receipt_basis_cents)} recorded take-home so far. This updates with receipts; borrowing and transfers are excluded.</p>${(row.source_notes || []).map(note => `<p>${esc(note)}</p>`).join('')}${row.reasons?.includes('cash_income_unrecorded') ? '<p>Cash income is not fully recorded, so the budget is an estimate.</p>' : ''}</details><div class="tr-budget-detail-actions"><button type="button" data-budget-entries>Transactions</button></div>`;
       return;
     }
     const fund = row.mode === 'fund';
@@ -85,20 +91,20 @@ export function createBudgetDetail({root, api, endpoint, getContext, esc, precis
     const blocked = !record && !!sourceId() || busy || !!readError || row.status === 'multiple_funds';
     const explanation = [...new Set([...(row.reasons || []), ...(envelopes?.future ? ['future_period'] : [])])].map(reason => reasons[reason]).filter(Boolean);
     const dates = record?.kind === 'budget' ? `${record.data.effective_on} – ${record.data.ends_on || 'ongoing'}` : row.plan_period ? `${row.plan_period.from} – ${row.plan_period.through}` : envelopes?.month || '';
-    body.innerHTML = `<header><div><span>${esc(fund ? 'Reserve fund' : 'Spending plan')} · ${esc(envelopes?.month || '')}</span><h2 id="tr-budget-detail-title">${esc(row.label)}</h2></div><button type="button" data-budget-close aria-label="Close budget details">×</button></header>
+    body.innerHTML = `<header><div><span>${esc(envelopes?.month || '')}</span><h2 id="tr-budget-detail-title">${esc(row.label)}</h2></div><button type="button" data-budget-close aria-label="Close budget details">×</button></header>
       <section class="tr-budget-preview" data-budget-preview aria-live="polite">${previewHtml()}</section>
-      <details class="tr-budget-evidence"><summary>Spending and plan details${row.default_from ? ' · previous budget' : ''}</summary><dl><div><dt>Bank-recorded category spending</dt><dd>${money(recordedBank(row))}</dd></div>${row.reported_cash_as_of ? `<div><dt>Reported cash through ${esc(row.reported_cash_as_of)}</dt><dd>${money(row.reported_cash_spent_cents)}</dd></div>` : ''}<div><dt>Pending purchases</dt><dd>${money(row.pending_cents ?? 0)}</dd></div>${dates ? `<div><dt>Plan dates</dt><dd>${esc(dates)}</dd></div>` : ''}</dl>
+      <details class="tr-budget-evidence"><summary>Details</summary><dl><div><dt>Bank-recorded category spending</dt><dd>${money(recordedBank(row))}</dd></div>${row.reported_cash_as_of ? `<div><dt>Reported cash through ${esc(row.reported_cash_as_of)}</dt><dd>${money(row.reported_cash_spent_cents)}</dd></div>` : ''}<div><dt>Pending purchases</dt><dd>${money(row.pending_cents ?? 0)}</dd></div>${dates ? `<div><dt>Plan dates</dt><dd>${esc(dates)}</dd></div>` : ''}</dl>
       ${fund ? '<p class="tr-budget-note">Category spending is shown for context. It does not prove money was withdrawn from this fund. Saved progress changes only when actual funding is recorded.</p>' : ''}
       ${explanation.length ? `<ul class="tr-budget-reasons">${explanation.map(reason => `<li>${esc(reason)}</li>`).join('')}</ul>` : ''}
       ${(row.source_notes || []).map(note => `<p>${esc(note)}</p>`).join('')}${row.reported_cash_as_of ? '<p>Cash report is budget only; transaction charts exclude it.</p>' : ''}${row.default_from ? `<p>Defaulted from the previous monthly budget. Last saved source: ${esc(row.default_from.source_month)}.</p>` : ''}</details>
-      <form data-budget-form><h3>${fund ? 'Adjust your reserve plan' : 'Adjust this allowance'}</h3>
-      ${!fund && cents(row.suggestion?.amount_cents) !== null ? `<p class="tr-budget-suggestion">Last month: ${money(row.suggestion.amount_cents)}${row.suggestion.partial ? ' recorded · partial' : ' spent'} <button type="button" data-budget-suggestion>Use amount</button></p>` : ''}
-      ${field(fund ? 'Monthly contribution' : row.partial_period ? 'Allowance for the shown dates' : 'Monthly allowance', 'monthly_cents', plan)}
-      <label class="tr-budget-range">Preview amount<input type="range" min="0" max="${Math.max(50000, plan * 2, row.fund?.target_cents || 0)}" step="100" value="${plan}" data-budget-slider></label>
+      <form data-budget-form>
+      ${!fund && cents(row.suggestion?.amount_cents) !== null ? `<p class="tr-budget-suggestion">Last month ${money(row.suggestion.amount_cents)}${row.suggestion.partial ? ' · partial' : ''} <button type="button" data-budget-suggestion>Use amount</button></p>` : ''}
+      ${field(fund ? 'Monthly contribution' : row.partial_period ? 'Allowance for the shown dates' : 'Monthly budget', 'monthly_cents', plan)}
       ${fund && row.fund ? field('Fund target', 'target_cents', values.target_cents ?? row.fund.target_cents) + `<label>Target date<input type="date" data-budget-target-date value="${esc(values.target_on || row.fund.target_on)}"></label>` : ''}
       ${!record && sourceId() && !readError ? '<p role="status">Loading this plan’s editing details…</p>' : ''}
       ${readError ? `<p role="alert">${esc(readError)}</p><button type="button" data-budget-retry>Retry plan details</button>` : ''}
-      <div class="tr-budget-detail-actions"><button type="submit" ${blocked ? 'disabled' : ''}>${busy ? 'Saving…' : 'Save plan'}</button>${undo ? '<button type="button" data-budget-undo>Undo last edit</button>' : ''}<button type="button" data-budget-entries>View recorded entries</button></div><small>Changes save only when you choose Save plan. Purchases and bank balances stay unchanged.</small></form>`;
+      <div class="tr-budget-detail-actions"><button type="submit" ${blocked ? 'disabled' : ''}>${busy ? 'Saving…' : 'Save'}</button>${undo ? '<button type="button" data-budget-undo>Undo last edit</button>' : ''}<button type="button" data-budget-entries>Transactions</button></div></form>`;
+    refreshPreview();
   }
   async function loadRecord(token) {
     if (!sourceId() || row.mode === 'income_percentage') return;
@@ -193,11 +199,23 @@ export function createBudgetDetail({root, api, endpoint, getContext, esc, precis
   body.addEventListener('input', event => {
     const name = event.target.dataset.budgetMoney;
     if (name) {values[name] = budgetInputCents(event.target.value); dirty = true; refreshPreview();}
-    if (event.target.matches('[data-budget-slider]')) {values.monthly_cents = Number(event.target.value);dirty = true;body.querySelector('[data-budget-money="monthly_cents"]').value = (values.monthly_cents / 100).toFixed(2);refreshPreview();}
     if (event.target.matches('[data-budget-target-date]')) {values.target_on = event.target.value;dirty = true;}
+  });
+  body.addEventListener('focusout', event => {
+    const name = event.target.dataset.budgetMoney;
+    if (name && cents(values[name]) !== null) event.target.value = formatInput(values[name]);
   });
   body.addEventListener('submit', event => {event.preventDefault();void save();});
   body.addEventListener('click', event => {
+    const step = event.target.closest('[data-budget-step]');
+    if (step) {
+      if (busy) return;
+      if (cents(values.monthly_cents) === null) {notice('Enter a valid budget amount.');return;}
+      values.monthly_cents = Math.max(0, Math.min(99999999900, values.monthly_cents + Number(step.dataset.budgetStep) * 1000));
+      dirty = true;
+      body.querySelector('[data-budget-money="monthly_cents"]').value = formatInput(values.monthly_cents);
+      refreshPreview();
+    }
     if (event.target.closest('[data-budget-suggestion]') && cents(row.suggestion?.amount_cents) !== null) {values.monthly_cents = Math.max(0, row.suggestion.amount_cents);dirty = true;render();}
     if (event.target.closest('[data-budget-close]')) {dialog.close();generation++;}
     if (event.target.closest('[data-budget-retry]')) {readError = null;void loadRecord(generation);}

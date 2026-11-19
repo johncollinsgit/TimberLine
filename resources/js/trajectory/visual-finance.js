@@ -222,13 +222,13 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     return `<div class="vf-envelope-grid vf-budget-list">${selected.map((row, index) => {
       const color = financeColor(row.category ?? row.key), compact = financeBudgetCompact(row, {future: envelopes?.future === true});
       let used = compact.plan === null || compact.spent === null ? null : compact.plan === 0 ? (compact.spent > 0 ? 100 : 0) : Math.min(100, Math.max(0, compact.spent / compact.plan * 100));
-      let allowance = compact.plan === null ? row.uses_parent_budget ? 'Shared budget' : '— budget' : `${money(compact.plan)}${row.target_status === 'draft' ? ' est.' : ''} ${row.partial_period ? 'dated budget' : 'budget'}`;
+      let allowance = compact.plan === null ? row.uses_parent_budget ? 'Shared' : 'Set budget' : `${money(compact.plan)}${row.target_status === 'draft' ? ' est.' : ''} ${row.partial_period ? 'dated' : ''}`;
       let spent = compact.needsSplit && compact.spent === 0 ? 'Needs split' : `${money(compact.spent)} spent`;
       let left = `${compact.needsSplit && compact.left !== null && compact.left >= 0 ? '≤ ' : ''}${money(compact.left)} left${compact.estimated ? ' · est.' : ''}`;
       if(row.mode === 'income_percentage') allowance = Number.isSafeInteger(row.rate_bps) ? `${row.rate_bps / 100}% of take-home` : 'Income rule';
       if(row.mode === 'fund') {
         const saved = number(row.fund?.saved_cents), cap = number(row.fund?.target_cents);
-        allowance = `${money(cap)} fund target`;
+        allowance = `${money(cap)} goal`;
         spent = `${money(saved)} saved`;
         left = cap === null || saved === null ? '— to save' : `${money(Math.max(0,cap-saved))} to save`;
         used = saved === null || cap === null ? null : cap === 0 ? 100 : Math.min(100,Math.max(0,saved/cap*100));
@@ -244,7 +244,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     if (error) return `<section class="vf-error" role="alert"><h2>This financial view could not load</h2><p>${esc(error)}</p>${button('Try again', 'retry')}</section>`;
     if (!report) return '<section class="vf-empty" role="status">Loading your financial picture…</section>';
     const covered = coverageHtml();
-    if (view === 'budget') return `<div class="vf-finance" aria-busy="${loading}"><div class="vf-section-heading">${programPicker()}<div><span class="vf-eyebrow">Your monthly spending plan</span><h2>What’s left to spend</h2></div><label>Budget month<input type="month" data-vf-input="budget-month" value="${esc(state.budgetMonth)}"></label>${button('Manage targets', 'legacy-budget')}${button('Add category / program', 'definitions')}</div>${envelopeCards()}</div>`;
+    if (view === 'budget') return `<div class="vf-finance" aria-busy="${loading}"><div class="vf-section-heading">${programPicker()}<h2>Categories</h2><label>Budget month<input type="month" data-vf-input="budget-month" value="${esc(state.budgetMonth)}"></label>${button('Manage targets', 'legacy-budget')}${button('Add category / program', 'definitions')}</div>${envelopeCards()}</div>`;
     const emptyToday = emptyRecordedPeriod();
     const latest = report.coverage?.latest_recorded_on;
     const latestNote = emptyToday ? latest && /^\d{4}-\d{2}-\d{2}$/.test(latest) ? `Bank activity through ${new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',timeZone:'UTC'}).format(new Date(latest+'T12:00:00Z'))}` : 'No bank activity yet' : null;

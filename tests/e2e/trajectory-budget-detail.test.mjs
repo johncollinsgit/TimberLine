@@ -25,6 +25,6 @@ test('reserve target and contribution previews never turn a planned target into 
   assert.equal(preview.still_to_save_cents, 120000);assert.equal(row.fund.target_cents, 100000);
 });
 test('dollar inputs retain cents and reject shorthand exponent negative and overprecision', () => {
-  assert.equal(budgetInputCents('166.67'), 16667);assert.equal(budgetInputCents('0'), 0);
-  for (const value of ['', '-1', '1e5', '2.999', '5k']) assert.equal(budgetInputCents(value), null);
+  assert.equal(budgetInputCents('166.67'), 16667);assert.equal(budgetInputCents('0'), 0);assert.equal(budgetInputCents('1,400.00'),140000);assert.equal(budgetInputCents('12,345,678.90'),1234567890);
+  for (const value of ['', '-1', '1e5', '2.999', '5k', '1,40', '1,,400', '1,2345']) assert.equal(budgetInputCents(value), null);
 });

@@ -37,16 +37,25 @@ for (const engine of [chromium, webkit]) {
       await page.getByRole('heading', {name: 'Groceries', exact: true}).waitFor();
       assert.equal(await page.getByRole('dialog').isVisible(), true);
       await page.getByRole('button', {name: 'Use amount', exact: true}).click();
-      assert.equal(await page.locator('[data-budget-money="monthly_cents"]').inputValue(), '1250.00');
+      assert.equal(await page.locator('[data-budget-money="monthly_cents"]').inputValue(), '1,250.00');
       assert.match(await page.locator('.tr-budget-suggestion').innerText(), /partial/);
       assert.equal((await page.evaluate(() => window.requests.filter(r => r.method !== 'GET'))).length, 0);
+      assert.equal(await page.locator('input[type="range"]').count(), 0);
+      await page.getByRole('button', {name:'Increase monthly budget by $10',exact:true}).click();
+      assert.equal(await page.locator('[data-budget-money="monthly_cents"]').inputValue(), '1,260.00');
+      await page.getByRole('button', {name:'Decrease monthly budget by $10',exact:true}).click();
+      assert.equal(await page.locator('[data-budget-money="monthly_cents"]').inputValue(), '1,250.00');
+      await page.locator('[data-budget-money="monthly_cents"]').fill('0');
+      assert.equal(await page.getByRole('button', {name:'Decrease monthly budget by $10',exact:true}).isDisabled(), true);
+      await page.getByRole('button', {name:'Increase monthly budget by $10',exact:true}).click();
+      assert.equal(await page.locator('[data-budget-money="monthly_cents"]').inputValue(), '10.00');
       await page.locator('[data-budget-money="monthly_cents"]').fill('1500');
       assert.match(await page.locator('[data-budget-preview]').innerText(), /Budget\s+\$1500.00/);
       assert.match(await page.locator('[data-budget-preview]').innerText(), /Left · est.\s+\$700.00/);
       assert.equal(await page.locator('.tr-budget-evidence').getAttribute('open'), null);
       assert.equal((await page.evaluate(() => window.requests.filter(r => r.method !== 'GET'))).length, 0);
       await page.evaluate(() => window.resolveRead());
-      await page.getByRole('button', {name: 'Save plan', exact: true}).click();
+      await page.getByRole('button', {name: 'Save', exact: true}).click();
       await page.getByRole('button', {name: 'Undo last edit'}).waitFor();
       assert.deepEqual(await page.evaluate(() => window.requests.find(r => r.method === 'PATCH').data), {version: 1, changes: {monthly_cents: 150000}, month: '2026-11', plan_context: 'a'.repeat(64)});
       await page.getByRole('button', {name: 'Undo last edit'}).click();
@@ -54,16 +63,18 @@ for (const engine of [chromium, webkit]) {
       const geometry = await page.getByRole('dialog').evaluate(element => ({width: element.getBoundingClientRect().width, scroll: element.scrollWidth, client: element.clientWidth}));
       assert.ok(geometry.width <= width); assert.ok(geometry.scroll <= geometry.client + 1);
       assert.equal(await page.evaluate(() => window.requests.some(r => /analysis|dashboard/.test(r.path))), false);
-      await page.getByRole('button', {name: 'View recorded entries'}).click();
+      await page.getByRole('button', {name: 'Transactions'}).click();
       assert.equal(await page.evaluate(() => window.entries), 1);
       await page.evaluate(() => window.detail.open({mode: 'fund', category: 'travel', label: 'Travel reserve', record_id: 12, record_ids: [12], bank_spent_cents: 5000, pending_cents: 0,
         fund: {record_id: 12, version: 1, target_cents: 100000, saved_cents: 0, monthly_cents: 16667, target_on: '2027-05-18'}}, {month: '2026-11'}));
       assert.match(await page.locator('[data-budget-preview]').innerText(), /\$0.00 saved/);
+      await page.getByRole('button',{name:'Increase monthly budget by $10',exact:true}).click();
+      assert.equal(await page.locator('[data-budget-money="monthly_cents"]').inputValue(),'176.67');
       await page.locator('[data-budget-money="monthly_cents"]').fill('200');
       await page.locator('[data-budget-money="target_cents"]').fill('1200');
-      assert.match(await page.locator('[data-budget-preview]').innerText(), /\$1200.00 still to build/);
+      assert.match(await page.locator('[data-budget-preview]').innerText(), /\$1200.00 to save/);
       await page.evaluate(() => window.resolveRead());
-      await page.getByRole('button', {name: 'Save plan', exact: true}).click();
+      await page.getByRole('button', {name: 'Save', exact: true}).click();
       await page.getByRole('button', {name: 'Undo last edit'}).waitFor();
       const fundSave = await page.evaluate(() => window.requests.filter(r => r.method === 'PATCH').at(-1));
       assert.deepEqual(fundSave.data.changes, {monthly_cents: 20000, target_cents: 120000, target_on: '2027-05-18'});
@@ -73,10 +84,10 @@ for (const engine of [chromium, webkit]) {
       assert.match(await page.locator('[data-budget-preview]').innerText(), /\$571.00/);
       await page.evaluate(() => window.resolveRead());
       assert.equal(await page.locator('[data-budget-money="monthly_cents"]').inputValue(), '571.00');
-      assert.equal(await page.getByRole('button',{name:'Save plan',exact:true}).isEnabled(), true);
+      assert.equal(await page.getByRole('button',{name:'Save',exact:true}).isEnabled(), true);
       assert.doesNotMatch(await page.getByRole('dialog').innerText(), /more than one plan|individual targets/);
       await page.locator('[data-budget-money="monthly_cents"]').fill('600');
-      await page.getByRole('button',{name:'Save plan',exact:true}).click();
+      await page.getByRole('button',{name:'Save',exact:true}).click();
       await page.getByRole('button',{name:'Undo last edit'}).waitFor();
       const aggregateSave=await page.evaluate(()=>window.requests.filter(request=>request.method==='PATCH').at(-1));
       assert.match(aggregateSave.path,/\/21$/);assert.equal(aggregateSave.data.month,'2026-11');assert.equal(aggregateSave.data.changes.monthly_cents,60000);
@@ -87,6 +98,14 @@ for (const engine of [chromium, webkit]) {
         window.ctx.month = '2026-12'; window.detail.contextChanged(); oldRead();
       });
       assert.equal(await page.getByRole('dialog').isVisible(), false);
+      await page.evaluate(() => {
+        window.ctx.month = '2026-11';
+        window.detail.open({category:'fuel',label:'Fuel',record_ids:[],target_cents:35000,bank_spent_cents:0,reported_cash_spent_cents:0,pending_cents:0,reasons:['needs_split']},{month:'2026-11'});
+      });
+      assert.match(await page.locator('[data-budget-preview]').innerText(), /Needs split/);
+      assert.equal(await page.getByRole('progressbar',{name:'Budget spent',exact:true}).count(),0,'Unresolved category spending cannot announce zero percent spent');
+      await page.evaluate(() => window.detail.open({category:'fuel',label:'Fuel',record_ids:[],target_cents:35000,bank_spent_cents:0,reported_cash_spent_cents:0,pending_cents:0,reasons:[]},{month:'2026-11'}));
+      assert.equal(await page.getByRole('progressbar',{name:'Budget spent',exact:true}).getAttribute('aria-valuenow'),'0','Known zero spending retains its real zero progress');
       assert.deepEqual(errors, []); await page.close();
     }
   } finally {await browser.close();}

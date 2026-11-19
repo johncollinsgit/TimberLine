@@ -290,3 +290,11 @@ Budget envelopes reuse request-local monthly projections and native-version cont
 hashes. Ordinary plans read the current and prior month needed for spending and
 suggestions; an explicit rollover keeps its full required history. No global cache,
 budget default, source record or financial calculation changes as part of this reuse.
+
+### Budget amount controls (November 18)
+
+Monthly budget and fund-contribution editors use $10 minus/plus steps and a
+comma-formatted direct-entry field. Steps stop at zero, preserve existing cents,
+and update the preview only; Save retains the native version/context guards.
+No slider remains. The category list omits repeated budget wording, while dated
+and estimated amounts and fund goals stay distinct. Evidence stays under Details.
