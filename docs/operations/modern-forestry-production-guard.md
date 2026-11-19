@@ -148,3 +148,21 @@ php artisan marketing:validate-candle-cash-legacy-conversion --json --limit=0
 Do not use a local `SHOPIFY_ADMIN_TOKEN` as production proof: local developer
 tokens can expire independently. The installed production store credentials and
 per-store import health are the operational evidence for live Shopify access.
+
+## Candle Cash daily allowance - 2026-11-19
+
+- Modern Forestry allows one Candle Cash redemption per canonical customer per
+  calendar day, across redemption entry points, with reset at midnight
+  `America/New_York` (including daylight-saving transitions). Other tenants are
+  unchanged unless their channel rules configure a daily allowance.
+- Issuing a code reserves that day's allowance under the customer row lock.
+  Reopening that unused code is idempotent and does not debit the wallet again.
+  Provider uncertainty keeps that same code reserved. Canceling a reservation does
+  not grant another same-day allowance. An older code used today also blocks a
+  replacement today. Replays of the original purchase remain idempotent.
+- The public status contract exposes the daily rule and the next reset. A used
+  allowance disables a new redemption, while unused-code recovery and the separate
+  Birthday Club coupon remain available. The FAQ page content is maintained in the
+  theme repository and must be published separately from theme synchronization.
+- Balances, earning rates, existing code expiry, sale pricing and current product /
+  shipping combination policy are not changed by this release.

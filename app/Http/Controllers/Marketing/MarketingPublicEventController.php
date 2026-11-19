@@ -2608,6 +2608,7 @@ class MarketingPublicEventController extends Controller
             'insufficient_candle_cash' => 'You need a little more reward balance before the $10 redemption is ready.',
             'missing_tenant_context' => 'This rewards lookup needs a valid store context before it can continue.',
             'reward_unavailable' => 'This reward is currently unavailable.',
+            'daily_limit_reached' => \App\Services\Marketing\CandleCashDailyRedemptionLimit::MESSAGE,
             'redemption_blocked' => 'Redemption is temporarily blocked. Please try again later.',
             default => 'Could not process redemption right now. Please try again shortly.',
         };

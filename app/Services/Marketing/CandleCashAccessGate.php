@@ -32,6 +32,16 @@ class CandleCashAccessGate
     {
         $enabled = $this->storefrontRedeemEnabledForProfile($profile);
 
+        if ($enabled && $profile) {
+            $daily = app(CandleCashDailyRedemptionLimit::class);
+            $status = $daily->status($profile);
+            if ($status['reached'] && ! $daily->hasReusableOnlineCode($profile)) {
+                return ['redeem_enabled' => false, 'cta_label' => 'Available tomorrow',
+                    'message' => CandleCashDailyRedemptionLimit::MESSAGE, 'mode' => 'daily_limit_reached',
+                    'reset_at' => $status['reset_at']];
+            }
+        }
+
         return [
             'redeem_enabled' => $enabled,
             'cta_label' => $enabled ? 'Redeem Reward Credit' : 'Check reward status',
@@ -76,7 +86,7 @@ class CandleCashAccessGate
         $encoded = $this->base64UrlEncode((string) json_encode($payload, JSON_UNESCAPED_SLASHES));
         $signature = hash_hmac('sha256', $encoded, $this->signingKey());
 
-        return $encoded . '.' . $signature;
+        return $encoded.'.'.$signature;
     }
 
     public function storefrontUnlocked(Request $request): bool

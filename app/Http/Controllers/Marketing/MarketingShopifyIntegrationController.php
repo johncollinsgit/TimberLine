@@ -330,6 +330,7 @@ class MarketingShopifyIntegrationController extends Controller
         if (! (bool) ($redemptionAccess['redeem_enabled'] ?? false)) {
             $balance = $candleCashService->currentBalance($profile);
             $accessMode = trim((string) ($redemptionAccess['mode'] ?? 'pending_status')) ?: 'pending_status';
+            $dailyLimited = $accessMode === 'daily_limit_reached';
 
             $this->logStorefrontEvent($request, 'widget_redeem_request', [
                 'status' => 'error',
@@ -339,7 +340,7 @@ class MarketingShopifyIntegrationController extends Controller
                 'source_id' => (string) $reward->id,
                 'meta' => [
                     'reward_id' => (int) $reward->id,
-                    'state' => 'redemption_unavailable',
+                    'state' => $dailyLimited ? 'daily_limit_reached' : 'redemption_unavailable',
                     'access_mode' => $accessMode,
                     'balance' => round((float) $balance, 3),
                     'shopify_store_key' => $this->normalizeStoreKey($storeContext['store_key'] ?? null),
@@ -347,21 +348,21 @@ class MarketingShopifyIntegrationController extends Controller
             ]);
 
             return MarketingStorefrontContract::error(
-                code: 'redemption_access_denied',
+                code: $dailyLimited ? 'daily_limit_reached' : 'redemption_access_denied',
                 message: (string) ($redemptionAccess['message'] ?? 'Reward redemption is not available right now.'),
-                status: 403,
+                status: $dailyLimited ? 422 : 403,
                 details: [
                     'balance' => $this->storefrontBalancePayload($candleCashService, $balance),
                     'candle_cash_balance' => $candleCashService->amountFromPoints($balance),
                     'candle_cash_balance_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints($balance)),
                     'candle_cash_amount' => $candleCashService->amountFromPoints($balance),
                     'candle_cash_amount_formatted' => $candleCashService->formatCurrency($candleCashService->amountFromPoints($balance)),
-                    'state' => 'redemption_unavailable',
+                    'state' => $dailyLimited ? 'daily_limit_reached' : 'redemption_unavailable',
                     'redemption_access' => $redemptionAccess,
                     'redemption_rules' => $candleCashService->redemptionRulesPayload($tenantId),
                 ],
-                states: ['redemption_unavailable'],
-                recoveryStates: $this->widgetService->recoveryStatesForError('reward_unavailable')
+                states: [$dailyLimited ? 'daily_limit_reached' : 'redemption_unavailable'],
+                recoveryStates: $this->widgetService->recoveryStatesForError($dailyLimited ? 'daily_limit_reached' : 'reward_unavailable')
             );
         }
 
@@ -400,7 +401,9 @@ class MarketingShopifyIntegrationController extends Controller
 
             return MarketingStorefrontContract::error(
                 code: $errorCode,
-                message: 'Reward redemption request could not be completed.',
+                message: $errorCode === 'daily_limit_reached'
+                    ? \App\Services\Marketing\CandleCashDailyRedemptionLimit::MESSAGE
+                    : 'Reward redemption request could not be completed.',
                 status: 422,
                 details: [
                     'balance' => $this->storefrontBalancePayload($candleCashService, $result['balance'] ?? 0),
@@ -3794,7 +3797,8 @@ class MarketingShopifyIntegrationController extends Controller
             'redemption' => [
                 'redeem_increment_dollars' => $redeemIncrement,
                 'max_redeemable_per_order_dollars' => $maxRedeemable,
-                'message' => $this->defaultStorefrontRedemptionMessage($programName, $redeemIncrement, $maxRedeemable),
+                'message' => trim($this->defaultStorefrontRedemptionMessage($programName, $redeemIncrement, $maxRedeemable).' '
+                    .(string) data_get($candleCashService->redemptionRulesPayload($tenantId), 'daily_limit_message', '')),
             ],
             'membership' => [
                 'status' => $membershipStatus,

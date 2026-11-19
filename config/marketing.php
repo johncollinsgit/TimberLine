@@ -249,7 +249,8 @@ return [
         'storefront_reward_value' => env('MARKETING_CANDLE_CASH_STOREFRONT_REWARD_VALUE', '10USD'),
         // Resolved from the persisted profile's tenant, never a shopper-supplied channel or brand.
         'tenant_channel_rules' => [
-            'modern-forestry' => ['online_amount' => 10, 'in_person_amount' => 5, 'birthday_reward_amount' => 10, 'recurring_charges_allowed' => false],
+            'modern-forestry' => ['online_amount' => 10, 'in_person_amount' => 5, 'birthday_reward_amount' => 10, 'recurring_charges_allowed' => false,
+                'max_redemptions_per_customer_per_day' => 1, 'redemption_timezone' => 'America/New_York'],
         ],
         // Legacy beta rollout knob retained for compatibility only; storefront access is now GA and this value is ignored.
         'temporary_storefront_live_email_allowlist' => array_values(array_filter(array_map(
