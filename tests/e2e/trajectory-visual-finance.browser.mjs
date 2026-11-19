@@ -109,7 +109,7 @@ try {
       ]});});
       const budgetCards=page.locator('.vf-budget-list');
       assert.doesNotMatch(await budgetCards.innerText(),/Unavailable|\$0\.00|left after recorded spending|Resets monthly|Tax split pending/);
-      assert.match(await budgetCards.innerText(),/\$1,400\.00 budget/);assert.match(await budgetCards.innerText(),/\$640\.00 spent/);assert.match(await budgetCards.innerText(),/\$760\.00 left · est./);
+      assert.match(await budgetCards.innerText(),/\$1,400\.00/);assert.match(await budgetCards.innerText(),/\$640\.00 spent/);assert.match(await budgetCards.innerText(),/\$760\.00 left · est./);
       assert.deepEqual((await budgetCards.locator('.vf-envelope-label').allTextContents()).map(value=>value.trim()),['Groceries','Travel','Materials','Fuel','Dining','Education']);
       assert.equal(await budgetCards.locator('small,details,.vf-envelope-actions,.vf-envelope-notes').count(),0,'List rows contain no notes/setup prose');
       assert.equal(await page.getByRole('button',{name:'Confirm budget…',exact:true}).count(),0);

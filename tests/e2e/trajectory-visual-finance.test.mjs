@@ -249,7 +249,7 @@ test('budget cards show dated drafts and recorded-only grocery costs while prese
   const html = ui.render('budget');
   assert.doesNotMatch(html, /Unavailable|\$0\.00/);assert.match(html, /\$1400\.00/);assert.match(html, /\$640\.00 spent/);
   assert.match(html, /\$210\.00 spent/);assert.match(html, /— left/);
-  assert.match(html, /\$450\.00/);assert.match(html, /dated budget/);assert.doesNotMatch(html, /Confirm budget…/);
+  assert.match(html, /\$450\.00/);assert.match(html, /dated/);assert.doesNotMatch(html, /Confirm budget…/);
   assert.match(html, /vf-budget-list/);assert.doesNotMatch(html, /vf-envelope-notes|vf-envelope-actions|Confirm budget|Set budget…|Cash &lt;spending>/);
   assert.equal(budgets.rows[0].remaining_cents, null);
 });
@@ -268,7 +268,7 @@ test('owner reported monthly cash is visible separately and is not presented as 
 
 test('fund cards show actual saved progress and contribution rather than a monthly spending cap',async()=>{
  const {ui}=fixture(async path=>path.includes('budget-envelopes')?{month:'2028-02',rows:[{key:'0|travel',category:'travel',label:'Travel fund',mode:'fund',target_cents:null,planned_cents:30000,spent_cents:0,bank_spent_cents:0,remaining_cents:null,fund:{saved_cents:0,target_cents:100000,monthly_cents:16667}}],summary:{remaining_cents:null}}:structuredClone(report));await ui.refresh();const html=ui.render('budget');
- assert.match(html,/\$0\.00 saved/);assert.match(html,/\$1000\.00 fund target/);assert.match(html,/\$1000\.00 to save/);assert.doesNotMatch(html,/\$300\.00|\$166\.67|\$0\.00 spent/);
+ assert.match(html,/\$0\.00 saved/);assert.match(html,/\$1000\.00 goal/);assert.match(html,/\$1000\.00 to save/);assert.doesNotMatch(html,/\$300\.00|\$166\.67|\$0\.00 spent/);
 });
 
 

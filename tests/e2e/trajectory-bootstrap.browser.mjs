@@ -57,7 +57,7 @@ try{
    await primary('analysis');await page.locator('[data-action="vf-ledger-all"]').click();
    const categories=page.locator('[data-vf-category]');assert.ok(await categories.count());
    assert.equal(await categories.evaluateAll(nodes=>nodes.every(node=>node.disabled)),true,'Editing waits for native editing metadata');
-   await primary('budget');await expect(page.getByRole('heading',{name:'What’s left to spend',exact:true})).toBeVisible();
+   await primary('budget');await expect(page.getByRole('heading',{name:'Categories',exact:true})).toBeVisible();
    await primary('overview');await expect(page.locator('#vf-income-chart')).toBeVisible();
    assert.equal(reads.filter(path=>path.endsWith('/dashboard')).length,0,'Home, Analysis and Budget never request the expensive legacy Dashboard');assert.equal(reads.filter(path=>path.endsWith('/visual-context')).length,1);assert.equal(reads.filter(path=>path.endsWith('/analysis')).length,1);assert.equal(reads.filter(path=>path.endsWith('/budget-envelopes')).length,1);
    releaseDashboard();await expect(page.locator('#tr-add')).toBeEnabled();
@@ -82,7 +82,7 @@ try{
    if(width===390){
     await expect(setup).toBeHidden();await expect(page.getByRole('button',{name:'Import budget CSV',exact:true})).toBeHidden();await expect(phoneBudget).toBeVisible();
     assert.ok(await phoneBudget.evaluate(node=>node.getBoundingClientRect().right<=innerWidth),'Phone budget action fits the viewport');
-    await phoneBudget.click();await expect(page.getByRole('heading',{name:'What’s left to spend',exact:true})).toBeVisible();
+    await phoneBudget.click();await expect(page.getByRole('heading',{name:'Categories',exact:true})).toBeVisible();
    }else{
     await expect(setup).toBeVisible();await expect(page.getByRole('button',{name:'Import budget CSV',exact:true})).toBeVisible();await expect(phoneBudget).toBeHidden();
     await expect(setup).toContainText('Planned debt payments');assert.doesNotMatch(await setup.innerText(),/Debt cash reserve/);
@@ -100,7 +100,7 @@ try{
     await page.evaluate(()=>window.scrollTo(0,600));await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBeGreaterThan(0);
     const after=await navigation.boundingBox();assert.ok(Math.abs(before.y-after.y)<1,'The bottom tabs stay pinned while content scrolls');
     await primary('budget');await expect(navigation.locator('[data-tab="budget"]')).toHaveAttribute('aria-current','page');
-    await expect(page.getByRole('heading',{name:'What’s left to spend',exact:true})).toBeVisible();
+    await expect(page.getByRole('heading',{name:'Categories',exact:true})).toBeVisible();
     await primary('overview');
    }
    await expect(page.locator('#vf-income-chart')).toBeVisible();await expect(page.locator('#tr-content')).toHaveAttribute('aria-busy','false');

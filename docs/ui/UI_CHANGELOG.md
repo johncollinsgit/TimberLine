@@ -3778,3 +3778,5 @@ Phone actions now share one compact header with labeled notification, add and
 calendar icons. Date, account, workspace and analysis options open in the calendar
 popover; the selected business and date remain visible. The same controls return
 to their full desktop positions on resize, preserving values and handlers.
+
+- Trajectory: replace the monthly budget slider with $10 touch controls and comma-formatted entry; shorten budget list and editor copy while retaining source details and explicit Save.
