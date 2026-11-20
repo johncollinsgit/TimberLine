@@ -214,6 +214,7 @@ test('real pilot revocation expiry and provider changes block captured settings 
 });
 
 test('fixed live acceptance is preview-first and replays its two requests without extra model use', function () {
+    $this->travelTo(\Carbon\CarbonImmutable::parse(config('ai_branch.rates_valid_until'))->subDay());
     [$tenant, $owner] = prepareFictionalVoicePilot($this);
     config(['ai_branch.api_key' => 'test-acceptance-key', 'ai_branch.model' => 'gpt-6-luna',
         'ai_branch.input_micros_per_million' => 250000, 'ai_branch.output_micros_per_million' => 750000]);

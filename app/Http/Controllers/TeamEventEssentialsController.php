@@ -23,6 +23,12 @@ class TeamEventEssentialsController extends Controller
         } else {
             $input = $request->validate(['include_sales' => 'sometimes|boolean']);
             $result = $essentials->read($tenant, $request->user(), $event, (bool) ($input['include_sales'] ?? true));
+            if (\App\Services\Marketing\TeamShowTextCampaigns::enabledFor($tenant->id) && $event->kind === 'event'
+                && ! in_array($event->status, ['withdrawn', 'cancelled'], true)
+                && app(\App\Services\Team\Studio\EventSalesAccess::class)->manager($tenant, $request->user())
+                && app(\App\Services\Tenancy\TenantModuleAccessResolver::class)->canAccess($tenant->id, 'sms')) {
+                $result['show_text_url'] = route('team.events.show-text', ['id' => $event->id, 'tenant' => $tenant->slug], false);
+            }
         }
 
         return response()->json($result)->header('Cache-Control', 'private, no-store');

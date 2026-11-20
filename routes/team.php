@@ -31,6 +31,14 @@ Route::middleware(['auth', 'verified', 'tenant.access', \App\Http\Middleware\Ens
         Route::get('/events/{id}/intelligence', \App\Http\Controllers\TeamEventIntelligenceController::class)->whereUuid('id')->name('events.intelligence');
         Route::get('/events/{id}/sales-history', \App\Http\Controllers\TeamEventSalesHistoryController::class)->whereUuid('id')->name('events.sales-history');
         Route::get('/events/{id}/essentials', \App\Http\Controllers\TeamEventEssentialsController::class)->whereUuid('id')->name('events.essentials');
+        Route::prefix('/events/{id}/show-text')->whereUuid('id')->name('events.show-text')->controller(\App\Http\Controllers\TeamShowTextController::class)->group(function (): void {
+            Route::get('/', 'show');
+            Route::post('/photo', 'photo')->name('.photo');
+            Route::post('/review', 'review')->name('.review');
+            Route::post('/send', 'send')->name('.send');
+            Route::post('/preview', 'preview')->middleware('throttle:5,1')->name('.preview');
+            Route::get('/results/{campaign}', 'results')->whereNumber('campaign')->name('.results');
+        });
         Route::post('/events/{id}/travel', \App\Http\Controllers\TeamEventEssentialsController::class)->whereUuid('id')->name('events.travel');
         Route::get('/events/{id}/updates', [\App\Http\Controllers\TeamEventUpdatesController::class, 'index'])->whereUuid('id')->name('events.updates');
         Route::post('/events/{id}/updates', [\App\Http\Controllers\TeamEventUpdatesController::class, 'store'])->whereUuid('id')->name('events.updates.store');

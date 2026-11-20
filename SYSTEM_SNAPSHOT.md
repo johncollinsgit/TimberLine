@@ -1,3 +1,10 @@
+## Teams show texts (source candidate)
+
+Teams event managers can review a show-based SMS audience, attach an MMS photo,
+queue an approved message, and see delivery and replies through the existing
+marketing inbox. See [Teams show texts](docs/operations/team-show-texts.md) for
+pilot setup and audience coverage checks.
+
 ## Shared Events reporting (November 15; source candidate)
 
 Browser Everbranch Events reuses Teams event identities and canonical customer

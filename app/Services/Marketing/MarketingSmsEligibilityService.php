@@ -16,7 +16,22 @@ class MarketingSmsEligibilityService
 
     public function __construct(
         protected MarketingIdentityNormalizer $identityNormalizer
-    ) {
+    ) {}
+
+    /** Explicit opt-outs from another retained profile for the same destination. */
+    public function recordedOptOutPhones(int $tenantId, array $phones): array
+    {
+        $candidates = collect($phones)->flatMap(fn ($phone) => $this->identityNormalizer->phoneMatchCandidates($phone))->unique()->all();
+        $blocked = [];
+        foreach (array_chunk($candidates, 500) as $chunk) {
+            $matches = MarketingProfile::forTenantId($tenantId)->whereNotNull('sms_opted_out_at')
+                ->whereIn('normalized_phone', $chunk)->pluck('normalized_phone');
+            foreach ($matches as $number) {
+                $blocked[] = $this->identityNormalizer->toE164($number);
+            }
+        }
+
+        return array_values(array_unique(array_filter($blocked)));
     }
 
     /**
@@ -58,7 +73,7 @@ class MarketingSmsEligibilityService
     }
 
     /**
-     * @param iterable<int,MarketingProfile> $profiles
+     * @param  iterable<int,MarketingProfile>  $profiles
      * @return Collection<int,array{
      *   eligible:bool,
      *   reason_codes:array<int,string>,
@@ -155,8 +170,8 @@ class MarketingSmsEligibilityService
     }
 
     /**
-     * @param Collection<int,MessagingContactChannelState> $stateByProfileId
-     * @param Collection<string,MessagingContactChannelState> $stateByPhone
+     * @param  Collection<int,MessagingContactChannelState>  $stateByProfileId
+     * @param  Collection<string,MessagingContactChannelState>  $stateByPhone
      * @return array{status:string,reason:?string}
      */
     protected function resolveChannelState(
@@ -206,7 +221,7 @@ class MarketingSmsEligibilityService
     }
 
     /**
-     * @param array<int,string> $reasonCodes
+     * @param  array<int,string>  $reasonCodes
      */
     protected function blockingNote(array $reasonCodes, string $status, ?string $reason): ?string
     {

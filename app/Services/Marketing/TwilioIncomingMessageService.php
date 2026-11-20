@@ -96,6 +96,7 @@ class TwilioIncomingMessageService
 
         $message = $this->conversationService->appendMessage($conversation, [
             'marketing_profile_id' => $profile?->id,
+            'marketing_message_delivery_id' => $this->showTextReplyDelivery($matchedDelivery, $payload, $fromPhone, $toPhone, $occurredAt),
             'channel' => 'sms',
             'direction' => 'inbound',
             'provider' => 'twilio',
@@ -192,6 +193,27 @@ class TwilioIncomingMessageService
             'conversation_id' => (int) $conversation->id,
             'message_type' => $classification['message_type'],
         ];
+    }
+
+    private function showTextReplyDelivery(?MarketingMessageDelivery $delivery, array $payload, string $fromPhone, ?string $toPhone, CarbonImmutable $occurredAt): ?int
+    {
+        if (! $delivery || $delivery->source_label !== 'team_show_text' || $delivery->channel !== 'sms'
+            || ! $delivery->tenant_id || ! $delivery->sent_at || $delivery->sent_at->greaterThan($occurredAt)
+            || $this->identityNormalizer->toE164($delivery->to_phone) !== $fromPhone
+            || ! $toPhone || $this->identityNormalizer->toE164($delivery->from_identifier) !== $toPhone) {
+            return null;
+        }
+        if (($payload['OriginalRepliedMessageSid'] ?? null) === $delivery->provider_message_id && filled($delivery->provider_message_id)) {
+            return (int) $delivery->id;
+        }
+        $since = $occurredAt->subDays(7);
+        $matching = MarketingMessageDelivery::forTenantId($delivery->tenant_id)->where('channel', 'sms')
+            ->whereIn('to_phone', $this->identityNormalizer->phoneMatchCandidates($fromPhone))
+            ->whereIn('from_identifier', $this->identityNormalizer->phoneMatchCandidates($toPhone))
+            ->whereBetween('sent_at', [$since, $occurredAt])->whereNotNull('provider_message_id')
+            ->orderByDesc('id')->limit(2)->pluck('id')->all();
+
+        return $matching === [(int) $delivery->id] ? (int) $delivery->id : null;
     }
 
     protected function resolveDelivery(array $payload, ?string $fromPhone, ?string $toPhone, ?int $tenantId = null): ?MarketingMessageDelivery

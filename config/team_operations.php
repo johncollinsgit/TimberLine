@@ -3,6 +3,8 @@
 return [
     'enabled' => (bool) env('TEAM_OPERATIONS_ENABLED', false),
     'send_enabled' => (bool) env('TEAM_OPERATIONS_SEND_ENABLED', false),
+    'show_texts_enabled' => (bool) env('TEAM_SHOW_TEXTS_ENABLED', false),
+    'show_texts_tenants' => array_values(array_filter(array_map('trim', explode(',', (string) env('TEAM_SHOW_TEXTS_TENANTS', ''))))),
     'asana_create_enabled' => (bool) env('TEAM_OPERATIONS_ASANA_CREATE_ENABLED', false),
     'asana_write_enabled' => (bool) env('TEAM_OPERATIONS_ASANA_WRITE_ENABLED', false),
     'sheet_ids_enabled' => (bool) env('TEAM_OPERATIONS_SHEET_IDS_ENABLED', false),
