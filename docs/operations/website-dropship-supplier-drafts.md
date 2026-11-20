@@ -33,6 +33,20 @@ php artisan website:dropship-draft 101 202 303 --submit
 
 In Shopify Drafts, confirm that the ticket is private, totals $0, and shows the correct variants, quantities, and destination. Use the draft to make and ship the products. Keep it in Drafts and record shipment and tracking in the seller's fulfillment workflow. Coordinate any subsequent cancellation or refund directly with the supplier before shipment.
 
+## Enable automatic intake
+
+1. Run both dropshipping migrations and confirm the operator path as part of supplier acceptance. Configure the seller to use Stripe for this pilot.
+2. Set `"automatic": true` on the approved seller site and supplier entry in `WEBSITE_DROPSHIP_SHOPIFY_SUPPLIERS`. Refresh app configuration and restart the dedicated worker after configuration changes.
+3. Run the standard Laravel scheduler and supervise the dedicated worker.
+
+```sh
+php artisan queue:work website_dropship_drafts --queue=website-dropship-drafts --sleep=3 --tries=1 --timeout=60
+```
+
+The paid Stripe transaction records the outbox entry. The scheduler queues it each minute through `website:dispatch-dropship-drafts`. The worker rechecks approval and looks for Stripe refund activity before creating a draft. The handoff uses the frozen supplier route and the Shopify destination approved at payment. Existing paid orders can use the operator path.
+
+Review `website_dropship_outbox` rows in `review` using the stored seller tenant, site, and order IDs. An expired queue lease is recoverable, and a pending Shopify create is reconciled by its original tag. The worker moves a handoff to review when the supplier approval changes, the payment becomes ineligible, or recovery reaches five worker attempts. Restore the original connection and use the operator commands for any reviewed order that should still proceed.
+
 ## Recover an uncertain submission
 
 The command records a claim before sending Shopify a single create request. If the response is lost, run the read-only lookup against the same supplier connection.
@@ -41,4 +55,4 @@ The command records a claim before sending Shopify a single create request. If t
 php artisan website:dropship-draft 101 202 303 --reconcile
 ```
 
-If the command cannot verify the result, search the original Shopify shop using the correlation tag it reports. Shopify search can lag. Keep the existing claim and resolve the ticket in that shop before deciding on a recovery. Automated order dispatch, Printful submission, and supplier shipment status synchronization are future work.
+If the command cannot verify the result, search the original Shopify shop using the correlation tag it reports. Shopify search can lag. Keep the existing claim and resolve the ticket in that shop before deciding on a recovery. Printful submission and supplier shipment status synchronization are future work.

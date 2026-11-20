@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
 
-/** An operator-only work intake draft on a separately approved supplier connection. */
+/** A work intake draft on a separately approved supplier connection. */
 class WebsiteDropshipDraftHandoff
 {
     private const API_VERSION = '2026-07';
@@ -19,7 +19,7 @@ class WebsiteDropshipDraftHandoff
 
     public function __construct(private readonly WebsiteShippingPlanService $shipping) {}
 
-    public function submit(int $tenantId, int $siteId, int $orderId): string
+    public function submit(int $tenantId, int $siteId, int $orderId, ?array $automaticDestination = null): string
     {
         $this->assertEnabled();
         if (DB::transactionLevel() !== 0) {
@@ -32,10 +32,12 @@ class WebsiteDropshipDraftHandoff
 
         // Verify the supplier account before sending any buyer data.
         [$supplier, $connection] = $this->preparedOrder($tenantId, $siteId, $orderId);
+        $this->assertAutomaticDestination($automaticDestination, $supplier, $connection);
         $this->verifyShop($connection);
 
-        [$tag, $payload] = DB::transaction(function () use ($tenantId, $siteId, $orderId, $criteria, $supplier, $connection) {
+        [$tag, $payload] = DB::transaction(function () use ($tenantId, $siteId, $orderId, $criteria, $supplier, $connection, $automaticDestination) {
             [$currentSupplier, $currentConnection, $payload] = $this->preparedOrder($tenantId, $siteId, $orderId, lock: true);
+            $this->assertAutomaticDestination($automaticDestination, $currentSupplier, $currentConnection);
             if ($currentSupplier !== $supplier || $currentConnection !== $connection || $criteria->exists()) {
                 throw new RuntimeException('The supplier route or attempt has changed. Reconcile the existing attempt.');
             }
@@ -68,7 +70,7 @@ class WebsiteDropshipDraftHandoff
         return $this->record($criteria, $tag, $draft['id']);
     }
 
-    public function reconcile(int $tenantId, int $siteId, int $orderId): string
+    public function reconcile(int $tenantId, int $siteId, int $orderId, ?array $automaticDestination = null): string
     {
         $this->assertEnabled();
         $criteria = $this->drafts($tenantId, $siteId, $orderId);
@@ -76,13 +78,13 @@ class WebsiteDropshipDraftHandoff
         if ($attempt === null) {
             throw new RuntimeException('No supplier draft attempt exists for this seller order.');
         }
-        if ($attempt->shopify_draft_id !== null) {
-            return $attempt->shopify_draft_id;
-        }
-
         $connection = $this->connection($tenantId, $siteId, $attempt->supplier_key);
+        $this->assertAutomaticDestination($automaticDestination, $attempt->supplier_key, $connection);
         if ($attempt->shop_id !== $connection['shop_id'] || $attempt->shop_domain !== $connection['shop_domain']) {
             throw new RuntimeException('Restore access to the original supplier shop to reconcile this attempt.');
+        }
+        if ($attempt->shopify_draft_id !== null) {
+            return $attempt->shopify_draft_id;
         }
         $this->verifyShop($connection);
         $query = 'query SupplierDraftLookup($filter: String!) { draftOrders(first: 2, query: $filter) { nodes { '.self::DRAFT_FIELDS.' } pageInfo { hasNextPage } } }';
@@ -95,6 +97,41 @@ class WebsiteDropshipDraftHandoff
         }
 
         return $this->record($criteria, $attempt->correlation_tag, $matches[0]['id']);
+    }
+
+    public function alreadyAttempted(int $tenantId, int $siteId, int $orderId): bool
+    {
+        return $this->drafts($tenantId, $siteId, $orderId)->exists();
+    }
+
+    public function automaticDestination(WebsiteOrder $order): ?array
+    {
+        if (config('website_dropshipping.shopify_drafts_enabled') !== true
+            || $order->source !== 'native' || $order->fulfillment_method !== 'ship'
+            || empty(config('website_dropshipping.shopify_suppliers.'.$order->tenant_id.'.'.$order->tenant_site_id))) {
+            return null;
+        }
+
+        try {
+            [$supplier] = $this->supplierItems($order);
+            $connection = $this->connection($order->tenant_id, $order->tenant_site_id, $supplier);
+        } catch (RuntimeException) {
+            return null;
+        }
+
+        return ($connection['automatic'] ?? false) === true ? $this->destination($supplier, $connection) : null;
+    }
+
+    private function assertAutomaticDestination(?array $expected, string $supplier, array $connection): void
+    {
+        if ($expected !== null && (($connection['automatic'] ?? false) !== true || $expected !== $this->destination($supplier, $connection))) {
+            throw new RuntimeException('The automatic supplier authorization has changed.');
+        }
+    }
+
+    private function destination(string $supplier, array $connection): array
+    {
+        return ['supplier_key' => $supplier, 'shop_id' => $connection['shop_id'], 'shop_domain' => $connection['shop_domain']];
     }
 
     private function preparedOrder(int $tenantId, int $siteId, int $orderId, bool $lock = false): array
@@ -119,10 +156,35 @@ class WebsiteDropshipDraftHandoff
             throw new RuntimeException('Verified live Stripe payment without refund activity is required for a supplier handoff.');
         }
 
+        [$supplier, $items] = $this->supplierItems($order);
+        $address = $this->shipping->address((array) $order->shipping_address);
+        [$first, $last] = array_pad(explode(' ', $address['name'], 2), 2, '');
+        $reference = (string) $order->number;
+
+        return [$supplier, $this->connection($tenantId, $siteId, $supplier), [
+            'presentmentCurrencyCode' => 'USD',
+            'note' => 'Everbranch supplier work intake for '.$reference.'. Buyer paid the seller. Keep this as an internal draft. Do not invoice or complete in Shopify.',
+            'poNumber' => $reference,
+            'visibleToCustomer' => false,
+            'acceptAutomaticDiscounts' => false,
+            'allowDiscountCodesInCheckout' => false,
+            'taxExempt' => true,
+            'shippingAddress' => array_filter([
+                'firstName' => $last === '' ? '' : $first, 'lastName' => $last === '' ? $first : $last,
+                'address1' => $address['street1'], 'address2' => $address['street2'] ?? '',
+                'city' => $address['city'], 'provinceCode' => $address['state'],
+                'zip' => $address['zip'], 'countryCode' => $address['country'],
+            ]),
+            'lineItems' => $items,
+        ]];
+    }
+
+    private function supplierItems(WebsiteOrder $order): array
+    {
         $supplier = null;
         $location = null;
         $items = [];
-        foreach ($order->lines()->forTenantId($tenantId)->where('product_type', 'physical')->orderBy('id')->get() as $line) {
+        foreach ($order->lines()->forTenantId($order->tenant_id)->where('product_type', 'physical')->orderBy('id')->get() as $line) {
             $route = $line->snapshot['dropshipping'] ?? [];
             $candidate = $route['supplier'] ?? '';
             $variant = $route['variant'] ?? '';
@@ -146,26 +208,7 @@ class WebsiteDropshipDraftHandoff
             throw new RuntimeException('No eligible Shopify supplier lines were found.');
         }
 
-        $address = $this->shipping->address((array) $order->shipping_address);
-        [$first, $last] = array_pad(explode(' ', $address['name'], 2), 2, '');
-        $reference = (string) $order->number;
-
-        return [$supplier, $this->connection($tenantId, $siteId, $supplier), [
-            'presentmentCurrencyCode' => 'USD',
-            'note' => 'Everbranch supplier work intake for '.$reference.'. Buyer paid the seller. Keep this as an internal draft. Do not invoice or complete in Shopify.',
-            'poNumber' => $reference,
-            'visibleToCustomer' => false,
-            'acceptAutomaticDiscounts' => false,
-            'allowDiscountCodesInCheckout' => false,
-            'taxExempt' => true,
-            'shippingAddress' => array_filter([
-                'firstName' => $last === '' ? '' : $first, 'lastName' => $last === '' ? $first : $last,
-                'address1' => $address['street1'], 'address2' => $address['street2'] ?? '',
-                'city' => $address['city'], 'provinceCode' => $address['state'],
-                'zip' => $address['zip'], 'countryCode' => $address['country'],
-            ]),
-            'lineItems' => $items,
-        ]];
+        return [$supplier, $items];
     }
 
     private function assertEnabled(): void

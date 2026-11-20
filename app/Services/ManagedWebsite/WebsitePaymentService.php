@@ -185,6 +185,9 @@ class WebsitePaymentService
                     ? 'Stripe payment verified. Inventory committed once.'
                     : 'Stripe payment verified, but inventory needs staff review. Fulfillment is blocked.');
                 app(WebsiteOrderNotificationService::class)->record($order, 'order:'.$order->id.':confirmed', $committed ? 'confirmed' : 'payment_review');
+                if ($committed && data_get($metadata, 'livemode') === true) {
+                    app(WebsiteDropshipOutbox::class)->record($order, $payment->id);
+                }
             } elseif (($session['status'] ?? '') === 'expired' && ($session['payment_status'] ?? '') === 'unpaid') {
                 $this->expire($order, $payment);
             }

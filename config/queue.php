@@ -55,6 +55,15 @@ return [
             'after_commit' => true,
         ],
 
+        'website_dropship_drafts' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => 'website-dropship-drafts',
+            'retry_after' => 120,
+            'after_commit' => true,
+        ],
+
         // Source reporting can walk historical cohorts; keep its lease longer
         // than the dedicated 600-second worker timeout, independent of checkout.
         'event_performance' => [
