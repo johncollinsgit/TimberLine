@@ -24,6 +24,8 @@ return [
     'invoice_bank_payments_enabled' => $bool('MANAGED_WEBSITE_INVOICE_BANK_PAYMENTS_ENABLED'),
     // Every gate defaults to false. Empty allowlists never mean "everyone".
     'commerce_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_ENABLED'),
+    // Owner-reviewed, no credentials. Key by seller tenant, site, and Website variant ID.
+    'dropshipping_routes' => json_decode((string) env('MANAGED_WEBSITE_DROPSHIPPING_ROUTES', '{}'), true, 16, JSON_THROW_ON_ERROR),
     // A tenant-specific catalog/cart preview without live payment checkout.
     'commerce_preview_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_PREVIEW_TENANT_IDS'),
     // Native retail operations, shipping, and connected-store imports each have

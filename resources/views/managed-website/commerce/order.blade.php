@@ -22,6 +22,17 @@
                     <section class="overflow-hidden border border-zinc-200 bg-white"><x-ui.operational-toolbar><h2 class="text-sm font-semibold text-zinc-950">Timeline</h2><span class="text-xs text-zinc-500">Staff-visible history</span></x-ui.operational-toolbar><ol class="divide-y divide-zinc-100">@forelse($order->events as $event)<li class="px-4 py-3"><p class="text-sm text-zinc-800">{{ $event->message }}</p><p class="mt-1 text-xs text-zinc-500">{{ $event->created_at->format('M j, Y g:i A') }} · {{ str($event->event_type)->headline() }}</p></li>@empty<li class="px-4 py-5 text-sm text-zinc-500">New operational events will appear here.</li>@endforelse</ol></section>
                 </div>
                 <aside class="space-y-5">
+                    @if($supplierLines->isNotEmpty())
+                        <section class="border border-zinc-200 bg-white p-4">
+                            <h2 class="text-sm font-semibold text-zinc-950">Dropshipping</h2>
+                            <p class="mt-2 text-sm text-zinc-600">Supplier variants saved at checkout. Arrange shipment with the supplier once payment is verified.</p>
+                            <ul class="mt-2 space-y-2 text-sm text-zinc-800">
+                                @foreach($supplierLines as $line)
+                                    <li>{{ $line->quantity }} × {{ $line->title }} · {{ data_get($line->snapshot, 'dropshipping.supplier') }} · {{ data_get($line->snapshot, 'dropshipping.variant') }}</li>
+                                @endforeach
+                            </ul>
+                        </section>
+                    @endif
                     <section class="border border-zinc-200 bg-white p-4"><h2 class="text-sm font-semibold text-zinc-950">Customer</h2><p class="mt-3 text-sm font-medium text-zinc-900">{{ data_get($order->customer_snapshot, 'name', 'Website shopper') }}</p><p class="mt-1 text-sm text-zinc-600">{{ data_get($order->customer_snapshot, 'email', 'No email') }}</p><p class="text-sm text-zinc-600">{{ data_get($order->customer_snapshot, 'phone') }}</p>@if($order->website_customer_id)<a class="mt-3 inline-block text-sm font-medium text-emerald-800 hover:underline" href="{{ route('managed-website.customers.show', $order->website_customer_id) }}">Open customer</a>@endif</section>
                     @include('managed-website.commerce.shipment-actions')
                     @include('managed-website.commerce.payment-actions')

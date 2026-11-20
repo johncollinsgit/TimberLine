@@ -85,3 +85,39 @@ test('sales channels page is tenant-scoped and read-only', function (): void {
         ->assertSeeText('No confirmed sales in this range')
         ->assertDontSeeText('Everbranch Website');
 });
+
+test('native dropshipping is attributed exactly once using its own paid lines', function (): void {
+    $tenant = salesChannelTenant();
+    $other = salesChannelTenant('supplier-channel-other');
+    $actor = User::factory()->tenantAdmin()->create();
+    $site = app(ManagedWebsiteService::class)->createSite($tenant, $actor);
+    $now = now()->startOfDay()->addHour();
+    $addOrder = function (string $number, string $status, int $amount) use ($now, $tenant, $site): WebsiteOrder {
+        return WebsiteOrder::query()->create([
+            'tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'source' => 'native',
+            'number' => $number, 'lookup_token' => 'lookup-'.strtolower($number), 'payment_status' => $status,
+            'subtotal_cents' => $amount, 'total_cents' => $amount, 'paid_at' => $now,
+        ]);
+    };
+    $drop = $addOrder('WEB-DROP', 'paid', 5800);
+    $web = $addOrder('WEB-LOCAL', 'paid', 1500);
+    $pending = $addOrder('WEB-PENDING', 'pending', 2200);
+
+    foreach ([[$drop, $tenant->id], [$drop, $tenant->id], [$web, $other->id], [$pending, $tenant->id]] as [$order, $owner]) {
+        $order->lines()->create([
+            'tenant_id' => $owner, 'title' => 'Candle', 'product_type' => 'physical', 'quantity' => 1,
+            'unit_price_cents' => 2900, 'line_total_cents' => 2900,
+            'snapshot' => ['dropshipping' => ['provider' => 'shopify', 'supplier' => 'fixture-shop', 'variant' => '8oz', 'location_id' => 10]],
+        ]);
+    }
+
+    $summary = app(SalesChannelSummaryService::class)->forTenant($tenant, $now->copy()->startOfDay(), $now->copy()->endOfDay());
+    $channels = collect($summary['channels'])->keyBy('key');
+
+    expect($summary['order_count'])->toBe(2)
+        ->and($summary['revenue_cents'])->toBe(7300)
+        ->and($summary['has_website_channel'])->toBeTrue()
+        ->and($channels->get('dropshipping')['order_count'])->toBe(1)
+        ->and($channels->get('dropshipping')['revenue_cents'])->toBe(5800)
+        ->and($channels->get('everbranch_website')['revenue_cents'])->toBe(1500);
+});

@@ -33,7 +33,11 @@ class WebsiteCheckoutService
             $site = TenantSite::query()->forTenantId($cart->tenant_id)->lockForUpdate()->findOrFail($site->id);
             $cart = WebsiteCart::query()->lockForUpdate()->with('items.variant.product')->findOrFail($cart->id);
             abort_if($cart->status !== 'active' || $cart->items->isEmpty(), 422, 'Your cart is empty or no longer active.');
-            $fingerprint = $this->fingerprint($cart, $buyer, $site);
+            $supplierRoutes = app(WebsiteDropshipRouting::class)->forCart($cart, $site);
+            if ($supplierRoutes !== [] && ($buyer['fulfillment_method'] ?? '') !== 'ship') {
+                throw ValidationException::withMessages(['fulfillment_method' => 'Supplier items must be shipped.']);
+            }
+            $fingerprint = $this->fingerprint($cart, $buyer, $site, $supplierRoutes);
             $existing = $this->activePayment($cart);
             if ($existing) {
                 abort_unless($existing->provider === $provider, 409, 'Resume or cancel the original payment before choosing another method.');
@@ -115,7 +119,8 @@ class WebsiteCheckoutService
                     'tenant_id' => $site->tenant_id, 'website_order_id' => $order->id, 'website_product_variant_id' => $variant->id,
                     'title' => $variant->product->title, 'product_type' => $variant->product->product_type, 'quantity' => $item->quantity,
                     'unit_price_cents' => $variant->price_cents, 'line_total_cents' => $line['lineTotal'],
-                    'snapshot' => ['track_inventory' => $variant->product->track_inventory && $variant->inventory_quantity !== null, 'variant_title' => $variant->title, 'sku' => $variant->sku, 'product_handle' => $variant->product->handle],
+                    'snapshot' => ['track_inventory' => $variant->product->track_inventory && $variant->inventory_quantity !== null, 'variant_title' => $variant->title, 'sku' => $variant->sku, 'product_handle' => $variant->product->handle,
+                        ...isset($supplierRoutes[$variant->id]) ? ['dropshipping' => $supplierRoutes[$variant->id]] : []],
                 ]);
                 if ($variant->product->track_inventory && $variant->inventory_quantity !== null) {
                     WebsiteInventoryReservation::query()->create([
@@ -173,7 +178,7 @@ class WebsiteCheckoutService
             ->whereNotIn('status', ['paid', 'partially_refunded', 'refunded', 'failed', 'expired', 'cancelled'])->latest('id')->first();
     }
 
-    private function fingerprint(WebsiteCart $cart, array $buyer, TenantSite $site): string
+    private function fingerprint(WebsiteCart $cart, array $buyer, TenantSite $site, array $supplierRoutes): string
     {
         $items = $cart->items->sortBy('website_product_variant_id')->map(fn ($item) => [
             $item->website_product_variant_id, $item->quantity, $item->variant?->price_cents,
@@ -187,6 +192,9 @@ class WebsiteCheckoutService
             trim((string) ($buyer['phone'] ?? '')), $buyer['fulfillment_method'] ?? '', $address,
             (int) ($buyer['shipping_rate_quote_id'] ?? 0), $buyer['notes'] ?? '', $buyer['preferred_at'] ?? '',
             (int) data_get($site->publishedSiteVersion?->settings, 'free_shipping_threshold_cents', 0)];
+        if ($supplierRoutes !== []) {
+            $value[] = $supplierRoutes;
+        }
 
         return hash_hmac('sha256', json_encode($value, JSON_THROW_ON_ERROR), (string) config('app.key'));
     }
