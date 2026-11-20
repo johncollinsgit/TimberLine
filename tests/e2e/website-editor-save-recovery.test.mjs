@@ -616,7 +616,7 @@ test('saved settings history uses its own source and never publishes restored se
         await expect(dialog.getByText('Published settings', {exact:true})).toBeVisible();
         await dialog.getByRole('button', {name:'Restore site settings version 2'}).click();
         await expect(f.page.getByLabel(/^Text/)).toHaveValue('Initial draft');
-        assert.deepEqual(f.state.restores, [{path:'/website/history/site/2/restore',body:{current_version_id:3},csrf:'fictional-only'}]);
+        await expect.poll(() => f.state.restores).toEqual([{path:'/website/history/site/2/restore',body:{current_version_id:3},csrf:'fictional-only'}]);
         assert.equal(f.state.published, null);
         assert.deepEqual(f.errors, []);
     } finally { await f.close(); }
