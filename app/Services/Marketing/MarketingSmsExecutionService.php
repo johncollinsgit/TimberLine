@@ -228,6 +228,13 @@ class MarketingSmsExecutionService
         if ($toPhone === null) {
             return $this->skipRecipient($recipient, 'missing_phone', 'Recipient has no sendable phone number.');
         }
+        $reviewedPhone = data_get($recipient->recommendation_snapshot, 'team_show_text_phone');
+        if ($campaign->source_label === 'team_show_text' && (! $reviewedPhone || ! TeamShowTextCampaigns::enabledFor((int) $campaign->tenant_id))) {
+            return $this->skipRecipient($recipient, 'show_text_review_required', 'The show text needs a current approval.');
+        }
+        if ($reviewedPhone !== null && ($toPhone !== $reviewedPhone || $profile->sms_opted_out_at || $profile->archived_at || $profile->merged_into_profile_id)) {
+            return $this->skipRecipient($recipient, 'show_text_contact_changed', 'The reviewed customer or phone changed before sending.');
+        }
 
         if (! $overrideWindows) {
             $windowCheck = $this->passesSendTimeGuards($campaign);
@@ -299,6 +306,25 @@ class MarketingSmsExecutionService
                 $hasCurrentMedia = array_key_exists('mms_media', (array) $lockedCampaign->target_snapshot)
                     || data_get($lockedRecipient->recommendation_snapshot, 'mms_media') !== null
                     || data_get($lockedRecipient->recommendation_snapshot, 'mms_media_approval') !== null;
+                $reviewedPhone = data_get($lockedRecipient->recommendation_snapshot, 'team_show_text_phone');
+                if ($reviewedPhone !== null) {
+                    $current = $lockedRecipient->profile()->forTenantId($deliveryContext['tenant_id'])->lockForUpdate()->first();
+                    $eligibility = $current ? $this->smsEligibilityService->evaluateProfile($current, $deliveryContext['tenant_id']) : [];
+                    if (! in_array($lockedRecipient->status, $allowedStatuses, true)
+                        || (int) $lockedRecipient->send_attempt_count !== $attemptNumber - 1
+                        || $reviewedPhone !== $toPhone || ($eligibility['normalized_phone'] ?? null) !== $toPhone
+                        || ! ($eligibility['eligible'] ?? false) || $current?->sms_opted_out_at
+                        || $current?->archived_at || $current?->merged_into_profile_id
+                        || $this->smsEligibilityService->recordedOptOutPhones($deliveryContext['tenant_id'], [$toPhone])
+                        || $lockedCampaign->message_body !== $campaign->message_body
+                        || $lockedCampaign->store_key !== data_get($lockedRecipient->recommendation_snapshot, 'team_show_text_store')
+                        || hash('sha256', (string) $lockedCampaign->message_body) !== data_get($lockedRecipient->recommendation_snapshot, 'team_show_text_body_sha256')
+                        || (string) data_get($lockedCampaign->target_snapshot, 'mms_media.sha256') !== data_get($lockedRecipient->recommendation_snapshot, 'team_show_text_photo_sha256')
+                        || $lockedRecipient->variant_id !== $recipient->variant_id
+                        || $lockedRecipient->variant()->where('campaign_id', $campaign->id)->value('message_text') !== $campaign->message_body) {
+                        throw ValidationException::withMessages(['mms_claim' => 'The reviewed show message or recipient changed.']);
+                    }
+                }
                 if ($mmsMedia !== null || $hasCurrentMedia) {
                     // Every photo worker claims in campaign-then-recipient order. A
                     // preparation, rejection or other claim that won the race must
@@ -437,6 +463,12 @@ class MarketingSmsExecutionService
                 ? ($recipient->failed_at ?: now())
                 : $recipient->failed_at,
         ])->save();
+
+        if (! $dryRun && $reviewedPhone !== null && (string) $delivery->error_code === '21610') {
+            app(MessagingContactChannelStateService::class)->markSmsUnsubscribed(
+                (int) $delivery->tenant_id, $profile, $toPhone, 'provider_opt_out', 'twilio_send', ['delivery_id' => $delivery->id]
+            );
+        }
 
         $this->deliveryTrackingService->appendEvent(
             delivery: $delivery,

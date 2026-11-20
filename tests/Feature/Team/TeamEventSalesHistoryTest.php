@@ -241,3 +241,31 @@ test('ambiguous scope customer associations retain sales as unattributed instead
     expect($evidence['purchases'])->toHaveCount(1)->and($evidence['purchases'][0]['customer_id'])->toBeNull()
         ->and($evidence['purchases'][0]['net_sales_minor'])->toBe(1000)->and($evidence['customer_review_items'])->not->toBeEmpty();
 });
+
+test('show texts select opted-in customers from reviewed prior editions and selected nearby shows', function () {
+    $series = salesHistoryRecord($this, 'series');
+    $nearby = salesHistoryRecord($this, 'series', ['title' => 'Fictional nearby show']);
+    $current = salesHistoryRecord($this, 'event', ['starts_on' => '2026-11-14', 'ends_on' => '2026-11-15']);
+    $past = salesHistoryRecord($this, 'event', ['starts_on' => '2024-11-02', 'ends_on' => '2024-11-03']);
+    $related = salesHistoryRecord($this, 'event', ['starts_on' => '2023-11-04', 'ends_on' => '2023-11-05']);
+    salesHistoryMap($this, $current, $series, ['square_scopes' => []]);
+    salesHistoryMap($this, $past, $series);
+    salesHistoryMap($this, $related, $nearby);
+    $customers = [];
+    foreach (['2024-11-02' => '+15550001010', '2023-11-04' => '+15550001011', '2024-11-01' => '+15550001012'] as $date => $phone) {
+        salesHistoryOrder($this, $date, 1000);
+        $order = SquareOrder::forTenantId($this->tenant->id)->latest('id')->firstOrFail();
+        $profile = \App\Models\MarketingProfile::create(['tenant_id' => $this->tenant->id, 'phone' => $phone, 'accepts_sms_marketing' => true]);
+        \App\Models\MarketingProfileLink::create(['tenant_id' => $this->tenant->id, 'marketing_profile_id' => $profile->id,
+            'source_type' => 'square_order', 'source_id' => $order->square_order_id]);
+        $customers[] = $profile->id;
+    }
+    $audience = app(\App\Services\Marketing\TeamShowTextAudience::class);
+    $context = $audience->context($current);
+    $settings = $audience->settings($current, $context);
+    $settings['nearby_series'] = [$nearby->id];
+    expect(array_column($audience->build($this->tenant, $current, $context, $settings, ['show', 'nearby'])['rows'], 'id'))
+        ->toBe(array_slice($customers, 0, 2));
+    expect(array_column($audience->build($this->tenant, $current, $context, $settings, ['show'])['rows'], 'id'))
+        ->toBe([$customers[0]]);
+});

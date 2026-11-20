@@ -6,6 +6,10 @@ require an audit of the whole repository or its release history.
 
 ## Scope and orientation
 
+For event campaigns, use the existing Teams show, historical sales mappings,
+and canonical profiles. See the [show texts runbook](docs/operations/team-show-texts.md)
+for the preview, consent, and activation workflow.
+
 - Inspect Git status before editing. Keep other work and its staging intact.
 - Read the relevant runbook below and search the matching sections of
   `SYSTEM_SNAPSHOT.md` and `docs/agents/operating-reference.md` when needed.

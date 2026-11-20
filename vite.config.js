@@ -26,6 +26,7 @@ export default defineConfig(() => ({
         'resources/js/workspace-settings.js',
         'resources/js/workspace-draft.js',
         'resources/js/team/app.js',
+        'resources/js/team/show-text.js',
         'resources/js/tenant-payment-setup.js',
         'resources/css/evergrove-booking.css',
         'resources/js/evergrove-booking.js',

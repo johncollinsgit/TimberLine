@@ -61,6 +61,13 @@ export function installEventDetail(body, { record, api, tenant, scope, current, 
       facts.append(field(sales.previous?.year ? sales.previous.year + ' comparison' : 'Previous year comparison', sales.previous?.status === 'needs_review' ? 'Needs review' : currency(sales.previous?.amount_cents, sales.previous?.currency), sales.previous?.status === 'recorded' ? 'Historical net sales comparison' : 'No linked comparison yet'), field(currentLabel, currentValue, currentHint));
     }
     facts.append(field('Hotel', stay));
+    summary.querySelector('[data-show-text]')?.remove();
+    if (typeof data.show_text_url === 'string' && data.show_text_url.startsWith('/team/events/')) {
+      const showText = node('a', 'Text customers', 'eb-primary-button');
+      showText.href = data.show_text_url;
+      showText.dataset.showText = '';
+      summary.append(showText);
+    }
     aside.replaceChildren();
     renderTravel(data.travel || {});
     const contact = data.coordinator || {};
