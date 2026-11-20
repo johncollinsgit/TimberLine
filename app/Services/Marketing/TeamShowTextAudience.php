@@ -82,11 +82,8 @@ class TeamShowTextAudience
         $evidence = [];
         $issues = [];
         $omitted = 0;
-        if (in_array('show', $groups, true)) {
-            $this->eventPurchases($tenant, $show, $context['byOccurrence']->get($show->id), 'show', $evidence, $issues);
-            if ($context['series'] === null) {
-                $issues[] = 'Link earlier editions in Event sales history to include their customers.';
-            }
+        if (in_array('show', $groups, true) && $context['series'] === null) {
+            $issues[] = 'Link earlier editions in Event sales history to include their customers.';
         }
         foreach ($context['byOccurrence']->except([$show->id]) as $id => $link) {
             $edition = $context['records']->get($id);

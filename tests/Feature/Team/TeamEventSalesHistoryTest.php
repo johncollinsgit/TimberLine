@@ -245,14 +245,14 @@ test('ambiguous scope customer associations retain sales as unattributed instead
 test('show texts select opted-in customers from reviewed prior editions and selected nearby shows', function () {
     $series = salesHistoryRecord($this, 'series');
     $nearby = salesHistoryRecord($this, 'series', ['title' => 'Fictional nearby show']);
-    $current = salesHistoryRecord($this, 'event', ['starts_on' => '2026-11-14', 'ends_on' => '2026-11-15']);
+    $current = salesHistoryRecord($this, 'event', ['starts_on' => '2025-11-14', 'ends_on' => '2025-11-15']);
     $past = salesHistoryRecord($this, 'event', ['starts_on' => '2024-11-02', 'ends_on' => '2024-11-03']);
     $related = salesHistoryRecord($this, 'event', ['starts_on' => '2023-11-04', 'ends_on' => '2023-11-05']);
-    salesHistoryMap($this, $current, $series, ['square_scopes' => []]);
+    salesHistoryMap($this, $current, $series);
     salesHistoryMap($this, $past, $series);
     salesHistoryMap($this, $related, $nearby);
     $customers = [];
-    foreach (['2024-11-02' => '+15550001010', '2023-11-04' => '+15550001011', '2024-11-01' => '+15550001012'] as $date => $phone) {
+    foreach (['2024-11-02' => '+15550001010', '2023-11-04' => '+15550001011', '2024-11-01' => '+15550001012', '2025-11-14' => '+15550001013'] as $date => $phone) {
         salesHistoryOrder($this, $date, 1000);
         $order = SquareOrder::forTenantId($this->tenant->id)->latest('id')->firstOrFail();
         $profile = \App\Models\MarketingProfile::create(['tenant_id' => $this->tenant->id, 'phone' => $phone, 'accepts_sms_marketing' => true]);
