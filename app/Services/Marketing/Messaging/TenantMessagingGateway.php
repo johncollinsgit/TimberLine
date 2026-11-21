@@ -144,12 +144,17 @@ class TenantMessagingGateway
         app(\App\Services\Onboarding\SelfServiceTrialService::class)->assertPaidUsageAllowed($tenantId);
         try {
             $resolution = $this->accountResolver->resolve($tenantId, 'sms');
+            $account = $resolution['account'];
+            if (array_key_exists('expected_tenant_sms_account', $options)
+                && ($resolution['mode'] !== 'tenant' || ! $account
+                    || $options['expected_tenant_sms_account'] !== [$account->id, $account->smsSenderFingerprint()])) {
+                throw new \RuntimeException('The original tenant SMS sender is no longer available.');
+            }
             if ($resolution['mode'] === 'legacy') {
                 return $this->legacySms->sendSms($to, $body, $options);
             }
 
             /** @var TenantMessagingAccount $account */
-            $account = $resolution['account'];
             if ($account->provider !== 'twilio_subaccount') {
                 throw new \RuntimeException('Unsupported tenant SMS provider.');
             }

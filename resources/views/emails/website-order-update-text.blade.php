@@ -17,6 +17,9 @@ Refund confirmed: ${{ number_format($update['refund_cents'] / 100, 2) }} {{ strt
 Total refunded at this update: ${{ number_format($update['refunded_cents'] / 100, 2) }}
 Original order total: ${{ number_format($update['total_cents'] / 100, 2) }}
 @endif
+@if($update['kind'] === 'merchant_paid_email')
+Total paid: ${{ number_format($update['total_cents'] / 100, 2) }} {{ strtoupper($update['currency']) }}
+@else
 @if($update['tracking_number'])
 {{ $update['carrier'] }} tracking: {{ $update['tracking_number'] }}
 @endif
@@ -25,3 +28,4 @@ View your order and shipping updates:
 {!! $update['order_url'] !!}
 
 Keep this private order link secure. This is a transactional update about your order.
+@endif

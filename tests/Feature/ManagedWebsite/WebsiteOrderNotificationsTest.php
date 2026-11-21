@@ -4,6 +4,7 @@ use App\Jobs\SendWebsiteOrderNotification;
 use App\Mail\WebsiteOrderUpdateMail;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantMessagingAccount;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use App\Models\User;
@@ -15,6 +16,7 @@ use App\Models\WebsiteShipment;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsiteOrderNotificationService;
 use App\Services\ManagedWebsite\WebsiteOrderNotificationTransport;
+use App\Services\Marketing\Messaging\TenantMessagingGateway;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -73,6 +75,87 @@ test('accepted transitions have one encrypted frozen notification and one accept
     expect($notification->fresh()->status)->toBe('accepted')->and($notification->fresh()->attempts)->toBe(1);
     Mail::assertSent(WebsiteOrderUpdateMail::class, fn ($mail) => $mail->hasTo('private-buyer@example.test') && $mail->update['total_cents'] === 1299 && $mail->envelope()->from->address === 'orders@everbranch.example');
     Mail::assertSentCount(1);
+});
+
+test('merchant purchase alerts are distinct, tenant owned and contain no shopper details', function (): void {
+    $tenantId = $this->tenant->id;
+    $this->order->update(['paid_at' => now()]);
+    config()->set([
+        'managed_website.order_notifications_enabled' => false,
+        'managed_website.merchant_purchase_alerts_enabled' => true,
+        'managed_website.merchant_purchase_alert_contacts' => [
+            $tenantId => ['email' => ['owner@example.test', 'OWNER@example.test'], 'sms' => ['+12025550123']],
+            $tenantId + 100 => ['email' => ['another-tenant@example.test'], 'sms' => ['+12025550124']],
+        ],
+        'features.tenant_messaging_platform' => true,
+        'marketing.sms.dry_run' => false,
+        'marketing.messaging.platform.provider_cost_micros.twilio.sms' => 100,
+        'marketing.messaging.platform.provider_cost_ceiling_micros.sms' => 1000,
+    ]);
+    $smsAccount = TenantMessagingAccount::query()->forAllTenants()->create([
+        'tenant_id' => $tenantId, 'channel' => 'sms', 'provider' => 'twilio_subaccount', 'status' => 'ready',
+        'provider_account_id' => 'AC'.str_repeat('1', 32), 'provider_resource_id' => 'MG'.str_repeat('2', 32),
+        'credentials' => ['auth_token' => 'test-credential'],
+    ]);
+    $sms = Mockery::mock(TenantMessagingGateway::class);
+    $sms->shouldReceive('sendSms')->once()->withArgs(function ($tenant, $recipient, $body, $options) use ($tenantId, $smsAccount): bool {
+        expect($tenant)->toBe($tenantId)->and($recipient)->toBe('+12025550123')
+            ->and($body)->toContain('WEB-NOTIFICATION', 'USD 12.99')->not->toContain('Private Buyer', 'private-buyer@example.test', $this->order->lookup_token)
+            ->and($options['expected_tenant_sms_account'])->toBe([$smsAccount->id, $smsAccount->smsSenderFingerprint()])
+            ->and($options['ledger_source_type'])->toBe('website_merchant_purchase_alert');
+
+        return true;
+    })->andReturn(['success' => true, 'provider_message_id' => 'SM'.str_repeat('3', 32), 'dry_run' => false]);
+    $this->app->instance(TenantMessagingGateway::class, $sms);
+
+    ($this->record)();
+    ($this->record)();
+    $merchantRows = WebsiteOrderNotification::query()->forTenantId($tenantId)->whereIn('kind', ['merchant_paid_email', 'merchant_paid_sms'])->get()->keyBy('kind');
+    expect($merchantRows)->toHaveCount(2)
+        ->and($merchantRows['merchant_paid_email']->snapshot)->not->toHaveKeys(['order_url', 'items'])
+        ->and($merchantRows['merchant_paid_email']->snapshot['recipient'])->toBe('owner@example.test')
+        ->and(WebsiteOrderNotification::query()->where('kind', 'confirmed')->sole()->status)->toBe('blocked');
+    foreach ($merchantRows as $notification) {
+        $this->notifications->deliver($notification->id);
+        $this->notifications->deliver($notification->id);
+        expect($notification->fresh()->status)->toBe('accepted')->and($notification->fresh()->attempts)->toBe(1);
+    }
+    Mail::assertSent(WebsiteOrderUpdateMail::class, function ($mail): bool {
+        $body = $mail->render();
+
+        return $mail->hasTo('owner@example.test') && str_contains($body, '12.99') && ! str_contains($body, $this->order->lookup_token);
+    });
+    Mail::assertSentCount(1);
+    expect(DB::table('website_order_notifications')->where('kind', 'merchant_paid_sms')->sole()->snapshot)->not->toContain('+12025550123');
+});
+
+test('merchant alert workers block withdrawn contacts, legacy SMS and unpaid or paid review orders', function (): void {
+    $this->order->update(['paid_at' => now(), 'payment_status' => 'paid_review']);
+    $tenantId = $this->tenant->id;
+    $contactKey = "managed_website.merchant_purchase_alert_contacts.{$tenantId}";
+    config()->set([
+        'managed_website.merchant_purchase_alerts_enabled' => true,
+        $contactKey => ['email' => ['owner@example.test'], 'sms' => ['+12025550123']],
+        'marketing.sms.dry_run' => false,
+        'marketing.messaging.platform.legacy_tenant_ids' => [$tenantId],
+    ]);
+    ($this->record)('payment-review', 'payment_review');
+    expect(WebsiteOrderNotification::query()->whereIn('kind', ['merchant_paid_email', 'merchant_paid_sms'])->count())->toBe(0);
+    $this->order->update(['payment_status' => 'paid']);
+    ($this->record)();
+    $email = WebsiteOrderNotification::query()->where('kind', 'merchant_paid_email')->sole();
+    $sms = WebsiteOrderNotification::query()->where('kind', 'merchant_paid_sms')->sole();
+    expect($sms->status)->toBe('blocked')->and($sms->failure_code)->toBe('not_ready_at_transition');
+    config()->set($contactKey, ['email' => ['replacement@example.test']]);
+    $this->notifications->deliver($email->id);
+    $this->notifications->deliver($sms->id);
+    expect($email->fresh()->status)->toBe('blocked')->and($email->fresh()->failure_code)->toBe('readiness_changed');
+    $fallback = app(TenantMessagingGateway::class)->sendSms($tenantId, '+12025550123', 'Merchant alert', [
+        'expected_tenant_sms_account' => [1, str_repeat('a', 64)],
+    ]);
+    expect($fallback['success'])->toBeFalse()->and($fallback['error_message'])->toContain('original tenant SMS sender');
+    Mail::assertNothingSent();
+    Http::assertNothingSent();
 });
 
 test('each recorded shipment transition remains distinct and label preparation never claims handoff', function (): void {
