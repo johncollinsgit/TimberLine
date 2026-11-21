@@ -75,7 +75,9 @@ spending. Background EventPerformance workers aggregate before pagination;
 lifetime customers are counted once across selected shows. Existing reviewed
 source versions, dependency witnesses, issuer checks, stale-read invalidation and
 coverage notices remain mandatory. Assigned staff retain only their approved
-summary scope. Comparisons reuse the existing event/per-day reports; unknown or
+summary scope. Owned MySQL customer read views resolve original Pay receipt pool
+membership without cache writes, including cold or expired database caches.
+Comparisons reuse the existing event/per-day reports; unknown or
 incomplete coverage does not establish zero sales or campaign lift. Customer
 history and later online/membership windows reuse CustomerEventValueService.
 

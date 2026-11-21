@@ -17,11 +17,21 @@ final class PayEventReceiptIndex
         if (! $pools) {
             return ['ids' => [], 'review_items' => []];
         }
+        $source = fn () => $this->store->rows('sales', $tenant)->where('commerce_source', StockPosCommerce::VERSION);
+        if (app(\App\Services\Team\Studio\EventCustomerReadView::class)->owns($tenant)) {
+            // Database cache reads can delete expired entries, and misses acquire
+            // writer locks. Resolve original membership inside this owned read view.
+            $index = ['entries' => [], 'watermark' => null];
+            foreach ($source()->orderBy('id')->cursor() as $sale) {
+                $this->index($index, $sale);
+            }
+
+            return $this->matchingPools($index, $pools);
+        }
         $key = 'pay-event-receipt-index-v1:'.hash('sha256', implode(':', [$this->store->db->getName(), $this->store->db->getDatabaseName(), $this->store->runtime(), $tenant]));
         if ($rebuild) {
             Cache::forget($key);
         }
-        $source = fn () => $this->store->rows('sales', $tenant)->where('commerce_source', StockPosCommerce::VERSION);
         $count = $source()->count();
         $index = Cache::get($key);
         if (! is_array($index) || ! isset($index['entries']) || count($index['entries']) !== $count) {
@@ -54,6 +64,12 @@ final class PayEventReceiptIndex
                 return $index;
             });
         }
+
+        return $this->matchingPools($index, $pools);
+    }
+
+    private function matchingPools(array $index, array $pools): array
+    {
         $ids = [];
         $unavailable = false;
         foreach ($index['entries'] as $id => $entry) {

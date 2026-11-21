@@ -54,6 +54,22 @@ test('Core merge HTTP review survives native MySQL JSON storage and preserves re
         ->and(CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'gift')->count())->toBe(1);
 });
 
+test('event customer read views can resolve receipt pools with a cold or expired database cache', function (bool $expired) {
+    config(['pos_live.runtime_id' => 'fictional_event_cache', 'cache.default' => 'database', 'cache.prefix' => 'event-read-'.Str::uuid().':']);
+    \Illuminate\Support\Facades\Cache::purge('database');
+    $store = app(\App\Services\Pos\PosStore::class);
+    $key = 'pay-event-receipt-index-v1:'.hash('sha256', implode(':', [$store->db->getName(), $store->db->getDatabaseName(), $store->runtime(), $this->tenant->id]));
+    if ($expired) {
+        \Illuminate\Support\Facades\Cache::put($key, ['entries' => [], 'watermark' => null], now()->addMinute());
+        DB::table('cache')->where('key', config('cache.prefix').$key)->update(['expiration' => now()->subMinute()->timestamp]);
+    }
+    $before = DB::table('cache')->where('key', config('cache.prefix').$key)->first();
+    $result = app(\App\Services\Team\Studio\EventCustomerReadView::class)->run($this->tenant->id,
+        fn () => app(\App\Services\Reporting\PayEventReceiptIndex::class)->forPools($this->tenant->id, ['reviewed-pool']));
+    expect($result)->toBe(['ids' => [], 'review_items' => []])
+        ->and(DB::table('cache')->where('key', config('cache.prefix').$key)->first())->toEqual($before);
+})->with([false, true]);
+
 test('a merge waiting behind purchase earning retains the receipt and ledger on the canonical survivor', function () {
     $tenant = $this->tenant->id;
     $survivor = MarketingProfile::create(['tenant_id' => $tenant, 'first_name' => 'Reviewed survivor']);
