@@ -110,15 +110,57 @@ test('native MySQL rebuild serves show and lifetime rankings over the same revie
         MarketingProfileLink::create(['tenant_id' => $case->tenant->id, 'marketing_profile_id' => $profile->id,
             'source_type' => 'square_order', 'source_id' => $order, 'source_meta' => []]);
     }
+    // A retained unresolved native attempt is not a purchase, but remains an
+    // original dependency of this reviewed show and its canonical buyer.
+    $stock = app(\App\Services\Inventory\StockLedger::class);
+    $pool = $stock->createPool($case->tenant->id, 'pending-report-fixture', $case->owner->id, 'Reviewed show', 'show', 'event:123')['pool_id'];
+    $stock->rows('event_links', $case->tenant->id)->insert(['tenant_id' => $case->tenant->id, 'event_id' => 123, 'provider' => 'manual', 'external_id' => 'pending-report-fixture',
+        'metadata' => json_encode(['name' => 'Reviewed show', 'timezone' => 'America/New_York', 'start_on' => $case->scope['starts_on'], 'end_on' => $case->scope['ends_on']]),
+        'reviewed_by' => $case->owner->id, 'created_at' => now(), 'updated_at' => now()]);
+    $event->update(['data' => ['_teams_enrichment' => ['commerce_event' => ['id' => 123]]]]);
+    $store = app(\App\Services\Pos\PosStore::class);
+    $saleId = bin2hex(random_bytes(16));
+    $register = str_repeat('a', 32);
+    $binding = (new \App\Services\PaymentsCore\MerchantBinding($case->tenant->id, $register, 'square', 'fictional-merchant', 'original-location', 'live', $store->runtime()))->snapshot();
+    $lines = [['line_id' => 'line1', 'kind' => 'merchandise', 'quantity' => 1, 'unit_amount_minor' => 1000, 'tax_amount_minor' => 70]];
+    $snapshot = ['binding' => $binding, 'sale' => (new \App\Services\PaymentsCore\SaleSnapshot($saleId, 'usd', $lines))->snapshot(),
+        'terms' => ['stock_pool_id' => $pool, 'tax_minor' => 70, 'total_minor' => 1070, 'subtotal_minor' => 1000], 'customer' => ['id' => $loyal->id]];
+    $store->rows('sales', $case->tenant->id)->insert($store->values($case->tenant->id, [
+        'id' => $saleId, 'register_id' => $register, 'actor_id' => $case->owner->id, 'location_id' => 'original-location',
+        'request_id' => (string) Str::uuid(), 'payment_request_id' => (string) Str::uuid(), 'sdk_attempt_id' => (string) Str::uuid(), 'attempt_id' => bin2hex(random_bytes(16)),
+        'snapshot' => $store->encrypt($snapshot), 'snapshot_hash' => \App\Services\PaymentsCore\Contract::hash($snapshot), 'amount_minor' => 1070, 'currency' => 'usd',
+        'commerce_source' => \App\Services\Pos\StockPosCommerce::VERSION, 'state' => 'unknown', 'stock_state' => 'reserved',
+        'created_at' => '2025-11-01 16:00:00', 'expires_at' => now()->addHour(), 'reconciled_at' => now()->subMinute(),
+    ]));
+    MarketingProfileLink::create(['tenant_id' => $case->tenant->id, 'marketing_profile_id' => $loyal->id,
+        'source_type' => 'pos_sale', 'source_id' => $store->runtime().':'.$saleId, 'source_meta' => []]);
+    $dependencies = app(\App\Services\Team\Studio\EventCustomerDependencies::class);
+    $frame = $dependencies->capture($case->tenant, $area);
     $reports = app(\App\Services\Team\Studio\EventPerformance::class);
     $reports->rebuild($case->tenant, $case->owner, $area);
     $filters = ['group_by' => 'customer', 'event_id' => $event->id, 'from' => '2025-11-01', 'to' => '2025-11-02', 'sort' => 'net_sales'];
+    // The scheduled reconciliation poll writes this even if no financial or
+    // identity evidence changed. Both anchor and lifetime revisions must survive.
+    $store->rows('sales', $case->tenant->id)->where('id', $saleId)->update(['reconciled_at' => now()]);
+    expect($dependencies->capture($case->tenant, $area)['signature'])->toBe($frame['signature']);
     $show = $reports->read($case->tenant, $case->owner, $area, $filters);
     $life = $reports->read($case->tenant, $case->owner, $area, $filters + ['rank_basis' => 'lifetime']);
     expect($show['status'])->toBe('ready')->and($life['status'])->toBe('ready')
         ->and(array_column($show['rows'], 'id'))->toBe(array_map('strval', [$large->id, $loyal->id]))
         ->and(array_column($life['rows'], 'id'))->toBe(array_map('strval', [$loyal->id, $large->id]))
-        ->and(array_column($life['rows'], 'paid_total_minor'))->toBe([12100, 5500]);
+        ->and(array_column($life['rows'], 'paid_total_minor'))->toBe([12100, 5500])
+        ->and(CandleCashTransaction::whereIn('marketing_profile_id', [$loyal->id, $large->id, $outsider->id])->count())->toBe(0);
+    $changed = $snapshot;
+    $changed['customer']['id'] = $outsider->id;
+    $store->rows('sales', $case->tenant->id)->where('id', $saleId)->update([
+        'snapshot' => $store->encrypt($changed), 'snapshot_hash' => \App\Services\PaymentsCore\Contract::hash($changed),
+    ]);
+    expect($dependencies->capture($case->tenant, $area)['signature'])->not->toBe($frame['signature']);
+    $store->rows('sales', $case->tenant->id)->where('id', $saleId)->update([
+        'snapshot' => $store->encrypt($snapshot), 'snapshot_hash' => \App\Services\PaymentsCore\Contract::hash($snapshot), 'state' => 'review',
+    ]);
+    expect($dependencies->capture($case->tenant, $area)['signature'])->not->toBe($frame['signature'])
+        ->and($reports->read($case->tenant, $case->owner, $area, $filters)['status'])->toBe('preparing');
 });
 
 test('a merge waiting behind purchase earning retains the receipt and ledger on the canonical survivor', function () {
