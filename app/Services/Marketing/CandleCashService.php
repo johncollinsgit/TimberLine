@@ -277,7 +277,7 @@ class CandleCashService
      */
     public function redemptionRulesPayload(?int $tenantId = null): array
     {
-        $increment = $this->minimumRedemptionPoints($tenantId);
+        $increment = $this->programConfig($tenantId)['partial_redemption_enabled'] ? 1.0 : $this->fixedRedemptionAmount($tenantId);
         $payload = [
             'canonical_measurement_label' => '1 reward credit = $1.00',
             'redeem_increment_dollars' => $increment,
@@ -702,6 +702,7 @@ class CandleCashService
 
         $pointsCost = $this->storefrontRewardPointsCost($reward, $tenantId);
         $amount = $this->fixedRedemptionAmount($tenantId);
+        $rules = $this->redemptionRulesPayload($tenantId);
         $normalizedBalance = $balancePoints !== null ? CandleCashMeasurement::normalizeStoredAmount($balancePoints) : null;
         if ($this->programConfig($tenantId)['partial_redemption_enabled']) {
             $amount = max(1, $this->availableRedemptionAmount($normalizedBalance ?? 0, $tenantId));
@@ -710,7 +711,7 @@ class CandleCashService
         return [
             'id' => (int) $reward->id,
             'name' => 'Redeem '.$this->formatRewardCurrency($amount).' Reward Credit',
-            'description' => $this->redemptionRulesPayload($tenantId)['channel_summary'] ?? ('Apply '.$this->formatRewardCurrency($amount)
+            'description' => $rules['channel_summary'] ?? ('Apply '.$this->formatRewardCurrency($amount)
                 .' off this order. Reward credit is redeemed in '.$this->fixedRedemptionFormatted($tenantId).' increments, with a limit of '
                 .$this->formatRewardCurrency($this->maxRedeemablePerOrderAmount($tenantId)).' per order.'),
             'reward_type' => (string) $reward->reward_type,
@@ -720,8 +721,8 @@ class CandleCashService
             'candle_cash_amount' => $amount,
             'candle_cash_amount_formatted' => $this->formatRewardCurrency($amount),
             'is_redeemable_now' => $normalizedBalance !== null ? $normalizedBalance >= $pointsCost : null,
-            'redeem_increment_dollars' => $this->minimumRedemptionPoints($tenantId),
-            'redeem_increment_formatted' => $this->formatRewardCurrency($this->minimumRedemptionPoints($tenantId)),
+            'redeem_increment_dollars' => $rules['redeem_increment_dollars'],
+            'redeem_increment_formatted' => $rules['redeem_increment_formatted'],
             'limit_per_order_dollars' => $this->maxRedeemablePerOrderAmount($tenantId),
             'limit_per_order_formatted' => $this->formatRewardCurrency($this->maxRedeemablePerOrderAmount($tenantId)),
             'max_redemptions_per_order' => 1,

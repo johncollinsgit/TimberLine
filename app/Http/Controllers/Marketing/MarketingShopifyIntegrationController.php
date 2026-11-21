@@ -3783,7 +3783,7 @@ class MarketingShopifyIntegrationController extends Controller
         $walletLabel = (string) data_get($customer, 'wallet_label', $rewardsLabel.' Wallet');
         $expirationMode = (string) ($expiration['expiration_mode'] ?? 'days_from_issue');
         $expirationDays = max(1, (int) ($expiration['expiration_days'] ?? 90));
-        $redeemIncrement = $candleCashService->minimumRedemptionPoints($tenantId);
+        $redeemIncrement = $candleCashService->redemptionRulesPayload($tenantId)['redeem_increment_dollars'];
         $maxRedeemable = $candleCashService->maxRedeemablePerOrderAmount($tenantId);
         $multiplierEnabled = $candleCashService->candleClubMultiplierEnabled($tenantId);
         $multiplierValue = $candleCashService->candleClubMultiplierValue($tenantId);

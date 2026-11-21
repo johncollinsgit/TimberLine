@@ -132,7 +132,7 @@ test('an enrolled partial wallet can redeem whole dollars online and reuse or re
     $service->addRewardAmountIdempotent($profile, 6.8, 'gift', 'fractional-wallet');
     $payload = $service->storefrontRewardPayload($reward, 6.8, $tenant->id);
     expect($payload['is_redeemable_now'])->toBeTrue()->and($payload['candle_cash_amount'])->toBe(6)
-        ->and($payload['redeem_increment_dollars'])->toBe(1);
+        ->and($payload['redeem_increment_dollars'])->toBe(1.0);
     $first = $service->requestStorefrontRedemption($profile, $reward);
     $retry = $service->requestStorefrontRedemption($profile, $reward);
     $code = CandleCashRedemption::findOrFail($first['redemption_id']);
