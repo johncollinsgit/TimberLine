@@ -69,6 +69,8 @@ test('the shared customer detail and page read the canonical birthday without is
     $this->getJson('/workspace/customers/'.$alias->id.'?tenant='.$this->tenant->slug)->assertOk()
         ->assertJsonPath('customer.id', $this->profile->id)->assertJsonPath('birthday.month', 2)
         ->assertJsonPath('birthday.day', 29)->assertJsonMissingPath('birthday.year');
+    $this->get('/workspace/customers/'.$alias->id.'?tenant='.$this->tenant->slug)
+        ->assertRedirect(route('customers.profile', ['profile' => $this->profile->id, 'tenant' => $this->tenant->slug]));
     $this->get($this->profileUrl)->assertOk()->assertSee('02/29')->assertSee('Birthday needs review')
         ->assertSee('Last recorded birthday reward')->assertSee('2025');
     expect($birthday->fresh()->getRawOriginal())->toBe($before)

@@ -40,7 +40,7 @@ class ConnectedCustomersController extends Controller
         $lookup = app(TenantCustomerLookup::class);
         if ($id = $request->route('profile')) {
             $detail = $lookup->details($tenant->id, (int) $id);
-            if ((int) $id !== (int) $detail['customer']['id']) {
+            if (! $request->expectsJson() && (int) $id !== (int) $detail['customer']['id']) {
                 return redirect()->route('customers.profile', ['profile' => $detail['customer']['id'], 'tenant' => $tenant->slug]);
             }
             $profile = MarketingProfile::forTenantId($tenant->id)->findOrFail($detail['customer']['id']);
