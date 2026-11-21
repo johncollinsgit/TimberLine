@@ -257,8 +257,11 @@ class WebsiteCommerceController extends Controller
             $refundableCents = 0; // Wallet refunds belong to their original store.
         }
 
+        $supplierLines = app(\App\Services\ManagedWebsite\WebsiteDropshipRouting::class)->orderLines($order);
+
         return view('managed-website.commerce.order', compact('tenant', 'order', 'pendingRefunds', 'refundableCents', 'walletPayment', 'walletAdminUrl') + [
-            'shippingInstructions' => app(\App\Services\ManagedWebsite\WebsiteShippingInstructionsService::class)->forOrder($order),
+            'shippingInstructions' => $supplierLines->isEmpty() ? app(\App\Services\ManagedWebsite\WebsiteShippingInstructionsService::class)->forOrder($order) : null,
+            'supplierLines' => $supplierLines,
             'canManageOrders' => $commerce->enabledFor($tenant), 'canServicePayments' => $nativePayments->isNotEmpty() || $walletPayment !== null,
             'canManageShipping' => app(WebsiteShippingAccessService::class)->canManage($tenant, $request->user()),
             'shippingEnabled' => app(WebsiteCommerceShippingService::class)->rolloutEnabledFor($tenant),
@@ -587,14 +590,24 @@ class WebsiteCommerceController extends Controller
         $this->requireCommerce($tenant, $commerce);
         $cart = $commerce->cartFor($site, $request->session()->get($this->cartSessionKey($site)));
         $request->session()->put($this->cartSessionKey($site), $cart->token);
+        $shippingEnabled = $shipping->enabledFor($tenant) && $cart->loadMissing('items.variant.product')->items->contains(fn ($item) => $item->variant?->product?->product_type === 'physical');
+        $requiresFreight = $cart->items->contains(fn ($item) => $item->variant?->product?->product_type === 'physical' && data_get($item->variant?->options, 'shipping_mode', 'parcel') !== 'parcel');
+        $missingShippingWeights = app(\App\Services\ManagedWebsite\WebsiteShippingReadinessService::class)->missingCartWeights($cart);
+        $supplierOnly = false;
+        $supplierCartMessage = null;
+        try {
+            $supplierOnly = app(\App\Services\ManagedWebsite\WebsiteDropshipRouting::class)->forCart($cart, $site) !== [];
+            if ($supplierOnly && (! $shippingEnabled || $requiresFreight || $missingShippingWeights->isNotEmpty())) {
+                $supplierCartMessage = 'Shipping is currently unavailable for the supplier items in your cart.';
+            }
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $supplierCartMessage = $exception->getMessage();
+        }
 
-        return view('managed-website.cart', compact('site', 'cart') + [
+        return view('managed-website.cart', compact('site', 'cart', 'shippingEnabled', 'requiresFreight', 'missingShippingWeights', 'supplierOnly', 'supplierCartMessage') + [
             'checkoutAttempt' => app(\App\Services\ManagedWebsite\WebsiteCheckoutService::class)->activePayment($cart),
-            'shippingEnabled' => $shipping->enabledFor($tenant) && $cart->loadMissing('items.variant.product')->items->contains(fn ($item) => $item->variant?->product?->product_type === 'physical'),
             'checkoutReady' => $commerce->checkoutReadiness($tenant)['ready'],
-            'requiresFreight' => $cart->loadMissing('items.variant.product')->items->contains(fn ($item) => $item->variant?->product?->product_type === 'physical' && data_get($item->variant?->options, 'shipping_mode', 'parcel') !== 'parcel'),
             'shopPayReady' => app(\App\Services\ManagedWebsite\ShopPayWalletConnectionService::class)->availableFor($tenant, $site),
-            'missingShippingWeights' => app(\App\Services\ManagedWebsite\WebsiteShippingReadinessService::class)->missingCartWeights($cart),
         ]);
     }
 

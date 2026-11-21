@@ -320,6 +320,9 @@ Schedule::command('subscriptions:replacement-process --tax-preflight')->everyMin
 Schedule::command('payments:health')->everyFifteenMinutes()->withoutOverlapping(10)->runInBackground();
 Schedule::command('website:reconcile-shipments')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();
 Schedule::command('website:dispatch-order-notifications')->everyMinute()->withoutOverlapping(10)->runInBackground();
+Schedule::command('website:dispatch-dropship-drafts')->everyMinute()
+    ->when(fn () => config('website_dropshipping.shopify_drafts_enabled') === true)
+    ->withoutOverlapping(10)->runInBackground();
 
 \Illuminate\Support\Facades\Schedule::command('marketing:dispatch-desk')->everyMinute()->withoutOverlapping();
 

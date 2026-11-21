@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\Tenant;
 use App\Models\WebsiteOrder;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -32,7 +33,7 @@ class SalesChannelSummaryService
         }
 
         if (Schema::hasTable('website_orders')) {
-            $channels = $channels->concat($this->websiteChannel($tenantId, $startsAt, $endsAt));
+            $channels = $channels->concat($this->websiteChannels($tenantId, $startsAt, $endsAt));
         }
 
         if ($this->hasLivePos()) {
@@ -55,7 +56,7 @@ class SalesChannelSummaryService
             'order_count' => (int) $channels->sum('order_count'),
             'revenue_cents' => (int) $channels->sum('revenue_cents'),
             'channel_count' => $channels->count(),
-            'has_website_channel' => $channels->contains(fn (array $channel): bool => $channel['key'] === 'everbranch_website'),
+            'has_website_channel' => $channels->contains(fn (array $channel): bool => in_array($channel['key'], ['everbranch_website', 'dropshipping'], true)),
         ];
     }
 
@@ -137,28 +138,44 @@ class SalesChannelSummaryService
     }
 
     /** @return Collection<int,array{key:string,label:string,order_count:int,revenue_cents:int,latest_order_at:?string}> */
-    private function websiteChannel(int $tenantId, CarbonInterface $startsAt, CarbonInterface $endsAt): Collection
+    private function websiteChannels(int $tenantId, CarbonInterface $startsAt, CarbonInterface $endsAt): Collection
     {
-        $summary = WebsiteOrder::query()->withoutPosSimulation()
+        $orders = WebsiteOrder::query()->withoutPosSimulation()
             ->forTenantId($tenantId)
             ->where('payment_status', 'paid')
-            ->whereBetween('paid_at', [$startsAt, $endsAt])
+            ->whereBetween('paid_at', [$startsAt, $endsAt]);
+
+        $channels = collect();
+        if (Schema::hasTable('website_order_lines')) {
+            $supplierLines = static fn ($lines) => $lines->selectRaw('1')->from('website_order_lines')
+                ->whereColumn('website_order_lines.tenant_id', 'website_orders.tenant_id')
+                ->whereColumn('website_order_lines.website_order_id', 'website_orders.id')
+                ->where('website_orders.source', 'native')
+                ->where('website_order_lines.product_type', 'physical')
+                ->whereNotNull('website_order_lines.snapshot->dropshipping->supplier');
+
+            $channels->push($this->websiteSummary((clone $orders)->whereExists($supplierLines), 'dropshipping', 'Dropshipping'));
+            $orders->whereNotExists($supplierLines);
+        }
+
+        return $channels->push($this->websiteSummary($orders, 'everbranch_website', 'Everbranch Website'));
+    }
+
+    private function websiteSummary(Builder $orders, string $key, string $label): array
+    {
+        $summary = $orders
             ->selectRaw('COUNT(*) as order_count')
             ->selectRaw('COALESCE(SUM(total_cents), 0) as revenue_cents')
             ->selectRaw('MAX(paid_at) as latest_order_at')
             ->first();
 
-        if (! $summary || (int) $summary->getAttribute('order_count') === 0) {
-            return collect();
-        }
-
-        return collect([[
-            'key' => 'everbranch_website',
-            'label' => 'Everbranch Website',
+        return [
+            'key' => $key,
+            'label' => $label,
             'order_count' => (int) $summary->getAttribute('order_count'),
             'revenue_cents' => (int) $summary->getAttribute('revenue_cents'),
             'latest_order_at' => $summary->getAttribute('latest_order_at'),
-        ]]);
+        ];
     }
 
     private function legacyLabel(string $source): string
