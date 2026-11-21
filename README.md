@@ -29,6 +29,15 @@ contract, verification and remaining hardware/provider acceptance.
 
 # Everbranch
 
+## Access for agents and maintainers
+
+Read [AGENTS.md](AGENTS.md), [README_FOR_AGENTS.md](README_FOR_AGENTS.md), and the
+[Everbranch / GitHub / Shopify access runbook](docs/operations/agent-access.md)
+before requesting credentials or browser sign-in. The runbook identifies the
+production server, Windows SSH alias, Shopify connector, host verification,
+and Forge fallback. Older dated deployment notes below are historical;
+the current protected release workflow remains authoritative.
+
 ## Development and brand history
 
 Everbranch’s development under the Everbranch name dates back to at least April 2026.
@@ -475,17 +484,11 @@ credentials, grant source access or enable external sends, AI or spreadsheet wri
 - Performance note: the mobile Home endpoint is currently the heaviest Modern Forestry payload on cold cache. `/api/mobile/v1/modern-forestry/home` now returns a local shell immediately on a true cold cache and refreshes the full Shopify-backed payload after the response. Product detail responses at `/api/mobile/v1/modern-forestry/products/{handle}` are cached server-side for repeat access.
 - Home boot rule: do not put Candle Cash cleanup, checkout recovery, or other bag-repair network work on the root iOS startup path. Keep those repairs tied to explicit Bag / checkout actions so Home stays snappy even when reward state is messy.
 - Known remaining issue: Home cold-load performance is still not acceptable for production UX until the iOS bootstrap fully treats Home as stale-while-revalidate and keeps bag/product/shop navigation from feeling blocked by Home payload timing.
-- Deploy note: if production GitHub Actions fails during `vite build` with exit code 137, backend-only PHP changes may be deployed safely over SSH without rebuilding assets, provided no frontend bundle changes are required. A failed asset build can leave the API feeling degraded or inconsistent until caches and PHP processes are reset.
-- Backend-only production recovery process:
-  - fetch/checkout latest `main`
-  - `composer install --no-dev --prefer-dist --optimize-autoloader`
-  - `php artisan migrate --force`
-  - `php artisan optimize:clear`
-  - `php artisan config:cache`
-  - `php artisan route:cache`
-  - `php artisan view:cache`
-  - `php artisan queue:restart`
-  - reload nginx/php-fpm if available
+- Historical deploy incident: `vite build` previously failed with exit code 137.
+  The former backend-only SSH recovery recipe is retired. Follow the protected
+  [atomic release workflow](docs/operations/forge-atomic-release-runbook.md) and
+  its separately authorized emergency path; do not bypass a failed CI build,
+  hotpatch the active release, or broadly clear production caches.
 
 ## Modern Forestry Variant Media + Mobile Detail Notes (2026-06-23)
 
@@ -1435,7 +1438,8 @@ Commercialization/access state:
   - latest production rollout for commit `dbf0762` had been completed manually before deploy automation was restored:
     - deploy command: `ssh forge@129.212.138.111 'bash /home/forge/deploy_backstage.sh'`
     - health check: `curl -sS https://backstage.theforestrystudio.com/up` returned `Application up.`
-  - manual SSH deploy remains available as fallback, but is no longer the primary required path while deploy secrets stay configured
+  - historical manual SSH deployment was later retired; current releases use
+    the protected [atomic release workflow](docs/operations/forge-atomic-release-runbook.md)
 - checkout and broad subscription lifecycle mutation writes are still intentionally disabled
 - upgrade prompts are informational routing only
 - multi-tenant completion estimate (historical snapshot at 2026-03-27): `45%`
