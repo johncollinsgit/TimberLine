@@ -209,3 +209,16 @@ test('original card surcharges never count as rewardable merchandise', function 
     $result = $this->effects->reconcile($this->tenant->id, 'original-order');
     expect($result['effects']['eligible_minor'])->toBe(5900)->and($result['effects']['reward_posted_minor'])->toBe(177);
 });
+
+test('repeated Core preview reviews do not initiate pending wallet merges', function () {
+    $donor = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Duplicate']);
+    $this->actingAs($this->owner);
+    foreach (range(1, 2) as $attempt) {
+        $preview = $this->postJson('/workspace/customers/merges/preview?tenant='.$this->tenant->slug, [
+            'profile_ids' => [$this->profile->id, $donor->id], 'survivor_profile_id' => $this->profile->id, 'request_id' => (string) Str::uuid(),
+        ])->assertOk()->json();
+        expect(\App\Models\CustomerMergeOperation::findOrFail($preview['operation_id'])->status)->toBe('preview');
+    }
+    $this->postJson('/workspace/customers/merges/'.$preview['operation_id'].'/apply?tenant='.$this->tenant->slug,
+        ['expected_version' => $preview['version'], 'identity_confirmed' => true])->assertOk()->assertJsonPath('status', 'completed');
+});

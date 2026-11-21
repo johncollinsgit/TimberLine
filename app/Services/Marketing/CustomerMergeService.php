@@ -53,7 +53,8 @@ class CustomerMergeService
                 ['tenant_id' => $tenantId, 'idempotency_key' => $idempotencyKey],
                 [
                     'store_key' => $storeKey,
-                    'status' => 'draft',
+                    // Core review snapshots do not initiate a merge or reserve a wallet.
+                    'status' => ($context['source'] ?? null) === 'core_customers' ? 'preview' : 'draft',
                     'source' => (string) ($context['source'] ?? 'everbranch_wizard'),
                     'survivor_profile_id' => $survivorProfileId,
                     'initiated_by' => $context['initiated_by'] ?? null,
@@ -96,7 +97,7 @@ class CustomerMergeService
         foreach ($operation->before_state['profiles'] ?? [] as $before) {
             $profile = MarketingProfile::query()->where('tenant_id', $operation->tenant_id)->whereKey($before['id'])->lockForUpdate()->first();
             abort_unless($profile && ! $profile->merged_at && ! $profile->archived_at
-                && \App\Services\PaymentsCore\Contract::hash($this->profileSnapshot($profile)) === \App\Services\PaymentsCore\Contract::hash($before),
+                && \App\Services\PaymentsCore\Contract::hash($this->profileSnapshot($profile, true)) === \App\Services\PaymentsCore\Contract::hash($before),
                 409, 'Customer records changed after the preview. Review the current history and balances again.');
         }
     }
@@ -550,7 +551,7 @@ class CustomerMergeService
         ];
     }
 
-    private function profileSnapshot(MarketingProfile $profile): array
+    private function profileSnapshot(MarketingProfile $profile, bool $locked = false): array
     {
         return [
             'id' => (int) $profile->id,
@@ -558,13 +559,14 @@ class CustomerMergeService
             'name' => trim((string) ($profile->first_name.' '.$profile->last_name)),
             'email' => $profile->email,
             'phone' => $profile->phone,
-            'balance' => (float) DB::table('candle_cash_balances')->where('marketing_profile_id', $profile->id)->value('balance'),
-            'transaction_count' => DB::table('candle_cash_transactions')->where('marketing_profile_id', $profile->id)->count(),
-            'owned_record_counts' => $this->ownedRecordCounts($profile),
+            'balance' => (float) DB::table('candle_cash_balances')->where('marketing_profile_id', $profile->id)->when($locked, fn ($q) => $q->lockForUpdate())->value('balance'),
+            'transaction_count' => $locked ? DB::table('candle_cash_transactions')->where('marketing_profile_id', $profile->id)->lockForUpdate()->get(['id'])->count()
+                : DB::table('candle_cash_transactions')->where('marketing_profile_id', $profile->id)->count(),
+            'owned_record_counts' => $this->ownedRecordCounts($profile, $locked),
         ];
     }
 
-    private function ownedRecordCounts(MarketingProfile $profile): array
+    private function ownedRecordCounts(MarketingProfile $profile, bool $locked = false): array
     {
         $counts = [];
         foreach (array_merge($this->registry->directReferences(), collect($this->registry->conflictReferences())->map(fn (array $policy): array => [$policy['column']])->all()) as $table => $columns) {
@@ -573,7 +575,8 @@ class CustomerMergeService
             }
             foreach ($columns as $column) {
                 if (Schema::hasColumn($table, $column)) {
-                    $counts[$table.'.'.$column] = DB::table($table)->where($column, $profile->id)->count();
+                    $query = DB::table($table)->where($column, $profile->id);
+                    $counts[$table.'.'.$column] = $locked ? $query->lockForUpdate()->get([$column])->count() : $query->count();
                 }
             }
         }

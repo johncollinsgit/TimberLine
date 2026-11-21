@@ -7,6 +7,11 @@ markers and consent remain unchanged. Reviewed Core duplicate merges preserve
 source references, alias history and the existing rewards ledger; preview hashes
 reject changed records. Source, ledger and merge admission use current locked
 rows under the shared tenant account fence, including MySQL repeatable reads.
+Core review operations use an inactive `preview` state, so an abandoned or
+repeated review cannot strand a Pay wallet. Only that server-owned source/state
+is excluded from the pending-merge hold check; existing provider merges still
+block holds. Approval revalidates the preview and rejects held or spent rewards
+under the original account/profile fence, with a reviewable conflict response.
 
 ## Explicit enrollment and repair
 
