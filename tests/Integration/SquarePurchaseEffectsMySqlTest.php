@@ -37,6 +37,23 @@ test('concurrent original purchase retries award once under the shared tenant fe
         ->and(app(CandleCashService::class)->currentBalance($this->profile))->toBe(1.8);
 });
 
+test('Core merge HTTP review survives native MySQL JSON storage and preserves rewards on replay', function () {
+    $donor = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Reviewed duplicate']);
+    app(CandleCashService::class)->addRewardAmountIdempotent($donor, 5, 'gift', 'reviewed-gift');
+    $base = '/workspace/customers/merges';
+    $preview = $this->actingAs($this->owner)->postJson($base.'/preview?tenant='.$this->tenant->slug, [
+        'profile_ids' => [$this->profile->id, $donor->id], 'survivor_profile_id' => $this->profile->id,
+        'request_id' => (string) Str::uuid(),
+    ])->assertOk()->json();
+    $url = $base.'/'.$preview['operation_id'].'/apply?tenant='.$this->tenant->slug;
+    $approval = ['expected_version' => $preview['version'], 'identity_confirmed' => true];
+    $this->postJson($url, $approval)->assertOk()->assertJsonPath('status', 'completed');
+    $this->postJson($url, $approval)->assertOk()->assertJsonPath('profile_id', $this->profile->id);
+    expect($donor->fresh()->merged_into_profile_id)->toBe($this->profile->id)
+        ->and(app(CandleCashService::class)->currentBalance($this->profile))->toBe(5.0)
+        ->and(CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'gift')->count())->toBe(1);
+});
+
 test('a merge waiting behind purchase earning retains the receipt and ledger on the canonical survivor', function () {
     $tenant = $this->tenant->id;
     $survivor = MarketingProfile::create(['tenant_id' => $tenant, 'first_name' => 'Reviewed survivor']);

@@ -5,7 +5,8 @@ Square order/payment/customer relationships. It never matches a card/name or
 copies a provider order. Conflicting claims remain in review. Source-only import
 markers and consent remain unchanged. Reviewed Core duplicate merges preserve
 source references, alias history and the existing rewards ledger; preview hashes
-reject changed records. Source, ledger and merge admission use current locked
+canonicalize object keys across native MySQL JSON storage and reject changed
+values. List order remains significant. Source, ledger and merge admission use current locked
 rows under the shared tenant account fence, including MySQL repeatable reads.
 Core review operations use an inactive `preview` state, so an abandoned or
 repeated review cannot strand a Pay wallet. Only that server-owned source/state

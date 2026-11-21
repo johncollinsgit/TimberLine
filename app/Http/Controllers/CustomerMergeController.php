@@ -66,6 +66,6 @@ class CustomerMergeController extends Controller
 
     public function version(CustomerMergeOperation $operation): string
     {
-        return hash('sha256', json_encode([$operation->id, $operation->status, $operation->before_state, $operation->updated_at?->toIso8601String()]));
+        return app(CustomerMergeService::class)->previewVersion($operation);
     }
 }
