@@ -6,6 +6,10 @@ require an audit of the whole repository or its release history.
 
 ## Scope and orientation
 
+- For live questions, production SSH, GitHub and Shopify access, start with
+  [the agent access runbook](docs/operations/agent-access.md). Check established
+  connections before requesting another browser sign-in or new credentials.
+
 For event campaigns, use the existing Teams show, historical sales mappings,
 and canonical profiles. See the [show texts runbook](docs/operations/team-show-texts.md)
 for the preview, consent, and activation workflow.
@@ -107,6 +111,7 @@ continue to apply.
 
 | Area | Start here |
 | --- | --- |
+| Live Everbranch, GitHub and Shopify access | `docs/operations/agent-access.md` |
 | Release validation and parallel jobs | `docs/operations/parallel-release-validation.md` |
 | Migration and schema safety | `docs/operations/migration-safety-gate.md` |
 | Production recovery and drift | `docs/operations/release-observability-and-recovery.md` |

@@ -1,5 +1,9 @@
 # Permanent delivery workflow
 
+- For Everbranch production, GitHub and Shopify access, read
+  `docs/operations/agent-access.md`. Use existing host-specific SSH and connected
+  tools before asking the owner to sign in again. Never copy private keys or
+  provider tokens into the repository or chat.
 - Read `README_FOR_AGENTS.md` before making changes. It is the current delivery
   contract: scoped local checks, a focused PR, all protected CI checks, normal
   Forge deployment, then exact-SHA `/ready` verification. Do not choose a different
