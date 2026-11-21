@@ -201,3 +201,11 @@ test('campaign results count original purchases once and distinguish actual deli
     expect($results)->toMatchArray(['accepted_sends' => 1, 'delivered' => 0, 'sent_only' => 1, 'attributed_buyers' => 1,
         'attributed_purchases' => 1, 'net_sales_minor' => 6000, 'reward_minor' => 180, 'causal_credit' => false]);
 });
+
+test('original card surcharges never count as rewardable merchandise', function () {
+    $raw = $this->order->raw_payload;
+    $raw['net_amounts']['card_surcharge_money'] = ['amount' => 100, 'currency' => 'USD'];
+    $this->order->update(['raw_payload' => $raw]);
+    $result = $this->effects->reconcile($this->tenant->id, 'original-order');
+    expect($result['effects']['eligible_minor'])->toBe(5900)->and($result['effects']['reward_posted_minor'])->toBe(177);
+});

@@ -154,3 +154,12 @@ test('partial in person earning keeps the existing cap and rejects a sub dollar 
     expect($first['ok'])->toBeTrue()->and($service->redemptionAmountForIssuedCode(CandleCashRedemption::findOrFail($first['redemption_id'])))->toBe(5.0)
         ->and($service->currentBalance($profile))->toBe(1.8);
 });
+
+test('partial cash redemption leaves unrelated zero cost rewards available', function () {
+    [$tenant, $profile] = channelRewardFixture(balance: 0);
+    \App\Models\TenantMarketingSetting::create(['tenant_id' => $tenant->id, 'key' => 'candle_cash_program_config', 'value' => ['partial_redemption_enabled' => true]]);
+    app()->forgetInstance(CandleCashService::class);
+    app(\App\Services\Tenancy\TenantMarketingSettingsResolver::class)->flushArrayCache();
+    $free = CandleCashReward::create(['name' => 'Fictional free sample', 'candle_cash_cost' => 0, 'reward_type' => 'product', 'reward_value' => 'sample', 'is_active' => true]);
+    expect(app(CandleCashService::class)->redeemReward($profile, $free)['ok'])->toBeTrue();
+});

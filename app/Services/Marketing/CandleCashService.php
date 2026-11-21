@@ -932,7 +932,7 @@ class CandleCashService
             if ($this->isStorefrontReward($reward, $tenantId) && ($inPerson || in_array($normalizedPlatform, ['shopify', 'public_lookup', 'modern_forestry_ios'], true))) {
                 $cost = $this->availableRedemptionAmount($current, $tenantId, $inPerson ? (int) $channels['in_person_amount'] : $this->fixedRedemptionPoints($tenantId));
             }
-            if ($cost < 1 || $current < $cost) {
+            if ($current < $cost || ($cost < 1 && $this->isStorefrontReward($reward, $tenantId) && $this->programConfig($tenantId)['partial_redemption_enabled'])) {
                 return [
                     'ok' => false,
                     'balance' => $current,

@@ -176,12 +176,14 @@ class SquarePurchaseEffects
         $tax = $read($refund > 0 ? 'tax_money' : 'total_tax_money');
         $tip = $read($refund > 0 ? 'tip_money' : 'total_tip_money');
         $charges = $read($refund > 0 ? 'service_charge_money' : 'total_service_charge_money');
+        $surcharge = $raw['net_amounts']['card_surcharge_money'] ?? null;
+        $surchargeMinor = $surcharge === null ? 0 : (($surcharge['currency'] ?? null) === 'USD' && is_int($surcharge['amount'] ?? null) && $surcharge['amount'] >= 0 ? $surcharge['amount'] : null);
         if ($total === null || $tax === null || $tip === null || $charges === null
-            || $total !== (int) $order->total_money_amount - $refund || $total < $tax + $tip + $charges) {
+            || $surchargeMinor === null || $total !== (int) $order->total_money_amount - $refund || $total < $tax + $tip + $charges + $surchargeMinor) {
             return null;
         }
 
-        return $total - $tax - $tip - $charges;
+        return $total - $tax - $tip - $charges - $surchargeMinor;
     }
 
     private function attribute(int $tenant, MarketingProfile $profile, SquareOrder $order, ?int $net, ?string $event, bool $dryRun): array
