@@ -355,6 +355,10 @@ class BirthdayEmailDispatchService
         $rewardValue = $this->displayRewardValue($issuance);
         $isCandleCash = $rewardType === 'candle_cash';
         $isUsableCode = ! $isCandleCash && $issuance->isUsable();
+        $candleCashTerms = $isCandleCash
+            ? (app(CandleCashService::class)->redemptionRulesPayload($issuance->marketingProfile?->tenant_id)['online_minimum_message']
+                ?? 'Candle Cash applies in $10 increments at checkout.')
+            : '';
         $rewardApplyUrl = $isCandleCash
             ? $this->storefrontUrl('/account')
             : $this->storefrontUrl(
@@ -381,7 +385,7 @@ class BirthdayEmailDispatchService
                 ? 'View your Candle Cash'
                 : ($isUsableCode ? 'Use your birthday gift' : 'Claim your birthday coupon'),
             'birthday_reward_message' => $isCandleCash
-                ? 'Your birthday gift of <strong>'.$rewardValue.' in Candle Cash</strong> has been added to your account. Candle Cash applies in $10 increments at checkout.'
+                ? 'Your birthday gift of <strong>'.$rewardValue.' in Candle Cash</strong> has been added to your account. '.$candleCashTerms
                 : ($isUsableCode
                     ? 'Use code <strong>'.e((string) ($metadata['coupon_code'] ?? '')).'</strong> for <strong>'.$rewardValue.' off</strong> your next order.'
                     : 'Your <strong>'.$rewardValue.' birthday coupon</strong> is ready. Sign in on your birthday gift page to claim it.'),
