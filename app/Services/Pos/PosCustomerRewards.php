@@ -225,7 +225,7 @@ final class PosCustomerRewards
             $desired = 0;
             if ($remaining > 0 && ($rules['enable_order_based_earning'] ?? true) && isset($rules['purchase_earn_bps'])) {
                 // Integer cents, nearest-cent half-up; original terms also govern refunds.
-                $desired = intdiv($remaining * $rules['purchase_earn_bps'] + 5000, 10000);
+                $desired = \App\Services\Marketing\PurchaseRewardCalculator::percentageMinor($remaining, $rules['purchase_earn_bps']);
             }
             if ($remaining > 0 && ($rules['enable_order_based_earning'] ?? true)) {
                 $ordinal = (int) $terms['order_number'];

@@ -36,8 +36,7 @@ class MarketingCampaignsController extends Controller
 {
     public function __construct(
         protected MarketingTenantOwnershipService $ownershipService
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -237,8 +236,7 @@ class MarketingCampaignsController extends Controller
         MarketingEmailReadiness $readinessService,
         MarketingCampaignDeliveryDiagnostics $diagnosticsService,
         MarketingCampaignRewardIssuanceService $campaignRewardIssuanceService
-    ): View
-    {
+    ): View {
         $tenantId = $this->resolveTenantId($request);
         $strict = $this->strictTenantMode();
         $this->assertCampaignAccess($campaign, $tenantId);
@@ -298,7 +296,7 @@ class MarketingCampaignsController extends Controller
         $diagnostics = $diagnosticsService->summarize($campaign, $emailReadiness, $emailDeliveryLog);
         $rewardIssuanceSummary = $campaignRewardIssuanceService->summaryForCampaign($campaign, $tenantId, 5);
 
-        $conversionsQuery = $campaign->conversions();
+        $conversionsQuery = $campaign->conversions()->where('attribution_type', '!=', 'superseded');
         if ($strict && $tenantId !== null) {
             $conversionsQuery->whereHas('profile', fn ($query) => $query->forTenantId($tenantId));
         }
@@ -314,7 +312,7 @@ class MarketingCampaignsController extends Controller
         ];
         $conversionSourceKeys = (clone $conversionsQuery)
             ->get(['source_type', 'source_id'])
-            ->map(fn ($row): string => strtolower(trim((string) $row->source_type)) . '|' . trim((string) $row->source_id))
+            ->map(fn ($row): string => strtolower(trim((string) $row->source_type)).'|'.trim((string) $row->source_id))
             ->filter()
             ->unique()
             ->values();
@@ -327,7 +325,7 @@ class MarketingCampaignsController extends Controller
                 ->when($strict && $tenantId !== null, fn ($query) => $query->whereHas('profile', fn ($profileQuery) => $profileQuery->forTenantId($tenantId)))
                 ->get(['id', 'platform', 'external_order_source', 'external_order_id'])
                 ->filter(function (CandleCashRedemption $redemption) use ($conversionSourceKeys): bool {
-                    $key = strtolower(trim((string) $redemption->external_order_source)) . '|' . trim((string) $redemption->external_order_id);
+                    $key = strtolower(trim((string) $redemption->external_order_source)).'|'.trim((string) $redemption->external_order_id);
 
                     return $conversionSourceKeys->contains($key);
                 });
@@ -365,6 +363,7 @@ class MarketingCampaignsController extends Controller
             'emailDeliveryLog' => $emailDeliveryLog,
             'diagnostics' => $diagnostics,
             'conversionSummary' => $conversionSummary,
+            'purchaseResults' => app(\App\Services\Marketing\EventCampaignResults::class)->forCampaign($campaign),
             'rewardConversionSummary' => $rewardConversionSummary,
             'performanceSummary' => $performanceSummary,
             'timingInsight' => $timingInsight,
@@ -717,7 +716,7 @@ class MarketingCampaignsController extends Controller
         $reason = match ($status) {
             'unsupported' => $notes[0] ?? 'Selected provider does not support runtime email sends in this architecture.',
             'incomplete' => $missing !== []
-                ? 'Email provider setup is incomplete: ' . implode(', ', $missing)
+                ? 'Email provider setup is incomplete: '.implode(', ', $missing)
                 : 'Email provider setup is incomplete for this tenant.',
             'error' => $missing[0] ?? ($notes[0] ?? 'Email readiness could not be validated.'),
             default => 'Email sending is disabled or not configured for this tenant.',
@@ -1026,7 +1025,7 @@ class MarketingCampaignsController extends Controller
         }
 
         $variantId = null;
-        if (!empty($data['variant_id'])) {
+        if (! empty($data['variant_id'])) {
             $variantId = $campaign->variants()
                 ->where('id', (int) $data['variant_id'])
                 ->exists()
@@ -1100,7 +1099,7 @@ class MarketingCampaignsController extends Controller
         ]);
 
         $sendWindow = null;
-        if (!empty($data['send_window_start']) || !empty($data['send_window_end'])) {
+        if (! empty($data['send_window_start']) || ! empty($data['send_window_end'])) {
             $sendWindow = [
                 'start' => $data['send_window_start'] ?? null,
                 'end' => $data['send_window_end'] ?? null,
@@ -1108,7 +1107,7 @@ class MarketingCampaignsController extends Controller
         }
 
         $quietHours = null;
-        if (!empty($data['quiet_hours_start']) || !empty($data['quiet_hours_end'])) {
+        if (! empty($data['quiet_hours_start']) || ! empty($data['quiet_hours_end'])) {
             $quietHours = [
                 'start' => $data['quiet_hours_start'] ?? null,
                 'end' => $data['quiet_hours_end'] ?? null,
@@ -1187,7 +1186,7 @@ class MarketingCampaignsController extends Controller
     }
 
     /**
-     * @param array<int,mixed> $recipientIds
+     * @param  array<int,mixed>  $recipientIds
      * @return array<int,int>
      */
     protected function validatedRecipientIdsForCampaign(array $recipientIds, MarketingCampaign $campaign, ?int $tenantId): array
@@ -1247,7 +1246,7 @@ class MarketingCampaignsController extends Controller
     }
 
     /**
-     * @param Collection<int,int> $segmentIds
+     * @param  Collection<int,int>  $segmentIds
      */
     protected function segmentsQueryForTenant(bool $strict, Collection $segmentIds): \Illuminate\Database\Eloquent\Builder
     {
@@ -1267,7 +1266,7 @@ class MarketingCampaignsController extends Controller
     }
 
     /**
-     * @param Collection<int,int> $groupIds
+     * @param  Collection<int,int>  $groupIds
      */
     protected function groupsQueryForTenant(bool $strict, Collection $groupIds): \Illuminate\Database\Eloquent\Builder
     {
@@ -1296,7 +1295,7 @@ class MarketingCampaignsController extends Controller
                 'key' => $key,
                 'label' => $section['label'],
                 'href' => route($section['route']),
-                'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'] . '.*'),
+                'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'].'.*'),
             ];
         }
 

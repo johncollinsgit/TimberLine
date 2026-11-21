@@ -3796,3 +3796,11 @@ popover; the selected business and date remain visible. The same controls return
 to their full desktop positions on resize, preserving values and handlers.
 
 - Trajectory: replace the monthly budget slider with $10 touch controls and comma-formatted entry; shorten budget list and editor copy while retaining source details and explicit Save.
+
+## 2026-11-21 — Shared purchase and event customer history
+
+Core customer profiles add reviewed duplicate consolidation and authorized text
+history. Campaigns show observed delivery and modeled purchase results. Teams
+show details and comparison reports support the same buyer cohort ranked by show
+or recorded lifetime spending, including original Square shows without a native
+Pay register. Unknown coverage and sent-only evidence remain labeled.

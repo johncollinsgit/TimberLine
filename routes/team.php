@@ -25,6 +25,8 @@ Route::middleware(['auth', 'verified', 'tenant.access', \App\Http\Middleware\Ens
         Route::get('/customers/{profile}', \App\Http\Controllers\TeamCustomerLookupController::class)->whereNumber('profile')->defaults('action', 'detail')->name('customers.detail');
         Route::get('/customers', \App\Http\Controllers\TeamCustomerLookupController::class)->name('customers.search');
         Route::get('/events/{event}/customer-value', \App\Http\Controllers\TeamCustomerEventValueController::class)->whereUuid('event')->name('events.customer-value');
+        Route::get('/events/{id}/customer-insights', \App\Http\Controllers\TeamEventCustomerInsightsController::class)->whereUuid('id')->name('events.customer-insights');
+        Route::get('/events/{id}/campaign-results/{campaign}', \App\Http\Controllers\TeamEventCustomerInsightsController::class)->whereUuid('id')->whereNumber('campaign')->name('events.campaign-results');
         Route::get('/events/{id}/confirmed-sales', \App\Http\Controllers\TeamConfirmedEventSalesController::class)->whereUuid('id')->name('events.confirmed-sales');
         Route::get('/events/{id}/sales-candidates', \App\Http\Controllers\TeamEventSalesCandidatesController::class)->whereUuid('id')->name('events.sales-candidates');
         Route::get('/events/{id}/profitability', \App\Http\Controllers\TeamEventProfitabilityController::class)->whereUuid('id')->name('events.profitability');

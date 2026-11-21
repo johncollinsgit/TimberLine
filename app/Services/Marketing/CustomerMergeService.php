@@ -90,6 +90,17 @@ class CustomerMergeService
         });
     }
 
+    /** Core previews must still describe the same contacts, wallet and owned references at approval. */
+    public function assertCurrentPreview(CustomerMergeOperation $operation): void
+    {
+        foreach ($operation->before_state['profiles'] ?? [] as $before) {
+            $profile = MarketingProfile::query()->where('tenant_id', $operation->tenant_id)->whereKey($before['id'])->lockForUpdate()->first();
+            abort_unless($profile && ! $profile->merged_at && ! $profile->archived_at
+                && \App\Services\PaymentsCore\Contract::hash($this->profileSnapshot($profile)) === \App\Services\PaymentsCore\Contract::hash($before),
+                409, 'Customer records changed after the preview. Review the current history and balances again.');
+        }
+    }
+
     /**
      * Apply the Everbranch side of a completed Shopify merge or an internal-only merge.
      * This method is idempotent and safe to replay from a webhook.
@@ -252,13 +263,13 @@ class CustomerMergeService
                 continue;
             }
             foreach ($donors as $donor) {
-                $rows = DB::table($table)->where($policy['column'], $donor->id)->orderByDesc('id')->get();
+                $rows = DB::table($table)->where($policy['column'], $donor->id)->orderByDesc('id')->lockForUpdate()->get();
                 foreach ($rows as $row) {
                     $existing = DB::table($table)->where($policy['column'], $survivor->id);
                     foreach ($policy['keys'] as $key) {
                         $existing->where($key, $row->{$key});
                     }
-                    $existingRow = $existing->first();
+                    $existingRow = $existing->lockForUpdate()->first();
                     if ($existingRow) {
                         if ($table === 'marketing_profile_links') {
                             $updates = ['tenant_id' => $tenantId];
@@ -401,8 +412,8 @@ class CustomerMergeService
     {
         $resolutions = [];
         $ambiguousChoices = (array) ($resolution['ambiguous_balances'] ?? []);
-        $survivorBalance = (float) DB::table('candle_cash_balances')->where('marketing_profile_id', $survivor->id)->value('balance');
-        $survivorLedgerCount = DB::table('candle_cash_transactions')->where('marketing_profile_id', $survivor->id)->count();
+        $survivorBalance = (float) DB::table('candle_cash_balances')->where('marketing_profile_id', $survivor->id)->lockForUpdate()->value('balance');
+        $survivorLedgerCount = DB::table('candle_cash_transactions')->where('marketing_profile_id', $survivor->id)->lockForUpdate()->get()->count();
         if ($survivorBalance !== 0.0 && $survivorLedgerCount === 0) {
             $choice = (string) ($ambiguousChoices[(string) $survivor->id] ?? $ambiguousChoices[$survivor->id] ?? '');
             if (! in_array($choice, ['include_as_opening', 'discard_duplicate'], true)) {
@@ -420,8 +431,8 @@ class CustomerMergeService
             $resolutions[] = ['table' => 'candle_cash_balances', 'row_id' => $survivor->id, 'action' => $choice, 'donor_profile_id' => null, 'amount' => $survivorBalance];
         }
         foreach ($donors as $donor) {
-            $donorBalance = (float) DB::table('candle_cash_balances')->where('marketing_profile_id', $donor->id)->value('balance');
-            $donorTransactions = DB::table('candle_cash_transactions')->where('marketing_profile_id', $donor->id)->orderBy('id')->get();
+            $donorBalance = (float) DB::table('candle_cash_balances')->where('marketing_profile_id', $donor->id)->lockForUpdate()->value('balance');
+            $donorTransactions = DB::table('candle_cash_transactions')->where('marketing_profile_id', $donor->id)->orderBy('id')->lockForUpdate()->get();
             if ($donorBalance !== 0.0 && $donorTransactions->isEmpty()) {
                 $choice = (string) ($ambiguousChoices[(string) $donor->id] ?? $ambiguousChoices[$donor->id] ?? '');
                 if (! in_array($choice, ['include_as_opening', 'discard_duplicate'], true)) {
@@ -451,7 +462,7 @@ class CustomerMergeService
                     ->where('source_id', $sourceId)
                     ->where('type', $transaction->type)
                     ->where('candle_cash_delta', $transaction->candle_cash_delta)
-                    ->exists();
+                    ->lockForUpdate()->first() !== null;
                 if ($duplicate) {
                     DB::table('candle_cash_transactions')->where('id', $transaction->id)->delete();
                     $resolutions[] = ['table' => 'candle_cash_transactions', 'row_id' => $transaction->id, 'action' => 'deduplicated_source', 'donor_profile_id' => $donor->id];
@@ -464,7 +475,7 @@ class CustomerMergeService
 
         $ledgerNet = (float) DB::table('candle_cash_transactions')
             ->where('marketing_profile_id', $survivor->id)
-            ->sum('candle_cash_delta');
+            ->lockForUpdate()->get()->sum('candle_cash_delta');
         DB::table('candle_cash_balances')->updateOrInsert(
             ['marketing_profile_id' => $survivor->id],
             ['balance' => $ledgerNet, 'updated_at' => now()]

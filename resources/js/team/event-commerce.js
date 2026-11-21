@@ -7,8 +7,9 @@ function fold(title, cls) { const panel = el('details', '', 'event-panel ' + cls
 
 export function installEventCommerce(host, { record, api, tenant, current }) {
   const panel = el('section', '', 'event-commerce'); panel.hidden = true;
-  const sales = fold('Sales', 'event-sales-panel'), customers = fold('Customers', 'event-customers-panel'); panel.append(sales.panel, customers.panel); host.prepend(panel);
+  const sales = fold('Sales', 'event-sales-panel'), customers = fold('Customers', 'event-customers-panel'); const insights = fold('Customers & marketing', 'event-customer-insights'); panel.append(insights.panel, sales.panel, customers.panel); host.prepend(panel);
   let active = true, accessBlocked = false, permissions = {}, eventID, salesSerial = 0, customerSerial = 0, summaryController, rowController, customerController, searchTimer;
+  let insightsEnabled = false, insightsSerial = 0, insightsController, insightsTimer, rankBasis = 'event', insightsPage = 1;
   let transactions, transactionRows, summaryHost, salesFeedback, rowFeedback, page = 1, customerPage = 1, query = '', customerDetail = false, searchInput, customerResults, customerFeedback, salesLoading = false;
   const valid = (kind, ticket) => active && !accessBlocked && current() && !panel.hidden && (kind === 'sales' ? sales.panel.open && ticket === salesSerial : customers.panel.open && ticket === customerSerial);
   const newLink = (name, path) => { const link = el('a', name); link.href = path; link.target = '_blank'; link.rel = 'noopener'; return link; };
@@ -72,7 +73,7 @@ export function installEventCommerce(host, { record, api, tenant, current }) {
     const form = el('form', '', 'event-customer-search'); searchInput = el('input'); searchInput.type = 'search'; searchInput.value = query; searchInput.placeholder = 'Name, phone or email'; searchInput.setAttribute('aria-label', 'Search event customers');
     searchInput.oninput = () => { customerSerial++; customerController?.abort(); query = searchInput.value; customerPage = 1; clearTimeout(searchTimer); searchTimer = setTimeout(() => loadCustomers(), 250); };
     form.onsubmit = event => { event.preventDefault(); searchInput.blur(); void loadCustomers(); }; form.append(searchInput); customerResults = el('div', '', 'event-customer-results'); customers.content.append(customerFeedback, form, customerResults);
-    if (permissions.audience) customers.content.append(newLink('Marketing audience', '/marketing/event-audiences?tenant=' + encodeURIComponent(tenant) + '&event_id=' + eventID));
+    if (permissions.audience) customers.content.append(newLink('Marketing audience', '/marketing/event-audiences?tenant=' + encodeURIComponent(tenant) + (eventID ? '&event_id=' + eventID : '')));
   }
   async function loadCustomers(nextPage = customerPage) {
     if (!active || accessBlocked || !current() || !customers.panel.open || !permissions.customers || !eventID || customerDetail) return;
@@ -95,22 +96,64 @@ export function installEventCommerce(host, { record, api, tenant, current }) {
       const result = await api('/customers/' + id, { signal: customerController.signal }); if (!valid('customers', ticket)) return;
       customers.content.replaceChildren(button('Back to ' + back, () => { customerDetail = false; if (back === 'sales') { customers.panel.open = false; sales.panel.open = true; } else void loadCustomers(); }), el('h3', result.customer.name));
       const contacts = [result.customer.phone, result.customer.email].filter(value => value && String(value).trim().toLowerCase() !== String(result.customer.name || '').trim().toLowerCase()); if (contacts.length) customers.content.append(el('p', contacts.join(' · ')));
-      customers.content.append(newLink('Open customer', '/workspace/customers/' + id + '?tenant=' + encodeURIComponent(tenant) + '&event_id=' + eventID));
+      customers.content.append(newLink('Open customer', '/workspace/customers/' + id + '?tenant=' + encodeURIComponent(tenant) + (eventID ? '&event_id=' + eventID : '')));
       const rewards = result.commerce.rewards; if (rewards?.available) customers.content.append(el('p', (rewards.label || 'Rewards') + ' · ' + (rewards.balance == null || String(rewards.balance).trim() === '' ? 'Balance unavailable' : rewards.balance)));
       for (const purchase of result.commerce.purchases) { const text = ['square_order', 'square_payment'].includes(purchase.source) ? 'Square purchase' : purchase.source === 'pos_sale' ? 'In-person purchase' : purchase.number || 'Purchase'; const row = el('details', '', 'event-purchase'); row.append(el('summary', text + ' · ' + (purchase.confirmed ? money(purchase.amount_minor, purchase.currency) : 'Unverified record') + ' · ' + date(purchase.occurred_at))); if (purchase.source_id || purchase.number) row.append(el('p', 'Reference: ' + (purchase.source_id || purchase.number), 'event-small event-soft')); customers.content.append(row); }
+      for (const message of result.marketing?.messages || []) {
+        const row = el('details', '', 'event-purchase'); row.append(el('summary', (message.campaign_name || 'Message') + ' · ' + message.status + ' · ' + date(message.sent_at)), el('p', message.message)); customers.content.append(row);
+      }
       if (result.commerce.has_more) customers.content.append(el('p', 'Open the customer to review older linked history.', 'event-small event-soft'));
     } catch (error) { fail(error, 'customers', ticket, customerFeedback, () => showCustomer(id, back)); }
   }
+  async function loadInsights(nextPage = insightsPage) {
+    if (!active || !current() || !insights.panel.open || !insightsEnabled) return;
+    const ticket = ++insightsSerial; insightsPage = nextPage; insightsController?.abort(); clearTimeout(insightsTimer); insightsController = new AbortController();
+    insights.content.replaceChildren(el('p', 'Loading customer and campaign results…', 'event-soft'));
+    try {
+      const data = await api('/events/' + record.id + '/customer-insights', { query: { rank_basis: rankBasis, page: insightsPage }, signal: insightsController.signal });
+      if (!active || !current() || ticket !== insightsSerial || !insights.panel.open) return;
+      insights.content.replaceChildren();
+      const controls = el('nav', '', 'event-commerce-tabs'); controls.setAttribute('aria-label', 'Show customer ranking');
+      for (const [value, label] of [['event', 'At this show'], ['lifetime', 'Lifetime of show buyers']]) {
+        const b = button(label, () => { rankBasis = value; void loadInsights(1); }); b.setAttribute('aria-pressed', String(rankBasis === value)); controls.append(b);
+      }
+      insights.content.append(controls, el('p', rankBasis === 'event' ? 'Ranked by spending at this show, including tax after recorded refunds.' : 'These show buyers ranked by recorded lifetime spending across linked purchases, including tax after recorded refunds.', 'event-small event-soft'));
+      if (data.report.status === 'preparing') { insights.content.append(el('p', 'Preparing customer rankings in the background. Unknown coverage is not zero sales.', 'event-soft')); insightsTimer = setTimeout(() => loadInsights(), 10000); }
+      for (const row of data.report.rows || []) {
+        const line = el('div', '', 'event-customer-list');
+        const name = button(row.label, () => { customers.panel.hidden = false; customers.panel.open = true; void showCustomer(row.id); });
+        line.append(name, el('span', money(row.paid_total_minor) + ' · ' + row.sale_count + ' purchases' + (row.complete ? '' : ' · partial coverage'), 'event-small'));
+        insights.content.append(line);
+      }
+      if (!(data.report.rows || []).length && data.report.status !== 'preparing') insights.content.append(el('p', 'No confirmed customer-linked purchases in the current report. Source or customer reviews may still be needed.', 'event-soft'));
+      pagination(data.report.has_more, insightsPage, loadInsights, insights.content);
+      for (const campaign of data.marketing?.campaigns || []) {
+        const card = el('section', '', 'event-panel'); card.append(el('h3', campaign.name));
+        card.append(el('p', campaign.accepted_sends + ' accepted sends · ' + campaign.delivered + ' confirmed deliveries · ' + campaign.sent_only + ' delivery unconfirmed · ' + campaign.failed + ' failed', 'event-small'));
+        card.append(el('p', campaign.attributed_buyers + ' attributed buyers · ' + money(campaign.net_sales_minor) + ' attributed net sales · ' + money(campaign.reward_minor) + ' Candle Cash issued', 'event-small'));
+        card.append(el('p', campaign.clicked_customers + ' customers clicked · ' + campaign.replies + ' replied · ' + campaign.opt_outs + ' opted out. Text attribution is modeled correlation, not causal lift.', 'event-small event-soft'));
+        card.append(newLink('View campaign results', campaign.url)); insights.content.append(card);
+      }
+      if (data.report.review_items?.length) insights.content.append(el('p', data.report.review_items.join(' '), 'event-small event-soft'));
+    } catch (error) {
+      if (!active || !current() || ticket !== insightsSerial) return;
+      if (restricted(error)) { insights.content.replaceChildren(el('p', 'Your current permissions or source access no longer allow these details. Refresh the show.', 'event-soft')); }
+      else insights.content.replaceChildren(el('p', error.message || 'Customer results could not load.'), button('Try again', () => loadInsights()));
+    }
+  }
+  insights.panel.ontoggle = () => { if (insights.panel.open) void loadInsights(); else { insightsSerial++; insightsController?.abort(); clearTimeout(insightsTimer); insights.content.replaceChildren(); } };
   sales.panel.ontoggle = () => { if (sales.panel.open) { if (!eventID) sales.content.replaceChildren(el('p', 'Link this occurrence to its reviewed event and register to connect sales.', 'event-soft')); else void loadSummary(); } else stopSales(true); };
-  customers.panel.ontoggle = () => { if (customers.panel.open) { if (!eventID) customers.content.replaceChildren(el('p', 'Link this occurrence to its reviewed event and register to connect customers.', 'event-soft')); else if (!customerDetail) void loadCustomers(); } else stopCustomers(true); };
+  customers.panel.ontoggle = () => { if (customers.panel.open) { if (!eventID && !customerDetail) customers.content.replaceChildren(el('p', 'Link this occurrence to its reviewed event and register to connect customers.', 'event-soft')); else if (!customerDetail) void loadCustomers(); } else stopCustomers(true); };
   const timer = setInterval(() => { if (active && !accessBlocked && current() && sales.panel.open && !transactions?.open && !document.hidden && !salesLoading && !document.activeElement?.matches('input,textarea,select')) void loadSummary(); }, 5000);
   return {
     update(data) {
+      insightsEnabled = data.customer_insights_available === true; insights.panel.hidden = !insightsEnabled;
       permissions = { sales: data.sales?.can_view === true, customers: data.can_lookup_customers === true, audience: data.can_prepare_audiences === true };
       if (eventID !== data.commerce_event_id) { stopSales(true); stopCustomers(true); sales.panel.open = customers.panel.open = false; }
-      eventID = data.commerce_event_id; panel.hidden = !permissions.sales && !permissions.customers; sales.panel.hidden = !permissions.sales; customers.panel.hidden = !permissions.customers;
+      eventID = data.commerce_event_id; panel.hidden = !permissions.sales && !permissions.customers && !insightsEnabled; sales.panel.hidden = !permissions.sales; customers.panel.hidden = !permissions.customers;
+      if (!insightsEnabled) { insightsSerial++; insightsController?.abort(); clearTimeout(insightsTimer); insights.content.replaceChildren(); }
       if (!permissions.sales) stopSales(true); if (!permissions.customers) stopCustomers(true);
     },
-    dispose() { active = false; stopSales(true); stopCustomers(true); clearInterval(timer); panel.remove(); }
+    dispose() { active = false; insightsSerial++; insightsController?.abort(); clearTimeout(insightsTimer); stopSales(true); stopCustomers(true); clearInterval(timer); panel.remove(); }
   };
 }

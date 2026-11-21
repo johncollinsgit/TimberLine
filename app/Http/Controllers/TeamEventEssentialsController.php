@@ -23,6 +23,7 @@ class TeamEventEssentialsController extends Controller
         } else {
             $input = $request->validate(['include_sales' => 'sometimes|boolean']);
             $result = $essentials->read($tenant, $request->user(), $event, (bool) ($input['include_sales'] ?? true));
+            $result['customer_insights_available'] = $event->kind === 'event' && app(\App\Services\Team\Studio\EventSalesAccess::class)->manager($tenant, $request->user());
             if (\App\Services\Marketing\TeamShowTextCampaigns::enabledFor($tenant->id) && $event->kind === 'event'
                 && ! in_array($event->status, ['withdrawn', 'cancelled'], true)
                 && app(\App\Services\Team\Studio\EventSalesAccess::class)->manager($tenant, $request->user())

@@ -220,6 +220,7 @@ class TenantRewardsPolicyService
                 'minimum_purchase_dollars' => round(max(0, (float) ($program['minimum_purchase_dollars'] ?? 0)), 2),
                 'rounding_behavior' => $this->enumOrDefault($policyValue['rounding_behavior'] ?? null, ['nearest_cent', 'floor', 'ceiling'], 'nearest_cent'),
                 'max_wallet_balance_dollars' => $this->nullablePositiveFloat($program['max_wallet_balance_dollars'] ?? null),
+                'partial_redemption_enabled' => (bool) ($program['partial_redemption_enabled'] ?? false),
             ],
             'earning_rules' => [
                 'enable_milestone_rewards' => (bool) ($policyEarning['enable_milestone_rewards'] ?? true),
@@ -520,6 +521,7 @@ class TenantRewardsPolicyService
                 ...($onlineMinimumCents === null ? [] : ['online_minimum_subtotal_cents' => $onlineMinimumCents]),
                 'rounding_behavior' => $this->enumOrDefault($value['rounding_behavior'] ?? null, ['nearest_cent', 'floor', 'ceiling'], 'nearest_cent'),
                 'max_wallet_balance_dollars' => $this->nullablePositiveFloat($value['max_wallet_balance_dollars'] ?? null),
+                'partial_redemption_enabled' => (bool) ($value['partial_redemption_enabled'] ?? false),
             ],
             'earning_rules' => [
                 'enable_milestone_rewards' => (bool) ($earning['enable_milestone_rewards'] ?? true),
@@ -670,6 +672,7 @@ class TenantRewardsPolicyService
                 'max_redeemable_per_order_dollars' => round(max(0.01, (float) ($value['max_redeemable_per_order_dollars'] ?? 10)), 2),
                 'minimum_purchase_dollars' => round(max(0, (float) ($value['minimum_purchase_dollars'] ?? 0)), 2),
                 'max_wallet_balance_dollars' => $this->nullablePositiveFloat($value['max_wallet_balance_dollars'] ?? null),
+                'partial_redemption_enabled' => (bool) ($value['partial_redemption_enabled'] ?? false),
                 'max_open_codes' => max(1, (int) ($financePolicy['max_open_codes'] ?? 1)),
                 'second_order_reward_amount' => round(max(0, (float) ($earning['second_order_reward_amount'] ?? 5)), 2),
                 'candle_club_multiplier_enabled' => (bool) ($earning['candle_club_multiplier_enabled'] ?? true),
@@ -976,9 +979,11 @@ class TenantRewardsPolicyService
             'value_model.redeem_increment_dollars' => ['access' => 'editable', 'message' => null],
             'value_model.max_redeemable_per_order_dollars' => ['access' => 'editable', 'message' => null],
             'value_model.minimum_purchase_dollars' => ['access' => 'editable_with_warning', 'message' => 'Lower minimum purchase values can tighten margin.'],
+            'value_model.max_wallet_balance_dollars' => ['access' => 'editable', 'message' => 'Purchase earning pauses at this wallet balance. Existing balances are retained.'],
+            'value_model.partial_redemption_enabled' => ['access' => 'editable', 'message' => 'Redeem available whole dollars within the existing order limits; remaining cents carry forward.'],
 
             'finance_and_safety.max_open_codes' => ['access' => 'editable_with_warning', 'message' => 'Higher open-code limits can increase outstanding liability.'],
-            'earning_rules.purchase_earn_bps' => ['access' => 'editable', 'message' => 'Applies to eligible Everbranch Pay merchandise after discounts and before tax. Existing bonuses are separate.'],
+            'earning_rules.purchase_earn_bps' => ['access' => 'editable', 'message' => 'Applies to eligible purchase merchandise after discounts and before tax. Original Square sales require reviewed enrollment. Existing bonuses are separate.'],
             'earning_rules.rewardable_channels' => ['access' => 'editable', 'message' => null],
             'redemption_rules.code_strategy' => ['access' => 'editable_with_warning', 'message' => 'Shared codes reduce customer-level attribution precision.'],
             'redemption_rules.stacking_mode' => ['access' => 'editable_with_warning', 'message' => 'Stacking can increase discount spend and reduce margin.'],

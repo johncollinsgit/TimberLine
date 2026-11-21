@@ -448,3 +448,8 @@ scheduled/owner controls) and `CustomerPurchasePlaceDiscoveryTest` (versioned
 mapping, owner route, confirmed original purchases, ambiguous place exclusion,
 home/permission preservation and tenant isolation). Existing history, source
 policy, identity, cohort and Modern Forestry guard suites remain required.
+
+Purchase effects and Teams campaign results are explicitly enrolled separately
+from read-only source imports. See [shared purchase rewards](square-purchase-rewards.md)
+for original identity evidence, preview/apply repair, cap/redemption policy,
+MySQL concurrency and live acceptance.

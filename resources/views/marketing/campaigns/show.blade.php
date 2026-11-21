@@ -9,13 +9,15 @@
             hint-text="Approved recipients are still re-validated at send time for consent, phone availability, and send-window guardrails before Twilio execution."
         />
 
+        @isset($purchaseResults)@include('marketing.campaigns.purchase-results', ['results' => $purchaseResults])@endisset
+
         <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6 space-y-4">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                     <h2 class="text-2xl font-semibold text-zinc-950">{{ $campaign->name }}</h2>
                     <div class="mt-1 text-sm text-zinc-600">{{ $campaign->description ?: 'No campaign description.' }}</div>
                     <div class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-600">
-                        <span class="inline-flex rounded-full border border-zinc-300 bg-zinc-50 px-2.5 py-1">Status: {{ $campaign->status }}</span>
+                        <span class="inline-flex rounded-full border border-zinc-300 bg-zinc-50 px-2.5 py-1">Activity: {{ $purchaseResults['activity_status'] ?? $campaign->status }}</span>
                         <span class="inline-flex rounded-full border border-zinc-300 bg-zinc-50 px-2.5 py-1">Channel: {{ strtoupper($campaign->channel) }}</span>
                         <span class="inline-flex rounded-full border border-zinc-300 bg-zinc-50 px-2.5 py-1">Objective: {{ $campaign->objective ?: '—' }}</span>
                         <span class="inline-flex rounded-full border border-zinc-300 bg-zinc-50 px-2.5 py-1">Segment: {{ $campaign->segment?->name ?: 'Unlinked' }}</span>
