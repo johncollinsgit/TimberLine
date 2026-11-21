@@ -115,6 +115,8 @@ test('mobile rewards redeem reuses an existing issued storefront code when the a
                         'codeDiscount' => [
                             '__typename' => 'DiscountCodeBasic',
                             'title' => 'Reward Credit Applied',
+                            'usageLimit' => 1,
+                            'minimumRequirement' => ['greaterThanOrEqualToSubtotal' => ['amount' => '40.00']],
                             'startsAt' => now()->toIso8601String(),
                             'endsAt' => now()->addDays(7)->toIso8601String(),
                             'customerGets' => ['appliesOnOneTimePurchase' => true, 'appliesOnSubscription' => false],

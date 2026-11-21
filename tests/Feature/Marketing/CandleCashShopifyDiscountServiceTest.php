@@ -13,7 +13,7 @@ use App\Services\Marketing\TenantRewardsPolicyService;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
-test('single code policy overrides order stacking while preserving product and shipping promotions', function (bool $existing, bool $flagship) {
+test('single code policy enforces the qualifying subtotal and preserves eligible shipping combinations', function (bool $existing, bool $flagship) {
     $redemption = candleCashShopifyDiscountFixture([
         'max_codes_per_order' => $flagship ? 2 : 1,
         'stacking_mode' => 'selected_promo_types',
@@ -41,7 +41,9 @@ test('single code policy overrides order stacking while preserving product and s
     });
 
     app(CandleCashShopifyDiscountService::class)->ensureDiscountForRedemption($redemption, 'retail');
-    expect($input['combinesWith'])->toBe(['orderDiscounts' => false, 'productDiscounts' => true, 'shippingDiscounts' => true]);
+    expect($input['combinesWith'])->toBe(['orderDiscounts' => false, 'productDiscounts' => ! $flagship, 'shippingDiscounts' => true])
+        ->and(data_get($input, 'minimumRequirement.subtotal.greaterThanOrEqualToSubtotal'))->toBe($flagship ? '40.00' : null)
+        ->and($input['usageLimit'] ?? null)->toBe($flagship ? 1 : null);
     if (! $existing) {
         expect(data_get($input, 'customerGets.value.discountAmount'))->toBe(['amount' => '10.00', 'appliesOnEachItem' => false]);
     }

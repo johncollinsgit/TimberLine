@@ -293,10 +293,15 @@ class CandleCashService
             $daily = app(CandleCashDailyRedemptionLimit::class)->rules($tenantId);
             $payload['max_redemptions_per_customer_per_day'] = $daily['maximum'];
             $payload['redemption_timezone'] = $daily['timezone'];
+            if (isset($channels['online_minimum_subtotal_cents'])) {
+                $payload['online_minimum_subtotal_cents'] = $channels['online_minimum_subtotal_cents'];
+                $payload['online_minimum_message'] = $this->fixedRedemptionFormatted($tenantId).' Candle Cash can be redeemed on qualifying merchandise purchases of '
+                    .$this->formatRewardCurrency($channels['online_minimum_subtotal_cents'] / 100).' or more, before taxes and shipping.';
+            }
             $payload['daily_limit_message'] = 'Candle Cash can only be redeemed once per customer per day (Eastern Time).';
             $payload['channel_summary'] = 'Use up to '.$this->formatRewardCurrency($channels['in_person_amount']).' Candle Cash per in-person purchase or '
                 .$this->fixedRedemptionFormatted($tenantId).' online. Rewards apply to other purchases, excluding recurring Candle Club charges. '
-                .$payload['daily_limit_message'];
+                .($payload['online_minimum_message'] ?? '').' '.$payload['daily_limit_message'];
         }
 
         return $payload;
