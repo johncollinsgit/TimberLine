@@ -27,7 +27,7 @@ class EventPerformance
 {
     public const TABLE = 'team_event_performance_facts';
 
-    private const REPORT_VERSION = 4;
+    private const REPORT_VERSION = 5;
 
     private const DIGEST_VERSION = 'indexed-content-v1';
 
@@ -108,9 +108,9 @@ class EventPerformance
         }
         $generation = $data['generation'];
         $kind = match ($filters['group_by']) {
-            'team_member' => 'team_member', 'customer' => $filters['rank_basis'] === 'lifetime' ? 'customer_lifetime' : 'customer', 'weekend' => 'day', default => 'event'
+            'team_member' => 'team_member', 'customer' => $filters['rank_basis'] === 'lifetime' ? 'customer_life' : 'customer', 'weekend' => 'day', default => 'event'
         };
-        $customerKind = in_array($kind, ['customer', 'customer_lifetime'], true);
+        $customerKind = in_array($kind, ['customer', 'customer_life'], true);
         $matching = $this->filtered($tenant, $area, $generation, $filters, $kind);
         $base = $this->filtered($tenant, $area, $generation, array_replace($filters, ['q' => '']), 'event')
             ->whereIn('event_id', (clone $matching)->select('event_id'));
@@ -151,10 +151,10 @@ class EventPerformance
             $query = $this->weekendQuery($query, $filters);
         }
         $groupColumn = $kind === 'day' ? 'weekend_key' : 'group_key';
-        $paidAggregate = $kind === 'customer_lifetime' ? 'MAX' : 'SUM';
-        $countAggregate = $kind === 'customer_lifetime' ? 'MAX' : 'SUM';
+        $paidAggregate = $kind === 'customer_life' ? 'MAX' : 'SUM';
+        $countAggregate = $kind === 'customer_life' ? 'MAX' : 'SUM';
         $groups = $query->selectRaw($groupColumn.' as dimension_key, MIN(id) as first_id, COUNT(DISTINCT event_id) as event_count, COALESCE('.$countAggregate.'(sale_count),0) as sale_count, SUM(net_sales_minor) as net_sales_minor, COALESCE(SUM(known_net_sales_minor),0) as known_net_sales_minor, CASE WHEN COUNT(paid_total_minor) = COUNT(*) THEN '.$paidAggregate.'(paid_total_minor) ELSE NULL END as paid_total_minor, COALESCE(SUM(selling_days),0) as selling_days, MIN(complete) as complete, MIN(local_date) as starts_on, MAX(ends_on) as ends_on')->groupBy($groupColumn);
-        if ($kind === 'customer_lifetime') {
+        if ($kind === 'customer_life') {
             $totals = DB::query()->fromSub(clone $groups, 'lifetime_customers')->selectRaw('COUNT(*) as customer_count, COALESCE(SUM(sale_count),0) as purchase_count, CASE WHEN COUNT(paid_total_minor) = COUNT(*) THEN SUM(paid_total_minor) ELSE NULL END as paid_total_minor')->first();
             $result['summary']['customer_count'] = (int) $totals->customer_count;
             $result['summary']['customer_purchase_count'] = (int) $totals->purchase_count;
@@ -344,7 +344,7 @@ class EventPerformance
                                 $known = $journey->every(fn ($purchase) => ($purchase['currency'] ?? null) === 'USD'
                                     && is_int($purchase['amount_minor'] ?? null) && is_int($purchase['refunded_minor'] ?? null));
                                 $paid = $known ? $journey->sum(fn ($purchase) => $purchase['amount_minor'] - $purchase['refunded_minor']) : null;
-                                $facts[] = $this->fact($tenant->id, 'customer_lifetime', $event->id.':lifetime:'.$customerId, (string) $customerId,
+                                $facts[] = $this->fact($tenant->id, 'customer_life', $event->id.':lifetime:'.$customerId, (string) $customerId,
                                     trim($profile->first_name.' '.$profile->last_name) ?: 'Customer', ['event_id' => $event->id, 'customer_id' => $customerId,
                                         'local_date' => $event->starts_on->toDateString(), 'ends_on' => $event->ends_on->toDateString(),
                                         'net_sales_minor' => null, 'known_net_sales_minor' => 0, 'paid_total_minor' => $paid,
@@ -365,7 +365,7 @@ class EventPerformance
                     // A concurrent identity import must not block event totals.
                     // Withhold every customer fact; reads still compare the old
                     // signature freshly and return preparing for that dimension.
-                    $this->facts($tenant, $area, $generation)->whereIn('kind', ['customer', 'customer_lifetime'])->delete();
+                    $this->facts($tenant, $area, $generation)->whereIn('kind', ['customer', 'customer_life'])->delete();
                     Log::notice('Event reporting customer evidence withheld', ['tenant_id' => (int) $tenant->id, 'area_id' => (string) $area->id,
                         'phase' => $customerInvalidated ? 'witness_validation' : 'final_dependency_or_access']);
                     $customerAccess = false;
@@ -813,13 +813,13 @@ class EventPerformance
     private function filtered(Tenant $tenant, TeamArea $area, string $generation, array $filters, string $kind): Builder
     {
         $q = $this->facts($tenant, $area, $generation)->where('kind', $kind)->where('local_date', '<=', $filters['to']);
-        in_array($kind, ['event', 'team_member', 'customer_lifetime'], true) ? $q->where('ends_on', '>=', $filters['from']) : $q->where('local_date', '>=', $filters['from']);
+        in_array($kind, ['event', 'team_member', 'customer_life'], true) ? $q->where('ends_on', '>=', $filters['from']) : $q->where('local_date', '>=', $filters['from']);
         if (! empty($filters['event_id'])) {
             $q->where('event_id', $filters['event_id']);
         }
         foreach (['team_member_id' => 'team_member', 'customer_id' => 'customer'] as $filter => $dimension) {
             if (! empty($filters[$filter])) {
-                if ($dimension === $kind || $dimension === 'customer' && $kind === 'customer_lifetime') {
+                if ($dimension === $kind || $dimension === 'customer' && $kind === 'customer_life') {
                     $q->where('group_key', hash('sha256', (string) $filters[$filter]));
                 }
                 $ids = $this->facts($tenant, $area, $generation)->where('kind', $dimension)->where('group_key', hash('sha256', (string) $filters[$filter]))->select('event_id');

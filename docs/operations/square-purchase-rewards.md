@@ -72,8 +72,10 @@ Teams event details expose customer/campaign results for current authorized
 managers even when the original Square show has no native Pay event/register.
 The same show buyer cohort can rank by show spending or recorded linked lifetime
 spending. Background EventPerformance workers aggregate before pagination;
-lifetime customers are counted once across selected shows. Existing reviewed
-source versions, dependency witnesses, issuer checks, stale-read invalidation and
+lifetime customers are counted once across selected shows. Report version 5 stores
+lifetime fact kinds within the released 16-character schema limit; native MySQL
+acceptance rebuilds both rankings. Existing reviewed source versions, dependency
+witnesses, issuer checks, stale-read invalidation and
 coverage notices remain mandatory. Assigned staff retain only their approved
 summary scope. Owned MySQL customer read views resolve original Pay receipt pool
 membership without cache writes, including cold or expired database caches.
