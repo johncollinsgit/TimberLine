@@ -5,7 +5,8 @@ Square order/payment/customer relationships. It never matches a card/name or
 copies a provider order. Conflicting claims remain in review. Source-only import
 markers and consent remain unchanged. Reviewed Core duplicate merges preserve
 source references, alias history and the existing rewards ledger; preview hashes
-reject changed records. Source, ledger and merge admission use current locked
+canonicalize object keys across native MySQL JSON storage and reject changed
+values. List order remains significant. Source, ledger and merge admission use current locked
 rows under the shared tenant account fence, including MySQL repeatable reads.
 Core review operations use an inactive `preview` state, so an abandoned or
 repeated review cannot strand a Pay wallet. Only that server-owned source/state
@@ -74,7 +75,9 @@ spending. Background EventPerformance workers aggregate before pagination;
 lifetime customers are counted once across selected shows. Existing reviewed
 source versions, dependency witnesses, issuer checks, stale-read invalidation and
 coverage notices remain mandatory. Assigned staff retain only their approved
-summary scope. Comparisons reuse the existing event/per-day reports; unknown or
+summary scope. Owned MySQL customer read views resolve original Pay receipt pool
+membership without cache writes, including cold or expired database caches.
+Comparisons reuse the existing event/per-day reports; unknown or
 incomplete coverage does not establish zero sales or campaign lift. Customer
 history and later online/membership windows reuse CustomerEventValueService.
 

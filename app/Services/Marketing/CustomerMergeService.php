@@ -97,9 +97,33 @@ class CustomerMergeService
         foreach ($operation->before_state['profiles'] ?? [] as $before) {
             $profile = MarketingProfile::query()->where('tenant_id', $operation->tenant_id)->whereKey($before['id'])->lockForUpdate()->first();
             abort_unless($profile && ! $profile->merged_at && ! $profile->archived_at
-                && \App\Services\PaymentsCore\Contract::hash($this->profileSnapshot($profile, true)) === \App\Services\PaymentsCore\Contract::hash($before),
+                && $this->snapshotHash($this->profileSnapshot($profile, true)) === $this->snapshotHash($before),
                 409, 'Customer records changed after the preview. Review the current history and balances again.');
         }
+    }
+
+    public function previewVersion(CustomerMergeOperation $operation): string
+    {
+        return $this->snapshotHash([$operation->id, $operation->status, $operation->before_state, $operation->updated_at?->toIso8601String()]);
+    }
+
+    /** MySQL JSON may reorder object keys; list order and all reviewed values remain significant. */
+    private function snapshotHash(array $snapshot): string
+    {
+        $normalize = function (array $value) use (&$normalize): array {
+            foreach ($value as $key => $item) {
+                if (is_array($item)) {
+                    $value[$key] = $normalize($item);
+                }
+            }
+            if (! array_is_list($value)) {
+                ksort($value, SORT_STRING);
+            }
+
+            return $value;
+        };
+
+        return \App\Services\PaymentsCore\Contract::hash($normalize($snapshot));
     }
 
     /**

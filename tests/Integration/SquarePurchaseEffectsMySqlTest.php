@@ -37,6 +37,39 @@ test('concurrent original purchase retries award once under the shared tenant fe
         ->and(app(CandleCashService::class)->currentBalance($this->profile))->toBe(1.8);
 });
 
+test('Core merge HTTP review survives native MySQL JSON storage and preserves rewards on replay', function () {
+    $donor = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Reviewed duplicate']);
+    app(CandleCashService::class)->addRewardAmountIdempotent($donor, 5, 'gift', 'reviewed-gift');
+    $base = '/workspace/customers/merges';
+    $preview = $this->actingAs($this->owner)->postJson($base.'/preview?tenant='.$this->tenant->slug, [
+        'profile_ids' => [$this->profile->id, $donor->id], 'survivor_profile_id' => $this->profile->id,
+        'request_id' => (string) Str::uuid(),
+    ])->assertOk()->json();
+    $url = $base.'/'.$preview['operation_id'].'/apply?tenant='.$this->tenant->slug;
+    $approval = ['expected_version' => $preview['version'], 'identity_confirmed' => true];
+    $this->postJson($url, $approval)->assertOk()->assertJsonPath('status', 'completed');
+    $this->postJson($url, $approval)->assertOk()->assertJsonPath('profile_id', $this->profile->id);
+    expect($donor->fresh()->merged_into_profile_id)->toBe($this->profile->id)
+        ->and(app(CandleCashService::class)->currentBalance($this->profile))->toBe(5.0)
+        ->and(CandleCashTransaction::where('marketing_profile_id', $this->profile->id)->where('source', 'gift')->count())->toBe(1);
+});
+
+test('event customer read views can resolve receipt pools with a cold or expired database cache', function (bool $expired) {
+    config(['pos_live.runtime_id' => 'fictional_event_cache', 'cache.default' => 'database', 'cache.prefix' => 'event-read-'.Str::uuid().':']);
+    \Illuminate\Support\Facades\Cache::purge('database');
+    $store = app(\App\Services\Pos\PosStore::class);
+    $key = 'pay-event-receipt-index-v1:'.hash('sha256', implode(':', [$store->db->getName(), $store->db->getDatabaseName(), $store->runtime(), $this->tenant->id]));
+    if ($expired) {
+        \Illuminate\Support\Facades\Cache::put($key, ['entries' => [], 'watermark' => null], now()->addMinute());
+        DB::table('cache')->where('key', config('cache.prefix').$key)->update(['expiration' => now()->subMinute()->timestamp]);
+    }
+    $before = DB::table('cache')->where('key', config('cache.prefix').$key)->first();
+    $result = app(\App\Services\Team\Studio\EventCustomerReadView::class)->run($this->tenant->id,
+        fn () => app(\App\Services\Reporting\PayEventReceiptIndex::class)->forPools($this->tenant->id, ['reviewed-pool']));
+    expect($result)->toBe(['ids' => [], 'review_items' => []])
+        ->and(DB::table('cache')->where('key', config('cache.prefix').$key)->first())->toEqual($before);
+})->with([false, true]);
+
 test('a merge waiting behind purchase earning retains the receipt and ledger on the canonical survivor', function () {
     $tenant = $this->tenant->id;
     $survivor = MarketingProfile::create(['tenant_id' => $tenant, 'first_name' => 'Reviewed survivor']);
