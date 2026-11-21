@@ -79,6 +79,12 @@ witnesses, issuer checks, stale-read invalidation and
 coverage notices remain mandatory. Assigned staff retain only their approved
 summary scope. Owned MySQL customer read views resolve original Pay receipt pool
 membership without cache writes, including cold or expired database caches.
+Dependency frame version 2 excludes only the native receipt's `reconciled_at`
+polling cursor from anchor and lifetime revision hashes. Unchanged pending Pay
+attempts can be observed without continuously invalidating customer rankings;
+all payment, snapshot/customer, stock and association fields remain fenced.
+The MySQL rebuild acceptance retains a pending attempt, advances its polling
+cursor, verifies both rankings, then rejects changed customer/payment evidence.
 Comparisons reuse the existing event/per-day reports; unknown or
 incomplete coverage does not establish zero sales or campaign lift. Customer
 history and later online/membership windows reuse CustomerEventValueService.

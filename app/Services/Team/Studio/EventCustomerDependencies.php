@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Schema;
 /** A private dependency frame, never another customer or commerce authority. */
 class EventCustomerDependencies
 {
-    public const VERSION = 1;
+    public const VERSION = 2;
 
     private const MAX_ROWS = 50000;
 
@@ -289,7 +289,7 @@ class EventCustomerDependencies
                     abort_if($index['review_items'] !== [], 409, 'Original customer receipt anchors need review.');
                     $store = app(PosStore::class);
                     $sales = $index['ids'] ? $this->bounded($store->rows('sales', $tenant->id)->whereIn('id', $index['ids']), self::MAX_ROWS) : collect();
-                    $revision[$event]['native'] = $sales->all();
+                    $revision[$event]['native'] = $this->nativeReceiptRevisions($sales);
                     foreach ($sales as $sale) {
                         $snapshot = app(PosService::class)->snapshot($sale);
                         abort_unless(($snapshot['binding']['environment'] ?? null) === 'live' && in_array($snapshot['terms']['stock_pool_id'] ?? null, $pools, true), 409, 'Original customer receipt scope changed.');
@@ -581,13 +581,21 @@ class EventCustomerDependencies
                         ->where('runtime_id', $store->runtime())->whereIn('sale_id', $sales->pluck('id')), ['id'])->all();
                 }
             }
-            $state['native_sales'] = $sales->all();
+            $state['native_sales'] = $this->nativeReceiptRevisions($sales);
             $state['native_associations'] = $associations->all();
             $state['provider_operations'] = $operations->all();
         }
 
         return ['keys' => $keys, 'order_tenders' => $orderTenders, 'website_parents' => $websiteParents, 'native_customers' => $nativeCustomers,
             'revision' => $state, 'dates' => $dates];
+    }
+
+    private function nativeReceiptRevisions(Collection $sales): array
+    {
+        // The reconciliation scheduler advances this polling cursor even when
+        // the retained attempt has no new evidence. Preserve every other field,
+        // including financial state, ownership, snapshot and stock references.
+        return $sales->map(fn ($sale) => (object) array_diff_key((array) $sale, ['reconciled_at' => true]))->all();
     }
 
     private function sourceRows(string $table, Builder $query, array $identifiers): Collection
