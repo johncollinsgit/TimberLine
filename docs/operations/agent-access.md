@@ -57,7 +57,7 @@ not authorize hotpatching, bypassing checks or running test fixtures in producti
 
 ## Windows direct SSH
 
-Computer account: `C:\Users\father`. The prepared client configuration uses:
+Computer account: `C:\Users\father`. The installed client configuration uses:
 
 | Local item | Location / value |
 | --- | --- |
@@ -77,8 +77,16 @@ or copy the Mac's identity. This setup does not require `ssh-agent`.
 The alias uses public-key-only batch authentication, `IdentitiesOnly yes`,
 `StrictHostKeyChecking yes`, a dedicated known-host file, ED25519 host keys,
 `UpdateHostKeys no`, and `ForwardAgent no`. It requests no PTY. The dedicated
-server key entry is intended to use `restrict`, disabling PTY, agent/X11/port
+server key entry uses `restrict`, disabling PTY, agent/X11/port
 forwarding and user rc files while allowing commands as `forge`.
+
+Direct batch SSH was successfully verified on November 21, 2026: the account
+was `forge` on `Backstage`, the active application symlink resolved, and a
+read-only Laravel transaction retrieved Modern Forestry's rewards policy and
+current reminder preview. Exactly one entry matched this dedicated key and
+its `restrict` option. Existing authorized-key entries were preserved.
+Separate computers can retain their own keys and simultaneous SSH connections;
+production releases must still be serialized through the protected workflow.
 
 Check effective configuration without exposing private-key contents:
 
