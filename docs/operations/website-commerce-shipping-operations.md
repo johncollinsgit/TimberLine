@@ -154,6 +154,28 @@ The normal dedicated worker command is:
 Marketing/Shopify resolvers, customer consent and messaging credits are excluded.
 Disabled historical rows stay blocked even after configuration is enabled.
 
+## Merchant purchase alerts
+
+For paid Website orders, merchant email and SMS alerts can be enabled
+independently of shopper receipts. Set
+`MANAGED_WEBSITE_MERCHANT_PURCHASE_ALERTS_ENABLED=true` and configure approved
+merchant contacts in `MANAGED_WEBSITE_MERCHANT_PURCHASE_ALERT_CONTACTS`. For
+example, `{"42":{"email":["orders@example.test"],"sms":["+12025550123"]}}` maps
+one email and one consenting phone number to tenant ID 42. Use E.164 phone
+numbers. Keep actual contacts in protected deployment configuration and reload
+the dedicated workers after changing the settings.
+
+Merchant emails need the existing approved transactional sender. SMS requires
+the merchant's verified, isolated Twilio sender and the normal metered tenant
+messaging account. The job uses the same durable Website queue. It excludes
+shopper identity and private order links from merchant alerts. Offers in other
+systems need their own verified order integration before this job can notify
+for them.
+
+The order must reach paid state through verified Website checkout or a fully
+settled Website invoice. Deposit, review, unpaid, and practice states do not
+send purchase alerts. Merchant contacts removed before delivery are blocked.
+
 Confirmed Stripe refunds record a separate receipt in the same accepted native
 transaction, keyed to the original payment and provider refund. It freezes that
 refund amount and the cumulative confirmed refunds, labels the original order

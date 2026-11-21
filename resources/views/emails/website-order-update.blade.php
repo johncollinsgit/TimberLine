@@ -12,7 +12,11 @@
     @if($update['kind'] === 'refund_confirmed')
         <p><strong>Refund confirmed: ${{ number_format($update['refund_cents'] / 100, 2) }} {{ strtoupper($update['currency']) }}</strong><br>Total refunded at this update: ${{ number_format($update['refunded_cents'] / 100, 2) }}<br>Original order total: ${{ number_format($update['total_cents'] / 100, 2) }}</p>
     @endif
-    @if($update['tracking_number'])<p>{{ $update['carrier'] }} tracking: {{ $update['tracking_number'] }}</p>@endif
-    <p><a href="{{ $update['order_url'] }}" rel="noreferrer">View your order and shipping updates</a></p>
-    <p style="font-size:12px;color:#536273">Keep this private order link secure. This is a transactional update about your order.</p>
+    @if($update['kind'] === 'merchant_paid_email')
+        <p><strong>Total paid: ${{ number_format($update['total_cents'] / 100, 2) }} {{ strtoupper($update['currency']) }}</strong></p>
+    @else
+        @if($update['tracking_number'])<p>{{ $update['carrier'] }} tracking: {{ $update['tracking_number'] }}</p>@endif
+        <p><a href="{{ $update['order_url'] }}" rel="noreferrer">View your order and shipping updates</a></p>
+        <p style="font-size:12px;color:#536273">Keep this private order link secure. This is a transactional update about your order.</p>
+    @endif
 </body></html>

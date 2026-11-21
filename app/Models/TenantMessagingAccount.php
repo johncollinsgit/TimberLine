@@ -48,4 +48,9 @@ class TenantMessagingAccount extends Model
     {
         return $this->status === self::STATUS_READY && $this->suspended_at === null;
     }
+
+    public function smsSenderFingerprint(): string
+    {
+        return hash('sha256', json_encode([$this->provider_account_id, $this->provider_resource_id, $this->sender_identifier], JSON_THROW_ON_ERROR));
+    }
 }

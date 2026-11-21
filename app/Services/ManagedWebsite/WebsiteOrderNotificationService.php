@@ -54,6 +54,9 @@ class WebsiteOrderNotificationService
             return;
         }
         $tenant = Tenant::query()->findOrFail($order->tenant_id);
+        if (in_array($kind, ['confirmed', 'invoice_payment'], true)) {
+            $this->recordMerchantPurchase($order, $tenant);
+        }
         $readiness = $this->readiness($tenant);
         $recipient = trim((string) data_get($order->customer_snapshot, 'email'));
         $validRecipient = filter_var($recipient, FILTER_VALIDATE_EMAIL) !== false && ! preg_match('/[\r\n]/', $recipient);
@@ -83,11 +86,11 @@ class WebsiteOrderNotificationService
     }
 
     /** Safe setup-health data; no live provider calls, credentials, or shopper data. */
-    public function readiness(Tenant $tenant): array
+    public function readiness(Tenant $tenant, bool $merchant = false): array
     {
         $blockers = [];
-        if (! config('managed_website.order_notifications_enabled') || (! in_array($tenant->id, (array) config('managed_website.order_notifications_tenant_ids', []), true)
-            && ! app(SelfServiceWebsiteCollectionAccess::class)->allows($tenant))) {
+        if (! $merchant && (! config('managed_website.order_notifications_enabled') || (! in_array($tenant->id, (array) config('managed_website.order_notifications_tenant_ids', []), true)
+            && ! app(SelfServiceWebsiteCollectionAccess::class)->allows($tenant)))) {
             $blockers[] = 'Native order notifications are not enabled for this workspace.';
         }
         if (! app(TenantModuleAccessResolver::class)->canAccess($tenant->id, 'managed_website')) {
@@ -115,6 +118,19 @@ class WebsiteOrderNotificationService
                 $blockers[] = 'The approved platform SES sender, rollout and budget are not ready.';
             }
         }
+        $blockers = [...$blockers, ...$this->queueBlockers()];
+        $site = $merchant ? null : TenantSite::query()->forTenantId($tenant->id)->first();
+        $url = $site ? $this->publicUrl($site) : null;
+        if (! $merchant && (! $url || ! app(ManagedWebsiteService::class)->publicPage($tenant, ''))) {
+            $blockers[] = 'A published native Website and verified public host are required for private order links.';
+        }
+
+        return ['ready' => $blockers === [], 'blockers' => $blockers, 'public_url' => $url, 'mailer' => $identity['mailer'], 'transport' => $transport];
+    }
+
+    private function queueBlockers(): array
+    {
+        $blockers = [];
         $queueConnection = trim((string) config('managed_website.order_notifications_connection'));
         if (trim((string) config('managed_website.order_notifications_queue')) === '' || $queueConnection === '') {
             $blockers[] = 'Select a dedicated native order notification queue.';
@@ -130,13 +146,69 @@ class WebsiteOrderNotificationService
             // SQS retains its existing durable-driver admission. Its external
             // visibility timeout needs operator review, not a fabricated local proof.
         }
-        $site = TenantSite::query()->forTenantId($tenant->id)->first();
-        $url = $site ? $this->publicUrl($site) : null;
-        if (! $url || ! app(ManagedWebsiteService::class)->publicPage($tenant, '')) {
-            $blockers[] = 'A published native Website and verified public host are required for private order links.';
+
+        return $blockers;
+    }
+
+    private function recordMerchantPurchase(WebsiteOrder $order, Tenant $tenant): void
+    {
+        $merchant = app(WebsiteMerchantPurchaseAlerts::class);
+        if (! $merchant->isPaidOrder($order)) {
+            return;
+        }
+        foreach (['email', 'sms'] as $channel) {
+            $contacts = $merchant->contacts($tenant->id, $channel);
+            if ($contacts === []) {
+                continue;
+            }
+            $identity = $this->merchantIdentity($tenant, $channel);
+            foreach ($contacts as $recipient) {
+                $snapshot = $merchant->snapshot($order, $tenant, $channel, $recipient) + ($identity ?? []);
+                $key = hash('sha256', json_encode(['merchant_paid', $order->id, $channel, $recipient], JSON_THROW_ON_ERROR));
+                $notification = WebsiteOrderNotification::query()->firstOrCreate(['tenant_id' => $tenant->id, 'transition_key' => $key], [
+                    'website_order_id' => $order->id, 'kind' => $snapshot['kind'], 'snapshot' => $snapshot,
+                    'status' => $identity ? 'pending' : 'blocked', 'next_attempt_at' => $identity ? now() : null,
+                    'failure_code' => $identity ? null : 'not_ready_at_transition',
+                ]);
+                if ($notification->wasRecentlyCreated && $identity) {
+                    DB::afterCommit(fn () => $this->enqueue($notification->id));
+                }
+            }
+        }
+    }
+
+    private function merchantIdentity(Tenant $tenant, string $channel): ?array
+    {
+        if ($channel === 'email') {
+            return $this->readiness($tenant, merchant: true)['ready']
+                ? $this->identity() + ['identity_fingerprint' => $this->identityFingerprint()] : null;
+        }
+        if ($this->queueBlockers() !== [] || ! app(TenantModuleAccessResolver::class)->canAccess($tenant->id, 'managed_website')) {
+            return null;
         }
 
-        return ['ready' => $blockers === [], 'blockers' => $blockers, 'public_url' => $url, 'mailer' => $identity['mailer'], 'transport' => $transport];
+        return app(WebsiteMerchantPurchaseAlerts::class)->smsIdentity($tenant->id);
+    }
+
+    private function merchantRowIdentity(WebsiteOrderNotification $row, Tenant $tenant, string $channel): ?array
+    {
+        $contacts = app(WebsiteMerchantPurchaseAlerts::class)->contacts($tenant->id, $channel);
+
+        return in_array(data_get($row->snapshot, 'recipient'), $contacts, true) ? $this->merchantIdentity($tenant, $channel) : null;
+    }
+
+    private function readyToSend(WebsiteOrderNotification $row, WebsiteOrder $order, Tenant $tenant): bool
+    {
+        if ($channel = app(WebsiteMerchantPurchaseAlerts::class)->channel($row->kind)) {
+            $identity = $this->merchantRowIdentity($row, $tenant, $channel);
+
+            return $identity !== null && array_intersect_key($row->snapshot, $identity) === $identity;
+        }
+        $readiness = $this->readiness($tenant);
+        $expectedUrl = $readiness['public_url'] ? $this->orderUrl($order, $readiness['public_url']) : null;
+
+        return $readiness['ready'] && $expectedUrl === data_get($row->snapshot, 'order_url')
+            && hash_equals((string) data_get($row->snapshot, 'identity_fingerprint', ''), $this->identityFingerprint());
     }
 
     public function deliver(int $id): void
@@ -149,10 +221,8 @@ class WebsiteOrderNotificationService
             }
             $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($row->tenant_id)->find($row->website_order_id);
             $tenant = Tenant::query()->find($row->tenant_id);
-            $readiness = $tenant ? $this->readiness($tenant) : ['ready' => false, 'public_url' => null];
-            $expectedUrl = $order && $readiness['public_url'] ? $this->orderUrl($order, $readiness['public_url']) : null;
-            if (! $order || ! in_array($order->source, ['native', 'staff_quote', 'staff_draft_invoice'], true) || ! $readiness['ready'] || $expectedUrl !== data_get($row->snapshot, 'order_url')
-                || ! hash_equals((string) data_get($row->snapshot, 'identity_fingerprint', ''), $this->identityFingerprint())) {
+            if (! $tenant || ! $order || ! in_array($order->source, ['native', 'staff_quote', 'staff_draft_invoice'], true)
+                || ! $this->readyToSend($row, $order, $tenant)) {
                 $row->update(['status' => 'blocked', 'failure_code' => 'readiness_changed', 'next_attempt_at' => null]);
 
                 return null;
@@ -175,17 +245,20 @@ class WebsiteOrderNotificationService
         if (! $notification) {
             return;
         }
-        $transport = app(WebsiteOrderNotificationTransport::class);
-        try {
-            $mail = $transport->prepare($notification);
-        } catch (\Throwable $exception) {
-            $this->finish($notification, ['status' => $notification->attempts >= 5 ? 'failed' : 'retry', 'failure_code' => 'local_preparation_failed',
-                'next_attempt_at' => $notification->attempts >= 5 ? null : now()->addMinutes(min(60, 2 ** $notification->attempts))]);
+        $merchantSms = $notification->kind === 'merchant_paid_sms';
+        if (! $merchantSms) {
+            $transport = app(WebsiteOrderNotificationTransport::class);
+            try {
+                $mail = $transport->prepare($notification);
+            } catch (\Throwable $exception) {
+                $this->finish($notification, ['status' => $notification->attempts >= 5 ? 'failed' : 'retry', 'failure_code' => 'local_preparation_failed',
+                    'next_attempt_at' => $notification->attempts >= 5 ? null : now()->addMinutes(min(60, 2 ** $notification->attempts))]);
 
-            return;
+                return;
+            }
         }
         try {
-            $messageId = $transport->send($notification, $mail);
+            $messageId = $merchantSms ? app(WebsiteMerchantPurchaseAlerts::class)->sendSms($notification) : $transport->send($notification, $mail);
         } catch (\Throwable $exception) {
             // A send exception can follow provider acceptance. Never guess and resend.
             $this->finish($notification, ['status' => 'unknown', 'failure_code' => 'transport_acceptance_unknown']);
@@ -207,11 +280,19 @@ class WebsiteOrderNotificationService
             $row = WebsiteOrderNotification::query()->forTenantId($order->tenant_id)->where('website_order_id', $order->id)->lockForUpdate()->findOrFail($id);
             abort_unless(in_array($row->status, ['blocked', 'failed'], true), 422, 'Only a blocked or locally failed update can be retried here.');
             $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($order->tenant_id)->findOrFail($order->id);
-            $readiness = $this->readiness(Tenant::query()->findOrFail($order->tenant_id));
-            abort_unless($readiness['ready'] && $this->current($row, $order), 422, 'Restore notification readiness and review the current order state first.');
+            $tenant = Tenant::query()->findOrFail($order->tenant_id);
+            abort_unless($this->current($row, $order), 422, 'Restore notification readiness and review the current order state first.');
             $snapshot = $row->snapshot;
-            abort_unless(filter_var($snapshot['recipient'] ?? '', FILTER_VALIDATE_EMAIL) && preg_match('/^[A-Za-z0-9]{56}$/', (string) $order->lookup_token), 422, 'This saved recipient or private order link needs review.');
-            $row->update(['snapshot' => array_merge($snapshot, $this->identity(), ['identity_fingerprint' => $this->identityFingerprint(), 'order_url' => $this->orderUrl($order, $readiness['public_url'])]),
+            if ($channel = app(WebsiteMerchantPurchaseAlerts::class)->channel($row->kind)) {
+                $identity = $this->merchantRowIdentity($row, $tenant, $channel);
+                abort_unless($identity, 422, 'Restore the approved merchant recipient and sender first.');
+            } else {
+                $readiness = $this->readiness($tenant);
+                abort_unless($readiness['ready'], 422, 'Restore notification readiness and review the current order state first.');
+                abort_unless(filter_var($snapshot['recipient'] ?? '', FILTER_VALIDATE_EMAIL) && preg_match('/^[A-Za-z0-9]{56}$/', (string) $order->lookup_token), 422, 'This saved recipient or private order link needs review.');
+                $identity = $this->identity() + ['identity_fingerprint' => $this->identityFingerprint(), 'order_url' => $this->orderUrl($order, $readiness['public_url'])];
+            }
+            $row->update(['snapshot' => array_replace($snapshot, $identity),
                 'status' => 'pending', 'attempts' => 0, 'failure_code' => null, 'next_attempt_at' => now()]);
             $this->audit($order, $row, $actor, 'notification_retry_requested', $reason);
             DB::afterCommit(fn () => $this->enqueue($row->id));
@@ -320,6 +401,10 @@ class WebsiteOrderNotificationService
         }
         if ($row->kind === 'payment_review') {
             return in_array($order->payment_status, ['payment_review', 'paid_review'], true);
+        }
+        $merchant = app(WebsiteMerchantPurchaseAlerts::class);
+        if ($merchant->channel($row->kind)) {
+            return $merchant->isPaidOrder($order) && $order->refunded_cents <= (int) data_get($row->snapshot, 'refunded_cents', 0);
         }
         if (in_array($row->kind, ['confirmed', 'invoice_payment'], true)) {
             // An earlier refund must not hide a later accepted installment receipt.
