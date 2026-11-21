@@ -661,6 +661,27 @@ test('shopify embedded rewards policy update increments version and writes audit
         ->and((int) data_get((array) $audit?->result, 'policy_version', 0))->toBe(2);
 });
 
+test('Modern Forestry reminder previews use the checkout minimum even when the saved policy says fifty', function () {
+    $this->tenant->update(['slug' => 'modern-forestry']);
+    TenantMarketingSetting::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'key' => TenantRewardsPolicyService::POLICY_KEY,
+        'value' => ['value_model' => ['minimum_purchase_dollars' => 50]],
+    ]);
+    TenantMarketingSetting::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'key' => TenantRewardsPolicyService::NOTIFICATION_KEY,
+        'value' => ['templates' => ['sms_body' => 'Use your reward on orders over {{ minimum_purchase }} before {{ expiration_date }}.']],
+    ]);
+
+    $policy = app(TenantRewardsPolicyService::class)->resolve($this->tenant->id);
+    $message = 'on qualifying merchandise purchases of $40.00 or more, before taxes and shipping';
+
+    expect($policy['value_model']['minimum_purchase_dollars'])->toEqual(40)
+        ->and(app(\App\Services\Marketing\TenantRewardsPolicyMessagePreviewService::class)->emailReminder($policy)['body'])->toContain($message)
+        ->and(app(\App\Services\Marketing\TenantRewardsPolicyMessagePreviewService::class)->smsReminder($policy)['body'])->toContain($message);
+});
+
 test('shopify embedded rewards alpha defaults endpoint applies starter policy', function () {
     $response = $this
         ->withHeaders(retailRewardsApiHeaders())

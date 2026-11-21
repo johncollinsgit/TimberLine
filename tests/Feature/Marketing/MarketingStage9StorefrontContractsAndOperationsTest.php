@@ -2,6 +2,7 @@
 
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashReward;
+use App\Models\CustomerExternalProfile;
 use App\Models\EventInstance;
 use App\Models\MarketingProfile;
 use App\Models\MarketingStorefrontEvent;
@@ -155,6 +156,38 @@ test('storefront app proxy signature mode is accepted when enabled', function ()
         ->assertOk()
         ->assertJsonPath('ok', true)
         ->assertJsonPath('meta.auth_mode', 'app_proxy');
+});
+
+test('cart reward status requires the signed owner and available credit or a confirmed open code', function () {
+    config()->set('marketing.shopify.app_proxy_secret', 'stage9-proxy-secret');
+    config()->set('services.shopify.stores.retail.shop', 'modernforestry.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'stage9-retail-client');
+    $tenant = stage9MapStore('retail', 'modernforestry.myshopify.com', 'modern-forestry');
+    $profile = MarketingProfile::factory()->create(['tenant_id' => $tenant->id]);
+    CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenant->id, 'marketing_profile_id' => $profile->id, 'provider' => 'shopify',
+        'integration' => 'native', 'store_key' => 'retail', 'external_customer_id' => '771',
+    ]);
+    $status = fn (string $customer, array $extra = []) => $this->getJson(route('marketing.shopify.candle-cash.status', stage9AppProxySignedQuery([
+        'shop' => 'modernforestry.myshopify.com', 'timestamp' => (string) time(), 'logged_in_customer_id' => $customer, ...$extra,
+    ], 'stage9-proxy-secret')));
+
+    $status('771')->assertOk()->assertJsonPath('data.cart_reward_available', false);
+    $cash = app(CandleCashService::class);
+    $cash->addPoints($profile, 10, 'earn', 'test', 'seed');
+    $status('771')->assertOk()
+        ->assertJsonPath('data.cart_reward_available', true)
+        ->assertJsonPath('data.redemption_rules.online_minimum_subtotal_cents', 4000);
+    $status('', ['shopify_customer_id' => '771'])->assertOk()->assertJsonPath('data.cart_reward_available', false);
+
+    $cash->requestStorefrontRedemption($profile, $cash->storefrontReward($tenant->id));
+    $sync = \Mockery::mock(CandleCashShopifyDiscountService::class);
+    $sync->shouldReceive('ensureDiscountForRedemption')->twice()->andReturn(
+        ['checkout_usable' => true], ['checkout_usable' => false],
+    );
+    app()->instance(CandleCashShopifyDiscountService::class, $sync);
+    $status('771')->assertOk()->assertJsonPath('data.cart_reward_available', true);
+    $status('771')->assertOk()->assertJsonPath('data.cart_reward_available', false);
 });
 
 test('storefront reward balance stays isolated to the verified shop tenant', function () {

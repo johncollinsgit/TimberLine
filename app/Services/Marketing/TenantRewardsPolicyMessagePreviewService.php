@@ -55,6 +55,7 @@ class TenantRewardsPolicyMessagePreviewService
         $expiration = (array) ($policy['expiration_and_reminders'] ?? []);
         $templates = (array) ($expiration['templates'] ?? []);
         $tokens = $this->tokens($policy, $reward, $context);
+        $templates = $this->updateMinimumWording($templates, $policy);
         $programName = $this->stringOrDefault($tokens['program_name'] ?? null, 'Rewards');
 
         return [
@@ -73,7 +74,7 @@ class TenantRewardsPolicyMessagePreviewService
             'body' => $this->renderTemplate(
                 $this->stringOrDefault(
                     $templates['email_body'] ?? null,
-                    'Hi {{ first_name }}, you still have {{ reward_value }} in {{ program_name }}. Use up to {{ max_redeem }} on orders over {{ minimum_purchase }} before {{ expiration_date }}. See your rewards: {{ rewards_url }}'
+                    'Hi {{ first_name }}, you still have {{ reward_value }} in {{ program_name }}. Use up to {{ max_redeem }} {{ minimum_purchase_requirement }} before {{ expiration_date }}. See your rewards: {{ rewards_url }}'
                 ),
                 $tokens
             ),
@@ -95,12 +96,13 @@ class TenantRewardsPolicyMessagePreviewService
         $expiration = (array) ($policy['expiration_and_reminders'] ?? []);
         $templates = (array) ($expiration['templates'] ?? []);
         $tokens = $this->tokens($policy, $reward, $context);
+        $templates = $this->updateMinimumWording($templates, $policy);
 
         return [
             'body' => $this->renderTemplate(
                 $this->stringOrDefault(
                     $templates['sms_body'] ?? null,
-                    'Hi {{ first_name }}, you still have {{ reward_value }} in {{ program_name }}. Use up to {{ max_redeem }} on orders over {{ minimum_purchase }} before {{ expiration_date }}. {{ sms_lead }} {{ rewards_url }}'
+                    'Hi {{ first_name }}, you still have {{ reward_value }} in {{ program_name }}. Use up to {{ max_redeem }} {{ minimum_purchase_requirement }} before {{ expiration_date }}. {{ sms_lead }} {{ rewards_url }}'
                 ),
                 $tokens
             ),
@@ -194,11 +196,33 @@ class TenantRewardsPolicyMessagePreviewService
             'reward_value' => $rewardValueLabel,
             'max_redeem' => '$'.number_format($maxRedeem, 2),
             'minimum_purchase' => $minimumPurchaseLabel,
+            'minimum_purchase_requirement' => isset($value['online_minimum_subtotal_cents'])
+                ? 'on qualifying merchandise purchases of '.$minimumPurchaseLabel.' or more, before taxes and shipping,'
+                : 'on orders over '.$minimumPurchaseLabel,
             'expiration_date' => $expirationDate,
             'days_until_expiration' => $daysUntilExpiration !== null ? (string) $daysUntilExpiration : '0',
             'rewards_url' => $rewardsUrl,
             'sms_lead' => $this->smsLead($expiration),
         ];
+    }
+
+    protected function updateMinimumWording(array $templates, array $policy): array
+    {
+        if (! isset($policy['value_model']['online_minimum_subtotal_cents'])) {
+            return $templates;
+        }
+
+        foreach (['email_body', 'sms_body'] as $channel) {
+            if (is_string($templates[$channel] ?? null)) {
+                $templates[$channel] = str_replace(
+                    'on orders over {{ minimum_purchase }}',
+                    '{{ minimum_purchase_requirement }}',
+                    $templates[$channel]
+                );
+            }
+        }
+
+        return $templates;
     }
 
     /**

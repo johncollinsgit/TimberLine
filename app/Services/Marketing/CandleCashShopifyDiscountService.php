@@ -27,6 +27,12 @@ query CandleCashDiscountByCode($code: String!) {
         title
         startsAt
         endsAt
+        status
+        asyncUsageCount
+        usageLimit
+        minimumRequirement {
+          ... on DiscountMinimumSubtotal { greaterThanOrEqualToSubtotal { amount } }
+        }
         customerGets {
           appliesOnOneTimePurchase
           appliesOnSubscription
@@ -171,12 +177,21 @@ GRAPHQL;
             throw new RuntimeException('This online reward does not match the tenant per-order amount.');
         }
 
+        $minimumCents = $channelRules['online_minimum_subtotal_cents'] ?? null;
+        $checkoutRequirements = $minimumCents === null ? [] : [
+            'minimumRequirement' => [
+                'subtotal' => ['greaterThanOrEqualToSubtotal' => number_format($minimumCents / 100, 2, '.', '')],
+            ],
+            'usageLimit' => 1,
+        ];
+
         $lookup = $client->query(self::LOOKUP_BY_CODE_QUERY, [
             'code' => $rewardCode,
         ]);
 
         $existing = $this->discountIdentifiersFromPayload($lookup['codeDiscountNodeByCode'] ?? null);
         if ($existing !== null) {
+            $checkoutUsable = ($existing['status'] ?? null) === 'ACTIVE' && ($existing['usage_count'] ?? null) === 0;
             $amountChanged = ($existing['value_type'] ?? null) !== null && (
                 $existing['value_type'] !== 'DiscountAmount'
                 || $existing['discount_amount'] !== $amount
@@ -184,17 +199,20 @@ GRAPHQL;
             );
             if (! $this->combinesWithMatches($existing['combines_with'] ?? null, $desiredCombinesWith)
                 || ($purchaseEligibility !== [] && ($existing['purchase_eligibility'] ?? null) !== $purchaseEligibility)
-                || $amountChanged) {
+                || $amountChanged
+                || ($minimumCents !== null && (($existing['minimum_subtotal_cents'] ?? null) !== $minimumCents || ($existing['usage_limit'] ?? null) !== 1))) {
                 $existing = $this->updateDiscountCombinesWith(
                     $client,
                     $existing,
                     $desiredCombinesWith,
                     $purchaseEligibility,
-                    $amountChanged ? $amount : null
+                    $amountChanged ? $amount : null,
+                    $checkoutRequirements
                 );
             }
 
             return [
+                'checkout_usable' => $checkoutUsable,
                 'discount_id' => $existing['discount_id'],
                 'discount_node_id' => $existing['discount_node_id'],
                 'store_key' => (string) ($store['key'] ?? ''),
@@ -204,7 +222,7 @@ GRAPHQL;
         }
 
         $data = $client->query(self::CREATE_BASIC_DISCOUNT_MUTATION, [
-            'basicCodeDiscount' => $this->basicDiscountInput($redemption),
+            'basicCodeDiscount' => [...$this->basicDiscountInput($redemption), ...$checkoutRequirements],
         ]);
 
         $payload = $data['discountCodeBasicCreate'] ?? null;
@@ -223,6 +241,7 @@ GRAPHQL;
         }
 
         return [
+            'checkout_usable' => true,
             'discount_id' => $created['discount_id'],
             'discount_node_id' => $created['discount_node_id'],
             'store_key' => (string) ($store['key'] ?? ''),
@@ -476,7 +495,13 @@ GRAPHQL;
             ] : null;
         }
 
+        $minimumSubtotal = data_get($discount, 'minimumRequirement.greaterThanOrEqualToSubtotal.amount');
+
         return [
+            'minimum_subtotal_cents' => is_numeric($minimumSubtotal) ? (int) round((float) $minimumSubtotal * 100) : null,
+            'usage_limit' => $discount['usageLimit'] ?? null,
+            'usage_count' => $discount['asyncUsageCount'] ?? null,
+            'status' => $discount['status'] ?? null,
             'discount_id' => null,
             'discount_node_id' => $discountNodeId !== '' ? $discountNodeId : null,
             'starts_at' => trim((string) ($discount['startsAt'] ?? '')) ?: null,
@@ -556,6 +581,11 @@ GRAPHQL;
             default => $default,
         };
 
+        // Protect the qualifying merchandise floor in carts that also contain gift cards.
+        if (isset(app(CandleCashChannelPolicy::class)->rules($tenantId)['online_minimum_subtotal_cents'])) {
+            $combinesWith['productDiscounts'] = false;
+        }
+
         // Shopify combines discount classes, not our reward-code identities.
         // Allowing ORDER combinations also allows two Candle Cash codes together.
         if ($this->isFlagshipTenant($tenantId) || (int) ($redemptionRules['max_codes_per_order'] ?? 1) === 1) {
@@ -631,7 +661,8 @@ GRAPHQL;
         array $existingDiscount,
         array $desiredCombinesWith,
         array $purchaseEligibility = [],
-        ?float $amount = null
+        ?float $amount = null,
+        array $checkoutRequirements = []
     ): array {
         $discountNodeId = trim((string) ($existingDiscount['discount_node_id'] ?? ''));
         if ($discountNodeId === '') {
@@ -642,6 +673,7 @@ GRAPHQL;
             'id' => $discountNodeId,
             'basicCodeDiscount' => [
                 'combinesWith' => $this->normalizedCombinesWith($desiredCombinesWith),
+                ...$checkoutRequirements,
                 ...($purchaseEligibility !== [] || $amount !== null ? ['customerGets' => [
                     ...$purchaseEligibility,
                     ...($amount !== null ? ['value' => ['discountAmount' => [

@@ -134,6 +134,20 @@ rewards, import, connection, or webhook lanes.
   adjustment. Historical canceled-but-live codes require separate Shopify
   deactivation; never treat a local cancellation as provider confirmation.
 
+## Candle Cash online purchase minimum
+
+- Shopify enforces the Modern Forestry tenant's configured qualifying subtotal
+  and single-use cap on each issued online code. Product and order discounts
+  cannot combine with Candle Cash. The tenant's existing shipping-discount
+  policy still applies. Sale prices count as merchandise prices.
+- After deployment, recheck active Shopify `CC-` codes so any issued during the
+  transition also have the new minimum and single-use cap.
+- Cart progress reads the signed shopper's reward availability and Shopify cart
+  line prices before Candle Cash. Checkout is on Shopify Grow and uses Shopify's
+  discount validation. The connected retail theme owns the cart page and drawer.
+- The public Rewards Program FAQ is Shopify page content. Publish its relevant
+  changes separately from the Git-connected theme.
+
 ## Read-only production checks
 
 Run these only when a production status check is needed. They do not import,

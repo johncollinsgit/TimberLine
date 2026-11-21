@@ -94,7 +94,7 @@ class TenantRewardsPolicyService
         $current = $this->corePolicy($tenantId);
         $allowedPatch = $this->bridgeLegacyReminderOffsets($this->allowedPatch($patch));
         $merged = $this->deepMerge($current, $allowedPatch);
-        $normalized = $this->normalizeCorePolicy($merged);
+        $normalized = $this->normalizeCorePolicy($merged, $tenantId);
         $controls = $this->fieldControls($normalized, $context);
 
         $errors = $this->mergeErrors(
@@ -133,7 +133,7 @@ class TenantRewardsPolicyService
         $current = $this->corePolicy($tenantId);
         $allowedPatch = $this->bridgeLegacyReminderOffsets($this->allowedPatch($patch));
         $merged = $this->deepMerge($current, $allowedPatch);
-        $normalized = $this->normalizeCorePolicy($merged);
+        $normalized = $this->normalizeCorePolicy($merged, $tenantId);
         $controls = $this->fieldControls($normalized, $context);
         $restrictedErrors = (bool) ($context['bypass_restricted_fields'] ?? false)
             ? []
@@ -303,7 +303,7 @@ class TenantRewardsPolicyService
             'team_access' => $this->operationsService->normalizeTeamAccess(is_array($teamAccess) ? $teamAccess : []),
         ];
 
-        return $this->normalizeCorePolicy($normalized);
+        return $this->normalizeCorePolicy($normalized, $tenantId);
     }
 
     /**
@@ -474,10 +474,11 @@ class TenantRewardsPolicyService
      * @param  array<string,mixed>  $input
      * @return array<string,mixed>
      */
-    protected function normalizeCorePolicy(array $input): array
+    protected function normalizeCorePolicy(array $input, ?int $tenantId): array
     {
         $identity = (array) ($input['program_identity'] ?? []);
         $value = (array) ($input['value_model'] ?? []);
+        $onlineMinimumCents = app(CandleCashChannelPolicy::class)->rules($tenantId)['online_minimum_subtotal_cents'] ?? null;
         $earning = (array) ($input['earning_rules'] ?? []);
         $redemption = (array) ($input['redemption_rules'] ?? []);
         $expiration = (array) ($input['expiration_and_reminders'] ?? []);
@@ -513,7 +514,10 @@ class TenantRewardsPolicyService
                 'points_per_dollar' => (int) ($value['points_per_dollar'] ?? CandleCashService::DEFAULT_LEGACY_POINTS_PER_CANDLE_CASH),
                 'redeem_increment_dollars' => round(max(0.01, (float) ($value['redeem_increment_dollars'] ?? 10)), 2),
                 'max_redeemable_per_order_dollars' => round(max(0.01, (float) ($value['max_redeemable_per_order_dollars'] ?? 10)), 2),
-                'minimum_purchase_dollars' => round(max(0, (float) ($value['minimum_purchase_dollars'] ?? 0)), 2),
+                'minimum_purchase_dollars' => $onlineMinimumCents === null
+                    ? round(max(0, (float) ($value['minimum_purchase_dollars'] ?? 0)), 2)
+                    : $onlineMinimumCents / 100,
+                ...($onlineMinimumCents === null ? [] : ['online_minimum_subtotal_cents' => $onlineMinimumCents]),
                 'rounding_behavior' => $this->enumOrDefault($value['rounding_behavior'] ?? null, ['nearest_cent', 'floor', 'ceiling'], 'nearest_cent'),
                 'max_wallet_balance_dollars' => $this->nullablePositiveFloat($value['max_wallet_balance_dollars'] ?? null),
             ],
@@ -576,7 +580,7 @@ class TenantRewardsPolicyService
                 'max_open_codes' => max(1, (int) ($finance['max_open_codes'] ?? 1)),
                 'breakage_reporting_visible' => (bool) ($finance['breakage_reporting_visible'] ?? true),
                 'fraud_sensitivity_mode' => $this->enumOrDefault($finance['fraud_sensitivity_mode'] ?? null, ['low', 'balanced', 'high'], 'balanced'),
-                'require_minimum_order_for_redemption' => (bool) ($finance['require_minimum_order_for_redemption'] ?? false),
+                'require_minimum_order_for_redemption' => $onlineMinimumCents !== null || (bool) ($finance['require_minimum_order_for_redemption'] ?? false),
                 'manual_grant_approval_threshold_dollars' => $this->nullablePositiveFloat($finance['manual_grant_approval_threshold_dollars'] ?? null),
             ],
             'access_state' => [
@@ -814,7 +818,7 @@ class TenantRewardsPolicyService
         $fieldControls = $this->fieldControls($policy, $context);
         $reminderHistory = $tenantId !== null ? $this->reminderLogService->recentForTenant($tenantId) : [];
         $supportActionHistory = $tenantId !== null ? $this->auditService->recentSupportActionsForTenant($tenantId) : [];
-        $alphaReference = $this->alphaReferencePolicy($policy);
+        $alphaReference = $this->alphaReferencePolicy($policy, $tenantId);
         $readiness = $this->readinessService->evaluate($tenantId, $policy, [
             'versioning' => $versioning,
             'messages' => $messages,
@@ -945,9 +949,9 @@ class TenantRewardsPolicyService
      * @param  array<string,mixed>  $basePolicy
      * @return array<string,mixed>
      */
-    protected function alphaReferencePolicy(array $basePolicy): array
+    protected function alphaReferencePolicy(array $basePolicy, ?int $tenantId): array
     {
-        return $this->normalizeCorePolicy($this->deepMerge($basePolicy, $this->alphaDefaultPatch()));
+        return $this->normalizeCorePolicy($this->deepMerge($basePolicy, $this->alphaDefaultPatch()), $tenantId);
     }
 
     /**
@@ -1023,6 +1027,13 @@ class TenantRewardsPolicyService
             'team_access.support_role' => ['access' => 'editable_with_warning', 'message' => 'Support tools should stay limited to trusted operators.'],
             'team_access.automation_role' => ['access' => 'editable_with_warning', 'message' => 'Automation mode changes should stay limited to trusted operators.'],
         ];
+
+        if (isset($value['online_minimum_subtotal_cents'])) {
+            $controls['value_model.minimum_purchase_dollars'] = [
+                'access' => 'restricted',
+                'message' => 'The online minimum comes from the same configuration Shopify enforces at checkout.',
+            ];
+        }
 
         if (($value['currency_mode'] ?? 'fixed_cash') !== 'points_to_cash') {
             $controls['value_model.points_per_dollar'] = [

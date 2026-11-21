@@ -1387,6 +1387,7 @@ class MarketingShopifyIntegrationController extends Controller
         $rewardCreditLabelTitle = Str::title($rewardCreditLabel);
         $voteLockedJoinUrl = trim((string) data_get($integrationConfig, 'vote_locked_join_url', '')) ?: null;
         $rewardCodeRows = [];
+        $confirmedCartCode = false;
 
         foreach ($activeCodes as $row) {
             $platform = trim((string) ($row->platform ?? ''));
@@ -1396,11 +1397,11 @@ class MarketingShopifyIntegrationController extends Controller
 
             if ($isShopify) {
                 try {
-                    $this->ensureShopifyDiscountForCandleCashRedemption(
-                        $discountSyncService,
+                    $synced = $discountSyncService->ensureDiscountForRedemption(
                         $row,
                         $this->normalizeStoreKey($storeContext['store_key'] ?? null)
                     );
+                    $confirmedCartCode = $confirmedCartCode || ($synced['checkout_usable'] ?? false);
                     $discountSyncStatus = 'synced';
                     $applyPath = $this->candleCashApplyPath((string) $row->redemption_code);
                 } catch (\Throwable $e) {
@@ -1460,6 +1461,13 @@ class MarketingShopifyIntegrationController extends Controller
             $rewardCodeRows = [];
         }
 
+        $signedCustomerId = $this->normalizeShopifyCustomerId($request->query('logged_in_customer_id', ''));
+        $ownsReward = $profile && $signedCustomerId !== ''
+            && $request->attributes->get('marketing_storefront_auth_mode') === 'app_proxy'
+            && $this->profileFromShopifyCustomerId($signedCustomerId, $storeContext['store_key'] ?? null, $tenantId)?->is($profile);
+        $cartRewardAvailable = $ownsReward && ($redemptionAccess['redeem_enabled'] ?? false)
+            && ($confirmedCartCode || ($activeCodes->isEmpty() && ($storefrontRewardRows[0]['is_redeemable_now'] ?? false)));
+
         $this->logStorefrontEvent($request, 'widget_candle_cash_status_lookup', [
             'status' => $profile ? 'ok' : 'pending',
             'issue_type' => $profile ? null : (string) ($resolved['status'] ?? 'missing_identity'),
@@ -1498,6 +1506,7 @@ class MarketingShopifyIntegrationController extends Controller
             'balance' => $balancePayload,
             'storefront_reward' => $storefrontRewardRows[0] ?? null,
             'available_rewards' => $storefrontRewardRows,
+            'cart_reward_available' => $cartRewardAvailable,
             'consent' => [
                 'sms' => (bool) ($profile?->accepts_sms_marketing ?? false),
                 'email' => (bool) ($profile?->accepts_email_marketing ?? false),
