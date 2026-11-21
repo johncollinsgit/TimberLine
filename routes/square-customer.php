@@ -19,6 +19,8 @@ Route::middleware(['auth', 'verified', 'tenant.access'])->prefix('workspace/cust
 Route::middleware(['auth', 'verified', 'throttle:10,1'])->get('/workspace/customers/square/callback', [SquareCustomerOAuthController::class, 'callback'])->name('customers.square.callback');
 
 Route::middleware(['auth', 'verified', 'tenant.access'])->prefix('workspace/customers')->group(function (): void {
+    Route::post('/merges/preview', [\App\Http\Controllers\CustomerMergeController::class, 'preview'])->middleware('throttle:10,1')->name('customers.merges.preview');
+    Route::post('/merges/{operation}/apply', [\App\Http\Controllers\CustomerMergeController::class, 'apply'])->whereNumber('operation')->middleware('throttle:10,1')->name('customers.merges.apply');
     Route::get('/reconciliation', [\App\Http\Controllers\CustomerSourceReconciliationController::class, 'index'])->name('customers.reconciliation');
     Route::post('/reconciliation/restore', [\App\Http\Controllers\CustomerSourceReconciliationController::class, 'restore'])->middleware('throttle:12,1')->name('customers.reconciliation.restore');
     Route::post('/reconciliation/purchase-place', [\App\Http\Controllers\CustomerSourceReconciliationController::class, 'mapPurchasePlace'])->middleware('throttle:12,1')->name('customers.reconciliation.purchase-place');

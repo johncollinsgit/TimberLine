@@ -217,3 +217,24 @@ it('records a fractional-dollar redemption in the canonical ledger', function ()
         ->and((float) DB::table('candle_cash_transactions')->where('source', 'pos_reservation')
             ->where('marketing_profile_id', $this->profile->id)->value('candle_cash_delta'))->toBe(-2.49);
 });
+
+it('leaves only Core read-only previews inactive while retaining actual merge and reservation fences', function (string $source, string $status, bool $allowed): void {
+    $other = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Reviewed duplicate']);
+    $merges = app(CustomerMergeService::class);
+    $operation = $merges->createOperation($this->tenant->id, [$this->profile->id, $other->id], $other->id, 'core', (string) Str::uuid(), [], ['source' => $source]);
+    expect($operation->status)->toBe($source === 'core_customers' ? 'preview' : 'draft');
+    $operation->update(['status' => $status]);
+    if ($allowed) {
+        $hold = $this->service->reserve($this->tenant->id, $this->sale, 500, 'customer-approved');
+        expect($hold->state)->toBe('held');
+        expect(fn () => $merges->apply($operation))->toThrow(CustomerMergeException::class, 'A reward purchase or refund needs review');
+        expect($this->profile->fresh()->merged_into_profile_id)->toBeNull()
+            ->and(CandleCashBalance::find($this->profile->id)->balance)->toBe(7.345);
+    } else {
+        expect(fn () => $this->service->reserve($this->tenant->id, $this->sale, 500, 'customer-approved'))
+            ->toThrow(PosException::class, 'customer_identity_review_required');
+    }
+})->with([
+    ['core_customers', 'preview', true], ['core_customers', 'draft', false], ['core_customers', 'processing', false],
+    ['everbranch_wizard', 'draft', false], ['everbranch_wizard', 'preview', false],
+]);

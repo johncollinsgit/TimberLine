@@ -25,6 +25,8 @@ class TeamCustomerLookupController extends Controller
             $result = ['events' => app(EventCustomerCohort::class)->options($tenant->id)];
         } elseif ($action === 'detail') {
             $result = $lookup->details($tenant->id, (int) $request->route('profile'));
+            $result['marketing'] = app(\App\Services\Marketing\CustomerMarketingHistory::class)->allowed($tenant->id, $request->user())
+                ? app(\App\Services\Marketing\CustomerMarketingHistory::class)->read($tenant->id, (int) $result['customer']['id']) : null;
         } else {
             $cohort = null;
             if (isset($i['event_id'])) {

@@ -590,6 +590,12 @@ class SquareMarketingSyncService
                         } else {
                             $handle();
                         }
+                        if (! $dryRun && app(SquarePurchaseEffects::class)->policy($tenantId)) {
+                            $orderId = $type === 'square_orders_sync' ? ($payload['id'] ?? null) : ($type === 'square_payments_sync' ? ($payload['order_id'] ?? null) : null);
+                            if (is_string($orderId) && $orderId !== '' && app(SquarePurchaseEffects::class)->needsReconcile($tenantId, $orderId)) {
+                                \App\Jobs\ReconcileSquarePurchaseEffects::dispatch($tenantId, $orderId)->afterCommit();
+                            }
+                        }
                         $summary['processed']++;
                     } catch (\Throwable $e) {
                         $summary['errors']++;

@@ -71,6 +71,8 @@ final class PosCandleCashReservation
             if ($this->store->db->table('customer_merge_operation_members as member')
                 ->join('customer_merge_operations as operation', 'operation.id', '=', 'member.customer_merge_operation_id')
                 ->where('operation.tenant_id', $tenant)->where('member.marketing_profile_id', $profileId)
+                ->where(fn ($query) => $query->whereNull('operation.source')->orWhere('operation.source', '!=', 'core_customers')
+                    ->orWhere('operation.status', '!=', 'preview'))
                 ->whereNotIn('operation.status', ['completed', 'cancelled'])->lockForUpdate()->exists()) {
                 throw new PosException('customer_identity_review_required', 409);
             }

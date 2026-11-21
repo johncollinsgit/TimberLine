@@ -48,7 +48,7 @@
                 <tbody>
                     @forelse(data_get($snapshot, 'purchases', []) as $purchase)
                         <tr >
-                            <td >{{ $purchase['number'] }}</td>
+                            <td ><div>{{ $purchase['number'] }}</div><div class="customer-commerce-coverage">{{ substr($purchase['occurred_at'] ?? '', 0, 10) }}</div>@foreach($purchase['items'] ?? [] as $item)<div class="customer-commerce-coverage">{{ $item['quantity'] ?? '—' }} × {{ $item['title'] ?? 'Original item' }}</div>@endforeach</td>
                             <td >{{ ['online' => 'Online', 'in_person' => 'In person', 'unknown' => 'Not recorded'][$purchase['channel']] ?? 'Not recorded' }}</td>
                             <td >{{ ['paid' => 'Payment confirmed', 'partially_refunded' => 'Partially refunded', 'refunded' => 'Refunded', 'unverified' => 'Payment not verified'][$purchase['status']] ?? 'Payment not verified' }}</td>
                             <td >

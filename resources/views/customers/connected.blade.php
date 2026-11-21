@@ -14,9 +14,11 @@
                     @if($detail['customer']['phone'])<a class="min-h-11 py-2 underline" href="tel:{{ $detail['customer']['phone'] }}">{{ $detail['customer']['phone'] }}</a>@endif
                 </div>
             </section>
+            @if($canManage && $duplicates->isNotEmpty())@include('customers.merge-review')@endif
             <x-customer-commerce :snapshot="$detail['commerce']" :rewards-label="data_get($detail, 'commerce.rewards.label', 'Rewards')" />
             <x-customer-birthday :birthday="$detail['birthday'] ?? null" />
             @if($purchasePage > 1 || $purchaseHasMore)<nav class="flex flex-wrap items-center gap-3" aria-label="Customer purchase history"><span class="text-sm text-zinc-500">Linked purchases · page {{ $purchasePage }}</span>@if($purchasePage > 1)<a class="inline-flex min-h-11 items-center rounded-xl border px-4" href="{{ route('customers.profile', [...$query, 'profile'=>$profile->id, 'tenant'=>$tenant->slug, 'purchase_page'=>$purchasePage-1]) }}">Newer purchases</a>@endif@if($purchaseHasMore && $purchasePage < 100)<a class="inline-flex min-h-11 items-center rounded-xl border px-4" href="{{ route('customers.profile', [...$query, 'profile'=>$profile->id, 'tenant'=>$tenant->slug, 'purchase_page'=>$purchasePage+1]) }}">Older purchases</a>@endif</nav>@endif
+            @if($marketingHistory)@include('customers.marketing-history')@endif
             @if($squareSource)@include('customers.square-source')@endif
         @else
             <form method="GET" class="grid gap-4 rounded-2xl border bg-white p-5 sm:grid-cols-3 dark:bg-zinc-900">

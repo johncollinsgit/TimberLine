@@ -360,6 +360,12 @@ class SquareCustomerIdentityService
                     MarketingProfileLink::create(['tenant_id' => $tenantId, 'marketing_profile_id' => $profile->id, 'source_type' => $type,
                         'source_id' => $source->$key, 'match_method' => 'reviewed_square_customer_relation', 'source_meta' => ['square_customer_id' => $customerId, 'location_id' => $source->location_id, 'location_is_event' => false] + $this->binding($binding)]);
                 }
+                if ($type === 'square_payment' && $source->square_order_id) {
+                    $linked = app(SquarePurchaseCustomerLinker::class)->reconcile($tenantId, $source->square_order_id);
+                    if ($linked['status'] === 'review') {
+                        $conflicts++;
+                    }
+                }
             }
         }
 

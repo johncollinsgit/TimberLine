@@ -2705,7 +2705,7 @@ class MarketingShopifyIntegrationController extends Controller
         $birthdayProfile = $profile->birthdayProfile;
         $birthdayStatus = $birthdayRewardEngine->statusForProfile($birthdayProfile, ['tenant_id' => $tenantId]);
         $balance = $candleCashService->currentBalance($profile);
-        $minRewardCandleCash = $candleCashService->fixedRedemptionPoints($tenantId);
+        $minRewardCandleCash = $candleCashService->minimumRedemptionPoints($tenantId);
         $states = $this->widgetService->customerStatusStates($profile, (string) $resolved['status'], [
             'candle_cash_balance' => $balance,
             'min_reward_candle_cash' => $minRewardCandleCash,
@@ -3783,7 +3783,7 @@ class MarketingShopifyIntegrationController extends Controller
         $walletLabel = (string) data_get($customer, 'wallet_label', $rewardsLabel.' Wallet');
         $expirationMode = (string) ($expiration['expiration_mode'] ?? 'days_from_issue');
         $expirationDays = max(1, (int) ($expiration['expiration_days'] ?? 90));
-        $redeemIncrement = $candleCashService->fixedRedemptionAmount($tenantId);
+        $redeemIncrement = $candleCashService->redemptionRulesPayload($tenantId)['redeem_increment_dollars'];
         $maxRedeemable = $candleCashService->maxRedeemablePerOrderAmount($tenantId);
         $multiplierEnabled = $candleCashService->candleClubMultiplierEnabled($tenantId);
         $multiplierValue = $candleCashService->candleClubMultiplierValue($tenantId);

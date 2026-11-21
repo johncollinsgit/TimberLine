@@ -118,6 +118,7 @@ class CandleCashService
             'candle_club_multiplier_value' => round(max(1, $candleClubMultiplierValue), 2),
             'candle_club_free_shipping_enabled' => $candleClubFreeShippingEnabled,
             'channel_rules' => $channelRules,
+            'partial_redemption_enabled' => (bool) data_get($configured, 'partial_redemption_enabled', false),
         ];
     }
 
@@ -276,12 +277,13 @@ class CandleCashService
      */
     public function redemptionRulesPayload(?int $tenantId = null): array
     {
+        $increment = $this->programConfig($tenantId)['partial_redemption_enabled'] ? 1.0 : $this->fixedRedemptionAmount($tenantId);
         $payload = [
             'canonical_measurement_label' => '1 reward credit = $1.00',
-            'redeem_increment_dollars' => $this->fixedRedemptionAmount($tenantId),
-            'redeem_increment_formatted' => $this->formatRewardCurrency($this->fixedRedemptionAmount($tenantId)),
-            'redeem_increment_candle_cash' => $this->fixedRedemptionAmount($tenantId),
-            'redeem_increment_candle_cash_formatted' => $this->formatCandleCash($this->fixedRedemptionAmount($tenantId)),
+            'redeem_increment_dollars' => $increment,
+            'redeem_increment_formatted' => $this->formatRewardCurrency($increment),
+            'redeem_increment_candle_cash' => $increment,
+            'redeem_increment_candle_cash_formatted' => $this->formatCandleCash($increment),
             'max_redeemable_per_order_dollars' => $this->maxRedeemablePerOrderAmount($tenantId),
             'max_redeemable_per_order_formatted' => $this->formatRewardCurrency($this->maxRedeemablePerOrderAmount($tenantId)),
             'max_redemptions_per_order' => 1,
@@ -302,6 +304,13 @@ class CandleCashService
             $payload['channel_summary'] = 'Use up to '.$this->formatRewardCurrency($channels['in_person_amount']).' Candle Cash per in-person purchase or '
                 .$this->fixedRedemptionFormatted($tenantId).' online. Rewards apply to other purchases, excluding recurring Candle Club charges. '
                 .($payload['online_minimum_message'] ?? '').' '.$payload['daily_limit_message'];
+        }
+
+        if ($this->programConfig($tenantId)['partial_redemption_enabled']) {
+            $payload['partial_redemption_enabled'] = true;
+            $payload['channel_summary'] = 'Redeem available Candle Cash in $1 increments, up to '.$this->formatRewardCurrency($this->maxRedeemablePerOrderAmount($tenantId)).' online'
+                .($channels ? ' or '.$this->formatRewardCurrency($channels['in_person_amount']).' in person' : '').'. Remaining cents carry forward. '
+                .($payload['online_minimum_message'] ?? '').' '.($payload['daily_limit_message'] ?? '');
         }
 
         return $payload;
@@ -362,8 +371,20 @@ class CandleCashService
     public function storefrontRewardPointsCost(CandleCashReward $reward, ?int $tenantId = null): int
     {
         return $this->isStorefrontReward($reward, $tenantId)
-            ? $this->fixedRedemptionPoints($tenantId)
+            ? $this->minimumRedemptionPoints($tenantId)
             : (int) $reward->candle_cash_cost;
+    }
+
+    public function minimumRedemptionPoints(?int $tenantId = null): int
+    {
+        return $this->programConfig($tenantId)['partial_redemption_enabled'] ? 1 : $this->fixedRedemptionPoints($tenantId);
+    }
+
+    public function availableRedemptionAmount(float $balance, ?int $tenantId = null, ?int $cap = null): int
+    {
+        $cap ??= $this->fixedRedemptionPoints($tenantId);
+
+        return $this->programConfig($tenantId)['partial_redemption_enabled'] ? max(0, min($cap, (int) floor($balance))) : $cap;
     }
 
     public function storefrontRedemptionMatchesCurrentRules(
@@ -375,6 +396,10 @@ class CandleCashService
         $tenantId = $this->resolvedTenantId($tenantId, null, $redemption);
 
         if (! $this->isStorefrontReward($reward, $tenantId)) {
+            return true;
+        }
+
+        if ($this->programConfig($tenantId)['partial_redemption_enabled'] && app(CandleCashChannelPolicy::class)->issuedAmount($redemption) !== null) {
             return true;
         }
 
@@ -412,7 +437,7 @@ class CandleCashService
             return 0;
         }
 
-        return CandleCashRedemption::query()
+        $candidates = CandleCashRedemption::query()
             ->where('marketing_profile_id', $profile->id)
             ->where('reward_id', $reward->id)
             ->where(function ($query) use ($platform): void {
@@ -422,12 +447,14 @@ class CandleCashService
             ->where(function ($query): void {
                 $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
             })
-            ->where('candle_cash_spent', '!=', $this->fixedRedemptionPoints($tenantId))
-            ->update([
-                'status' => 'canceled',
-                'canceled_at' => now(),
-                'reconciliation_notes' => 'Canceled automatically after reward storefront standardization.',
-            ]);
+            ->where('candle_cash_spent', '!=', $this->fixedRedemptionPoints($tenantId))->get();
+        $staleIds = $candidates->reject(fn ($row) => $this->storefrontRedemptionMatchesCurrentRules($row, $reward, $tenantId))->modelKeys();
+
+        return CandleCashRedemption::whereKey($staleIds)->where('status', 'issued')->update([
+            'status' => 'canceled',
+            'canceled_at' => now(),
+            'reconciliation_notes' => 'Canceled automatically after reward storefront standardization.',
+        ]);
     }
 
     /** A failed response does not prove Shopify rejected the discount. Keep the original hold and code for retry. */
@@ -675,12 +702,16 @@ class CandleCashService
 
         $pointsCost = $this->storefrontRewardPointsCost($reward, $tenantId);
         $amount = $this->fixedRedemptionAmount($tenantId);
+        $rules = $this->redemptionRulesPayload($tenantId);
         $normalizedBalance = $balancePoints !== null ? CandleCashMeasurement::normalizeStoredAmount($balancePoints) : null;
+        if ($this->programConfig($tenantId)['partial_redemption_enabled']) {
+            $amount = max(1, $this->availableRedemptionAmount($normalizedBalance ?? 0, $tenantId));
+        }
 
         return [
             'id' => (int) $reward->id,
             'name' => 'Redeem '.$this->formatRewardCurrency($amount).' Reward Credit',
-            'description' => $this->redemptionRulesPayload($tenantId)['channel_summary'] ?? ('Apply '.$this->formatRewardCurrency($amount)
+            'description' => $rules['channel_summary'] ?? ('Apply '.$this->formatRewardCurrency($amount)
                 .' off this order. Reward credit is redeemed in '.$this->fixedRedemptionFormatted($tenantId).' increments, with a limit of '
                 .$this->formatRewardCurrency($this->maxRedeemablePerOrderAmount($tenantId)).' per order.'),
             'reward_type' => (string) $reward->reward_type,
@@ -690,11 +721,12 @@ class CandleCashService
             'candle_cash_amount' => $amount,
             'candle_cash_amount_formatted' => $this->formatRewardCurrency($amount),
             'is_redeemable_now' => $normalizedBalance !== null ? $normalizedBalance >= $pointsCost : null,
-            'redeem_increment_dollars' => $amount,
-            'redeem_increment_formatted' => $this->formatRewardCurrency($amount),
+            'redeem_increment_dollars' => $rules['redeem_increment_dollars'],
+            'redeem_increment_formatted' => $rules['redeem_increment_formatted'],
             'limit_per_order_dollars' => $this->maxRedeemablePerOrderAmount($tenantId),
             'limit_per_order_formatted' => $this->formatRewardCurrency($this->maxRedeemablePerOrderAmount($tenantId)),
             'max_redemptions_per_order' => 1,
+            'partial_redemption_enabled' => $this->programConfig($tenantId)['partial_redemption_enabled'],
         ];
     }
 
@@ -898,7 +930,10 @@ class CandleCashService
                 $cost = (int) $channels['in_person_amount'];
             }
             $current = CandleCashMeasurement::normalizeStoredAmount($balance->balance);
-            if ($current < $cost) {
+            if ($this->isStorefrontReward($reward, $tenantId) && ($inPerson || in_array($normalizedPlatform, ['shopify', 'public_lookup', 'modern_forestry_ios'], true))) {
+                $cost = $this->availableRedemptionAmount($current, $tenantId, $inPerson ? (int) $channels['in_person_amount'] : $this->fixedRedemptionPoints($tenantId));
+            }
+            if ($current < $cost || ($cost < 1 && $this->isStorefrontReward($reward, $tenantId) && $this->programConfig($tenantId)['partial_redemption_enabled'])) {
                 return [
                     'ok' => false,
                     'balance' => $current,
@@ -923,7 +958,7 @@ class CandleCashService
                 'issued_at' => now(),
                 'expires_at' => now()->addDays($expiryDays),
                 'redeemed_at' => null,
-                'redemption_context' => $channels !== null && $this->isStorefrontReward($reward, $tenantId) ? [
+                'redemption_context' => ($channels !== null || $this->programConfig($tenantId)['partial_redemption_enabled']) && $this->isStorefrontReward($reward, $tenantId) ? [
                     'tenant_id' => $tenantId,
                     'channel_policy' => ['version' => 1, 'tenant_id' => $tenantId, 'channel' => $inPerson ? 'in_person' : 'online',
                         'amount_cents' => $cost * 100, 'max_per_order_cents' => $cost * 100, 'recurring_charges_allowed' => false],

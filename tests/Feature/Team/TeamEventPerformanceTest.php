@@ -785,3 +785,33 @@ test('MySQL reviewed window and explicit-order digests cover both original order
         expect((int) DB::selectOne($query['query'], $query['bindings'])->n)->toBe(2);
     }
 });
+
+test('lifetime ranking retains the same show cohort while including original purchases at other shows', function () {
+    $event = performanceEvent($this);
+    $otherEvent = performanceEvent($this, 'Another fictional show', '2025-11-14');
+    $loyal = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Longtime buyer']);
+    $large = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Large show buyer']);
+    $outsider = MarketingProfile::create(['tenant_id' => $this->tenant->id, 'first_name' => 'Absent from this show']);
+    performanceCustomerOriginal($this, $event, $loyal, 'loyal-show', 1000);
+    performanceCustomerOriginal($this, $event, $large, 'large-show', 5000);
+    performanceCustomerOriginal($this, $otherEvent, $loyal, 'loyal-other', 10000, 0, 124);
+    performanceCustomerOriginal($this, $otherEvent, $outsider, 'outsider-other', 50000, 0, 124);
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    $url = $this->url.'&group_by=customer&sort=net_sales&event_id='.$event->id;
+    $eventRows = $this->actingAs($this->owner)->getJson($url)->assertOk()->json('rows');
+    $lifeRows = $this->getJson($url.'&rank_basis=lifetime')->assertOk()->assertJsonPath('summary.paid_total_minor', 16000)->json('rows');
+    expect(array_column($eventRows, 'id'))->toBe(array_map('strval', [$large->id, $loyal->id]))
+        ->and(array_column($lifeRows, 'id'))->toBe(array_map('strval', [$loyal->id, $large->id]))
+        ->and(array_column($lifeRows, 'paid_total_minor'))->toBe([11000, 5000]);
+});
+
+test('event customer insights require current financial authority and deny assigned staff private detail', function () {
+    $event = performanceEvent($this);
+    app(EventPerformance::class)->rebuild($this->tenant, $this->owner, $this->area);
+    $url = '/team/events/'.$event->id.'/customer-insights?tenant='.$this->tenant->slug;
+    $this->actingAs($this->owner)->getJson($url)->assertOk()->assertJsonPath('report.status', 'ready');
+    $staff = teamMember($this->tenant, 'member');
+    $event->update(['assigned_user_id' => $staff->id]);
+    $this->actingAs($staff)->getJson($url)->assertForbidden();
+    $this->actingAs($this->owner)->get('/team/events/'.$event->id.'/campaign-results/999?tenant='.$this->tenant->slug)->assertNotFound();
+});

@@ -122,3 +122,44 @@ test('Square reconciliation uses the same channel guards and a preview leaves th
     expect(fn () => $reconcile->markRedeemedManually($online, ['platform' => 'square', 'external_order_id' => 'different-order']))->toThrow(ValidationException::class);
     expect($online->fresh()->status)->toBe('issued');
 });
+
+test('an enrolled partial wallet can redeem whole dollars online and reuse or restore the exact issued amount', function () {
+    [$tenant, $profile, $reward] = channelRewardFixture(balance: 0);
+    \App\Models\TenantMarketingSetting::create(['tenant_id' => $tenant->id, 'key' => 'candle_cash_program_config', 'value' => ['partial_redemption_enabled' => true]]);
+    app()->forgetInstance(CandleCashService::class);
+    app(\App\Services\Tenancy\TenantMarketingSettingsResolver::class)->flushArrayCache();
+    $service = app(CandleCashService::class);
+    $service->addRewardAmountIdempotent($profile, 6.8, 'gift', 'fractional-wallet');
+    $payload = $service->storefrontRewardPayload($reward, 6.8, $tenant->id);
+    expect($payload['is_redeemable_now'])->toBeTrue()->and($payload['candle_cash_amount'])->toBe(6)
+        ->and($payload['redeem_increment_dollars'])->toBe(1.0);
+    $first = $service->requestStorefrontRedemption($profile, $reward);
+    $retry = $service->requestStorefrontRedemption($profile, $reward);
+    $code = CandleCashRedemption::findOrFail($first['redemption_id']);
+    expect($first['ok'])->toBeTrue()->and($retry['redemption_id'])->toBe($code->id)
+        ->and($service->redemptionAmountForIssuedCode($code))->toBe(6.0)->and($service->currentBalance($profile))->toBe(0.8);
+    $service->cancelIssuedRedemptionAndRestoreBalance($code);
+    expect($service->currentBalance($profile))->toBe(6.8);
+    Http::assertNothingSent();
+});
+
+test('partial in person earning keeps the existing cap and rejects a sub dollar balance', function () {
+    [$tenant, $profile, $reward] = channelRewardFixture(balance: 0);
+    \App\Models\TenantMarketingSetting::create(['tenant_id' => $tenant->id, 'key' => 'candle_cash_program_config', 'value' => ['partial_redemption_enabled' => true]]);
+    app()->forgetInstance(CandleCashService::class);
+    app(\App\Services\Tenancy\TenantMarketingSettingsResolver::class)->flushArrayCache();
+    $service = app(CandleCashService::class);
+    $service->addRewardAmountIdempotent($profile, 6.8, 'gift', 'wallet');
+    $first = $service->redeemReward($profile, $reward, 'square');
+    expect($first['ok'])->toBeTrue()->and($service->redemptionAmountForIssuedCode(CandleCashRedemption::findOrFail($first['redemption_id'])))->toBe(5.0)
+        ->and($service->currentBalance($profile))->toBe(1.8);
+});
+
+test('partial cash redemption leaves unrelated zero cost rewards available', function () {
+    [$tenant, $profile] = channelRewardFixture(balance: 0);
+    \App\Models\TenantMarketingSetting::create(['tenant_id' => $tenant->id, 'key' => 'candle_cash_program_config', 'value' => ['partial_redemption_enabled' => true]]);
+    app()->forgetInstance(CandleCashService::class);
+    app(\App\Services\Tenancy\TenantMarketingSettingsResolver::class)->flushArrayCache();
+    $free = CandleCashReward::create(['name' => 'Fictional free sample', 'candle_cash_cost' => 0, 'reward_type' => 'product', 'reward_value' => 'sample', 'is_active' => true]);
+    expect(app(CandleCashService::class)->redeemReward($profile, $free)['ok'])->toBeTrue();
+});

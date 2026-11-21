@@ -20,6 +20,7 @@ class ConnectedCustomersController extends Controller
         abort_unless($tenant instanceof Tenant && app(CustomerProfileAccess::class)->allows($request->user(), $tenant), 403);
         $input = $request->validate(['query' => ['nullable', 'string', 'min:2', 'max:120'],
             'event_id' => ['nullable', 'integer', 'min:1'], 'page' => ['sometimes', 'integer', 'min:1', 'max:100000'],
+            'marketing_page' => ['sometimes', 'integer', 'min:1', 'max:100000'],
             'purchase_page' => ['sometimes', 'integer', 'min:1', 'max:100']]);
         $canManage = false;
         try {
@@ -39,6 +40,9 @@ class ConnectedCustomersController extends Controller
         $lookup = app(TenantCustomerLookup::class);
         if ($id = $request->route('profile')) {
             $detail = $lookup->details($tenant->id, (int) $id);
+            if (! $request->expectsJson() && (int) $id !== (int) $detail['customer']['id']) {
+                return redirect()->route('customers.profile', ['profile' => $detail['customer']['id'], 'tenant' => $tenant->slug]);
+            }
             $profile = MarketingProfile::forTenantId($tenant->id)->findOrFail($detail['customer']['id']);
             if ($purchasePage > 1) {
                 $history = app(\App\Services\Marketing\CustomerCommerceSnapshotService::class)->forReportingProfile($profile, $tenant->id);
@@ -54,12 +58,27 @@ class ConnectedCustomersController extends Controller
         $cohort = isset($input['event_id']) ? app(EventCustomerCohort::class)->read($tenant->id, $input['event_id']) : null;
         $results = ! $profile && (filled($input['query'] ?? null) || $cohort)
             ? $lookup->search($tenant->id, $input['query'] ?? '', $cohort['profile_ids'] ?? null, $input['page'] ?? 1) : null;
-        $data = ['tenant' => $tenant, 'query' => $input, 'results' => $results, 'detail' => $detail,
+        $marketingHistory = $profile && app(\App\Services\Marketing\CustomerMarketingHistory::class)->allowed($tenant->id, $request->user())
+            ? app(\App\Services\Marketing\CustomerMarketingHistory::class)->read($tenant->id, $profile->id, $input['marketing_page'] ?? 1) : null;
+        $duplicates = $canManage && $profile ? MarketingProfile::forTenantId($tenant->id)->where('id', '!=', $profile->id)->whereNull('merged_into_profile_id')->whereNull('archived_at')
+            ->where(function ($q) use ($profile) {
+                $q->whereRaw('1 = 0');
+                if ($profile->normalized_phone) {
+                    $q->orWhere('normalized_phone', $profile->normalized_phone);
+                }
+                if ($profile->phone) {
+                    $q->orWhere('phone', $profile->phone);
+                }
+                if ($profile->normalized_email) {
+                    $q->orWhere('normalized_email', $profile->normalized_email);
+                }
+            })->limit(10)->get(['id', 'first_name', 'last_name']) : collect();
+        $data = ['duplicates' => $duplicates, 'marketingHistory' => $marketingHistory, 'tenant' => $tenant, 'query' => $input, 'results' => $results, 'detail' => $detail,
             'profile' => $profile, 'squareSource' => $squareSource, 'canManage' => $canManage, 'purchasePage' => $purchasePage, 'purchaseHasMore' => $purchaseHasMore,
             'events' => $canManage ? app(EventCustomerCohort::class)->options($tenant->id) : [], 'context' => $cohort];
 
         return ($request->expectsJson() ? response()->json(['tenant' => ['id' => $tenant->id, 'name' => $tenant->name, 'slug' => $tenant->slug],
-            'customer' => $detail['customer'] ?? null, 'commerce' => $detail['commerce'] ?? null, 'birthday' => $detail['birthday'] ?? null, 'results' => $results,
+            'customer' => $detail['customer'] ?? null, 'commerce' => $detail['commerce'] ?? null, 'birthday' => $detail['birthday'] ?? null, 'marketing' => $marketingHistory, 'results' => $results,
             'event_context' => $cohort ? array_diff_key($cohort, ['profile_ids' => true, 'relations' => true]) : null,
             'purchase_page' => $purchasePage, 'purchase_has_more' => $purchaseHasMore])
             : response()->view('customers.connected', $data))->header('Cache-Control', 'private, no-store');
