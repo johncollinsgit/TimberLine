@@ -12815,16 +12815,16 @@ CREATE TABLE `trajectory_allocation_details` (
   `revision` bigint unsigned NOT NULL,
   `line_index` smallint unsigned NOT NULL,
   `amount_cents` bigint NOT NULL,
-  `category` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `category` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `subcategory_record_id` bigint unsigned DEFAULT NULL,
   `program_record_id` bigint unsigned DEFAULT NULL,
-  `flow` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `settlement_status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'none',
-  `settlement_note` text COLLATE utf8mb4_unicode_ci,
-  `source_fingerprint` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `flow` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `settlement_status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'none',
+  `settlement_note` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `source_fingerprint` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `active` tinyint(1) NOT NULL DEFAULT '1',
   `invalidated_at` timestamp NULL DEFAULT NULL,
-  `invalidation_reason` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `invalidation_reason` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -12856,12 +12856,12 @@ CREATE TABLE `trajectory_assistant_turns` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `space_id` bigint unsigned NOT NULL,
   `user_id` bigint unsigned NOT NULL,
-  `request_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `request_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `question` text COLLATE utf8mb4_unicode_ci NOT NULL,
-  `context` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `response` longtext COLLATE utf8mb4_unicode_ci,
-  `state` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'processing',
+  `request_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_hash` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `question` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `context` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `response` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `state` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'processing',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -12915,8 +12915,8 @@ CREATE TABLE `trajectory_expense_notices` (
   `space_id` bigint unsigned NOT NULL,
   `user_id` bigint unsigned NOT NULL,
   `transaction_id` bigint unsigned NOT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `delivery_status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `delivery_status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
   `read_at` timestamp NULL DEFAULT NULL,
   `delivered_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
@@ -12999,10 +12999,10 @@ CREATE TABLE `trajectory_push_subscriptions` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `space_id` bigint unsigned NOT NULL,
   `user_id` bigint unsigned NOT NULL,
-  `endpoint_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `endpoint` text COLLATE utf8mb4_unicode_ci NOT NULL,
-  `keys` text COLLATE utf8mb4_unicode_ci NOT NULL,
-  `content_encoding` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'aes128gcm',
+  `endpoint_hash` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `endpoint` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `keys` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `content_encoding` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'aes128gcm',
   `disabled_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -13142,6 +13142,200 @@ CREATE TABLE `vision_ideas` (
   UNIQUE KEY `vision_ideas_slug_unique` (`slug`),
   KEY `vision_ideas_sort_order_index` (`sort_order`),
   KEY `vision_ideas_status_index` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `watershed_adjustments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `watershed_adjustments` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `player_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `school_year` int unsigned NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ws_adjustment_year` (`tenant_id`,`player_id`,`school_year`),
+  KEY `watershed_adjustments_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `watershed_applications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `watershed_applications` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `term_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `family_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `version` int unsigned NOT NULL DEFAULT '1',
+  `request_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `amount_cents` int unsigned NOT NULL DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ws_app_family_term` (`tenant_id`,`term_id`,`family_id`),
+  UNIQUE KEY `ws_app_request` (`tenant_id`,`request_id`),
+  KEY `watershed_applications_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `watershed_challenges`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `watershed_challenges` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `email` varchar(254) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `code_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `attempts` int unsigned NOT NULL DEFAULT '0',
+  `expires_at` timestamp NOT NULL,
+  `consumed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `watershed_challenges_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `watershed_deliveries`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `watershed_deliveries` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `delivery_key` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `provider_message_id` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ws_delivery_key` (`tenant_id`,`delivery_key`),
+  KEY `watershed_deliveries_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `watershed_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `watershed_events` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `event_key` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `action` varchar(60) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `actor_id` bigint unsigned DEFAULT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ws_event_key` (`tenant_id`,`event_key`),
+  KEY `watershed_events_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `watershed_family_states`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `watershed_family_states` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `family_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `preapproved` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ws_family_state` (`tenant_id`,`family_id`),
+  KEY `watershed_family_states_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `watershed_imports`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `watershed_imports` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `fingerprint` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `family_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ws_import_source` (`tenant_id`,`fingerprint`),
+  KEY `watershed_imports_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `watershed_invoices`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `watershed_invoices` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `application_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `amount_cents` int unsigned NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'unpaid',
+  `account_id` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `attempt_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `checkout_request` longtext COLLATE utf8mb4_unicode_ci,
+  `checkout_id` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `payment_intent_id` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `paid_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ws_invoice_app` (`application_id`),
+  KEY `watershed_invoices_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `watershed_releases`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `watershed_releases` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `application_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `player_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `application_version` int unsigned NOT NULL,
+  `answers` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sha256` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `form_version` varchar(60) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `signed_at` timestamp NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ws_release_version` (`application_id`,`application_version`,`player_id`),
+  KEY `watershed_releases_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `watershed_sessions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `watershed_sessions` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `family_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ws_session_token` (`token_hash`),
+  KEY `watershed_sessions_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `watershed_terms`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `watershed_terms` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `term_key` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `school_year` int unsigned NOT NULL,
+  `registration_open` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ws_term_key` (`tenant_id`,`term_key`),
+  KEY `watershed_terms_tenant_id_index` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `wax_inventories`;
@@ -14785,3 +14979,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (340,'2026_11_16_17
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (341,'2026_11_18_030000_make_trajectory_source_identity_exact',57);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (342,'2026_11_18_051000_create_trajectory_assistant_and_alerts',58);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (343,'2026_11_18_120000_create_trajectory_allocation_details',58);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (344,'2026_11_21_220000_create_watershed_registration',59);

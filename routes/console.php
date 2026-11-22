@@ -351,3 +351,5 @@ Artisan::command('campus-facilities:expire-voice', function () {
 Schedule::command('campus-facilities:expire-voice')->everyMinute()->withoutOverlapping(2);
 
 \Illuminate\Support\Facades\Schedule::command('customer-sources:renew-square --limit=200')->dailyAt('00:40')->withoutOverlapping();
+
+Schedule::command('watershed:process')->everyMinute()->withoutOverlapping(5)->runInBackground();

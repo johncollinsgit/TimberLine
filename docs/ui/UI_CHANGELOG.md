@@ -3804,3 +3804,7 @@ history. Campaigns show observed delivery and modeled purchase results. Teams
 show details and comparison reports support the same buyer cohort ranked by show
 or recorded lifetime spending, including original Square shows without a native
 Pay register. Unknown coverage and sent-only evidence remain labeled.
+
+## 2026-11-21 — Watershed co-op registration
+
+Added a private leadership workspace for family preapproval, application and placement decisions, class rosters, signed releases and email delivery status. Parent registration on the existing Watershed Site reuses Wren households and adds semester medical review, requested placements, co-op acknowledgement and payment after acceptance. Nursery is free; Kinder and older classes cost $75 per child.

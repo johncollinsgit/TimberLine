@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_21_220000_create_watershed_registration.php' => [
+        'test' => 'tests/Integration/WatershedMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['retained terms and signed records survive interruption before trailing delivery/import tables, repeated recovery and non-destructive rollback'],
+    ],
     '2026_11_18_120000_create_trajectory_allocation_details.php' => [
         'test' => 'tests/Integration/TrajectoryAttributionMySqlRecoveryTest.php',
         'scenarios' => ['encrypted category/program attribution survives creation before trailing indexes, repeated recovery and retained-data rollback; duplicate transaction/revision/line and incompatible named indexes reject without replacing source or historical allocations'],
