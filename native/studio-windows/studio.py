@@ -32,8 +32,8 @@ def form(parent,title,fields):
         if choices:
             widget=ttk.Combobox(pane,values=choices[0],state="readonly",width=44)
             widget.set(value)
-        elif label in {"Description","Caption","Sponsor brief"}:
-            widget=tk.Text(pane,height=4,width=45,wrap="word")
+        elif label in {"Description","Caption","Sponsor brief","Timed captions"}:
+            widget=tk.Text(pane,height=14 if label=="Timed captions" else 4,width=58,wrap="word")
             widget.insert("1.0",str(value))
         else:
             widget=ttk.Entry(pane,width=48)
@@ -92,7 +92,7 @@ class Studio:
                       ("Add cue",lambda:self.cue(True)),("Edit cue",self.cue),("Cut from cue",self.cut_from_cue),("Remove",lambda:self.remove("captions"))])
         self.add_tab("Cuts",[("Format","kind",80),("In (s)","start",70),("Out (s)","end",70),("Frame","framing",90),("Opening / label","label",400)],
                      [("Suggest cuts",self.suggest),("Add cut",lambda:self.cut(True)),("Edit cut",self.cut),
-                      ("Preview cut",self.preview),("Remove",lambda:self.remove("clips"))])
+                      ("Preview cut",self.preview),("Edit clip captions",self.clip_captions),("Remove",lambda:self.remove("clips"))])
         self.add_tab("Products",[("Variant ID","variant_id",260),("Name","label",240),("In (s)","start",90),("Out (s)","end",90)],
                      [("Suggest tags from catalog",self.catalog),("Add tag",lambda:self.tag(True)),("Edit tag",self.tag),("Remove",lambda:self.remove("product_tags"))])
         self.add_tab("Sponsors",[("Sponsor","sponsor",160),("Deliverable","kind",100),("Promised (s)","seconds",90),
@@ -433,6 +433,32 @@ class Studio:
                             framing=f["Framing"],burn_captions=f["Burn captions"]=="Yes")
                 if new:
                     cuts.append(prev)
+            self.save(update)
+
+    def clip_captions(self):
+        cut=self.p["clips"][self.selected("Cuts")]
+        if cut.get("timeline")!="source":
+            self.nav.select(2)
+            self.status.set("Edit the episode transcript to update this cut’s captions.")
+            return
+        track=next(s for s in self.p["sources"] if s["id"]==cut["camera"])
+        master=track["id"]==self.p["edit"]["camera"] and track["offset"]==0
+        cues=self.p["captions"] if master else track.get("source_captions",[])
+        lines=["WEBVTT",""]
+        for cue in cues:
+            lines.extend([media.stamp(cue["start"])+" --> "+media.stamp(cue["end"]),cue["text"],""])
+        f=form(self.app,"Edit timed captions for "+track["label"],[("Timed captions","\n".join(lines))])
+        if f:
+            value=f["Timed captions"]
+            edited=media.parse_captions(value)
+            if value.strip() not in {"","WEBVTT"} and not edited:
+                raise ValueError("Enter WebVTT or SRT timestamps and caption text.")
+            if any(c["end"]>track["duration"]+.005 for c in edited):
+                raise ValueError("A caption extends beyond the original clip.")
+            def update():
+                track["source_captions"]=edited
+                if master:
+                    self.p["captions"]=copy.deepcopy(edited)
             self.save(update)
 
     def preview(self):

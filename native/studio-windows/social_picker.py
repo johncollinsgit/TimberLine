@@ -42,6 +42,7 @@ class SocialPicker:
         ttk.Button(bar,text="Choose files or ZIPs…",command=self.choose).pack(side="left",padx=4)
         self.help_link=ttk.Button(bar,text="Open creator export",command=self.help)
         self.help_link.pack(side="right")
+        self.takeout=ttk.Button(bar,text="Open Google Takeout",command=lambda:webbrowser.open("https://takeout.google.com/"))
         self.guide=tk.StringVar()
         ttk.Label(frame,textvariable=self.guide,wraplength=730).pack(fill="x",pady=8)
         self.tree=ttk.Treeview(frame,columns=("name","size","captions"),show="headings",selectmode="extended",height=10)
@@ -80,9 +81,11 @@ class SocialPicker:
         if self.platform.get()=="YouTube Shorts":
             self.guide.set("In YouTube Studio, open Content, find your Short and choose Download from its menu. For multiple uploads, select YouTube videos in Google Takeout and export as ZIP.")
             self.help_link.configure(text="YouTube download help")
+            self.takeout.pack(side="right",padx=4)
         else:
             self.guide.set("In Meta Accounts Center, open Your information and permissions, then export your information. Choose your profile and its posts, reels or videos, and download to your device.")
             self.help_link.configure(text="Open Meta Accounts Center")
+            self.takeout.pack_forget()
 
     def help(self):
         url=("https://support.google.com/youtube/answer/56100" if self.platform.get()=="YouTube Shorts"

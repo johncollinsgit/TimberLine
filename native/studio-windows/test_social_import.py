@@ -116,6 +116,44 @@ class SocialImportTests(unittest.TestCase):
         self.assertEqual(result,again)
         self.assertEqual(1,len(list(path.parent.iterdir())))
 
+    @unittest.skipUnless(__import__("os").name=="nt","Windows GUI")
+    def test_editor_import_action(self):
+        import os
+        import time
+        import tkinter as tk
+        from studio import Studio
+        from social_picker import SocialPicker
+        window=tk.Tk()
+        editor=Studio(window)
+        self.addCleanup(editor.close)
+        editor.attach(self.root,self.p)
+        clip=self.sample("ui.mp4")
+        clip.with_suffix(".vtt").write_text("WEBVTT\n\n00:00:00.100 --> 00:00:01.000\nGUI caption.\n")
+        def ready(predicate):
+            deadline=time.monotonic()+10
+            while not predicate() and time.monotonic()<deadline:
+                window.update()
+                time.sleep(.02)
+            self.assertTrue(predicate())
+        picker=SocialPicker(editor)
+        window.update()
+        with patch("social_picker.filedialog.askopenfilenames",return_value=[str(clip)]):
+            picker.choose()
+        ready(lambda:not picker.busy)
+        self.assertEqual(("0",),picker.tree.selection())
+        self.assertEqual("ui.vtt",picker.caption.get())
+        with patch.object(os,"startfile") as player:
+            picker.preview()
+            ready(lambda:not picker.busy)
+            player.assert_called_once()
+            self.assertTrue(media.metadata(player.call_args.args[0])["video"])
+        picker.submit.invoke()
+        ready(lambda:not editor.busy)
+        self.assertEqual("GUI caption.",editor.p["captions"][0]["text"])
+        self.assertEqual("source",editor.p["clips"][0]["timeline"])
+        self.assertEqual(1,len(editor.tables["Cuts"].get_children()))
+        self.assertEqual(editor.p,json.loads((self.root/"episode.json").read_text(encoding="utf-8")))
+
     def test_source_cut_keeps_own_sound_and_captions(self):
         master=self.sample("master.mp4",1,hz=200)
         video=self.sample("short.mp4",3,hz=700)
