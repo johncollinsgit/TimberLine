@@ -30,6 +30,15 @@
                 @endforeach
                 </div>
             @endforeach
+            @if(!$previewMode)
+                <div class="mm-nav-group"><p>Video</p>
+                    @if($makerMode)
+                        <a href="{{ $consoleBase }}/studio">Maker Studio</a>
+                    @else
+                        <a href="{{ route('marketplace.operator.videos') }}">Watch review queue</a>
+                    @endif
+                </div>
+            @endif
         </nav>
         <div class="mm-sidebar-bottom">
             @if($makerMode)<a href="/account">← Maker account</a><small>Independent makers welcome.<br>No Everbranch subscription required.</small>

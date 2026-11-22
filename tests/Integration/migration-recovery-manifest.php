@@ -3,6 +3,26 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_22_010000_create_marketplace_videos.php' => [
+        'test' => 'tests/Integration/MarketplaceVideoMySqlRecoveryTest.php',
+        'scenarios' => ['Retained rows survive interrupted creation, missing indexes, replay and application rollback.'],
+    ],
+    '2026_11_22_100000_create_maker_video_catalog_sources.php' => [
+        'test' => 'tests/Integration/MakerVideoCatalogMySqlRecoveryTest.php',
+        'scenarios' => ['Retained rows survive interrupted creation, missing indexes, replay and application rollback.'],
+    ],
+    '2026_11_22_100100_add_video_tag_to_marketplace_order_lines.php' => [
+        'test' => 'tests/Integration/MakerVideoCatalogMySqlRecoveryTest.php',
+        'scenarios' => ['Retained rows survive interrupted creation, missing indexes, replay and application rollback.'],
+    ],
+    '2026_11_22_110000_create_studio_offers.php' => [
+        'test' => 'tests/Integration/StudioSponsorshipMySqlRecoveryTest.php',
+        'scenarios' => ['Retained rows survive interrupted creation, missing indexes, replay and application rollback.'],
+    ],
+    '2026_11_22_110100_create_studio_briefs.php' => [
+        'test' => 'tests/Integration/StudioSponsorshipMySqlRecoveryTest.php',
+        'scenarios' => ['Retained rows survive interrupted creation, missing indexes, replay and application rollback.'],
+    ],
     '2026_11_21_220000_create_watershed_registration.php' => [
         'test' => 'tests/Integration/WatershedMySqlMigrationRecoveryTest.php',
         'scenarios' => ['retained terms and signed records survive interruption before trailing delivery/import tables, repeated recovery and non-destructive rollback'],

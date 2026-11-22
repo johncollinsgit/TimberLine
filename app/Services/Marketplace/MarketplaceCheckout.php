@@ -95,7 +95,7 @@ class MarketplaceCheckout
             }
             $group = $entry['group'];
             $groups[$group] ??= ['key' => $group, 'label' => $group === 'shipping' ? 'Ship to you' : (PickupLocation::query()->find((int) substr($group, 7))?->name ?? 'Pickup unavailable'), 'lines' => [], 'subtotal_cents' => 0];
-            $groups[$group]['lines'][] = ['key' => $key, 'listing' => $listing, 'quantity' => (int) $entry['quantity']];
+            $groups[$group]['lines'][] = ['key' => $key, 'listing' => $listing, 'quantity' => (int) $entry['quantity'], ...array_intersect_key($entry, ['video_tag_id' => true])];
             $groups[$group]['subtotal_cents'] += $listing->price_cents * $entry['quantity'];
         }
 
@@ -109,7 +109,13 @@ class MarketplaceCheckout
         $key = $listing->id.':'.$group;
         $total = (int) ($cart[$key]['quantity'] ?? 0) + $quantity;
         abort_unless($quantity > 0 && $total <= 99 && count($cart) < 100, 422);
-        $cart[$key] = ['listing_id' => $listing->id, 'quantity' => $total, 'group' => $group];
+        $tag = $request->session()->pull('marketplace.video_tags.'.$listing->id);
+        $attribution = $tag ? app(MakerVideoSales::class)->attribution($listing, (int) $tag) : [];
+        // Do not credit an entire mixed cart line to the last video clicked.
+        if (isset($cart[$key]) && ($cart[$key]['video_tag_id'] ?? null) !== ($attribution['video_tag_id'] ?? null)) {
+            $attribution = [];
+        }
+        $cart[$key] = ['listing_id' => $listing->id, 'quantity' => $total, 'group' => $group, ...$attribution];
         $request->session()->put('marketplace_cart', $cart);
     }
 
@@ -126,7 +132,7 @@ class MarketplaceCheckout
         $owner = $this->owner($request);
         $groups = $this->groups($request);
         abort_unless(isset($groups[$group]) && count($groups[$group]['lines']) <= 100, 422, 'This checkout group is empty.');
-        $selection = array_map(fn ($line) => ['cart_key' => $line['key'], 'listing_id' => $line['listing']->id, 'quantity' => $line['quantity']], $groups[$group]['lines']);
+        $selection = array_map(fn ($line) => ['cart_key' => $line['key'], 'listing_id' => $line['listing']->id, 'quantity' => $line['quantity'], ...array_intersect_key($line, ['video_tag_id' => true])], $groups[$group]['lines']);
         $fingerprint = hash('sha256', json_encode($selection));
         $checkout = DB::transaction(function () use ($request, $group, $uuid, $connection, $owner, $selection, $fingerprint): Checkout {
             Setting::query()->whereKey(1)->lockForUpdate()->firstOrFail();

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Guest recording · Everbranch Studio</title>
+  <link rel="stylesheet" href="./guest.css">
+  <script defer src="./guest.js"></script>
+</head>
+<body>
+  <main>
+    <header><span>Everbranch Studio</span><h1>Guest recording</h1>
+      <p>Record your side of the conversation. When you finish, download your recording and give the file to your host.</p>
+    </header>
+    <section aria-label="Camera and microphone">
+      <div class="screens"><figure><video id="preview" autoplay playsinline muted></video><figcaption>Your camera</figcaption></figure>
+      <figure id="remoteBox" hidden><video id="remote" autoplay playsinline controls></video><figcaption>Your guest or host</figcaption></figure></div>
+      <div class="controls"><label>Your name<input id="name" maxlength="80" autocomplete="given-name"></label>
+      <label>Record<select id="mode"><option value="video">Camera and microphone</option><option value="audio">Microphone only</option></select></label></div>
+      <div class="actions"><button id="allow">Enable devices</button><button id="start" disabled>Start recording</button>
+      <button id="stop" disabled>Stop recording</button><button id="release" disabled>Turn devices off</button></div>
+      <p role="status" id="status">Camera and microphone are off.</p>
+    </section>
+    <details><summary>Call another Studio guest</summary>
+      <p>Pair privately using a message to exchange the call details below. Both people can record locally. Headphones keep the other voice out of your microphone.</p>
+      <label>ICE server configuration, if your host supplied it<textarea id="ice" rows="2" spellcheck="false" placeholder="Optional JSON array of STUN or TURN servers"></textarea></label>
+      <div class="actions"><button id="invite" disabled>Create invitation</button><button id="answer" disabled>Answer invitation</button><button id="connect" disabled>Apply answer</button><button id="hang" disabled>End call</button></div>
+      <label>Paste details from the other person<textarea id="incoming" rows="2" spellcheck="false"></textarea></label>
+      <label>Your details to send<textarea id="outgoing" rows="2" readonly></textarea></label>
+      <p>Different networks may require the host’s TURN relay. You can also use your usual calling app while recording here.</p>
+    </details>
+    <section><h2>Saved recordings</h2><p>Your browser saves chunks on this device as you record. Keep this tab open while recording. A download can also recover saved chunks after an interruption.</p>
+      <ul id="archive"></ul></section>
+  </main>
+</body>
+</html>

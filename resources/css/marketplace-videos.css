@@ -1,0 +1,30 @@
+.watch-channel h1, .watch-editor h1 { overflow-wrap: anywhere; }
+.watch-filters, .watch-product form { margin: 1rem 0; }
+.watch-filters { display: flex; gap: 1.2rem; flex-wrap: wrap; }
+.watch-filters a { padding: .45rem 0; color: var(--muted); text-decoration: none; }
+.watch-filters [aria-current="page"] { color: var(--ink); font-weight: 700; border-bottom: 2px solid currentColor; }
+.watch-grid { display: grid; gap: 2rem; grid-template-columns: repeat(auto-fill, minmax(min(17rem,100%),1fr)); }
+.watch-tile { color: inherit; text-decoration: none; }
+.watch-tile img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; border-radius: .65rem; margin-bottom: .7rem; }
+.watch-tile h2, .watch-product h3 { font-size: 1.3rem; margin: .35rem 0; }
+.watch-feature { display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(15rem, 1fr); gap: clamp(1.4rem, 4vw, 4rem); }
+.watch-feature section, .watch-feature aside { min-width: 0; }
+.watch-player, .watch-preview { background: #171917; width: 100%; max-height: 72vh; object-fit: contain; border-radius: .65rem; }
+.watch-preview { max-height: 28rem; }
+.watch-product { padding: 1.15rem; background: var(--white); border: 1px solid var(--line); border-radius: .6rem; margin-bottom: .7rem; }
+.watch-product.watch-in-scene { border-color: var(--leaf); box-shadow: inset .24rem 0 var(--leaf); }
+.watch-time { display: inline-block; color: var(--leaf); text-decoration: underline; font: inherit; background: transparent; border: 0; cursor: pointer; padding: .3rem 0; width: fit-content; }
+.watch-form { margin-top: 1.6rem; }
+.watch-editor { max-width: 65rem; }
+.watch-editor .panel { min-width: 0; }
+.watch-editor .panel:has(table) { overflow-x: auto; }
+.watch-editor fieldset { display: grid; gap: 1rem; }
+.watch-editor legend { font-size: 1.3rem; font-weight: 700; }
+.watch-tag-row { display: grid; align-items: end; gap: .65rem; grid-template-columns: minmax(0,3fr) repeat(2,minmax(4rem,1fr)); padding: .5rem 0; }
+.watch-tag-row select { width: 100%; }
+.watch-preview[hidden], .watch-time[hidden], .watch-editor [hidden], .watch-channel [hidden] { display: none; }
+@media (max-width: 720px) {
+    .watch-feature { grid-template-columns: minmax(0,1fr); }
+    .watch-tag-row { grid-template-columns: 1fr 1fr; }
+    .watch-tag-row label:first-child { grid-column: span 2; }
+}

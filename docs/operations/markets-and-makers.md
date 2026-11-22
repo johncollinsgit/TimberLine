@@ -277,3 +277,11 @@ For a local fictional preview only, use the exact SQLite database
 `markets-makers-preview.sqlite`, `MARKETPLACE_DEMO=true`, local mail logging and
 checkout off. `marketplace:demo` refuses other environments. Normal staff
 authentication and dedicated Store owner/admin membership still apply.
+
+## Video shopping catalogs
+
+An invited, approved maker opens **Video shopping catalog** from the video editor. For Shopify, register a dedicated, non-embedded merchant-distributed app with the `read_products` scope, the authorization code grant, and expiring offline access. Register `https://<verified-marketplace-host>/integrations/video-catalog/shopify/callback` as an allowed redirect. Configure `MARKETPLACE_VIDEO_SHOPIFY_CLIENT_ID` and `MARKETPLACE_VIDEO_SHOPIFY_CLIENT_SECRET` server-side. The maker enters their permanent myshopify.com domain, completes Shopify authorization, browses published variants, then selects the items they want in the editor. The marketplace stores credentials encrypted, serializes token refresh, and checks variant publication and availability with a 45-second cache. Disconnecting the shop immediately removes its purchase links. [Shopify authorization code grant](https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/authorization-code-grant) · [Shopify product variants](https://shopify.dev/docs/api/admin-graphql/2026-10/queries/productVariants)
+
+For Everbranch, the maker links their workspace and a workspace owner or administrator uses **Share in maker videos** beside each published retail variant. The resulting product URL preselects that variant in the seller’s store. A matching approved marketplace allocation uses the marketplace purchase route when checkout, stock, and the maker’s accepted terms allow it. Disconnecting a catalog preserves the video.
+
+During the pilot, a direct Shopify or Everbranch visit earns the marketplace a 0% referral fee. The maker’s store keeps payment, fulfillment, and refund authority. External referrals report clicks. Marketplace video sales derive from reconciled, non-test order lines after discounts and refunded units, excluding orders held for review. A fully refunded line contributes zero sales and revenue. Checkout continues to apply the maker’s accepted marketplace rate once. Production services and sponsorships are separate bookings.

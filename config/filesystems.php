@@ -35,6 +35,13 @@ return [
     */
 
     'disks' => [
+        'marketplace_video' => [
+            'driver' => 'local',
+            'root' => storage_path('app/marketplace-video'),
+            'visibility' => 'private',
+            'serve' => false,
+            'throw' => true,
+        ],
         'rentals_private' => [
             'driver' => 'local',
             'root' => storage_path('app/rentals-private'),
