@@ -111,8 +111,11 @@ class EventCalendarWindow
         if ($dates) {
             return false; // Sparse explicit sessions never become a continuous range.
         }
-        $start = $record->starts_on?->toDateString();
-        $end = $record->ends_on?->toDateString() ?? $start;
+        $sourceRange = is_array($data['event_schedule'] ?? null) ? $data['event_schedule'] : [];
+        $start = $record->starts_on?->toDateString() ?? ($sourceRange['starts_on'] ?? null);
+        $end = $record->ends_on?->toDateString() ?? ($sourceRange['ends_on'] ?? $start);
+        $start = $this->validDate($start) ? $start : null;
+        $end = $this->validDate($end) ? $end : $start;
         if ($start || $end) {
             return ($start ?? $end) <= $window['to'] && $end >= $window['from'];
         }

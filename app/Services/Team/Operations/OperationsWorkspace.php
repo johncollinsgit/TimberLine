@@ -204,11 +204,13 @@ class OperationsWorkspace
     {
         $data = $record->data ?? [];
         $schedule = app(EventSchedule::class)->calendar($data, $record->starts_on?->toDateString(), $record->ends_on?->toDateString());
+        $sourceRange = is_array($data['event_schedule'] ?? null) ? $data['event_schedule'] : [];
+        $schedule = array_replace(array_intersect_key($sourceRange, array_flip(['starts_on', 'ends_on'])), $schedule);
         $acceptance = app(EventAcceptance::class)->project($record, $acceptanceHint);
 
         return ['id' => $record->id, 'area_id' => $record->area_id, 'kind' => $record->kind, 'title' => $record->title, 'status' => $record->status, 'version' => $record->version,
             'assigned_user_id' => $record->assigned_user_id, 'starts_on' => $record->starts_on?->toDateString(), 'ends_on' => $record->ends_on?->toDateString(),
-            'data' => ['event_schedule' => $schedule, 'source_schedule' => $data['source_schedule'] ?? $data['event_schedule']['source_schedule'] ?? null,
+            'data' => ['event_schedule' => $schedule, 'source_schedule' => $data['source_schedule'] ?? $data['event_schedule']['source_schedule'] ?? null, 'source_id' => $data['source_id'] ?? null,
                 'calendar_acceptance_status' => $acceptance['status'],
                 ...in_array($acceptance['basis'], ['asana_tags', 'source_unverified'], true) ? ['event_acceptance' => $acceptance] : []],
             'calendar_people' => $this->calendarPeople($record, $people), 'source' => $record->connection_id ? ['connection_id' => $record->connection_id, 'key' => $record->source_key] : null,
