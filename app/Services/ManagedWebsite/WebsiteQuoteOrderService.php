@@ -150,7 +150,7 @@ class WebsiteQuoteOrderService
             'lines.*.title' => 'nullable|string|max:190', 'lines.*.quantity' => 'required|integer|min:1|max:1000',
             'lines.*.unit_price_cents' => 'nullable|integer|min:0|max:100000000',
             'discount_code' => 'nullable|string|max:64', 'manual_discount' => 'nullable|array',
-            'fulfillment_method' => 'required|in:pickup,local_delivery', 'delivery_details' => 'nullable|string|max:1000',
+            'fulfillment_method' => 'required|in:pickup,local_delivery,service', 'delivery_details' => 'nullable|string|max:1000',
             'delivery_confirmed' => 'required|boolean', 'shipping_cents' => 'required|integer|min:0|max:100000000',
             'tax_cents' => 'required|integer|min:0|max:100000000', 'manual_tax_confirmed' => 'required|boolean', 'tax_basis' => 'nullable|string|max:1000',
             'deposit_type' => 'required|in:none,fixed,percent', 'deposit_value' => 'nullable|integer|min:1|max:100000000',
@@ -181,7 +181,7 @@ class WebsiteQuoteOrderService
         $subtotal = (int) array_sum(array_column($lines, 'line_total_cents'));
         abort_unless($subtotal <= 2000000000, 422, 'This invoice exceeds the supported amount limit.');
         $discount = $this->discounts->calculate($site, $lines, $data['discount_code'] ?? null, $data['manual_discount'] ?? null);
-        abort_if($data['fulfillment_method'] === 'pickup' && (int) $data['shipping_cents'] !== 0, 422, 'Pickup must not include a delivery charge.');
+        abort_if(in_array($data['fulfillment_method'], ['pickup', 'service'], true) && (int) $data['shipping_cents'] !== 0, 422, 'Pickup and service orders must have zero shipping.');
         abort_unless($data['fulfillment_method'] !== 'local_delivery' || filled($data['delivery_details'] ?? null), 422, 'Record the agreed delivery address and terms.');
         $total = $subtotal - $discount['amount_cents'] + (int) $data['tax_cents'] + (int) $data['shipping_cents'];
         abort_unless($total <= 2000000000, 422, 'This invoice exceeds the supported amount limit.');

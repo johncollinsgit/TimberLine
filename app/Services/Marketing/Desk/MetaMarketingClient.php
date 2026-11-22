@@ -19,6 +19,7 @@ class MetaMarketingClient
             ['instagram', 'reply'] => 'instagram_business_manage_messages',
             ['instagram', 'insights'] => 'instagram_business_manage_insights',
             ['facebook', 'publish'] => 'pages_manage_posts',
+            ['facebook', 'media'] => 'pages_read_engagement',
             ['facebook', 'reply'] => 'pages_messaging',
             ['facebook', 'insights'] => 'read_insights',
             default => '',

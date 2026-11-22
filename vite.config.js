@@ -13,6 +13,7 @@ export default defineConfig(() => ({
         'resources/css/marketplace.css',
         'resources/css/subscriptions-pilot-customer.css',
         'resources/js/marketplace-wallet.js',
+        'resources/js/marketplace-videos.js',
         'resources/js/website-shop-pay.js',
         'resources/js/marketplace-management.js',
         'resources/js/app.js',

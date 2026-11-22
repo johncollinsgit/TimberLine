@@ -17,6 +17,7 @@
 
 require __DIR__.'/highlevel.php';
 require __DIR__.'/marketing-desk.php';
+require __DIR__.'/studio-distribution.php';
 require __DIR__.'/marketplace.php';
 require __DIR__.'/service-proposals.php';
 

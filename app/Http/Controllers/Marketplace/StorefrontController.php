@@ -47,7 +47,12 @@ class StorefrontController extends Controller
     {
         $maker = Maker::query()->where('slug', $slug)->where('status', 'approved')->firstOrFail();
 
-        return view('marketplace.maker', ['maker' => $maker, 'listings' => $this->listings()->where('maker_id', $maker->id)->get()]);
+        $markets = \App\Models\Marketplace\Market::where('status', 'published')->where('ends_at', '>=', now())
+            ->whereHas('makers', fn ($q) => $q->where('marketplace_makers.id', $maker->id)->where('marketplace_market_makers.status', 'approved'))
+            ->orderBy('starts_at')->limit(6)->get();
+        $hasVideos = \App\Models\Marketplace\MakerVideo::published()->where('maker_id', $maker->id)->exists();
+
+        return view('marketplace.maker', ['maker' => $maker, 'markets' => $markets, 'hasVideos' => $hasVideos, 'listings' => $this->listings()->where('maker_id', $maker->id)->get()]);
     }
 
     public function cart(Request $request, MarketplaceCheckout $checkout)

@@ -20,8 +20,13 @@ return [
     // Only independently verified hosts belong here. No wildcard or tenant fallback.
     'host' => env('MARKETPLACE_VERIFIED_HOST', ''),
     'operator_user_ids' => array_filter(array_map('intval', explode(',', env('MARKETPLACE_OPERATOR_USER_IDS', '')))),
+    'video_shopify_client_id' => env('MARKETPLACE_VIDEO_SHOPIFY_CLIENT_ID'),
+    'video_shopify_client_secret' => env('MARKETPLACE_VIDEO_SHOPIFY_CLIENT_SECRET'),
     'api_version' => '2026-10',
     'currency' => 'USD',
+    'video_upload_mb' => max(1, min(2048, (int) env('MARKETPLACE_VIDEO_UPLOAD_MB', 512))),
+    'video_ffmpeg' => env('MARKETPLACE_VIDEO_FFMPEG', 'ffmpeg'),
+    'video_ffprobe' => env('MARKETPLACE_VIDEO_FFPROBE', 'ffprobe'),
     'country' => 'US',
     'timezone' => 'America/New_York',
     'demo' => (bool) env('MARKETPLACE_DEMO', false),

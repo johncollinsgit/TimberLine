@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <meta name="color-scheme" content="dark" />
+        <title>Everbranch Studio</title>
+        <link rel="icon" href="data:," />
+        <link rel="stylesheet" href="editor.css" />
+        <script defer src="icons.js"></script>
+        <script defer src="editor.js"></script>
+    </head>
+    <body>
+        <header class="top">
+            <div class="brand">
+                <span class="brandmark" aria-hidden="true"><i></i><i></i><i></i><i></i></span
+                ><b>Everbranch</b><span>Studio</span>
+            </div>
+            <button id="projectMenu" class="project-picker" aria-haspopup="menu" data-tip="Project menu">
+                <i data-icon="folder"></i><span id="projectTitle">Workspace</span
+                ><i data-icon="chevron"></i>
+            </button>
+            <nav class="workspaces" aria-label="Workspace">
+                <button data-work="edit" class="selected">Edit</button><button data-work="mix">Mix</button
+                ><button data-work="deliver">Deliver</button>
+            </nav>
+            <div class="top-end">
+                <span class="disk" id="diskState"><i></i> Local studio</span
+                ><button id="record" class="record" data-tip="Record cameras and microphone">
+                    <i class="record-dot"></i>Record</button
+                ><button id="export" class="primary"><i data-icon="export"></i>Export</button>
+            </div>
+        </header>
+        <main class="workspace">
+            <nav class="rail" aria-label="Editing panels">
+                <div id="railItems"></div>
+                <div class="rail-bottom">
+                    <button
+                        id="shortcuts"
+                        aria-label="Keyboard shortcuts"
+                        data-tip="Keyboard shortcuts ( ?)"
+                    >
+                        <i data-icon="keyboard"></i></button
+                    ><button id="appMenu" aria-label="Studio menu" data-tip="Studio menu">
+                        <i data-icon="settings"></i>
+                    </button>
+                </div>
+            </nav>
+            <section class="library panel" aria-labelledby="libraryTitle">
+                <div class="panel-title">
+                    <span class="panel-heading"
+                        ><i id="binIcon" data-icon="grid"></i>
+                        <h2 id="libraryTitle">Media library</h2></span
+                    ><span id="binCount" class="count">0</span>
+                </div>
+                <div id="binTools" class="bin-tools"></div>
+                <div id="binItems" class="bin-items"></div>
+                <div id="binFoot" class="bin-foot"></div>
+            </section>
+            <section class="monitor panel" aria-label="Video monitor">
+                <div class="panel-title">
+                    <span class="panel-heading"
+                        ><i data-icon="monitor"></i>
+                        <h2 id="monitorTitle">Program monitor</h2></span
+                    >
+                    <div class="inline">
+                        <button
+                            id="monitorMode"
+                            class="micro"
+                            data-tip="Switch between source and sequence"
+                        >
+                            Sequence<i data-icon="chevron"></i></button
+                        ><button
+                            class="icon"
+                            id="full"
+                            aria-label="Fullscreen monitor"
+                            data-tip="Fullscreen monitor"
+                        >
+                            <i data-icon="expand"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="monitor-area" id="monitorArea">
+                    <video id="video" playsinline preload="metadata"></video>
+                    <div id="viewerCaption" class="viewer-caption"></div>
+                    <div id="welcome" class="welcome">
+                        <div class="welcome-copy">
+                            <h1>Start an<br />episode.</h1>
+                            <div class="welcome-actions">
+                                <button id="welcomeNew" class="primary">
+                                    <i data-icon="plus"></i>New episode</button
+                                ><button id="welcomeOpen" class="glass">
+                                    <i data-icon="folderOpen"></i>Open episode
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="monitorEmpty" hidden>
+                        <i data-icon="film"></i><span>Import a recording to preview it here.</span
+                        ><button class="secondary" data-action="import_media">Import media</button>
+                    </div>
+                </div>
+                <div class="transport">
+                    <div class="timecode">
+                        <b id="playTime">00:00:00:00</b><span id="totalTime"> / 00:00:00:00</span>
+                    </div>
+                    <div class="playback">
+                        <button
+                            class="icon"
+                            id="begin"
+                            aria-label="Go to start"
+                            data-tip="Go to start (Home)"
+                        >
+                            <i data-icon="start"></i></button
+                        ><button
+                            class="icon"
+                            id="prevFrame"
+                            aria-label="Previous frame"
+                            data-tip="Previous frame (←)"
+                        >
+                            <i data-icon="stepBack"></i></button
+                        ><button class="play" id="play" aria-label="Play" data-tip="Play / pause (Space)">
+                            <i data-icon="play"></i></button
+                        ><button
+                            class="icon"
+                            id="nextFrame"
+                            aria-label="Next frame"
+                            data-tip="Next frame (→)"
+                        >
+                            <i data-icon="step"></i></button
+                        ><button class="icon" id="end" aria-label="Go to end" data-tip="Go to end (End)">
+                            <i data-icon="end"></i>
+                        </button>
+                    </div>
+                    <div class="inline">
+                        <button
+                            class="icon"
+                            id="ccToggle"
+                            aria-label="Show captions"
+                            aria-pressed="true"
+                            data-tip="Show captions"
+                        >
+                            <i data-icon="captions"></i></button
+                        ><button
+                            class="icon"
+                            id="monitorMute"
+                            aria-label="Mute preview"
+                            data-tip="Mute preview"
+                        >
+                            <i data-icon="volume"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+            <aside class="inspector panel" aria-label="Inspector">
+                <div class="panel-title">
+                    <div class="inspector-tabs">
+                        <button id="inspectTab" class="selected">Inspector</button
+                        ><button id="mixerTab">Mixer</button>
+                    </div>
+                    <i data-icon="sliders"></i>
+                </div>
+                <div id="inspectorBody" class="inspector-body"></div>
+            </aside>
+            <section class="timeline panel" aria-label="Editing timeline">
+                <div class="timeline-head">
+                    <span class="panel-heading"
+                        ><i data-icon="timeline"></i>
+                        <h2>Timeline</h2>
+                        <span id="sequenceTitle" class="sequence-title">Main sequence</span></span
+                    >
+                    <div class="tools" aria-label="Timeline tools">
+                        <button
+                            class="tool chosen"
+                            id="pointer"
+                            aria-label="Selection tool"
+                            data-tip="Selection tool (V)"
+                        >
+                            <i data-icon="pointer"></i></button
+                        ><button class="tool" id="razor" aria-label="Blade tool" data-tip="Blade tool (B)">
+                            <i data-icon="blade"></i></button
+                        ><i class="divider"></i
+                        ><button
+                            class="tool"
+                            id="split"
+                            aria-label="Split at playhead"
+                            data-tip="Split at playhead (S)"
+                        >
+                            <i data-icon="split"></i></button
+                        ><button class="smart" id="gap" aria-label="Smart Split" data-tip="Detect pauses and review cuts">
+                            <i data-icon="spark"></i><span>Smart Split</span></button
+                        ><button class="tool" id="undo" aria-label="Undo" data-tip="Undo (Ctrl+Z)">
+                            <i data-icon="undo"></i>
+                        </button>
+                    </div>
+                    <div class="timeline-view">
+                        <button
+                            class="tool chosen"
+                            id="snap"
+                            aria-label="Snap to cuts"
+                            aria-pressed="true"
+                            data-tip="Snap to cuts (N)"
+                        >
+                            <i data-icon="magnet"></i></button
+                        ><button class="tool" id="zoomOut" aria-label="Zoom out" data-tip="Zoom out (−)">
+                            <i data-icon="minus"></i></button
+                        ><input
+                            id="zoom"
+                            type="range"
+                            min="1"
+                            max="12"
+                            step=".25"
+                            value="1"
+                            aria-label="Timeline zoom"
+                        /><button class="tool" id="zoomIn" aria-label="Zoom in" data-tip="Zoom in (+)">
+                            <i data-icon="plus"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="timeline-body" id="timelineBody">
+                    <div class="labels" id="trackLabels"></div>
+                    <div class="track-scroll" id="trackScroll">
+                        <div id="canvas" class="track-canvas">
+                            <div
+                                class="ruler"
+                                id="ruler"
+                                role="slider"
+                                tabindex="0"
+                                aria-label="Program playhead"
+                                aria-valuemin="0"
+                                aria-valuenow="0"
+                                aria-valuemax="0"
+                            ></div>
+                            <div id="lanes"></div>
+                            <div class="playhead" id="playhead"><i></i></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+        <footer class="statusbar">
+            <span
+                ><i class="status-dot"></i
+                ><span id="status" role="status">Opening local workspace…</span></span
+            ><span id="footerRight"><i data-icon="drive"></i>Local storage</span>
+        </footer>
+        <div id="menu" class="menu" role="menu" hidden></div>
+        <div id="tooltip" role="tooltip" hidden></div>
+        <div id="toasts" aria-live="polite"></div>
+        <dialog id="modal">
+            <form id="modalForm">
+                <header>
+                    <div>
+                        <span class="modal-category" id="modalCategory">Everbranch Studio</span>
+                        <h2 id="modalTitle"></h2>
+                    </div>
+                    <button type="button" class="icon" id="modalClose" aria-label="Close">
+                        <i data-icon="close"></i>
+                    </button>
+                </header>
+                <div id="modalBody"></div>
+                <div class="modal-actions" id="modalActions"></div>
+            </form>
+        </dialog>
+    </body>
+</html>

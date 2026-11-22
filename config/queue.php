@@ -44,6 +44,24 @@ return [
             'after_commit' => false,
         ],
 
+        'maker_video' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => 'maker-video',
+            'retry_after' => 7500,
+            'after_commit' => true,
+        ],
+
+        'studio_distribution' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => 'studio-distribution',
+            'retry_after' => 240,
+            'after_commit' => true,
+        ],
+
         // Native receipts have their own worker and a lease longer than their
         // 90-second job timeout. Never consume the unrelated default backlog.
         'website_order_notifications' => [

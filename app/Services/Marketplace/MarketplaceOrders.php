@@ -179,7 +179,7 @@ class MarketplaceOrders
             }
             foreach ($mapped as [$snapshot, $line, $lineDiscount]) {
                 $local = OrderLine::query()->firstOrCreate(['order_id' => $order->id, 'provider_line_gid' => $line['id']], [
-                    'maker_id' => $snapshot['maker_id'], 'listing_id' => $snapshot['listing_id'], 'title' => $snapshot['title'], 'quantity' => $snapshot['quantity'],
+                    'video_tag_id' => $snapshot['video_tag_id'] ?? null, 'maker_id' => $snapshot['maker_id'], 'listing_id' => $snapshot['listing_id'], 'title' => $snapshot['title'], 'quantity' => $snapshot['quantity'],
                     'unit_price_cents' => $snapshot['price_cents'], 'maker_unit_cents' => $snapshot['maker_cents'], 'rate_id' => $snapshot['rate_id'], 'discount_cents' => $lineDiscount,
                 ]);
                 LedgerEntry::query()->firstOrCreate(['source_key' => 'sale:'.$local->id], ['maker_id' => $local->maker_id, 'order_line_id' => $local->id, 'kind' => 'merchandise', 'amount_cents' => $local->maker_unit_cents * $local->quantity]);

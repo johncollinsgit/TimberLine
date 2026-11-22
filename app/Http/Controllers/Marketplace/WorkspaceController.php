@@ -47,7 +47,7 @@ class WorkspaceController extends Controller
         $maker = Maker::query()->findOrFail($id);
         $tenant = $access->assertWorkspaceManager($request->user(), (int) $maker->tenant_id);
 
-        return view('marketplace.workspace-catalog', ['maker' => $maker, 'tenant' => $tenant, 'variants' => WebsiteProductVariant::query()->where('tenant_id', $tenant->id)->whereHas('product', fn ($q) => $q->where('tenant_id', $tenant->id)->where('product_type', 'physical'))->with('product')->paginate(30), 'listings' => $maker->listings()->with('levels')->get()]);
+        return view('marketplace.workspace-catalog', ['maker' => $maker, 'tenant' => $tenant, 'videoInvited' => $maker->status === 'approved' && \App\Models\Marketplace\MakerVideo::invited($maker->id), 'videoSelections' => \App\Models\Marketplace\VideoCatalogSource::where('maker_id', $maker->id)->where('provider', 'everbranch')->get()->pluck('selections', 'reference')->all(), 'variants' => WebsiteProductVariant::query()->where('tenant_id', $tenant->id)->whereHas('product', fn ($q) => $q->where('tenant_id', $tenant->id)->where('product_type', 'physical'))->with('product')->paginate(30), 'listings' => $maker->listings()->with('levels')->get()]);
     }
 
     public function import(Request $request, int $id, MarketplaceCatalog $catalog)
