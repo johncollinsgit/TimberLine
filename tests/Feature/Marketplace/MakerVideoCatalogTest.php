@@ -64,6 +64,7 @@ it('authorizes an exact shop, selects only published variants and disables the l
     $key = 'shopify:'.$source->id.':871';
     expect($catalog->resolve($this->maker, $key))->toBeNull();
     $this->post($this->url.'/'.$source->id.'/variants', ['variant' => '871', 'action' => 'add'])->assertRedirect();
+    $this->get($this->url.'/export')->assertOk()->assertExactJson([['variant_id' => $key, 'label' => 'Thru Hike 8 oz']]);
     $card = $catalog->resolve($this->maker, $key);
     expect($card['href'])->toBe('https://'.$shop.'/products/thru-hike?variant=871')->and($card['available'])->toBeTrue()->and($card['lane'])->toBe('maker_store');
     $other = Maker::create(['name' => 'Other', 'slug' => 'other', 'story' => 'Other', 'city' => 'Other', 'status' => 'approved']);

@@ -1,4 +1,5 @@
 import '../css/marketplace-videos.css';
+import {attachSocialImporter} from './marketplace-social-import.js';
 import {attachStudioImporter} from './marketplace-studio-package.js';
 
 const player = document.querySelector('[data-watch-player]');
@@ -28,6 +29,7 @@ if (player) {
 const editor = document.querySelector('[data-video-editor]');
 if (editor) {
     attachStudioImporter(editor);
+    attachSocialImporter(editor);
     const file = editor.querySelector('[data-video-file]');
     const preview = editor.querySelector('[data-source-preview]');
     const status = editor.querySelector('[data-record-status]');

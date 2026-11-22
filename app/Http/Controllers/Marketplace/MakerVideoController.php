@@ -23,7 +23,7 @@ class MakerVideoController extends Controller
         $maker = $access->maker($request, $id);
 
         return view('marketplace.videos.studio', [
-            'maker' => $maker, 'invited' => MakerVideo::invited($id),
+            'maker' => $maker, 'invited' => $maker->status === 'approved' && MakerVideo::invited($id),
             'videos' => MakerVideo::where('maker_id', $id)->orderByDesc('updated_at')->paginate(20),
         ]);
     }
@@ -31,8 +31,8 @@ class MakerVideoController extends Controller
     public function edit(Request $request, int $id, MarketplaceAccess $access, MakerVideoCatalog $catalog, MakerVideoSales $sales, ?int $videoId = null)
     {
         $maker = $access->maker($request, $id);
-        $video = $videoId ? $this->ownedVideo($maker, $videoId) : new MakerVideo(['format' => 'short', 'revision' => 0]);
-        $invited = MakerVideo::invited($id);
+        $video = $videoId ? $this->ownedVideo($maker, $videoId) : new MakerVideo(['format' => 'short', 'theme' => 'maker-showcases', 'revision' => 0]);
+        $invited = $maker->status === 'approved' && MakerVideo::invited($id);
         abort_unless($video->exists || $invited, 403);
         $tags = $video->exists ? $video->tags()->orderBy('id')->get() : collect();
         $tagIds = $tags->pluck('id')->all();
@@ -61,7 +61,9 @@ class MakerVideoController extends Controller
         $maxKb = config('marketplace.video_upload_mb') * 1024;
         $data = $request->validate([
             'title' => 'required|string|max:160', 'description' => 'nullable|string|max:5000', 'format' => 'required|in:short,long',
+            'theme' => ['required', \Illuminate\Validation\Rule::in(array_keys(MakerVideo::THEMES))],
             'source' => [($videoId ? 'nullable' : 'required'), 'file', 'mimetypes:video/mp4,video/quicktime,video/webm', 'max:'.$maxKb],
+            'source_post_url' => ['nullable', 'string', 'max:1024'],
             'source_sha256' => ['nullable', 'regex:/^[a-f0-9]{64}$/iD'],
             'revision' => 'required|integer|min:0', 'action' => 'required|in:draft,submit',
             'trim_start' => 'nullable|integer|min:0|max:14399', 'trim_end' => 'nullable|integer|min:1|max:14400',
@@ -69,6 +71,10 @@ class MakerVideoController extends Controller
             'tags.*.key' => 'nullable|string|max:145', 'tags.*.start' => 'nullable|integer|min:0|max:14399',
             'tags.*.end' => 'nullable|integer|min:1|max:14400',
         ]);
+        $sourceUrl = ! empty($data['source_post_url']) ? \App\Services\Marketplace\MakerSocialImport::postUrl($data['source_post_url']) : null;
+        if (! empty($data['source_post_url']) && ! $sourceUrl) {
+            throw ValidationException::withMessages(['source_post_url' => 'Use an Instagram, Facebook or YouTube video link.']);
+        }
         $start = (int) ($data['trim_start'] ?? 0);
         $end = isset($data['trim_end']) ? (int) $data['trim_end'] : null;
         if ($end !== null && $end <= $start) {
@@ -102,7 +108,7 @@ class MakerVideoController extends Controller
         $obsolete = [];
         $submit = $data['action'] === 'submit';
         try {
-            $video = DB::transaction(function () use ($maker, $videoId, $data, $path, $file, $tags, $vtt, $start, $end, $submit, &$obsolete) {
+            $video = DB::transaction(function () use ($maker, $videoId, $data, $path, $file, $tags, $vtt, $start, $end, $submit, $sourceUrl, &$obsolete) {
                 $video = $videoId ? MakerVideo::where('maker_id', $maker->id)->lockForUpdate()->findOrFail($videoId) : new MakerVideo(['maker_id' => $maker->id]);
                 abort_if((int) $video->revision !== (int) $data['revision'], 409, 'This draft changed. Reload before saving.');
                 if ($path) {
@@ -110,12 +116,15 @@ class MakerVideoController extends Controller
                     $video->source_path = $path;
                     $video->source_type = $file->getMimeType();
                 }
+                if ($path || array_key_exists('source_post_url', $data)) {
+                    $video->source_post_url = $sourceUrl;
+                }
                 if ($video->render_path) {
                     $obsolete[] = $video->render_path;
                     $obsolete[] = $video->render_path.'.jpg';
                 }
                 $video->fill([
-                    'title' => $data['title'], 'description' => $data['description'] ?? null, 'format' => $data['format'],
+                    'title' => $data['title'], 'description' => $data['description'] ?? null, 'format' => $data['format'], 'theme' => $data['theme'],
                     'trim_start' => $start, 'trim_end' => $end, 'captions' => $vtt, 'revision' => (int) $video->revision + 1,
                     'first_submitted_at' => $video->first_submitted_at ?? ($submit ? now() : null),
                     'status' => $submit ? 'processing' : 'draft', 'duration' => null, 'publish_at' => null,

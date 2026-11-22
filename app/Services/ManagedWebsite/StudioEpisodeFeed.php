@@ -22,10 +22,25 @@ class StudioEpisodeFeed
     public function episodes(int $tenant): array
     {
         $url = $this->url($tenant);
-        $response = Http::withoutRedirecting()->connectTimeout(3)->timeout(10)->get($url);
-        abort_unless($response->successful() && strlen($response->body()) <= 8 * 1024 * 1024
-            && ! preg_match('/<!DOCTYPE/i', $response->body()), 503, 'The episode feed is unavailable.');
-        $rss = simplexml_load_string($response->body(), SimpleXMLElement::class, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        try {
+            $response = Http::withoutRedirecting()->withOptions(['stream' => true])->connectTimeout(3)->timeout(10)->get($url);
+        } catch (\Illuminate\Http\Client\ConnectionException) {
+            abort(503, 'The episode feed is unavailable.');
+        }
+        abort_unless($response->successful(), 503, 'The episode feed is unavailable.');
+        $stream = $response->toPsrResponse()->getBody();
+        $body = '';
+        try {
+            while (! $stream->eof()) {
+                $chunk = $stream->read(65536);
+                abort_if(($chunk === '' && ! $stream->eof()) || strlen($body) + strlen($chunk) > 8 * 1024 * 1024, 503, 'The episode feed could not be read.');
+                $body .= $chunk;
+            }
+        } finally {
+            $stream->close();
+        }
+        abort_if(preg_match('/<!DOCTYPE/i', $body), 503, 'The episode feed could not be read.');
+        $rss = simplexml_load_string($body, SimpleXMLElement::class, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
         abort_unless($rss && isset($rss->channel), 503, 'The episode feed could not be read.');
         $episodes = [];
         foreach ($rss->channel->item as $item) {
@@ -36,8 +51,9 @@ class StudioEpisodeFeed
             }
             $assets = [];
             foreach ($item->children(self::NS)->asset as $asset) {
-                $kind = (string) $asset['kind'];
-                $href = (string) $asset['url'];
+                $attributes = $asset->attributes();
+                $kind = (string) $attributes['kind'];
+                $href = (string) $attributes['url'];
                 if (! in_array($kind, ['episode_video', 'short', 'trailer', 'captions'], true) || ! $this->validAsset($url, $href, $kind === 'captions' ? 'vtt' : 'mp4')) {
                     continue;
                 }

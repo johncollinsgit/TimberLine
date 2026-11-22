@@ -3,11 +3,12 @@
 use App\Http\Controllers\Marketplace\AccountController;
 use App\Http\Controllers\Marketplace\MakerController;
 use App\Http\Controllers\Marketplace\MakerVideoController;
-use App\Http\Controllers\Marketplace\VideoReviewController;
-use App\Http\Controllers\Marketplace\WatchController;
 use App\Http\Controllers\Marketplace\OperatorController;
 use App\Http\Controllers\Marketplace\ShopifyWebhookController;
+use App\Http\Controllers\Marketplace\SocialVideoImportController;
 use App\Http\Controllers\Marketplace\StorefrontController;
+use App\Http\Controllers\Marketplace\VideoReviewController;
+use App\Http\Controllers\Marketplace\WatchController;
 use App\Http\Controllers\Marketplace\WorkspaceController;
 use App\Http\Middleware\MarketplaceAppHost;
 use App\Http\Middleware\MarketplacePublicHost;
@@ -21,6 +22,11 @@ if (config('marketplace.host')) {
         Route::get('/', [StorefrontController::class, 'index'])->name('home');
         require __DIR__.'/marketplace-video-catalog.php';
         Route::get('/markets', [\App\Http\Controllers\Marketplace\MarketController::class, 'index'])->name('markets');
+        Route::prefix('/maker/{id}/studio/social')->whereNumber('id')->middleware('throttle:20,1')->group(function () {
+            Route::get('/accounts', [SocialVideoImportController::class, 'accounts'])->name('maker.social.accounts');
+            Route::get('/{platform}/{account}', [SocialVideoImportController::class, 'clips'])->whereIn('platform', ['instagram', 'facebook'])->whereNumber('account');
+            Route::post('/{platform}/{account}/{clip}', [SocialVideoImportController::class, 'file'])->whereIn('platform', ['instagram', 'facebook'])->whereNumber(['account', 'clip']);
+        });
         Route::get('/watch', [WatchController::class, 'index'])->name('watch');
         Route::get('/watch/{videoId}', [WatchController::class, 'show'])->whereNumber('videoId')->name('watch.show');
         Route::get('/watch/{videoId}/film', [WatchController::class, 'file'])->whereNumber('videoId')->name('watch.file');

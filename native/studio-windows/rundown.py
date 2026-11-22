@@ -18,5 +18,6 @@ def parse_rundown(p, raw):
             duration=number(duration,1,86400,"promised duration")
         previous=existing.get((booking,kind),{})
         existing[(booking,kind)]={"booking_id":booking,"kind":kind,"sponsor":str(item["sponsor"]),
-                                  "brief":str(item["brief"]),"seconds":duration,"placement":previous.get("placement")}
+                                  "brief":str(item["brief"]),"seconds":duration,"placement":previous.get("placement"),
+                                  "editor_notes":previous.get("editor_notes",str(item["brief"]))}
     return list(existing.values())

@@ -38,6 +38,17 @@ class VideoCatalogController extends Controller
             'connectionMessage' => $message, 'invited' => MakerVideo::invited($id) && $maker->status === 'approved', 'shopifyReady' => $shopify->configured()]);
     }
 
+    public function export(Request $request, int $id, MarketplaceAccess $access, \App\Services\Marketplace\MakerVideoCatalog $catalog)
+    {
+        $maker = $access->maker($request, $id);
+        $this->assertPilot($maker);
+        $variants = collect($catalog->options($maker))->map(fn ($card) => [
+            'variant_id' => $card['key'], 'label' => trim($card['label'].' '.$card['variant']),
+        ])->values();
+
+        return response()->json($variants)->header('Content-Disposition', 'attachment; filename="maker-video-catalog.json"');
+    }
+
     public function authorizeShopify(Request $request, int $id, MarketplaceAccess $access, MakerVideoShopify $shopify)
     {
         $maker = $access->maker($request, $id);

@@ -510,6 +510,11 @@ jobs:
         GUIDED_SETTINGS_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Onboarding/WorkspaceSettingsTest.php
         npx playwright test -c playwright.branches.config.ts
       if: matrix.group == 'workspace'
+    - name: Prepare Watch and maker Studio browser fixtures
+      run: |
+        node --test tests/e2e/marketplace-studio-package.test.mjs
+        MARKETPLACE_CONSOLE_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Marketplace/MakerVideoTest.php
+      if: matrix.group == 'workspace'
     - name: Verify Marketplace management in Chromium and WebKit
       run: |
         MARKETPLACE_CONSOLE_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Marketplace/MarketManagementTest.php
@@ -631,9 +636,11 @@ jobs:
         tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php
         tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php
         tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php
-        tests/Integration/TeamFileEventTargetsMySqlRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/MarketplaceVideoMySqlRecoveryTest.php
-        tests/Integration/MakerVideoCatalogMySqlRecoveryTest.php tests/Integration/StudioSponsorshipMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php
+        tests/Integration/TeamFileEventTargetsMySqlRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php
         tests/Integration/ServiceProposalMySqlRecoveryTest.php tests/Integration/FieldMaterialReviewMySqlRecoveryTest.php --compact
+      if: matrix.group == 'schema'
+    - name: Verify maker videos, catalog and Studio sponsorship migration recovery
+      run: php ./vendor/bin/pest tests/Integration/MarketplaceVideoMySqlRecoveryTest.php tests/Integration/MakerVideoCatalogMySqlRecoveryTest.php tests/Integration/StudioSponsorshipMySqlRecoveryTest.php --compact
       if: matrix.group == 'schema'
     - name: Verify Trajectory finance migration recovery
       env:

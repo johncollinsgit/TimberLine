@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_22_140000_add_marketplace_video_themes.php' => [
+        'test' => 'tests/Integration/MarketplaceVideoMySqlRecoveryTest.php',
+        'scenarios' => ['Default maker showcase theme for retained uploads, missing discovery index repair and repeat migration.'],
+    ],
     '2026_11_22_010000_create_marketplace_videos.php' => [
         'test' => 'tests/Integration/MarketplaceVideoMySqlRecoveryTest.php',
         'scenarios' => ['Retained rows survive interrupted creation, missing indexes, replay and application rollback.'],

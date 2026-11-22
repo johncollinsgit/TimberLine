@@ -7,6 +7,7 @@
     <p>Choose the products viewers can shop from {{ $maker->name }}’s videos. Orders placed in your own store carry a 0% referral fee during the pilot. Your store handles payment, fulfillment, and refunds.</p>
     @if($connectionMessage)<p role="alert">{{ $connectionMessage }}</p>@endif
     @if($invited)
+    <a class="button secondary" href="{{ route('marketplace.public.maker.video-catalog.export', $maker->id) }}">Download catalog for Studio</a>
     <section class="panel">
         <h2>Connect Shopify</h2>
         @if($shopifyReady)

@@ -25,7 +25,7 @@ class RenderMarketplaceVideo implements ShouldQueue
 
     public function __construct(public int $videoId, public int $revision)
     {
-        $this->onQueue('maker-video');
+        $this->onConnection('maker_video')->onQueue('maker-video');
     }
 
     public function handle(MakerVideoRenderer $renderer): void

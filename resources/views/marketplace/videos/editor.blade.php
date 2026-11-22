@@ -31,6 +31,7 @@
     <form class="stack watch-form" method="post" enctype="multipart/form-data" data-video-editor data-max-mb="{{ config('marketplace.video_upload_mb') }}" action="{{ $video->exists ? route('marketplace.public.maker.videos.save', [$maker->id, $video->id]) : route('marketplace.public.maker.videos.create', $maker->id) }}">
         @csrf <input type="hidden" name="revision" value="{{ $video->revision }}">
         <input type="hidden" name="source_sha256" value="">
+        @include('marketplace.videos.social-import')
         <details class="panel" data-package-panel hidden><summary>Import a Windows Studio export</summary>
             <label>Approved public export folder<input type="file" data-package-files webkitdirectory multiple></label>
             <label>Video to import<select data-package-choice></select></label>
@@ -56,6 +57,7 @@
         <fieldset class="panel"><legend>Video details</legend>
             <label>Title<input name="title" maxlength="160" required value="{{ old('title', $video->title) }}"></label>
             <label>Description<textarea name="description" rows="3" maxlength="5000">{{ old('description', $video->description) }}</textarea></label>
+            <label>Watch theme<select name="theme" required>@foreach(\App\Models\Marketplace\MakerVideo::THEMES as $key => $label)<option value="{{ $key }}" @selected(old('theme', $video->theme) === $key)>{{ $label }}</option>@endforeach</select></label>
             <label>Format<select name="format">@foreach(['short' => 'Short video', 'long' => 'Long video'] as $key => $label)<option value="{{ $key }}" @selected(old('format', $video->format) === $key)>{{ $label }}</option>@endforeach</select></label>
             <label data-vtt-import hidden>Import English captions (.vtt)<input type="file" accept=".vtt,text/vtt" data-vtt-file></label>
             <label>English captions (WebVTT)<textarea name="captions" rows="6" maxlength="1000000" placeholder="WEBVTT&#10;&#10;00:00:00.000 --> 00:00:03.000&#10;Your opening line">{{ old('captions', $video->captions) }}</textarea></label>

@@ -39,7 +39,7 @@ async function loadStudioEpisodes(container) {
         player.playsInline = true;
         player.width = 320;
         player.setAttribute('style','max-width:100%;height:auto');
-        const caption = resource('captions');
+        const caption = mediaUrl(assets.find(a => a.getAttribute('kind') === 'captions' && (!a.hasAttribute('for') || mediaUrl(a.getAttribute('for')) === video))?.getAttribute('url'));
         if (caption) {
           const track = document.createElement('track');
           Object.assign(track, {kind: 'captions', src: caption, srclang: 'en', label: 'English'});

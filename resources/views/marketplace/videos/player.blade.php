@@ -11,7 +11,8 @@
                 @if($video->captions)<track kind="captions" label="English" srclang="en" src="{{ route('marketplace.public.watch.captions', $video->id) }}" default>@endif
             </video>
             <h1>{{ $video->title }}</h1>
-            <a class="text-link" href="{{ route('marketplace.public.maker', $video->maker->slug) }}">{{ $video->maker->name }}</a>
+            <p>By <a class="text-link" href="{{ route('marketplace.public.maker', $video->maker->slug) }}">{{ $video->maker->name }}</a> · <a href="{{ route('marketplace.public.watch', ['theme' => $video->theme]) }}">{{ \App\Models\Marketplace\MakerVideo::THEMES[$video->theme] }}</a></p>
+            <p>Scouting for a market? <a class="text-link" href="{{ route('marketplace.public.maker', $video->maker->slug) }}">Explore this maker’s business</a></p>
             @if($video->description)<p class="preserve-lines">{{ $video->description }}</p>@endif
         </section>
         @if($cards->isNotEmpty())

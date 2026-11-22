@@ -16,9 +16,16 @@ use Illuminate\Support\Str;
 
 class MarketController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return view('marketplace.markets', ['markets' => Market::where('status', 'published')->where('ends_at', '>=', now())->with(['makers' => fn ($q) => $q->where('marketplace_market_makers.status', 'approved')->where('marketplace_makers.status', 'approved')])->orderBy('starts_at')->paginate(20)]);
+        $filters = $request->validate(['maker' => 'nullable|string|max:160']);
+        $markets = Market::where('status', 'published')->where('ends_at', '>=', now())
+            ->when($filters['maker'] ?? null, fn ($q, $slug) => $q->whereHas('makers', fn ($makers) => $makers->where('marketplace_makers.slug', $slug)
+                ->where('marketplace_makers.status', 'approved')->where('marketplace_market_makers.status', 'approved')))
+            ->with(['makers' => fn ($q) => $q->where('marketplace_market_makers.status', 'approved')->where('marketplace_makers.status', 'approved')])
+            ->orderBy('starts_at')->paginate(20)->withQueryString();
+
+        return view('marketplace.markets', compact('markets'));
     }
 
     public function save(Request $request)

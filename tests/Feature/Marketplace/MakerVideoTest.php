@@ -42,9 +42,52 @@ beforeEach(function () {
     $this->studio = $this->published.'/maker/'.$this->maker->id.'/studio';
     $this->reviews = 'https://app.theeverbranch.test/marketplace/operations/videos';
     $this->draft = [
-        'title' => 'Throwing a cup', 'description' => 'Shaping the rim by hand', 'format' => 'short', 'action' => 'submit',
+        'title' => 'Throwing a cup', 'description' => 'Shaping the rim by hand', 'theme' => 'behind-the-scenes', 'format' => 'short', 'action' => 'submit',
         'revision' => 0, 'trim_start' => 3, 'trim_end' => 15, 'captions' => "WEBVTT\n\n00:00.000 --> 00:02.000\nThe rim.",
     ];
+});
+
+it('exports the maker editor and shoppable player for the isolated browser fixtures', function () {
+    if (! getenv('MARKETPLACE_CONSOLE_FIXTURES')) {
+        $this->markTestSkipped('Rendered browser fixtures are opt-in.');
+    }
+    $this->withVite();
+    $directory = storage_path('framework/testing/marketplace-console');
+    \Illuminate\Support\Facades\File::ensureDirectoryExists($directory);
+    mmEnableVideoMaker($this->maker);
+    $listing = Listing::create(['maker_id' => $this->maker->id, 'slug' => 'studio-test-cup', 'title' => 'Studio test cup', 'variant_label' => '8 oz', 'category' => 'Ceramics', 'description' => 'Cup', 'price_cents' => 2000, 'images' => [], 'status' => 'approved']);
+    $video = MakerVideo::create(['maker_id' => $this->maker->id, 'title' => 'Throwing a cup', 'format' => 'short', 'source_path' => 'private/raw.mp4', 'source_type' => 'video/mp4', 'render_path' => 'render.mp4', 'duration' => 12, 'status' => 'approved', 'publish_at' => now()]);
+    $video->tags()->create(['product_key' => 'marketplace:'.$listing->id, 'label' => 'Cup', 'start_seconds' => 2, 'end_seconds' => 4]);
+    $editor = $this->withSession(['marketplace_identity' => $this->identity->id])->get($this->studio.'/new')->assertOk();
+    $player = $this->get($this->published.'/watch/'.$video->id)->assertOk();
+    file_put_contents($directory.'/video-editor.html', $editor->getContent());
+    file_put_contents($directory.'/video-player.html', $player->getContent());
+});
+
+it('lets customers and organizers discover business ideas and featured makers while only invited approved maker owners may publish', function () {
+    $maker = $this->maker;
+    $create = fn ($title, $theme, $format) => MakerVideo::create(['maker_id' => $maker->id, 'title' => $title, 'theme' => $theme, 'format' => $format, 'source_path' => 'private/raw.mp4', 'source_type' => 'video/mp4', 'render_path' => 'render.mp4', 'duration' => 12, 'status' => 'approved', 'publish_at' => now()]);
+    $start = $create('Starting a pottery studio', 'starting-a-business', 'long');
+    $create('Pricing a first collection', 'starting-a-business', 'short');
+    $create('Trimming the foot', 'behind-the-scenes', 'short');
+    $create('A first collection', 'maker-showcases', 'long');
+    $url = $this->published.'/watch';
+    $this->get($url.'?theme=starting-a-business&format=long')->assertOk()->assertSee('Starting a pottery studio')->assertDontSee('Pricing a first collection')->assertDontSee('Trimming the foot');
+    $this->get($url.'?theme=behind-the-scenes&format=long')->assertOk()->assertSee('No videos match these filters');
+    $this->get($url.'?maker='.$maker->slug)->assertOk()->assertSee('Watch '.$maker->name);
+    $this->get($url.'/'.$start->id)->assertOk()->assertSee('Explore this maker’s business');
+    $this->get($this->published.'/makers/'.$maker->slug)->assertOk()->assertSee('Watch '.$maker->name);
+    $customer = Identity::create(['email' => 'customer@market.example.test', 'active' => true]);
+    $this->actingAs($this->operator)->withSession(['marketplace_identity' => $customer->id])->get($url)->assertOk();
+    mmEnableVideoMaker($maker);
+    $this->get($this->studio.'/new')->assertForbidden();
+    $this->post($this->studio, $this->draft)->assertForbidden();
+    Membership::create(['maker_id' => $maker->id, 'identity_id' => $customer->id, 'active' => true, 'role' => 'organizer']);
+    $this->post($this->studio, $this->draft)->assertForbidden();
+    $maker->update(['status' => 'suspended']);
+    $this->withSession(['marketplace_identity' => $this->identity->id])->get($this->studio.'/new')->assertForbidden();
+    $this->post($this->studio, $this->draft)->assertForbidden();
+    $this->get($url.'?maker='.$maker->slug)->assertNotFound();
 });
 
 function mmEnableVideoMaker(Maker $maker): void
@@ -74,6 +117,8 @@ it('invites a maker, processes only the submitted revision, schedules review and
     (new RenderMarketplaceVideo($video->id, 1))->handle($renderer);
     (new RenderMarketplaceVideo($video->id, 1))->handle($renderer);
     $this->get($this->reviews.'/'.$video->id)->assertOk()->assertSee('Approve publication');
+    $this->post($this->reviews.'/'.$video->id.'/costs', ['minutes' => 90, 'cost' => '100.00'])->assertRedirect();
+    $this->get($this->reviews)->assertOk()->assertSee('1 participating makers')->assertSee('1.5 team production hours')->assertSee('$100.00');
     $data = ['revision' => 1, 'action' => 'approve', 'publish_at' => now()->addDay()->setTimezone(config('marketplace.timezone'))->format('Y-m-d\TH:i')];
     $this->post($this->reviews.'/'.$video->id, $data)->assertSessionHasNoErrors()->assertRedirect();
     $this->get($this->published.'/watch/'.$video->id)->assertNotFound();
@@ -126,6 +171,7 @@ it('validates trim windows and outputs text-only cues with clip-relative timesta
         ->and(fn () => $validator->normalize("WEBVTT\n\n00:00.000 --> 01:00.000\nToo late", 10))->toThrow(Illuminate\Validation\ValidationException::class);
     mmEnableVideoMaker($this->maker);
     $this->withSession(['marketplace_identity' => $this->identity->id])->post($this->studio, [...$this->draft, 'source' => UploadedFile::fake()->create('source.mp4', 20, 'video/mp4'), 'trim_end' => 2])->assertSessionHasErrors('trim_end');
+    $this->post($this->studio, [...$this->draft, 'source' => UploadedFile::fake()->create('source.mp4', 20, 'video/mp4'), 'source_sha256' => str_repeat('a', 64)])->assertSessionHasErrors('source');
     expect(MakerVideo::count())->toBe(0);
 });
 
@@ -150,4 +196,11 @@ it('renders only the selected seconds as H.264 with audio, a poster and no priva
     expect((float) $info['format']['duration'])->toBeGreaterThanOrEqual(1.95)->toBeLessThanOrEqual(2.10)
         ->and(array_column($info['streams'], 'codec_name'))->toBe(['h264', 'aac'])
         ->and($info['format']['tags']['title'] ?? null)->toBeNull();
+
+    // MediaRecorder WebM blobs can have neither a container duration nor an index.
+    $stream = new Symfony\Component\Process\Process([$ffmpeg, '-v', 'error', '-i', $disk->path($source), '-map', '0:v:0', '-c:v', 'libvpx', '-f', 'webm', 'pipe:1']);
+    $disk->put('camera.webm', $stream->mustRun()->getOutput());
+    $video->update(['source_path' => 'camera.webm', 'source_type' => 'video/webm', 'revision' => 2, 'status' => 'processing']);
+    (new RenderMarketplaceVideo($video->id, 2))->handle(app(MakerVideoRenderer::class));
+    expect($video->fresh()->status)->toBe('review')->and($video->fresh()->duration)->toBe(2.0);
 });

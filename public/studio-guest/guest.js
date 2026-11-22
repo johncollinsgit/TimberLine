@@ -67,7 +67,8 @@ async function archive() {
     }));
     const remove = document.createElement("button");
     remove.textContent = "Remove";
-    remove.disabled = activeSessions.has(item.id) || !item.complete;
+    // Give active recorders in other tabs time to save their next chunk.
+    remove.disabled = activeSessions.has(item.id) || (!item.complete && Date.now() - (item.lastSave || item.created) < 60000);
     remove.addEventListener("click", safe(async () => {
       if (!confirm("Delete this recording from this browser? Download a copy first.")) return;
       await transactions(["recordings","chunks"], "readwrite", tx => {
@@ -116,7 +117,7 @@ async function start() {
     const number = seq++;
     pending = pending.then(async () => {
       if (hasStorageError) return;
-      const next = {...item, bytes: item.bytes + event.data.size, mime: event.data.type || item.mime};
+      const next = {...item, lastSave: Date.now(), bytes: item.bytes + event.data.size, mime: event.data.type || item.mime};
       await transactions(["chunks","recordings"],"readwrite", tx => {
         tx.objectStore("chunks").add({id:item.id, seq:number, data:event.data});
         tx.objectStore("recordings").put(next);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Marketplace;
 
 use App\Http\Controllers\Controller;
+use App\Models\Marketplace\Maker;
 use App\Models\Marketplace\MakerVideo;
 use App\Services\Marketplace\MakerVideoCatalog;
 use Illuminate\Http\Request;
@@ -13,11 +14,14 @@ class WatchController extends Controller
 {
     public function index(Request $request)
     {
-        $filters = $request->validate(['format' => 'nullable|in:short,long']);
+        $filters = $request->validate(['format' => 'nullable|in:short,long', 'theme' => ['nullable', \Illuminate\Validation\Rule::in(array_keys(MakerVideo::THEMES))], 'maker' => 'nullable|string|max:160']);
+        $maker = isset($filters['maker']) ? Maker::where('status', 'approved')->where('slug', $filters['maker'])->firstOrFail() : null;
         $videos = MakerVideo::published()->with('maker')->when($filters['format'] ?? null, fn ($q, $format) => $q->where('format', $format))
+            ->when($filters['theme'] ?? null, fn ($q, $theme) => $q->where('theme', $theme))
+            ->when($maker, fn ($q) => $q->where('maker_id', $maker->id))
             ->orderByDesc('publish_at')->orderByDesc('id')->paginate(12)->withQueryString();
 
-        return view('marketplace.videos.watch', compact('videos'));
+        return view('marketplace.videos.watch', compact('videos', 'filters', 'maker'));
     }
 
     public function show(int $videoId, MakerVideoCatalog $catalog)

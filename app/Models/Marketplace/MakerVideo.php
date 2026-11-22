@@ -10,6 +10,12 @@ use Illuminate\Support\Facades\DB;
 
 class MakerVideo extends Model
 {
+    public const THEMES = [
+        'starting-a-business' => 'Starting a business',
+        'behind-the-scenes' => 'Behind the scenes',
+        'maker-showcases' => 'Maker showcases',
+    ];
+
     protected $table = 'marketplace_videos';
 
     protected $guarded = [];

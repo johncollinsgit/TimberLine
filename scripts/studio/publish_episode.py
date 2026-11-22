@@ -87,18 +87,24 @@ def publish(package, feed, state, previous=None):
             ET.SubElement(item, tag).text = value
         seen = set()
         prepared = []
+        videos = {}
+        paths = set()
+        caption_targets = set()
         media = feed.parent / "media"
         media.mkdir(exist_ok=True)
         for asset in asset_rows:
             kind = asset["kind"]
-            if kind not in TYPES or (kind != "short" and kind in seen):
+            if kind not in TYPES or (kind in {"episode_audio", "episode_video"} and kind in seen) or asset["path"] in paths:
                 raise ValueError(f"Unsupported or duplicate asset: {kind}")
             if asset["mime_type"] != TYPES[kind][1]:
                 raise ValueError(f"Incorrect media type for {kind}")
             source = (package / asset["path"]).resolve(strict=True)
             if not source.is_relative_to(package) or not source.is_file() or Path(asset["path"]).is_absolute():
                 raise ValueError("Asset outside revision directory")
+            paths.add(asset["path"])
             seen.add(kind)
+            if kind in {'episode_video', 'trailer', 'short'}:
+                videos[asset['path']] = (kind, asset['sha256'])
             prepared.append((kind, source, asset))
         if not {"episode_audio", "episode_video"} <= seen:
             raise ValueError("Episode audio and video are required")
@@ -112,7 +118,14 @@ def publish(package, feed, state, previous=None):
                 if kind == "episode_audio":
                     ET.SubElement(item, "enclosure", url=url, length=str(asset["bytes"]), type=mime)
                 else:
-                    ET.SubElement(item, f"{{{NS}}}asset", kind=kind, url=url, type=mime)
+                    attributes = {'kind': kind, 'url': url, 'type': mime}
+                    if kind == 'captions':
+                        owner = asset.get('video') or next(path for path, value in videos.items() if value[0] == 'episode_video')
+                        if owner not in videos or owner in caption_targets:
+                            raise ValueError('Caption track needs a unique video in this revision')
+                        caption_targets.add(owner)
+                        attributes['for'] = f'{link}/media/{videos[owner][1]}.mp4'
+                    ET.SubElement(item, f"{{{NS}}}asset", attributes)
             if old_rev == revision:
                 if ET.tostring(old).strip() != ET.tostring(item).strip():
                     raise ValueError("An immutable revision cannot change")

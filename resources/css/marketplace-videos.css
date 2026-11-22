@@ -4,7 +4,7 @@
 .watch-filters a { padding: .45rem 0; color: var(--muted); text-decoration: none; }
 .watch-filters [aria-current="page"] { color: var(--ink); font-weight: 700; border-bottom: 2px solid currentColor; }
 .watch-grid { display: grid; gap: 2rem; grid-template-columns: repeat(auto-fill, minmax(min(17rem,100%),1fr)); }
-.watch-tile { color: inherit; text-decoration: none; }
+.watch-tile, .watch-tile > a:first-child { color: inherit; text-decoration: none; }
 .watch-tile img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; border-radius: .65rem; margin-bottom: .7rem; }
 .watch-tile h2, .watch-product h3 { font-size: 1.3rem; margin: .35rem 0; }
 .watch-feature { display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(15rem, 1fr); gap: clamp(1.4rem, 4vw, 4rem); }

@@ -14,6 +14,7 @@ from uuid import UUID
 import media
 from capture import Capture, devices
 from rundown import parse_rundown
+from social_picker import SocialPicker
 
 
 def form(parent,title,fields):
@@ -73,7 +74,7 @@ class Studio:
         self.header.pack(fill="x")
         self.heading=ttk.Label(self.header,text="Everbranch Studio",font=("Segoe UI",19,"bold"))
         self.heading.pack(side="left")
-        for text,fn in [("Open episode",self.open),("New episode",self.new)]:
+        for text,fn in [("Open episode",self.open),("New episode",self.new),("Import social clip",self.social)]:
             ttk.Button(self.header,text=text,command=lambda f=fn:self.guarded(f,project=False)).pack(side="right",padx=4)
         self.nav=ttk.Notebook(app)
         self.nav.pack(fill="both",expand=True,padx=18,pady=12)
@@ -83,7 +84,7 @@ class Studio:
                                   ("Gain (dB)","gain_db",75),("Length (s)","duration",90),("Use","enabled",60)],
                      [("Record",self.record),("Stop recording",self.stop),("Import video",lambda:self.import_file("camera")),
                       ("Import voice",lambda:self.import_file("voice")),("Import music",lambda:self.import_file("music")),
-                      ("Edit track",self.track),("Play",self.play_track)])
+                      ("Edit track",self.track),("Play",self.play_track),("Suggest mix",self.mix)])
         self.add_tab("Camera cuts",[("Switch at (s)","at",130),("Camera","label",350)],
                      [("Add switch",lambda:self.angle(True)),("Edit switch",self.angle),("Remove",self.remove_angle)])
         self.add_tab("Transcript",[("Start (s)","start",100),("End (s)","end",100),("Caption","text",600)],
@@ -93,7 +94,7 @@ class Studio:
                      [("Suggest cuts",self.suggest),("Add cut",lambda:self.cut(True)),("Edit cut",self.cut),
                       ("Preview cut",self.preview),("Remove",lambda:self.remove("clips"))])
         self.add_tab("Products",[("Variant ID","variant_id",260),("Name","label",240),("In (s)","start",90),("Out (s)","end",90)],
-                     [("Add tag",lambda:self.tag(True)),("Edit tag",self.tag),("Remove",lambda:self.remove("product_tags"))])
+                     [("Suggest tags from catalog",self.catalog),("Add tag",lambda:self.tag(True)),("Edit tag",self.tag),("Remove",lambda:self.remove("product_tags"))])
         self.add_tab("Sponsors",[("Sponsor","sponsor",160),("Deliverable","kind",100),("Promised (s)","seconds",90),
                                  ("Placement (s)","placement",90),("Brief","brief",350)],
                      [("Import rundown",self.rundown),("Place deliverable",self.place),("Make social cut",self.sponsor_cut)])
@@ -130,8 +131,8 @@ class Studio:
         self.nav.add(tab,text=name)
         bar=ttk.Frame(tab)
         bar.pack(fill="x",pady=(0,8))
-        for label,fn in actions:
-            ttk.Button(bar,text=label,command=lambda f=fn:self.guarded(f)).pack(side="left",padx=(0,4))
+        for idx,(label,fn) in enumerate(actions):
+            ttk.Button(bar,text=label,command=lambda f=fn:self.guarded(f)).grid(row=idx//5,column=idx%5,padx=(0,4),pady=2,sticky="ew")
         table=ttk.Treeview(tab,columns=[key for _,key,_ in cols],show="headings",selectmode="browse")
         for title,key,width in cols:
             table.heading(key,text=title)
@@ -238,6 +239,12 @@ class Studio:
         i=self.selected(name)
         self.save(lambda:self.p[key].pop(i))
 
+    def social(self):
+        if self.p is None:
+            self.new()
+        if self.p is not None:
+            SocialPicker(self)
+
     def import_file(self,kind):
         extensions=media.VIDEO if kind=="camera" else media.AUDIO
         files=filedialog.askopenfilenames(title=f"Import {kind} recordings",filetypes=[("Recordings"," ".join("*"+s for s in sorted(extensions)))])
@@ -262,6 +269,25 @@ class Studio:
         if f:
             self.save(lambda:s.update(label=f["Name"],offset=media.number(f["Timeline offset (s)"],-86400,86400,"offset"),
                                       gain_db=media.number(f["Gain (dB)"],-60,24,"gain"),enabled=f["Enabled"]=="Yes"))
+
+    def mix(self):
+        tracks=[s for s in self.p["sources"] if s["enabled"] and s["audio"]]
+        if not tracks:
+            raise ValueError("Import audio before setting levels.")
+        # Suggest editable starting levels for source types; the master is loudness-normalized.
+        f=form(self.app,"Suggested mix",[("Voice gain (dB)",0),("Music bed below voice (dB)",23),
+                ("Include primary camera microphone","No" if any(s["kind"]=="voice" for s in tracks) else "Yes",["Yes","No"])])
+        if f:
+            def update():
+                voice=media.number(f["Voice gain (dB)"],-60,24,"voice gain")
+                bed=media.number(f["Music bed below voice (dB)"],0,60,"music bed")
+                for s in tracks:
+                    if s["kind"]=="voice":
+                        s["gain_db"]=voice
+                    elif s["kind"]=="music":
+                        s["gain_db"]=23-bed
+                self.p["edit"]["include_camera_audio"]=f["Include primary camera microphone"]=="Yes"
+            self.save(update)
 
     def play_track(self):
         s=self.p["sources"][self.selected("Recordings")]
@@ -391,6 +417,10 @@ class Studio:
         selected=next((k for k,v in cameras.items() if v==prev.get("camera",self.p["edit"]["camera"])),next(iter(cameras)))
         a=self.p["edit"]["start"]
         b=self.p["edit"]["end"]
+        if prev.get("timeline")=="source":
+            source=next(s for s in self.p["sources"] if s["id"]==prev["camera"])
+            a,b=0,source["duration"]
+            cameras={selected:source["id"]}
         f=form(self.app,"Edit cut",[("Label",prev.get("label","")),("Format",prev.get("kind","short"),["short","trailer"]),
             ("Start (s)",prev.get("start",a)),("End (s)",prev.get("end",min(b,a+30))),("Camera",selected,list(cameras)),
             ("Framing",prev.get("framing","center"),["wide","left","center","right","fit"]),
@@ -416,6 +446,20 @@ class Studio:
             media.render_cut(self.root,self.p,cut,path,"preview",(640,360),24)
             return path/"preview.mp4"
         self.background("Rendering clip preview…",create,os.startfile)
+
+    def catalog(self):
+        if not self.p["captions"]:
+            raise ValueError("Import or transcribe captions first.")
+        filename=filedialog.askopenfilename(title="Select the maker's catalog JSON",filetypes=[("Catalog","*.json")])
+        if not filename:
+            return
+        suggestions=media.suggest_tags(self.p,json.loads(Path(filename).read_text(encoding="utf-8-sig")))
+        if not suggestions:
+            self.status.set("No new unambiguous variant names matched the transcript.")
+            return
+        if messagebox.askyesno("Add suggested tags?",f"Add {len(suggestions)} timed variant suggestions for review in Products?"):
+            self.save(lambda:self.p["product_tags"].extend(suggestions))
+            self.status.set("Product suggestions added. Review each variant and its start and end times.")
 
     def tag(self,new=False):
         tags=self.p["product_tags"]
@@ -527,5 +571,10 @@ class Studio:
 
 if __name__=="__main__":
     window=tk.Tk()
-    Studio(window)
+    editor=Studio(window)
+    if __import__("sys").argv[1:]==["--check-launch"]:
+        window.update()
+        assert len(editor.nav.tabs())==7 and window.winfo_ismapped()
+        print("Everbranch Studio launched with seven editing panels. Library: "+str(media.library()))
+        window.after(100,window.destroy)
     window.mainloop()

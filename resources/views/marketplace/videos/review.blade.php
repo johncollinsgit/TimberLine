@@ -5,7 +5,7 @@
 <div class="page-shell watch-editor">
     <a class="back-link" href="{{ route('marketplace.operator.videos') }}">← Review queue</a>
     <h1>{{ $video->title }}</h1>
-    <p>{{ $video->maker->name }} · {{ ucfirst($video->status) }} · Revision {{ $video->revision }}</p>
+    <p>{{ $video->maker->name }} · {{ \App\Models\Marketplace\MakerVideo::THEMES[$video->theme] }} · {{ ucfirst($video->status) }} · Revision {{ $video->revision }}</p>
     @if($video->description)<p class="preserve-lines">{{ $video->description }}</p>@endif
     @if($video->render_path)
         <video class="watch-preview" controls playsinline preload="metadata" src="{{ route('marketplace.operator.videos.preview', [$video->id, 'film']) }}">

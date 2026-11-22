@@ -42,10 +42,15 @@ const server = http.createServer((req,res) => {
     await caller.waitForFunction(() => document.getElementById("remote").readyState >= 2);
     await caller.locator("#start").click();
     // Wait for committed chunks, then simulate abrupt tab loss.
-    await caller.waitForFunction(async () => {
-      const db = await new Promise(resolve => {const req=indexedDB.open("everbranch-studio-guest-v1");req.onsuccess=()=>resolve(req.result);});
-      return await new Promise(resolve => {const req=db.transaction("chunks").objectStore("chunks").count();req.onsuccess=()=>{db.close();resolve(req.result>=2);};});
-    });
+    let persisted=0;
+    for (let attempt=0;attempt<30 && persisted<2;attempt++) {
+      await caller.waitForTimeout(350);
+      persisted=await caller.evaluate(async () => {
+        const db = await new Promise(resolve => {const req=indexedDB.open("everbranch-studio-guest-v1");req.onsuccess=()=>resolve(req.result);});
+        return await new Promise(resolve => {const req=db.transaction("chunks").objectStore("chunks").count();req.onsuccess=()=>{db.close();resolve(req.result);};});
+      });
+    }
+    assert.ok(persisted>=2,"Expected durable chunks: "+persisted+" "+await caller.locator("#status").textContent());
     const context=caller.context();
     await caller.close({runBeforeUnload:false});
     const recovered=await context.newPage();

@@ -51,6 +51,7 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(1.5,manifest["product_tags"][0]["start"])
         self.assertEqual(0,manifest["clips"][0]["product_tags"][0]["start"])
         self.assertEqual(9,manifest["sponsor_rundown"][0]["booking_id"])
+        self.assertEqual(1.5,manifest["sponsor_rundown"][0]["program_position"])
         self.assertEqual(original_hash,media.digest(src))
         self.assertEqual(original_hash,media.digest(self.root/cam["original_path"]))
         media.approve(self.root,self.p,output.name)
@@ -72,6 +73,17 @@ class StudioTests(unittest.TestCase):
         self.assertNotEqual(track["path"],track["original_path"])
         self.assertAlmostEqual(2,track["duration"],delta=.2)
         self.assertEqual(media.digest(browser),media.digest(self.root/track["original_path"]))
+
+    def test_variant_suggestions(self):
+        self.p["edit"].update(start=0,end=4)
+        self.p["captions"]=[{"start":0,"end":2,"text":"Our trail candle is back."},
+                            {"start":2,"end":4,"text":"Try the eight ounce jar."}]
+        catalog={"items":[{"key":"shopify:3:8","label":"Trail candle","aliases":["eight ounce jar"]},
+                          {"key":"shopify:3:16","label":"Trail candle"}]}
+        tags=media.suggest_tags(self.p,catalog)
+        self.assertEqual([("shopify:3:8",2)],[(t["variant_id"],t["start"]) for t in tags])
+        self.p["product_tags"]=tags
+        self.assertEqual([],media.suggest_tags(self.p,catalog))
 
     def test_boundaries(self):
         with self.assertRaises(ValueError):

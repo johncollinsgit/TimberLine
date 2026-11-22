@@ -10,9 +10,13 @@ class StudioEpisodeDelivery extends Model
     use BelongsToTenant;
 
     public $incrementing = false;
+
     protected $keyType = 'string';
+
     protected $guarded = [];
+
     protected $hidden = ['details'];
+
     protected $casts = ['details' => 'encrypted:array'];
 
     public static function receiptId(int $tenant, string $provider, string $episode, string $revision, string $digest): string

@@ -43,6 +43,15 @@ class PodcastPublishTest(unittest.TestCase):
         self.send(old)
         self.assertEqual([item.text for item in ET.parse(self.feed).findall(".//guid")], ["urn:uuid:" + self.manifest["episode_id"], "archive"])
 
+    def test_clip_captions_are_linked_to_the_correct_video(self):
+        for path, kind, mime, owner in [("trailer.mp4", "trailer", "video/mp4", None), ("trailer.vtt", "captions", "text/vtt", "trailer.mp4"), ("episode.vtt", "captions", "text/vtt", "ep.mp4")]:
+            data = path.encode()
+            (self.package / path).write_bytes(data)
+            self.manifest["assets"].append(dict(path=path, kind=kind, mime_type=mime, sha256=hashlib.sha256(data).hexdigest(), bytes=len(data), video=owner))
+        self.send()
+        assets = [tag.attrib for tag in ET.parse(self.feed).findall(".//{*}asset")]
+        self.assertEqual({a["for"] for a in assets if a["kind"] == "captions"}, {a["url"] for a in assets if a["kind"] in {"episode_video", "trailer"}})
+
     def test_private_corrupt_and_traversal_assets_never_published(self):
         before = self.feed.read_bytes()
         for change in [{"approval":"draft"}, {"visibility":"members"}]:

@@ -18,6 +18,7 @@ VIDEO = {".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi"}
 AUDIO = {".wav", ".flac", ".mp3", ".aac", ".m4a", ".ogg", ".webm", ".mkv"}
 KINDS = {"camera", "voice", "music"}
 FRAMES = {"wide", "left", "center", "right", "fit"}
+LOCAL_FORMATS = "mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,mp3,aac,flac,wav,ogg"
 LOCK = threading.Lock()
 
 
@@ -49,7 +50,7 @@ def run(args, cwd=None):
 
 
 def metadata(path):
-    result = subprocess.run([ffmpeg(), "-hide_banner", "-nostdin", "-protocol_whitelist", "file,pipe", "-i", str(path)],
+    result = subprocess.run([ffmpeg(), "-hide_banner", "-nostdin", "-format_whitelist", LOCAL_FORMATS, "-protocol_whitelist", "file,pipe", "-i", str(path)],
                             capture_output=True, text=True, encoding="utf-8", errors="replace")
     duration = re.search(r"Duration:\s*(\d+):(\d+):([\d.]+)", result.stderr)
     if not duration:
@@ -119,7 +120,7 @@ def import_source(root, p, path, kind="camera", offset=0):
         remuxed = Path(root) / "recovered" / (key + ".mkv")
         remuxed.parent.mkdir(exist_ok=True)
         try:
-            run(["-fflags", "+genpts", "-protocol_whitelist", "file,pipe", "-i", str(path.resolve()),
+            run(["-fflags", "+genpts", "-format_whitelist", LOCAL_FORMATS, "-protocol_whitelist", "file,pipe", "-i", str(path.resolve()),
                  "-map", "0:v?", "-map", "0:a?", "-c", "copy", str(remuxed)])
             meta = metadata(remuxed)
         except BaseException:
@@ -220,12 +221,51 @@ def suggestions(p):
         if any(a < y and b > x for x,y in used):
             continue
         kind = "trailer" if not selected else "short"
-        selected.append({"kind": kind, "start": a, "end": b, "framing": "wide" if kind=="trailer" else "center",
+        selected.append({"kind": kind, "start": a, "end": b, "framing": "wide" if kind=="trailer" else ("fit" if len([s for s in p["sources"] if s["kind"]=="camera" and s["enabled"]])>1 else "center"),
                          "camera": p["edit"]["camera"], "label": text[:90], "burn_captions": True})
         used.append((a,b))
         if len(selected) == 4:
             break
     return selected
+
+
+def suggest_tags(p,catalog):
+    items=catalog if isinstance(catalog,list) else catalog.get("items",catalog.get("products",[]))
+    if not isinstance(items,list):
+        raise ValueError("Choose a maker catalog containing variant IDs and names.")
+    def words(text):
+        return " ".join(re.findall(r"[a-z0-9]+",str(text).casefold()))
+    candidates=[]
+    for item in items:
+        if not isinstance(item,dict):
+            continue
+        key=item.get("variant_id") or item.get("key")
+        name=item.get("label") or item.get("name") or ""
+        variant=item.get("variant_label") or item.get("variant") or ""
+        if not isinstance(key,str) or not name:
+            continue
+        aliases=item.get("aliases",[])
+        aliases=aliases if isinstance(aliases,list) else []
+        phrases={words(" ".join([str(name),str(variant)])),*(words(alias) for alias in aliases if isinstance(alias,str))}
+        candidates.append((key," ".join(x for x in (str(name),str(variant)) if x),phrases))
+    # A shared name alone cannot identify which of two variants appeared.
+    owners={}
+    for key,_,phrases in candidates:
+        for phrase in phrases:
+            owners.setdefault(phrase,set()).add(key)
+    out=[]
+    edit=p["edit"]
+    for cue in p["captions"]:
+        content=" "+words(cue["text"])+" "
+        a,b=max(edit["start"],cue["start"]),min(edit["end"],cue["end"])
+        if b<=a:
+            continue
+        for key,label,phrases in candidates:
+            if any(phrase and len(owners[phrase])==1 and " "+phrase+" " in content for phrase in phrases):
+                tag={"variant_id":key,"label":label,"start":a,"end":b}
+                if not any(t["variant_id"]==key and t["start"]<b and t["end"]>a for t in [*out,*p.get("product_tags",[])]):
+                    out.append(tag)
+    return out
 
 
 def verify(p):
@@ -247,10 +287,12 @@ def verify(p):
         camera = cameras.get(cut.get("camera") or master["id"])
         if not camera:
             raise ValueError("Choose a camera for each cut.")
-        offset = camera["offset"]
+        standalone = cut.get("timeline")=="source"
+        offset = 0 if standalone else camera["offset"]
         a = number(cut["start"],max(0,offset),offset+camera["duration"],"cut start")
         b = number(cut["end"],a+0.01,offset+camera["duration"]+0.005,"cut end")
-        if i and (a<p["edit"]["start"] or b>p["edit"]["end"] or cut["kind"] not in {"trailer","short"} or cut["framing"] not in FRAMES):
+        outside_master = not standalone and (a<p["edit"]["start"] or b>p["edit"]["end"])
+        if i and (outside_master or cut["kind"] not in {"trailer","short"} or cut["framing"] not in FRAMES):
             raise ValueError("Choose an in-range clip and a supported format.")
     if p["edit"].get("intro","").strip():
         number(p["edit"]["intro_seconds"], 0.25, 30, "intro seconds")
@@ -311,6 +353,11 @@ def camera_segments(p,cut):
 
 def render_cut(root, p, cut, work, name, wide, fps):
     a,b = cut["start"],cut["end"]
+    if cut.get("timeline")=="source":
+        source=next(s for s in p["sources"] if s["id"]==cut["camera"])
+        cues=p["captions"] if source["id"]==p["edit"]["camera"] and source["offset"]==0 else source.get("source_captions",[])
+        p={**p,"sources":[{**source,"offset":0}],"captions":cues,
+           "edit":{**p["edit"],"camera":source["id"],"include_camera_audio":True,"intro":""}}
     segments = camera_segments(p,cut)
     frame = cut.get("framing","wide")
     w,h = wide if frame=="wide" else wide[::-1]
@@ -378,12 +425,27 @@ def render(root, p, wide=(1920,1080), fps=30):
         tags=[{**tag,"start":tag["start"]-p["edit"]["start"]+lead,"end":tag["end"]-p["edit"]["start"]+lead}
               for tag in p.get("product_tags",[])]
         for clip in clips:
+            if clip.get("timeline")=="source":
+                source=next(s for s in p["sources"] if s["id"]==clip["camera"])
+                origin=source.get("origin",{})
+                clip["source_platform"]=origin.get("platform","")
+                clip["source_url"]=origin.get("creator_url","")
+                if source["id"]!=p["edit"]["camera"]:
+                    clip["product_tags"]=[]
+                    continue
             clip["product_tags"]=[{**tag,"start":max(tag["start"],clip["start"])-clip["start"],
                                   "end":min(tag["end"],clip["end"])-clip["start"]}
                                  for tag in p.get("product_tags",[]) if tag["start"]<clip["end"] and tag["end"]>clip["start"]]
+        rundown=[]
+        for item in p.get("sponsor_rundown",[]):
+            placement=item.get("placement")
+            active=placement is not None and p["edit"]["start"]<=placement<p["edit"]["end"]
+            matching=[clip["path"] for clip in clips if clip.get("booking_id")==item["booking_id"]]
+            rundown.append({**item,"program_position":placement-p["edit"]["start"]+lead if active else None,
+                            "clip_paths":matching})
         manifest={k:p[k] for k in ("schema_version","episode_id","title","description","visibility")}
         manifest.update(revision=revision,approval="draft",created_at=utc(),edit_fingerprint=fingerprint(p),
-                        assets=assets,clips=clips,product_tags=tags,sponsor_rundown=p.get("sponsor_rundown",[]))
+                        assets=assets,clips=clips,product_tags=tags,sponsor_rundown=rundown)
         (temp/"intro.txt").unlink(missing_ok=True)
         atomic_json(temp/"studio-package.json",manifest)
         final=exports/revision
@@ -412,7 +474,9 @@ def transcribe(root,p,model,cli):
     verify(p)
     if not Path(cli).is_file() or not Path(model).is_file():
         raise ValueError("Install the local caption tool using setup-captions.ps1, or import WebVTT/SRT.")
-    with tempfile.TemporaryDirectory() as folder:
+    scratch=Path(root)/"cache"
+    scratch.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=scratch) as folder:
         tmp=Path(folder)
         args,graph=[],[]
         speech={**p,"sources":[s for s in p["sources"] if s["kind"]!="music"]}
