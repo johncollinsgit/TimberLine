@@ -123,6 +123,35 @@ test('native checkout reserves only allocated stock and pays the dedicated merch
     expect(Order::count())->toBe(1)->and($order->merchandise_cents)->toBe(5000)->and($order->discount_cents)->toBe(500)->and($order->lines()->first()->maker_unit_cents)->toBe(4250)->and($order->processing_cost_cents)->toBe(188)->and(StockReservation::first()->committed_at)->not->toBeNull()->and(InventoryLevel::sum('quantity'))->toBe(4)->and(LedgerEntry::whereNotNull('eligible_at')->count())->toBe(0);
 });
 
+test('a video sale uses the accepted native fee, commits stock once and credits only net verified merchandise', function (): void {
+    $f = nativeMarketFixture();
+    $video = \App\Models\Marketplace\MakerVideo::create(['maker_id' => $f['maker']->id, 'title' => 'Glazing the mug', 'format' => 'short',
+        'status' => 'approved', 'publish_at' => now()->subMinute(), 'source_path' => 'source.mp4', 'source_type' => 'video/mp4', 'render_path' => 'render.mp4']);
+    $tag = $video->tags()->create(['product_key' => 'marketplace:'.$f['listing']->id, 'label' => 'Mug']);
+    $sales = app(\App\Services\Marketplace\MakerVideoSales::class);
+    $this->withSession(['marketplace.video_tags.'.$f['listing']->id => $tag->id]);
+    $refunds = [];
+    $state = 'complete';
+    nativeMarketFake($f, $refunds, $state);
+    $checkout = nativeMarketBegin($this, $f);
+    expect($checkout->snapshot['lines'][0]['video_tag_id'])->toBe($tag->id)
+        ->and($sales->summary($f['maker'], [$tag->id])['orders'])->toBe(0);
+    $service = app(MarketplaceNativeCheckout::class);
+    $order = $service->reconcile($checkout);
+    $service->reconcile($checkout->fresh());
+    $line = $order->lines()->sole();
+    expect($line->video_tag_id)->toBe($tag->id)->and($line->maker_unit_cents)->toBe(4250)
+        ->and($sales->forTags($f['maker'], [$tag->id]))->toBe([])->and(InventoryLevel::sum('quantity'))->toBe(4);
+    // The reporting fixture now represents a verified live payment. Provider calls remain faked.
+    $order->update(['test_mode' => false, 'review_required' => false]);
+    expect($sales->forTags($f['maker'], [$tag->id])[$tag->id])->toBe(['orders' => 1, 'net_merchandise_cents' => 4500]);
+    $other = Maker::create(['name' => 'Other', 'slug' => 'other', 'status' => 'approved', 'city' => 'Easley', 'story' => 'Other']);
+    expect($sales->forTags($other, [$tag->id]))->toBe([]);
+    $service->refund($line, 1, 600, 5457, (string) Str::uuid(), 1);
+    expect($sales->summary($f['maker'], [$tag->id]))->toBe(['orders' => 0, 'net_merchandise_cents' => 0])
+        ->and(InventoryLevel::sum('quantity'))->toBe(4);
+});
+
 test('confirmed checkout expiry releases native allocations once without returning them to the source channel', function (): void {
     $f = nativeMarketFixture();
     $refunds = [];

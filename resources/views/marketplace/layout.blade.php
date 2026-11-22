@@ -15,7 +15,7 @@
 <div class="announcement">Rooted in the Upstate. Made for everyday. <span>Shop small. Find something good.</span></div>
 <header class="site-header">
     <a class="wordmark" href="{{ $marketRoot }}/" aria-label="Markets and Makers home"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2v28M2 16h28M6 6l20 20M6 26 26 6" stroke="currentColor" stroke-width="3"/></svg><span>markets<span class="amp">&</span>makers<small>GOODS WITH A GOOD STORY</small></span></a>
-    <nav aria-label="Main navigation"><a href="{{ $marketRoot }}/#shop">Shop the goods</a><a href="{{ $marketRoot }}/#makers">Meet the makers</a><a href="{{ $marketRoot }}/markets">Markets & shows</a><a href="{{ $marketRoot }}/sell">Become a maker</a></nav>
+    <nav aria-label="Main navigation"><a href="{{ $marketRoot }}/#shop">Shop the goods</a><a href="{{ $marketRoot }}/watch">Watch</a><a href="{{ $marketRoot }}/#makers">Meet the makers</a><a href="{{ $marketRoot }}/markets">Markets & shows</a><a href="{{ $marketRoot }}/sell">Become a maker</a></nav>
     <div class="header-actions"><a href="{{ $marketRoot }}/account" aria-label="Your account">@include('marketplace.partials.icon', ['name'=>'user'])<span>Account</span></a><a href="{{ $marketRoot }}/cart" class="bag-link" aria-label="Shopping bag">@include('marketplace.partials.icon', ['name'=>'bag'])<span class="bag-count">{{ array_sum(array_column(session('marketplace_cart', []), 'quantity')) }}</span></a></div>
 </header>
 <main id="main">

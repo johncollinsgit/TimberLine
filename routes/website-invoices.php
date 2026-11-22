@@ -3,6 +3,8 @@
 use App\Http\Controllers\WebsiteInvoiceAdminController;
 use Illuminate\Support\Facades\Route;
 
+require __DIR__.'/studio-sponsorships.php';
+
 Route::middleware(['auth', 'verified', 'role:admin,manager,marketing_manager', 'tenant.access', 'module:managed_website', \App\Http\Middleware\UseConnectedWebsiteEditor::class])
     ->prefix('website/invoices')->name('managed-website.invoices.')->group(function (): void {
         Route::get('/', [WebsiteInvoiceAdminController::class, 'index'])->name('index');
