@@ -5,7 +5,17 @@ return [
     'tenant_slug' => 'wren-family-soccer',
     'origin' => 'https://watershedfellowship.com',
     'bridge_secret' => env('WATERSHED_BRIDGE_SECRET'),
-    'permission_text' => 'I, the participant, have read the rules of conduct, the above evaluation of my health, and permission to participate in the activities. I agree to abide by the stated personal limitations and code of conduct.  My child has my permission to attend Watershed co-op activities.',
+    'permission_text' => 'For ALL youth activities, we expect each participant to conform to these rules of conduct:
+No possession or use of alcohol, drugs, or tobacco
+No fighting, weapons, fireworks, lighters, or explosives
+Participation with the group is expected
+Respect property
+Respect one another, staff, and adult leaders
+Respect and comply with event schedules
+
+Participants who fail to comply with these expectations may be asked to leave the premises.
+
+I, the participant, have read the rules of conduct, the above evaluation of my health, and permission to participate in the activities. I agree to abide by the stated personal limitations and code of conduct.  My child has my permission to attend Watershed co-op activities.',
     'medical_release_text' => 'This consent form gives permission to seek whatever medical attention is deemed necessary, and releases Community Bible Church and its staff of any liability against personal losses of named child.
 
 I acknowledge that participation in the activity of this ministry involves risk to the participant (and to the participants’ parents or guardians, if the participant is a minor), and may result in various types of injury including, but not limited to, the following:  sickness, bodily injury, death, emotional injury, personal injury, property damage, and financial damage.

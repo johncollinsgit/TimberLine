@@ -62,7 +62,7 @@ Preview `php artisan watershed:prepare --roster=/private/source.csv --actor=ID`.
 `--apply` initializes the closed Spring 2027 term and records each source fingerprint.
 Only one exact reviewed guardian-name match can seed preapproval; unmatched or
 ambiguous rows appear in the leadership matching queue. Historical Paid marks are
-ignored. Stdin may be used as `/dev/stdin` so the private CSV need not be saved.
+ignored. Stdin may be used as `php://stdin` so the private CSV need not be saved.
 Replays do not reinstate a subsequently revoked preapproval.
 
 John and Sarah are the explicit configured leaders and must also be active tenant
@@ -87,3 +87,19 @@ full-tree upgrade rehearsal and the data-free schema fingerprint check.
 Rollback closes registration and disables `WATERSHED_ENABLED`, then uses normal
 backend and Site release controls. Keep all new tables, original provider attempts,
 payments, signatures, audit and import records. Migration down is non-destructive.
+
+## Church release export
+
+The Site fills the same original CBC two-page PDF template and field coordinates
+as Wren Soccer. Only the ministry label and semester replace soccer labels/dates.
+The printed medical history, conduct rules, church footer and two signatures retain
+the church layout. Complete signed answers continue on additional pages when needed,
+including co-op placement, teaching acknowledgement and long medical instructions.
+The renderer reads the immutable signed snapshot, never a later edited profile.
+
+Parent downloads require the owning household session. Leader exports use five-minute
+relative signed backend links and recheck active verified named leadership, current
+tenant admin membership and the Wren entitlement. Site source URLs are origin/path
+allowlisted, redirects rejected, and responses use private no-store/no-referrer.
+Prefill checks signed releases across both Wren seasons, then applies canonical
+reviewed medical profile fields. Fresh consent/signatures are still required.

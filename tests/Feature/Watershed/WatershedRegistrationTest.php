@@ -127,14 +127,59 @@ it('allows only the named active tenant leaders to administer Watershed', functi
     $other->tenants()->attach($this->tenant, ['role' => 'admin', 'membership_active' => true]);
     $this->actingAs($other)->get('/watershed?tenant=wren-family-soccer')->assertForbidden();
 });
-it('renders complete long medical notes in downloadable signed PDFs', function () {
-    $this->submission['children'][0]['medical']['comments'] = str_repeat('Detailed care instructions. ', 65);
-    $id = $this->svc->submit($this->tenant->id, $this->family, $this->submission);
+it('exports the immutable signed snapshot for the church renderer without losing long notes', function () {
+    $notes = str_repeat('Detailed care instructions. ', 65);
+    $this->submission['children'][0]['medical']['comments'] = $notes;
+    $this->svc->submit($this->tenant->id, $this->family, $this->submission);
     $release = $this->s->query('releases', $this->tenant->id)->sole();
-    $response = app(\App\Http\Controllers\Watershed\WatershedPdf::class)->response($release);
-    expect($response->headers->get('Content-Type'))->toBe('application/pdf')->and(substr($response->getContent(), 0, 4))->toBe('%PDF');
-    $text = preg_replace('/\s+/', ' ', (new \Smalot\PdfParser\Parser)->parseContent($response->getContent())->getText());
-    expect(substr_count($text, 'Detailed care instructions.'))->toBe(65);
+    $this->shared->query('players', $this->tenant->id)->where('id', $this->pid)->update(['name' => 'Later name']);
+    $response = app(\App\Services\Watershed\WatershedReleaseExport::class)->response($release);
+    $data = $response->getData(true);
+    expect($data['playerName'])->toBe('Example Child')->and($data['answers']['comments'])->toBe($notes)
+        ->and($data['answers']['guardianSignature'])->toBe('Example Parent')->and($data['season_key'])->toBe('spring-2027')
+        ->and($response->headers->get('Cache-Control'))->toContain('no-store');
+});
+
+it('prefills medical answers from both Wren seasons while keeping canonical edits and pickup phones', function () {
+    foreach (['fall-2026' => '2026-08-01', 'spring-2027' => '2026-11-01'] as $season => $date) {
+        $this->shared->insert('releases', $this->tenant->id, ['family_id' => $this->fid, 'player_id' => $this->pid, 'season_key' => $season, 'source_key' => (string) Str::uuid(), 'form_version' => 'fixture', 'answers' => $this->shared->encrypt(['allergies' => 'yes', 'allergenList' => $season]), 'sha256' => hash('sha256', $season), 'signed_at' => $date]);
+    }
+    $this->shared->query('players', $this->tenant->id)->where('id', $this->pid)->update(['profile' => $this->shared->encrypt(['allergenList' => 'Parent reviewed details'])]);
+    $this->svc->contact($this->tenant->id, $this->family, [...$this->shared->decrypt($this->family->profile), 'pickupPhone' => '8645550125']);
+    $profile = $this->svc->profile($this->tenant->id, $this->shared->row('families', $this->tenant->id, $this->fid));
+    expect($profile['children']->first()['medical'])->toBe(['allergies' => 'yes', 'allergenList' => 'Parent reviewed details'])
+        ->and($profile['family']['profile']['pickupPhone'])->toBe('8645550125');
+});
+
+it('requires an unexpired signed export link and rechecks current leadership access', function () {
+    $this->svc->submit($this->tenant->id, $this->family, $this->submission);
+    $id = $this->s->query('releases', $this->tenant->id)->sole()->id;
+    $leader = User::factory()->create(['email' => config('watershed.leaders')[0], 'is_active' => true, 'email_verified_at' => now()]);
+    $leader->tenants()->attach($this->tenant, ['role' => 'admin', 'membership_active' => true]);
+    $url = \Illuminate\Support\Facades\URL::temporarySignedRoute('watershed.release-data', now()->addMinutes(5), ['id' => $id, 'actor' => $leader->id], absolute: false);
+    $this->getJson('/api/watershed/release-data/'.$id.'?actor='.$leader->id)->assertForbidden();
+    $this->getJson($url)->assertOk()->assertJsonPath('playerName', 'Example Child');
+    $this->getJson($url.'&tenant=unrelated')->assertForbidden();
+    $leader->tenants()->updateExistingPivot($this->tenant->id, ['membership_active' => false]);
+    $this->getJson($url)->assertForbidden();
+    $leader->tenants()->updateExistingPivot($this->tenant->id, ['membership_active' => true]);
+    $this->travel(6)->minutes();
+    $this->getJson($url)->assertForbidden();
+});
+
+it('keeps parent release exports within the authenticated household', function () {
+    $this->svc->submit($this->tenant->id, $this->family, $this->submission);
+    $id = $this->s->query('releases', $this->tenant->id)->sole()->id;
+    $token = 'fictional-export-session';
+    $session = $this->s->insert('sessions', $this->tenant->id, ['family_id' => $this->fid, 'token_hash' => hash('sha256', $token), 'expires_at' => now()->addHour()]);
+    $request = \Illuminate\Http\Request::create('/api/watershed/portal/release', 'POST', ['release_id' => $id]);
+    $request->headers->set('X-Watershed-Session', $token);
+    $request->attributes->set('watershed_tenant', $this->tenant);
+    $controller = app(\App\Http\Controllers\Watershed\WatershedPortalController::class);
+    expect($controller->handle($request, 'release')->getData(true)['playerName'])->toBe('Example Child');
+    $other = $this->shared->insert('families', $this->tenant->id, ['email' => 'other@example.test', 'profile' => $this->shared->encrypt([])]);
+    $this->s->query('sessions', $this->tenant->id)->where('id', $session)->update(['family_id' => $other]);
+    expect(fn () => $controller->handle($request, 'release'))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
 });
 
 it('rejects checkout before acceptance and across households', function () {

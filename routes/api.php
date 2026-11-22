@@ -284,3 +284,13 @@ Route::post('/connected-website/carolina-barrel/inquiries', [\App\Http\Controlle
 require __DIR__.'/team-mobile.php';
 
 Route::match(['get', 'post'], '/watershed/portal/{action}', [\App\Http\Controllers\Watershed\WatershedPortalController::class, 'handle'])->middleware([\App\Http\Middleware\Watershed\VerifyWatershedBridge::class, 'throttle:120,1']);
+
+Route::get('/watershed/release-data/{id}', function (\Illuminate\Http\Request $r, string $id) {
+    abort_unless(config('watershed.enabled'), 404);
+    $tenant = \App\Models\Tenant::where('slug', config('watershed.tenant_slug'))->firstOrFail();
+    $actor = \App\Models\User::findOrFail($r->query('actor'));
+    $access = app(\App\Services\Soccer\SoccerAccess::class);
+    abort_unless($actor->hasVerifiedEmail() && in_array(strtolower($actor->email), config('watershed.leaders'), true) && $access->enabled($tenant) && $access->admin($tenant, $actor), 403);
+
+    return app(\App\Services\Watershed\WatershedReleaseExport::class)->response(app(\App\Services\Watershed\WatershedStore::class)->row('releases', $tenant->id, $id));
+})->middleware(['signed:relative', 'throttle:60,1'])->name('watershed.release-data');
