@@ -65,7 +65,7 @@ class WatershedPortalController extends Controller
             $release = $store->row('releases', $tenant, $d['release_id']);
             abort_unless($store->row('applications', $tenant, $release->application_id)->family_id === $f->id, 403);
 
-            return app(WatershedPdf::class)->response($release);
+            return app(\App\Services\Watershed\WatershedReleaseExport::class)->response($release);
         } elseif ($action === 'logout') {
             $store->query('sessions', $tenant)->where('token_hash', hash('sha256', $r->header('X-Watershed-Session')))->delete();
 

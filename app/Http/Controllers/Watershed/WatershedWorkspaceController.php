@@ -70,6 +70,9 @@ class WatershedWorkspaceController extends Controller
     {
         $t = $this->tenant($r);
 
-        return app(WatershedPdf::class)->response(app(WatershedStore::class)->row('releases', $t->id, $id));
+        app(WatershedStore::class)->row('releases', $t->id, $id);
+        $source = rtrim(config('soccer.backend_origin'), '/').\Illuminate\Support\Facades\URL::temporarySignedRoute('watershed.release-data', now()->addMinutes(5), ['id' => $id, 'actor' => $r->user()->id], absolute: false);
+
+        return redirect()->away(config('watershed.origin').'/api/watershed/admin-pdf?source='.urlencode($source))->header('Referrer-Policy', 'no-referrer');
     }
 }

@@ -10,7 +10,7 @@ class WatershedRegistration
 {
     public const MEDICAL = ['child1Gender', 'allergies', 'allergenList', 'epipen', 'conditions', 'restrictions', 'comments', 'medical_note', 'insuranceCompany', 'policyNumber', 'physician', 'physicianPhone', 'dentist', 'dentistPhone', 'recentIllnesses', 'eyewear', 'tetanusDate'];
 
-    public const CONTACT = ['parentName', 'phone', 'spouseName', 'spousePhone', 'address', 'city', 'state', 'zip', 'motherName', 'motherPhone', 'fatherName', 'fatherPhone', 'pickupPerson', 'emergencyContact', 'emergencyPhone'];
+    public const CONTACT = ['parentName', 'phone', 'spouseName', 'spousePhone', 'address', 'city', 'state', 'zip', 'motherName', 'motherPhone', 'fatherName', 'fatherPhone', 'pickupPerson', 'pickupPhone', 'emergencyContact', 'emergencyPhone'];
 
     public function __construct(private WatershedStore $store, private SoccerStore $shared, private WatershedPlacement $placement) {}
 
@@ -27,9 +27,15 @@ class WatershedRegistration
         $players = $this->shared->query('players', $tenant)->where('family_id', $family->id)->orderBy('name')->get()->map(function ($p) use ($tenant, $term) {
             $assessment = $this->placement->assess($p->birthday, $term->school_year);
             $adjustment = $this->store->query('adjustments', $tenant)->where('player_id', $p->id)->where('school_year', $term->school_year)->first();
-            $latest = $this->store->query('releases', $tenant)->where('player_id', $p->id)->latest('created_at')->first();
+            $latest = $this->store->query('releases', $tenant)->where('player_id', $p->id)->latest('signed_at')->first();
+            $wren = $this->shared->query('releases', $tenant)->where('player_id', $p->id)->where('family_id', $p->family_id)->whereNotNull('signed_at')->latest('signed_at')->first();
+            $snapshots = collect([$latest, $wren])->filter()->sortBy('signed_at');
+            $medical = [];
+            foreach ($snapshots as $snapshot) {
+                $medical = [...$medical, ...$this->store->decrypt($snapshot->answers)];
+            }
 
-            return ['id' => $p->id, 'name' => $p->name, 'birthday' => $p->birthday, 'assessment' => $assessment, 'adjustment' => $adjustment ? $this->store->decrypt($adjustment->payload) : null, 'medical' => array_intersect_key([...($latest ? $this->store->decrypt($latest->answers) : []), ...$this->shared->decrypt($p->profile)], array_flip(self::MEDICAL))];
+            return ['id' => $p->id, 'name' => $p->name, 'birthday' => $p->birthday, 'assessment' => $assessment, 'adjustment' => $adjustment ? $this->store->decrypt($adjustment->payload) : null, 'medical' => array_intersect_key([...$medical, ...$this->shared->decrypt($p->profile)], array_flip(self::MEDICAL))];
         });
 
         return ['family' => ['id' => $family->id, 'email' => $family->email, 'profile' => array_intersect_key($this->shared->decrypt($family->profile), array_flip(self::CONTACT)), 'preapproved' => (bool) $state?->preapproved],
