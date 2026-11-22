@@ -282,3 +282,5 @@ Route::post('/connected-website/carolina-barrel/inquiries', [\App\Http\Controlle
 })->middleware('signed:relative')->name('soccer.release-data');
 
 require __DIR__.'/team-mobile.php';
+
+Route::match(['get', 'post'], '/watershed/portal/{action}', [\App\Http\Controllers\Watershed\WatershedPortalController::class, 'handle'])->middleware([\App\Http\Middleware\Watershed\VerifyWatershedBridge::class, 'throttle:120,1']);

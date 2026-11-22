@@ -9,6 +9,7 @@
 
 @php($pageUrl=fn($s,$extra=[])=>route('soccer.workspace',['section'=>$s,'tenant'=>$tenant->slug,...$extra]))
 <header class="header"><div><span class="eyebrow">Wren Family Soccer</span><h1>{{ ['home'=>'A new season starts here.','parents'=>'Parents & families','players'=>'Players','coaches'=>$admin?'Coaches':'Your coach jersey','teams'=>'Teams','messages'=>'Messages','website'=>'Website editor','settings'=>'Season & connections'][$section] }}</h1><p class="muted">{{ $season?->name ?? 'Spring 2027' }} · Community Bible Church · Easley, SC</p></div>
+@if($admin && config('watershed.enabled') && in_array(strtolower(auth()->user()->email),config('watershed.leaders')))<a class="btn ghost" href="{{ route('watershed.workspace',['tenant'=>$tenant->slug]) }}">The Watershed</a>@endif
 @if($admin)<a class="btn ghost" href="{{ $pageUrl('settings') }}">Season settings</a>
 @endif</header>
 

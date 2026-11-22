@@ -2793,3 +2793,5 @@ Route::get('/stockists', [\App\Http\Controllers\StockistLocatorController::class
 Route::get('/stockists/assets/{file}', [\App\Http\Controllers\StockistLocatorController::class, 'asset'])->where('file', '[A-Za-z0-9_.-]+')->name('stockists.assets');
 
 require __DIR__.'/square-customer.php';
+
+require __DIR__.'/watershed.php';

@@ -31,6 +31,11 @@ class SoccerWebhookController extends Controller
         $event = json_decode($r->getContent(), true, 512, JSON_THROW_ON_ERROR);
         $obj = $event['data']['object'] ?? [];
         $t = Tenant::where('slug', config('soccer.tenant_slug'))->firstOrFail();
+        if (config('watershed.enabled') && ! empty($obj['metadata']['watershed_invoice_id'])) {
+            app(\App\Services\Watershed\WatershedPayment::class)->webhook($t->id, $obj);
+
+            return response()->json(['received' => true]);
+        }
         if ($event['type'] === 'checkout.session.completed' && ($obj['payment_status'] ?? '') === 'paid' && ($obj['currency'] ?? '') === 'usd') {
             $id = $obj['metadata']['soccer_invoice_id'] ?? '';
             $i = $store->query('invoices', $t->id)->where('id', $id)->first();
