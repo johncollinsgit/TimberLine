@@ -24,6 +24,6 @@ class VerifyWatershedBridge
         $r->attributes->set('watershed_tenant', $t);
         app(\App\Support\Tenancy\TenantContext::class)->set($t->id);
 
-        return $next($r)->header('Cache-Control','private, no-store');
+        return $next($r)->header('Cache-Control', 'private, no-store');
     }
 }

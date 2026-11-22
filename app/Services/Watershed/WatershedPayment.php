@@ -110,9 +110,9 @@ class WatershedPayment
         $id = $object['metadata']['watershed_invoice_id'] ?? null;
         if (! $id) {
             return;
-        }$i = $this->store->query('invoices',$tenant)->where('id',$id)->first();
+        }$i = $this->store->query('invoices', $tenant)->where('id', $id)->first();
         if ($i && $i->checkout_id === ($object['id'] ?? null)) {
-            $this->reconcile($tenant,$id);
+            $this->reconcile($tenant, $id);
         }
     }
 }

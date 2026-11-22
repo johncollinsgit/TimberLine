@@ -47,9 +47,9 @@ class WatershedAuth
     public function family(int $tenant, ?string $token): object
     {
         abort_unless($token, 401);
-        $s = $this->store->query('sessions', $tenant)->where('token_hash', hash('sha256', $token))->where('expires_at','>',now())->first();
-        abort_unless($s,401);
+        $s = $this->store->query('sessions', $tenant)->where('token_hash', hash('sha256', $token))->where('expires_at', '>', now())->first();
+        abort_unless($s, 401);
 
-        return $this->shared->row('families',$tenant,$s->family_id);
+        return $this->shared->row('families', $tenant, $s->family_id);
     }
 }

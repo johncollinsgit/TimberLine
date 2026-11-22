@@ -38,6 +38,6 @@ class WatershedProcess extends Command
             }
         }
 
-return self::SUCCESS;
+        return self::SUCCESS;
     }
 }

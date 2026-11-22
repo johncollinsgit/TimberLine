@@ -74,6 +74,6 @@ class WatershedPortalController extends Controller
             abort(404);
         }
 
-        return response()->json($registration->profile($tenant, app(\App\Services\Soccer\SoccerStore::class)->row('families',$tenant,$f->id)));
+        return response()->json($registration->profile($tenant, app(\App\Services\Soccer\SoccerStore::class)->row('families', $tenant, $f->id)));
     }
 }

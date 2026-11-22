@@ -70,6 +70,6 @@ class WatershedWorkspaceController extends Controller
     {
         $t = $this->tenant($r);
 
-        return app(WatershedPdf::class)->response(app(WatershedStore::class)->row('releases',$t->id,$id));
+        return app(WatershedPdf::class)->response(app(WatershedStore::class)->row('releases', $t->id, $id));
     }
 }

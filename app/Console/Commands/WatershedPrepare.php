@@ -42,7 +42,7 @@ class WatershedPrepare extends Command
                         }
                     }
 
-return false;
+                    return false;
                 });
                 $rows[] = ['name' => $name, 'fingerprint' => hash('sha256', 'watershed-roster-v1:'.$expected), 'family_id' => $matches->count() === 1 ? $matches->first()->id : null];
             }fclose($handle);
