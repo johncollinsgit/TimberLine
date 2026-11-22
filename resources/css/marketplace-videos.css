@@ -16,7 +16,18 @@
 .watch-time { display: inline-block; color: var(--leaf); text-decoration: underline; font: inherit; background: transparent; border: 0; cursor: pointer; padding: .3rem 0; width: fit-content; }
 .watch-form { margin-top: 1.6rem; }
 .watch-editor { max-width: 65rem; }
-.watch-editor .panel { min-width: 0; }
+.watch-editor .panel, .watch-editor form, .watch-editor label, .watch-editor details,
+.watch-editor fieldset, .watch-editor select, .watch-editor input, .watch-editor textarea {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+}
+.watch-editor fieldset { grid-template-columns: minmax(0, 1fr); }
+.watch-editor .panel > *, .watch-editor .watch-tag-row > * { min-width: 0; overflow-wrap: anywhere; }
+.watch-editor .watch-form select, .watch-editor .watch-form textarea { width: 100%; }
+.watch-editor .panel, .watch-editor fieldset, .watch-editor details { width: 100%; }
+.watch-editor input[type="file"] { width: 100%; overflow: hidden; }
+.watch-editor .inline-actions { flex-wrap: wrap; }
 .watch-editor .panel:has(table) { overflow-x: auto; }
 .watch-editor fieldset { display: grid; gap: 1rem; }
 .watch-editor legend { font-size: 1.3rem; font-weight: 700; }
@@ -25,6 +36,6 @@
 .watch-preview[hidden], .watch-time[hidden], .watch-editor [hidden], .watch-channel [hidden] { display: none; }
 @media (max-width: 720px) {
     .watch-feature { grid-template-columns: minmax(0,1fr); }
-    .watch-tag-row { grid-template-columns: 1fr 1fr; }
+    .watch-tag-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .watch-tag-row label:first-child { grid-column: span 2; }
 }

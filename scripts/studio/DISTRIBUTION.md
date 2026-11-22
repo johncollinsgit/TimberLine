@@ -2,6 +2,12 @@
 
 The operator publishes the PC's approved public package to the existing RSS feed with `publish_episode.py`. The episode UUID identifies the episode. Its revision UUID and content-addressed media files identify the exact cut that the editors approved. The distribution page reads these records from the workspace's configured HTTPS feed. Earlier episodes without Studio revision metadata remain in the subscriber feed.
 
+## Publishing from Everbranch Craft on Windows
+
+Render the episode, review the exported audio, video and captions, and approve the public revision in Craft. Select **Publish to FRH** for that revision. If the connection drops, retry the same revision. To correct a published episode, review and approve the replacement export and explicitly supply the UUID of the revision currently in the feed.
+
+The equivalent operator command from the Craft installation is `python frh_publish.py "G:\Everbranch Craft\Your project" --publish-revision REVISION_UUID --confirm-publish`. Include `--previous-revision CURRENT_UUID` only for an intentional correction. The PC uses its existing `everbranch-prod` SSH identity and the verified `.ssh/frh-known-hosts` entry for `frh-web-1`. Only the approved manifest and its listed exports cross the connection. The server checks file hashes in private staging and applies the active `frh-public` release's publisher to the podcast feed served by Caddy. All publishers targeting this feed must share its private lock at `/srv/frh-podcast/.studio/publish.sqlite`.
+
 ## Workspace setup
 
 1. Set `STUDIO_DISTRIBUTION_FEEDS` to a JSON object mapping the actual FRH workspace ID to `https://freerangehumanity.com/podcast/rss.xml`. Each additional workspace must have its own approved feed. Enable Marketing Desk and its messaging module for the participating tenant. Add its public media hostname to the existing `MARKETING_DESK_MEDIA_HOSTS` list. The public web server must serve HTTP HEAD and exact byte ranges for Studio media.

@@ -598,7 +598,11 @@ class Studio:
 if __name__=="__main__":
     window=tk.Tk()
     editor=Studio(window)
-    if __import__("sys").argv[1:]==["--check-launch"]:
+    arguments = __import__("sys").argv[1:]
+    if len(arguments)==2 and arguments[0]=="--project":
+        directory=Path(arguments[1]).resolve()
+        editor.attach(directory,json.loads((directory/"episode.json").read_text("utf-8")))
+    if arguments==["--check-launch"]:
         window.update()
         assert len(editor.nav.tabs())==7 and window.winfo_ismapped()
         print("Everbranch Studio launched with seven editing panels. Library: "+str(media.library()))

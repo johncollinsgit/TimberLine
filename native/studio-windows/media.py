@@ -270,12 +270,15 @@ def suggest_tags(p,catalog):
 
 def verify(p):
     cameras = {s["id"]: s for s in p["sources"] if s["kind"]=="camera" and s.get("enabled", True)}
+    sequenced = bool(p.get("sequence"))
     master = cameras.get(p["edit"]["camera"])
+    if sequenced and not master:
+        master = next(iter(cameras.values()), None)
     if not master:
         raise ValueError("Select an enabled camera or video recording.")
     if p["visibility"] not in {"private","public","members"} or not p["title"].strip():
         raise ValueError("Choose a visibility and episode title.")
-    if any(s["kind"]=="music" and s.get("enabled",True) for s in p["sources"]) and not p["edit"]["music_licensed"]:
+    if any(s["kind"]=="music" and s.get("enabled",True) and not s.get("muted", False) for s in p["sources"]) and not p["edit"]["music_licensed"]:
         raise ValueError("Confirm that you have permission to use the music before rendering.")
     for s in p["sources"]:
         number(s["gain_db"], -60, 24, "track gain")
@@ -283,7 +286,12 @@ def verify(p):
     for c in p["captions"]:
         a = number(c["start"],0,86400,"caption start")
         number(c["end"],a+0.001,86400,"caption end")
+    if "sequence" in p:
+        import sequence
+        sequence.segments(p)
     for i, cut in enumerate([p["edit"], *p["clips"]]):
+        if not i and sequenced:
+            continue
         camera = cameras.get(cut.get("camera") or master["id"])
         if not camera:
             raise ValueError("Choose a camera for each cut.")
@@ -291,7 +299,7 @@ def verify(p):
         offset = 0 if standalone else camera["offset"]
         a = number(cut["start"],max(0,offset),offset+camera["duration"],"cut start")
         b = number(cut["end"],a+0.01,offset+camera["duration"]+0.005,"cut end")
-        outside_master = not standalone and (a<p["edit"]["start"] or b>p["edit"]["end"])
+        outside_master = not sequenced and not standalone and (a<p["edit"]["start"] or b>p["edit"]["end"])
         if i and (outside_master or cut["kind"] not in {"trailer","short"} or cut["framing"] not in FRAMES):
             raise ValueError("Choose an in-range clip and a supported format.")
     if p["edit"].get("intro","").strip():
@@ -299,13 +307,14 @@ def verify(p):
     for tag in p.get("product_tags", []):
         if not isinstance(tag,dict) or not isinstance(tag.get("variant_id"),str) or not tag["variant_id"].strip():
             raise ValueError("Each suggested product tag needs a variant_id.")
-        a = number(tag.get("start"),p["edit"]["start"],p["edit"]["end"],"product tag start")
-        number(tag.get("end"),a+0.001,p["edit"]["end"],"product tag end")
+        start_limit, end_limit = (0, 86400) if sequenced else (p["edit"]["start"], p["edit"]["end"])
+        a = number(tag.get("start"),start_limit,end_limit,"product tag start")
+        number(tag.get("end"),a+0.001,end_limit,"product tag end")
 
 
-def audio_inputs(root, p, a, b, args, graph, first_input):
+def audio_inputs(root, p, a, b, args, graph, first_input, normalize=True):
     edit = p["edit"]
-    tracks = [s for s in p["sources"] if s.get("enabled",True) and s["audio"] and
+    tracks = [s for s in p["sources"] if s.get("enabled",True) and not s.get("muted", False) and s["audio"] and
               (s["kind"] in {"voice","music"} or (s["id"]==edit["camera"] and edit["include_camera_audio"]))]
     feeds = []
     for track in tracks:
@@ -320,7 +329,8 @@ def audio_inputs(root, p, a, b, args, graph, first_input):
         graph.append(f"[{idx}:a:0]aresample=48000,aformat=channel_layouts=stereo,volume={gain}dB,adelay={round(1000*(start-a))}:all=1,apad=whole_dur={b-a}[{name}]")
         feeds.append(f"[{name}]")
     if feeds:
-        graph.append("".join(feeds)+f"amix=inputs={len(feeds)}:normalize=0,atrim=duration={b-a},loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000[audio]")
+        level = ",loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000" if normalize else ""
+        graph.append("".join(feeds)+f"amix=inputs={len(feeds)}:normalize=0,atrim=duration={b-a}{level}[audio]")
     else:
         graph.append(f"anullsrc=r=48000:cl=stereo,atrim=duration={b-a}[audio]")
     return bool(feeds)
@@ -407,7 +417,12 @@ def render(root, p, wide=(1920,1080), fps=30):
         path=temp/name
         assets.append({"kind":kind,"path":name,"mime_type":mime,"bytes":path.stat().st_size,"sha256":digest(path),**extra})
     try:
-        lead=render_cut(root,p,p["edit"],temp,"episode",wide,fps)
+        import sequence
+        cuts = sequence.segments(p)
+        if p.get("sequence") or p["edit"].get("outro", "").strip():
+            lead = sequence.render_episode(root, p, cuts, temp, wide, fps)
+        else:
+            lead = render_cut(root,p,p["edit"],temp,"episode",wide,fps)
         add("episode_video","episode.mp4","video/mp4")
         add("captions","episode.vtt","text/vtt",video="episode.mp4")
         run(["-i","episode.mp4","-vn","-c:a","libmp3lame","-b:a","160k","episode.mp3"],temp)
@@ -418,12 +433,16 @@ def render(root, p, wide=(1920,1080), fps=30):
             kind=cut["kind"]
             counts[kind]+=1
             name=f"{kind}-{counts[kind]:02}"
-            render_cut(root,p,cut,temp,name,wide,fps)
+            clip_project = p
+            if p.get("sequence") and not any(s["id"] == p["edit"]["camera"] and s.get("enabled", True) for s in p["sources"]):
+                clip_project = {**p, "edit": {**p["edit"], "camera": cuts[0]["camera"]}}
+            render_cut(root,clip_project,cut,temp,name,wide,fps)
             add(kind,name+".mp4","video/mp4")
             add("captions",name+".vtt","text/vtt",video=name+".mp4")
             clips.append({**cut,"path":name+".mp4","captions":name+".vtt"})
-        tags=[{**tag,"start":tag["start"]-p["edit"]["start"]+lead,"end":tag["end"]-p["edit"]["start"]+lead}
-              for tag in p.get("product_tags",[])]
+        tags = sequence.intervals(cuts, p.get("product_tags", []), lead) if p.get("sequence") else [
+            {**tag, "start": tag["start"] - p["edit"]["start"] + lead, "end": tag["end"] - p["edit"]["start"] + lead}
+            for tag in p.get("product_tags", [])]
         for clip in clips:
             if clip.get("timeline")=="source":
                 source=next(s for s in p["sources"] if s["id"]==clip["camera"])
@@ -439,10 +458,10 @@ def render(root, p, wide=(1920,1080), fps=30):
         rundown=[]
         for item in p.get("sponsor_rundown",[]):
             placement=item.get("placement")
-            active=placement is not None and p["edit"]["start"]<=placement<p["edit"]["end"]
+            retained = sequence.positions(cuts, placement, lead)
             matching=[clip["path"] for clip in clips if clip.get("booking_id")==item["booking_id"]]
-            rundown.append({**item,"program_position":placement-p["edit"]["start"]+lead if active else None,
-                            "clip_paths":matching})
+            rundown.append({**item, "program_position": retained[0] if retained else None,
+                           "program_positions": retained, "clip_paths": matching})
         manifest={k:p[k] for k in ("schema_version","episode_id","title","description","visibility")}
         manifest.update(revision=revision,approval="draft",created_at=utc(),edit_fingerprint=fingerprint(p),
                         assets=assets,clips=clips,product_tags=tags,sponsor_rundown=rundown)
