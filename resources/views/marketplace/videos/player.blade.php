@@ -25,7 +25,7 @@
                     @if($tag->start_seconds !== null)<button type="button" class="watch-time" data-seek="{{ $tag->start_seconds }}" hidden>Shown at {{ gmdate($tag->start_seconds >= 3600 ? 'G:i:s' : 'i:s', $tag->start_seconds) }}</button>@endif
                     @if(!empty($card['available']) && !empty($card['href']))
                         <form action="{{ route('marketplace.public.watch.shop', [$video->id, $tag->id]) }}" method="post">@csrf
-                            <button class="button compact">{{ $card['lane'] === 'marketplace' ? 'Shop on Markets & Makers' : 'Shop at '.$video->maker->name }}</button>
+                            <button class="button compact">{{ match ($card['lane']) { 'maker_quote' => 'Request a quote', 'marketplace' => 'Shop on Markets & Makers', default => 'Shop at '.$video->maker->name } }}</button>
                         </form>
                     @else
                         <p>Currently unavailable</p>
