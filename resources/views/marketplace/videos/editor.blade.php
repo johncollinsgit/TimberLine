@@ -28,9 +28,10 @@
         $rows = array_slice(array_values($rows), 0, 12);
         if (count($rows) < 12) $rows[] = [];
     @endphp
-    <form class="stack watch-form" method="post" enctype="multipart/form-data" data-video-editor data-max-mb="{{ config('marketplace.video_upload_mb') }}" action="{{ $video->exists ? route('marketplace.public.maker.videos.save', [$maker->id, $video->id]) : route('marketplace.public.maker.videos.create', $maker->id) }}">
+    <form class="stack watch-form" method="post" enctype="multipart/form-data" data-video-editor data-video-id="{{ $video->id }}" data-upload-url="{{ route('marketplace.public.maker.videos', $maker->id) }}/uploads" data-max-mb="{{ config('marketplace.video_upload_mb') }}" action="{{ $video->exists ? route('marketplace.public.maker.videos.save', [$maker->id, $video->id]) : route('marketplace.public.maker.videos.create', $maker->id) }}">
         @csrf <input type="hidden" name="revision" value="{{ $video->revision }}">
-        <input type="hidden" name="source_sha256" value="">
+        <input type="hidden" name="source_sha256" value="{{ old('source_sha256', '') }}">
+        <input type="hidden" name="source_upload_id" value="{{ old('source_upload_id', '') }}">
         @include('marketplace.videos.social-import')
         <details class="panel" data-package-panel hidden><summary>Import a Windows Studio export</summary>
             <label>Approved public export folder<input type="file" data-package-files webkitdirectory multiple></label>
@@ -40,8 +41,12 @@
         </details>
         <fieldset class="panel"><legend>Footage</legend>
             <label>{{ $video->exists ? 'Replace source video' : 'Upload a video' }}
-                <input data-video-file type="file" name="source" accept="video/mp4,video/webm,video/quicktime,.mov,.mp4,.webm" @required(!$video->exists)>
+                <input data-video-file type="file" name="source" accept="video/mp4,video/webm,video/quicktime,.mov,.mp4,.webm" @required(!$video->exists && !old('source_upload_id'))>
             </label>
+            @if(old('source_upload_id'))<p class="fine-print">Your uploaded video is staged for this draft. You can correct the fields below and save again.</p>@endif
+            <div data-upload-panel hidden><progress max="100" aria-label="Video upload progress"></progress> <span role="status" aria-live="polite"></span>
+                <button type="button" class="button secondary compact" data-retry-upload hidden>Retry upload</button>
+            </div>
             <p class="fine-print">MP4, MOV or WebM, up to {{ config('marketplace.video_upload_mb') }} MB. Your source recording is private.</p>
             <div class="inline-actions">
                 <button type="button" class="button secondary compact" data-record hidden>Record with camera</button>

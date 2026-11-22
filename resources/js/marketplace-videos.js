@@ -1,6 +1,7 @@
 import '../css/marketplace-videos.css';
 import {attachSocialImporter} from './marketplace-social-import.js';
 import {attachStudioImporter} from './marketplace-studio-package.js';
+import {attachVideoUpload} from './marketplace-video-upload.js';
 
 const player = document.querySelector('[data-watch-player]');
 if (player) {
@@ -119,7 +120,7 @@ if (editor) {
                     const extension = mime === 'video/mp4' ? 'mp4' : 'webm';
                     transfer.items.add(new File(chunks, 'maker-recording.' + extension, {type: mime}));
                     file.files = transfer.files;
-                    showFile();
+                    file.dispatchEvent(new Event('change'));
                     status.textContent = 'Recording ready. Preview the footage before saving.';
                 }, {once: true});
                 recorder.start(1000);
@@ -146,4 +147,5 @@ if (editor) {
         });
         window.addEventListener('pagehide', stopTracks);
     }
+    attachVideoUpload(editor);
 }

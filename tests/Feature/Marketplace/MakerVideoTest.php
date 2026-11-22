@@ -204,3 +204,112 @@ it('renders only the selected seconds as H.264 with audio, a poster and no priva
     (new RenderMarketplaceVideo($video->id, 2))->handle(app(MakerVideoRenderer::class));
     expect($video->fresh()->status)->toBe('review')->and($video->fresh()->duration)->toBe(2.0);
 });
+
+function mmVideoUploadParts(string $bytes): array
+{
+    $parts = str_split($bytes, \App\Services\Marketplace\MakerVideoUploads::CHUNK_BYTES);
+    $hashes = array_map(fn ($part) => hash('sha256', $part), $parts);
+
+    return [$parts, $hashes, ['size' => strlen($bytes), 'fingerprint' => hash('sha256', implode('', $hashes)), 'revision' => 0]];
+}
+
+it('saves a real video larger than the PHP file limit through private retryable one MiB requests', function () {
+    mmEnableVideoMaker($this->maker);
+    $this->withSession(['marketplace_identity' => $this->identity->id]);
+    $bytes = file_get_contents(public_path('images/public-site/everbranch-studio-hero-loop.mp4')).pack('N', 1400008).'free'.str_repeat("\0", 1400000);
+    [$parts, $hashes, $init] = mmVideoUploadParts($bytes);
+    expect(strlen($bytes))->toBeGreaterThan(2 * 1024 ** 2);
+    $token = (string) \Illuminate\Support\Str::uuid();
+    $url = $this->studio.'/uploads/'.$token;
+    $json = ['Accept' => 'application/json'];
+    $this->postJson($url, $init)->assertOk()->assertJsonPath('next_index', 0);
+    $send = fn ($i, $sum = null) => $this->post($url.'/parts/'.$i, [
+        'part' => UploadedFile::fake()->createWithContent('part.bin', $parts[$i]), 'checksum' => $sum ?? $hashes[$i],
+    ], $json);
+    $send(1)->assertConflict();
+    $send(0, str_repeat('0', 64))->assertUnprocessable();
+    $send(0)->assertOk()->assertJsonPath('next_index', 1);
+    $send(0)->assertOk()->assertJsonPath('next_index', 1);
+    $this->postJson($url, $init)->assertOk()->assertJsonPath('next_index', 1);
+    $this->postJson($url.'/finish')->assertConflict();
+    for ($i = 1; $i < count($parts); $i++) {
+        $send($i)->assertOk()->assertJsonPath('next_index', $i + 1);
+    }
+    $this->postJson($url.'/finish')->assertOk()->assertJsonPath('state', 'ready');
+    $this->postJson($url.'/finish')->assertOk()->assertJsonPath('state', 'ready');
+    $form = [...$this->draft, 'source_upload_id' => $token, 'source_sha256' => hash('sha256', $bytes)];
+    $this->post($this->studio, [...$form, 'title' => ''])->assertSessionHasErrors('title');
+    $this->post($this->studio, [...$form, 'source_sha256' => str_repeat('0', 64)])->assertSessionHasErrors('source');
+    expect(MakerVideo::count())->toBe(0);
+    $this->post($this->studio, $form)->assertSessionHasNoErrors()->assertRedirect();
+    $video = MakerVideo::sole();
+    expect($video->revision)->toBe(1)->and($video->source_type)->toBe('video/mp4')
+        ->and(hash('sha256', Storage::disk('marketplace_video')->get($video->source_path)))->toBe(hash('sha256', $bytes));
+    Queue::assertPushed(RenderMarketplaceVideo::class, 1);
+    Storage::disk('marketplace_video')->assertMissing('upload-staging/'.$this->maker->id.'/'.$token.'/data');
+    $this->post($this->studio, $form)->assertRedirect($this->studio.'/'.$video->id);
+    expect(MakerVideo::count())->toBe(1)->and($video->fresh()->revision)->toBe(1);
+    Queue::assertPushed(RenderMarketplaceVideo::class, 1);
+});
+
+it('restricts staged maker video uploads by membership, invitation, file type, reservation and expiration', function () {
+    [$parts, $hashes, $init] = mmVideoUploadParts(str_repeat('plain text ', 100));
+    $token = (string) \Illuminate\Support\Str::uuid();
+    $url = $this->studio.'/uploads/'.$token;
+    $this->withSession(['marketplace_identity' => $this->identity->id])->postJson($url, $init)->assertForbidden();
+    mmEnableVideoMaker($this->maker);
+    $this->postJson($url, [...$init, 'size' => 3 * 1024 ** 3])->assertUnprocessable();
+    $this->postJson($url, $init)->assertOk();
+    $this->get($url)->assertNotFound();
+    $other = Maker::create(['name' => 'Other', 'slug' => 'other-stage', 'city' => 'Easley', 'story' => 'Other maker.', 'status' => 'approved']);
+    $identity = Identity::create(['email' => 'other-stage@example.test', 'active' => true]);
+    Membership::create(['maker_id' => $other->id, 'identity_id' => $identity->id, 'active' => true, 'role' => 'owner']);
+    mmEnableVideoMaker($other);
+    $foreign = $this->published.'/maker/'.$other->id.'/studio/uploads/'.$token;
+    $this->withSession(['marketplace_identity' => $identity->id])->postJson($url.'/finish')->assertForbidden();
+    $this->postJson($foreign.'/finish')->assertNotFound();
+    $this->post($this->published.'/maker/'.$other->id.'/studio', [...$this->draft, 'source_upload_id' => $token])->assertNotFound();
+    $this->withSession(['marketplace_identity' => $this->identity->id])->post($url.'/parts/0', [
+        'part' => UploadedFile::fake()->createWithContent('maker.mp4', $parts[0]), 'checksum' => $hashes[0],
+    ], ['Accept' => 'application/json'])->assertOk();
+    $this->postJson($url.'/finish')->assertUnprocessable()->assertJsonValidationErrors('source');
+    for ($i = 0; $i < 2; $i++) {
+        $this->postJson($this->studio.'/uploads/'.\Illuminate\Support\Str::uuid(), $init)->assertOk();
+    }
+    $next = $this->studio.'/uploads/'.\Illuminate\Support\Str::uuid();
+    $this->postJson($next, $init)->assertStatus(429);
+    $this->deleteJson($url)->assertOk();
+    $this->postJson($next, $init)->assertOk();
+    $this->travel(25)->hours();
+    $this->postJson($next.'/finish')->assertGone();
+    expect(app(\App\Services\Marketplace\MakerVideoUploads::class)->prune())->toBe(3);
+    $this->postJson($next.'/finish')->assertNotFound();
+});
+
+it('preserves a draft when assembled bytes fail verification and binds a replacement ticket to its video and revision', function () {
+    $bytes = file_get_contents(public_path('images/public-site/everbranch-studio-hero-loop.mp4'));
+    [$parts, $hashes, $init] = mmVideoUploadParts($bytes);
+    mmEnableVideoMaker($this->maker);
+    $this->withSession(['marketplace_identity' => $this->identity->id])->post($this->studio, [
+        ...$this->draft, 'action' => 'draft', 'source' => UploadedFile::fake()->create('first.mp4', 3, 'video/mp4'),
+    ])->assertSessionHasNoErrors();
+    $video = MakerVideo::sole();
+    $token = (string) \Illuminate\Support\Str::uuid();
+    $url = $this->studio.'/uploads/'.$token;
+    $this->postJson($url, [...$init, 'video_id' => $video->id, 'revision' => 1])->assertOk();
+    $this->postJson($url, $init)->assertConflict();
+    foreach ($parts as $i => $part) {
+        $this->post($url.'/parts/'.$i, ['part' => UploadedFile::fake()->createWithContent('part.bin', $part), 'checksum' => $hashes[$i]],
+            ['Accept' => 'application/json'])->assertOk();
+    }
+    $this->postJson($url.'/finish')->assertOk();
+    $this->post($this->studio, [...$this->draft, 'source_upload_id' => $token])->assertConflict();
+    $path = 'upload-staging/'.$this->maker->id.'/'.$token.'/data';
+    Storage::disk('marketplace_video')->put($path, 'broken');
+    $this->post($this->studio.'/'.$video->id, [...$this->draft, 'revision' => 1, 'source_upload_id' => $token])->assertUnprocessable();
+    expect($video->fresh()->revision)->toBe(1)->and($video->fresh()->source_path)->toBe($video->source_path);
+    Storage::disk('marketplace_video')->put($path, $bytes);
+    $this->post($this->studio.'/'.$video->id, [...$this->draft, 'action' => 'draft', 'revision' => 1, 'source_upload_id' => $token])->assertSessionHasNoErrors();
+    expect($video->fresh()->revision)->toBe(2);
+    Storage::disk('marketplace_video')->assertMissing($video->source_path);
+});

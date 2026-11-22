@@ -3,6 +3,7 @@
 use App\Http\Controllers\Marketplace\AccountController;
 use App\Http\Controllers\Marketplace\MakerController;
 use App\Http\Controllers\Marketplace\MakerVideoController;
+use App\Http\Controllers\Marketplace\MakerVideoUploadController;
 use App\Http\Controllers\Marketplace\OperatorController;
 use App\Http\Controllers\Marketplace\ShopifyWebhookController;
 use App\Http\Controllers\Marketplace\SocialVideoImportController;
@@ -35,6 +36,12 @@ if (config('marketplace.host')) {
         Route::post('/watch/{videoId}/play', [WatchController::class, 'viewed'])->whereNumber('videoId')->middleware('throttle:60,1')->name('watch.play');
         Route::post('/watch/{videoId}/products/{tagId}', [WatchController::class, 'shop'])->whereNumber(['videoId', 'tagId'])->middleware('throttle:60,1')->name('watch.shop');
         Route::get('/maker/{id}/studio', [MakerVideoController::class, 'index'])->whereNumber('id')->name('maker.videos');
+        Route::prefix('/maker/{id}/studio/uploads/{token}')->where(['id' => '[0-9]+', 'token' => '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}'])->group(function () {
+            Route::post('/', [MakerVideoUploadController::class, 'start'])->middleware('throttle:30,1')->name('maker.videos.upload.start');
+            Route::post('/parts/{index}', [MakerVideoUploadController::class, 'chunk'])->where('index', '[0-9]{1,4}')->middleware('throttle:600,1')->name('maker.videos.upload.chunk');
+            Route::post('/finish', [MakerVideoUploadController::class, 'finish'])->middleware('throttle:30,1')->name('maker.videos.upload.finish');
+            Route::delete('/', [MakerVideoUploadController::class, 'cancel'])->middleware('throttle:30,1')->name('maker.videos.upload.cancel');
+        });
         Route::get('/maker/{id}/studio/new', [MakerVideoController::class, 'edit'])->whereNumber('id')->name('maker.videos.new');
         Route::post('/maker/{id}/studio', [MakerVideoController::class, 'save'])->whereNumber('id')->middleware('throttle:20,60')->name('maker.videos.create');
         Route::get('/maker/{id}/studio/{videoId}', [MakerVideoController::class, 'edit'])->whereNumber(['id', 'videoId'])->name('maker.videos.edit');

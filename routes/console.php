@@ -275,6 +275,11 @@ Schedule::call(fn (): int => app(WorkspaceAssetService::class)->pruneExpiredUplo
     ->everyThirtyMinutes()
     ->withoutOverlapping(10);
 
+Schedule::call(fn (): int => app(\App\Services\Marketplace\MakerVideoUploads::class)->prune())
+    ->name('marketplace:prune-staged-videos')
+    ->everyThirtyMinutes()
+    ->withoutOverlapping(10);
+
 // Accepted contract allowances reset by calendar month. Once a period closes,
 // create one auditable Stripe invoice for any metered overage and link it back
 // to the immutable usage periods so retries cannot bill the same usage twice.

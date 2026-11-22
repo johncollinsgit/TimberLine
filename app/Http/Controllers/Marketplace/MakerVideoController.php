@@ -9,8 +9,10 @@ use App\Models\Marketplace\MakerVideo;
 use App\Services\Marketplace\MakerVideoCaptions;
 use App\Services\Marketplace\MakerVideoCatalog;
 use App\Services\Marketplace\MakerVideoSales;
+use App\Services\Marketplace\MakerVideoUploads;
 use App\Services\Marketplace\MarketplaceAccess;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -58,8 +60,26 @@ class MakerVideoController extends Controller
         if ($videoId !== null) {
             $this->ownedVideo($maker, $videoId);
         }
+        if ($request->filled('source_upload_id')) {
+            $request->validate(['source_upload_id' => 'required|uuid', 'source' => 'prohibited', 'revision' => 'required|integer|min:0']);
+
+            return app(MakerVideoUploads::class)->save($id, strtolower($request->string('source_upload_id')->toString()), $videoId, (int) $request->input('revision'),
+                fn (UploadedFile $file, string $name) => $this->saveDraft($request, $maker, $videoId, $catalog, $captions, $file, $name));
+        }
+
+        return $this->saveDraft($request, $maker, $videoId, $catalog, $captions)[0];
+    }
+
+    private function saveDraft(Request $request, Maker $maker, ?int $videoId, MakerVideoCatalog $catalog, MakerVideoCaptions $captions,
+        ?UploadedFile $staged = null, ?string $stagedName = null): array
+    {
+        $id = $maker->id;
         $maxKb = config('marketplace.video_upload_mb') * 1024;
-        $data = $request->validate([
+        $input = $request->all();
+        if ($staged !== null) {
+            $input['source'] = $staged;
+        }
+        $data = validator($input, [
             'title' => 'required|string|max:160', 'description' => 'nullable|string|max:5000', 'format' => 'required|in:short,long',
             'theme' => ['required', \Illuminate\Validation\Rule::in(array_keys(MakerVideo::THEMES))],
             'source' => [($videoId ? 'nullable' : 'required'), 'file', 'mimetypes:video/mp4,video/quicktime,video/webm', 'max:'.$maxKb],
@@ -70,7 +90,7 @@ class MakerVideoController extends Controller
             'captions' => 'nullable|string|max:1000000', 'tags' => 'nullable|array|max:12',
             'tags.*.key' => 'nullable|string|max:145', 'tags.*.start' => 'nullable|integer|min:0|max:14399',
             'tags.*.end' => 'nullable|integer|min:1|max:14400',
-        ]);
+        ])->validate();
         $sourceUrl = ! empty($data['source_post_url']) ? \App\Services\Marketplace\MakerSocialImport::postUrl($data['source_post_url']) : null;
         if (! empty($data['source_post_url']) && ! $sourceUrl) {
             throw ValidationException::withMessages(['source_post_url' => 'Use an Instagram, Facebook or YouTube video link.']);
@@ -99,12 +119,15 @@ class MakerVideoController extends Controller
             }
             $tags[$key] = ['label' => mb_substr(trim($card['label'].' '.($card['variant'] ?? '')), 0, 255), 'start_seconds' => $from, 'end_seconds' => $to, 'active' => true];
         }
-        $file = $request->file('source');
+        $file = $staged ?? $request->file('source');
         if (! empty($data['source_sha256']) && (! $file || ! hash_equals(strtolower($data['source_sha256']), hash_file('sha256', $file->getRealPath())))) {
             throw ValidationException::withMessages(['source' => 'The uploaded video differs from the verified Studio export.']);
         }
         $disk = Storage::disk('marketplace_video');
-        $path = $file ? $file->store('sources/'.$id, 'marketplace_video') : null;
+        $path = $file ? ($stagedName ? $file->storeAs('sources/'.$id, $stagedName, 'marketplace_video') : $file->store('sources/'.$id, 'marketplace_video')) : null;
+        if ($file && (! is_string($path) || $path === '')) {
+            throw new \RuntimeException('The private source video could not be stored.');
+        }
         $obsolete = [];
         $submit = $data['action'] === 'submit';
         try {
@@ -156,7 +179,7 @@ class MakerVideoController extends Controller
             $disk->delete($oldPath);
         }
 
-        return redirect()->route('marketplace.public.maker.videos.edit', [$id, $video->id])->with('status', $submit ? 'Submission saved. Check the processing and review status below.' : 'Draft saved.');
+        return [redirect()->route('marketplace.public.maker.videos.edit', [$id, $video->id])->with('status', $submit ? 'Submission saved. Check the processing and review status below.' : 'Draft saved.'), $video->id];
     }
 
     public function source(Request $request, int $id, int $videoId, MarketplaceAccess $access)
