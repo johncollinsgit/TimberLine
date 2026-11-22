@@ -14,7 +14,7 @@
     @endif
     @if($cards->isNotEmpty())<h2>Featured products</h2><ul>
         @foreach($cards as ['tag' => $tag, 'card' => $card])
-            <li>{{ $tag->label }} · {{ ($card['available'] ?? false) ? 'Available' : 'Currently unavailable' }} @if($tag->start_seconds !== null || $tag->end_seconds !== null) · {{ $tag->start_seconds ?? 0 }}s to {{ $tag->end_seconds !== null ? $tag->end_seconds.'s' : 'end' }}@endif</li>
+            <li>{{ $tag->label }} · {{ ($card['available'] ?? false) ? (($card['lane'] ?? '') === 'maker_quote' ? 'Request a quote' : 'Available') : 'Currently unavailable' }} @if($tag->start_seconds !== null || $tag->end_seconds !== null) · {{ $tag->start_seconds ?? 0 }}s to {{ $tag->end_seconds !== null ? $tag->end_seconds.'s' : 'end' }}@endif</li>
         @endforeach
     </ul>@endif
     <details class="panel"><summary>Production time and cost</summary>
