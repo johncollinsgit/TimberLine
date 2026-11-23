@@ -76,7 +76,7 @@
                         <label>Product or variant<select name="tags[{{ $index }}][key]"><option value="">No tag</option>
                             @if(!empty($row['key']) && !collect($options)->contains('key', $row['key']))<option selected value="{{ $row['key'] }}">{{ $tags->firstWhere('product_key', $row['key'])?->label ?? 'Previous product' }} (unavailable)</option>@endif
                             @foreach($options as $option)
-                                <option value="{{ $option['key'] }}" @selected(($row['key'] ?? '') === $option['key'])>{{ $option['label'] }} {{ $option['variant'] ?? '' }} · {{ $option['lane'] === 'marketplace' ? 'Marketplace' : 'Maker store' }}</option>
+                                <option value="{{ $option['key'] }}" @selected(($row['key'] ?? '') === $option['key'])>{{ $option['label'] }} {{ $option['variant'] ?? '' }} · {{ match ($option['lane']) { 'maker_quote' => 'Request a quote', 'marketplace' => 'Marketplace', default => 'Maker store' } }}</option>
                             @endforeach
                         </select></label>
                         <label>From (sec)<input type="number" min="0" max="14399" name="tags[{{ $index }}][start]" value="{{ $row['start'] ?? '' }}"></label>

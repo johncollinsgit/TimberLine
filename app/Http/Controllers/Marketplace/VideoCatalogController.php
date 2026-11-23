@@ -7,6 +7,7 @@ use App\Models\Marketplace\Maker;
 use App\Models\Marketplace\MakerVideo;
 use App\Models\Marketplace\VideoCatalogSource;
 use App\Models\WebsiteProductVariant;
+use App\Services\Marketplace\MakerVideoCatalog;
 use App\Services\Marketplace\MakerVideoShopify;
 use App\Services\Marketplace\MarketplaceAccess;
 use App\Services\Shopify\ShopifyHmacVerifier;
@@ -110,17 +111,23 @@ class VideoCatalogController extends Controller
         $tenant = $access->assertWorkspaceManager($request->user(), (int) $maker->tenant_id);
         $input = $request->validate(['variant_id' => 'required|integer|min:1', 'action' => 'required|in:add,remove']);
         $variant = WebsiteProductVariant::forTenant($tenant)->with('product')
-            ->whereHas('product', fn ($q) => $q->where('tenant_id', $tenant->id)->where('product_type', 'physical')
+            ->whereHas('product', fn ($q) => $q->where('tenant_id', $tenant->id)->whereIn('product_type', ['physical', 'quote'])
                 ->whereHas('site', fn ($site) => $site->where('tenant_id', $tenant->id)))->findOrFail($input['variant_id']);
         $product = $variant->product;
+        $selection = null;
         if ($input['action'] === 'add') {
             $this->assertPilot($maker);
+            abort_if($product->status !== 'active' || ! $product->site->public_enabled || $product->site->status !== 'published', 422, 'Publish this product and site before sharing it.');
+            $selection = ['label' => $product->title, 'variant' => $variant->title];
+            if ($product->product_type === 'quote') {
+                $selection['quote_url'] = app(MakerVideoCatalog::class)->quoteDestination($product->site, $variant);
+                abort_unless($selection['quote_url'], 422, 'Share a published quote product with one available option and an active quote form.');
+            }
         }
-        abort_if($input['action'] === 'add' && ($product->status !== 'active' || ! $product->site->public_enabled || $product->site->status !== 'published'), 422, 'Publish this product and site before sharing it.');
-        DB::transaction(function () use ($maker, $product, $variant, $input) {
+        DB::transaction(function () use ($maker, $product, $variant, $selection) {
             $connection = VideoCatalogSource::firstOrCreate(['provider' => 'everbranch', 'reference' => (string) $product->tenant_site_id], ['maker_id' => $maker->id]);
             abort_unless((int) $connection->maker_id === $maker->id, 409, 'This site is connected to another maker.');
-            $this->changeSelection($connection, (string) $variant->id, $input['action'] === 'add' ? ['label' => $product->title, 'variant' => $variant->title] : null);
+            $this->changeSelection($connection, (string) $variant->id, $selection);
         });
 
         return back()->with('status', $input['action'] === 'add' ? 'Variant shared with this maker for shoppable videos.' : 'Variant removed from video shopping.');

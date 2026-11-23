@@ -7,10 +7,12 @@ use App\Models\Marketplace\Maker;
 use App\Models\Marketplace\VideoCatalogSource;
 use App\Models\TenantSite;
 use App\Models\WebsiteProductVariant;
+use App\Services\ManagedWebsite\ConnectedWebsiteService;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsiteCommerceService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class MakerVideoCatalog
 {
@@ -74,16 +76,26 @@ class MakerVideoCatalog
         }
         $site = TenantSite::forTenantId($maker->tenant_id)->where('public_enabled', true)->where('status', 'published')
             ->with('tenant', 'publishedSiteVersion')->find($source->reference);
-        if (! $site || data_get($site->publishedSiteVersion?->settings ?? $site->settings, 'domain_choice') === 'everbranch_subdomain') {
+        if (! $site) {
             return null;
         }
         $variant = WebsiteProductVariant::forTenantId($maker->tenant_id)->with('product')
             ->whereHas('product', fn ($q) => $q->where('tenant_id', $maker->tenant_id)->where('tenant_site_id', $site->id)
-                ->where('status', 'active')->where('product_type', 'physical'))->find($id);
+                ->where('status', 'active')->whereIn('product_type', ['physical', 'quote']))->find($id);
         if (! $variant) {
             return null;
         }
         $key = 'everbranch:'.$site->id.':'.$id;
+        $consentedQuote = $source->selections[$id]['quote_url'] ?? null;
+        if ($variant->product->product_type === 'quote') {
+            $url = $this->quoteDestination($site, $variant);
+            $available = $url !== null && $url === $consentedQuote;
+
+            return $this->card($maker, $key, $variant->product->title, $variant->title, $available, $url, 'maker_quote');
+        }
+        if ($consentedQuote !== null || data_get($site->publishedSiteVersion?->settings ?? $site->settings, 'domain_choice') === 'everbranch_subdomain') {
+            return null;
+        }
         // A maker who allocated this variant to marketplace checkout should receive its existing order and fee terms.
         $listing = $maker->listings()->where('source_variant_id', $id)->where('status', 'approved')->where('stock_quantity', '>', 0)->first();
         if ($listing) {
@@ -104,9 +116,55 @@ class MakerVideoCatalog
         return $this->card($maker, $key, $product->title, $variant->title, (bool) $available, 'https://'.$host.'/products/'.rawurlencode($product->handle).'?variant='.$id);
     }
 
+    /** Return an exact product page whose public quote form is backed by the current site and product. */
+    public function quoteDestination(TenantSite $site, WebsiteProductVariant $variant): ?string
+    {
+        $product = $variant->product;
+        if (! $site->public_enabled || $site->status !== 'published' || $product?->product_type !== 'quote'
+            || $product->status !== 'active' || (int) $variant->tenant_id !== (int) $site->tenant_id
+            || (int) $product->tenant_id !== (int) $site->tenant_id || (int) $product->tenant_site_id !== (int) $site->id
+            || ! preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/D', $product->handle)) {
+            return null;
+        }
+        // The hosted quote form records a product and the connected form initially selects its first option.
+        // Share an exact choice only while both the seller and shopper can identify it unambiguously.
+        if (! $variant->is_available || $product->variants()->where('tenant_id', $site->tenant_id)
+            ->where('is_available', true)->whereKeyNot($variant->id)->exists()) {
+            return null;
+        }
+        $websites = app(ManagedWebsiteService::class);
+        $host = $site->subdomain.'.'.config('tenancy.domains.canonical.base_domain');
+        if (! filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) || ! $websites->publicHostAllowed($site, $host)) {
+            return null;
+        }
+        $url = 'https://'.$host.'/products/'.rawurlencode($product->handle).'?variant='.$variant->id;
+        $connected = app(ConnectedWebsiteService::class);
+        if ($connected->connected($site)) {
+            $version = $site->publishedSiteVersion;
+            if ('https://'.$host !== ConnectedWebsiteService::ORIGIN || $version?->status !== 'published'
+                || (int) $version->tenant_id !== (int) $site->tenant_id || (int) $version->tenant_site_id !== (int) $site->id
+                || data_get($version->settings, 'connected_renderer') !== ConnectedWebsiteService::RENDERER) {
+                return null;
+            }
+            try {
+                $connected->assertAvailable($site);
+            } catch (HttpExceptionInterface) {
+                return null;
+            }
+
+            // The connected quote receiver only accepts available variants from the published catalog.
+            return $product->track_inventory && $variant->inventory_quantity < 1 ? null : $url.'#order';
+        }
+        $published = $websites->publicPage($site->tenant, '');
+
+        return ($published['site']->id ?? null) === $site->id ? $url : null;
+    }
+
     private function listingCard(Maker $maker, Listing $listing): array
     {
-        $available = $listing->stock_quantity > 0 && app(MarketplaceRates::class)->accepted($listing)
+        $quoteSource = $listing->source_variant_id && WebsiteProductVariant::query()->whereKey($listing->source_variant_id)
+            ->whereHas('product', fn ($q) => $q->where('product_type', 'quote'))->exists();
+        $available = ! $quoteSource && $listing->stock_quantity > 0 && app(MarketplaceRates::class)->accepted($listing)
             && app(MarketplaceCheckout::class)->blockers() === [];
         if ($available && config('marketplace.checkout_provider') === 'shopify') {
             $available = $listing->shopify_variant_gid && $listing->published_revision === $listing->revision
@@ -117,11 +175,11 @@ class MakerVideoCatalog
         return [...$card, 'lane' => 'marketplace', 'listing_id' => $listing->id];
     }
 
-    private function card(Maker $maker, string $key, string $label, string $variant, bool $available, ?string $href): array
+    private function card(Maker $maker, string $key, string $label, string $variant, bool $available, ?string $href, string $lane = 'maker_store'): array
     {
         $available = $available && $maker->status === 'approved';
 
         return ['key' => $key, 'label' => $label, 'variant' => $variant, 'seller' => $maker->name,
-            'available' => $available, 'href' => $available ? $href : null, 'lane' => 'maker_store'];
+            'available' => $available, 'href' => $available ? $href : null, 'lane' => $lane];
     }
 }
