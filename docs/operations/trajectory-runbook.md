@@ -33,6 +33,71 @@ finance records are registered with global search or generic tenant exports.
 
 ## Provider onboarding
 
+### SimpleFIN private pilot
+
+SimpleFIN is an additional read-only bank-feed provider, using the same scoped
+Trajectory accounts, ledger, account ownership, and shared business bank-feed
+entry point. It is not a separate module, accounting ledger, payout bank, payment
+method, or customer subscription. Existing Plaid connections retain their provider.
+
+Set `SIMPLEFIN_ENABLED=true` and list the explicitly authorized finance **space
+IDs** in `SIMPLEFIN_LINK_SPACE_IDS` through the normal configuration/release
+process. Both settings default off/empty. Existing connected feeds may continue
+syncing when new connections are paused by clearing the space list; disabling
+the provider stops all SimpleFIN retrieval. Normal finance entitlement and current
+owner access still apply. Deployment alone does not enable customer rollout.
+
+From Accounts, choose Connect a bank → SimpleFIN. The private pilot uses an
+owner's SimpleFIN Bridge subscription and setup token. The owner signs in and
+authorizes banks on SimpleFIN, then enters the one-time token in Everbranch's
+password field, never in chat or repository fixtures. The server claims it over
+verified HTTPS, rejects off-provider hosts/ports/redirects, binds recovery to the
+owner/space/browser, and encrypts the resulting access URL. An uncertain claim
+requires a new token; it must not be blindly repeated. Owner disconnect removes
+Everbranch's credential and preserves imported history; the owner may also revoke
+the app in SimpleFIN. It does not cancel the owner's SimpleFIN subscription.
+
+Review each USD account's type, owner and balance convention before first import.
+Card issuers can report debt balances with different signs; the review says
+“You owe” or “You have a credit” rather than asking the owner to interpret signs.
+A zero-balance debt account requests review when its first nonzero balance arrives.
+The owner can explicitly reuse a matching manual balance account with no
+transactions, preserving its ID and debt-plan links without counting the snapshot
+again. Historical imports remain separate and use existing explicit source
+reconciliation/balance authority controls. Newly discovered accounts stay unmapped.
+
+`trajectory:sync-simplefin` queues authorized feeds at most once per six-hour slot
+with stable jitter; Laravel schedules the command every fifteen minutes. Every
+provider accounts request, including failed attempts and account discovery, counts
+against a shared rolling budget of 20 per access URL per 24 hours, below SimpleFIN's
+published 24-request expectation. Sync backfills up to 730 requested days in
+90-day windows, committing each validated response and its progress atomically.
+The observed transaction start is actual returned history, not the requested start.
+Partial errors cannot advance historical completion or delete absent rows. Pending
+transactions are omitted. Stable IDs prevent replay duplicates and preserve review.
+
+Balances retain the provider's `balance-date`, not the polling time. Optional
+available balances are stored separately in encrypted connection coverage and
+exposed only for the authorized account. UI labels approximately daily bank
+updates and incomplete history. APRs, minimum payments and loan terms remain
+manual; this adapter does not add bank evidence to AI provider context.
+
+The public SimpleFIN contract currently uses a customer-managed account and token.
+Everbranch-paid subscriptions, provisioning, embedded signup and commercial pricing
+remain unconfirmed. Do not enable general customer signup, charge customers, accept
+partner terms or promise the retail $15/year price for sponsored service on the
+basis of this implementation. A partnership information request was authorized by
+the owner; an inquiry is not a commercial agreement.
+
+Validation: `SimpleFinTest`, existing Trajectory scope/Plaid/source-reconciliation
+tests, `npm run test:trajectory`, and desktop/mobile connection chooser and mapping
+checks with fictional records. Real bank/card coverage requires an owner-authorized
+pilot after protected release; passing tests does not establish institution access.
+References: [SimpleFIN developer guide](https://beta-bridge.simplefin.org/info/developers)
+and [protocol](https://www.simplefin.org/protocol.html), checked November 24, 2026.
+
+### Other providers
+
 - Plaid uses `PLAID_ENVIRONMENT` (`sandbox` or `production`), `PLAID_CLIENT_ID`,
   `PLAID_SECRET`, `PLAID_WEBHOOK_URL`, and `PLAID_REDIRECT_URI`. Configure
   the webhook at `/api/trajectory/webhooks/plaid`. New bank sign-ins require the

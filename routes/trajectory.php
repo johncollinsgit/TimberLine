@@ -48,6 +48,7 @@ Route::middleware(['auth', 'verified', 'throttle:120,1'])->prefix('trajectory')-
         Route::post('/imports/confirm', [Trajectory::class, 'confirmImport'])->name('trajectory.confirmImport');
         Route::post('/banks/link', [Trajectory::class, 'linkBank'])->name('trajectory.linkBank')->middleware('throttle:10,1');
         Route::post('/banks/exchange', [Trajectory::class, 'exchangeBank'])->name('trajectory.exchangeBank')->middleware('throttle:10,1');
+        Route::post('/banks/simplefin', [\App\Http\Controllers\Trajectory\SimpleFinController::class, 'store'])->name('trajectory.simplefin')->middleware('throttle:5,1');
         Route::post('/banks/{connection}/sync', [Trajectory::class, 'syncBank'])->name('trajectory.syncBank')->middleware('throttle:5,1');
         Route::delete('/banks/{connection}', [Trajectory::class, 'disconnectBank'])->name('trajectory.disconnectBank');
         Route::post('/invites', [Trajectory::class, 'invite'])->name('trajectory.invite');

@@ -484,6 +484,9 @@ jobs:
     - name: Verify Trajectory progressive startup
       run: node tests/e2e/trajectory-bootstrap.browser.mjs
       if: matrix.group == 'workspace'
+    - name: Verify Trajectory SimpleFIN connection path
+      run: node tests/e2e/trajectory-simplefin.browser.mjs
+      if: matrix.group == 'workspace'
     - name: Verify Trajectory chart explanations
       run: node tests/e2e/trajectory-donut-explanation.browser.mjs
       if: matrix.group == 'workspace'

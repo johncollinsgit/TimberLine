@@ -1,3 +1,13 @@
+## 2026-11-24 · SimpleFIN private bank connection path
+
+Accounts offers an enabled-provider chooser for SimpleFIN and Plaid. The SimpleFIN
+pilot opens provider setup and accepts a masked one-time setup token, then reviews
+account ownership, type and balance convention. An existing manual snapshot can be
+chosen explicitly when it has no transaction history. Feed rows show the provider,
+daily-update expectation, incomplete history and escaped connection errors; account
+rows retain the bank's observation date and label available balances separately.
+This is an additional read-only feed path, with no customer subscription activation.
+
 ## 2026-11-19 · Fuel budget progress after editing
 
 Known fuel spending stays visible in the progress bar when other transportation

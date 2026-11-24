@@ -177,6 +177,7 @@ class PlaidService
 
     public function sync(Connection $connection): void
     {
+        abort_unless($connection->provider === 'plaid', 422, 'Use this connection’s original provider.');
         Cache::lock('trajectory:sync:'.$connection->id, 300)->get(function () use ($connection): void {
             $connection->refresh();
             $space = Space::findOrFail($connection->space_id);
@@ -355,7 +356,7 @@ class PlaidService
     public function debtSuggestions(Space $space): array
     {
         $suggestions = [];
-        foreach (Connection::whereIn('id', Account::where('space_id', $space->id)->whereNotNull('connection_id')->pluck('connection_id'))->where('status', '!=', 'disconnected')->get() as $connection) {
+        foreach (Connection::where('provider', 'plaid')->whereIn('id', Account::where('space_id', $space->id)->whereNotNull('connection_id')->pluck('connection_id'))->where('status', '!=', 'disconnected')->get() as $connection) {
             foreach (($connection->coverage['liabilities'] ?? []) as $kind => $rows) {
                 foreach ($rows ?? [] as $row) {
                     $account = Account::where('space_id', $space->id)->where('source_key', 'plaid:'.$connection->id.':'.($row['account_id'] ?? ''))->first();

@@ -14,8 +14,8 @@ use Illuminate\Support\Str;
 class SourceCoverageReconciliationService
 {
     /**
-     * Prefer a live Plaid account over the same account imported through Monarch
-     * from the first available Plaid transaction onward. The historical export
+     * Prefer a connected bank account over the same account imported through Monarch
+     * from the first available bank transaction onward. The historical export
      * remains authoritative for its earlier gap.
      */
     public function preview(User $user, Space $space): array
@@ -23,7 +23,7 @@ class SourceCoverageReconciliationService
         app(FinanceAccess::class)->authorize($user, $space);
 
         $accounts = Account::where('space_id', $space->id)->get();
-        $plaid = $accounts->filter(fn (Account $account): bool => str_starts_with($account->source_key, 'plaid:') && $account->connection_id);
+        $plaid = $accounts->filter(fn (Account $account): bool => app(CashBalanceSourceService::class)->sourceType($account) === 'connected');
         $monarch = $accounts->filter(fn (Account $account): bool => str_starts_with($account->source_key, 'monarch:'));
         $byName = $plaid->groupBy(fn (Account $account): string => $this->accountName($account->name));
 

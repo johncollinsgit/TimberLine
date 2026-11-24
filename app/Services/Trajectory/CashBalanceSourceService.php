@@ -18,7 +18,7 @@ class CashBalanceSourceService
         return match (true) {
             str_starts_with($account->source_key, 'manual:') && strlen($account->source_key) > strlen('manual:') => 'manual',
             str_starts_with($account->source_key, 'monarch:'.$account->space_id.':') => 'historical_import',
-            $account->connection_id && str_starts_with($account->source_key, 'plaid:'.$account->connection_id.':') && strlen($account->source_key) > strlen('plaid:'.$account->connection_id.':') => 'connected',
+            $account->connection_id && preg_match('/^(?:plaid|simplefin):'.preg_quote((string) $account->connection_id, '/').':.+$/D', $account->source_key) => 'connected',
             default => 'other',
         };
     }
@@ -72,10 +72,13 @@ class CashBalanceSourceService
     public function accountPayload(Space $space, Collection $accounts): array
     {
         $excluded = $this->excluded($space, $accounts);
+        $connections = Connection::whereIn('id', $accounts->pluck('connection_id')->filter())->get()->keyBy('id');
 
         return $accounts->map(fn (Account $a): array => [
             ...$a->only(['id', 'name', 'kind', 'connection_id', 'balance_cents', 'history_start', 'observed_at', 'currency']),
             'source_type' => $this->sourceType($a),
+            'available_balance_cents' => $a->connection_id && $connections->get($a->connection_id)?->provider === 'simplefin'
+                ? ($connections->get($a->connection_id)->coverage['simplefin_balances'][substr($a->source_key, strlen('simplefin:'.$a->connection_id.':'))]['available_cents'] ?? null) : null,
             'current_balance_excluded' => isset($excluded[$a->id]),
             'current_balance_replaced_by_account_id' => $excluded[$a->id] ?? null,
         ])->all();
