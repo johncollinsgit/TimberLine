@@ -75,6 +75,16 @@ archived renderer. Shared workspaces, AI and agreement requests retain their
 separate access rules. After the protected release, verify the password gate
 and the intended walkthrough for each configured edition.
 
+## Editing live proposal copy
+
+In the proposal owner workspace, open **Published versions**, then **Edit live
+copy** for an active version. Saving replaces the web overview introduction
+and optionally shows a titled plain-text section above the tabs. Clear the
+section fields to remove it, or clear the introduction to restore the
+published text. Readers use the existing password-protected URL. The editor
+stores copy separately from the published snapshot and scopes it to one
+version. Publish a new edition for changes to the agreement, pricing, or PDF.
+
 ## Source capabilities
 
 - `/owner-workspaces/{workspace}/proposals`: list/create/edit, catalog, clients,

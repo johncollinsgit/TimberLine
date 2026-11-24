@@ -21,6 +21,8 @@ Route::middleware(['auth', 'verified', \App\Proposals\ResponsePolicy::class])->p
     Route::get('/{draftId}/pdf', [PdfController::class, 'owner'])->middleware('throttle:6,1')->name('pdf');
     Route::post('/{draftId}/financial-planning', [OwnerController::class, 'financial'])->name('financial');
     Route::post('/{draftId}/publish', [OwnerController::class, 'publish'])->middleware('throttle:10,1')->name('publish');
+    Route::get('/versions/{versionId}/live-copy', [\App\Proposals\LiveCopyController::class, 'edit'])->whereUuid('versionId')->name('live-copy');
+    Route::put('/versions/{versionId}/live-copy', [\App\Proposals\LiveCopyController::class, 'update'])->whereUuid('versionId')->name('live-copy.update');
     Route::get('/versions/{versionId}/activity', [\App\Proposals\ActivityController::class, 'owner'])->name('activity');
     Route::post('/versions/{versionId}/revoke', [OwnerController::class, 'revoke'])->name('revoke');
 });

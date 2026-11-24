@@ -29,6 +29,9 @@
     };
 @endphp
 <article class="card"><strong>{{ $version->payload['title'] }} · version {{ $version->number }}</strong><p>{{ ucfirst($version->payload['audience']) }} access · {{ $linkStatus }}</p><p class="hash">{{ $version->content_hash }}</p>
+@if(config('service_proposals.writes_enabled') && config('service_proposals.publish_enabled') && $proposalAccess->linkAvailable($version))
+<p><a class="button secondary" href="{{ route('service-proposals.owner.live-copy', [$tenant->slug, $version->id]) }}">Edit live copy</a></p>
+@endif
 @if(app(\App\Proposals\Activity::class)->enabled($version))
 <p><a class="button secondary" href="{{ route('service-proposals.owner.activity', [$tenant->slug, $version->id]) }}">Review activity</a></p>
 @endif

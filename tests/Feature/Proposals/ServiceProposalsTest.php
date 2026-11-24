@@ -113,6 +113,31 @@ test('published snapshots do not change when prices templates clients and drafts
     expect(fn () => $version->fresh()->delete())->toThrow(LogicException::class);
 });
 
+test('owners can update and remove live copy on the same private link without changing the publication', function (): void {
+    ['version' => $version, 'token' => $token] = proposalPublish($this, 'reviewer');
+    $snapshot = $version->payload;
+    $path = $this->ownerPath.'/versions/'.$version->id.'/live-copy';
+    $url = 'https://evergrove.test/service-proposals/'.$token;
+    $update = ['revision' => 0, 'intro' => 'A shorter introduction', 'heading' => 'Next steps', 'body' => '<script>example</script>'];
+
+    $this->actingAs($this->owner)->get($this->ownerPath)->assertOk()->assertSee('Edit live copy');
+    $this->get($path)->assertOk()->assertSee('Save to live proposal');
+    $this->put('/owner-workspaces/'.$this->regular->slug.'/proposals/versions/'.$version->id.'/live-copy', $update)->assertNotFound();
+    $this->putJson($path, [...$update, 'body' => null])->assertUnprocessable();
+    $this->put($path, $update)->assertRedirect();
+    $this->put($path, $update)->assertConflict();
+    $this->get($url)->assertOk()->assertDontSee('A shorter introduction');
+    $this->post($url.'/unlock', ['password' => 'Test proposal password'])->assertRedirect();
+    $this->get($url)->assertOk()->assertSee('A shorter introduction')->assertSee('Next steps')
+        ->assertSee('<script>example</script>')->assertDontSee('<script>example</script>', false);
+
+    $this->put($path, ['revision' => 1, 'intro' => null, 'heading' => null, 'body' => null])->assertRedirect();
+    $this->get($url)->assertOk()->assertSee($snapshot['intro'])->assertDontSee('A shorter introduction')->assertDontSee('live-proposal-copy', false);
+    expect($version->fresh()->payload)->toBe($snapshot)->and($version->fresh()->content_hash)->toBe($version->content_hash);
+    $version->update(['revoked_at' => now()]);
+    $this->put($path, [...$update, 'revision' => 2])->assertGone();
+});
+
 test('configured one two three year terms stay separate from monthly cadence', function (): void {
     $item = $this->draft->payload['items'][0];
     $item['terms_months'] = [12, 24, 36];

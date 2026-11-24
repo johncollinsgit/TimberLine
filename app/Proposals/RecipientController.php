@@ -35,7 +35,9 @@ class RecipientController
         $financial = ! empty($version->payload['client_details']) ? app(FinancialPlanning::class)->view($request, $version->payload,
             'recipient:'.$version->tenant_id.':'.$version->id.':'.$version->content_hash, route('service-proposals.recipient.financial', $token)) : null;
 
-        return response()->view('service-proposals.recipient', ['payload' => $version->payload, 'preview' => false, 'version' => $version, 'token' => $token, 'requestKey' => $requestKey, 'comments' => $comments, 'reviewerName' => $reviewerName, 'commentKey' => $commentKey, 'financial' => $financial])->header('Cache-Control', 'private, no-store');
+        $liveCopy = app(LiveCopy::class)->find($version)?->payload ?? [];
+
+        return response()->view('service-proposals.recipient', ['liveCopy' => $liveCopy, 'payload' => $version->payload, 'preview' => false, 'version' => $version, 'token' => $token, 'requestKey' => $requestKey, 'comments' => $comments, 'reviewerName' => $reviewerName, 'commentKey' => $commentKey, 'financial' => $financial])->header('Cache-Control', 'private, no-store');
     }
 
     public function unlock(Request $request, string $token)
