@@ -136,6 +136,14 @@ rewards, import, connection, or webhook lanes.
 
 ## Candle Cash online purchase minimum
 
+- Owner clarification, November 24: online redemption requires at least $10
+  available and uses exactly $10 on $40+ qualifying retail merchandise before
+  tax/shipping. Ordinary merchandise and mixed carts qualify; a cart does not
+  need candles. All subscription items (including Candle Club), renewals and
+  gift cards remain excluded. The live policy's partial-redemption setting was
+  disabled through the audited policy service (version 8 to 9). Existing balances
+  and earning rules were preserved. Public status/catalog wording and the theme's
+  cart, wallet, rules and FAQ must communicate this same eligibility.
 - Shopify enforces the Modern Forestry tenant's configured qualifying subtotal
   and single-use cap on each issued online code. Product and order discounts
   cannot combine with Candle Cash. The tenant's existing shipping-discount
