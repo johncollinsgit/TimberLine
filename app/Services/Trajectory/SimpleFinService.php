@@ -118,6 +118,7 @@ class SimpleFinService
                 abort_unless($this->linkReady($lockedSpace), 503);
                 $existing = Connection::where('external_id', $external)->lockForUpdate()->first();
                 abort_if($existing && ($existing->space_id !== $space->id || ($existing->coverage['owner_user_id'] ?? null) !== $owner->id), 409, 'This connection is already owned elsewhere.');
+                abort_if($existing?->status === 'disconnected', 410, 'Create a new setup token to reconnect.');
                 abort_if($connection && $existing && $existing->id !== $connection->id, 409, 'This setup token belongs to another saved connection.');
                 $saved = $connection ? Connection::whereKey($connection->id)->lockForUpdate()->firstOrFail() : ($existing ?? new Connection);
                 if ($saved->exists) {

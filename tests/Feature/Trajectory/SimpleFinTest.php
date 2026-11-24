@@ -80,6 +80,31 @@ test('redirects and credential-bearing invalid access URLs cannot escape the pro
     expect(Connection::count())->toBe(0);
 });
 
+test('claim recovery after a cache failure cannot reactivate a disconnected grant', function (): void {
+    $access = $this->accessUrl;
+    Http::fake(['*/claim/*' => function () use (&$access) {
+        return Http::response($access);
+    }]);
+    $service = app(SimpleFinService::class);
+    $requestId = (string) Str::uuid();
+    $connection = $service->connect($this->space, $this->owner, $this->token, $requestId, 'fictional-session');
+    // Model a durable DB commit followed by a failed final cache write.
+    Cache::put('trajectory:simplefin:claim:'.hash('sha256', $this->token), encrypt([
+        'binding' => [$this->owner->id, $this->space->id, hash('sha256', 'fictional-session'), null],
+        'access_url' => $this->accessUrl,
+    ]), now()->addDay());
+    $this->actingAs($this->owner)->deleteJson('/trajectory/spaces/'.$this->space->id.'/banks/'.$connection->id)->assertOk();
+    expect(fn () => $service->connect($this->space, $this->owner, $this->token, $requestId, 'fictional-session'))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect($connection->fresh()->status)->toBe('disconnected')->and($connection->fresh()->access_token)->toBe('');
+    Http::assertSentCount(1);
+    $access = str_replace('fixture-password', 'fresh-fictional-password', $access);
+    $newToken = base64_encode('https://beta-bridge.simplefin.org/simplefin/claim/fresh-token');
+    $reconnected = $service->connect($this->space, $this->owner, $newToken, (string) Str::uuid(), 'fictional-session', $connection->fresh());
+    expect($reconnected->id)->toBe($connection->id)->and($reconnected->status)->toBe('mapping_required');
+    Http::assertSentCount(2);
+});
+
 test('an uncertain claim is not retried and does not expose provider credentials', function (): void {
     $calls = 0;
     Http::fake(function () use (&$calls) {
