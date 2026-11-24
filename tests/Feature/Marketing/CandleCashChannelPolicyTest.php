@@ -46,7 +46,8 @@ test('modern forestry members redeem five in person and ten online without affec
             'max_redeemable_per_order_dollars' => 10.0, 'in_person_max_redeemable_per_order_dollars' => 5.0,
             'max_redemptions_per_order' => 1, 'recurring_charges_allowed' => false,
         ])
-        ->and($service->storefrontRewardPayload($reward, 25, $tenant->id)['description'])->toContain('$5', '$10', 'excluding recurring Candle Club charges');
+        ->and($service->redemptionRulesPayload($tenant->id)['online_eligibility_message'])->toContain('other retail merchandise', 'Subscriptions (including Candle Club)', 'gift cards are excluded')
+        ->and($service->storefrontRewardPayload($reward, 25, $tenant->id)['description'])->toContain('$5', '$10', 'Subscriptions (including Candle Club)', 'renewal charges', 'gift cards are excluded');
     $retry = $service->redeemReward($profile, $reward, 'square');
     expect($retry['redemption_id'])->toBe($square['redemption_id'])->and($service->currentBalance($profile))->toBe(25.0);
 });

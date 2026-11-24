@@ -301,8 +301,9 @@ class CandleCashService
                     .$this->formatRewardCurrency($channels['online_minimum_subtotal_cents'] / 100).' or more, before taxes and shipping.';
             }
             $payload['daily_limit_message'] = 'Candle Cash can only be redeemed once per customer per day (Eastern Time).';
+            $payload['online_eligibility_message'] = 'Candles, wax melts, and other retail merchandise qualify, including mixed carts. Subscriptions (including Candle Club), renewal charges, and gift cards are excluded.';
             $payload['channel_summary'] = 'Use up to '.$this->formatRewardCurrency($channels['in_person_amount']).' Candle Cash per in-person purchase or '
-                .$this->fixedRedemptionFormatted($tenantId).' online. Rewards apply to other purchases, excluding recurring Candle Club charges. '
+                .$this->fixedRedemptionFormatted($tenantId).' online. '.$payload['online_eligibility_message'].' '
                 .($payload['online_minimum_message'] ?? '').' '.$payload['daily_limit_message'];
         }
 
