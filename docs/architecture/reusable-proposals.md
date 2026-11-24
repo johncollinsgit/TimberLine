@@ -59,6 +59,22 @@ no script, clipboard permission, manager recovery link or durable token exposure
 The existing idempotent publication retry, password gate and immutable snapshot
 behavior are unchanged.
 
+## Permanent campus reviewer links
+
+The isolated proposal owner can configure
+`SERVICE_PROPOSALS_PERMANENT_REVIEWER_VERSIONS_JSON` as a private JSON object
+mapping up to ten exact version UUIDs to their immutable content hashes. Use
+only editions approved for indefinite sharing. The allowlist is empty by
+default and applies to Lees-McRae reviewer editions with no shared-workspace
+descriptor. The existing URL, password, 30-minute session, host and rate limits,
+and owner revocation still apply. Removing an entry restores the original
+expiry. Publication records remain immutable.
+
+Indefinite access covers the proposal and any walkthrough with a compatible
+archived renderer. Shared workspaces, AI and agreement requests retain their
+separate access rules. After the protected release, verify the password gate
+and the intended walkthrough for each configured edition.
+
 ## Source capabilities
 
 - `/owner-workspaces/{workspace}/proposals`: list/create/edit, catalog, clients,

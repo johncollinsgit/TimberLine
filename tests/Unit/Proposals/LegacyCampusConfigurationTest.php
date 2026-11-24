@@ -16,7 +16,7 @@ final class LegacyCampusConfigurationTest extends TestCase
         function base_path($path = '') {return $GLOBALS['argv'][1].'/'.$path;}
         require base_path('vendor/autoload.php');
         $config = require base_path('apps/enterprise/config/service_proposals.php');
-        echo json_encode(['legacy'=>$config['campus_review']['legacy_versions'], 'ai'=>$config['reviewer_ai']['enabled'],
+        echo json_encode(['legacy'=>$config['campus_review']['legacy_versions'], 'permanent'=>$config['permanent_reviewer_versions'], 'ai'=>$config['reviewer_ai']['enabled'],
             'workspace'=>$config['reviewer_workspace']['enabled']], JSON_THROW_ON_ERROR);
         PHP;
         $process = new Process([PHP_BINARY, '-r', $script, dirname(__DIR__, 3)], dirname(__DIR__, 3), [], json_encode($environment, JSON_THROW_ON_ERROR), 5);
@@ -34,9 +34,21 @@ final class LegacyCampusConfigurationTest extends TestCase
 
     public function test_empty_default_and_exact_owner_map_never_enable_other_features(): void
     {
-        $this->assertSame(['legacy' => [], 'ai' => false, 'workspace' => false], $this->configuration([]));
+        $this->assertSame(['legacy' => [], 'permanent' => [], 'ai' => false, 'workspace' => false], $this->configuration([]));
         $row = ['tenant_id' => 17, 'content_hash' => str_repeat('a', 64), 'renderer' => 'lees-mcrae-v5'];
-        $this->assertSame(['legacy' => ['01000000-0000-7000-8000-000000000001' => $row], 'ai' => false, 'workspace' => false], $this->configuration($this->environment($row)));
+        $this->assertSame(['legacy' => ['01000000-0000-7000-8000-000000000001' => $row], 'permanent' => [], 'ai' => false, 'workspace' => false], $this->configuration($this->environment($row)));
+    }
+
+    public function test_permanent_reviewer_pins_require_valid_ids_and_hashes_in_the_owner_runtime(): void
+    {
+        $pins = ['01000000-0000-7000-8000-000000000001' => str_repeat('a', 64)];
+        $setting = 'SERVICE_PROPOSALS_PERMANENT_REVIEWER_VERSIONS_JSON';
+        $owner = ['SERVICE_PROPOSALS_RUNTIME_PURPOSE' => 'proposal_owner', 'SERVICE_PROPOSALS_OWNER_TENANT_ID' => '17'];
+        $valid = json_encode($pins, JSON_THROW_ON_ERROR);
+
+        $this->assertSame($pins, $this->configuration($owner + [$setting => $valid])['permanent']);
+        $this->assertSame([], $this->configuration([$setting => $valid])['permanent']);
+        $this->assertSame([], $this->configuration($owner + [$setting => json_encode($pins + ['invalid' => 'guessed'], JSON_THROW_ON_ERROR)])['permanent']);
     }
 
     public function test_wrong_tenant_authority_shape_types_and_unbounded_config_remain_invalid(): void
