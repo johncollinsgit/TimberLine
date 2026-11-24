@@ -15,7 +15,18 @@
 @foreach($assets->where('kind', 'template') as $asset)<details class="card"><summary>{{ $asset->payload['name'] }} · unreviewed</summary>@include('service-proposals.asset-form', ['kind' => 'template'])</details>@endforeach
 <details class="card"><summary>Add a draft master template</summary>@include('service-proposals.asset-form', ['kind' => 'template', 'asset' => null])</details></section>
 <section id="reviews"><h2>Agreement requests</h2><p class="muted">Requests are non-binding. Signature, payment and subscription records remain separate.</p>@forelse($reviews as $review)<article class="card"><span class="pill">Agreement requested</span><h3>{{ $review->payload['client']['name'] }} · {{ $review->payload['title'] }}</h3><p>Version {{ $review->payload['version_number'] }}</p><p>{{ $review->created_at->format('M j, Y H:i') }} UTC · {{ $review->payload['signature_status'] }} · payment {{ $review->payload['payment_status'] }}</p>@include('service-proposals.selection', ['selection' => $review->payload['selection']])<p class="hash">Selection reference {{ $review->selection_hash }}</p></article>@empty<p>No agreement requests yet.</p>@endforelse</section>
-<section><h2>Published versions</h2>@forelse($versions as $version)<article class="card"><strong>{{ $version->payload['title'] }} · version {{ $version->number }}</strong><p>{{ ucfirst($version->payload['audience']) }} access · {{ $version->revoked_at ? 'Revoked' : ($version->expires_at->isPast() ? 'Expired' : 'Private link active') }}</p><p class="hash">{{ $version->content_hash }}</p>
+<section><h2>Published versions</h2>
+@php($proposalAccess = app(\App\Proposals\Access::class))
+@forelse($versions as $version)
+@php
+    $linkStatus = match (true) {
+        $version->revoked_at !== null => 'Revoked',
+        ! $proposalAccess->linkAvailable($version) => 'Expired',
+        $proposalAccess->permanent($version) => 'Private link active · No expiration',
+        default => 'Private link active',
+    };
+@endphp
+<article class="card"><strong>{{ $version->payload['title'] }} · version {{ $version->number }}</strong><p>{{ ucfirst($version->payload['audience']) }} access · {{ $linkStatus }}</p><p class="hash">{{ $version->content_hash }}</p>
 @if(app(\App\Proposals\Activity::class)->enabled($version))
 <p><a class="button secondary" href="{{ route('service-proposals.owner.activity', [$tenant->slug, $version->id]) }}">Review activity</a></p>
 @endif

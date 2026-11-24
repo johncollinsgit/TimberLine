@@ -14,6 +14,21 @@ $config['recipient_hosts'] = is_array($hosts) && array_is_list($hosts)
     && count($hosts) <= 10 && count(array_filter($hosts, fn ($host) => is_string($host)
         && preg_match('/^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/D', $host))) === count($hosts) ? array_values(array_unique($hosts)) : [];
 
+// Exact immutable reviewer editions. Only the isolated proposal owner runtime
+// can admit these pins; malformed input leaves the ordinary lifetime in force.
+$permanentText = env('SERVICE_PROPOSALS_PERMANENT_REVIEWER_VERSIONS_JSON', '');
+$permanent = is_string($permanentText) && strlen($permanentText) <= 2000 ? json_decode($permanentText, true, 4) : null;
+if ($config['runtime_purpose'] === 'proposal_owner' && count($config['owner_workspaces']) === 1
+    && is_array($permanent) && ! array_is_list($permanent) && count($permanent) <= 10) {
+    foreach ($permanent as $versionId => $hash) {
+        if (! \App\Proposals\ReviewerWorkspaceSchema::uuid($versionId) || ! \App\Proposals\ReviewerWorkspaceSchema::hash($hash)) {
+            $permanent = [];
+            break;
+        }
+    }
+    $config['permanent_reviewer_versions'] = $permanent;
+}
+
 // An explicitly reviewed owner-runtime map only. No content hash or tenant is
 // inferred. Invalid supplied configuration remains invalid, rather than falling
 // back to current rendering for a registered legacy edition.

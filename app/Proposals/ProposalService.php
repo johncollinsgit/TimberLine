@@ -296,7 +296,7 @@ class ProposalService
 
         return DB::transaction(function () use ($version, $name, $page, $body, $requestKey): Comment {
             $locked = Version::whereKey($version->id)->lockForUpdate()->firstOrFail();
-            abort_if($locked->revoked_at || $locked->expires_at->isPast(), 410);
+            abort_unless(app(Access::class)->linkAvailable($locked), 410);
             $payload = ['name' => $name, 'page' => $page, 'body' => $body, 'client' => $version->payload['client']['name'], 'title' => $version->payload['title'], 'version_number' => $version->number, 'version_hash' => $version->content_hash, 'identity_status' => 'self_selected_display_name'];
             $existing = Comment::where('tenant_id', $version->tenant_id)->where('version_id', $version->id)->where('request_key', hash('sha256', $requestKey))->first();
             if ($existing) {

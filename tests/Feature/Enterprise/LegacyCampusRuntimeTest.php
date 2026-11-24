@@ -222,6 +222,56 @@ final class LegacyCampusRuntimeTest extends TestCase
         Mail::assertNothingSent();
     }
 
+    public function test_pinned_expired_reviewer_link_preserves_password_archive_session_and_revocation(): void
+    {
+        extract($this->legacy());
+        $this->travel(8)->days();
+        $this->get($path)->assertGone();
+        config(['service_proposals.permanent_reviewer_versions' => [$version->id => str_repeat('b', 64)]]);
+        $this->get($path)->assertGone();
+
+        $pins = [$version->id => $version->content_hash];
+        config(['service_proposals.permanent_reviewer_versions' => $pins]);
+        $this->get($path)->assertOk()->assertSee('Proposal password');
+        $this->get($path.'/campus/projects')->assertRedirect($path);
+        $this->postWithToken($path.'/unlock', ['password' => 'Synthetic reviewer password'])->assertRedirect($path);
+        $this->get($path.'/campus/projects')->assertOk();
+        $this->postWithToken($path.'/request-agreement', [])->assertForbidden();
+
+        $this->travel(31)->minutes();
+        $this->get($path.'/campus/projects')->assertRedirect($path);
+        $this->postWithToken($path.'/unlock', ['password' => 'Synthetic reviewer password'])->assertRedirect($path);
+        config(['service_proposals.permanent_reviewer_versions' => []]);
+        $this->get($path.'/campus/projects')->assertGone();
+
+        config(['service_proposals.permanent_reviewer_versions' => $pins]);
+        $version->update(['revoked_at' => now()]);
+        $this->get($path)->assertGone();
+        $this->assertSame($version->expires_at->timestamp, $version->fresh()->expires_at->timestamp);
+        Http::assertNothingSent();
+        Mail::assertNothingSent();
+    }
+
+    public function test_pinned_reviewer_proposal_can_open_without_an_archive_and_client_expiry_is_unchanged(): void
+    {
+        [$tenant, $owner] = $this->owner();
+        ['version' => $reviewer, 'token' => $reviewerToken] = $this->publication($tenant, $owner);
+        ['version' => $client, 'token' => $clientToken] = app(ProposalService::class)->publish(
+            $tenant, $owner->id, $reviewer->draft_id, $reviewer->payload['draft_revision'],
+            'Synthetic client password', 7, Str::uuid()->toString(), 'client',
+        );
+        $pins = [$reviewer->id => $reviewer->content_hash, $client->id => $client->content_hash];
+        config(['service_proposals.permanent_reviewer_versions' => $pins]);
+
+        $this->travel(8)->days();
+        $reviewerPath = $this->url('/service-proposals/'.$reviewerToken);
+        $this->get($reviewerPath)->assertOk()->assertSee('Proposal password');
+        $this->postWithToken($reviewerPath.'/unlock', ['password' => 'Synthetic reviewer password'])->assertRedirect($reviewerPath);
+        $this->get($reviewerPath)->assertOk()->assertSee($reviewer->payload['title']);
+        $this->get($this->url('/service-proposals/'.$clientToken))->assertGone();
+        $this->get($reviewerPath.'/campus/projects')->assertGone();
+    }
+
     public function test_mounted_pre_registry_null_and_malformed_expiry_close_without_any_rendering_or_public_content(): void
     {
         extract($this->legacy());

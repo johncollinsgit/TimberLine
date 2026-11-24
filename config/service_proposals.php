@@ -12,6 +12,7 @@ return [
     // HighLevel location, email, public host or a client tenant's numeric ID.
     'owner_workspaces' => [], // tenant ID => regular | enterprise
     'recipient_hosts' => [],
+    'permanent_reviewer_versions' => [],
     // Private proposal demo AI is independently configured; no inherited key or automatic activation.
     'reviewer_ai' => array_replace(['tenant_id' => null, 'area_id' => null, 'ledger_id' => null,
         'prior_spend_verified' => false, 'prior_spend_microusd' => null, 'prior_spend_evidence_hash' => null, 'inventory_evidence_hash' => null],

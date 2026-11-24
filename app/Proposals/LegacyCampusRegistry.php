@@ -35,12 +35,7 @@ final class LegacyCampusRegistry
             && (int) $version->tenant_id === $row['tenant_id'] && hash_equals($row['content_hash'], $version->content_hash)
             && ($version->payload['client']['reference'] ?? null) === CampusReviewManifest::CLIENT_REFERENCE
             && in_array($version->payload['audience'] ?? null, ['client', 'reviewer'], true), 404);
-        try {
-            $valid = ! $version->revoked_at && $version->expires_at instanceof \Carbon\CarbonInterface && $version->expires_at->isFuture();
-        } catch (\Throwable) {
-            $valid = false;
-        }
-        abort_unless($valid, 410);
+        abort_unless(app(Access::class)->linkAvailable($version), 410);
         $artifact = new LegacyCampusArtifact;
         $manifest = $artifact->manifest();
         abort_unless(($version->payload['campus_review'] ?? null) === $manifest, 409, 'The legacy review binding changed.');

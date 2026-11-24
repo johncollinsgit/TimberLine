@@ -46,7 +46,7 @@ class RecipientController
             return back()->withErrors(['access' => 'Unable to unlock this proposal.']);
         }
         $request->session()->regenerate();
-        $request->session()->put('service_proposal_access.'.$version->id, ['hash' => $version->content_hash, 'until' => min(now()->addMinutes(30)->timestamp, $version->expires_at->timestamp)]);
+        $request->session()->put('service_proposal_access.'.$version->id, ['hash' => $version->content_hash, 'until' => $this->access->unlockUntil($version)]);
         $request->attributes->set('service_proposal_activity_completed', 'unlocked');
 
         return redirect()->route('service-proposals.recipient.show', $token);

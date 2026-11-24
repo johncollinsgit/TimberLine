@@ -19,6 +19,37 @@ class Access
         return $expiry instanceof \Carbon\CarbonInterface ? $expiry : null;
     }
 
+    public function permanent(Version $version): bool
+    {
+        $versions = config('service_proposals.permanent_reviewer_versions');
+        $hash = is_array($versions) ? ($versions[(string) $version->id] ?? null) : null;
+        if (! is_string($hash) || ! hash_equals($hash, (string) $version->content_hash)
+            || config('enterprise.runtime') !== true || config('service_proposals.runtime_purpose') !== 'proposal_owner'
+            || config('service_proposals.owner_workspaces') !== [(int) $version->tenant_id => 'enterprise']) {
+            return false;
+        }
+
+        $payload = $version->payload;
+
+        return ($payload['client']['reference'] ?? null) === CampusReviewManifest::CLIENT_REFERENCE
+            && ($payload['audience'] ?? null) === 'reviewer'
+            && ! array_key_exists('review_workspace', $payload);
+    }
+
+    public function linkAvailable(Version $version): bool
+    {
+        $expiry = $this->expiry($version);
+
+        return ! $version->revoked_at && $expiry !== null && ($expiry->isFuture() || $this->permanent($version));
+    }
+
+    public function unlockUntil(Version $version): int
+    {
+        $deadline = now()->addMinutes(30)->timestamp;
+
+        return $this->permanent($version) ? $deadline : min($deadline, $this->expiry($version)?->timestamp ?? 0);
+    }
+
     /** A display name is never an access grant; only the existing password unlock is. */
     public function unlocked(Request $request, Version $version): bool
     {
@@ -27,7 +58,7 @@ class Access
         return is_array($grant) && is_string($grant['hash'] ?? null)
             && hash_equals($version->content_hash, $grant['hash'])
             && is_numeric($grant['until'] ?? null) && $grant['until'] > now()->timestamp
-            && ! $version->revoked_at && ($this->expiry($version)?->isFuture() ?? false);
+            && $this->linkAvailable($version);
     }
 
     public function owner(Request $request, bool $write = false): Tenant
@@ -52,8 +83,7 @@ class Access
             && in_array(strtolower($request->getHost()), config('service_proposals.recipient_hosts', []), true), 404);
         $version = Version::query()->where('token_hash', hash('sha256', $token))->firstOrFail();
         abort_unless(in_array(config('service_proposals.owner_workspaces.'.$version->tenant_id), ['regular', 'enterprise'], true), 404);
-        $expiry = $this->expiry($version);
-        abort_if($version->revoked_at || $expiry === null || $expiry->isPast(), 410);
+        abort_unless($this->linkAvailable($version), 410);
 
         return $version;
     }
