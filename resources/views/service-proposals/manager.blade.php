@@ -16,7 +16,9 @@
 <details class="card"><summary>Add a draft master template</summary>@include('service-proposals.asset-form', ['kind' => 'template', 'asset' => null])</details></section>
 <section id="reviews"><h2>Agreement requests</h2><p class="muted">Requests are non-binding. Signature, payment and subscription records remain separate.</p>@forelse($reviews as $review)<article class="card"><span class="pill">Agreement requested</span><h3>{{ $review->payload['client']['name'] }} · {{ $review->payload['title'] }}</h3><p>Version {{ $review->payload['version_number'] }}</p><p>{{ $review->created_at->format('M j, Y H:i') }} UTC · {{ $review->payload['signature_status'] }} · payment {{ $review->payload['payment_status'] }}</p>@include('service-proposals.selection', ['selection' => $review->payload['selection']])<p class="hash">Selection reference {{ $review->selection_hash }}</p></article>@empty<p>No agreement requests yet.</p>@endforelse</section>
 <section><h2>Published versions</h2>
-@php($proposalAccess = app(\App\Proposals\Access::class))
+@php
+    $proposalAccess = app(\App\Proposals\Access::class);
+@endphp
 @forelse($versions as $version)
 @php
     $linkStatus = match (true) {
