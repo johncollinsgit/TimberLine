@@ -6,10 +6,21 @@
 @php
     $personalLetter = \App\Proposals\PersonalLetter::from($payload);
     $comparison = app(\App\Proposals\ProposalComparison::class)->from($payload);
+    $showCampusReview = ! $preview && $version && app(\App\Proposals\CampusReviewManifest::class)->available($version);
 @endphp
 <header class="proposal-hero"><img class="proposal-corner" src="/images/proposals/evergrove-mountain-corner-v2.svg" alt="" aria-hidden="true" width="218" height="168"><div class="topline"><span class="brand"><img class="proposal-company-wordmark" src="/brand/evergrove-logo.png" alt="Evergrove Software" width="1290" height="615"></span><span class="pill">{{ $preview ? 'Owner preview · draft' : 'Private · version '.$version->number }}</span></div><h1>{{ $payload['title'] }}</h1><p class="muted">Prepared by {{ $payload['prepared_by'] }}</p></header>
 @include('service-proposals.pdf-download')
 @unless($preview)@include('service-proposals.activity-bridge')@endunless
+@if($showCampusReview && app(\App\Proposals\Access::class)->permanent($version) && app(\App\Proposals\LegacyCampusRegistry::class)->registered($version))
+<aside class="card no-print" aria-labelledby="physical-plant-next-steps">
+    <h2 id="physical-plant-next-steps">Next steps for Physical Plant</h2>
+    <ol>
+        <li><p><strong>Set up a kickoff.</strong> Andrew, reply with a couple of times that work for you, the person who runs Roll Call, and one technician.</p></li>
+        <li><p><strong>Walk through one job.</strong> Bring a recent work order and a printed Roll Call sheet. We’ll follow the job from request to closeout.</p></li>
+        <li><p><strong>Choose the first pilot.</strong> Together, we’ll pick the crew and the work they’ll track, decide how the pilot fits with MaintenanceCare, and agree on what needs to work before launch.</p></li>
+    </ol>
+</aside>
+@endif
 @php
     $proposalSections = $personalLetter ? ['letter' => 'From John', 'overview' => 'Overview'] : ['overview' => 'Overview'];
     $proposalSections = ($comparison ? ['compare' => 'Compare options'] : []) + $proposalSections;
@@ -37,7 +48,7 @@
 @endif
 @slot('overview')
 @if(($payload['client']['reference'] ?? null) === 'lees-mcrae-college')<div class="proposal-college-reveal">@include('service-proposals.branding.lees-mcrae-reveal')</div>@endif
-@if(!$preview && $version && app(\App\Proposals\CampusReviewManifest::class)->available($version))
+@if($showCampusReview)
 <section class="card campus-review-entry"><h2>Review the campus experience.</h2><p>Explore the same fictional campus screens and leave shared feedback on each page of this exact reviewed build. Display names do not grant campus access.</p><p><a class="button" href="{{ route('service-proposals.recipient.campus', [$token, 'home']) }}">Open campus review</a></p></section>
 @endif
 

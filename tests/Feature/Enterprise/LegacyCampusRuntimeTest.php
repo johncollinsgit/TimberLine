@@ -232,9 +232,12 @@ final class LegacyCampusRuntimeTest extends TestCase
 
         $pins = [$version->id => $version->content_hash];
         config(['service_proposals.permanent_reviewer_versions' => $pins]);
-        $this->get($path)->assertOk()->assertSee('Proposal password');
+        $this->get($path)->assertOk()->assertSee('Proposal password')->assertDontSee('Next steps for Physical Plant');
         $this->get($path.'/campus/projects')->assertRedirect($path);
         $this->postWithToken($path.'/unlock', ['password' => 'Synthetic reviewer password'])->assertRedirect($path);
+        $this->get($path)->assertOk()->assertSeeInOrder([
+            'Next steps for Physical Plant', 'Set up a kickoff.', 'Walk through one job.', 'Choose the first pilot.',
+        ]);
         $this->get($path.'/campus/projects')->assertOk();
         $this->postWithToken($path.'/request-agreement', [])->assertForbidden();
 
@@ -267,7 +270,7 @@ final class LegacyCampusRuntimeTest extends TestCase
         $reviewerPath = $this->url('/service-proposals/'.$reviewerToken);
         $this->get($reviewerPath)->assertOk()->assertSee('Proposal password');
         $this->postWithToken($reviewerPath.'/unlock', ['password' => 'Synthetic reviewer password'])->assertRedirect($reviewerPath);
-        $this->get($reviewerPath)->assertOk()->assertSee($reviewer->payload['title']);
+        $this->get($reviewerPath)->assertOk()->assertSee($reviewer->payload['title'])->assertDontSee('Next steps for Physical Plant');
         $this->get($this->url('/service-proposals/'.$clientToken))->assertGone();
         $this->get($reviewerPath.'/campus/projects')->assertGone();
     }
