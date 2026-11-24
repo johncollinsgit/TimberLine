@@ -337,7 +337,7 @@ class DashboardService
             'coverage' => ['history_days' => $days, 'provisional' => $days < 90 || count($blockers) > 0, 'blockers' => $blockers, 'history_start' => $historyStart?->toDateString()],
             'accounts' => array_values(array_filter(app(CashBalanceSourceService::class)->accountPayload($space, $allAccounts), fn ($account) => $accountId === null || $account['id'] === $accountId)),
             'cash_source_version' => app(CashBalanceSourceService::class)->version($space),
-            'connections' => Connection::where(fn ($q) => $q->where('space_id', $space->id)->orWhereIn('id', $accounts->pluck('connection_id')->filter()))->get()->map(fn ($c) => [...$c->only(['id', 'status', 'institution_name', 'synced_at']), 'managed_here' => $c->space_id === $space->id])->all(),
+            'connections' => Connection::where(fn ($q) => $q->where('space_id', $space->id)->orWhereIn('id', $accounts->pluck('connection_id')->filter()))->get()->map(fn ($c) => [...$c->only(['id', 'provider', 'status', 'institution_name', 'synced_at']), 'history_complete' => $c->coverage['history_complete'] ?? null, 'errors' => $c->provider === 'simplefin' && $c->space_id === $space->id ? ($c->coverage['simplefin_errors'] ?? []) : [], 'managed_here' => $c->space_id === $space->id])->all(),
             'medical' => $space->kind === 'household' ? $medical : null,
             'household_cards' => $space->kind === 'household' ? app(HouseholdCardsService::class)->build($records, $start->toDateString(), $end->toDateString(), $today->toDateString(), $entries) : null,
             'card_activity' => app(CardActivityService::class)->build($space, $accounts, $records, $start->toDateString(), $end->toDateString(), $viewer, $range === 'all'),
@@ -372,7 +372,7 @@ class DashboardService
             'cash_history' => $scopeAccount ? [] : Snapshot::where('space_id', $space->id)->orderBy('observed_on')->get()->filter(fn ($s) => isset($s->data['imported_cash_cents']))->map(fn ($s) => ['date' => $s->observed_on->toDateString(), 'cash_cents' => $s->data['imported_cash_cents'], 'accounts' => $s->data['imported_cash_accounts'], 'source' => $s->data['cash_source']])->values()->all(),
             'net_worth_history' => $scopeAccount ? [] : Snapshot::where('space_id', $space->id)->orderBy('observed_on')->get()->filter(fn ($s) => isset($s->data['net_worth_cents']))->map(fn ($s) => ['date' => $s->observed_on->toDateString(), ...$s->data])->values()->all(),
             'business' => $business,
-            'providers' => ['plaid' => app(PlaidService::class)->linkReady($space), 'plaid_sync' => app(PlaidService::class)->ready(), 'metals' => filled(config('trajectory.goldapi_key')), 'sms' => (bool) config('trajectory.sms_enabled')],
+            'providers' => ['plaid' => app(PlaidService::class)->linkReady($space), 'plaid_sync' => app(PlaidService::class)->ready(), 'simplefin' => app(SimpleFinService::class)->linkReady($space), 'metals' => filled(config('trajectory.goldapi_key')), 'sms' => (bool) config('trajectory.sms_enabled')],
             'settings' => [
                 'discretionary_categories' => $space->settings['discretionary_categories'] ?? config('trajectory.discretionary_defaults'),
                 'pending_bank_connections' => $space->settings['pending_bank_connections'] ?? [],

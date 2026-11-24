@@ -7,6 +7,13 @@ return [
     'ai_enabled' => (bool) env('TRAJECTORY_AI_ENABLED', true),
     'checkout_enabled' => false,
     'plans' => ['personal', 'business', 'both'],
+    'simplefin' => [
+        'enabled' => (bool) env('SIMPLEFIN_ENABLED', false),
+        'link_space_ids' => array_values(array_filter(array_map(
+            static fn (string $id): int|false => filter_var(trim($id), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]),
+            explode(',', (string) env('SIMPLEFIN_LINK_SPACE_IDS', '')),
+        ))),
+    ],
     'plaid' => [
         'environment' => env('PLAID_ENVIRONMENT', 'sandbox'),
         'client_id' => env('PLAID_CLIENT_ID'),

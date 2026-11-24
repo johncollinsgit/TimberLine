@@ -25,44 +25,80 @@ class PlanningController extends Controller
     public function bankAccounts(Request $request, Space $space, \App\Models\Trajectory\Connection $connection)
     {
         $this->bankOwner($request, $space, $connection);
-        $remote = app(\App\Services\Trajectory\PlaidService::class)->call('/accounts/get', ['access_token' => $connection->access_token]);
+        $provider = app(\App\Services\Trajectory\BankProviderService::class);
+        $remote = $provider->accounts($connection);
         $local = Account::where('connection_id', $connection->id)->get()->keyBy('source_key');
         $allowed = app(FinanceAccess::class)->spaces($request->user())->pluck('id');
-        $rows = collect($remote['accounts'] ?? [])->filter(fn ($a) => ($a['balances']['iso_currency_code'] ?? null) === 'USD')->map(function ($a) use ($local, $connection, $allowed) {
-            $existing = $local->get('plaid:'.$connection->id.':'.$a['account_id']);
+        $rows = collect($remote)->map(function ($a) use ($local, $connection, $allowed, $provider) {
+            $existing = $local->get($provider->sourceKey($connection, $a['id']));
             // A connection owner cannot inspect another space after losing membership.
             if ($existing && ! $allowed->contains($existing->space_id)) {
                 return null;
             }
 
-            return ['id' => $a['account_id'], 'name' => $a['name'], 'mask' => $a['mask'] ?? null, 'space_id' => $existing?->space_id, 'existing' => (bool) $existing];
+            return [...$a, 'space_id' => $existing?->space_id, 'existing' => (bool) $existing];
         })->filter()->values();
 
-        return response()->json(['accounts' => $rows])->header('Cache-Control', 'private, no-store');
+        $manual = $connection->provider === 'simplefin' ? Account::whereIn('space_id', $allowed)->whereNull('connection_id')->where('source_key', 'like', 'manual:%')
+            ->whereNotIn('id', Transaction::select('account_id'))->get()->map->only(['id', 'space_id', 'name', 'kind', 'currency'])->all() : [];
+
+        return response()->json(['accounts' => $rows, 'provider' => $connection->provider, 'manual_accounts' => $manual])->header('Cache-Control', 'private, no-store');
     }
 
     public function mapBankAccounts(Request $request, Space $space, \App\Models\Trajectory\Connection $connection)
     {
         $this->bankOwner($request, $space, $connection);
-        $data = $request->validate(['assignments' => 'required|array|min:1|max:100', 'assignments.*.id' => 'required|string|max:200|distinct', 'assignments.*.space_id' => 'required|integer']);
-        $remote = app(\App\Services\Trajectory\PlaidService::class)->call('/accounts/get', ['access_token' => $connection->access_token]);
-        $remoteIds = collect($remote['accounts'] ?? [])->filter(fn ($a) => ($a['balances']['iso_currency_code'] ?? null) === 'USD')->pluck('account_id');
+        $data = $request->validate(['assignments' => 'required|array|min:1|max:100', 'assignments.*.id' => 'required|string|max:200|distinct', 'assignments.*.space_id' => 'required|integer',
+            'assignments.*.kind' => 'nullable|in:cash,credit,loan', 'assignments.*.balance_multiplier' => 'nullable|integer|in:1,-1', 'assignments.*.reuse_account_id' => 'nullable|integer|distinct']);
+        $provider = app(\App\Services\Trajectory\BankProviderService::class);
+        $remote = $provider->accounts($connection);
+        $remoteIds = collect($remote)->pluck('id');
         $mapping = [];
         foreach ($data['assignments'] as $assignment) {
             abort_unless($remoteIds->contains($assignment['id']), 422, 'Choose an account returned by this bank.');
             app(WorkspaceService::class)->manage($request->user(), Space::findOrFail($assignment['space_id']));
+            if ($connection->provider === 'simplefin') {
+                abort_unless(isset($assignment['kind'], $assignment['balance_multiplier'])
+                    && ($assignment['kind'] !== 'cash' || (int) $assignment['balance_multiplier'] === 1), 422, 'Review the account type and bank balance meaning. Cash retains its reported sign.');
+            }
             $mapping[$assignment['id']] = $assignment['space_id'];
         }
-        \Illuminate\Support\Facades\Cache::lock('trajectory:sync:'.$connection->id, 300)->block(5, function () use ($connection, $mapping, $request, $space) {
-            \Illuminate\Support\Facades\DB::transaction(function () use ($connection, $mapping, $request, $space) {
+        \Illuminate\Support\Facades\Cache::lock('trajectory:sync:'.$connection->id, 300)->block(5, function () use ($connection, $mapping, $request, $space, $data, $provider, $remote) {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($connection, $mapping, $request, $space, $data, $provider, $remote) {
                 $connection = \App\Models\Trajectory\Connection::whereKey($connection->id)->lockForUpdate()->firstOrFail();
                 $this->bankOwner($request, $space, $connection);
                 foreach ($mapping as $id => $target) {
-                    $account = Account::where('source_key', 'plaid:'.$connection->id.':'.$id)->first();
+                    app(WorkspaceService::class)->manage($request->user(), Space::whereKey($target)->lockForUpdate()->firstOrFail());
+                    $account = Account::where('source_key', $provider->sourceKey($connection, $id))->first();
                     abort_if($account && $account->space_id !== $target, 422, 'Use Assign owner on an imported account so its history and linked plans can be checked.');
                 }
                 $before = $connection->coverage['account_spaces'] ?? [];
-                $connection->update(['coverage' => [...($connection->coverage ?? []), 'require_account_mapping' => true, 'account_spaces' => [...$before, ...$mapping]], 'cursor' => null, 'status' => 'sync_pending']);
+                $coverage = $connection->coverage ?? [];
+                $resetHistory = $connection->provider !== 'simplefin';
+                if ($connection->provider === 'simplefin') {
+                    foreach ($data['assignments'] as $assignment) {
+                        $id = $assignment['id'];
+                        $resetHistory = $resetHistory || ! isset($before[$id]);
+                        $key = $provider->sourceKey($connection, $id);
+                        $existing = Account::where('source_key', $key)->lockForUpdate()->first();
+                        abort_if($existing && ($existing->kind !== $assignment['kind'] || (($coverage['balance_multipliers'][$id] ?? null) !== (int) $assignment['balance_multiplier'] && ! ($coverage['balance_review_pending'][$id] ?? false))), 422, 'An imported account cannot change its type or balance convention during mapping.');
+                        if (! empty($assignment['reuse_account_id'])) {
+                            abort_if($existing, 422, 'This bank account already has a saved account.');
+                            $reuse = Account::where('space_id', $assignment['space_id'])->lockForUpdate()->findOrFail($assignment['reuse_account_id']);
+                            abort_unless(! $reuse->connection_id && str_starts_with($reuse->source_key, 'manual:') && $reuse->kind === $assignment['kind'] && $reuse->currency === 'USD'
+                                && ! Transaction::where('account_id', $reuse->id)->exists(), 422, 'Choose a matching manual balance account without transaction history.');
+                            app(\App\Services\Trajectory\CashBalanceSourceService::class)->assertUnlinked(Space::findOrFail($reuse->space_id), $reuse);
+                            $prior = $reuse->only(['source_key', 'connection_id']);
+                            $reuse->update(['source_key' => $key, 'connection_id' => $connection->id]);
+                            \App\Models\Trajectory\Event::create(['space_id' => $reuse->space_id, 'actor_id' => $request->user()->id, 'action' => 'manual_account_connected', 'record_id' => $reuse->id, 'before' => $prior, 'after' => $reuse->only(['source_key', 'connection_id'])]);
+                        }
+                        $coverage['account_kinds'][$id] = $assignment['kind'];
+                        $coverage['balance_multipliers'][$id] = (int) $assignment['balance_multiplier'];
+                        $coverage['zero_balance_review'][$id] = $assignment['kind'] !== 'cash' && collect($remote)->firstWhere('id', $id)['reported_balance_cents'] === 0;
+                        unset($coverage['balance_review_pending'][$id]);
+                    }
+                }
+                $connection->update(['coverage' => [...$coverage, 'require_account_mapping' => true, 'account_spaces' => [...$before, ...$mapping]], 'cursor' => $resetHistory ? null : $connection->cursor, 'status' => 'sync_pending']);
                 \App\Models\Trajectory\Event::create(['space_id' => $space->id, 'actor_id' => $request->user()->id, 'action' => 'bank_account_mapping', 'record_id' => $connection->id, 'before' => $before, 'after' => $mapping]);
             });
         });

@@ -15,7 +15,7 @@ class WebhookController extends Controller
     {
         abort_unless(config('trajectory.enabled'), 404);
         abort_unless($plaid->verifyWebhook((string) $request->header('Plaid-Verification'), $request->getContent()), 403);
-        $connection = Connection::where('external_id', (string) $request->input('item_id'))->first();
+        $connection = Connection::where('provider', 'plaid')->where('external_id', (string) $request->input('item_id'))->first();
         if ($connection && $connection->status !== 'disconnected') {
             if ($request->input('webhook_type') === 'ITEM' && $request->input('webhook_code') === 'ERROR') {
                 $connection->update(['status' => 'needs_attention']);

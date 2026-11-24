@@ -10,6 +10,8 @@ class Connection extends Model
 
     protected $guarded = ['id'];
 
+    protected $attributes = ['provider' => 'plaid'];
+
     protected $hidden = ['access_token', 'cursor', 'coverage'];
 
     protected function casts(): array

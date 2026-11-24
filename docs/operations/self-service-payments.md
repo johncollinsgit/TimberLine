@@ -123,6 +123,13 @@ another real charge to test rollout admission.
 
 ## Separate bank feeds
 
+The bank-feed chooser also supports the explicitly enabled SimpleFIN private
+pilot. Its connection is shared core Trajectory infrastructure and can be opened
+from any authorized Everbranch business surface. `SIMPLEFIN_ENABLED` and exact
+`SIMPLEFIN_LINK_SPACE_IDS` govern setup independently from Plaid's flags. See the
+Trajectory runbook for one-time token setup, reviewed account ownership, polling,
+disconnect behavior and the separate sponsored-billing/embedded-onboarding inquiry.
+
 The optional bank-transactions action opens an already-authorized business
 Trajectory space. It never creates a household or grants financial access. An
 existing QuickBooks view remains authoritative accounting; provider/channel
