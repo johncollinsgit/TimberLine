@@ -17,7 +17,8 @@ class ProposalService
 
     public function assets(Tenant $tenant, ?string $kind = null)
     {
-        return Asset::query()->where('tenant_id', $tenant->id)->when($kind, fn ($q) => $q->where('kind', $kind))->oldest()->get();
+        return Asset::query()->where('tenant_id', $tenant->id)->where('kind', '!=', LiveCopy::KIND)
+            ->when($kind, fn ($q) => $q->where('kind', $kind))->oldest()->get();
     }
 
     public function asset(Tenant $tenant, string $id, string $kind): Asset

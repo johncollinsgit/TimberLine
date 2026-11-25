@@ -10,6 +10,12 @@
 <header class="proposal-hero"><img class="proposal-corner" src="/images/proposals/evergrove-mountain-corner-v2.svg" alt="" aria-hidden="true" width="218" height="168"><div class="topline"><span class="brand"><img class="proposal-company-wordmark" src="/brand/evergrove-logo.png" alt="Evergrove Software" width="1290" height="615"></span><span class="pill">{{ $preview ? 'Owner preview · draft' : 'Private · version '.$version->number }}</span></div><h1>{{ $payload['title'] }}</h1><p class="muted">Prepared by {{ $payload['prepared_by'] }}</p></header>
 @include('service-proposals.pdf-download')
 @unless($preview)@include('service-proposals.activity-bridge')@endunless
+@if(isset($liveCopy['heading'], $liveCopy['body']))
+<aside class="card no-print" aria-labelledby="live-proposal-copy">
+    <h2 id="live-proposal-copy">{{ $liveCopy['heading'] }}</h2>
+    <p class="body-copy">{{ $liveCopy['body'] }}</p>
+</aside>
+@endif
 @php
     $proposalSections = $personalLetter ? ['letter' => 'From John', 'overview' => 'Overview'] : ['overview' => 'Overview'];
     $proposalSections = ($comparison ? ['compare' => 'Compare options'] : []) + $proposalSections;
@@ -41,7 +47,7 @@
 <section class="card campus-review-entry"><h2>Review the campus experience.</h2><p>Explore the same fictional campus screens and leave shared feedback on each page of this exact reviewed build. Display names do not grant campus access.</p><p><a class="button" href="{{ route('service-proposals.recipient.campus', [$token, 'home']) }}">Open campus review</a></p></section>
 @endif
 
-<section class="proposal-introduction"><h2>A clearer way forward.</h2><p class="body-copy">{{ $payload['intro'] }}</p></section>
+<section class="proposal-introduction"><h2>A clearer way forward.</h2><p class="body-copy">{{ $liveCopy['intro'] ?? $payload['intro'] }}</p></section>
 <div class="notice"><strong>For discussion · non-binding</strong><p>{{ $payload['legal_notice'] }}</p></div>
 
 @endslot
