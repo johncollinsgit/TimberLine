@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_11_26_120000_add_budget_account_to_trajectory_allocation_details.php' => [
+        'test' => 'tests/Integration/TrajectoryAttributionMySqlRecoveryTest.php',
+        'scenarios' => ['Retain historic amounts and optional planning account through retries and rollback.'],
+    ],
     '2026_11_22_140000_add_marketplace_video_themes.php' => [
         'test' => 'tests/Integration/MarketplaceVideoMySqlRecoveryTest.php',
         'scenarios' => ['Default maker showcase theme for retained uploads, missing discovery index repair and repeat migration.'],

@@ -1,5 +1,8 @@
 .tr-transaction-source{display:grid;gap:3px;font-size:11px;line-height:1.55;color:#647980;margin-top:5px;overflow-wrap:anywhere;grid-column:1/-1}
-.tr-category-suggestion{display:grid;gap:6px;padding:11px 12px;margin-top:9px;border:1px solid #d8e6e0;border-radius:9px;background:#f3f8f5;white-space:normal;min-width:0;font-size:12px;line-height:1.5;color:#46645b}
+.tr-category-suggestion{display:flex;align-items:baseline;flex-wrap:wrap;gap:3px 9px;margin-top:4px;white-space:normal;min-width:0;font-size:11px;line-height:1.45;color:#46645b}
+.tr-category-suggestion details{max-width:34em}
+.tr-category-suggestion summary{color:#315e50;cursor:pointer;font-weight:600}
+.tr-category-suggestion details[open]>*:not(summary){display:block;margin-top:4px}
 .tr-category-suggestion strong{font-size:12px;color:#275749}
 .tr-category-suggestion small{font-size:11px;color:#64766e}
 .tr-category-suggestion-actions{display:flex;flex-wrap:wrap;gap:6px}
@@ -20,6 +23,20 @@
 .tr-transaction-detail-dialog .tr-list-merchant-desktop{display:inline!important}
 .tr-transaction-detail-dialog section>div{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .tr-transaction-detail-dialog .tr-category-suggestion,.tr-transaction-detail-dialog .tr-transaction-source{width:100%}
+.tr-app .tr-review-table .tr-category-suggestion-actions button{padding:3px 5px;min-height:24px;background:transparent;border:0;color:#365f56;font-size:11px;text-decoration:underline;text-underline-offset:3px}
+.tr-review-table .tr-refund-label,.tr-transaction-detail-dialog .tr-refund-label{display:block;color:#326b58;font-size:11px;font-weight:540;line-height:1.5}
+.vf-table .vf-refund-pair{background:#f4f8f6}
+.vf-table .vf-pair-detail .tr-review-merchant{border-inline-start:2px solid #9ac3b4}
+@media(min-width:701px){
+  .vf-ledger .vf-table td{padding:7px 12px}
+  .vf-ledger .tr-review-date,.vf-ledger .tr-review-amount{font-variant-numeric:tabular-nums}
+  .vf-ledger .tr-review-amount{font-weight:620}
+  .vf-ledger .tr-review-actions{white-space:nowrap;text-align:right}
+  .vf-ledger .tr-review-actions .vf-button{min-height:28px;padding:3px 8px;margin-inline-start:4px;font-size:11px}
+  .vf-ledger .vf-inline-category select{min-height:29px;padding:3px 22px 3px 8px;min-width:116px}
+  .vf-ledger .tr-transaction-source{display:flex;flex-wrap:wrap;gap:1px 8px;margin-top:2px;line-height:1.3}
+  .vf-ledger .vf-ledger-controls{gap:10px;justify-content:start}
+}
 @media(max-width:700px){
   .tr-review-table-wrap,.vf-table-wrap.tr-review-table-wrap{overflow:visible;width:100%;min-width:0;max-width:100%}
   .tr-review-table,.vf-table.tr-review-table{display:block;width:100%;min-width:0!important;table-layout:fixed;border-collapse:separate;white-space:normal}
@@ -41,4 +58,11 @@
   .vf-ledger-controls input,.vf-ledger-controls select{min-height:40px;font-size:16px}
   .tr-review-undo{align-items:flex-start;flex-wrap:wrap}
   .tr-transaction-detail-dialog button{min-height:40px}
+  .vf-ledger-controls:has([data-vf-input="budget-account"]){grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}
+  .vf-ledger-controls:has([data-vf-input="budget-account"]) label:first-child{grid-column:1/-1;max-width:none}
+  .tr-review-table .tr-review-amount .tr-refund-label,.tr-review-table .vf-refund-pair .tr-review-merchant>*{display:block}
+  .tr-review-table .vf-refund-pair .tr-review-actions{display:block;grid-column:2;grid-row:2;text-align:right}
+  .tr-review-table .vf-refund-pair .tr-review-amount{align-self:start;grid-row:1}
+  .tr-review-table .vf-refund-pair .tr-review-date{align-self:center}
+  .tr-review-table .vf-refund-pair .tr-review-actions .vf-button{min-height:40px;padding:4px 10px}
 }

@@ -12967,6 +12967,7 @@ CREATE TABLE `trajectory_allocation_details` (
   `invalidation_reason` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
+  `budget_account_id` bigint unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `traj_detail_revision` (`transaction_id`,`revision`,`line_index`),
   KEY `traj_detail_tx_active` (`transaction_id`,`active`),
@@ -15128,3 +15129,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (349,'2026_11_22_11
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (350,'2026_11_22_120000_create_studio_episode_deliveries',60);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (351,'2026_11_22_140000_add_marketplace_video_themes',60);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (352,'2026_11_22_150000_add_maker_video_source_post',60);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (353,'2026_11_26_120000_add_budget_account_to_trajectory_allocation_details',61);

@@ -1,3 +1,11 @@
+## 2026-11-26 · Transaction review and seasonal spending
+
+Desktop and phone ledgers show a full purchase and matching return on one row.
+View pair opens both postings. Split supports a budget account, category and note
+for each part and calculates the remaining amount as you type. Household Home
+and Budget show Edisto in November and Christmas in November and December when
+the corresponding household expense category is active.
+
 ## 2026-11-24 · SimpleFIN private bank connection path
 
 Accounts offers an enabled-provider chooser for SimpleFIN and Plaid. The SimpleFIN

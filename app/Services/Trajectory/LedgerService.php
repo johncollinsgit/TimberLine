@@ -226,6 +226,7 @@ class LedgerService
         })->all();
 
         $entries = app(AttributionService::class)->decorateEntries($space, app(SalesTaxService::class)->decorateEntries($space, $entries));
+        $entries = app(PurchaseReturnService::class)->decorate($space, $entries);
 
         return $viewer ? app(TransactionIdentityService::class)->decorate($viewer, $space, $entries) : $entries;
     }

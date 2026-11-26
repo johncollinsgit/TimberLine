@@ -17,12 +17,18 @@ class ReconciliationService
         $ids = $access->spaces($user)->pluck('id')->all();
         $rows = Transaction::whereIn('space_id', $ids)->where('removed', false)->where('pending', false)->whereNotIn('flow', ['medical_payment', 'medical_share', 'medical_membership'])->where('posted_on', '>=', now()->subDays(90))->latest('posted_on')->limit(1500)->get();
         $candidates = [];
+        // Both match kinds require identical absolute cents. Keep encounter order within each bucket.
+        $byAmount = $rows->groupBy(fn ($row) => abs($row->amount_cents));
         foreach ($rows->where('space_id', $space->id) as $a) {
-            foreach ($rows as $b) {
-                if ($a->id >= $b->id || $a->account_id === $b->account_id || abs($a->posted_on->diffInDays($b->posted_on)) > 5) {
-                    continue;
-                }
-                if (in_array($a->flow, ['transfer', 'card_payment', 'owner_distribution', 'owner_wages', 'duplicate'], true) && $a->reviewed) {
+            if (in_array($a->flow, ['transfer', 'card_payment', 'owner_distribution', 'owner_wages', 'duplicate'], true) && $a->reviewed) {
+                continue;
+            }
+            $date = $a->posted_on;
+            $earliest = $date->subDays(5)->toDateString();
+            $latest = $date->addDays(5)->toDateString();
+            foreach ($byAmount->get(abs($a->amount_cents)) as $b) {
+                $otherDate = substr($b->getRawOriginal('posted_on'), 0, 10);
+                if ($a->id >= $b->id || $a->account_id === $b->account_id || $otherDate < $earliest || $otherDate > $latest) {
                     continue;
                 }
                 if ($a->amount_cents === -$b->amount_cents && $a->amount_cents !== 0) {

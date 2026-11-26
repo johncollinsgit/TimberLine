@@ -347,3 +347,25 @@ marker and remaining stays an estimated upper bound (≤); changing the allowanc
 updates that bar immediately. A zero/unknown child under an unresolved parent still
 has no zero-percent progress claim. This is presentation only; no spending, review
 flags or saved allowance is changed.
+
+### Purchase returns, budget accounts and seasonal spending
+
+The transaction ledger groups a uniquely matched purchase and full return into a
+net row when both entries are present in the view. Opening the pair shows each
+posting, its date and its original controls. The other posting’s date remains
+visible when a filter selects just one side. Matching uses the posted merchant,
+account, opposite amounts and a 30-day window. Conflicting candidates remain
+available for individual review. Ask can open the transfer reconciliation screen
+when the user asks to match a transfer.
+
+The split editor accepts positive amounts or percentages and calculates the
+remainder in cents. Each allocation can carry its own category, workspace and
+budget account. The spending ledger’s Budget account filter follows that
+designation and otherwise uses an owned funding account. Bank activity and
+balances continue to use the posted source account.
+
+Starting in November 2026, an active household Edisto expense category enables
+its November spending card. An active Christmas expense category enables a
+November–December card whose total starts on November 1 each year. Home and
+Budget use posted economic amounts, including category splits and refunds.
+General Gifts purchases count toward Christmas only when classified to Christmas.

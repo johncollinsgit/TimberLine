@@ -38,6 +38,15 @@ beforeEach(function (): void {
     $this->context = fn ($tx) => ['transaction_ids' => [$tx->id], 'transaction_versions' => [(string) $tx->id => $tx->version]];
 });
 
+test('requests to match a transfer open reconciliation with both bank rows untouched', function (string $question): void {
+    $tx = ($this->entry)('transfer question');
+    $result = app(AssistantService::class)->respond($this->owner, $this->space, $question, ($this->context)($tx), (string) Str::uuid());
+    expect($result['open_transfer_review'])->toBeTrue()
+        ->and($result)->not->toHaveKey('choices')
+        ->and($result)->not->toHaveKey('proposal')
+        ->and($tx->fresh()->version)->toBe($tx->version);
+})->with(['Look at the transfer', 'Transfer', 'Move transfers over to transfer and just match it']);
+
 test('an explicit assistant category command saves once and supports versioned undo', function (): void {
     $transaction = ($this->entry)('category');
     $original = $transaction->only(['amount_cents', 'source_key', 'source', 'account_id', 'posted_on']);

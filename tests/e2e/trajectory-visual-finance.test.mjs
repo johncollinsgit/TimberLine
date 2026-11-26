@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createVisualFinance, financeBudgetRows, financeBudgetTotals, financeBudgetPresentation, financeBudgetCompact, financeColor, financeSelectionRows, sortFinanceEntries} from '../../resources/js/trajectory/visual-finance.js';
+import {createVisualFinance, financeBudgetRows, financeBudgetTotals, financeBudgetPresentation, financeBudgetCompact, financeColor, financeSelectionRows, groupRefundEntries, sortFinanceEntries} from '../../resources/js/trajectory/visual-finance.js';
 
 const esc = x => String(x ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');
 const precise = x => Number.isSafeInteger(x) ? `$${(x / 100).toFixed(2)}` : 'Unavailable';
@@ -304,4 +304,38 @@ test('known fuel spending retains a proportional bar when other parent costs sti
  const {ui}=fixture(async path=>path.includes('budget-envelopes')?budgets:structuredClone(report));await ui.refresh();const html=ui.render('budget');
  assert.match(html,/aria-valuenow="79"/);assert.match(html,/\$510.83\+ spent/);assert.match(html,/≤ \$139.17 left · est./);assert.doesNotMatch(html,/vf-budget-track-unknown/);
  budgets.rows[0].spent_cents=0;budgets.rows[0].bank_spent_cents=0;await ui.refresh();const unknown=ui.render('budget');assert.match(unknown,/Needs split/);assert.match(unknown,/vf-budget-track-unknown/);assert.doesNotMatch(unknown,/aria-valuenow="0"/);
+});
+
+test('only paired full bank entries in the same projected direction fold into a net return', () => {
+  const purchase = {...entries[0], id: 44, amount_cents: -1200, refund_match: {status:'matched',role:'purchase',counterpart_transaction_id:45,amount_cents:1200}};
+  const refund = {...entries[2], id: 45, amount_cents: 1200, refund_match: {status:'matched',role:'refund',counterpart_transaction_id:44,amount_cents:1200}};
+  const incoming = {...refund, direction:'in'};
+  const result = groupRefundEntries([incoming, refund, purchase]);
+  assert.equal(result.length, 2);
+  assert.equal(result[0].row, incoming);
+  assert.equal(result[1].purchase, purchase);
+  assert.equal(result[1].refund, refund);
+  assert.ok(groupRefundEntries([refund])[0].row);
+  assert.equal(groupRefundEntries([{...purchase, attribution_detail_id:9}, refund]).length, 2);
+  assert.equal(groupRefundEntries([{...purchase, refund_match: {...purchase.refund_match, bank_level: true}}, refund]).length, 2);
+});
+
+test('budget account ledger filter uses the assigned split or the same-space funding account', async () => {
+  const {ui} = fixture();
+  const source = {authorized_source:true,source_space_id:7,account_id:11};
+  const ledger = [
+    {...entries[0], merchant:'Gift allocation',source_identity:source,budget_account_id:12},
+    {...entries[1], merchant:'From checking',source_identity:source},
+    {...entries[2], merchant:'External funding',source_identity:{...source,source_space_id:8}},
+  ];
+  ui.adoptSnapshot({...report,year:2028,grain:'month',scope:{basis:'spending'},entries:ledger,
+    account_options:[{id:11,name:'Checking'},{id:12,name:'Holiday fund'}]}, {month:'2028-02',rows:[]});
+  await ui.handleClick({dataset:{action:'vf-ledger-all'}});
+  await ui.handleInput({dataset:{vfInput:'budget-account'},value:'12'});
+  assert.match(ui.render('analysis'),/Gift allocation/);
+  assert.doesNotMatch(ui.render('analysis'),/From checking|External funding/);
+  assert.deepEqual(ui.getAssistantContext().transaction_ids,[1]);
+  await ui.handleInput({dataset:{vfInput:'budget-account'},value:'11'});
+  assert.match(ui.render('analysis'),/From checking/);
+  assert.doesNotMatch(ui.render('analysis'),/Gift allocation|External funding/);
 });

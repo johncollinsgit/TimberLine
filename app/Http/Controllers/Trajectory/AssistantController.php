@@ -26,11 +26,11 @@ class AssistantController extends Controller
         $access->authorize($request->user(), $space);
         $data = $request->validate([
             'question' => 'required|string|max:2000', 'request_id' => 'required|uuid', 'use_ai' => 'sometimes|boolean',
-            'context' => 'sometimes|array:from,through,account_id,program_id,level,direction,category,subcategory,transaction_ids,transaction_versions,space_id,basis,selection_truncated,focused_transaction',
+            'context' => 'sometimes|array:from,through,account_id,budget_account_id,program_id,level,direction,category,subcategory,transaction_ids,transaction_versions,space_id,basis,selection_truncated,focused_transaction',
             'context.selection_truncated' => 'sometimes|boolean', 'context.focused_transaction' => 'sometimes|boolean',
             'context.basis' => 'sometimes|in:spending,cash',
             'context.from' => 'sometimes|date_format:Y-m-d|before_or_equal:today', 'context.through' => 'required_with:context.from|date_format:Y-m-d|after_or_equal:context.from|before_or_equal:today',
-            'context.account_id' => 'nullable|integer|min:1', 'context.program_id' => 'nullable|integer|min:1',
+            'context.account_id' => 'nullable|integer|min:1', 'context.budget_account_id' => 'nullable|integer|min:1', 'context.program_id' => 'nullable|integer|min:1',
             'context.level' => 'sometimes|string|max:40', 'context.direction' => 'sometimes|in:in,out,income,expense,both',
             'context.category' => 'nullable|string|max:80', 'context.subcategory' => 'nullable|string|max:80',
             'context.space_id' => 'sometimes|integer|min:1',

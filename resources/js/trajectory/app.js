@@ -138,7 +138,7 @@ function boot() {
     const basicProjection=!!data&&!priorSelection.period&&(priorSelection.program??null)===null&&priorSelection.grain==='month'
       &&priorSelection.year===Number(data.range.end.slice(0,4))&&priorSelection.comparisonYear===priorSelection.year-1
       &&priorSelection.budgetMonth===data.range.end.slice(0,7)&&priorReport?.range.from===data.range.start&&priorReport?.range.through===data.range.end;
-    const savedClientSelection=!periodChange&&basicProjection?Object.fromEntries(['direction','category','subcategory','merchantGroup','ledger','ledgerSort','query','page','focusedEntry'].filter(key=>priorSelection[key]!==undefined).map(key=>[key,priorSelection[key]])):null;
+    const savedClientSelection=!periodChange&&basicProjection?Object.fromEntries(['direction','category','subcategory','merchantGroup','ledger','ledgerSort','budgetAccount','expandedRefund','query','page','focusedEntry'].filter(key=>priorSelection[key]!==undefined).map(key=>[key,priorSelection[key]])):null;
     if(!reuseDashboard){
       loadAbort?.abort();controller=new AbortController();loadAbort=controller;
       pendingDashboard={version:requestedVersion,context:reportContext()};dashboardError=null;
@@ -277,7 +277,7 @@ function boot() {
     onBeforeChange:remember,onChange:()=>render(),onChanged:load,onNavigate:(view,rememberStep=true)=>{if(rememberStep)navigate(view);else{tab=view;filter={};evidenceRows=null;render();window.scrollTo(0,0);}},
     onReviewTransaction:row=>{if(!data){notice('Editing details are still loading. Try again in a moment.');return;}if(row.editable)transactionForm(row);else void showTransactions({ids:[row.id],economic_costs:true});},
     onEditBudget:()=>navigate('budget-targets'),onAddDefinition:()=>void definitionForm().catch(error=>notice(error.message)),onAsk:()=>assistant.openChat(),onClearAccount:()=>{accountFilter=null;filter={};evidenceRows=null;navigation.length=0;$('#tr-back').hidden=true;void load();},notice});
-  const assistant=initTrajectoryAssistant({root,getContext:currentAssistantContext,api,endpoint,notice,onChanged:load});
+  const assistant=initTrajectoryAssistant({root,getContext:currentAssistantContext,api,endpoint,notice,onChanged:load,onMatchTransfers:showTransferMatches});
   function currentAssistantContext(){
     const base={space_id:active,scope,...visualFinance.getAssistantContext()};
     if(assistantFocusedTransaction){const tx=assistantFocusedTransaction;return {...base,from:tx.date,through:tx.date,level:'transaction',category:tx.category,subcategory:null,transaction_ids:[tx.source_transaction_id??tx.id],transaction_versions:{[tx.source_transaction_id??tx.id]:tx.version},selection_truncated:false,focused_transaction:true};}
@@ -286,7 +286,7 @@ function boot() {
       if(filter.ids)rows=rows.filter(r=>filter.ids.includes(r.id));
       if(filter.category)rows=rows.filter(r=>r.category===filter.category);
       if(filter.review)rows=rows.filter(r=>!r.reviewed);
-      return {...base,from:data?.range.start,through:data?.range.end,level:'transactions',category:filter.category??null,subcategory:null,transaction_ids:[...new Set(rows.map(r=>r.id))].slice(0,100),transaction_versions:Object.fromEntries(rows.slice(0,100).map(r=>[r.id,r.version])),selection_truncated:rows.length>100,focused_transaction:false};
+      return {...base,budget_account_id:null,from:data?.range.start,through:data?.range.end,level:'transactions',category:filter.category??null,subcategory:null,transaction_ids:[...new Set(rows.map(r=>r.id))].slice(0,100),transaction_versions:Object.fromEntries(rows.slice(0,100).map(r=>[r.id,r.version])),selection_truncated:rows.length>100,focused_transaction:false};
     }
     if(!['overview','analysis','budget'].includes(tab))return {...base,from:data?.range.start,through:data?.range.end,level:tab,category:null,subcategory:null,transaction_ids:[],transaction_versions:{},selection_truncated:false,focused_transaction:false};
     return base;
@@ -567,6 +567,23 @@ function boot() {
     const input=choices?`<select ${attrs}>${choices.map(c=>`<option value="${esc(c.value??c)}" ${String(value)===String(c.value??c)?'selected':''}>${esc(c.label??title(String(c)))}</option>`).join('')}</select>`:type==='checkbox'?`<input ${attrs} type="checkbox" ${value?'checked':''}>`:`<input ${attrs} type="${type}" value="${esc(value)}" ${type==='number'?'step="any"':''}>`;
     return `<label class="tr-field ${full?'full':''}" for="field-${esc(name)}">${esc(label)}${input}</label>`;
   }
+  async function showTransferMatches() {
+    if (scope === 'both') return;
+    const sourceId = active;
+    const matches = await api(endpoint('/reconciliation', sourceId));
+    if (sourceId !== active || scope === 'both') return;
+    dialog('Review possible matches', matches.length ? matches.map((match, index) => `<div class="tr-block"><div class="tr-row"><div><strong>${esc(match.left.merchant)} ↔ ${esc(match.right.merchant)}</strong><p class="tr-subtle">${esc(match.explanation)} ${precise(match.left.amount_cents)} / ${precise(match.right.amount_cents)}</p></div><button type="button" data-match="${index}">Review</button></div></div>`).join('') : empty('No likely transfer or duplicate pairs in the recent history.'), null);
+    $('#tr-fields').querySelectorAll('[data-match]').forEach(button => button.onclick = () => {
+      if (sourceId !== active || scope === 'both') return;
+      const match = matches[Number(button.dataset.match)];
+      const kinds = match.kind === 'duplicate' ? ['duplicate'] : ['transfer','card_payment','owner_wages','owner_distribution'];
+      dialog('Confirm matched transactions', `<p class="tr-subtle">${esc(match.left.merchant)} ↔ ${esc(match.right.merchant)}</p>${field('kind','Purpose','text',match.kind,kinds)}`, async values => {
+        if (sourceId !== active || scope === 'both') throw Error('Reopen the match in its original workspace.');
+        await api(endpoint('/reconciliation', sourceId), 'POST', {left_id:match.left.id, right_id:match.right.id, left_version:match.left.version, right_version:match.right.version, kind:values.get('kind')});
+      });
+    });
+  }
+
   function dialog(heading,html,action,save='Save') {
     $('#tr-dialog-title').textContent=heading;$('#tr-fields').innerHTML=html;$('#tr-form-error').hidden=true;$('#tr-save').textContent=save;$('#tr-save').hidden=!action;formAction=action;$('#tr-dialog').showModal();
   }
@@ -654,7 +671,7 @@ function boot() {
     if(verifiedTax)tx={...tx,category:'taxes',flow:'sales_tax_remittance',face_punched:false,bullshit_spending:false};
     const matched=source.records.find(r=>['medical_payment','medical_share','medical_membership'].includes(r.kind)&&r.data.transaction_id===tx.id);
     if(matched){recordForm(matched.kind,matched);return;}
-    dialog('Categorize transaction',`<p class="tr-subtle">${scope==='both'?esc(tx.space_label)+' · ':''}${esc(tx.merchant)} · ${evidenceMoney(tx,tx.amount_cents)}<br>${esc(tx.explanation)}</p>${transactionIdentityHtml(tx,{esc})}${tx.flow==='sales_tax_remittance'?'<p class="tr-data-note">This receipt-backed purpose keeps the full bank cash movement and separates principal from known costs. It cannot be learned as an agency merchant rule.</p>':''}${field('category','Category','text',tx.category,source.category_options.map(c=>({value:c,label:source.workspace_settings?.income_categories?.[c]||title(c)})))}${field('flow','Money movement','text',tx.flow,['expense','income','refund','transfer','card_payment','asset_transfer','asset_sale','loan_draw','unclassified_deposit','owner_wages','owner_distribution','reimbursement','debt_payment','duplicate','sales_tax_remittance'])}${field('face_punched','Face Punched · unexpected, one time','checkbox',tx.face_punched)}${field('bullshit_spending','Bullshit Spending · unnecessary to me','checkbox',tx.bullshit_spending)}${field('learn','Remember an exact merchant rule','checkbox',false)}<div class="tr-actions tr-block">${btn('Allocate across spaces','split',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`)}${btn('Undo last review','undo',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`)}${source.space.kind==='household'&&tx.amount_cents<0?btn('Match monthly sharing contribution','membership-match',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`):''}${source.space.kind==='household'?btn('Match medical payment / share','medical-match',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`):''}</div>`,async v=>{await api(endpoint(`/transactions/${tx.id}`,tx.space_id||active),'PATCH',{version:tx.version,category:v.get('category'),flow:v.get('flow'),face_punched:v.get('face_punched')==='on',bullshit_spending:v.get('bullshit_spending')==='on',learn:v.get('learn')==='on'});});
+    dialog('Categorize transaction',`<p class="tr-subtle">${scope==='both'?esc(tx.space_label)+' · ':''}${esc(tx.merchant)} · ${evidenceMoney(tx,tx.amount_cents)}<br>${esc(tx.explanation)}</p>${transactionIdentityHtml(tx,{esc})}${tx.flow==='sales_tax_remittance'?'<p class="tr-data-note">This receipt-backed purpose keeps the full bank cash movement and separates principal from known costs. It cannot be learned as an agency merchant rule.</p>':''}${field('category','Category','text',tx.category,source.category_options.map(c=>({value:c,label:source.workspace_settings?.income_categories?.[c]||title(c)})))}${field('flow','Money movement','text',tx.flow,['expense','income','refund','transfer','card_payment','asset_transfer','asset_sale','loan_draw','unclassified_deposit','owner_wages','owner_distribution','reimbursement','debt_payment','duplicate','sales_tax_remittance'])}${field('face_punched','Face Punched · unexpected, one time','checkbox',tx.face_punched)}${field('bullshit_spending','Bullshit Spending · unnecessary to me','checkbox',tx.bullshit_spending)}${field('learn','Remember an exact merchant rule','checkbox',false)}<div class="tr-actions tr-block">${btn('Split transaction','split',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`)}${btn('Undo last review','undo',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`)}${source.space.kind==='household'&&tx.amount_cents<0?btn('Match monthly sharing contribution','membership-match',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`):''}${source.space.kind==='household'?btn('Match medical payment / share','medical-match',`data-id="${tx.id}" data-space-id="${tx.space_id||active}"`):''}</div>`,async v=>{await api(endpoint(`/transactions/${tx.id}`,tx.space_id||active),'PATCH',{version:tx.version,category:v.get('category'),flow:v.get('flow'),face_punched:v.get('face_punched')==='on',bullshit_spending:v.get('bullshit_spending')==='on',learn:v.get('learn')==='on'});});
   }
   function budgetImportForm() {
     if(scope==='both'||accountFilter!==null){notice('Choose one financial space and all accounts before importing budget targets.');return;}
@@ -849,11 +866,7 @@ function boot() {
       else if(a==='date')showTransactions({date:target.dataset.date});
       else if(a==='review'){remember();tab='transactions';filter={review:true};evidenceRows=null;render();}
       else if(a==='clear')showTransactions({});
-      else if(a==='reconciliation'){
-        const matches=await api(endpoint('/reconciliation'));
-        dialog('Review possible matches',matches.length?matches.map((m,i)=>`<div class="tr-block"><div class="tr-row"><div><strong>${esc(m.left.merchant)} ↔ ${esc(m.right.merchant)}</strong><p class="tr-subtle">${esc(m.explanation)} ${precise(m.left.amount_cents)} / ${precise(m.right.amount_cents)}</p></div><button type="button" data-match="${i}">Review</button></div></div>`).join(''):empty('No likely transfer or duplicate pairs in the recent history.'),null);
-        $('#tr-fields').querySelectorAll('[data-match]').forEach(button=>button.onclick=()=>{const match=matches[Number(button.dataset.match)];dialog('Confirm matched transactions',`<p class="tr-subtle">${esc(match.left.merchant)} ↔ ${esc(match.right.merchant)}</p>${field('kind','Purpose','text',match.kind,match.kind==='duplicate'?['duplicate']:['transfer','card_payment','owner_wages','owner_distribution'])}`,async v=>{await api(endpoint('/reconciliation'),'POST',{left_id:match.left.id,right_id:match.right.id,left_version:match.left.version,right_version:match.right.version,kind:v.get('kind')});});});
-      }
+      else if(a==='reconciliation') await showTransferMatches();
       else if(a==='combined'){
         const company=businessSpace;if(!company)throw new Error('Link an authorized business first.');
         const combined=await api(endpoint('/combined?business_id='+company.id+'&from='+data.range.start+'&through='+data.range.end));
@@ -880,6 +893,7 @@ function boot() {
       else if(a==='invite')dialog('Invite a household partner',field('email','Partner email','email','',null,true),async v=>{const invite=await api(endpoint('/invites'),'POST',{email:v.get('email')});dialog('Share this invitation',`<p class="tr-subtle">Only the signed-in user with that email can accept. This link expires in seven days.</p><div class="tr-code tr-block">${esc(invite.invite_url)}</div>`,null);return false;},'Create invitation');
       else if(a==='link-spaces')dialog('Link an authorized business',field('business_id','Business space','text','',spaces.filter(s=>s.kind==='business').map(s=>({value:s.id,label:s.name}))),async v=>{await api(endpoint('/links'),'POST',{business_id:Number(v.get('business_id'))});});
       else if(a==='profile')dialog('Your Bullshit Spending defaults',data.category_options.map(c=>field(c,title(c),'checkbox',data.settings.discretionary_categories.includes(c))).join(''),async v=>{await api(endpoint('/settings'),'PATCH',{discretionary_categories:data.category_options.filter(c=>v.get(c)==='on')});});
+      else if(a==='split' && ['expense','refund','income','owner_wages','reimbursement'].includes(tx.flow)){$('#tr-dialog').close();await visualFinance.openAttribution(tx);}
       else if(a==='split'){$('#tr-dialog').close();dialog('Allocate this transaction',`<p class="tr-subtle">Original amount: ${evidenceMoney(tx,tx.amount_cents)}. Assign an amount to another authorized space; the remainder stays here. Household/business spaces must be linked, or you must own both businesses. The original bank account and cash movement stay unchanged.</p>${field('space_id','Other authorized space','text','',spaces.filter(s=>s.id!==active).map(s=>({value:s.id,label:s.name})))}${field('mode','Split by','text','percent',['percent','dollars'])}${field('amount','Percentage or signed dollar amount','number',50)}`,async v=>{const other=v.get('mode')==='percent'?percentShare(tx.amount_cents,v.get('amount')):minor(v.get('amount'));await api(endpoint(`/transactions/${id}/split`),'POST',{version:tx.version,splits:[{space_id:active,amount_cents:tx.amount_cents-other},{space_id:Number(v.get('space_id')),amount_cents:other}]});});}
       else if(a==='debt-suggestion')recordForm('debt',null,Object.fromEntries(Object.entries(data.debt_suggestions[Number(target.dataset.index)]).filter(([,v])=>v!==null)));
       else if(a==='sell')dialog('Record a metals sale',field('quantity','Quantity sold','number',1)+field('proceeds','Proceeds after fees ($)','number',0)+field('transaction_id','Matching bank transaction ID (optional)','number',''),async v=>{await api(endpoint(`/records/${id}/sell`),'POST',{quantity:v.get('quantity'),proceeds_cents:minor(v.get('proceeds')),version:r.version,transaction_id:v.get('transaction_id')?Number(v.get('transaction_id')):null});});

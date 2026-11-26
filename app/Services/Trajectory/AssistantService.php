@@ -3,6 +3,7 @@
 namespace App\Services\Trajectory;
 
 use App\Http\Controllers\Trajectory\TrajectoryController;
+use App\Models\Trajectory\Account;
 use App\Models\Trajectory\AssistantTurn;
 use App\Models\Trajectory\Event;
 use App\Models\Trajectory\Space;
@@ -17,6 +18,9 @@ class AssistantService
     public function respond(User $user, Space $space, string $question, array $context, string $requestId, bool $useAi = false): array
     {
         app(FinanceAccess::class)->authorize($user, $space);
+        if (isset($context['budget_account_id'])) {
+            abort_unless(Account::where('space_id', $space->id)->whereKey($context['budget_account_id'])->exists(), 403);
+        }
         $hash = hash('sha256', json_encode([$space->id, $question, $context, $useAi], JSON_THROW_ON_ERROR));
         $turn = AssistantTurn::firstOrCreate(['user_id' => $user->id, 'request_id' => $requestId], [
             'space_id' => $space->id, 'request_hash' => $hash, 'question' => $question, 'context' => $context, 'state' => 'processing',
@@ -28,6 +32,14 @@ class AssistantService
             return ['id' => $turn->id, ...$turn->response];
         }
         try {
+            $asksForTransferMatch = preg_match('/\btransfers?\b/i', $question)
+                && preg_match('/\b(?:match(?:ing)?|reconcile|look at|review)\b|^\s*transfers?[.!?]?\s*$/i', $question);
+            if ($asksForTransferMatch) {
+                $reply = ['reply' => 'Open transfer matches to compare the two bank entries and confirm the pair.', 'open_transfer_review' => true];
+                $turn->update(['response' => $reply, 'state' => 'answered']);
+
+                return ['id' => $turn->id, ...$reply];
+            }
             $destination = $this->destination($space, $question);
             $reviewRequest = preg_match('/\b(?:categorize|classify|review|suggest)\b.*\b(?:uncategorized|needing a category|need(?:ing)? categor|transactions? needing|next transaction)\b|\b(?:next|uncategorized) transaction\b/i', $question);
             $followup = preg_match('/\b(?:what do you mean|why are you asking)\b/i', $question)
@@ -117,7 +129,7 @@ class AssistantService
         $selected = $this->selection($user, $space, $context);
         $query = Transaction::where('space_id', $space->id)->where('removed', false)->where('pending', false)
             ->whereIn('flow', ['expense', 'refund'])->where(fn ($q) => $q->where('category', 'uncategorized')->orWhere('reviewed', false));
-        if (! empty($context['transaction_ids'])) {
+        if (! empty($context['transaction_ids']) || isset($context['budget_account_id'])) {
             $query->whereIn('id', $selected->pluck('id'));
         } elseif (! empty($context['program_id'])) {
             return ['reply' => 'Open the program’s transaction list first so I can review its exact purchases.', 'clarification' => true];
@@ -238,6 +250,14 @@ class AssistantService
         $direction = $context['direction'] ?? 'out';
         $incoming = in_array($direction, ['in', 'income'], true);
         $rows = $rows->where('direction', $incoming ? 'in' : 'out');
+        if (isset($context['budget_account_id'])) {
+            $rows = $rows->filter(function (array $row) use ($context, $space): bool {
+                $source = $row['source_identity'] ?? [];
+                $sourceAccount = ($source['source_space_id'] ?? null) === $space->id ? ($source['account_id'] ?? null) : null;
+
+                return ($row['budget_account_id'] ?? $sourceAccount) === (int) $context['budget_account_id'];
+            });
+        }
         $category = $context['category'] ?? null;
         $name = $incoming ? 'Recorded receipts' : 'Recorded spending';
         if ($category) {
