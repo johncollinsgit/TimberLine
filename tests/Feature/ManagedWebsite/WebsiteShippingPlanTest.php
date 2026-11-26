@@ -87,6 +87,50 @@ test('free customer shipping retains the carrier cost in the accepted order plan
         ->and(data_get($order->shipping_rate_snapshot, 'plan.mode'))->toBe('test');
 });
 
+test('dropshipping quotes use the supplier origin and checkout freezes the exact supplier variant', function (): void {
+    $this->setup->saveLocation($this->site, ['name' => 'Supplier', 'street1' => '9 Oak St', 'city' => 'Waco',
+        'state' => 'TX', 'zip' => '76701', 'is_default' => false], $this->actor);
+    $location = WebsiteFulfillmentLocation::query()->forTenantId($this->tenant->id)->where('name', 'Supplier')->sole();
+    $key = "managed_website.dropshipping_routes.{$this->tenant->id}.{$this->site->id}";
+    $route = ['provider' => 'shopify', 'supplier' => 'test-supplier', 'variant' => 'variant-small', 'location_id' => $location->id];
+    config()->set($key, [$this->variant->id => $route]);
+
+    $quote = $this->shipping->quote($this->cart, $this->destination)[0];
+    expect(data_get($quote->parcel, '_shipping_plan.location_id'))->toBe($location->id);
+
+    config()->set($key, [$this->variant->id => array_replace($route, ['variant' => 'new-variant'])]);
+    expect(fn () => $this->plans->selectedQuote($this->cart, $quote->id, $this->destination))->toThrow(ValidationException::class);
+    config()->set($key, [$this->variant->id => $route]);
+
+    expect(fn () => $this->commerce->beginCheckout($this->cart, array_replace($this->buyer, ['fulfillment_method' => 'pickup']), 'https://pilot.test/success', 'https://pilot.test/cart'))
+        ->toThrow(ValidationException::class);
+
+    $order = $this->commerce->beginCheckout($this->cart, $this->buyer + ['shipping_rate_quote_id' => $quote->id], 'https://pilot.test/success', 'https://pilot.test/cart')['order'];
+    config()->set($key, []);
+    expect($order->lines()->sole()->snapshot['dropshipping'])->toBe($route);
+
+    $this->commerce->processStripeEvent(WebsiteStripeFixture::event($order));
+    $order->refresh();
+    expect($order->payment_status)->toBe('paid')
+        ->and(fn () => $this->shipping->purchaseLabel($order, $quote, $this->actor))
+        ->toThrow(HttpException::class, 'Arrange postage with the supplier');
+    Http::assertNotSent(fn ($request) => str_ends_with($request->url(), '/buy'));
+});
+
+test('dropshipping cannot merge local physical products into a supplier parcel', function (): void {
+    $locationId = WebsiteFulfillmentLocation::query()->forTenantId($this->tenant->id)->sole()->id;
+    config()->set("managed_website.dropshipping_routes.{$this->tenant->id}.{$this->site->id}", [
+        $this->variant->id => ['provider' => 'printful', 'supplier' => 'test-supplier', 'variant' => 'poster', 'location_id' => $locationId],
+    ]);
+    $local = $this->commerce->saveProduct($this->site, ['title' => 'Local product', 'product_type' => 'physical', 'status' => 'active',
+        'price' => '20.00', 'shipping_weight_ounces' => 12, 'shipping_length_inches' => 3,
+        'shipping_width_inches' => 2, 'shipping_height_inches' => 1, 'is_available' => true]);
+    $cart = $this->commerce->addToCart($this->cart, $local->variants->sole(), 1);
+
+    expect(fn () => $this->shipping->quote($cart, $this->destination))->toThrow(ValidationException::class, 'must be ordered separately');
+    Http::assertNothingSent();
+});
+
 test('shipping region changes invalidate unpaid quotes and reject excluded destinations before HTTP', function (): void {
     $quote = $this->shipping->quote($this->cart, $this->destination)[0];
     $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => ['USPS:GroundAdvantage'], 'charge_mode' => 'calculated', 'states' => ['TX']], $this->actor);

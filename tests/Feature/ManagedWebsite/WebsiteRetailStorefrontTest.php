@@ -76,6 +76,27 @@ test('a non-first variant cart selection keeps current server pricing and reject
     expect($cart->items()->sole()->quantity)->toBe(1)->and(WebsiteOrder::query()->count())->toBe(0);
 });
 
+test('both retail carts explain supplier shipping restrictions without exposing supplier identifiers', function (string $theme): void {
+    $this->websites->applyTheme($this->site, $theme, $this->actor);
+    $this->websites->publish($this->site->fresh(), $this->actor);
+    $supplierVariant = $this->variants[1];
+    $localVariant = $this->variants[2];
+    $localVariant->update(['is_available' => true]);
+    config()->set("managed_website.dropshipping_routes.{$this->tenant->id}.{$this->site->id}", [
+        $supplierVariant->id => ['provider' => 'shopify', 'supplier' => 'private-fixture-supplier', 'variant' => 'private-fixture-variant', 'location_id' => 10],
+    ]);
+    $this->post($this->origin.'/cart/items/'.$supplierVariant->id, ['quantity' => 1])->assertRedirect();
+    $this->get($this->origin.'/cart')->assertOk()
+        ->assertSeeText('Shipping is currently unavailable for the supplier items in your cart.')
+        ->assertDontSeeText('Local pickup')
+        ->assertDontSeeText('private-fixture-supplier');
+
+    $this->post($this->origin.'/cart/items/'.$localVariant->id, ['quantity' => 1])->assertRedirect();
+    $this->get($this->origin.'/cart')->assertOk()
+        ->assertSeeText('Items shipped by different suppliers must be ordered separately.')
+        ->assertDontSeeText('private-fixture-variant');
+})->with(['native' => 'hvac-service', 'Sawyer' => 'sawyer-naturals']);
+
 test('a foreign tenant or different product cannot supply the selected variant', function (): void {
     $foreign = Tenant::query()->create(['name' => 'Other shop', 'slug' => 'foreign-retail']);
     $product = WebsiteProduct::query()->create(['tenant_id' => $foreign->id, 'tenant_site_id' => $this->site->id, 'title' => 'Foreign', 'handle' => 'foreign', 'status' => 'active', 'product_type' => 'physical']);

@@ -87,12 +87,15 @@ class WebsiteShippingPlanService
         $destination = $this->rateAddress($destination);
         abort_unless($cart->status === 'active', 422, 'This cart is no longer active.');
         $site = TenantSite::query()->forTenantId($cart->tenant_id)->findOrFail($cart->tenant_site_id);
+        $supplierRoutes = app(WebsiteDropshipRouting::class)->forCart($cart, $site);
+        $supplierLocationId = $supplierRoutes === [] ? null : reset($supplierRoutes)['location_id'];
         $connection = $this->connection($cart->tenant_id);
         $policy = (array) data_get($site->settings, 'shipping', []);
         app(WebsiteShippingPolicyService::class)->buyerCharge($site, $destination['state'], 0);
         abort_unless(in_array($policy['mode'] ?? '', ['test', 'production'], true) && ! empty($policy['services']), 423, 'Review shipping mode and approved carrier services before requesting rates.');
         $origin = WebsiteFulfillmentLocation::query()->forTenantId($cart->tenant_id)->where('tenant_site_id', $site->id)
-            ->where('active', true)->orderByDesc('is_default')->orderBy('id')->first();
+            ->where('active', true)->when($supplierLocationId, fn ($query) => $query->whereKey($supplierLocationId))
+            ->orderByDesc('is_default')->orderBy('id')->first();
         abort_unless($origin, 423, 'Add an active US ship-from location before requesting rates.');
         $originAddress = $this->rateAddress((array) $origin->address, 'origin');
         $services = array_values($policy['services']);
@@ -155,6 +158,9 @@ class WebsiteShippingPlanService
             ];
             if (array_key_exists('residential', $destination)) {
                 $context['destination_residential'] = $destination['residential'];
+            }
+            if ($supplierRoutes !== []) {
+                $context['dropshipping_fingerprint'] = $this->fingerprint($supplierRoutes);
             }
             $context['fingerprint'] = $this->fingerprint($context);
 
