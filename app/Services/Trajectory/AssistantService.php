@@ -35,20 +35,71 @@ class AssistantService
             $asksForTransferMatch = preg_match('/\btransfers?\b/i', $question)
                 && preg_match('/\b(?:match(?:ing)?|reconcile|look at|review)\b|^\s*transfers?[.!?]?\s*$/i', $question);
             if ($asksForTransferMatch) {
-                $reply = ['reply' => 'Open transfer matches to compare the two bank entries and confirm the pair.', 'open_transfer_review' => true];
+                $reply = ['reply' => 'Compare the two bank entries in Transfer matches.', 'open_transfer_review' => true];
                 $turn->update(['response' => $reply, 'state' => 'answered']);
 
                 return ['id' => $turn->id, ...$reply];
             }
             $destination = $this->destination($space, $question);
             $reviewRequest = preg_match('/\b(?:categorize|classify|review|suggest)\b.*\b(?:uncategorized|needing a category|need(?:ing)? categor|transactions? needing|next transaction)\b|\b(?:next|uncategorized) transaction\b/i', $question);
-            $followup = preg_match('/\b(?:what do you mean|why are you asking)\b/i', $question)
-                && (AssistantTurn::where('space_id', $space->id)->where('user_id', $user->id)->where('id', '<', $turn->id)->latest('id')->first()?->response['choices'] ?? []);
+            $previous = AssistantTurn::where('space_id', $space->id)->where('user_id', $user->id)->where('id', '<', $turn->id)->latest('id')->first();
+            $last = $previous?->response ?? [];
+            $waiting = ! empty($last['review_transaction']) || ! empty($last['needs_destination'])
+                || (! empty($last['clarification']) && ! empty($last['choices'])); // Older saved conversations.
+            $followup = $waiting && preg_match('/\b(?:what do you mean|why are you asking)\b/i', $question);
+            if ($followup && ! empty($last['review_transaction'])) {
+                $target = $last['review_transaction'];
+                $reply = ['reply' => ($target['suggestion'] ?? null) ? ($target['reason'] ?? 'Does this category fit the purchase?') : 'Which category best describes this purchase?',
+                    'clarification' => true, 'needs_destination' => empty($target['suggestion']), 'review_transaction' => $target];
+                $turn->update(['response' => $reply, 'state' => 'answered', 'context' => $previous->context]);
+
+                return ['id' => $turn->id, ...$reply];
+            }
             if (($reviewRequest || $followup) && count($destination['matches']) === 0) {
                 $reply = $this->nextCategoryReview($user, $space, $context);
                 $turn->update(['response' => $reply, 'state' => 'answered']);
 
                 return ['id' => $turn->id, ...$reply];
+            }
+
+            // The user can type a destination into the normal composer. Only a question about one
+            // specific purchase carries its original version forward; a new view cannot retarget it.
+            $plainAnswer = preg_match('/^[\pL\pN][\pL\pN\s_\x27’&.,–-]{0,95}$/u', trim($question))
+                && ! preg_match('/\b(?:move|put|categorize|classify|set|change|review|next|split|half|how|why|what|show|list|compare|total)\b/i', $question);
+            if ($waiting && $plainAnswer) {
+                $priorContext = $previous->context ?? [];
+                $priorIds = $priorContext['transaction_ids'] ?? [];
+                $target = $last['review_transaction'] ?? null;
+                if (! $target && count($priorIds) === 1 && isset($priorContext['transaction_versions'][$priorIds[0]])) {
+                    $target = ['transaction_id' => $priorIds[0], 'version' => $priorContext['transaction_versions'][$priorIds[0]]];
+                }
+                if ($target) {
+                    $targetId = $target['transaction_id'];
+                    $currentIds = $context['transaction_ids'] ?? [];
+                    $scopeKeys = ['from', 'through', 'account_id', 'budget_account_id', 'program_id', 'basis', 'direction', 'category', 'subcategory'];
+                    $scopeChanged = collect($scopeKeys)->contains(fn ($key) => isset($context[$key]) && $context[$key] !== ($priorContext[$key] ?? null));
+                    $focusedCard = $this->isFocusedReviewCard($context, $priorContext, $target);
+                    if (($scopeChanged && ! $focusedCard) || ($currentIds !== [] && $currentIds !== [$targetId] && $currentIds !== $priorIds)) {
+                        $reply = ['reply' => 'Which transaction should I change?', 'clarification' => true];
+                        $turn->update(['response' => $reply, 'state' => 'answered']);
+
+                        return ['id' => $turn->id, ...$reply];
+                    }
+                    $context = [...$priorContext, ...array_filter($context, fn ($value) => $value !== null), 'transaction_ids' => [$targetId], 'transaction_versions' => [$targetId => $target['version']]];
+                    if (preg_match('/^(?:yes|correct|that[’\x27]s right)[.!]?$/i', trim($question)) && ! empty($target['suggestion'])) {
+                        $suggested = $target['suggestion'];
+                        $destination = $this->destination($space, $suggested['type'].' '.$suggested['key']);
+                        $destination['matches'] = array_values(array_filter($destination['matches'], fn ($current) => $current === $suggested));
+                    } elseif (preg_match('/^(?:the\s+)?(program|category|subcategory)[.!]?$/i', trim($question), $kind) && ! empty($last['choices']) && count($last['choices']) <= 3) {
+                        $candidates = collect($last['choices'])->where('type', strtolower($kind[1]));
+                        if ($candidates->count() === 1) {
+                            $choice = $candidates->first();
+                            $destination = $this->destination($space, $choice['type'].' '.$choice['key']);
+                            $destination['matches'] = array_values(array_filter($destination['matches'], fn ($current) => $current === $choice));
+                        }
+                    }
+                }
+                $destination['intent'] = true;
             }
 
             if (! $destination['intent'] && $this->hasAnalysisContext($context) && ! preg_match('/\b(half|50\s*%|split)\b/i', $question)) {
@@ -66,14 +117,14 @@ class AssistantService
             }
             if ($destination['intent']) {
                 if (($context['selection_truncated'] ?? false) && preg_match('/\b(these|those|all selected|all of them|every selected)\b/i', $question)) {
-                    $reply = ['reply' => 'This view contains more than 100 transactions. Select a smaller complete batch before changing all of it; nothing has changed.', 'clarification' => true];
+                    $reply = ['reply' => 'Select up to 100 transactions at a time.', 'clarification' => true];
                     $turn->update(['response' => $reply, 'state' => 'answered']);
 
                     return ['id' => $turn->id, ...$reply];
                 }
                 $named = $this->namedSelection($question, $selection);
                 if ($named === null) {
-                    $reply = ['reply' => 'Which purchase should I change? Select one transaction, name its exact merchant, or say “all selected”. Nothing has changed.', 'clarification' => true];
+                    $reply = ['reply' => 'Which transaction should I change?', 'clarification' => true];
                     $turn->update(['response' => $reply, 'state' => 'answered']);
 
                     return ['id' => $turn->id, ...$reply];
@@ -81,9 +132,17 @@ class AssistantService
                 $selection = $named;
             }
             if ($destination['intent'] && $selection->isEmpty()) {
-                $reply = ['reply' => 'Open or select the transaction you want to change, then tell me its category or program.', 'clarification' => true];
+                $reply = ['reply' => 'Which transaction should I change?', 'clarification' => true];
             } elseif ($destination['intent'] && count($destination['matches']) !== 1) {
-                $reply = ['reply' => 'Which exact category or program should I use? Choose one from this workspace; no transaction has changed.', 'clarification' => true, 'choices' => $destination['choices']];
+                $matches = $destination['matches'];
+                $reply = ['reply' => 'Which category or program should I use?', 'clarification' => true, 'needs_destination' => true];
+                if (count($matches) >= 2 && count($matches) <= 3) {
+                    $reply['reply'] = 'Which “'.$matches[0]['label'].'” did you mean?';
+                    $reply['choices'] = $matches;
+                }
+                if ($selection->count() === 1) {
+                    $reply['review_transaction'] = $this->reviewTarget($selection->first());
+                }
             } elseif ($destination['intent']) {
                 $actions = [];
                 foreach ($selection as $tx) {
@@ -91,7 +150,7 @@ class AssistantService
                     abort_unless(is_int($version) && $version === $tx->version, 409, 'The selected transaction changed. Refresh it before categorizing.');
                     $actions[] = ['transaction_id' => $tx->id, 'version' => $version, 'destination' => $destination['matches'][0]];
                 }
-                $reply = ['reply' => 'Review these '.count($actions).' transactions before applying the category or program.', 'proposal' => ['actions' => $actions, 'requires_review' => true]];
+                $reply = ['reply' => 'Apply '.$destination['matches'][0]['label'].' to '.count($actions).' transactions?', 'proposal' => ['actions' => $actions, 'requires_review' => true]];
                 $turn->update(['response' => $reply, 'state' => 'proposed']);
                 if (count($actions) === 1 || preg_match('/\b(these|those|all selected|all of them|every selected)\b/i', $question)) {
                     return $this->apply($user, $space, $turn);
@@ -105,7 +164,7 @@ class AssistantService
                 }
                 $data = app(DashboardService::class)->build($space, isset($context['from'], $context['through']) ? 'custom' : 'month', null, $context['from'] ?? null, $context['through'] ?? null, false, $user, $context['account_id'] ?? null);
                 if ($selection->isNotEmpty() && preg_match('/\b(expensive|largest|biggest|selected|these|this purchase|this transaction)\b/i', $question)) {
-                    $lines = $selection->sortBy('amount_cents')->take(10)->map(fn ($tx) => $tx->posted_on->toDateString().' · '.$tx->merchant.' · $'.number_format(abs($tx->amount_cents) / 100, 2));
+                    $lines = $selection->sortBy('amount_cents')->take(3)->map(fn ($tx) => $tx->posted_on->toDateString().' · '.$tx->merchant.' · $'.number_format(abs($tx->amount_cents) / 100, 2));
                     $reply = ['reply' => "Selected transactions, largest first:\n".$lines->implode("\n"), 'mode' => 'Private calculation'];
                 } else {
                     $reply = $useAi ? app(TrajectoryAiService::class)->respond($user, $space, $question, $data, $requestId)
@@ -118,7 +177,7 @@ class AssistantService
             return ['id' => $turn->id, ...$reply];
         } catch (\Throwable $exception) {
             if ($turn->fresh()->response === null) {
-                $turn->update(['state' => 'failed', 'response' => ['reply' => 'This request could not be completed. No automatic retry was sent. Refresh the selected transaction and ask again.']]);
+                $turn->update(['state' => 'failed', 'response' => ['reply' => 'Refresh the transaction and try again.']]);
             }
             throw $exception;
         }
@@ -157,9 +216,34 @@ class AssistantService
         app(FinanceAccess::class)->authorize($user->fresh(), $space->fresh());
 
         return ['reply' => $target ? 'I think this goes in '.$target['label'].'. Is that right?' : 'What was this purchase for?', 'mode' => 'Category review',
-            'review_transaction' => ['transaction_id' => $transaction->id, 'version' => $transaction->version, 'date' => $transaction->posted_on->toDateString(),
-                'merchant' => $transaction->merchant, 'amount_cents' => abs($transaction->amount_cents),
-                'suggestion' => $target, 'reason' => $suggestion['reason']]];
+            'needs_destination' => $target === null,
+            'review_transaction' => [...$this->reviewTarget($transaction), 'suggestion' => $target, 'reason' => $suggestion['reason']]];
+    }
+
+    private function reviewTarget(Transaction $transaction): array
+    {
+        return ['transaction_id' => $transaction->id, 'version' => $transaction->version, 'date' => $transaction->posted_on->toDateString(),
+            'merchant' => $transaction->merchant, 'amount_cents' => abs($transaction->amount_cents), 'suggestion' => null];
+    }
+
+    private function isFocusedReviewCard(array $context, array $previous, array $target): bool
+    {
+        $id = $target['transaction_id'];
+        $date = $target['date'] ?? null;
+        if (! $date || ($context['focused_transaction'] ?? false) !== true || ($context['level'] ?? null) !== 'transaction'
+            || ($context['transaction_ids'] ?? []) !== [$id] || ($context['transaction_versions'][$id] ?? null) !== $target['version']
+            || ($context['from'] ?? null) !== $date || ($context['through'] ?? null) !== $date
+            || ($context['direction'] ?? null) !== 'out' || ($context['basis'] ?? null) !== 'spending'
+            || (isset($previous['from'], $previous['through']) && ($date < $previous['from'] || $date > $previous['through']))) {
+            return false;
+        }
+        foreach (['account_id', 'budget_account_id', 'program_id', 'category', 'subcategory'] as $key) {
+            if (isset($context[$key]) && $context[$key] !== ($previous[$key] ?? null)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function apply(User $user, Space $space, AssistantTurn $turn): array
@@ -201,7 +285,7 @@ class AssistantService
                     $applied[] = ['transaction_id' => $tx->id, 'version' => $saved['version'], 'event_id' => $saved['event_id'], 'mode' => 'attribution'];
                 }
             }
-            $response = ['reply' => count($applied) === 1 ? 'Saved this transaction to '.$turn->response['proposal']['actions'][0]['destination']['label'].'.' : 'Saved '.count($applied).' reviewed transaction changes.', 'applied' => $applied, 'undo' => ['available' => true]];
+            $response = ['reply' => count($applied) === 1 ? 'Saved to '.$turn->response['proposal']['actions'][0]['destination']['label'].'.' : 'Saved '.count($applied).' transaction changes.', 'applied' => $applied, 'undo' => ['available' => true]];
             $turn->update(['state' => 'applied', 'response' => $response]);
             Event::create(['space_id' => $space->id, 'actor_id' => $user->id, 'action' => 'assistant_categorization', 'record_id' => $turn->id, 'after' => ['applied' => $applied, 'bank_cash_changed' => false]]);
 
@@ -225,7 +309,7 @@ class AssistantService
                     app(TrajectoryController::class)->undo($request, $space, $tx, app(FinanceAccess::class));
                 }
             }
-            $response = ['reply' => 'Undid the categorization. Original bank amounts and dates are unchanged.', 'undo' => ['available' => false]];
+            $response = ['reply' => 'Categorization undone.', 'undo' => ['available' => false]];
             $turn->update(['state' => 'undone', 'response' => $response]);
 
             return ['id' => $turn->id, ...$response];
@@ -243,7 +327,7 @@ class AssistantService
         if (! empty($context['focused_transaction']) && count($context['transaction_ids'] ?? []) === 1) {
             $pending = Transaction::where('space_id', $space->id)->where('pending', true)->where('removed', false)->find($context['transaction_ids'][0]);
             if ($pending) {
-                return ['reply' => $pending->merchant.' · $'.number_format(abs($pending->amount_cents) / 100, 2).' is pending. It is separate from posted spending; its amount can change when the bank posts it. You can categorize this purchase now.', 'mode' => 'Private calculation · pending purchase', 'context_summary' => ['amount_cents' => abs($pending->amount_cents), 'pending' => true, 'basis' => 'pending_bank_purchase']];
+                return ['reply' => $pending->merchant.' · $'.number_format(abs($pending->amount_cents) / 100, 2).' is pending. The amount may change when it posts.', 'mode' => 'Private calculation · pending purchase', 'context_summary' => ['amount_cents' => abs($pending->amount_cents), 'pending' => true, 'basis' => 'pending_bank_purchase']];
             }
         }
         $rows = collect($report['entries']);
@@ -281,13 +365,12 @@ class AssistantService
         }
         $amount = ($incoming ? 1 : -1) * (int) $rows->sum('amount_cents');
         $label = '$'.number_format($amount / 100, 2);
-        $top = $rows->sortBy(fn ($row) => -abs($row['amount_cents']))->take(10)->map(fn ($row) => $row['date'].' · '.$row['merchant'].' · '.($row['amount_cents'] > 0 && ! $incoming ? 'refund ' : '').'$'.number_format(abs($row['amount_cents']) / 100, 2));
+        $top = $rows->sortBy(fn ($row) => -abs($row['amount_cents']))->take(3)->map(fn ($row) => $row['date'].' · '.$row['merchant'].' · '.($row['amount_cents'] > 0 && ! $incoming ? 'refund ' : '').'$'.number_format(abs($row['amount_cents']) / 100, 2));
         $reply = $name.' for '.$report['range']['from'].' through '.$report['range']['through'].': '.$label.' across '.$rows->count().' recorded entries.';
-        $reply .= "\n".(($context['basis'] ?? 'spending') === 'cash' ? 'This is bank cash movement; repayments can appear here.' : 'Purchases are counted when incurred, net of refunds; card and loan repayments are separate.');
+        $reply .= ($context['basis'] ?? 'spending') === 'cash' ? ' Cash movement includes repayments.' : '';
         if ($top->isNotEmpty()) {
             $reply .= "\n\nLargest contributing entries:\n".$top->implode("\n");
         }
-        $reply .= "\n\nRecorded history can be incomplete. Select a purchase to change its category or program.";
 
         return ['reply' => $reply, 'mode' => 'Private calculation · current drilldown', 'context_summary' => ['amount_cents' => $amount, 'count' => $rows->count(), 'basis' => $context['basis'] ?? 'spending', 'range' => $report['range']]];
     }
@@ -357,7 +440,7 @@ class AssistantService
         }
         $label = $a['label'].' and '.$b['label'];
 
-        return ['reply' => 'Split '.$transaction->merchant.': $'.number_format(abs($first) / 100, 2).' to '.$a['label'].' and $'.number_format(abs($transaction->amount_cents - $first) / 100, 2).' to '.$b['label'].'. Review before saving. This does not move bank money or claim reimbursement.',
+        return ['reply' => 'Split '.$transaction->merchant.' with $'.number_format(abs($first) / 100, 2).' to '.$a['label'].' and $'.number_format(abs($transaction->amount_cents - $first) / 100, 2).' to '.$b['label'].'. Review before saving.',
             'proposal' => ['requires_review' => true, 'actions' => [['transaction_id' => $transaction->id, 'version' => $transaction->version, 'destination' => ['type' => 'split', 'label' => $label, 'lines' => $lines]]]]];
     }
 
@@ -384,7 +467,8 @@ class AssistantService
     {
         $all = $this->destinations($space);
         $target = trim($question);
-        $intent = preg_match('/\b(categorize|recategorize|classify|reclassify|move|put|mark|set|change)\b/i', $question) && ! preg_match('/\b(budget|target|limit)\b/i', $question);
+        $intent = preg_match('/\b(categorize|recategorize|classify|reclassify|move|put|mark|set|change)\b/i', $question)
+            && ! preg_match('/\b(?:budget|limit)\b|\b(?:savings|spending|monthly)\s+target\b|\b(?:set|adjust|raise|lower)\s+(?:(?:the|my|our)\s+)?target\b|\bchange\s+(?:the|my|our)\s+target\b/i', $question);
         if (preg_match('/\b(?:as|into|to|under)\s+(.+?)[.!]?$/i', $question, $match) && $intent) {
             $target = $match[1];
         } elseif (preg_match('/^(?:this|that|it|those)(?:\s+(?:is|was|are|were))?\s+(?:for\s+)?(.+?)[.!]?$/i', $target, $match)) {
@@ -396,7 +480,7 @@ class AssistantService
         $normalize = fn ($v) => mb_strtolower(trim(preg_replace('/[^\pL\pN]+/u', ' ', $v)));
         $matches = array_values(array_filter($all, fn ($candidate) => ($kind === null || $candidate['type'] === $kind) && in_array($normalize($target), [$normalize($candidate['key']), $normalize($candidate['label'])], true)));
 
-        return ['intent' => (bool) $intent || $matches !== [], 'matches' => $matches, 'choices' => array_slice($all, 0, 60)];
+        return ['intent' => (bool) $intent || $matches !== [], 'matches' => $matches];
     }
 
     private function destinations(Space $space): array
@@ -408,11 +492,11 @@ class AssistantService
             if (! $definition['active']) {
                 continue;
             }
+            $targets = array_values(array_filter($targets, fn ($target) => $target['key'] !== $definition['key']));
             if ($definition['parent_record_id']) {
                 $parent = collect($definitions)->firstWhere('id', $definition['parent_record_id']);
                 $targets[] = ['type' => 'subcategory', 'id' => $definition['id'], 'key' => $definition['key'], 'label' => $definition['name'], 'parent_key' => $parent['key']];
             } else {
-                $targets = array_values(array_filter($targets, fn ($target) => $target['key'] !== $definition['key']));
                 $targets[] = ['type' => 'category', 'key' => $definition['key'], 'label' => $definition['name']];
             }
         }

@@ -2,11 +2,13 @@ import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {chromium,webkit} from 'playwright';
 import {expect} from '@playwright/test';
+import {verifyCategoryReview} from './trajectory-assistant-review.browser.mjs';
 
 const script=(await readFile(new URL('../../resources/js/trajectory/assistant-ui.js',import.meta.url),'utf8')).replace("import './assistant-ui.css';",'').replace('export function initTrajectoryAssistant','window.initTrajectoryAssistant = function');
 const css=await readFile(new URL('../../resources/js/trajectory/assistant-ui.css',import.meta.url),'utf8');
 for(const engine of [chromium,webkit]){
  const browser=await engine.launch({headless:true});
+ await verifyCategoryReview(browser,engine.name(),script,css);
  for(const width of [390,1440]){
   const page=await browser.newPage({viewport:{width,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/*',route=>route.fulfill({status:200,contentType:'text/html',body:'<html><body><main id="trajectory"></main></body></html>'}));
@@ -32,7 +34,6 @@ for(const engine of [chromium,webkit]){
   await expect(page.locator('.tr-assistant-review')).toContainText('Example grocery purchase');
   const beforeReview=await page.evaluate(()=>window.requests.filter(request=>request.method==='POST').length);
   await page.getByRole('button',{name:'Explain',exact:true}).click();await expect(page.getByText('Four reviewed purchases from this merchant were groceries.',{exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'No',exact:true}).click();await expect(page.getByText('What was Example grocery purchase for? Tell me the category or describe its purpose.',{exact:true})).toBeVisible();
   expect(await page.evaluate(()=>window.requests.filter(request=>request.method==='POST').length)).toBe(beforeReview);
   await page.getByRole('button',{name:'Yes · Groceries',exact:true}).click();
   const yes=await page.evaluate(()=>window.requests.filter(request=>request.method==='POST'&&request.path.endsWith('/assistant')).at(-1));

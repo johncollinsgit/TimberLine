@@ -376,3 +376,102 @@ test('Ask does not invent a category when reviewing an unfamiliar purchase and s
     $empty = app(AssistantService::class)->respond($this->owner, $this->space, 'Review the next uncategorized transaction', ['from' => '2027-01-01', 'through' => '2027-01-31'], (string) Str::uuid());
     expect(isset($empty['review_transaction']))->toBeFalse()->and($empty['reply'])->toContain('No uncategorized');
 });
+
+test('an unknown destination asks one question and a typed answer applies only to the named transaction', function () {
+    $a = ($this->entry)('one');
+    $a->update(['merchant' => 'Target']);
+    $b = ($this->entry)('different');
+    $context = ['transaction_ids' => [$a->id, $b->id], 'transaction_versions' => [$a->id => $a->version, $b->id => $b->version]];
+    $service = app(AssistantService::class);
+    $first = $service->respond($this->owner, $this->space, 'Move Target to Not a category', $context, (string) Str::uuid());
+    expect($first['needs_destination'])->toBeTrue()->and($first)->not->toHaveKey('choices')
+        ->and($first['review_transaction']['transaction_id'])->toBe($a->id)->and($a->fresh()->version)->toBe($a->version);
+    $again = $service->respond($this->owner, $this->space, 'Something unfamiliar', $context, (string) Str::uuid());
+    expect($again['needs_destination'])->toBeTrue()->and($again)->not->toHaveKey('choices')->and($again['review_transaction']['transaction_id'])->toBe($a->id);
+    $reply = $service->respond($this->owner, $this->space, 'Groceries', $context, (string) Str::uuid());
+    expect($reply['applied'])->toHaveCount(1)->and($reply['applied'][0]['transaction_id'])->toBe($a->id)
+        ->and($b->fresh()->category)->toBe('shopping')->and($reply['undo']['available'])->toBeTrue();
+});
+
+test('a followup does not retarget a different selection or silently refresh a stale purchase version', function () {
+    $a = ($this->entry)('original');
+    $b = ($this->entry)('new');
+    $service = app(AssistantService::class);
+    $ask = fn () => $service->respond($this->owner, $this->space, 'Categorize this as unknown', ($this->context)($a), (string) Str::uuid());
+    $ask();
+    $reply = $service->respond($this->owner, $this->space, 'Groceries', ($this->context)($b), (string) Str::uuid());
+    expect($reply['clarification'])->toBeTrue()->and($reply)->not->toHaveKey('applied')->and($b->fresh()->category)->toBe('shopping');
+    $ask();
+    $a->increment('version');
+    expect(fn () => $service->respond($this->owner, $this->space, 'Groceries', [], (string) Str::uuid()))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class)
+        ->and($a->fresh()->category)->toBe('shopping');
+});
+
+test('a legacy catalogue prompt supports a plain answer and only exact same-label alternatives are offered', function () {
+    $tx = ($this->entry)('legacy');
+    $legacy = AssistantTurn::create(['space_id' => $this->space->id, 'user_id' => $this->owner->id, 'request_id' => (string) Str::uuid(),
+        'request_hash' => str_repeat('a', 64), 'question' => 'Which category?', 'context' => ($this->context)($tx), 'state' => 'answered',
+        'response' => ['clarification' => true, 'choices' => array_fill(0, 45, ['label' => 'Old choice'])]]);
+    $history = $this->actingAs($this->owner)->getJson('/trajectory/spaces/'.$this->space->id.'/assistant')->assertOk()->json('rows.0.response');
+    expect($history)->not->toHaveKey('choices')->and($history['needs_destination'])->toBeTrue()
+        ->and($legacy->fresh()->response['choices'])->toHaveCount(45);
+    Record::create(['space_id' => $this->space->id, 'kind' => 'program', 'name' => 'Shopping', 'data' => ['key' => 'shopping'], 'active' => true, 'version' => 1]);
+    $service = app(AssistantService::class);
+    $reply = $service->respond($this->owner, $this->space, 'Shopping', [], (string) Str::uuid());
+    expect($reply['needs_destination'])->toBeTrue()->and($reply['choices'])->toHaveCount(2)
+        ->and(collect($reply['choices'])->pluck('label')->unique()->all())->toBe(['Shopping'])
+        ->and(collect($reply['choices'])->pluck('type')->all())->toBe(['category', 'program'])->and($tx->fresh()->version)->toBe($tx->version);
+    $typed = $service->respond($this->owner, $this->space, 'category Shopping', [], (string) Str::uuid());
+    expect($typed['applied'])->toHaveCount(1)->and($typed['applied'][0]['transaction_id'])->toBe($tx->id);
+});
+
+test('Move Target to a named child category resolves one merchant and one destination', function () {
+    $tx = ($this->entry)('merchant');
+    $tx->update(['merchant' => 'Target']);
+    $other = ($this->entry)('other');
+    $defs = app(\App\Services\Trajectory\AttributionService::class);
+    $parent = $defs->saveDefinition($this->owner, $this->space, 'category_definition', 'Shopping', ['key' => 'shopping', 'direction' => 'expense']);
+    $child = $defs->saveDefinition($this->owner, $this->space, 'category_definition', 'Christmas', ['key' => 'christmas', 'direction' => 'expense', 'parent_record_id' => $parent->id]);
+    $context = ['transaction_ids' => [$tx->id, $other->id], 'transaction_versions' => [$tx->id => $tx->version, $other->id => $other->version]];
+    $reply = app(AssistantService::class)->respond($this->owner, $this->space, 'Move Target to Christmas', $context, (string) Str::uuid());
+    expect($reply['applied'])->toHaveCount(1)->and($reply['applied'][0]['transaction_id'])->toBe($tx->id)
+        ->and($defs->describe($this->owner, $this->space, $tx->fresh())['lines'][0]['subcategory_record_id'])->toBe($child->id)
+        ->and($other->fresh()->version)->toBe($other->version);
+});
+
+test('the Ask review card can narrow a whole-budget request to its exact day, row and version', function (string $followupScope) {
+    $tx = ($this->entry)('retailer');
+    $tx->update(['category' => 'uncategorized', 'reviewed' => false]);
+    $other = ($this->entry)('another');
+    $defs = app(\App\Services\Trajectory\AttributionService::class);
+    $defs->saveDefinition($this->owner, $this->space, 'category_definition', 'Christmas', ['key' => 'christmas', 'direction' => 'expense']);
+    $this->mock(\App\Services\Trajectory\ClassificationSuggestionService::class)->shouldReceive('preview')->once()->andReturn([
+        'rows' => [['editable' => true, 'category' => null, 'reason' => 'No consistent history.']]]);
+    $endpoint = '/trajectory/spaces/'.$this->space->id.'/assistant';
+    $context = ['space_id' => $this->space->id, 'from' => '2027-02-01', 'through' => '2027-02-12',
+        'level' => 'period', 'basis' => 'cash', 'direction' => 'both', 'transaction_ids' => [], 'transaction_versions' => []];
+    $first = $this->actingAs($this->owner)->postJson($endpoint, ['question' => 'Review the next uncategorized transaction', 'request_id' => (string) Str::uuid(), 'context' => $context])->assertOk();
+    $card = $first->json('review_transaction');
+    expect($card['transaction_id'])->toBe($tx->id);
+    $focused = [...$context, 'from' => $card['date'], 'through' => $card['date'], 'account_id' => null, 'budget_account_id' => null, 'program_id' => null,
+        'category' => null, 'subcategory' => null, 'direction' => 'out', 'level' => 'transaction', 'basis' => 'spending',
+        'focused_transaction' => true, 'selection_truncated' => false, 'transaction_ids' => [$card['transaction_id']], 'transaction_versions' => [$tx->id => $card['version']]];
+    if ($followupScope === 'wrong day') {
+        $focused['from'] = $focused['through'] = '2027-02-11';
+    } elseif ($followupScope === 'wrong transaction') {
+        $focused['transaction_ids'] = [$other->id];
+        $focused['transaction_versions'] = [$other->id => $other->version];
+    } elseif ($followupScope === 'wrong version') {
+        $focused['transaction_versions'] = [$tx->id => $card['version'] + 1];
+    } elseif ($followupScope === 'changed account scope') {
+        $focused['account_id'] = $this->cash->id;
+    }
+    $answer = $this->postJson($endpoint, ['question' => 'Christmas', 'request_id' => (string) Str::uuid(), 'context' => $focused])->assertOk()->json();
+    if ($followupScope === 'exact card') {
+        expect($answer['applied'])->toHaveCount(1)->and($answer['applied'][0]['transaction_id'])->toBe($tx->id)
+            ->and($tx->fresh()->category)->toBe('christmas');
+    } else {
+        expect($answer['clarification'])->toBeTrue()->and($answer)->not->toHaveKey('applied')->and($tx->fresh()->reviewed)->toBeFalse();
+    }
+    expect($other->fresh()->version)->toBe($other->version);
+})->with(['exact card', 'wrong day', 'wrong transaction', 'wrong version', 'changed account scope']);
