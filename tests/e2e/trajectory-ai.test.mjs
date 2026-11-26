@@ -60,6 +60,7 @@ test('AI notices and partial source coverage are visible and escaped',async()=>{
     assert.match(html,/AI context is partial/);
     assert.match(html,/&lt;script&gt;/);
     assert.doesNotMatch(html,/<script>/);
-    assert.match(f.ui.bud(),/no money moves from this chat/);
+    assert.match(f.ui.bud(),/Budget changes open for review/);
+    assert.match(f.ui.bud(),/Open transaction chat/);
   }finally{f.restore();}
 });

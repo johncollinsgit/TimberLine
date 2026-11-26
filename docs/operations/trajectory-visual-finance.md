@@ -116,6 +116,12 @@ scope/date/selection change or explicit reload. Successful updates retain the
 drilldown, Back history, sort, page/table scroll and focused chart control. Failed background
 reads retain the displayed dated snapshot; explicit Refresh shows request errors.
 
+Ask Everbranch reviews one posted purchase at a time. When a destination is
+unclear, the conversation asks for its name. The optional picker searches active
+destinations in the selected workspace. Old conversations with a saved category
+catalog open without rendering that catalog. The planning question page links to
+the same transaction chat and retains its own budget draft workflow.
+
 Ask Everbranch receives the current space, account/program, dates, basis,
 category, selected source IDs and versions. The server resolves the figures and
 permissions. Explicit categorization uses audited native services with Undo;

@@ -1,3 +1,9 @@
+## 2026-11-26 · Ask Everbranch
+
+Ask offers purchase review and transfer matching from the conversation. Review
+shows one purchase and its suggested category. Users can enter another category
+or search their workspace. Previous conversations use the same compact display.
+
 ## 2026-11-26 · Transaction review and seasonal spending
 
 Desktop and phone ledgers show a full purchase and matching return on one row.

@@ -53,7 +53,14 @@ export function planningUI({getData, spaces, esc, money, precise, panel, btn, pl
     document.querySelector('#tr-pnl-comparison')?.addEventListener('change',event=>{profitComparison=event.target.value;render?.();document.querySelector('#tr-pnl-comparison')?.focus();});
   }
   function companies(){return panel('Businesses & account ownership',`<p class="tr-subtle">Each company has separate books, access, and tax settings. Both shows your household with the company selected above. A shared bank login can feed accounts into different companies; only the connection owner can change those assignments.</p>${spaces.map(s=>`<div class="tr-row"><div><strong>${esc(s.name)}</strong><p class="tr-subtle">${s.kind==='household'?'Private household':'Business · separate financial access'}</p></div><a class="tr-link" href="/trajectory?space=${s.id}&tab=accounts">Open accounts</a></div>`).join('')}<div class="tr-actions tr-block">${btn('Add an entitled business','plan-add-business')}${btn('Edit current profile','plan-profile')}</div><p class="tr-subtle">New companies must have an Everbranch workspace, financial access, and Trajectory entitlement. Linking your household does not grant company access.</p>`);}
-  function bud(){return panel('Ask Everbranch',`<p class="tr-subtle">Ask about ${esc(getData().space.name)} and the selected period. Each answer identifies whether it used enabled AI or calculated guidance, and shows missing coverage. Budget changes open a draft for your review; no money moves from this chat.</p><div class="tr-actions">${['What income do I need this month?','What bills are upcoming?','How do metals proceeds affect my gap?','Can the business pay us?','Compare debt payoff methods'].map(q=>btn(q,'plan-bud-prompt',`data-question="${esc(q)}"`)).join('')}</div><label class="tr-field full tr-block">Your question<textarea id="tr-bud-question" rows="3" maxlength="2000"></textarea></label>${btn('Ask Everbranch','plan-bud')}<div id="tr-bud-thread" role="log" aria-live="polite">${(conversations.get(contextKey())||[]).join('')}</div>`);}
+  function bud() {
+    const prompts = ['What bills are upcoming?', 'What income do I need this month?'];
+    return panel('Transactions', btn('Open transaction chat', 'vf-ask-selected'))
+      + panel('Planning questions', `<form data-plan-question><label class="tr-field full">What would you like to know?<input id="tr-bud-question" maxlength="2000" required></label>
+        <div class="tr-actions"><button type="submit">Ask</button><small>Budget changes open for review.</small></div></form>
+        <div class="tr-actions tr-block">${prompts.map(q=>btn(q,'plan-bud-prompt',`data-question="${esc(q)}"`)).join('')}</div>
+        <div id="tr-bud-thread" role="log" aria-live="polite">${(conversations.get(contextKey())||[]).join('')}</div>`);
+  }
   function draw(){
     const data=getData(),p=data.planning;if(!p)return;
     const view=planOverview(data),sources=p.sources.filter(source=>source.expected_monthly_cents>0),colors=['#408c7b','#5b83c1','#9274ba','#d49450','#bd6e90','#6c974e'];

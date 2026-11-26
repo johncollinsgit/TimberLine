@@ -773,6 +773,13 @@ function boot() {
       handler.open();
     } catch(e) {finish();throw e;}
   }
+  root.addEventListener('submit', async event => {
+    if (!event.target.matches('[data-plan-question]')) return;
+    event.preventDefault();
+    const button = event.target.querySelector('[type="submit"]');
+    if (button.disabled) return;
+    try { await planning.handle('plan-bud', button); } catch (error) { notice(error.message); }
+  });
   root.addEventListener('click',async e=>{
     const target=e.target.closest('[data-action]');if(!target)return;
     const a=target.dataset.action,id=Number(target.dataset.id),spaceId=Number(target.dataset.spaceId)||active,r=data?.records.find(r=>r.id===id),tx=[...(evidenceRows||[]),...(data?.review_transactions||[]),...(data?.transactions||[])].find(t=>t.id===id&&(!target.dataset.spaceId||(t.space_id||active)===spaceId));

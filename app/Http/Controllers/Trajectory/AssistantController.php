@@ -15,7 +15,7 @@ class AssistantController extends Controller
     {
         $access->authorize($request->user(), $space);
         $rows = AssistantTurn::where('space_id', $space->id)->where('user_id', $request->user()->id)->orderByDesc('id')->limit(40)->get()->reverse()->values()->map(fn ($turn) => [
-            'id' => $turn->id, 'question' => $turn->question, 'response' => $turn->response, 'context' => $turn->context, 'created_at' => $turn->created_at->toIso8601String(),
+            'id' => $turn->id, 'question' => $turn->question, 'response' => $this->compactReply($turn->response), 'context' => $turn->context, 'created_at' => $turn->created_at->toIso8601String(),
         ]);
 
         return response()->json(['rows' => $rows])->header('Cache-Control', 'private, no-store');
@@ -39,7 +39,21 @@ class AssistantController extends Controller
         ]);
         abort_if(isset($data['context']['space_id']) && $data['context']['space_id'] !== $space->id, 403);
 
-        return response()->json($assistant->respond($request->user(), $space, $data['question'], $data['context'] ?? [], $data['request_id'], $data['use_ai'] ?? false))->header('Cache-Control', 'private, no-store');
+        $reply = $assistant->respond($request->user(), $space, $data['question'], $data['context'] ?? [], $data['request_id'], $data['use_ai'] ?? false);
+
+        return response()->json($this->compactReply($reply))->header('Cache-Control', 'private, no-store');
+    }
+
+    /** Older turns stored the whole destination catalog with a single clarification. */
+    private function compactReply(?array $reply): ?array
+    {
+        if (! empty($reply['clarification']) && count($reply['choices'] ?? []) > 3) {
+            unset($reply['choices']);
+            $reply['needs_destination'] = true;
+            $reply['reply'] = 'Which category or program should I use?';
+        }
+
+        return $reply;
     }
 
     public function apply(Request $request, Space $space, AssistantTurn $turn, AssistantService $assistant)
