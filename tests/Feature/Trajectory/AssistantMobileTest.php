@@ -360,7 +360,7 @@ test('Ask reviews one uncategorized purchase with a grounded suggestion and wait
         ->and($reply['review_transaction']['reason'])->toContain('Four reviewed')
         ->and(isset($reply['choices']))->toBeFalse()
         ->and($transaction->fresh()->category)->toBe('uncategorized');
-    $confirmed = $service->respond($this->owner, $this->space, 'Move this to category Groceries', ($this->context)($transaction), (string) Str::uuid());
+    $confirmed = $service->respond($this->owner, $this->space, 'Yes', ($this->context)($transaction), (string) Str::uuid());
     expect($confirmed['undo']['available'])->toBeTrue()->and($transaction->fresh()->category)->toBe('groceries');
     $service->undo($this->owner, $this->space, AssistantTurn::findOrFail($confirmed['id']));
     expect($transaction->fresh()->category)->toBe('uncategorized');
@@ -421,7 +421,7 @@ test('a legacy catalogue prompt supports a plain answer and only exact same-labe
     expect($reply['needs_destination'])->toBeTrue()->and($reply['choices'])->toHaveCount(2)
         ->and(collect($reply['choices'])->pluck('label')->unique()->all())->toBe(['Shopping'])
         ->and(collect($reply['choices'])->pluck('type')->all())->toBe(['category', 'program'])->and($tx->fresh()->version)->toBe($tx->version);
-    $typed = $service->respond($this->owner, $this->space, 'category Shopping', [], (string) Str::uuid());
+    $typed = $service->respond($this->owner, $this->space, 'the category', [], (string) Str::uuid());
     expect($typed['applied'])->toHaveCount(1)->and($typed['applied'][0]['transaction_id'])->toBe($tx->id);
 });
 

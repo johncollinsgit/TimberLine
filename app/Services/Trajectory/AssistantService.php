@@ -64,8 +64,8 @@ class AssistantService
 
             // The user can type a destination into the normal composer. Only a question about one
             // specific purchase carries its original version forward; a new view cannot retarget it.
-            $plainAnswer = preg_match('/^[\pL\pN][\pL\pN\s_\x27’&.,–-]{0,95}$/u', trim($question))
-                && ! preg_match('/\b(?:move|put|categorize|classify|set|change|review|next|split|half|how|why|what|show|list|compare|total)\b/i', $question);
+            $plainAnswer = mb_strlen(trim($question)) <= 120
+                && ! preg_match('/[?\r\n]|\b(?:move|put|categorize|classify|set|change|review|next|split|half|how|why|what|show|list|compare|total)\b/i', $question);
             if ($waiting && $plainAnswer) {
                 $priorContext = $previous->context ?? [];
                 $priorIds = $priorContext['transaction_ids'] ?? [];
@@ -79,7 +79,8 @@ class AssistantService
                     $scopeKeys = ['from', 'through', 'account_id', 'budget_account_id', 'program_id', 'basis', 'direction', 'category', 'subcategory'];
                     $scopeChanged = collect($scopeKeys)->contains(fn ($key) => isset($context[$key]) && $context[$key] !== ($priorContext[$key] ?? null));
                     $focusedCard = $this->isFocusedReviewCard($context, $priorContext, $target);
-                    if (($scopeChanged && ! $focusedCard) || ($currentIds !== [] && $currentIds !== [$targetId] && $currentIds !== $priorIds)) {
+                    $versionChanged = isset($context['transaction_versions'][$targetId]) && $context['transaction_versions'][$targetId] !== $target['version'];
+                    if ($versionChanged || ($scopeChanged && ! $focusedCard) || ($currentIds !== [] && $currentIds !== [$targetId] && $currentIds !== $priorIds)) {
                         $reply = ['reply' => 'Which transaction should I change?', 'clarification' => true];
                         $turn->update(['response' => $reply, 'state' => 'answered']);
 
