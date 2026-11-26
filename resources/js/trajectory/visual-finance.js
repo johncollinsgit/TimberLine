@@ -43,6 +43,16 @@ export function groupRefundEntries(entries) {
   return result;
 }
 
+// A refund in a spending report can also appear as an incoming bank receipt.
+// In the full-period ledger, count the credit once. Its inflow drilldown uses the original receipt.
+function periodLedgerEntries(report) {
+  const entries = report?.entries ?? [];
+  const sourceKey = row => [row.account_id, row.source_transaction_id ?? row.id, row.amount_cents].join(':');
+  const refunds = new Set(entries.filter(row => row.direction === 'out' && row.refund_match?.role === 'refund'
+    && !row.refund_match.bank_level && !row.attribution_detail_id && row.amount_cents === row.refund_match.amount_cents).map(sourceKey));
+  return entries.filter(row => !(row.direction === 'in' && row.amount_basis === 'owned_bank_cash' && refunds.has(sourceKey(row))));
+}
+
 export function sortFinanceEntries(entries, sort = 'largest', query = '') {
   const text = query.trim().toLocaleLowerCase();
   const rows = entries.filter(row => !text || [row.merchant, row.category_label, row.category, row.subcategory_label, row.date].some(x => String(x ?? '').toLocaleLowerCase().includes(text)));
@@ -407,7 +417,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     const latestNote = emptyToday ? latest && /^\d{4}-\d{2}-\d{2}$/.test(latest) ? `Bank activity through ${new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',timeZone:'UTC'}).format(new Date(latest+'T12:00:00Z'))}` : 'No bank activity yet' : null;
     const metrics = `<div class="vf-stat-row">${stats('Money coming in', report.summary?.inflow_cents, latestNote??'Sources of funds','',emptyToday?'None recorded':null)}${stats(partialSpending() ? 'Recorded costs' : state.basis === 'spending' ? 'Purchases & costs' : 'Bank cash out', spendingValue(), partialSpending() ? 'Tax payment split pending' : latestNote??rangeLabel(report.range),'',emptyToday?'None recorded':null)}${!getContext().account_id && Number.isSafeInteger(envelopes?.summary?.remaining_cents) ? stats('Budget left this month', envelopes.summary.remaining_cents, monthLabel(state.budgetMonth), 'vf-budget-stat') : ''}</div>`;
     if (view === 'overview') {const budgets = `<section class="vf-budget-preview"><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(monthLabel(state.budgetMonth))}</span><h2>What’s left in your budgets</h2></div>${programPicker()}${button('All budgets', 'navigate', 'data-view="budget"')}</div>${envelopeCards(6)}</section>`;return `<div class="vf-finance" aria-busy="${loading}">${metrics}${seasonalCards()}${overviewActions()}${piesHtml()}${budgets}${trendHtml()}${homeBills()}${covered}</div>`;}
-    return `<div class="vf-finance" aria-busy="${loading}">${controls()}${breadcrumbs()}${state.category ? categoryHtml() : state.ledger ? ledgerHtml(report.entries ?? [], 'Period transactions') : `${metrics}${trendHtml()}${piesHtml()}`}${covered}</div>`;
+    return `<div class="vf-finance" aria-busy="${loading}">${controls()}${breadcrumbs()}${state.category ? categoryHtml() : state.ledger ? ledgerHtml(periodLedgerEntries(report), 'Period transactions') : `${metrics}${trendHtml()}${piesHtml()}`}${covered}</div>`;
   }
 
   function draw() {
@@ -545,7 +555,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
 
   function assistantContext() {
     const selection = financeSelectionRows(report, state);
-    const ledger = state.category ? selection.entries : state.ledger ? report?.entries ?? [] : [];
+    const ledger = state.category ? selection.entries : state.ledger ? periodLedgerEntries(report) : [];
     const account = (state.ledger || state.category) && state.basis === 'spending' && state.direction !== 'in' ? state.budgetAccount : null;
     const scopedEntries = account ? ledger.filter(row => row.direction === 'out' && budgetAccountId(row) === account) : ledger;
     const focused = state.focusedEntry ? scopedEntries.find(row => keyOf(row) === state.focusedEntry) : null;

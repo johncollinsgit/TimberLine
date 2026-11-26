@@ -320,6 +320,22 @@ test('only paired full bank entries in the same projected direction fold into a 
   assert.equal(groupRefundEntries([{...purchase, refund_match: {...purchase.refund_match, bank_level: true}}, refund]).length, 2);
 });
 
+test('full-period ledger counts a returned purchase once while the incoming refund stays in its own drilldown', async () => {
+  const {ui} = fixture();
+  const purchase = {...entries[0], id: 44, account_id: 11, amount_cents: -1200, refund_match: {status:'matched',role:'purchase',counterpart_transaction_id:45,amount_cents:1200}};
+  const refund = {...purchase, id: 45, entry_key:'cost:45', amount_cents:1200, refund_match:{status:'matched',role:'refund',counterpart_transaction_id:44,amount_cents:1200}};
+  const receipt = {...refund, entry_key:'cash:45', amount_basis:'owned_bank_cash', direction:'in'};
+  const snapshot = {...report,year:2028,grain:'month',scope:{basis:'spending'},entries:[purchase, refund, receipt],
+    inflows:[{key:'refunds',ids:[45],entry_keys:['cash:45']}]};
+  ui.adoptSnapshot(snapshot, {month:'2028-02',rows:[]});
+  await ui.handleClick({dataset:{action:'vf-ledger-all'}});
+  const html = ui.render('analysis');
+  assert.match(html,/2 recorded entries/);
+  assert.match(html,/View pair/);
+  assert.doesNotMatch(html,/data-entry-key="cash:45"/);
+  assert.deepEqual(financeSelectionRows(snapshot,{direction:'in',category:'refunds'}).entries,[receipt]);
+});
+
 test('budget account ledger filter uses the assigned split or the same-space funding account', async () => {
   const {ui} = fixture();
   const source = {authorized_source:true,source_space_id:7,account_id:11};
