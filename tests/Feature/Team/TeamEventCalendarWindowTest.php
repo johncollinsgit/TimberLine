@@ -50,6 +50,24 @@ test('cross month setup and sparse selling dates use sessions rather than source
     expect(calendarWindowRead($tenant, $owner, $area, ['calendar_from' => '2026-11-07', 'calendar_to' => '2026-11-07'])['items'])->toBe([]);
 });
 
+test('a recorded multi day range matches its final day without manufacturing reviewed sessions', function () {
+    [$tenant, $owner] = teamWorkspace();
+    $area = studioArea($tenant);
+    $record = calendarWindowRecord($tenant, $area, 'Fictional three day show', ['event_schedule' => ['starts_on' => '2026-11-20', 'ends_on' => '2026-11-22'], 'source_schedule' => ['due_on' => '2026-11-20'], 'source_id' => '400'], null, null);
+    foreach ([[], ['event_scope' => 'window']] as $scope) {
+        $page = calendarWindowRead($tenant, $owner, $area, [...$scope, 'calendar_from' => '2026-11-22', 'calendar_to' => '2026-11-22']);
+        expect(array_column($page['items'], 'id'))->toBe([$record->id])
+            ->and($page['items'][0]['data']['event_schedule']['sessions'])->toBe([])
+            ->and($page['items'][0]['data']['event_schedule']['schedule_complete'])->toBeFalse();
+        expect(calendarWindowRead($tenant, $owner, $area, [...$scope, 'calendar_from' => '2026-11-23', 'calendar_to' => '2026-11-23'])['items'])->toBe([]);
+    }
+    expect($page['items'][0]['data']['source_id'])->toBe('400');
+    expect($page['items'][0]['data']['event_schedule']['starts_on'])->toBe('2026-11-20')
+        ->and($page['items'][0]['data']['event_schedule']['ends_on'])->toBe('2026-11-22')
+        ->and($record->fresh()->starts_on)->toBeNull();
+    Http::assertNothingSent();
+});
+
 test('independent source due date matches an outlier without turning due at or a legacy bound into a due marker', function () {
     [$tenant, $owner] = teamWorkspace();
     $area = studioArea($tenant);

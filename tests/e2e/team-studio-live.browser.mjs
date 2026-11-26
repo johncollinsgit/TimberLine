@@ -105,7 +105,7 @@ try {
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(origin + "/teams/studio?tenant=" + fixture.tenant);
     await page
-        .getByRole("heading", { name: "Your team. Your next event." })
+        .getByRole("heading", { name: "Event calendar", exact: true })
         .waitFor();
     const manifestHref = await page.locator('link[rel="manifest"]').getAttribute("href");
     assert.ok(manifestHref, "Authenticated studio has a tenant-bound manifest");
@@ -131,7 +131,7 @@ try {
             assert.ok((await context.request.get(href)).ok(), `Teams browser icon ${href} loads`);
         }
     }
-    await page.getByRole("button", { name: "＋ Create event" }).click();
+    await page.getByRole("button", { name: "New event", exact: true }).click();
     await page
         .getByLabel("Event name", { exact: true })
         .fill("Fictional HTTP browser event");
@@ -174,6 +174,7 @@ try {
         { headers: { Accept: "application/json" } },
     );
     assert.equal((await records.json()).items.length, 1);
+    await page.getByRole("button", { name: "Open Teams menu", exact: true }).click();
     await page
         .getByRole("navigation", { name: "Teams navigation" })
         .getByRole("button", { name: "My Work", exact: true })

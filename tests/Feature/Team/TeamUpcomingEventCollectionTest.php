@@ -96,7 +96,8 @@ test('unrelated historical sources are excluded before task access reads while c
     upcomingEvent($tenant, $area, 'Old source', '2022-11-08', null, [...$data, 'source_project' => '999', 'source_id' => '301'], ['connection_id' => $connection->id]);
     Http::fake(['*projects/200/tasks*' => Http::response(['data' => [['gid' => '300', 'workspace' => ['gid' => '100'], 'memberships' => [['project' => ['gid' => '200']]]]], 'next_page' => null])]);
     $result = upcomingRead($tenant, $owner, $area);
-    expect(array_column($result['items'], 'id'))->toBe([$current->id])->and(array_keys($result['items'][0]['data']))->toBe(['event_schedule', 'source_schedule', 'calendar_acceptance_status']);
+    expect(array_column($result['items'], 'id'))->toBe([$current->id])->and(array_keys($result['items'][0]['data']))->toBe(['event_schedule', 'source_schedule', 'source_id', 'calendar_acceptance_status'])
+        ->and($result['items'][0]['data']['source_id'])->toBe('300');
     Http::assertSentCount(1);
 });
 

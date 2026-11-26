@@ -3818,3 +3818,12 @@ Pay register. Unknown coverage and sent-only evidence remain labeled.
 ## 2026-11-21 — Watershed co-op registration
 
 Added a private leadership workspace for family preapproval, application and placement decisions, class rosters, signed releases and email delivery status. Parent registration on the existing Watershed Site reuses Wren households and adds semester medical review, requested placements, co-op acknowledgement and payment after acceptance. Nursery is free; Kinder and older classes cost $75 per child.
+
+## 2026-11-22 — Teams startup and automatic show details
+
+Teams keeps its calendar visible through startup and refresh, loads authorized
+show assignments independently, and automatically displays available dates,
+hours, venue and booth information. Connected shows no longer ask staff to
+complete a duplicate schedule or navigate Sources/Reviews. Multi-day shows
+remain visible through their final day; explicit gaps remain empty. Financial
+and paid-staff changes retain their existing separate save actions.

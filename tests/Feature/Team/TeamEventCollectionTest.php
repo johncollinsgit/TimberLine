@@ -48,7 +48,7 @@ test('collection projection preserves reviewed sparse sessions and crew without 
     $session = ['id' => (string) Str::uuid(), 'kind' => 'setup', 'date' => '2026-11-05'];
     collectionEvent($tenant, $area, 'Reviewed event', ['assigned_user_id' => $owner->id, 'data' => ['sessions' => [$session], 'original_notes' => str_repeat('Private detail ', 100), 'fields' => [['field' => 'address', 'value' => 'Private venue']], 'amount_cents' => 1234]]);
     $item = readCollectionEvents($tenant, $owner, $area)['items'][0];
-    expect(array_keys($item['data']))->toBe(['event_schedule', 'source_schedule', 'calendar_acceptance_status'])
+    expect(array_keys($item['data']))->toBe(['event_schedule', 'source_schedule', 'source_id', 'calendar_acceptance_status'])
         ->and($item['data']['event_schedule']['sessions'][0]['date'])->toBe('2026-11-05')
         ->and($item['calendar_people'][0]['id'])->toBe('native:'.$owner->id);
 });
@@ -76,7 +76,7 @@ test('compact calendar booking uses native acceptance or reviewed source accepta
         ->and($items['Source unreviewed']['data']['calendar_acceptance_status'])->toBeNull()
         ->and($items['Source reviewed']['data']['calendar_acceptance_status'])->toBe('yes')
         ->and($items['Source declined']['data']['calendar_acceptance_status'])->toBe('no')
-        ->and(array_keys($items['Source reviewed']['data']))->toBe(['event_schedule', 'source_schedule', 'calendar_acceptance_status']);
+        ->and(array_keys($items['Source reviewed']['data']))->toBe(['event_schedule', 'source_schedule', 'source_id', 'calendar_acceptance_status']);
     Http::assertSentCount(1);
 });
 

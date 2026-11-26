@@ -121,3 +121,19 @@ Four independent-process MySQL tests / 57 assertions cover competing creates,
 expired tokens, unknown outcomes and confirmed identity recovery. These checks
 use the real admission/provider/adoption services with fake HTTP transport and
 do not create a task in Asana.
+
+## Automatic show display — 2026-11-22
+
+Connected show details no longer require a staff review before showing known
+dates, venue, booth or literal setup/show/pack-up hours. The shared Teams client
+projects these details read-only from the current authorized task. Conflicting
+or ambiguous text is not guessed. This display behavior supersedes older manual
+review guidance for connected show details, without changing saved schedule,
+financial revision, attendance or payroll write contracts.
+
+Calendar window matching uses a valid source event range when SQL bounds and
+explicit sessions are absent. This includes the last day of a multi-day show;
+explicit sparse sessions still leave gap days empty. Compact event responses
+retain the range bounds and exact source task identity for deduplication. They
+do not include task notes or financial detail. Existing authorization, bounded
+window pagination and connection revalidation remain authoritative.
