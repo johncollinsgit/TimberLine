@@ -46,6 +46,8 @@ return [
     'order_notifications_mailer' => trim((string) env('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_MAILER', '')),
     'order_notifications_from_address' => trim((string) env('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_FROM_ADDRESS', '')),
     'order_notifications_from_name' => trim((string) env('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_FROM_NAME', 'Everbranch')),
+    'merchant_purchase_alerts_enabled' => $bool('MANAGED_WEBSITE_MERCHANT_PURCHASE_ALERTS_ENABLED'),
+    'merchant_purchase_alert_contacts' => json_decode((string) env('MANAGED_WEBSITE_MERCHANT_PURCHASE_ALERT_CONTACTS', '{}'), true) ?? [],
     'pirate_ship_bridge_enabled' => $bool('MANAGED_WEBSITE_PIRATE_SHIP_BRIDGE_ENABLED'),
     'pirate_ship_bridge_tenant_ids' => $tenantIds('MANAGED_WEBSITE_PIRATE_SHIP_BRIDGE_TENANT_IDS'),
     'commerce_imports_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_IMPORTS_ENABLED'),

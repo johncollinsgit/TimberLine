@@ -2,7 +2,7 @@
 @php($orderNotifications = \App\Models\WebsiteOrderNotification::query()->forTenant($tenant)->where('website_order_id', $order->id)->latest('id')->limit(40)->get(['id', 'kind', 'status', 'attempts', 'failure_code', 'created_at']))
 <section class="border border-zinc-200 bg-white p-4">
     <h2 class="font-semibold">Transactional order updates</h2>
-    <p class="mt-2 text-sm text-zinc-600">Accepted means the mail provider accepted the message. An uncertain send requires provider evidence before any retry.</p>
+    <p class="mt-2 text-sm text-zinc-600">Accepted means the messaging provider accepted the update. An uncertain send requires provider evidence before any retry.</p>
     @forelse($orderNotifications as $notification)
         <article class="mt-4 space-y-3 border-t pt-4 text-sm">
             <p><strong>{{ str($notification->kind)->headline() }}</strong> · {{ str($notification->status)->headline() }} · {{ $notification->attempts }} attempts</p>
@@ -17,7 +17,7 @@
             @elseif(in_array($notification->status, ['blocked', 'failed'], true))
                 <details><summary class="cursor-pointer font-semibold text-emerald-800">Review a send retry</summary><form method="POST" action="{{ route('managed-website.notifications.retry', [$order, $notification->id]) }}" class="mt-3 space-y-3">@csrf
                     <label class="block font-semibold">Reason for retry<textarea required name="reason" minlength="10" maxlength="1000" class="mt-1 block w-full rounded-lg border-zinc-300"></textarea></label>
-                    <label class="flex items-start gap-2"><input required type="checkbox" name="confirm_send" value="1"><span>Send this saved update to the original checkout email.</span></label>
+                    <label class="flex items-start gap-2"><input required type="checkbox" name="confirm_send" value="1"><span>{{ str_starts_with($notification->kind, 'merchant_paid_') ? 'Send this saved update to the configured merchant recipient.' : 'Send this saved update to the original checkout email.' }}</span></label>
                     <button class="fb-btn fb-btn-secondary" type="submit">Queue reviewed update</button>
                 </form></details>
             @endif

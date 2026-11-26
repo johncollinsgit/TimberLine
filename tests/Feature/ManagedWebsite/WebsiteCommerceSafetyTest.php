@@ -6,6 +6,7 @@ use App\Models\TenantModuleEntitlement;
 use App\Models\TenantPaymentAccount;
 use App\Models\User;
 use App\Models\WebsiteOrder;
+use App\Models\WebsiteOrderNotification;
 use App\Models\WebsiteProduct;
 use App\Models\WebsiteProductVariant;
 use App\Models\WebsiteStripeWebhookEvent;
@@ -59,7 +60,11 @@ test('native Website Commerce creates its own records and never touches legacy o
 test('checkout is server-priced and Stripe delivery is idempotent', function (): void {
     $tenant = commerceTenant();
     $actor = commerceActor($tenant);
-    config()->set('managed_website.editor_tenant_ids', [$tenant->id]);
+    config()->set([
+        'managed_website.editor_tenant_ids' => [$tenant->id],
+        'managed_website.merchant_purchase_alerts_enabled' => true,
+        "managed_website.merchant_purchase_alert_contacts.{$tenant->id}" => ['email' => ['merchant@example.test']],
+    ]);
     $website = app(ManagedWebsiteService::class);
     $site = $website->createSite($tenant, $actor);
     $commerce = app(WebsiteCommerceService::class);
@@ -72,12 +77,18 @@ test('checkout is server-priced and Stripe delivery is idempotent', function ():
     $result = $commerce->beginCheckout($cart, ['name' => 'Buyer Name', 'email' => 'buyer@example.test', 'phone' => '555-0100', 'fulfillment_method' => 'pickup'], 'https://pilot.test/success', 'https://pilot.test/cart');
     $order = $result['order'];
     expect($order->total_cents)->toBe(60000)->and(WebsiteOrder::query()->count())->toBe(1);
+    expect(WebsiteOrderNotification::query()->where('kind', 'merchant_paid_email')->count())->toBe(0);
     Http::assertSentCount(2);
 
     $event = WebsiteStripeFixture::event($order, 'evt_website_paid');
     $commerce->processStripeEvent($event);
     $commerce->processStripeEvent($event);
+    $commerce->processStripeEvent(WebsiteStripeFixture::event($order, 'evt_website_paid_readback'));
+    $alert = WebsiteOrderNotification::query()->where('kind', 'merchant_paid_email')->sole();
     expect($order->fresh()->payment_status)->toBe('paid')
+        ->and($alert->website_order_id)->toBe($order->id)
+        ->and($alert->snapshot['recipient'])->toBe('merchant@example.test')
+        ->and($alert->snapshot['total_cents'])->toBe(60000)
         ->and(WebsiteProductVariant::query()->findOrFail($variant->id)->inventory_quantity)->toBe(1)
         ->and(Order::query()->count())->toBe(0)
         ->and(json_encode(WebsiteStripeWebhookEvent::query()->firstOrFail()->payload))->not->toContain('buyer@example.test');
