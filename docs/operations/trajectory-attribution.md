@@ -29,6 +29,13 @@ Pending purchases may receive category/program detail so an alert can reserve th
 right budget immediately. They cannot attest open or completed settlement. Pending
 detail remains outside posted expense reports and appears only in pending reserves.
 
+The split editor displays the originating bank account and accepts positive amounts
+or percentages. One line receives the cent-exact remainder. Each line can designate
+a budget account within its own authorized workspace, independently of its category
+and program. An undesignated household purchase uses its source account for the
+household spending filter. The designation is stored on the allocation detail
+and restored on undo. Account balances and bank cash views use the original posting.
+
 PUT returns the new transaction version and `event_id`. POST `/attribution/undo` uses
 that exact current version and event ID. A later edit, provider amendment or prior
 undo rejects the stale request. Replaced and undone detail rows remain as inactive

@@ -1,7 +1,7 @@
 import './assistant-ui.css';
 
 /** One private conversation surface across financial drilldowns and expense notifications. */
-export function initTrajectoryAssistant({root, getContext, api, endpoint, notice = () => {}, onChanged = () => {}}) {
+export function initTrajectoryAssistant({root, getContext, api, endpoint, notice = () => {}, onChanged = () => {}, onMatchTransfers = null}) {
   if (!root) return null;
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money = value => value == null ? 'Not budgeted' : new Intl.NumberFormat('en-US', {style:'currency',currency:'USD'}).format(value / 100);
@@ -16,17 +16,17 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
   let deepLinkOpened=false;
   const context = () => {
     const raw = getContext?.() || {};
-    const allowed = ['from','through','account_id','program_id','level','direction','category','subcategory','transaction_ids','transaction_versions','space_id','basis','selection_truncated','focused_transaction'];
+    const allowed = ['from','through','account_id','budget_account_id','program_id','level','direction','category','subcategory','transaction_ids','transaction_versions','space_id','basis','selection_truncated','focused_transaction'];
     const value = Object.fromEntries(Object.entries(raw).filter(([key, v]) => allowed.includes(key) && v != null));
     if (value.direction && !['in','out','income','expense','both'].includes(value.direction)) delete value.direction;
     if (Array.isArray(value.transaction_ids)) value.transaction_ids = [...new Set(value.transaction_ids)].slice(0,100);
-    return selectedExpense ? {...value, from:selectedExpense.date, through:selectedExpense.date, account_id:null, program_id:null, category:null, subcategory:null, direction:'out', level:'transaction', basis:'spending', focused_transaction:true, selection_truncated:false, transaction_ids:[selectedExpense.transaction_id], transaction_versions:{[selectedExpense.transaction_id]:selectedExpense.version}} : value;
+    return selectedExpense ? {...value, from:selectedExpense.date, through:selectedExpense.date, account_id:null, budget_account_id:null, program_id:null, category:null, subcategory:null, direction:'out', level:'transaction', basis:'spending', focused_transaction:true, selection_truncated:false, transaction_ids:[selectedExpense.transaction_id], transaction_versions:{[selectedExpense.transaction_id]:selectedExpense.version}} : value;
   };
   const spaceId = () => getContext?.()?.scope==='both'?null:Number(getContext?.()?.space_id) || null;
   const path = suffix => endpoint(suffix, currentSpace || spaceId());
   function showError(error) {messages.push({role:'assistant',reply:error.message || 'Unable to complete this request.'}); renderChat();}
   function renderChat() {
-    view='chat'; content.innerHTML = messages.length ? messages.map(message => `<article class="tr-assistant-message ${message.role}"><small>${message.role==='user'?'You':'Everbranch'}</small><div>${esc(message.reply).replaceAll('\n','<br>')}</div>${message.review_transaction?`<section class="tr-assistant-review"><strong>${esc(message.review_transaction.merchant)} · ${money(message.review_transaction.amount_cents)}</strong><small>${esc(message.review_transaction.date)}</small><div>${message.review_transaction.suggestion?`<button type="button" data-assistant-review-yes="${message.id}">Yes · ${esc(message.review_transaction.suggestion.label)}</button>`:''}<button type="button" data-assistant-review-no="${message.id}">No</button><button type="button" data-assistant-review-explain="${message.id}">Explain</button></div></section>`:''}${message.applied?'<button type="button" data-assistant-review-next>Next transaction</button>':''}${message.proposal?`<button type="button" data-assistant-apply="${message.id}">Apply these ${message.proposal.actions?.length || ''} changes</button>`:''}${message.undo?.available?`<button type="button" data-assistant-undo="${message.id}">Undo</button>`:''}${message.choices?.length?`<div class="tr-assistant-choices">${message.choices.map(choice=>`<button type="button" data-assistant-choice="${esc(choice.type+' '+choice.label)}">${esc(choice.label)} · ${esc(choice.type)}</button>`).join('')}</div>`:''}</article>`).join('') : '<p>Select a chart, category or purchase, then ask about it here. Explicit category instructions save with Undo. Suggested batches are reviewed first.</p>';
+    view='chat'; content.innerHTML = messages.length ? messages.map(message => `<article class="tr-assistant-message ${message.role}"><small>${message.role==='user'?'You':'Everbranch'}</small><div>${esc(message.reply).replaceAll('\n','<br>')}</div>${message.open_transfer_review && onMatchTransfers ? '<button type="button" data-assistant-match-transfers>Review transfer matches</button>' : ''}${message.review_transaction?`<section class="tr-assistant-review"><strong>${esc(message.review_transaction.merchant)} · ${money(message.review_transaction.amount_cents)}</strong><small>${esc(message.review_transaction.date)}</small><div>${message.review_transaction.suggestion?`<button type="button" data-assistant-review-yes="${message.id}">Yes · ${esc(message.review_transaction.suggestion.label)}</button>`:''}<button type="button" data-assistant-review-no="${message.id}">No</button><button type="button" data-assistant-review-explain="${message.id}">Explain</button></div></section>`:''}${message.applied?'<button type="button" data-assistant-review-next>Next transaction</button>':''}${message.proposal?`<button type="button" data-assistant-apply="${message.id}">Apply these ${message.proposal.actions?.length || ''} changes</button>`:''}${message.undo?.available?`<button type="button" data-assistant-undo="${message.id}">Undo</button>`:''}${message.choices?.length?`<div class="tr-assistant-choices">${message.choices.map(choice=>`<button type="button" data-assistant-choice="${esc(choice.type+' '+choice.label)}">${esc(choice.label)} · ${esc(choice.type)}</button>`).join('')}</div>`:''}</article>`).join('') : '<p>Select a chart, category or purchase, then ask about it here. Explicit category instructions save with Undo. Suggested batches are reviewed first.</p>';
     host.querySelector('[data-assistant-form]').hidden = false;
     content.scrollTop=content.scrollHeight;
   }
@@ -163,6 +163,11 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
       else if(button.hasAttribute('data-assistant-inbox'))await openInbox();
       else if(button.hasAttribute('data-open-expense')){const row=inbox?.rows.find(row=>row.id===Number(button.dataset.openExpense));if(row&&!row.payload.removed)await chooseExpense(row);}
       else if(button.hasAttribute('data-load-expenses')){const older=await api(path(`/notifications?before=${inbox.next_before}`));inbox.rows.push(...older.rows);inbox.next_before=older.next_before;button.insertAdjacentHTML('beforebegin',older.rows.map(noticeRow).join(''));if(!older.next_before)button.remove();}
+      else if(button.hasAttribute('data-assistant-match-transfers')){
+        if (currentSpace !== spaceId() || !onMatchTransfers) return;
+        dialog.close();
+        try { await onMatchTransfers(); } catch (error) { notice(error.message || 'Could not load transfer matches.'); }
+      }
       else if(button.hasAttribute('data-assistant-review-next')){selectedExpense=null;await send('Review the next uncategorized transaction');}
       else if(button.hasAttribute('data-assistant-review-yes')||button.hasAttribute('data-assistant-review-no')||button.hasAttribute('data-assistant-review-explain')){
         const id=Number(button.dataset.assistantReviewYes??button.dataset.assistantReviewNo??button.dataset.assistantReviewExplain),message=messages.find(message=>message.id===id),review=message?.review_transaction;

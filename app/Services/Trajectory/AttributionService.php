@@ -2,6 +2,7 @@
 
 namespace App\Services\Trajectory;
 
+use App\Models\Trajectory\Account;
 use App\Models\Trajectory\Allocation;
 use App\Models\Trajectory\AllocationDetail;
 use App\Models\Trajectory\Event;
@@ -116,7 +117,15 @@ class AttributionService
             }
         })->map(fn ($target) => $target->only(['id', 'name', 'kind']))->values()->all();
 
-        return ['transaction_id' => $tx->id, 'version' => $tx->version, 'source_space_id' => $source->id, 'source_amount_cents' => $tx->amount_cents,
+        $budgetAccounts = Account::whereIn('id', array_filter(array_column($lines, 'budget_account_id')))->get(['id', 'space_id'])->keyBy('id');
+        foreach ($lines as &$line) {
+            $account = $budgetAccounts->get($line['budget_account_id'] ?? null);
+            $line['budget_account_id'] = $account && $account->space_id === $line['space_id'] ? $account->id : null;
+        }
+        unset($line);
+        $sourceAccount = Account::where('space_id', $source->id)->whereKey($tx->account_id)->first(['id', 'name']);
+
+        return ['transaction_id' => $tx->id, 'version' => $tx->version, 'source_account' => $sourceAccount?->only(['id', 'name']), 'pending' => $tx->pending, 'source_space_id' => $source->id, 'source_amount_cents' => $tx->amount_cents,
             'flow' => $tx->flow, 'lines' => $lines, 'target_spaces' => $targets, 'attribution_status' => $valid ? 'reviewed' : ($details->isEmpty() ? 'none' : 'needs_review')];
     }
 
@@ -127,7 +136,8 @@ class AttributionService
         abort_unless($this->available(), 503, 'Economic attribution is not available until its schema upgrade completes.');
         $data = Validator::make(['lines' => $lines], [
             'lines' => 'required|array|min:1|max:50', 'lines.*.space_id' => 'required|integer|min:1',
-            'lines.*' => 'array:space_id,amount_cents,category,subcategory_record_id,program_record_id,settlement_status,settlement_note,detail_id',
+            'lines.*' => 'array:space_id,amount_cents,category,budget_account_id,subcategory_record_id,program_record_id,settlement_status,settlement_note,detail_id',
+            'lines.*.budget_account_id' => 'nullable|integer|min:1',
             'lines.*.detail_id' => 'nullable|integer|min:1',
             'lines.*.amount_cents' => 'required|integer|between:-100000000000,100000000000', 'lines.*.category' => 'required|string|max:40',
             'lines.*.subcategory_record_id' => 'nullable|integer|min:1', 'lines.*.program_record_id' => 'nullable|integer|min:1',
@@ -150,6 +160,7 @@ class AttributionService
             abort_unless(in_array($tx->flow, ['expense', 'refund', 'income', 'owner_wages', 'reimbursement'], true), 422, 'Classify financial purpose before assigning economic detail.');
             app(MedicalSharingService::class)->assertUnbound($tx);
             abort_unless(array_sum(array_column($data['lines'], 'amount_cents')) === $tx->amount_cents, 422, 'Detail lines must total the original bank amount.');
+            $this->validateBudgetAccounts($data['lines'], $spaceIds);
             $lines = [];
             foreach ($data['lines'] as $line) {
                 abort_unless($tx->amount_cents < 0 ? $line['amount_cents'] < 0 : $line['amount_cents'] > 0, 422, 'Detail lines must have the bank transaction’s sign.');
@@ -188,6 +199,7 @@ class AttributionService
             $tx = Transaction::where('space_id', $source->id)->whereKey($tx->id)->lockForUpdate()->firstOrFail();
             abort_unless($tx->version === $version && $version === $event->after['version'] && $this->fingerprint($tx) === $before['source_fingerprint'], 409, 'The source changed after this attribution.');
             abort_if(Event::where('space_id', $source->id)->where('record_id', $tx->id)->where('action', 'attribution_undo')->get()->contains(fn ($e) => ($e->after['undone_event_id'] ?? null) === $eventId), 409);
+            $this->validateBudgetAccounts($before['lines'], $ids);
             $current = $this->snapshot($tx);
             $this->invalidate($tx, 'owner_undo');
             $amounts = array_column($before['allocations'], 'amount_cents', 'space_id');
@@ -251,11 +263,19 @@ class AttributionService
         }
         $details = AllocationDetail::where('space_id', $space->id)->whereIn('transaction_id', array_column($entries, 'id'))->where('active', true)->orderBy('line_index')->get()->groupBy('transaction_id');
         $sources = Transaction::whereIn('id', $details->keys())->get()->keyBy('id');
+        $budgetAccounts = Account::where('space_id', $space->id)->whereIn('id', $details->flatten(1)->pluck('budget_account_id')->filter()->unique())->pluck('name', 'id');
         foreach ($entries as &$entry) {
             $rows = $details->get($entry['id'], collect());
             $valid = $rows->isNotEmpty() && $sources->has($entry['id']) && $rows->every(fn ($r) => $r->source_fingerprint === $this->fingerprint($sources[$entry['id']]))
                 && $rows->sum('amount_cents') === $entry['amount_cents'];
             $entry['allocation_details'] = $valid ? $rows->map(fn ($r) => ['id' => $r->id, 'allocation_id' => $r->allocation_id, ...$this->line($r, ($entry['editable'] ?? false) === true)])->all() : [];
+            foreach ($entry['allocation_details'] as &$detail) {
+                $detail['budget_account_name'] = $budgetAccounts->get($detail['budget_account_id']);
+                if ($detail['budget_account_name'] === null) {
+                    $detail['budget_account_id'] = null;
+                }
+            }
+            unset($detail);
             $entry['attribution_status'] = $valid ? 'reviewed' : ($rows->isEmpty() ? 'none' : 'needs_review');
             if ($rows->isNotEmpty() && ! $valid) {
                 $entry['reviewed'] = false;
@@ -304,12 +324,28 @@ class AttributionService
                 $leaf = $detail['subcategory_record_id'] ? $categories->get($detail['subcategory_record_id']) : null;
                 $expanded[] = [...$entry, 'entry_key' => 'detail:'.$detail['id'], 'source_transaction_id' => $entry['id'], 'attribution_detail_id' => $detail['id'],
                     'allocation_id' => $detail['allocation_id'], 'amount_cents' => $detail['amount_cents'],
+                    'budget_account_id' => $detail['budget_account_id'], 'budget_account_name' => $detail['budget_account_name'],
                     'parent_category' => $detail['category'], 'category' => $leaf['key'] ?? $detail['category'],
                     'program_record_id' => $detail['program_record_id'], 'subcategory_record_id' => $detail['subcategory_record_id'], 'settlement_status' => $detail['settlement_status']];
             }
         }
 
         return $expanded;
+    }
+
+    private function validateBudgetAccounts(array $lines, array $spaceIds): void
+    {
+        $ids = array_filter(array_column($lines, 'budget_account_id'));
+        if (! $ids) {
+            return;
+        }
+        abort_unless(Schema::hasColumn('trajectory_allocation_details', 'budget_account_id'), 503, 'Budget account assignment is not available yet.');
+        $accounts = Account::whereIn('id', $ids)->whereIn('space_id', $spaceIds)->orderBy('id')->lockForUpdate()->pluck('space_id', 'id');
+        foreach ($lines as $line) {
+            if (isset($line['budget_account_id'])) {
+                abort_unless($accounts->get($line['budget_account_id']) === (int) $line['space_id'], 422, 'Choose a budget account belonging to the allocation workspace.');
+            }
+        }
     }
 
     private function validateDimensions(Space $target, array $line, string $flow): array
@@ -386,6 +422,7 @@ class AttributionService
             AllocationDetail::create(['transaction_id' => $tx->id, 'allocation_id' => $allocation->id, 'space_id' => $line['space_id'], 'revision' => $tx->version,
                 'line_index' => $index, 'amount_cents' => $line['amount_cents'], 'category' => $line['category'], 'flow' => $tx->flow,
                 'subcategory_record_id' => $line['subcategory_record_id'] ?? null, 'program_record_id' => $line['program_record_id'] ?? null,
+                ...(isset($line['budget_account_id']) ? ['budget_account_id' => $line['budget_account_id']] : []),
                 'settlement_status' => $line['settlement_status'] ?? 'none', 'settlement_note' => $line['settlement_note'] ?? null,
                 'source_fingerprint' => $this->fingerprint($tx), 'active' => true]);
         }
@@ -393,7 +430,7 @@ class AttributionService
 
     private function line(AllocationDetail $detail, bool $includeNote = true): array
     {
-        return ['space_id' => $detail->space_id, 'amount_cents' => $detail->amount_cents, 'category' => $detail->category,
+        return ['space_id' => $detail->space_id, 'amount_cents' => $detail->amount_cents, 'category' => $detail->category, 'budget_account_id' => $detail->budget_account_id,
             'subcategory_record_id' => $detail->subcategory_record_id, 'program_record_id' => $detail->program_record_id,
             'settlement_status' => $detail->settlement_status, 'settlement_note' => $includeNote ? $detail->settlement_note : null];
     }

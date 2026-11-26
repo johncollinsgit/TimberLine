@@ -207,7 +207,8 @@ class MoneyFlowService
                 $category = $entry['category'] ?? 'uncategorized';
                 $purposeKnown = in_array($flow, ['owner_distribution', 'owner_wages', 'card_payment', 'debt_payment', 'loan_draw', 'asset_sale', 'asset_transfer', 'medical_share', 'reimbursement', EconomicActivityService::TAX_FLOW], true);
                 $needsCategory = ! $purposeKnown || ($mode === 'spending' && $amount < 0 && $flow === 'owner_wages');
-                $review = ($entry['reviewed'] ?? false) !== true || ($category === 'uncategorized' && $needsCategory);
+                $matchedRefund = $flow === 'refund' && ($entry['refund_match']['status'] ?? null) === 'matched';
+                $review = (! ($entry['reviewed'] ?? false) && ! $matchedRefund) || ($category === 'uncategorized' && $needsCategory);
                 if ($amount > 0) {
                     [$kind, $label] = $review ? ['review', 'Needs review · incoming'] : match ($flow) {
                         EconomicActivityService::TAX_FLOW => ['tax_credit', ($entry['tax_purpose']['movement'] ?? null) === 'returned_payment' ? 'Returned sales-tax payments' : 'Sales-tax refunds'],

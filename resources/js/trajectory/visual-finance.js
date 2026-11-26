@@ -1,4 +1,5 @@
-import {transactionIdentityHtml, reviewRowKey} from './transaction-review.js';
+import {openSplitEditor} from './split-editor.js';
+import {transactionIdentityHtml, refundMatchLabel, reviewRowKey} from './transaction-review.js';
 /** A single exploration path: period → source/category → purpose → merchant → editable ledger. */
 export const financeColors = ['#257c77', '#4c83c3', '#db8845', '#9170c4', '#ce668c', '#6e9e54', '#43a4b0', '#bb9a3d', '#6279a6', '#c16e52', '#829252', '#9e71a1'];
 export const financeColor = key => financeColors[[...String(key)].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 0) % financeColors.length];
@@ -6,6 +7,51 @@ const number = n => Number.isSafeInteger(n) ? n : null;
 const clone = x => JSON.parse(JSON.stringify(x));
 const keyOf = r => String(r.entry_key ?? r.detail_id ?? r.id);
 export const financeLabel = value => String(value ?? '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+// Only collapse the two full entries represented in this particular ledger view.
+// A bank credit can also appear as an incoming source or as separate split details.
+export function groupRefundEntries(entries) {
+  const groups = new Map();
+  const memberships = new Map();
+  for (const row of entries) {
+    const match = row.refund_match;
+    if (match?.status !== 'matched' || match.bank_level || row.attribution_detail_id || row.allocation_details?.length
+        || Math.abs(row.amount_cents) !== match.amount_cents) continue;
+    const id = row.source_transaction_id ?? row.id;
+    const pair = [id, match.counterpart_transaction_id].sort((a, b) => a - b);
+    const key = [row.source_space_id ?? row.source_identity?.source_space_id, row.account_id, row.amount_basis, row.direction, ...pair].join(':');
+    const members = groups.get(key) ?? [];
+    members.push(row);
+    groups.set(key, members);
+    memberships.set(row, key);
+  }
+  const seen = new Set();
+  const result = [];
+  for (const row of entries) {
+    const key = memberships.get(row);
+    if (seen.has(key)) continue;
+    const members = groups.get(key);
+    const purchase = members?.find(r => r.refund_match.role === 'purchase');
+    const refund = members?.find(r => r.refund_match.role === 'refund');
+    if (members?.length === 2 && purchase && refund && purchase.amount_cents === -refund.amount_cents) {
+      result.push({key, purchase, refund});
+      seen.add(key);
+    } else {
+      result.push({row});
+    }
+  }
+  return result;
+}
+
+// A refund in a spending report can also appear as an incoming bank receipt.
+// In the full-period ledger, count the credit once. Its inflow drilldown uses the original receipt.
+function periodLedgerEntries(report) {
+  const entries = report?.entries ?? [];
+  const sourceKey = row => [row.account_id, row.source_transaction_id ?? row.id, row.amount_cents].join(':');
+  const refunds = new Set(entries.filter(row => row.direction === 'out' && row.refund_match?.role === 'refund'
+    && !row.refund_match.bank_level && !row.attribution_detail_id && row.amount_cents === row.refund_match.amount_cents).map(sourceKey));
+  return entries.filter(row => !(row.direction === 'in' && row.amount_basis === 'owned_bank_cash' && refunds.has(sourceKey(row))));
+}
 
 export function sortFinanceEntries(entries, sort = 'largest', query = '') {
   const text = query.trim().toLocaleLowerCase();
@@ -134,7 +180,7 @@ export function financeBudgetCompact(row, {future = false} = {}) {
 }
 
 export function createVisualFinance({root, getContext, getSpaces = () => [], api, endpoint, esc, precise, chart, onBeforeChange, onChange, onChanged, onNavigate, onReviewTransaction, onEditBudget, onAddDefinition, onClearAccount, onAsk, notice, transactionReview = null, homeBills = () => '', onOpenBudget = null}) {
-  let state = {version: 1, year: null, comparisonYear: null, grain: 'month', basis: 'spending', period: null, direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false, program: null, ledgerSort: 'largest', query: '', page: 1, budgetMonth: null, focusedEntry: null};
+  let state = {version: 1, year: null, comparisonYear: null, grain: 'month', basis: 'spending', period: null, direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false, program: null, expandedRefund: null, budgetAccount: null, ledgerSort: 'largest', query: '', page: 1, budgetMonth: null, focusedEntry: null};
   let report = null, envelopes = null, error = null, loading = false, request = 0, ownerContext = null, loadedProjection = null;
   let busyRow = null, visibleLedgerRows = [];
   const pageSize = 50;
@@ -161,7 +207,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   const overviewActions = () => `<div class="vf-quick-actions">${button('Explore analysis', 'navigate', 'data-view="analysis"', 'vf-primary')}${button('Your budgets', 'navigate', 'data-view="budget"')}${button('Review transactions', 'navigate', 'data-view="transactions"')}</div>`;
 
   function reset() {
-    state = {...state, year: null, comparisonYear: null, period: null, direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false, program: null, query: '', page: 1, budgetMonth: null, focusedEntry: null};
+    state = {...state, year: null, comparisonYear: null, period: null, direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false, program: null, expandedRefund: null, budgetAccount: null, query: '', page: 1, budgetMonth: null, focusedEntry: null};
     report = envelopes = error = loadedProjection = null; ownerContext = null; request++;
   }
 
@@ -237,15 +283,66 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     return `<section class="vf-trend-panel"><div class="vf-section-heading"><div><span class="vf-eyebrow">The bigger picture</span><h2>${state.grain === 'year' ? 'Year' : state.grain === 'week' ? 'Week' : 'Month'} by ${state.grain === 'year' ? 'year' : state.grain === 'week' ? 'week' : 'month'}</h2></div><span class="vf-caption">Tap a bar to explore that period</span></div><div class="vf-chart vf-trend"><canvas id="vf-period-chart" role="img" aria-label="Recorded incoming and spending by period, with comparison year; choose a period to drill down"></canvas></div><details class="vf-chart-alternative"><summary>Choose a period from the list</summary><div class="vf-period-list">${(report?.periods ?? []).map((p, i) => button(`${p.label} · ${precise(p.spending_cents)}`, 'period', `data-period-index="${i}" ${p.from && p.through && !p.future ? '' : 'disabled'}`)).join('')}</div></details></section>`;
   }
 
+  function budgetAccountId(row) {
+    if (row.budget_account_id) return row.budget_account_id;
+    const identity = row.source_identity;
+    return identity?.authorized_source && identity.source_space_id === getContext().space_id ? identity.account_id : null;
+  }
+
   function ledgerHtml(entries, heading = 'Transactions') {
-    const costMode = state.direction === 'out', signedAmount = row => costMode ? -row.amount_cents : row.amount_cents;
-    const filtered = sortFinanceEntries(entries, state.ledgerSort, state.query), pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const costMode = state.direction === 'out';
+    const signedAmount = row => costMode ? -row.amount_cents : row.amount_cents;
+    const budgetAccounts = state.basis === 'spending' && state.direction !== 'in' ? report?.account_options ?? [] : [];
+    const budgetFiltered = budgetAccounts.length && state.budgetAccount
+      ? entries.filter(row => row.direction === 'out' && budgetAccountId(row) === state.budgetAccount)
+      : entries;
+    const filtered = sortFinanceEntries(budgetFiltered, state.ledgerSort, state.query);
+    const groups = groupRefundEntries(filtered);
+    const pages = Math.max(1, Math.ceil(groups.length / pageSize));
     state.page = Math.min(state.page, pages);
-    const focused = entries.find(r => keyOf(r) === state.focusedEntry);
-    const rows = filtered.slice((state.page - 1) * pageSize, state.page * pageSize), options = report?.category_options ?? [];
-    visibleLedgerRows = rows;
-    const select = row => (!row.editable && !row.attribution_editable) || row.category_editable === false || row.tax_purpose ? `<span>${esc(row.category_label ?? categoryLabel(row.category))}</span>${row.editable ? button('Review', 'review-row', `data-entry="${esc(keyOf(row))}"`) : '<small>Allocated · read only</small>'}` : `<label class="vf-inline-category"><span class="sr-only">Category for ${esc(row.merchant)}</span><select data-vf-category="${esc(keyOf(row))}" ${busyRow === keyOf(row) ? 'disabled' : ''}>${options.map(c => `<option value="${esc(c)}" ${c === row.category ? 'selected' : ''}>${esc(categoryLabel(c))}</option>`).join('')}</select></label>`;
-    return `<section class="vf-ledger"><div class="vf-section-heading"><div><span class="vf-eyebrow">${filtered.length} recorded entries</span><h2>${esc(heading)}</h2></div><strong>${precise(entries.reduce((sum, row) => sum + signedAmount(row), 0))}</strong></div><div class="vf-ledger-controls"><label>Find a transaction<input type="search" data-vf-input="query" value="${esc(state.query)}" placeholder="Merchant, date or category"></label><label>Sort<select data-vf-input="sort">${[['largest', 'Biggest first'], ['smallest', 'Smallest first'], ['newest', 'Newest first'], ['oldest', 'Oldest first'], ['merchant', 'Merchant'], ['category', 'Category']].map(([key, text]) => `<option value="${key}" ${state.ledgerSort === key ? 'selected' : ''}>${text}</option>`).join('')}</select></label></div>${focused ? `<div class="vf-selected-purchase"><span>Selected: <strong>${esc(focused.merchant)}</strong> · ${precise(signedAmount(focused))}</span>${button('Ask about this purchase', 'ask-selected')}${button('Clear selection', 'clear-selection')}</div>` : ''}${transactionReview?.renderUndo() ?? ''}<div class="vf-table-wrap tr-review-table-wrap"><table class="vf-table tr-review-table"><caption>${esc(heading)}</caption><thead><tr><th scope="col">Date</th><th scope="col">Merchant / description</th><th scope="col">Category</th><th scope="col">${costMode ? 'Cost / refund' : 'Amount'}</th><th scope="col"><span class="sr-only">More detail</span></th></tr></thead><tbody>${rows.map(row => `<tr data-list-key="${esc(reviewRowKey(row))}" data-entry-key="${esc(keyOf(row))}" class="${keyOf(row) === state.focusedEntry ? 'vf-selected-row' : ''}"><td data-label="Date" class="tr-review-date">${esc(row.date)}</td><td data-label="Merchant" class="tr-review-merchant"><button type="button" class="tr-list-merchant-mobile" data-action="transaction-list-detail">${esc(row.merchant)}</button><button type="button" class="vf-merchant-select tr-list-merchant-desktop" data-action="vf-select-row" data-entry="${esc(keyOf(row))}">${esc(row.merchant)}</button>${transactionIdentityHtml(row, {esc})}<small>${esc(row.program_name ?? row.account_name ?? '')}${row.amount_basis === 'owned_bank_cash' ? ' · Bank cash' : ''}</small></td><td data-label="Category" class="tr-review-category">${select(row)}${transactionReview?.render(row) ?? ''}</td><td data-label="Amount" class="vf-money tr-review-amount">${precise(signedAmount(row))}</td><td data-label="Actions" class="tr-review-actions">${button(row.editable ? 'Details' : 'View', 'review-row', `data-entry="${esc(keyOf(row))}"`)}${row.attribution_editable || row.editable ? button('Split / program', 'attribution', `data-entry="${esc(keyOf(row))}"`) : ''}</td></tr>`).join('') || '<tr><td colspan="5">No transactions match this view.</td></tr>'}</tbody></table></div><div class="vf-pagination">${button('Previous', 'page', `data-page="${state.page - 1}" ${state.page === 1 ? 'disabled' : ''}`)}<span>Page ${state.page} of ${pages}</span>${button('Next', 'page', `data-page="${state.page + 1}" ${state.page === pages ? 'disabled' : ''}`)}</div></section>`;
+    const page = groups.slice((state.page - 1) * pageSize, state.page * pageSize);
+    const focused = filtered.find(row => keyOf(row) === state.focusedEntry);
+    const categoryControl = row => {
+      if ((!row.editable && !row.attribution_editable) || row.category_editable === false || row.tax_purpose) {
+        return `<span>${esc(row.category_label ?? categoryLabel(row.category))}</span>${row.editable ? button('Review', 'review-row', `data-entry="${esc(keyOf(row))}"`) : '<small>Allocated · read only</small>'}`;
+      }
+      const options = (report?.category_options ?? []).map(c => `<option value="${esc(c)}" ${c === row.category ? 'selected' : ''}>${esc(categoryLabel(c))}</option>`);
+      return `<label class="vf-inline-category"><span class="sr-only">Category for ${esc(row.merchant)}</span><select data-vf-category="${esc(keyOf(row))}" ${busyRow === keyOf(row) ? 'disabled' : ''}>${options.join('')}</select></label>`;
+    };
+    const entryHtml = (row, paired = false) => {
+      visibleLedgerRows.push(row);
+      const key = esc(keyOf(row));
+      const context = [row.program_name, row.source_identity ? null : row.account_name, row.amount_basis === 'owned_bank_cash' ? 'Bank cash' : null].filter(Boolean).join(' · ');
+      const matchLabel = refundMatchLabel(row, esc);
+      return `<tr data-list-key="${esc(reviewRowKey(row))}" data-entry-key="${key}" class="${keyOf(row) === state.focusedEntry ? 'vf-selected-row' : ''} ${paired ? 'vf-pair-detail' : ''}">
+        <td data-label="Date" class="tr-review-date">${esc(row.date)}</td>
+        <td data-label="Merchant" class="tr-review-merchant"><button type="button" class="tr-list-merchant-mobile" data-action="transaction-list-detail">${esc(row.merchant)}</button><button type="button" class="vf-merchant-select tr-list-merchant-desktop" data-action="vf-select-row" data-entry="${key}">${esc(row.merchant)}</button>${transactionIdentityHtml(row, {esc})}${context ? `<small>${esc(context)}</small>` : ''}</td>
+        <td data-label="Category" class="tr-review-category">${categoryControl(row)}${transactionReview?.render(row) ?? ''}</td>
+        <td data-label="Amount" class="vf-money tr-review-amount">${precise(signedAmount(row))}${matchLabel}</td>
+        <td data-label="Actions" class="tr-review-actions">${button(row.editable ? 'Details' : 'View', 'review-row', `data-entry="${key}"`)}${row.attribution_editable || row.editable ? button('Split', 'attribution', `data-entry="${key}" aria-label="Split transaction for ${esc(row.merchant)}"`) : ''}</td></tr>`;
+    };
+    const pairHtml = group => {
+      const {purchase, refund, key} = group;
+      const expanded = state.expandedRefund === key;
+      const sameCategory = purchase.category === refund.category;
+      const category = sameCategory ? categoryLabel(purchase.category) : [purchase, refund].map(row => categoryLabel(row.category)).join(' / ');
+      return `<tr class="vf-refund-pair">
+        <td class="tr-review-date">${esc(purchase.date)}</td>
+        <td class="tr-review-merchant"><strong>${esc(purchase.merchant)}</strong><small>Purchase &amp; return · ${precise(Math.abs(purchase.amount_cents))}</small></td>
+        <td class="tr-review-category">${esc(category)}</td>
+        <td class="vf-money tr-review-amount">${precise(signedAmount(purchase) + signedAmount(refund))}<span class="tr-refund-label">Net after return</span></td>
+        <td class="tr-review-actions">${button(expanded ? 'Hide pair' : 'View pair', 'refund-pair', `data-pair="${esc(key)}" aria-expanded="${expanded}"`)}</td>
+      </tr>${expanded ? entryHtml(purchase, true) + entryHtml(refund, true) : ''}`;
+    };
+    visibleLedgerRows = [];
+    const body = page.map(group => group.row ? entryHtml(group.row) : pairHtml(group)).join('');
+    const sorts = [['largest', 'Biggest first'], ['smallest', 'Smallest first'], ['newest', 'Newest first'], ['oldest', 'Oldest first'], ['merchant', 'Merchant'], ['category', 'Category']];
+    const accountPicker = budgetAccounts.length ? `<label>Budget account<select data-vf-input="budget-account"><option value="">All accounts</option>${budgetAccounts.map(account => `<option value="${esc(String(account.id))}" ${state.budgetAccount === account.id ? 'selected' : ''}>${esc(account.name)}</option>`).join('')}</select></label>` : '';
+    return `<section class="vf-ledger"><div class="vf-section-heading"><div><span class="vf-eyebrow">${filtered.length} recorded entries</span><h2>${esc(heading)}</h2></div><strong>${precise(filtered.reduce((sum, row) => sum + signedAmount(row), 0))}</strong></div>
+      <div class="vf-ledger-controls"><label>Find a transaction<input type="search" data-vf-input="query" value="${esc(state.query)}" placeholder="Merchant, date or category"></label>${accountPicker}<label>Sort<select data-vf-input="sort">${sorts.map(([key, text]) => `<option value="${key}" ${state.ledgerSort === key ? 'selected' : ''}>${text}</option>`).join('')}</select></label></div>
+      ${focused ? `<div class="vf-selected-purchase"><span>Selected: <strong>${esc(focused.merchant)}</strong> · ${precise(signedAmount(focused))}</span>${button('Ask about this purchase', 'ask-selected')}${button('Clear selection', 'clear-selection')}</div>` : ''}${transactionReview?.renderUndo() ?? ''}
+      <div class="vf-table-wrap tr-review-table-wrap"><table class="vf-table tr-review-table"><caption class="sr-only">${esc(heading)}</caption><thead><tr><th scope="col">Date</th><th scope="col">Merchant</th><th scope="col">Category</th><th scope="col">${costMode ? 'Cost / refund' : 'Amount'}</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>${body || '<tr><td colspan="5">No transactions match this view.</td></tr>'}</tbody></table></div>
+      <div class="vf-pagination">${button('Previous', 'page', `data-page="${state.page - 1}" ${state.page === 1 ? 'disabled' : ''}`)}<span>Page ${state.page} of ${pages}</span>${button('Next', 'page', `data-page="${state.page + 1}" ${state.page === pages ? 'disabled' : ''}`)}</div></section>`;
   }
 
   function categoryHtml() {
@@ -291,6 +388,18 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     return `<section class="vf-budget-totals" aria-label="Monthly budget totals">${metric('Total budget', totals.total, totals.partialTotal)}${metric('Budget left', totals.left, totals.partialLeft)}</section>`;
   }
 
+  function seasonalCards() {
+    const cards = envelopes?.seasonal_spending;
+    if (getContext().scope !== 'personal' || getContext().account_id || envelopes?.month !== state.budgetMonth || !cards?.length) return '';
+    const format = new Intl.DateTimeFormat('en-US', {month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC'});
+    const day = iso => new Date(iso + 'T12:00:00Z');
+    return `<section class="vf-stat-row" aria-label="Seasonal spending">${cards.map(card => {
+      const period = card.through ? format.formatRange(day(card.from), day(card.through)) : `Starts ${format.format(day(card.from))}`;
+      const note = card.through && !card.range_covered ? `${period} · Partial account history` : period;
+      return stats(`${categoryLabel(card.category)} spending`, card.net_spent_cents, note, '', card.through ? 'No history' : 'Upcoming');
+    }).join('')}</section>`;
+  }
+
   function savingsGoals() {
     if (getContext().account_id || !envelopes?.rows?.some(row => row.mode === 'fund')) return '';
     return `<details class="vf-savings-goals"><summary>Savings goals <span>After monthly expenses</span></summary>${envelopeCards(null, true)}</details>`;
@@ -302,13 +411,13 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     if (error) return `<section class="vf-error" role="alert"><h2>This financial view could not load</h2><p>${esc(error)}</p>${button('Try again', 'retry')}</section>`;
     if (!report) return '<section class="vf-empty" role="status">Loading your financial picture…</section>';
     const covered = coverageHtml();
-    if (view === 'budget') return `<div class="vf-finance" aria-busy="${loading}">${budgetSummary()}<div class="vf-section-heading vf-budget-tools">${programPicker()}<label>Budget month<input type="month" data-vf-input="budget-month" value="${esc(state.budgetMonth)}"></label>${button('Manage targets', 'legacy-budget')}${button('Add category / program', 'definitions')}</div>${envelopeCards()}${savingsGoals()}</div>`;
+    if (view === 'budget') return `<div class="vf-finance" aria-busy="${loading}">${budgetSummary()}${seasonalCards()}<div class="vf-section-heading vf-budget-tools">${programPicker()}<label>Budget month<input type="month" data-vf-input="budget-month" value="${esc(state.budgetMonth)}"></label>${button('Manage targets', 'legacy-budget')}${button('Add category / program', 'definitions')}</div>${envelopeCards()}${savingsGoals()}</div>`;
     const emptyToday = emptyRecordedPeriod();
     const latest = report.coverage?.latest_recorded_on;
     const latestNote = emptyToday ? latest && /^\d{4}-\d{2}-\d{2}$/.test(latest) ? `Bank activity through ${new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',timeZone:'UTC'}).format(new Date(latest+'T12:00:00Z'))}` : 'No bank activity yet' : null;
     const metrics = `<div class="vf-stat-row">${stats('Money coming in', report.summary?.inflow_cents, latestNote??'Sources of funds','',emptyToday?'None recorded':null)}${stats(partialSpending() ? 'Recorded costs' : state.basis === 'spending' ? 'Purchases & costs' : 'Bank cash out', spendingValue(), partialSpending() ? 'Tax payment split pending' : latestNote??rangeLabel(report.range),'',emptyToday?'None recorded':null)}${!getContext().account_id && Number.isSafeInteger(envelopes?.summary?.remaining_cents) ? stats('Budget left this month', envelopes.summary.remaining_cents, monthLabel(state.budgetMonth), 'vf-budget-stat') : ''}</div>`;
-    if (view === 'overview') {const budgets = `<section class="vf-budget-preview"><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(monthLabel(state.budgetMonth))}</span><h2>What’s left in your budgets</h2></div>${programPicker()}${button('All budgets', 'navigate', 'data-view="budget"')}</div>${envelopeCards(6)}</section>`;return `<div class="vf-finance" aria-busy="${loading}">${metrics}${overviewActions()}${piesHtml()}${budgets}${trendHtml()}${homeBills()}${covered}</div>`;}
-    return `<div class="vf-finance" aria-busy="${loading}">${controls()}${breadcrumbs()}${state.category ? categoryHtml() : state.ledger ? ledgerHtml(report.entries ?? [], 'Period transactions') : `${metrics}${trendHtml()}${piesHtml()}`}${covered}</div>`;
+    if (view === 'overview') {const budgets = `<section class="vf-budget-preview"><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(monthLabel(state.budgetMonth))}</span><h2>What’s left in your budgets</h2></div>${programPicker()}${button('All budgets', 'navigate', 'data-view="budget"')}</div>${envelopeCards(6)}</section>`;return `<div class="vf-finance" aria-busy="${loading}">${metrics}${seasonalCards()}${overviewActions()}${piesHtml()}${budgets}${trendHtml()}${homeBills()}${covered}</div>`;}
+    return `<div class="vf-finance" aria-busy="${loading}">${controls()}${breadcrumbs()}${state.category ? categoryHtml() : state.ledger ? ledgerHtml(periodLedgerEntries(report), 'Period transactions') : `${metrics}${trendHtml()}${piesHtml()}`}${covered}</div>`;
   }
 
   function draw() {
@@ -370,77 +479,8 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   }
 
   async function openAttribution(row) {
-    const sourceSpace = row.source_space_id ?? getContext().space_id, transaction = row.source_transaction_id ?? row.id;
-    const sourcePath = `/transactions/${transaction}/attribution`;
-    const description = await api(endpoint(sourcePath, sourceSpace));
-    const spaces = description.target_spaces ?? getSpaces();
-    const catalogs = new Map();
-    for (const id of new Set(description.lines.map(line => line.space_id))) catalogs.set(id, await api(endpoint('/attribution/definitions', id)));
-    let lines = description.lines.map(line => ({...line}));
-    const modal = document.createElement('dialog'); modal.className = 'vf-attribution-dialog';
-    modal.setAttribute('aria-label', 'Assign expense to a category, program or organization');
-    root.append(modal);
-    const currencyInput = cents => `${cents < 0 ? '-' : ''}${Math.floor(Math.abs(cents) / 100)}.${String(Math.abs(cents) % 100).padStart(2, '0')}`;
-    function readLines() {
-      return [...modal.querySelectorAll('[data-attribution-line]')].map(el => {
-        const amount = el.querySelector('[name="amount"]').value;
-        if (!/^-?\d+(\.\d{1,2})?$/.test(amount)) throw new Error('Use dollars with at most two decimal places.');
-        const sign = amount.startsWith('-') ? -1 : 1, [whole, decimal = ''] = amount.replace('-', '').split('.');
-        const cents = sign * (Number(whole) * 100 + Number(decimal.padEnd(2, '0')));
-        if (!Number.isSafeInteger(cents)) throw new Error('Amount is too large.');
-        const spaceId = Number(el.querySelector('[name="space"]').value), categoryKey = el.querySelector('[name="category"]').value;
-        const catalog = catalogs.get(spaceId), childId = Number(el.querySelector('[name="subcategory"]').value) || null;
-        const child = childId ? catalog.category_definitions.find(d => d.id === childId) : null;
-        const parent = child ? catalog.category_definitions.find(d => d.id === child.parent_record_id) : null;
-        return {space_id: spaceId, amount_cents: cents, category: parent?.key ?? categoryKey, subcategory_record_id: childId,
-          program_record_id: Number(el.querySelector('[name="program"]').value) || null,
-          settlement_status: el.querySelector('[name="settlement"]').value, settlement_note: el.querySelector('[name="note"]').value || null};
-      });
-    }
-    function paint() {
-      modal.innerHTML = `<form><header><div><h2>Who was this expense for?</h2><p>${esc(row.merchant)} · original source ${precise(description.source_amount_cents)}</p></div><button type="button" data-attribution-close aria-label="Close allocation editor">×</button></header><p class="vf-caption">Assign the original amount once. Keep negative amounts for purchases. This changes cost attribution, not bank cash or a reimbursement payment.</p><div class="vf-attribution-lines">${lines.map((line, index) => {
-        const catalog = catalogs.get(line.space_id), definitions = catalog.category_definitions.filter(d => d.active), parents = definitions.filter(d => !d.parent_record_id);
-        const children = definitions.filter(d => d.parent_record_id && parents.find(p => p.id === d.parent_record_id)?.key === line.category);
-        return `<fieldset data-attribution-line="${index}"><legend>Allocation ${index + 1}</legend><label>Organization / household<select name="space">${spaces.map(s => `<option value="${s.id}" ${s.id === line.space_id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label><label>Signed amount ($)<input name="amount" inputmode="decimal" value="${currencyInput(line.amount_cents)}" required></label><label>Category<select name="category">${catalog.categories.filter(c => !definitions.find(d => d.key === c)?.parent_record_id).map(c => `<option value="${esc(c)}" ${line.category === c ? 'selected' : ''}>${esc(definitions.find(d => d.key === c)?.name ?? financeLabel(c))}</option>`).join('')}</select></label><label>Subcategory<select name="subcategory"><option value="">No subcategory</option>${children.map(c => `<option value="${c.id}" ${c.id === line.subcategory_record_id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label><label>Program<select name="program"><option value="">General / unassigned</option>${catalog.programs.filter(p => p.active).map(p => `<option value="${p.id}" ${p.id === line.program_record_id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label><label>Reimbursement status<select name="settlement">${[['none', 'Not specified'], ['open', 'Awaiting reimbursement'], ['reimbursed', 'Already reimbursed']].map(([key, name]) => `<option value="${key}" ${key === line.settlement_status ? 'selected' : ''}>${name}</option>`).join('')}</select></label><label class="vf-wide-field">Note<input name="note" value="${esc(line.settlement_note ?? '')}" maxlength="160"></label><div class="vf-attribution-actions"><button type="button" data-attribution-remainder="${index}">Use remaining amount</button>${lines.length > 1 ? `<button type="button" data-attribution-remove="${index}">Remove allocation</button>` : ''}</div></fieldset>`;
-      }).join('')}</div><p data-attribution-error role="alert" hidden></p><footer><button type="button" data-attribution-add ${lines.length >= 50 ? 'disabled' : ''}>Add split</button><button type="button" data-attribution-close>Cancel</button><button type="submit" class="tr-primary">Save attribution</button></footer></form>`;
-    }
-    function failure(e) {const el = modal.querySelector('[data-attribution-error]'); el.hidden = false; el.textContent = e.message;}
-    modal.addEventListener('click', event => {
-      const node = event.target.closest('button'); if (!node) return;
-      if (node.hasAttribute('data-attribution-close')) {modal.close(); return;}
-      if (node.hasAttribute('data-attribution-add') || node.hasAttribute('data-attribution-remove') || node.hasAttribute('data-attribution-remainder')) {
-        try {
-          lines = readLines();
-          if (node.hasAttribute('data-attribution-add')) lines.push({...lines[0], amount_cents: 0, settlement_status: 'none', settlement_note: null});
-          if (node.hasAttribute('data-attribution-remove')) lines.splice(Number(node.dataset.attributionRemove), 1);
-          if (node.hasAttribute('data-attribution-remainder')) {const i = Number(node.dataset.attributionRemainder); lines[i].amount_cents = description.source_amount_cents - lines.reduce((n, line, j) => n + (j === i ? 0 : line.amount_cents), 0);}
-          paint();
-        } catch (e) {failure(e);}
-      }
-    });
-    modal.addEventListener('change', async event => {
-      if (!['space', 'category'].includes(event.target.name)) return;
-      try {
-        if (event.target.name === 'space' && !catalogs.has(Number(event.target.value))) catalogs.set(Number(event.target.value), await api(endpoint('/attribution/definitions', Number(event.target.value))));
-        lines = readLines(); const i = Number(event.target.closest('[data-attribution-line]').dataset.attributionLine);
-        if (event.target.name === 'space') {
-          const id = lines[i].space_id;
-          if (!catalogs.has(id)) catalogs.set(id, await api(endpoint('/attribution/definitions', id)));
-          lines[i] = {...lines[i], category: 'uncategorized', subcategory_record_id: null, program_record_id: null};
-        } else lines[i].subcategory_record_id = null;
-        paint();
-      } catch (e) {failure(e);}
-    });
-    modal.addEventListener('submit', async event => {
-      event.preventDefault(); const submit = modal.querySelector('[type="submit"]'); submit.disabled = true;
-      try {
-        lines = readLines();
-        if (lines.reduce((n, line) => n + line.amount_cents, 0) !== description.source_amount_cents) throw new Error('The allocations must total the original source amount.');
-        await api(endpoint(sourcePath, sourceSpace), 'PUT', {version: description.version, lines}); modal.close(); notice('Attribution saved. Original bank cash is unchanged.'); await onChanged();
-      } catch (e) {failure(e); submit.disabled = false;}
-    });
-    modal.addEventListener('close', () => modal.remove(), {once: true});
-    paint(); modal.showModal();
+    const sourceSpace = row.source_space_id ?? row.space_id ?? getContext().space_id;
+    await openSplitEditor({root, row, sourceSpace, api, endpoint, esc, precise, categoryLabel: financeLabel, notice, onChanged});
   }
 
   async function handleClick(target) {
@@ -453,6 +493,11 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     else if (action === 'vf-subcategory') await selectChild(target.dataset.key);
     else if (action === 'vf-ledger-category') await change({ledger: true, page: 1}, false);
     else if (action === 'vf-ledger-all') {await change({category: null, subcategory: null, merchantGroup: null, ledger: true, direction: null, page: 1}, false); onNavigate('analysis', false);}
+    else if (action === 'vf-refund-pair') {
+      state.expandedRefund = state.expandedRefund === target.dataset.pair ? null : target.dataset.pair;
+      onChange();
+      Array.from(root.querySelectorAll('[data-pair]')).find(node => node.dataset.pair === target.dataset.pair)?.focus({preventScroll: true});
+    }
     else if (action === 'vf-page') await change({page: Number(target.dataset.page)}, false, false);
     else if (action === 'vf-level') await change(target.dataset.level === 'subcategory' ? {merchantGroup: null, ledger: false} : target.dataset.level === 'category' ? {subcategory: null, merchantGroup: null, ledger: false} : target.dataset.level === 'period' ? {direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false} : {period: null, direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false}, target.dataset.level === 'overview');
     else if (action === 'vf-retry') {await refresh(); onChange();}
@@ -503,13 +548,19 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     else if (input === 'basis') await change({basis: target.value, category: null, subcategory: null, merchantGroup: null, ledger: false});
     else if (input === 'program') await change({program: target.value ? Number(target.value) : null, category: null, subcategory: null, merchantGroup: null, ledger: false});
     else if (input === 'budget-month') await change({budgetMonth: target.value});
+    else if (input === 'budget-account') await change({budgetAccount: target.value ? Number(target.value) : null, expandedRefund: null, page: 1}, false, false);
     else if (input === 'sort') await change({ledgerSort: target.value, page: 1}, false, false);
     else if (input === 'query') {state.query = target.value; state.page = 1; onChange(); const inputNode = root.querySelector('[data-vf-input="query"]'); inputNode?.focus({preventScroll: true}); inputNode?.setSelectionRange(state.query.length, state.query.length);}
   }
 
   function assistantContext() {
-    const selection = financeSelectionRows(report, state), scopedEntries = state.category ? selection.entries : state.ledger ? report?.entries ?? [] : [], focused = state.focusedEntry ? (report?.entries ?? []).find(row => keyOf(row) === state.focusedEntry) : null, entries = focused ? [focused] : scopedEntries;
-    return {...dates(), account_id: getContext().account_id ?? null, program_id: state.program,
+    const selection = financeSelectionRows(report, state);
+    const ledger = state.category ? selection.entries : state.ledger ? periodLedgerEntries(report) : [];
+    const account = (state.ledger || state.category) && state.basis === 'spending' && state.direction !== 'in' ? state.budgetAccount : null;
+    const scopedEntries = account ? ledger.filter(row => row.direction === 'out' && budgetAccountId(row) === account) : ledger;
+    const focused = state.focusedEntry ? scopedEntries.find(row => keyOf(row) === state.focusedEntry) : null;
+    const entries = focused ? [focused] : scopedEntries;
+    return {...dates(), account_id: getContext().account_id ?? null, budget_account_id: account ?? null, program_id: state.program,
       level: state.ledger ? 'transactions' : state.category ? 'category' : state.period ? 'period' : 'overview', direction: state.direction,
       category: state.category, subcategory: selection.subcategory?.category_key ?? selection.subcategory?.key ?? null, basis: state.basis,
       transaction_ids: [...new Set(entries.map(r => r.source_transaction_id ?? r.id))].slice(0, 100), transaction_versions: Object.fromEntries(entries.slice(0, 100).map(r => [r.source_transaction_id ?? r.id, r.version])), selection_truncated: entries.length > 100, focused_transaction: !!focused,
@@ -529,7 +580,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     },
     clearExploration() {
       const through = getContext().through, year = Number(through.slice(0,4));
-      state = {...state, year, comparisonYear: year-1, grain: 'month', period: null, direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false, program: null, query: '', page: 1, focusedEntry: null};
+      state = {...state, year, comparisonYear: year-1, grain: 'month', period: null, direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false, program: null, expandedRefund: null, budgetAccount: null, query: '', page: 1, focusedEntry: null};
     },
     capture: () => clone(state),
     restore(value) {if (value?.version === 1) state = {...state, merchantGroup: null, ...clone(value)};},

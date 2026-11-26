@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Trajectory;
 
 use App\Http\Controllers\Controller;
+use App\Models\Trajectory\Account;
 use App\Models\Trajectory\Record;
 use App\Models\Trajectory\Space;
 use App\Models\Trajectory\Transaction;
@@ -19,6 +20,7 @@ class AttributionController extends Controller
         $access->authorize($request->user(), $space);
 
         return response()->json(['space_id' => $space->id, 'categories' => app(WorkspaceService::class)->categories($space),
+            'budget_accounts' => Account::where('space_id', $space->id)->orderBy('name')->orderBy('id')->get(['id', 'name']),
             'category_definitions' => $service->categoryDefinitions($space), 'programs' => $service->programs($space)])
             ->header('Cache-Control', 'private, no-store');
     }

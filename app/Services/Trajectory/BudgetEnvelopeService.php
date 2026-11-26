@@ -41,9 +41,7 @@ class BudgetEnvelopeService
         $actualThrough = $end->min($today)->toDateString();
         $monthEntries = $all->where('date', '>=', $start->toDateString());
         $accounts = Account::where('space_id', $space->id)->get();
-        $covered = ! $future && $accounts->isNotEmpty() && $accounts->every(fn ($account) => $account->history_start
-            && $account->history_start->toDateString() <= $start->toDateString() && $account->observed_at
-            && $account->observed_at->toDateString() >= $actualThrough);
+        $covered = ! $future && $this->historyCovers($accounts, $start->toDateString(), $actualThrough);
         $hasActuals = ! $future && ($covered || $monthEntries->isNotEmpty());
         $pending = collect(app(AttributionService::class)->expandEntries($space, $this->pending($space, $start, $end), $programId));
         $pending = app(EconomicActivityService::class)->expenses($pending)->where('amount_cents', '<', 0);
@@ -53,9 +51,7 @@ class BudgetEnvelopeService
         $priorEnd = $priorStart->endOfMonth();
         $priorCosts = $costs->where('date', '>=', $priorStart->toDateString())->where('date', '<=', $priorEnd->toDateString());
         $priorTargets = $this->targets($space, $records, $priorStart, $programId);
-        $priorCovered = $priorEnd->lt($today) && $accounts->isNotEmpty() && $accounts->every(fn ($account) => $account->history_start
-            && $account->history_start->toDateString() <= $priorStart->toDateString() && $account->observed_at
-            && $account->observed_at->toDateString() >= $priorEnd->toDateString());
+        $priorCovered = $priorEnd->lt($today) && $this->historyCovers($accounts, $priorStart->toDateString(), $priorEnd->toDateString());
         $priorEvidence = $all->where('date', '>=', $priorStart->toDateString())->where('date', '<=', $priorEnd->toDateString())->isNotEmpty();
         $current = $costs->where('date', '>=', $start->toDateString())->where('date', '<=', $end->toDateString());
         $committed = $pending->where('date', '>=', $start->toDateString())->where('date', '<=', $end->toDateString());
@@ -282,12 +278,47 @@ class BudgetEnvelopeService
 
         return ['month' => $month, 'range' => ['from' => $start->toDateString(), 'through' => $end->toDateString()], 'program_id' => $programId,
             'as_of' => $today->toDateString(), 'actual_through' => $actualThrough, 'future' => $future,
+            'seasonal_spending' => $space->kind === 'household' && $programId === null
+                ? $this->seasonalSpending($start, $actualThrough, $all, $accounts, $catalog) : [],
             'rows' => $rows, 'summary' => ['spent_cents' => $hasActuals && ! $cashReportsOverlap ? -(int) $current->sum('amount_cents') + $reportedCashTotal : null,
                 'bank_spent_cents' => $hasActuals ? -(int) $current->sum('amount_cents') : null, 'reported_cash_spent_cents' => $reportedCashTotal, 'pending_cents' => -(int) $committed->sum('amount_cents'),
                 'target_cents' => $summaryRows->isEmpty() || $summaryRows->contains('target_cents', null) ? null : (int) $summaryRows->sum('target_cents'),
                 'remaining_cents' => ! $complete || $summaryRows->isEmpty() || $summaryRows->contains('remaining_cents', null) ? null : (int) $summaryRows->sum('remaining_cents')],
             'coverage' => ['complete' => false, 'costs_resolved' => $complete, 'range_covered' => $covered, 'has_recorded_activity' => $monthEntries->isNotEmpty(), 'notes' => ['Category allowances are plans, not available bank cash.', 'Pending purchases reserve budget until settled or removed. Missing history can change remaining amounts.', 'Ordinary categories reset monthly. Explicit funds carry their approved opening allowance and recorded activity.']],
             'program_options' => $programs->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->values()->all()];
+    }
+
+    private function historyCovers(Collection $accounts, string $from, string $through): bool
+    {
+        return $accounts->isNotEmpty() && $accounts->every(fn ($account) => $account->history_start
+            && $account->history_start->toDateString() <= $from && $account->observed_at
+            && $account->observed_at->toDateString() >= $through);
+    }
+
+    private function seasonalSpending(CarbonImmutable $month, string $actualThrough, Collection $entries, Collection $accounts, Collection $catalog): array
+    {
+        if ($month->year < 2026 || ! in_array($month->month, [11, 12], true)) {
+            return [];
+        }
+        // The envelope query already includes the previous month, covering the November opening in December.
+        $from = $month->setMonth(11)->toDateString();
+        $started = $from <= $actualThrough;
+        $covered = $started && $this->historyCovers($accounts, $from, $actualThrough);
+        $activity = $entries->whereBetween('date', [$from, $actualThrough]);
+        $hasHistory = $covered || $activity->isNotEmpty();
+        $purchases = $activity->whereIn('flow', ['expense', 'refund']);
+        $cards = [];
+        foreach ($month->month === 11 ? ['edisto', 'christmas'] : ['christmas'] as $category) {
+            $definition = $catalog->get($category);
+            if (empty($definition['record_id']) || $definition['direction'] !== 'expense') {
+                continue;
+            }
+            $lines = $purchases->whereIn('category', $this->categoryKeys($category, $catalog));
+            $cards[] = ['category' => $category, 'from' => $from, 'through' => $started ? $actualThrough : null,
+                'net_spent_cents' => $hasHistory ? -(int) $lines->sum('amount_cents') : null, 'range_covered' => $covered];
+        }
+
+        return $cards;
     }
 
     /** A mapped native goal is a reserve plan, never a monthly purchase allowance or invented cash. */

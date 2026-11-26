@@ -266,3 +266,36 @@ test('economic projection rechecks revoked business access on the next invocatio
         ->and($revoked[0]['merchant'])->toBe('Shared allocation')->and($revoked[0]['account_id'])->toBeNull()
         ->and($revoked[0]['amount_cents'])->toBe(-10001);
 });
+
+test('per-part budget accounts round trip on economic rows and undo without changing bank postings', function (): void {
+    $budget = Account::create(['space_id' => $this->space->id, 'source_key' => 'attribution:holiday', 'name' => 'Vacation and Christmas', 'kind' => 'cash', 'currency' => 'USD', 'balance_cents' => 70000]);
+    $other = attributionBusiness($this);
+    $foreign = Account::create(['space_id' => $other->id, 'source_key' => 'attribution:foreign', 'name' => 'Other account', 'kind' => 'cash', 'currency' => 'USD']);
+    $path = '/trajectory/spaces/'.$this->space->id;
+    $this->actingAs($this->owner);
+    $catalog = collect($this->getJson($path.'/attribution/definitions')->assertOk()->json('budget_accounts'));
+    expect($catalog->pluck('id')->all())->toContain($budget->id)->not->toContain($foreign->id);
+    $endpoint = $path.'/transactions/'.$this->tx->id.'/attribution';
+    $lines = [
+        ['space_id' => $this->space->id, 'amount_cents' => -6500, 'category' => 'travel', 'budget_account_id' => $budget->id],
+        ['space_id' => $this->space->id, 'amount_cents' => -3501, 'category' => 'groceries'],
+    ];
+    $this->putJson($endpoint, ['version' => 1, 'lines' => [[...$lines[0], 'budget_account_id' => $foreign->id], $lines[1]]])->assertUnprocessable();
+    $this->putJson($endpoint, ['version' => 1, 'lines' => $lines])->assertOk();
+    $saved = $this->getJson($endpoint)->assertOk()->json();
+    expect($saved['source_account'])->toBe(['id' => $this->account->id, 'name' => 'Checking'])
+        ->and(array_column($saved['lines'], 'budget_account_id'))->toBe([$budget->id, null]);
+    $projected = $this->attribution->expandEntries($this->space, app(LedgerService::class)->entries($this->space), null, $this->owner);
+    expect(array_column($projected, 'budget_account_name'))->toBe(['Vacation and Christmas', null])
+        ->and(array_sum(array_column($projected, 'amount_cents')))->toBe(-10001);
+    $edited = $this->putJson($endpoint, ['version' => $saved['version'], 'lines' => [[...$saved['lines'][0], 'category' => 'shopping'], $saved['lines'][1]]])->assertOk()->json();
+    expect($this->getJson($endpoint)->json('lines.0.budget_account_id'))->toBe($budget->id);
+    $this->postJson($endpoint.'/undo', ['version' => $edited['version'], 'event_id' => $edited['event_id']])->assertOk();
+    expect($this->getJson($endpoint)->json('lines.0.budget_account_id'))->toBe($budget->id)
+        ->and($this->tx->fresh()->account_id)->toBe($this->account->id)->and($budget->fresh()->balance_cents)->toBe(70000)
+        ->and($this->account->fresh()->balance_cents)->toBe(500000);
+    $budget->update(['space_id' => $other->id]);
+    expect($this->getJson($endpoint)->json('lines.0.budget_account_id'))->toBeNull();
+    $redacted = $this->attribution->expandEntries($this->space, app(LedgerService::class)->entries($this->space), null, $this->owner);
+    expect($redacted[0]['budget_account_id'])->toBeNull()->and($redacted[0]['budget_account_name'])->toBeNull();
+});

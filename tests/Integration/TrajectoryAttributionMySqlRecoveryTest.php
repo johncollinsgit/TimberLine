@@ -50,3 +50,31 @@ it('retains encrypted attribution history through partial indexes retries and ro
     $migration->up();
     DB::table('trajectory_allocation_details')->where('id', $id)->delete();
 });
+
+it('retains split budget account designations through migration retries and rollback', function (): void {
+    $db = DB::connection();
+    if ($db->getDriverName() !== 'mysql' || getenv('TRAJECTORY_DISPOSABLE_MYSQL') !== '1') {
+        $this->markTestSkipped('Explicit disposable Trajectory MySQL only.');
+    }
+    $disposable = in_array($db->getDatabaseName(), ['everbranch_ci', 'codex_trajectory_test'], true)
+        || preg_match('/^codex_split_accounts_test_[a-z0-9]+$/D', $db->getDatabaseName());
+    if (! app()->environment('testing') || ! $disposable || ! in_array($db->getConfig('host'), ['127.0.0.1', 'localhost'], true)) {
+        throw new RuntimeException('Refusing budget account recovery outside isolated disposable MySQL.');
+    }
+    $table = 'trajectory_allocation_details';
+    $migration = require database_path('migrations/2026_11_26_120000_add_budget_account_to_trajectory_allocation_details.php');
+    $id = DB::table($table)->insertGetId(['transaction_id' => 891235, 'allocation_id' => 891235, 'space_id' => 891235,
+        'revision' => 1, 'line_index' => 0, 'amount_cents' => -6500, 'category' => 'travel', 'flow' => 'expense',
+        'source_fingerprint' => str_repeat('a', 64), 'created_at' => now(), 'updated_at' => now()]);
+    try {
+        $migration->up();
+        $row = DB::table($table)->where('id', $id);
+        expect($row->value('budget_account_id'))->toBeNull();
+        $row->update(['budget_account_id' => 891236]);
+        $migration->up();
+        $migration->down();
+        expect((int) $row->value('budget_account_id'))->toBe(891236)->and((int) $row->value('amount_cents'))->toBe(-6500);
+    } finally {
+        DB::table($table)->where('id', $id)->delete();
+    }
+});
