@@ -78,12 +78,13 @@ Personal and Business use separate install identities at `/trajectory/personal/`
 and `/trajectory/business/`. Business retains its authorized organization
 selector. Neither service worker caches authenticated finance data.
 
-On phones, Add, expense notifications and Dates & view are icons in the top bar.
-The calendar opens one accessible popover for the existing period, custom dates,
-account, workspace and Analysis comparison/basis/program controls. Escape, Done
-and outside interaction close it; selections retain their native handlers and
-values. Desktop retains the full toolbar and inline Analysis controls. Foreground
-updates pause while this popover is open.
+On desktop, the header shows the current date range below the page title.
+Account and Period share a toolbar with the Analysis grouping interval. Report
+options opens the comparison years, spending basis, program when available,
+category organizer and report actions. On phones, the calendar opens Dates &
+view with the same controls and the workspace selector. Selecting Custom reveals
+the start and end dates. Escape and Done return focus to the opener. Foreground
+updates pause while either options panel is open.
 
 Home, Analysis and Budget reuse one successful, authorized in-memory snapshot
 when only the screen or client drilldown changes. The key includes the financial

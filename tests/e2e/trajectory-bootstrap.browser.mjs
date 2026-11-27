@@ -6,7 +6,8 @@ import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
 import {createServer} from 'node:net';
 import {chromium,webkit,expect} from '@playwright/test';
-import {selectReportScope,selectReportRange,closeReportControls,openReportControls} from './trajectory-controls.browser-helpers.mjs';
+import {selectReportScope,selectReportRange,closeReportControls,openReportControls,openReportOptions} from './trajectory-controls.browser-helpers.mjs';
+import {checkAnalysisHeader} from './trajectory-analysis-header.browser-helpers.mjs';
 import {checkReviewedCategoryChanges} from './trajectory-reviewed-categories.browser-helpers.mjs';
 const exec=promisify(execFile),base=resolve(),probe=createServer();
 await new Promise(done=>probe.listen(0,'127.0.0.1',done));const port=probe.address().port;await new Promise(done=>probe.close(done));
@@ -29,6 +30,7 @@ try{
  foreach([1000,2000] as $amount){$parts[]=$service->save($owner,$space,'budget','Fictional utility source',['category'=>'utilities','purpose'=>'spending','monthly_cents'=>$amount,'effective_on'=>$start,'reviewed'=>true])->id;}
  $merged=$service->save($owner,$space,'budget','Fictional combined utilities',['category'=>'utilities','purpose'=>'spending','monthly_cents'=>3000,'effective_on'=>$start,'ends_on'=>$end,'reviewed'=>true,'month_only'=>true,'supersedes_record_ids'=>$parts]);
  $attribution=app(App\\Services\\Trajectory\\AttributionService::class);
+ $attribution->saveDefinition($owner,$space,'program','Fictional activity',['key'=>'fictional_activity']);
  $parent=$attribution->saveDefinition($owner,$space,'category_definition','Shopping',['key'=>'shopping','direction'=>'expense']);
  $child=$attribution->saveDefinition($owner,$space,'category_definition','Family reimbursements',['key'=>'family_reimbursements','direction'=>'expense','parent_record_id'=>$parent->id]);
  $attribution->saveDefinition($owner,$space,'category_definition','Christmas',['key'=>'christmas','direction'=>'expense']);
@@ -50,7 +52,7 @@ try{
   await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
   const csrf=(await(await context.request.get(origin+'/login')).text()).match(/<meta name="csrf-token" content="([^"]+)"/)?.[1];assert.ok(csrf);
   assert.ok((await context.request.post(origin+'/login',{form:{email:'flow@fixture.invalid',password:'Fictional-flow-only-2028!',_token:csrf},headers:{Accept:'application/json'}})).ok());
-  for(const width of process.argv.includes('--category-edits')?[]:[390,1440]){
+  for(const width of process.argv.includes('--category-edits')||process.argv.includes('--report-header')?[]:[390,1440]){
    const page=await context.newPage(),errors=[],reads=[];page.setDefaultTimeout(12000);await page.setViewportSize({width,height:950});
    page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.method()==='GET')reads.push(new URL(request.url()).pathname);});
    let releaseDashboard,delivered=false;const dashboardGate=new Promise(done=>{releaseDashboard=done;});
@@ -144,7 +146,7 @@ try{
    // A refresh invalidates the dated memory cohort instead of presenting it as fresh.
    let releaseExplicit;const explicitGate=new Promise(done=>{releaseExplicit=done;});
    await page.route('**/analysis?*',async route=>{const response=await route.fetch();await explicitGate;try{await route.fulfill({response});}catch{}});
-   await openReportControls(page);await page.locator('#tr-refresh').click();await closeReportControls(page);await expect(page.locator('.vf-finance')).toHaveCount(0);releaseExplicit();await expect(page.locator('.vf-finance')).toBeVisible();await expect(page.locator('#tr-add')).toBeEnabled();
+   await openReportOptions(page);await page.locator('#tr-refresh').click();await closeReportControls(page);await expect(page.locator('.vf-finance')).toHaveCount(0);releaseExplicit();await expect(page.locator('.vf-finance')).toBeVisible();await expect(page.locator('#tr-add')).toBeEnabled();
    // Analysis tab is a section home, not a link back to Budget's drilldown.
    await primary('budget');await primary('analysis');await expect(page.locator('#tr-page-title')).toHaveText('Analysis');await expect(page.locator('#vf-period-chart')).toBeVisible();await expect(page.locator('#tr-back')).toBeHidden();
    assert.deepEqual(errors,[]);await page.close();
@@ -195,8 +197,14 @@ try{
     releaseBusiness();await expect(business.locator('#tr-add')).toBeEnabled();await business.close();
    }
   }
-  await checkReviewedCategoryChanges({context,origin,fixture,payments:combinedBudget.payments,childId:combinedBudget.child_id,phone:name==='webkit'});
-  checks.push(name+' '+(name==='webkit'?'phone':'desktop')+': two reviewed purchases recategorized in the mounted merchant ledger');
+  if(!process.argv.includes('--report-header')){
+   await checkReviewedCategoryChanges({context,origin,fixture,payments:combinedBudget.payments,childId:combinedBudget.child_id,phone:name==='webkit'});
+   checks.push(name+' '+(name==='webkit'?'phone':'desktop')+': two reviewed purchases recategorized in the mounted merchant ledger');
+  }
+  if(!process.argv.includes('--category-edits')){
+   await checkAnalysisHeader({context,origin,phone:name==='webkit'});
+   checks.push(name+': Analysis controls, focus, resize and drilled-ledger layout');
+  }
   await context.close();await browser.close();browser=null;
  }
  console.log(JSON.stringify({checks}));

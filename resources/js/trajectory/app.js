@@ -31,6 +31,7 @@ import {createBudgetDetail} from './budget-detail.js';
 import {initCompactTransactionList,createTransactionReview,transactionIdentityHtml,normalizedReviewRow,saveTransactionCategory,renderLegacyTransactionLedger} from './transaction-review.js';
 import './transaction-review.css';
 import './visual-finance.css';
+import './report-header.css';
 import {initTrajectoryAssistant} from './assistant-ui.js';
 import {canRefreshFinance, createForegroundRefresh} from './foreground-refresh.js';
 import {isVisualFinanceView,isMetadataContext,isPlanContext,validatePlanContext,visualContextPath,validateVisualContext,visualBootstrapMetadata,visualBootstrapRequest,createRangeSnapshotCache} from './bootstrap.js';
@@ -44,6 +45,10 @@ function boot() {
   const sectionTabs = () => [...root.querySelectorAll('[data-tab]'), ...(phoneNavigation?.querySelectorAll('[data-tab]') ?? [])];
   const mobile = initHouseholdMobile(root);
   const $ = (s) => root.querySelector(s);
+  function clearReportContent() {
+    $('#tr-content').replaceChildren();
+    mobile?.syncControls();
+  }
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money = (v) => v === null || v === undefined ? 'Unavailable' : new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(v/100);
   const precise = (v) => v === null || v === undefined ? 'Unavailable' : new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(v/100);
@@ -53,7 +58,6 @@ function boot() {
   const spaces = JSON.parse(root.dataset.spaces || '[]');
   const incoming = new URLSearchParams(window.location.search);
   let accountFilter = Number.isSafeInteger(Number(incoming.get('account_id')))&&Number(incoming.get('account_id'))>0?Number(incoming.get('account_id')):null;
-  $('.tr-toolbar > .tr-actions')?.insertAdjacentHTML('afterbegin','<label class="tr-account-picker">Account <select id="tr-account-filter" aria-label="Filter financial figures by account"><option value="">All accounts</option></select></label>');
   let bankStorage;
   try {bankStorage = window.sessionStorage;} catch {bankStorage = null;}
   const oauthReturn = incoming.has('oauth_state_id');
@@ -126,7 +130,7 @@ function boot() {
     const reuseDashboard=reuse&&!!data&&loadedDashboardContext===reportContext()&&(primary||planOnly&&isPlanContext(data)||!isMetadataContext(data));
     if(!reuseDashboard)loadedDashboardContext=null;
     if(!reuseDashboard&&displayedReportContext!==null&&displayedReportContext!==reportContext()){
-      filter={};flowDialog=null;navigation.length=0;$('#tr-back').hidden=true;$('#tr-dialog').close();$('#tr-content').innerHTML='';data=null;
+      filter={};flowDialog=null;navigation.length=0;$('#tr-back').hidden=true;$('#tr-dialog').close();clearReportContent();data=null;
     }
     evidenceRows=null;
     if(!data){$('#tr-add').disabled=true;$('#tr-compare').disabled=true;}
@@ -222,7 +226,7 @@ function boot() {
   const focusDescriptor=()=>{const node=document.activeElement?.closest?.('[data-action]');return node?{action:node.dataset.action,label:node.dataset.label||'',ids:node.dataset.ids||'',key:node.dataset.key||'',entry:node.dataset.entry||''}:null;};
   const captureNavigation=()=>({tab,filter:JSON.parse(JSON.stringify(filter)),scroll:window.scrollY,moneyFlowMode,visualFinance:visualFinance.capture(),depth:navigation.length,flowDialog:flowDialog?{...flowDialog}:null,focus:focusDescriptor()});
   const historyNavigation=reportNavigation({window,capture:captureNavigation,context:reportContext,enabled:()=>!new URLSearchParams(location.search).has('oauth_state_id'),
-    invalidate:reason=>{navigation.length=0;filter={};evidenceRows=null;flowDialog=null;$('#tr-back').hidden=true;$('#tr-dialog').close();if(reason==='history'){tab='overview';data=null;$('#tr-content').innerHTML='';void load();}},
+    invalidate:reason=>{navigation.length=0;filter={};evidenceRows=null;flowDialog=null;$('#tr-back').hidden=true;$('#tr-dialog').close();if(reason==='history'){tab='overview';data=null;clearReportContent();void load();}},
     restore:async(previous,isCurrent)=>{
       restoringNavigation=true;flowDialog=null;$('#tr-dialog').close();tab=previous.tab;filter=previous.filter;evidenceRows=null;moneyFlowMode=previous.moneyFlowMode;visualFinance.restore(previous.visualFinance);navigation.length=previous.depth;
       await load({reuse:true});if(!isCurrent()){restoringNavigation=false;return;}
@@ -979,10 +983,16 @@ function boot() {
   });
   root.addEventListener('change',e=>{if(['year','comparison','basis','program','budget-month'].includes(e.target.dataset.vfInput))rangeSnapshots.clear();if(!data&&e.target.matches('[data-vf-category]')){notice('Editing details are still loading. Try again in a moment.');return;}if(e.target.matches('[data-vf-input],[data-vf-category]'))void visualFinance.handleInput(e.target).catch(error=>notice(error.message));});
   $('#tr-add').onclick=async()=>{if(data&&await ensureFullDashboard())chooseAdd();else notice('Editing details are still loading. Try again in a moment.');};$('#tr-refresh').onclick=load;
-  $('#tr-space-tabs').addEventListener('click',e=>{const button=e.target.closest('[data-scope]');if(!button||button.dataset.scope===scope)return;navigation.length=0;$('#tr-back').hidden=true;welcome.reset();debtPlanner.reset();decisionMonth='';forecastExpanded=false;overviewExpanded=false;accountFilter=null;scope=button.dataset.scope;active=(scope==='personal'?personalSpace:businessSpace)?.id||personalSpace?.id||businessSpace?.id;scenarioId='';filter={};budgetSource=null;budgetMonth='';historyMonth='';evidenceRows=null;data=null;$('#tr-dialog').close();$('#tr-content').innerHTML='';renderSpaceTabs();load();});
+  $('#tr-space-tabs').addEventListener('click',e=>{const button=e.target.closest('[data-scope]');if(!button||button.dataset.scope===scope)return;navigation.length=0;$('#tr-back').hidden=true;welcome.reset();debtPlanner.reset();decisionMonth='';forecastExpanded=false;overviewExpanded=false;accountFilter=null;scope=button.dataset.scope;active=(scope==='personal'?personalSpace:businessSpace)?.id||personalSpace?.id||businessSpace?.id;scenarioId='';filter={};budgetSource=null;budgetMonth='';historyMonth='';evidenceRows=null;data=null;$('#tr-dialog').close();clearReportContent();renderSpaceTabs();load();});
   $('#tr-account-filter')?.addEventListener('change',async event=>{accountFilter=event.target.value===''?null:Number(event.target.value);decisionMonth='';scenarioId='';filter={};evidenceRows=null;navigation.length=0;$('#tr-back').hidden=true;debtPlanner.reset();await load();});
   $('#tr-compare').onclick=()=>{compareYear=!compareYear;$('#tr-compare').setAttribute('aria-pressed',String(compareYear));render();};
-  $('#tr-range').onclick=e=>{const button=e.target.closest('[data-range]');if(!button||button.dataset.range===reportingRange)return;reportingRange=button.dataset.range;filter={};evidenceRows=null;$('#tr-range').querySelectorAll('[data-range]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.range===reportingRange)));$('#tr-date-fields').hidden=reportingRange!=='custom';if(reportingRange!=='custom'||($('#tr-start').value&&$('#tr-end').value))load({periodChange:true});};
+  $('#tr-range').onchange = event => {
+    reportingRange = event.target.value;
+    filter = {};
+    evidenceRows = null;
+    $('#tr-date-fields').hidden = reportingRange !== 'custom';
+    if (reportingRange !== 'custom' || ($('#tr-start').value && $('#tr-end').value)) load({periodChange:true});
+  };
   for(const selector of ['#tr-start','#tr-end'])$(selector).onchange=()=>{if($('#tr-start').value&&$('#tr-end').value)load({periodChange:true});};
   sectionTabs().forEach(b=>b.onclick=()=>{if(data||visualMetadata||pendingDashboard)navigate(b.dataset.tab,{primary:true});});
   $('#tr-back').onclick=()=>{if(tab==='analysis'&&historyNavigation.previous()?.tab!=='analysis'){visualFinance.clearExploration();void load({reuse:true});return;}historyNavigation.back();};
@@ -993,7 +1003,7 @@ function boot() {
   document.addEventListener('scroll',()=>{foregroundInteraction++;},{capture:true,passive:true});
   const foregroundEligible=()=>canRefreshFinance({visible:!document.hidden,online:navigator.onLine!==false,hasData:!!data,tab,scope,
     loading:$('#tr-content').getAttribute('aria-busy')==='true'||visualFinance.isBusy(),
-    editing:!!document.querySelector('dialog[open],#tr-mobile-drawer[role="dialog"],#tr-report-controls[data-open],#tr-content details[open]')||document.activeElement?.matches('input,select,textarea,[contenteditable="true"]'),
+    editing:!!document.querySelector('dialog[open],#tr-mobile-drawer[role="dialog"],#tr-report-controls[data-open],#tr-options-toggle[aria-expanded="true"],#tr-content details[open]')||document.activeElement?.matches('input,select,textarea,[contenteditable="true"]'),
     linking:linkInProgress,restoring:restoringNavigation,oauth:new URLSearchParams(location.search).has('oauth_state_id'),hasMetals:!!data?.metals?.length});
   const refreshForeground=createForegroundRefresh({eligible:foregroundEligible,
     snapshot:()=>JSON.stringify([reportContext(),tab,visualFinance.capture(),loadVersion,foregroundInteraction]),

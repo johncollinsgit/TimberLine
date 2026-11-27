@@ -1,3 +1,10 @@
+## 2026-11-27 · Analysis report controls
+
+The report dates sit below the title. Desktop groups account, period and chart
+interval in one toolbar. Report options holds the comparison years, spending
+basis, program and category management. On phones, Dates & view contains the
+same settings in one panel.
+
 ## 2026-11-26 · Keep transaction review in place
 
 Changing a payment’s category in Analysis updates the current ledger. A payment
