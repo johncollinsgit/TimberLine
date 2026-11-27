@@ -948,8 +948,22 @@ function boot() {
   });
   function smsForm(){dialog('Text reminders',field('phone','Your mobile number','tel','+1',null,true)+field('consent','I want bill reminders, cash alerts, and weekly summaries','checkbox',false),async v=>{await api(endpoint('/sms/verify'),'POST',{phone:v.get('phone'),consent:v.get('consent')==='on'});dialog('Verify your phone',field('code','Code from your text','text','',null,true),async v2=>{await api(endpoint('/sms/confirm'),'POST',{code:v2.get('code')});},'Verify');return false;},'Send verification code');}
   $('#tr-form').addEventListener('submit',async e=>{e.preventDefault();if(!formAction)return;$('#tr-save').disabled=true;$('#tr-form-error').hidden=true;try{const done=await formAction(new FormData($('#tr-form')));if(done!==false){$('#tr-dialog').close();await load();}}catch(e){$('#tr-form-error').textContent=e.message;$('#tr-form-error').hidden=false;}finally{$('#tr-save').disabled=false;}});
-  $('#tr-close').onclick=$('#tr-cancel').onclick=()=>$('#tr-dialog').close();
-  $('#tr-dialog').addEventListener('close',()=>{assistantFocusedTransaction=null;if(flowDialog&&!restoringNavigation){const backed=historyNavigation.back();flowDialog=null;if(!backed)historyNavigation.sync();}});
+  function dismissDialog() {
+    if (flowDialog) {
+      const backed = historyNavigation.back();
+      flowDialog = null;
+      if (!backed) historyNavigation.sync();
+    }
+    $('#tr-dialog').close();
+  }
+  $('#tr-close').onclick = $('#tr-cancel').onclick = dismissDialog;
+  $('#tr-dialog').addEventListener('cancel', event => {
+    if (flowDialog) {event.preventDefault(); dismissDialog();}
+  });
+  // Native close notifications may arrive after a history-restored dialog reopens.
+  $('#tr-dialog').addEventListener('close', event => {
+    if (!event.currentTarget.open) assistantFocusedTransaction = null;
+  });
   root.addEventListener('keydown',e=>{
     const flow=e.target.closest('.tr-flow-action');
     if(flow&&['Enter',' '].includes(e.key)){e.preventDefault();flow.dispatchEvent(new MouseEvent('click',{bubbles:true}));return;}
