@@ -71,7 +71,7 @@ function boot() {
   let linkInProgress = false;
   let scope = requestedSpace?.kind==='business' ? 'business' : personalSpace ? 'personal' : 'business';
   let active = (scope==='personal' ? personalSpace : businessSpace)?.id, data, evidenceRows=null, tab = 'overview', charts = [], chartTables = {}, filter = {}, scenarioId = '', historyMonth = '', budgetSource = null, budgetMonth = '', seasonal = false, moneyFlowMode = 'spending', lenderInterestYear = null, formAction;
-  let flowDialog=null,restoringNavigation=false,displayedReportContext=null,assistantFocusedTransaction=null;
+  let flowDialog=null,dismissingFlowDialog=false,restoringNavigation=false,displayedReportContext=null,assistantFocusedTransaction=null;
   if (['overview','analysis','budget','transactions','accounts','planning','anomalies','tax','sales-tax','profit','companies','bud'].includes(incoming.get('tab'))) {tab=incoming.get('tab');filter=tab==='transactions'?{review:true}:{};}
   if (oauthReturn) tab = 'accounts';
   const endpoint = (path, spaceId=active) => `/trajectory/spaces/${spaceId}${path}`;
@@ -621,6 +621,7 @@ function boot() {
   function openFlowCategory(target,record=true){
     const merchants=JSON.parse(target.dataset.merchants||'[]'),cash=target.dataset.cash==='true',receipts=target.dataset.inflows==='true';
     if(record)remember();
+    dismissingFlowDialog=false;
     flowDialog={label:target.dataset.label||'',ids:target.dataset.ids||''};
     dialog(target.dataset.label||'Category records',`<p class="tr-subtle">${receipts?'Senders for this household receipt type.':'Merchants in this recorded category. Shared allocations keep the other space’s source private.'}</p><div class="tr-actions">${btn(receipts?'View all receipts':'View all category records','money-flow-evidence',`data-cash="${cash}" data-economic-category="${esc(target.dataset.economicCategory||'')}" data-economic-categories="${esc(target.dataset.economicCategories||'[]')}" data-ids="${esc(target.dataset.ids)}"`)}</div>${merchants.map(row=>`<div class="tr-row"><div><strong>${esc(row.label)}</strong><div>${precise(row.amount_cents)}</div></div>${btn('View transactions','money-flow-evidence',`data-cash="${cash}" data-economic-category="${esc(row.economic_category||'')}" data-economic-categories="${esc(JSON.stringify(row.economic_categories||[]))}" data-ids="${esc(JSON.stringify(row.ids))}"`)}</div>`).join('')}`,null);
     historyNavigation.sync();
@@ -950,9 +951,11 @@ function boot() {
   $('#tr-form').addEventListener('submit',async e=>{e.preventDefault();if(!formAction)return;$('#tr-save').disabled=true;$('#tr-form-error').hidden=true;try{const done=await formAction(new FormData($('#tr-form')));if(done!==false){$('#tr-dialog').close();await load();}}catch(e){$('#tr-form-error').textContent=e.message;$('#tr-form-error').hidden=false;}finally{$('#tr-save').disabled=false;}});
   function dismissDialog() {
     if (flowDialog) {
-      const backed = historyNavigation.back();
+      if (dismissingFlowDialog) return;
+      // History restoration closes this dialog once its originating view takes over.
+      if (historyNavigation.back()) {dismissingFlowDialog = true; return;}
       flowDialog = null;
-      if (!backed) historyNavigation.sync();
+      historyNavigation.sync();
     }
     $('#tr-dialog').close();
   }
