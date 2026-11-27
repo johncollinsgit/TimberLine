@@ -90,6 +90,8 @@ export async function checkAnalysisHeader({context, origin, phone}) {
     if (phone) await checkWidths(page, ['.vf-ledger .tr-review-table-wrap']);
     await page.locator('.vf-breadcrumbs [data-level="overview"]').click();
     await expect(page.locator('#vf-period-chart')).toBeVisible();
+    // The chart is visible in the intermediate render while this breadcrumb reloads the report.
+    await expect(page.locator('.vf-finance')).toHaveAttribute('aria-busy', 'false');
   }
 
   const references = await Promise.all(reportFields.map(selector => page.locator(selector).elementHandle()));
