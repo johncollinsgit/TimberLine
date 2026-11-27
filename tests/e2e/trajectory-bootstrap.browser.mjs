@@ -7,6 +7,7 @@ import {promisify} from 'node:util';
 import {createServer} from 'node:net';
 import {chromium,webkit,expect} from '@playwright/test';
 import {selectReportScope,selectReportRange,closeReportControls,openReportControls} from './trajectory-controls.browser-helpers.mjs';
+import {checkReviewedCategoryChanges} from './trajectory-reviewed-categories.browser-helpers.mjs';
 const exec=promisify(execFile),base=resolve(),probe=createServer();
 await new Promise(done=>probe.listen(0,'127.0.0.1',done));const port=probe.address().port;await new Promise(done=>probe.close(done));
 const dir=await mkdtemp(join(tmpdir(),'codex-money-flow-bootstrap-')),origin=`http://127.0.0.1:${port}`;
@@ -27,7 +28,20 @@ try{
  $service=app(App\\Services\\Trajectory\\RecordService::class);$start=now($space->timezone)->startOfMonth()->toDateString();$end=now($space->timezone)->endOfMonth()->toDateString();$parts=[];
  foreach([1000,2000] as $amount){$parts[]=$service->save($owner,$space,'budget','Fictional utility source',['category'=>'utilities','purpose'=>'spending','monthly_cents'=>$amount,'effective_on'=>$start,'reviewed'=>true])->id;}
  $merged=$service->save($owner,$space,'budget','Fictional combined utilities',['category'=>'utilities','purpose'=>'spending','monthly_cents'=>3000,'effective_on'=>$start,'ends_on'=>$end,'reviewed'=>true,'month_only'=>true,'supersedes_record_ids'=>$parts]);
- echo json_encode(['id'=>$merged->id,'sources'=>$parts]);
+ $attribution=app(App\\Services\\Trajectory\\AttributionService::class);
+ $parent=$attribution->saveDefinition($owner,$space,'category_definition','Shopping',['key'=>'shopping','direction'=>'expense']);
+ $child=$attribution->saveDefinition($owner,$space,'category_definition','Family reimbursements',['key'=>'family_reimbursements','direction'=>'expense','parent_record_id'=>$parent->id]);
+ $attribution->saveDefinition($owner,$space,'category_definition','Christmas',['key'=>'christmas','direction'=>'expense']);
+ $cash=App\\Models\\Trajectory\\Account::where('space_id',$space->id)->where('source_key','fictional:flow-cash')->sole();
+ $payments=[];
+ foreach ([-2167,-4312] as $amount) {
+   $key='fictional-zelle-'.$amount;
+   app(App\\Services\\Trajectory\\LedgerService::class)->ingest($cash,[['id'=>$key,'date'=>now($space->timezone)->toDateString(),'merchant'=>'Zelle: Fictional Family','amount_cents'=>$amount,'category'=>'shopping']]);
+   $payment=App\\Models\\Trajectory\\Transaction::where('account_id',$cash->id)->where('source_key',$cash->source_key.':'.$key)->sole();
+   $attribution->save($owner,$space,$payment,[['space_id'=>$space->id,'amount_cents'=>$amount,'category'=>'shopping','subcategory_record_id'=>$child->id]],$payment->version);
+   $payments[]=$payment->id;
+ }
+ echo json_encode(['id'=>$merged->id,'sources'=>$parts,'payments'=>$payments,'child_id'=>$child->id]);
  `);const combinedBudget=JSON.parse((await exec('php',[seed],{cwd:base,env})).stdout);
  server=spawn('php',['artisan','serve','--host=127.0.0.1',`--port=${port}`,'--no-reload'],{cwd:base,env,stdio:'ignore'});
  await expect.poll(async()=>{try{return(await fetch(origin+'/up')).ok;}catch{return false;}}).toBe(true);
@@ -36,7 +50,7 @@ try{
   await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
   const csrf=(await(await context.request.get(origin+'/login')).text()).match(/<meta name="csrf-token" content="([^"]+)"/)?.[1];assert.ok(csrf);
   assert.ok((await context.request.post(origin+'/login',{form:{email:'flow@fixture.invalid',password:'Fictional-flow-only-2028!',_token:csrf},headers:{Accept:'application/json'}})).ok());
-  for(const width of [390,1440]){
+  for(const width of process.argv.includes('--category-edits')?[]:[390,1440]){
    const page=await context.newPage(),errors=[],reads=[];page.setDefaultTimeout(12000);await page.setViewportSize({width,height:950});
    page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.method()==='GET')reads.push(new URL(request.url()).pathname);});
    let releaseDashboard,delivered=false;const dashboardGate=new Promise(done=>{releaseDashboard=done;});
@@ -46,7 +60,8 @@ try{
    await expect(page.locator('#vf-income-chart')).toBeVisible();assert.equal(delivered,false,'Real visual data paints before the blocked editing metadata');
    await expect(page.locator('#tr-content')).toHaveAttribute('aria-busy','false');await expect(page.locator('#tr-add')).toBeDisabled();
    const expected=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(initial.summary.inflow_cents/100);
-   await expect(page.locator('.vf-stat-row')).toContainText(expected);
+   const cashTotals=page.locator('.vf-stat-row').filter({hasText:'Money coming in'});
+   await expect(cashTotals).toContainText(expected);
    const income=page.locator('#vf-income-chart'),box=await income.boundingBox();
    await income.click({position:{x:box.width/2+Math.min(box.width,box.height)*.4,y:box.height/2}});
    await expect(page.locator('dialog.tr-donut-explanation')).toBeVisible();
@@ -123,8 +138,8 @@ try{
    const freshDayReport=await(await freshDay).json();await expect(page.locator('#tr-add')).toBeEnabled();await expect(page.locator('#tr-content')).toHaveAttribute('aria-busy','false');
    if(freshDayReport.coverage.history_available&&freshDayReport.coverage.selected_range_has_evidence===false){
     await expect(page.locator('.vf-pie-heading strong')).toHaveText(['None recorded','None recorded']);
-    await expect(page.locator('.vf-stat-row')).toContainText('None recorded');
-    assert.doesNotMatch(await page.locator('.vf-stat-row').innerText(),/Unavailable|No receipts recorded today|No purchases recorded today/);
+    await expect(cashTotals).toContainText('None recorded');
+    assert.doesNotMatch(await cashTotals.innerText(),/Unavailable|No receipts recorded today|No purchases recorded today/);
    }
    // A refresh invalidates the dated memory cohort instead of presenting it as fresh.
    let releaseExplicit;const explicitGate=new Promise(done=>{releaseExplicit=done;});
@@ -180,6 +195,8 @@ try{
     releaseBusiness();await expect(business.locator('#tr-add')).toBeEnabled();await business.close();
    }
   }
+  await checkReviewedCategoryChanges({context,origin,fixture,payments:combinedBudget.payments,childId:combinedBudget.child_id,phone:name==='webkit'});
+  checks.push(name+' '+(name==='webkit'?'phone':'desktop')+': two reviewed purchases recategorized in the mounted merchant ledger');
   await context.close();await browser.close();browser=null;
  }
  console.log(JSON.stringify({checks}));

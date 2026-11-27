@@ -1,4 +1,5 @@
 import Chart from 'chart.js/auto';
+import {createTrajectoryApi} from './api.js';
 import { planningUI } from './planning.js';
 import { chartPresentation } from './chart-theme.js';
 import { outlookUI } from './outlook.js';
@@ -81,14 +82,11 @@ function boot() {
     $('#tr-space-tabs').innerHTML=tabs.map(([key,label])=>`<button type="button" data-scope="${key}" role="tab" aria-selected="${scope===key}">${label}</button>`).join('');
   };
   renderSpaceTabs();
-  const api = async (path, method='GET', body=null, signal=null) => {
-    const headers = {Accept:'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content || ''};
-    if (body && !(body instanceof FormData)) headers['Content-Type']='application/json';
-    const response = await fetch(path,{method,headers,body:body ? body instanceof FormData ? body : JSON.stringify(body) : null,signal});
-    let result; try {result=await response.json();} catch {throw new Error('The server could not complete this request. Please refresh and try again.');}
-    if (!response.ok) {const error=new Error(result.errors ? Object.values(result.errors).flat().join('\n') : result.message || 'Request failed.');error.status=response.status;throw error;}
-    return result;
-  };
+  const api = createTrajectoryApi({
+    tokenMeta:document.querySelector('meta[name="csrf-token"]'),
+    viewerId:root.dataset.viewerId,
+    currentScope:() => JSON.stringify([scope, active, accountFilter]),
+  });
   const notice = (message) => {$('#tr-feedback').textContent=message;$('#tr-feedback').hidden=false;};
   const dashboardPath = (spaceId) => `/trajectory/spaces/${spaceId}/dashboard?range=${reportingRange}&accounting_basis=${accountingBasis}${scope!=='both'&&accountFilter!==null?`&account_id=${accountFilter}`:''}${scenarioId?`&scenario_id=${scenarioId}`:''}${reportingRange==='custom'?`&from=${$('#tr-start').value}&through=${$('#tr-end').value}`:''}&seasonal=${seasonal?1:0}`;
   const withSource = (rows, source) => (rows||[]).map(row=>({...row,space_id:source.id,space_label:source.name}));
@@ -237,8 +235,8 @@ function boot() {
       target?.focus({preventScroll:true});restoringNavigation=false;historyNavigation.sync();
     }});
   const remember=()=>{historyNavigation.push();navigation.push({});$('#tr-back').hidden=false;};
-  const navigate=(view,{primary=false}={})=>{remember();tab=view;if(primary&&view==='analysis')visualFinance.clearExploration();filter={};evidenceRows=null;if(!data||isMetadataContext(data)||scope!=='both'&&isVisualFinanceView(view)){render();void load({reuse:true});}else render();window.scrollTo(0,0);};
-  const ensureFullDashboard=async()=>!isMetadataContext(data)&&!!data||await load({reuse:true,full:true});
+  const navigate=(view,{primary=false}={})=>{remember();tab=view;if(primary&&view==='analysis')visualFinance.clearExploration();filter={};evidenceRows=null;if(!data||isMetadataContext(data)||loadedDashboardContext!==reportContext()||scope!=='both'&&isVisualFinanceView(view)){render();void load({reuse:true});}else render();window.scrollTo(0,0);};
+  const ensureFullDashboard=async()=>!isMetadataContext(data)&&!!data&&loadedDashboardContext===reportContext()||await load({reuse:true,full:true});
   const fetchEvidence=async next=>{const batches=next.ids?.length>5000?Array.from({length:Math.ceil(next.ids.length/5000)},(_,index)=>({...next,ids:next.ids.slice(index*5000,(index+1)*5000)})):[next];return (await Promise.all(batches.map(batch=>api(endpoint('/evidence'),'POST',batch)))).flat();};
   const showTransactions = async (next) => {
     const requestedContext=reportContext();
@@ -268,13 +266,46 @@ function boot() {
   const debtPlanner=debtPlannerUI({getData:()=>data,esc,precise,btn,plot,chart,line,render,requestScenario:(extraCents,spaceId)=>api(endpoint('/debt-scenarios',spaceId),'POST',{extra_cents:extraCents,...(accountFilter!==null&&spaceId===active?{account_id:accountFilter}:{})})});
   let legacyReviewRows=[];
   const reviewDefinitions=()=>{if(!data)return visualFinance.getReport()?.category_definitions??[];const source=data.records??[];return source.filter(record=>record.kind==='category_definition').map(record=>({id:record.id,record_id:record.id,key:record.data.key,label:record.name,parent_key:source.find(parent=>parent.id===record.data.parent_record_id)?.data.key}));};
-  const transactionReview=createTransactionReview({canRefine:row=>reviewDefinitions().some(definition=>definition.parent_key===row.category),getContext:()=>({space_id:active,account_id:accountFilter,from:data?.range.start??visualMetadata?.range.start,through:data?.range.end??visualMetadata?.range.end,program_id:tab==='analysis'?visualFinance.capture().program:null,view:tab}),api,endpoint,esc,precise,onRender:render,onChanged:load,notice,
+  let categoryRefresh = 0;
+  const mountedAnalysisLedger = () => tab === 'analysis' && !!root.querySelector('#tr-content .vf-ledger');
+
+  function renderReviewControls() {
+    if (tab === 'analysis') {
+      if (mountedAnalysisLedger()) visualFinance.patchLedger();
+    } else render();
+  }
+
+  async function refreshSavedCategory({isCurrent = () => true} = {}) {
+    const sequence = ++categoryRefresh;
+    const context = reportContext(), version = loadVersion;
+    rangeSnapshots.clear();
+    dashboardRevision++;
+    evidenceRows = null;
+    assistantFocusedTransaction = null;
+    // An already loaded full dashboard has old transaction rows. Fetch it when
+    // a legacy screen next needs it. The editing catalog contains no ledger rows.
+    if (data && !isMetadataContext(data)) loadedDashboardContext = null;
+    const current = () => sequence === categoryRefresh && context === reportContext()
+      && version === loadVersion && mountedAnalysisLedger() && isCurrent();
+    if (!current()) return true;
+    const refreshed = await visualFinance.refresh({afterSave: true, isCurrent: current});
+    if (!current()) return true;
+    if (!refreshed) return false;
+    visualFinance.patchLedger();
+    transactionReview.synchronize(visualFinance.getVisibleLedgerRows());
+    rememberRangeProjection();
+    historyNavigation.sync();
+    return true;
+  }
+
+  const refreshReview = () => mountedAnalysisLedger() ? refreshSavedCategory() : load();
+  const transactionReview=createTransactionReview({canRefine:row=>reviewDefinitions().some(definition=>definition.parent_key===row.category),getContext:()=>({space_id:active,account_id:accountFilter,from:data?.range.start??visualMetadata?.range.start,through:data?.range.end??visualMetadata?.range.end,program_id:tab==='analysis'?visualFinance.capture().program:null,view:tab}),api,endpoint,esc,precise,onRender:renderReviewControls,onChanged:refreshReview,notice,
     onChangeCategory:categoryChoiceForm,onSaved:(row,category,isCurrent)=>saveTransactionCategory({row,category,targetSpace:active,categoryDefinitions:reviewDefinitions(),api,endpoint,isCurrent})});
   initCompactTransactionList({root,getContext:()=>[reportContext(),tab,visualFinance.capture()]});
   const billsHome=createBillsHome({getReport:()=>data?.monthly_bills??null,esc,precise,onEdit:row=>{const record=data?.records.find(record=>record.id===row.record_id&&record.kind===row.record_kind);if(!record||record.version!==row.version){notice('These bill details changed. Refresh to review them.');return;}remember();recordForm(record.kind,record);},onEvidence:row=>showTransactions({ids:row.evidence_ids}),onManage:()=>navigate('bills'),isCurrent:report=>report?.space_id===active&&scope!=='both'});
   const budgetDetail=createBudgetDetail({root,api,endpoint,getContext:()=>({space_id:active,scope,account_id:accountFilter,month:visualFinance.capture().budgetMonth,program_id:visualFinance.capture().program}),esc,precise,onChanged:load,notice,onEntries:(row,envelopes)=>visualFinance.openBudgetEntries(row,envelopes)});
-  const visualFinance=createVisualFinance({root,getContext:()=>({space_id:active,scope,account_id:accountFilter,from:data?.range.start??visualMetadata?.range.start,through:data?.range.end??visualMetadata?.range.end,today:data?.decision_support?.as_of??visualMetadata?.today,revision:dashboardRevision}),getSpaces:()=>spaces,api,endpoint,esc,precise,chart,transactionReview,homeBills:()=>billsHome.render(),onOpenBudget:(row,envelopes)=>budgetDetail.open(row,envelopes),
-    onBeforeChange:remember,onChange:()=>render(),onChanged:load,onNavigate:(view,rememberStep=true)=>{if(rememberStep)navigate(view);else{tab=view;filter={};evidenceRows=null;render();window.scrollTo(0,0);}},
+  const visualFinance=createVisualFinance({root,getContext:()=>({space_id:active,scope,view:tab,account_id:accountFilter,from:data?.range.start??visualMetadata?.range.start,through:data?.range.end??visualMetadata?.range.end,today:data?.decision_support?.as_of??visualMetadata?.today,revision:dashboardRevision}),getSpaces:()=>spaces,api,endpoint,esc,precise,chart,transactionReview,homeBills:()=>billsHome.render(),onOpenBudget:(row,envelopes)=>budgetDetail.open(row,envelopes),
+    onBeforeChange:remember,onChange:()=>render(),onChanged:load,onCategorySaved:refreshSavedCategory,onNavigate:(view,rememberStep=true)=>{if(rememberStep)navigate(view);else{tab=view;filter={};evidenceRows=null;render();window.scrollTo(0,0);}},
     onReviewTransaction:row=>{if(!data){notice('Editing details are still loading. Try again in a moment.');return;}if(row.editable)transactionForm(row);else void showTransactions({ids:[row.id],economic_costs:true});},
     onEditBudget:()=>navigate('budget-targets'),onAddDefinition:()=>void definitionForm().catch(error=>notice(error.message)),onAsk:()=>assistant.openChat(),onClearAccount:()=>{accountFilter=null;filter={};evidenceRows=null;navigation.length=0;$('#tr-back').hidden=true;void load();},notice});
   const assistant=initTrajectoryAssistant({root,getContext:currentAssistantContext,api,endpoint,notice,onChanged:load,onMatchTransfers:showTransferMatches});
@@ -660,7 +691,15 @@ function boot() {
   function categoryChoiceForm(row) {
     const source=scope==='both'?data.by_space[row.space_id]:data??visualFinance.getReport();
     const labels=Object.fromEntries(reviewDefinitions().map(definition=>[definition.key,definition.label]));
-    dialog('Choose a category',`<p class="tr-subtle">${esc(row.date)} · ${esc(row.merchant)} · ${precise(row.amount_cents)}</p>${transactionIdentityHtml(row,{esc})}${field('category','Category','text',row.category,source.category_options.map(category=>({value:category,label:labels[category]??title(category)})))}<p class="tr-subtle">This changes this purchase’s category only. Its amount, money movement and flags stay the same.</p>`,async values=>{await transactionReview.saveChoice(row,values.get('category'));notice('Category confirmed.');},'Confirm category');
+    dialog('Choose a category',`<p class="tr-subtle">${esc(row.date)} · ${esc(row.merchant)} · ${precise(row.amount_cents)}</p>${transactionIdentityHtml(row,{esc})}${field('category','Category','text',row.category,source.category_options.map(category=>({value:category,label:labels[category]??title(category)})))}<p class="tr-subtle">This changes this purchase’s category only. Its amount, money movement and flags stay the same.</p>`,async values=>{
+      await transactionReview.saveChoice(row,values.get('category'));
+      notice('Category confirmed.');
+      if (mountedAnalysisLedger()) {
+        $('#tr-dialog').close();
+        if (!await refreshSavedCategory()) notice('Category saved. Refresh to update the displayed transactions.');
+        return false;
+      }
+    },'Confirm category');
   }
   function transactionForm(tx) {
     tx=normalizedReviewRow(tx,reviewDefinitions());

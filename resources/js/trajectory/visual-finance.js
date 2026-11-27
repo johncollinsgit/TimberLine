@@ -1,5 +1,5 @@
 import {openSplitEditor} from './split-editor.js';
-import {transactionIdentityHtml, refundMatchLabel, reviewRowKey} from './transaction-review.js';
+import {transactionIdentityHtml, refundMatchLabel, reviewRowKey, saveTransactionCategory} from './transaction-review.js';
 /** A single exploration path: period → source/category → purpose → merchant → editable ledger. */
 export const financeColors = ['#257c77', '#4c83c3', '#db8845', '#9170c4', '#ce668c', '#6e9e54', '#43a4b0', '#bb9a3d', '#6279a6', '#c16e52', '#829252', '#9e71a1'];
 export const financeColor = key => financeColors[[...String(key)].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 0) % financeColors.length];
@@ -179,10 +179,11 @@ export function financeBudgetCompact(row, {future = false} = {}) {
     tag: row.mode === 'income_percentage' ? Number.isSafeInteger(row.rate_bps) ? `${row.rate_bps / 100}% of take-home · est.` : 'Review income rule' : row.partial_period ? 'Dated plan' : future ? 'Planned' : needsSplit ? 'Needs split' : row.uses_parent_budget ? 'Shares parent budget' : exact === null && estimate !== null ? 'Est.' : row.default_from ? 'Previous budget' : row.target_status === 'draft' ? 'Est.' : ''};
 }
 
-export function createVisualFinance({root, getContext, getSpaces = () => [], api, endpoint, esc, precise, chart, onBeforeChange, onChange, onChanged, onNavigate, onReviewTransaction, onEditBudget, onAddDefinition, onClearAccount, onAsk, notice, transactionReview = null, homeBills = () => '', onOpenBudget = null}) {
+export function createVisualFinance({root, getContext, getSpaces = () => [], api, endpoint, esc, precise, chart, onBeforeChange, onChange, onChanged, onCategorySaved = onChanged, onNavigate, onReviewTransaction, onEditBudget, onAddDefinition, onClearAccount, onAsk, notice, transactionReview = null, homeBills = () => '', onOpenBudget = null}) {
   let state = {version: 1, year: null, comparisonYear: null, grain: 'month', basis: 'spending', period: null, direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false, program: null, expandedRefund: null, budgetAccount: null, ledgerSort: 'largest', query: '', page: 1, budgetMonth: null, focusedEntry: null};
   let report = null, envelopes = null, error = null, loading = false, request = 0, ownerContext = null, loadedProjection = null;
-  let busyRow = null, visibleLedgerRows = [];
+  let retainedLedger = null, visibleLedgerRows = [];
+  const categorySaves = new Map();
   const pageSize = 50;
   const stats = (label, value, note, className = '', unknown = null) => `<div class="vf-stat ${className}"><span>${esc(label)}</span><strong>${Number.isSafeInteger(value)||unknown===null?precise(value):esc(unknown)}</strong>${note ? `<small>${esc(note)}</small>` : ''}</div>`;
   const button = (label, action, attrs = '', style = '') => `<button type="button" class="vf-button ${style}" data-action="vf-${action}" ${attrs}>${esc(label)}</button>`;
@@ -190,6 +191,8 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   const contextKey = () => {const c = getContext(); return JSON.stringify([c.space_id, c.account_id, c.from, c.through]);};
   const dates = () => state.period ?? {from: getContext().from, through: getContext().through};
   const projectionKey = (revision = getContext().revision ?? null) => JSON.stringify([contextKey(), revision, dates(), state.year, state.comparisonYear, state.grain, state.basis, state.program, state.budgetMonth]);
+  const ledgerPath = () => JSON.stringify([projectionKey(null), state.direction, state.category, state.subcategory, state.merchantGroup]);
+  const writeKey = row => [row.source_space_id ?? getContext().space_id, row.source_transaction_id ?? row.id, row.version].join(':');
   const monthLabel = month => new Intl.DateTimeFormat('en-US', {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${month}-01T12:00:00Z`));
   const rangeLabel = range => !range ? '' : range.from===range.through ? new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}).format(new Date(range.from+'T12:00:00Z')) : range.from.slice(0,7)===range.through.slice(0,7)&&range.from.endsWith('-01') ? monthLabel(range.from.slice(0,7)) : `${range.from} – ${range.through}`;
   const partialSpending = () => state.basis === 'spending' && report?.summary?.spending_cents == null
@@ -208,13 +211,14 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
 
   function reset() {
     state = {...state, year: null, comparisonYear: null, period: null, direction: null, category: null, subcategory: null, merchantGroup: null, ledger: false, program: null, expandedRefund: null, budgetAccount: null, query: '', page: 1, budgetMonth: null, focusedEntry: null};
-    report = envelopes = error = loadedProjection = null; ownerContext = null; request++;
+    report = envelopes = error = loadedProjection = retainedLedger = null; ownerContext = null; request++;
   }
 
-  async function refresh({background = false, isCurrent = () => true} = {}) {
+  async function refresh({background = false, afterSave = false, isCurrent = () => true} = {}) {
     const c = getContext();
     if (!c.space_id || c.scope === 'both') return false;
-    if (background && (loading || busyRow || ownerContext !== contextKey())) return false;
+    const quiet = background || afterSave;
+    if (quiet && (loading || ownerContext !== contextKey() || (background && categorySaves.size))) return false;
     if (ownerContext !== contextKey()) { reset(); ownerContext = contextKey(); }
     const current = ++request, dateRange = dates();
     state.year ??= Number(dateRange.through.slice(0, 4));
@@ -226,12 +230,12 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     if (state.program) { params.set('program_id', String(state.program)); budgetParams.set('program_id', String(state.program)); }
     const selectedState = JSON.stringify(state);
     const requestedProjection = projectionKey();
-    if (!background) {loading = true; error = null;}
+    if (!quiet) {loading = true; error = null;}
     const responses = await Promise.allSettled([api(endpoint(`/analysis?${params}`)), api(endpoint(`/budget-envelopes?${budgetParams}`))]);
     if (current !== request || ownerContext !== contextKey() || requestedProjection !== projectionKey() || (background && selectedState !== JSON.stringify(state)) || !isCurrent()) return false;
     // A failed quiet read retains the displayed, dated snapshot. An explicit
     // reload continues to show a scoped error rather than substituting data.
-    if (background && responses.some(response => response.status !== 'fulfilled')) return false;
+    if (quiet && responses.some(response => response.status !== 'fulfilled')) return false;
     loading = false;
     if (responses[0].status === 'fulfilled') {report = responses[0].value; error = null;}
     else {report = null; error = responses[0].reason.message;}
@@ -263,7 +267,8 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   }
 
   function breadcrumbs() {
-    const {parent, subcategory, merchant} = financeSelectionRows(report, state);
+    const current = financeSelectionRows(report, state);
+    const {parent, subcategory, merchant} = !current.selected && retainedLedger?.path === ledgerPath() ? retainedLedger : current;
     return `<nav class="vf-breadcrumbs" aria-label="Analysis path">${button('Analysis', 'level', 'data-level="overview"')}<span aria-hidden="true">›</span>${button(rangeLabel(report?.range ?? dates()), 'level', 'data-level="period"')}${parent ? `<span aria-hidden="true">›</span>${button(parent.label ?? categoryLabel(parent.key), 'level', 'data-level="category"')}` : ''}${subcategory ? `<span aria-hidden="true">›</span>${button(subcategory.label, 'level', 'data-level="subcategory"')}` : ''}${merchant ? `<span aria-hidden="true">›</span><span>${esc(merchant.label)}</span>` : ''}${state.ledger ? '<span aria-hidden="true">›</span><span aria-current="page">Transactions</span>' : ''}</nav>`;
   }
 
@@ -306,8 +311,10 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
       if ((!row.editable && !row.attribution_editable) || row.category_editable === false || row.tax_purpose) {
         return `<span>${esc(row.category_label ?? categoryLabel(row.category))}</span>${row.editable ? button('Review', 'review-row', `data-entry="${esc(keyOf(row))}"`) : '<small>Allocated · read only</small>'}`;
       }
-      const options = (report?.category_options ?? []).map(c => `<option value="${esc(c)}" ${c === row.category ? 'selected' : ''}>${esc(categoryLabel(c))}</option>`);
-      return `<label class="vf-inline-category"><span class="sr-only">Category for ${esc(row.merchant)}</span><select data-vf-category="${esc(keyOf(row))}" ${busyRow === keyOf(row) ? 'disabled' : ''}>${options.join('')}</select></label>`;
+      const pending = categorySaves.get(writeKey(row));
+      const value = pending?.entry === keyOf(row) ? pending.category : row.category;
+      const options = (report?.category_options ?? []).map(c => `<option value="${esc(c)}" ${c === value ? 'selected' : ''}>${esc(categoryLabel(c))}</option>`);
+      return `<label class="vf-inline-category"><span class="sr-only">Category for ${esc(row.merchant)}</span><select data-vf-category="${esc(keyOf(row))}" data-vf-version="${esc(row.version)}" ${pending ? 'disabled' : ''}>${options.join('')}</select></label>`;
     };
     const entryHtml = (row, paired = false) => {
       visibleLedgerRows.push(row);
@@ -326,7 +333,7 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
       const expanded = state.expandedRefund === key;
       const sameCategory = purchase.category === refund.category;
       const category = sameCategory ? categoryLabel(purchase.category) : [purchase, refund].map(row => categoryLabel(row.category)).join(' / ');
-      return `<tr class="vf-refund-pair">
+      return `<tr class="vf-refund-pair" data-refund-pair="${esc(key)}">
         <td class="tr-review-date">${esc(purchase.date)}</td>
         <td class="tr-review-merchant"><strong>${esc(purchase.merchant)}</strong><small>Purchase &amp; return · ${precise(Math.abs(purchase.amount_cents))}</small></td>
         <td class="tr-review-category">${esc(category)}</td>
@@ -341,14 +348,79 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     return `<section class="vf-ledger"><div class="vf-section-heading"><div><span class="vf-eyebrow">${filtered.length} recorded entries</span><h2>${esc(heading)}</h2></div><strong>${precise(filtered.reduce((sum, row) => sum + signedAmount(row), 0))}</strong></div>
       <div class="vf-ledger-controls"><label>Find a transaction<input type="search" data-vf-input="query" value="${esc(state.query)}" placeholder="Merchant, date or category"></label>${accountPicker}<label>Sort<select data-vf-input="sort">${sorts.map(([key, text]) => `<option value="${key}" ${state.ledgerSort === key ? 'selected' : ''}>${text}</option>`).join('')}</select></label></div>
       ${focused ? `<div class="vf-selected-purchase"><span>Selected: <strong>${esc(focused.merchant)}</strong> · ${precise(signedAmount(focused))}</span>${button('Ask about this purchase', 'ask-selected')}${button('Clear selection', 'clear-selection')}</div>` : ''}${transactionReview?.renderUndo() ?? ''}
-      <div class="vf-table-wrap tr-review-table-wrap"><table class="vf-table tr-review-table"><caption class="sr-only">${esc(heading)}</caption><thead><tr><th scope="col">Date</th><th scope="col">Merchant</th><th scope="col">Category</th><th scope="col">${costMode ? 'Cost / refund' : 'Amount'}</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>${body || '<tr><td colspan="5">No transactions match this view.</td></tr>'}</tbody></table></div>
+      <div class="vf-table-wrap tr-review-table-wrap"><table class="vf-table tr-review-table"><caption class="sr-only">${esc(heading)}</caption><thead><tr><th scope="col">Date</th><th scope="col">Merchant</th><th scope="col">Category</th><th scope="col">${costMode ? 'Cost / refund' : 'Amount'}</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>${body || '<tr><td colspan="5" class="tr-review-empty">No transactions match this view.</td></tr>'}</tbody></table></div>
       <div class="vf-pagination">${button('Previous', 'page', `data-page="${state.page - 1}" ${state.page === 1 ? 'disabled' : ''}`)}<span>Page ${state.page} of ${pages}</span>${button('Next', 'page', `data-page="${state.page + 1}" ${state.page === pages ? 'disabled' : ''}`)}</div></section>`;
   }
 
+  // Reconcile the existing ledger after a scoped read; the chart controls, search,
+  // scroll container and every unaffected purchase stay mounted.
+  function patchLedger() {
+    const ledger = root.querySelector('.vf-finance .vf-ledger');
+    if (!ledger || !report) return false;
+    const doc = ledger.ownerDocument, selection = financeSelectionRows(report, state);
+    const entries = state.category ? selection.entries : periodLedgerEntries(report);
+    const heading = selection.selected?.label ?? ledger.querySelector('h2').textContent;
+    const template = doc.createElement('template');
+    template.innerHTML = ledgerHtml(entries, heading);
+    const next = template.content.firstElementChild;
+    const tbody = ledger.querySelector('tbody'), newBody = next.querySelector('tbody');
+    const rowKey = tr => tr.dataset.entryKey ?? tr.dataset.refundPair ?? '__empty__';
+    const existing = new Map([...tbody.rows].map(tr => [rowKey(tr), tr]));
+    const wanted = new Set([...newBody.rows].map(rowKey));
+    const pendingFocus = [...categorySaves.values()].find(edit => edit.focused && edit.target.isConnected)?.target;
+    const focus = doc.activeElement === doc.body ? pendingFocus : doc.activeElement;
+    const focusedRow = tbody.contains(focus ?? null) ? focus.closest('tr') : null;
+    const focusedIndex = focusedRow?.sectionRowIndex ?? -1;
+    for (const [key, tr] of existing) if (!wanted.has(key)) tr.remove();
+    let cursor = tbody.firstElementChild;
+    for (const newRow of [...newBody.rows]) {
+      const tr = existing.get(rowKey(newRow)) ?? newRow;
+      if (tr !== newRow && !tr.isEqualNode(newRow)) {
+        tr.className = newRow.className;
+        if (newRow.dataset.listKey) tr.dataset.listKey = newRow.dataset.listKey;
+        for (const [i, cell] of [...tr.cells].entries()) {
+          const fresh = newRow.cells[i];
+          if (!cell.isEqualNode(fresh)) cell.replaceWith(fresh.cloneNode(true));
+        }
+      }
+      if (tr !== cursor) tbody.insertBefore(tr, cursor);
+      cursor = tr.nextElementSibling;
+    }
+    for (const selector of ['.vf-section-heading .vf-eyebrow', '.vf-section-heading h2', '.vf-section-heading > strong', 'caption']) {
+      const current = ledger.querySelector(selector), text = next.querySelector(selector).textContent;
+      if (current.textContent !== text) current.textContent = text;
+    }
+    const trail = root.querySelector('.vf-finance .vf-breadcrumbs');
+    if (trail) {
+      const crumbs = doc.createElement('template');
+      crumbs.innerHTML = breadcrumbs();
+      const fresh = crumbs.content.firstElementChild;
+      if (!trail.isEqualNode(fresh)) trail.replaceChildren(...fresh.childNodes);
+    }
+    for (const selector of ['.vf-pagination','.vf-selected-purchase','.tr-review-undo']) {
+      const current = ledger.querySelector(selector), fresh = next.querySelector(selector);
+      if (current && !fresh) current.remove();
+      else if (fresh && !current) ledger.querySelector('.vf-table-wrap').before(fresh);
+      else if (current && !current.isEqualNode(fresh)) current.replaceChildren(...fresh.childNodes);
+    }
+    if (focusedIndex >= 0 && !focus.isConnected) {
+      const controls = '[data-vf-category]:enabled, [data-action="vf-review-row"]';
+      const rows = [...tbody.rows];
+      const nextControl = [...rows.slice(focusedIndex), ...rows.slice(0, focusedIndex).reverse()].map(tr => tr.querySelector(controls)).find(Boolean);
+      (nextControl ?? ledger.querySelector('[data-vf-input="query"]')).focus({preventScroll: true});
+    }
+    return true;
+  }
+
   function categoryHtml() {
-    const {parent, selected, entries} = financeSelectionRows(report, state);
+    const {parent, subcategory, merchant, selected, entries} = financeSelectionRows(report, state);
+    if (!selected && retainedLedger?.path === ledgerPath()) return ledgerHtml([], retainedLedger.heading);
     if (!selected) return `<section class="vf-empty"><h2>This category changed</h2><p>Its transactions may have moved after a review.</p>${button('Back to the period', 'level', 'data-level="period"')}</section>`;
-    if (state.ledger || !selected.children?.length) return ledgerHtml(entries, selected.label ?? categoryLabel(selected.key));
+    if (state.ledger || !selected.children?.length) {
+      const heading = selected.label ?? categoryLabel(selected.key);
+      retainedLedger = {path: ledgerPath(), heading, parent, subcategory, merchant};
+      return ledgerHtml(entries, heading);
+    }
     const children = selected.children;
     const amountsLabel = children.every(row => row.group_kind === 'merchant') ? 'Merchant amounts' : children.some(row => row.group_kind === 'merchant') ? 'Subcategory and merchant amounts' : 'Subcategory amounts';
     return `<section><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(parent?.label ?? '')}</span><h2>${esc(selected.label)}</h2></div><strong>${precise(selected.amount_cents)}</strong>${button('View all transactions', 'ledger-category')}</div><div class="vf-category-explore"><div class="vf-chart vf-donut"><canvas id="vf-category-chart" role="img" aria-label="${amountsLabel}; select a slice to explore"></canvas></div><div class="vf-slice-list">${children.map(row => `<button type="button" data-action="vf-subcategory" data-key="${esc(row.key)}"><span class="vf-swatch" style="background:${financeColor(row.key)}" aria-hidden="true"></span><span>${esc(row.label)}</span><strong>${precise(row.amount_cents)}</strong><span aria-hidden="true">›</span></button>`).join('')}</div></div></section>`;
@@ -460,24 +532,6 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     await change({...next, ledger: !child.children?.length, page: 1}, false);
   }
 
-  async function saveAttributedCategory(row, category) {
-    const sourceSpace = row.source_space_id ?? getContext().space_id, transaction = row.source_transaction_id ?? row.id;
-    const path = `/transactions/${transaction}/attribution`;
-    const description = await api(endpoint(path, sourceSpace));
-    if (description.version !== row.version) throw new Error('This transaction changed. Refresh before editing it.');
-    const detail = description.lines.find(line => line.detail_id === row.attribution_detail_id)
-      ?? (description.lines.length === 1 ? description.lines[0] : null);
-    if (!detail) throw new Error('Choose the current allocation detail before changing its category.');
-    const definitions = await api(endpoint('/attribution/definitions', detail.space_id));
-    const definition = definitions.category_definitions.find(d => d.key === category && d.active);
-    const parent = definition?.parent_record_id ? definitions.category_definitions.find(d => d.id === definition.parent_record_id) : null;
-    const lines = description.lines.map(line => {
-      const {detail_id, ...values} = line;
-      return line === detail ? {...values, category: parent?.key ?? category, subcategory_record_id: parent ? definition.id : null} : values;
-    });
-    await api(endpoint(path, sourceSpace), 'PUT', {version: description.version, lines});
-  }
-
   async function openAttribution(row) {
     const sourceSpace = row.source_space_id ?? row.space_id ?? getContext().space_id;
     await openSplitEditor({root, row, sourceSpace, api, endpoint, esc, precise, categoryLabel: financeLabel, notice, onChanged});
@@ -530,16 +584,39 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
   async function handleInput(target) {
     if (target.dataset.vfCategory) {
       const row = report?.entries?.find(r => keyOf(r) === target.dataset.vfCategory);
-      if ((!row?.editable && !row?.attribution_editable) || row.tax_purpose || row.category_editable === false) return;
-      const selected = target.value;
-      busyRow = keyOf(row); target.disabled = true;
+      if (!row || (target.dataset.vfVersion && Number(target.dataset.vfVersion) !== row.version)) {
+        if (row) target.value = row.category;
+        notice('This transaction changed. Refresh before editing it.');
+        return;
+      }
+      if ((!row.editable && !row.attribution_editable) || row.tax_purpose || row.category_editable === false) return;
+      const category = target.value, operation = writeKey(row);
+      const pending = categorySaves.get(operation);
+      if (pending) {target.value = pending.entry === keyOf(row) ? pending.category : row.category;return;}
+      const {space_id: targetSpace, scope, view} = getContext(), projection = projectionKey(null);
+      const isCurrent = () => projection === projectionKey(null) && view === getContext().view && scope === getContext().scope;
+      const edit = {entry: keyOf(row), category, target, focused: target.ownerDocument?.activeElement === target};
+      categorySaves.set(operation, edit);
+      target.disabled = true;
+      let saved = false;
       try {
-        const definition = report.category_definitions?.find(d => d.key === selected);
-        if (row.attribution_detail_id || row.detail_id || definition?.parent_key || !row.editable) await saveAttributedCategory(row, selected);
-        else await api(endpoint(`/transactions/${row.id}`), 'PATCH', {version: row.version, category: selected, flow: row.flow, face_punched: row.face_punched, bullshit_spending: row.bullshit_spending, learn: false});
-        notice('Category saved.'); await onChanged();
-      } catch (e) { target.value = row.category; notice(e.message); }
-      finally {busyRow = null; if (target.isConnected) target.disabled = false;}
+        const result = await saveTransactionCategory({row, category, targetSpace, categoryDefinitions: report.category_definitions, api, endpoint, isCurrent});
+        saved = true;
+        const updated = await onCategorySaved({row, category, result, isCurrent});
+        if (isCurrent()) notice(updated === false ? 'Category saved. Refresh to update this list and its totals.' : 'Category saved.');
+      } catch (error) {
+        if (isCurrent()) {
+          if (!saved) target.value = row.category;
+          notice(saved ? 'Category saved. Refresh to update this list and its totals.' : error.message);
+        }
+      } finally {
+        categorySaves.delete(operation);
+        if (target.isConnected) target.disabled = false;
+        if (isCurrent()) for (const control of root.querySelectorAll?.('[data-vf-category]:disabled') ?? []) {
+          const current = report?.entries?.find(entry => keyOf(entry) === control.dataset.vfCategory);
+          if (current && writeKey(current) === operation) control.disabled = false;
+        }
+      }
       return;
     }
     const input = target.dataset.vfInput;
@@ -567,10 +644,10 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     };
   }
 
-  return {render, draw, refresh, reset, openAttribution, openBudgetEntries, getVisibleLedgerRows: () => visibleLedgerRows, handleClick, handleInput, getAssistantContext: assistantContext,
+  return {render, draw, refresh, patchLedger, reset, openAttribution, openBudgetEntries, getVisibleLedgerRows: () => visibleLedgerRows, handleClick, handleInput, getAssistantContext: assistantContext,
     adoptSnapshot(initialReport, initialBudgets) {
       reset();ownerContext=contextKey();report=initialReport;envelopes=initialBudgets;
-      loading=false;busyRow=null;
+      loading=false;
       state.year=report.year;state.comparisonYear=state.year-1;state.grain=report.grain;state.basis=report.scope.basis;state.budgetMonth=envelopes.month;
       loadedProjection=projectionKey();
     },
@@ -587,6 +664,6 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     getReport: () => report,
     getBudgets: () => envelopes,
     hasCurrentSnapshot: () => !!report && !!envelopes && !error && !envelopes.error && !loading && loadedProjection === projectionKey(),
-    isBusy: () => loading || busyRow !== null,
+    isBusy: () => loading || categorySaves.size > 0,
   };
 }

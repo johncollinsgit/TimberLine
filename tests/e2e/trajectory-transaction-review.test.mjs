@@ -83,3 +83,22 @@ test('a reviewed native parent can request a refinement while a reviewed leaf st
  f.ui.synchronize([parent]);await flush();assert.match(f.ui.render(parent),/Suggested: Household items/);assert.equal(f.calls.filter(call=>call.method==='PATCH').length,0);assert.equal(parent.category,'shopping');assert.equal(parent.reviewed,true);
  const leaf=fixture({canRefine:()=>false});leaf.ui.synchronize([{...parent,category:'household_items'}]);await flush();assert.equal(leaf.calls.length,0);
 });
+
+test('legacy bank rows distinguish a saved Christmas purpose from raw Shopping and identify genuine splits', () => {
+  const shopping = {...row, category:'shopping', allocation_details:[{id:21,category:'christmas',subcategory_record_id:null}]};
+  assert.equal(normalizedReviewRow(shopping,[{id:null,key:'other'}]).category,'christmas');
+  shopping.allocation_details.push({id:22,category:'food',subcategory_record_id:31});
+  const split = normalizedReviewRow(shopping,[{id:31,key:'groceries'}]);
+  assert.deepEqual(split.split_categories,['christmas','groceries']);
+  assert.equal(split.attribution_detail_id,undefined);
+});
+
+test('the requested detail ID is authoritative and cannot select another line or space', async () => {
+  const description={version:3,lines:[{detail_id:11,space_id:7,category:'shopping'}, {detail_id:12,space_id:2,category:'groceries'}]};
+  for (const detail_id of [12, 99]) {
+    const calls = [];
+    const api=async(path,method='GET')=>{calls.push(method);return description;};
+    await assert.rejects(()=>saveTransactionCategory({row:{...row,detail_id},category:'christmas',targetSpace:7,api,endpoint:path=>path}),/current allocation detail/);
+    assert.deepEqual(calls,['GET']);
+  }
+});

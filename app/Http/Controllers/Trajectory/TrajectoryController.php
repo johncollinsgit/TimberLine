@@ -35,6 +35,15 @@ class TrajectoryController extends Controller
         return response()->view('trajectory.index', ['spaces' => $access->spaces($request->user())])->header('Cache-Control', 'private, no-store');
     }
 
+    public function sessionToken(Request $request)
+    {
+        abort_unless(config('trajectory.enabled'), 404);
+        abort_unless($request->header('X-Trajectory-Viewer') === (string) $request->user()->getAuthIdentifier(), 403, 'Your signed-in account changed. Reopen this page before saving.');
+
+        return response()->json(['csrf_token' => $request->session()->token()])
+            ->header('Cache-Control', 'no-store, private');
+    }
+
     public function dashboard(Request $request, Space $space, FinanceAccess $access, DashboardService $dashboard)
     {
         $access->authorize($request->user(), $space);
