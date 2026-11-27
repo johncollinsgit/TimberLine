@@ -108,9 +108,11 @@ export function financeBudgetTotals(report) {
   const plans = rows.map(row => overlapping(row) ? null : number(row.target_cents) ?? number(row.planned_cents));
   const remaining = rows.map(row => overlapping(row) ? null : number(row.remaining_cents) ?? number(row.estimated_remaining_cents));
   const sumKnown = values => values.some(value => value !== null) ? values.reduce((sum, value) => sum + (value ?? 0), 0) : null;
+  const remainingSubtotal = sumKnown(remaining);
+  const reserved = number(report?.debt_payoff_reservation?.amount_cents) ?? 0;
   return {
     total: number(report?.summary?.target_cents) ?? sumKnown(plans),
-    left: report?.future ? null : number(report?.summary?.remaining_cents) ?? sumKnown(remaining),
+    left: report?.future ? null : number(report?.summary?.remaining_cents) ?? (remainingSubtotal === null ? null : remainingSubtotal - reserved),
     partialTotal: number(report?.summary?.target_cents) === null && plans.some(value => value === null),
     partialLeft: number(report?.summary?.remaining_cents) === null && remaining.some(value => value === null),
     estimated: rows.some(row => number(row.target_cents) === null && number(row.planned_cents) !== null || number(row.remaining_cents) === null && number(row.estimated_remaining_cents) !== null),
@@ -453,6 +455,12 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     }).join('')}</div>`;
   }
 
+  function payoffReservation() {
+    const reservation = envelopes?.debt_payoff_reservation;
+    if (getContext().account_id || !reservation || !Number.isSafeInteger(reservation.amount_cents) || reservation.amount_cents <= 0) return '';
+    return `<div class="vf-payoff-reservation"><span>Extra debt payoff</span><strong>${esc(precise(reservation.amount_cents))}</strong><small>Reserved in the ${esc(monthLabel(state.budgetMonth))} budget</small></div>`;
+  }
+
   function budgetSummary() {
     if (getContext().account_id || envelopes?.error) return '';
     const totals = financeBudgetTotals(envelopes);
@@ -483,12 +491,12 @@ export function createVisualFinance({root, getContext, getSpaces = () => [], api
     if (error) return `<section class="vf-error" role="alert"><h2>This financial view could not load</h2><p>${esc(error)}</p>${button('Try again', 'retry')}</section>`;
     if (!report) return '<section class="vf-empty" role="status">Loading your financial picture…</section>';
     const covered = coverageHtml();
-    if (view === 'budget') return `<div class="vf-finance" aria-busy="${loading}">${budgetSummary()}${seasonalCards()}<div class="vf-section-heading vf-budget-tools">${programPicker()}<label>Budget month<input type="month" data-vf-input="budget-month" value="${esc(state.budgetMonth)}"></label>${button('Manage targets', 'legacy-budget')}${button('Add category / program', 'definitions')}</div>${envelopeCards()}${savingsGoals()}</div>`;
+    if (view === 'budget') return `<div class="vf-finance" aria-busy="${loading}">${budgetSummary()}${payoffReservation()}${seasonalCards()}<div class="vf-section-heading vf-budget-tools">${programPicker()}<label>Budget month<input type="month" data-vf-input="budget-month" value="${esc(state.budgetMonth)}"></label>${button('Manage targets', 'legacy-budget')}${button('Add category / program', 'definitions')}</div>${envelopeCards()}${savingsGoals()}</div>`;
     const emptyToday = emptyRecordedPeriod();
     const latest = report.coverage?.latest_recorded_on;
     const latestNote = emptyToday ? latest && /^\d{4}-\d{2}-\d{2}$/.test(latest) ? `Bank activity through ${new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',timeZone:'UTC'}).format(new Date(latest+'T12:00:00Z'))}` : 'No bank activity yet' : null;
     const metrics = `<div class="vf-stat-row">${stats('Money coming in', report.summary?.inflow_cents, latestNote??'Sources of funds','',emptyToday?'None recorded':null)}${stats(partialSpending() ? 'Recorded costs' : state.basis === 'spending' ? 'Purchases & costs' : 'Bank cash out', spendingValue(), partialSpending() ? 'Tax payment split pending' : latestNote??rangeLabel(report.range),'',emptyToday?'None recorded':null)}${!getContext().account_id && Number.isSafeInteger(envelopes?.summary?.remaining_cents) ? stats('Budget left this month', envelopes.summary.remaining_cents, monthLabel(state.budgetMonth), 'vf-budget-stat') : ''}</div>`;
-    if (view === 'overview') {const budgets = `<section class="vf-budget-preview"><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(monthLabel(state.budgetMonth))}</span><h2>What’s left in your budgets</h2></div>${programPicker()}${button('All budgets', 'navigate', 'data-view="budget"')}</div>${envelopeCards(6)}</section>`;return `<div class="vf-finance" aria-busy="${loading}">${metrics}${seasonalCards()}${overviewActions()}${piesHtml()}${budgets}${trendHtml()}${homeBills()}${covered}</div>`;}
+    if (view === 'overview') {const budgets = `<section class="vf-budget-preview"><div class="vf-section-heading"><div><span class="vf-eyebrow">${esc(monthLabel(state.budgetMonth))}</span><h2>What’s left in your budgets</h2></div>${programPicker()}${button('All budgets', 'navigate', 'data-view="budget"')}</div>${envelopeCards(6)}</section>`;return `<div class="vf-finance" aria-busy="${loading}">${metrics}${payoffReservation()}${seasonalCards()}${overviewActions()}${piesHtml()}${budgets}${trendHtml()}${homeBills()}${covered}</div>`;}
     return `<div class="vf-finance" aria-busy="${loading}">${controls()}${breadcrumbs()}${state.category ? categoryHtml() : state.ledger ? ledgerHtml(periodLedgerEntries(report), 'Period transactions') : `${metrics}${trendHtml()}${piesHtml()}`}${covered}</div>`;
   }
 

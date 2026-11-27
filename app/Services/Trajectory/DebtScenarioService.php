@@ -7,7 +7,7 @@ use Carbon\CarbonImmutable;
 /** Read-only scenarios. Inputs must already belong to one authorized financial space. */
 class DebtScenarioService
 {
-    public function compare(array $debts, CarbonImmutable $from, int $extraCents = 0, array $missing = [], bool $complete = false): array
+    public function compare(array $debts, CarbonImmutable $from, int $extraCents = 0, array $missing = [], bool $complete = false, bool $equalExtra = false): array
     {
         if ($extraCents < 0 || $extraCents > 1000000000000) {
             throw new \InvalidArgumentException('Use a nonnegative monthly extra within the supported scenario range.');
@@ -64,8 +64,8 @@ class DebtScenarioService
             return [...$base, 'status' => 'setup_required'];
         }
         $scenarios = [];
-        foreach (['minimum', 'snowball', 'avalanche', 'custom'] as $method) {
-            $scenarios[] = $this->simulate($activeDebts, $from, $method, $method === 'custom' ? $extraCents : 0);
+        foreach ($equalExtra ? ['snowball', 'avalanche'] : ['minimum', 'snowball', 'avalanche', 'custom'] as $method) {
+            $scenarios[] = $this->simulate($activeDebts, $from, $method, $equalExtra || $method === 'custom' ? $extraCents : 0);
         }
 
         return [...$base, 'status' => 'estimated', 'scenarios' => $scenarios, 'assumptions' => [

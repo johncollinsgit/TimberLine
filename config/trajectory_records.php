@@ -175,6 +175,7 @@ return [
         'reserve_shares' => ['label' => 'Reserve received shares for this need’s unpaid bills', 'type' => 'boolean', 'required' => true],
     ],
     'medical_bill' => [
+        'rate_millis' => ['label' => 'Verified annual interest rate (%)', 'type' => 'rate', 'required' => false],
         'medical_need_record_id' => ['label' => 'Medical need', 'type' => 'medical_need_record', 'required' => true],
         'provider' => ['label' => 'Provider', 'type' => 'text', 'required' => true],
         'reference' => ['label' => 'Invoice reference (unique per provider)', 'type' => 'text', 'required' => true],
@@ -316,6 +317,7 @@ return [
         ],
     ],
     'debt' => [
+        'maturity_on' => ['label' => 'Contract maturity date (optional)', 'type' => 'date', 'required' => false],
         'payment_cadence' => ['label' => 'Loan payment cadence', 'type' => 'select', 'required' => false, 'choices' => ['monthly', 'biweekly', 'weekly']],
         'interest_method' => ['label' => 'Interest calculation', 'type' => 'select', 'required' => false, 'choices' => ['monthly', 'actual_365']],
         'interest_paid_through' => ['label' => 'Interest paid through (daily interest loans)', 'type' => 'date', 'required' => false],
@@ -388,7 +390,17 @@ return [
             'required' => false,
         ],
     ],
+    'receipt_payment_plan' => [
+        'receipt_month' => ['label' => 'Month received', 'type' => 'month', 'required' => true],
+        'source_key' => ['label' => 'Deposit source', 'type' => 'text', 'required' => true],
+        'installments' => ['label' => 'Number of monthly payments', 'type' => 'integer', 'required' => true],
+    ],
     'asset' => [
+        'plan_sale_proceeds_cents' => [
+            'label' => 'Expected cash after selling costs and debt (optional)',
+            'type' => 'money',
+            'required' => false,
+        ],
         'value_cents' => [
             'label' => 'Current value',
             'type' => 'money',
@@ -414,6 +426,8 @@ return [
         'linked_business_space_id' => ['label' => 'Business equity: linked business space ID', 'type' => 'integer', 'required' => false],
     ],
     'metal' => [
+        'plan_net_per_item_cents' => ['label' => 'Net resale offer per item (optional)', 'type' => 'money', 'required' => false],
+        'plan_sale_quote_on' => ['label' => 'Date of resale offer', 'type' => 'date', 'required' => false],
         'metal' => [
             'label' => 'Metal',
             'type' => 'select',

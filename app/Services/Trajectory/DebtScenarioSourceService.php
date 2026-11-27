@@ -5,12 +5,13 @@ namespace App\Services\Trajectory;
 use App\Models\Trajectory\Account;
 use App\Models\Trajectory\Record;
 use App\Models\Trajectory\Space;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 
 /** Builds one authorized space's inputs; no balances or payment instructions are changed. */
 class DebtScenarioSourceService
 {
-    public function build(Space $space, int $extraCents = 0, ?int $accountId = null): array
+    public function build(Space $space, int $extraCents = 0, ?int $accountId = null, ?User $planViewer = null): array
     {
         $today = CarbonImmutable::now($space->timezone)->startOfDay();
         $accounts = Account::where('space_id', $space->id)->get();
@@ -18,7 +19,13 @@ class DebtScenarioSourceService
             abort_unless($accounts->contains('id', $accountId), 404);
             $accounts = $accounts->where('id', $accountId);
         }
-        $records = Record::where('space_id', $space->id)->where('active', true)->get();
+        $records = Record::where('space_id', $space->id)->where('active', true)
+            ->when($planViewer, fn ($q) => $q->whereIn('kind', ['debt', 'medical_need', 'medical_bill', 'medical_payment', 'medical_share',
+                'medical_membership', 'interest_statement', 'lender_interest_ytd', 'debt_balance_observation', 'payment_notice']))->get();
+        if ($planViewer) {
+            abort_unless($space->kind === 'household' && $accountId === null, 422);
+            app(HouseholdDebtPlanService::class)->applyBalanceEvidence($accounts, $records, $today);
+        }
         $terms = $records->where('kind', 'debt')->filter(fn ($r) => $r->data['confirmed'] ?? false);
         $debts = [];
         $missing = [];
@@ -70,10 +77,13 @@ class DebtScenarioSourceService
                     || ($source['payment_cents'] ?? 0) <= 0)) {
                     $missing[] = $medical['name'].' — verify its confirmed payment and actual next unpaid due date';
                 }
-                $debts[] = [...$medical, 'id' => 'medical-'.$medical['id'], 'rate_millis' => 0,
+                $debts[] = [...$medical, 'id' => 'medical-'.$medical['id'],
                     'next_due_on' => $due,
                     'payment_cadence' => 'monthly', 'interest_method' => 'monthly'];
             }
+        }
+        if ($planViewer) {
+            return app(HouseholdDebtPlanService::class)->build($space, $planViewer, $accounts, $records, $debts, $missing, $today, $extraCents);
         }
         // Having terms for every recorded account does not establish a full debt inventory.
         $complete = false;

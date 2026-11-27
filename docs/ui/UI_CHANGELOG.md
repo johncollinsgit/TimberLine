@@ -1,3 +1,23 @@
+## 2026-11-27 · Plan Trajectory
+
+The household Plan shows a monthly take-home target, dated bank balances and a
+comparison of month-to-date spending with the same dates in earlier years.
+Medical deposits can fund a saved payment schedule. A household can also model
+using bank cash or selling selected assets for a limited period. Previous
+months’ spending is the default forecast when available. Households can also
+select their saved variable spending estimate.
+
+Debt payoff lists cards, loans and provider balances with their dated terms.
+Households can compare payoff orders and apply one monthly extra to Budget.
+Changing the active scenario replaces the monthly reservation.
+
+## 2026-11-27 · Analysis report controls
+
+The report dates sit below the title. Desktop groups account, period and chart
+interval in one toolbar. Report options holds the comparison years, spending
+basis, program and category management. On phones, Dates & view contains the
+same settings in one panel.
+
 ## 2026-11-26 · Keep transaction review in place
 
 Changing a payment’s category in Analysis updates the current ledger. A payment

@@ -11,6 +11,7 @@ use App\Services\Trajectory\DashboardService;
 use App\Services\Trajectory\FinanceAccess;
 use App\Services\Trajectory\WorkspaceService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class PlanningController extends Controller
 {
@@ -115,7 +116,9 @@ class PlanningController extends Controller
             'income_categories' => 'sometimes|array|max:60', 'income_categories.*' => 'required|string|max:80',
             'income_expectations' => 'sometimes|array|max:60', 'income_expectations.*' => 'required|integer|min:0|max:100000000000',
             'flexible_monthly_cents' => 'sometimes|nullable|integer|min:0|max:100000000000',
-            'debt_extra_cents' => 'sometimes|integer|min:0|max:100000000000', 'debt_target_months' => 'sometimes|integer|min:1|max:600',
+            'debt_payoff_method' => ['required_with:debt_payoff_version', Rule::in(['minimum', 'avalanche', 'snowball', 'custom'])],
+            'debt_payoff_version' => 'required_with:debt_payoff_method|integer|min:0',
+            'debt_extra_cents' => 'required_with:debt_payoff_method|integer|min:0|max:100000000000', 'debt_target_months' => 'sometimes|integer|min:1|max:600',
             'tax_profile' => 'sometimes|array:state,federal_treatment,tax_year,industry',
             'tax_profile.state' => 'required_with:tax_profile|string|size:2|regex:/^[A-Z]{2}$/',
             'tax_profile.federal_treatment' => 'required_with:tax_profile|in:unknown,sole_proprietor,single_member_llc,partnership,s_corporation,c_corporation',
@@ -128,9 +131,9 @@ class PlanningController extends Controller
         foreach (array_keys($data['income_expectations'] ?? []) as $key) {
             abort_unless(in_array($key, [...$workspaces->categories($space), ...array_keys($data['income_categories'] ?? [])], true), 422, 'Choose an income category from this space.');
         }
-        $workspaces->save($request->user(), $space, $data);
+        $payoff = $workspaces->save($request->user(), $space, $data);
 
-        return response()->json(['ok' => true]);
+        return response()->json(['ok' => true, ...($payoff !== null ? ['debt_payoff' => $payoff] : [])]);
     }
 
     public function assign(Request $request, Space $space, Account $account, WorkspaceService $workspaces)
@@ -166,9 +169,12 @@ class PlanningController extends Controller
     public function debtScenarios(Request $request, Space $space, FinanceAccess $access)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['extra_cents' => 'required|integer|min:0|max:100000000000', 'account_id' => 'sometimes|nullable|integer|min:1']);
+        $data = $request->validate(['extra_cents' => 'required|integer|min:0|max:100000000000', 'account_id' => 'sometimes|nullable|integer|min:1',
+            'view' => 'sometimes|in:household_plan']);
+        $plan = ($data['view'] ?? null) === 'household_plan';
+        abort_if($plan && ($space->kind !== 'household' || isset($data['account_id'])), 422, 'Select the whole household to compare your debt plan.');
 
-        return response()->json(app(\App\Services\Trajectory\DebtScenarioSourceService::class)->build($space, (int) $data['extra_cents'], isset($data['account_id']) ? (int) $data['account_id'] : null))->header('Cache-Control', 'private, no-store');
+        return response()->json(app(\App\Services\Trajectory\DebtScenarioSourceService::class)->build($space, (int) $data['extra_cents'], isset($data['account_id']) ? (int) $data['account_id'] : null, $plan ? $request->user() : null))->header('Cache-Control', 'private, no-store');
     }
 
     public function businesses(Request $request, FinanceAccess $access)

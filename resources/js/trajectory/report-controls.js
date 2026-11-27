@@ -1,39 +1,150 @@
-/** One set of real controls: an anchored phone popover, the full desktop toolbar. */
+/** Move the actual report controls between the toolbar and the compact options sheet. */
 export function initReportControls(root) {
-  const doc=root.ownerDocument,win=doc.defaultView,compact=win.matchMedia('(max-width: 900px)');
-  const panel=root.querySelector('#tr-report-controls'),trigger=root.querySelector('#tr-date-toggle'),actions=root.querySelector('#tr-mobile-top-actions');
-  if(!panel||!trigger||!actions)return {sync(){},destroy(){}};
-  const context=root.querySelector('#tr-context-controls'),analysis=root.querySelector('#tr-analysis-controls'),period=root.querySelector('#tr-mobile-period-label');
-  const permanent=[],dynamic=[];let opened=false;
-  const keep=(node,list)=>{if(!node)return;const marker=doc.createComment('report-control-position');node.before(marker);list.push({node,marker});};
-  for(const node of [root.querySelector('[data-action="vf-inbox"]'),root.querySelector('#tr-add'),trigger,root.querySelector('#tr-space-tabs'),root.querySelector('#tr-company-label')])keep(node,permanent);
-  const restore=items=>items.forEach(({node,marker})=>{if(marker.isConnected){if(marker.nextSibling!==node)marker.after(node);}else node.remove();});
-  const updateCaption=()=>{if(!period)return;const dates=root.querySelector('#tr-context')?.textContent.split(' · ')[0]??'',label=root.querySelector('#tr-company-label'),company=!label?.hidden?root.querySelector('#tr-company')?.selectedOptions[0]?.textContent?.trim():null;period.textContent=company?`${company} · ${dates}`:dates;period.title=period.textContent;};
-  function close(focus=true){if(!opened)return;opened=false;sync();if(focus)trigger.focus({preventScroll:true});}
-  function sync(){
-    const phone=compact.matches;
-    if(!phone)opened=false;
-    restore(dynamic);dynamic.length=0;
-    if(phone){
-      for(const {node} of permanent){const destination=node.matches('#tr-space-tabs,#tr-company-label')?context:actions;if(node.parentNode!==destination)destination.append(node);}
-      for(const node of root.querySelectorAll('#tr-content .vf-controls,#tr-content .vf-section-heading>label,#tr-content .vf-section-heading>[data-action="vf-legacy-budget"],#tr-content .vf-section-heading>[data-action="vf-definitions"]')){keep(node,dynamic);analysis.append(node);}
-    }else restore(permanent);
-    panel.hidden=phone&&!opened;trigger.setAttribute('aria-expanded',String(opened));
-    if(phone){panel.setAttribute('role','dialog');panel.setAttribute('aria-labelledby','tr-report-controls-title');}
-    else{panel.removeAttribute('role');panel.removeAttribute('aria-labelledby');}
-    panel.toggleAttribute('data-open',phone&&opened);
-    updateCaption();
+  const doc = root.ownerDocument;
+  const compact = doc.defaultView.matchMedia('(max-width: 900px)');
+  const find = selector => root.querySelector(selector);
+  const panel = find('#tr-report-controls');
+  const trigger = find('#tr-date-toggle');
+  const done = find('#tr-date-close');
+  const options = find('#tr-report-options');
+  const optionsToggle = find('#tr-options-toggle');
+  const actions = find('#tr-mobile-top-actions');
+  const context = find('#tr-context-controls');
+  const analysis = find('#tr-analysis-controls');
+  const grouping = find('#tr-grouping-controls');
+  const caption = find('#tr-mobile-period-label');
+  const content = find('#tr-content');
+  const range = find('#tr-range');
+  const positions = new Map();
+  const headerActions = [find('[data-action="vf-inbox"]'), find('#tr-add'), trigger];
+  const scope = find('#tr-space-tabs');
+  let sheetOpen = false;
+  let optionsOpen = false;
+
+  function move(node, destination) {
+    if (node.parentNode === destination) return;
+    if (!positions.has(node)) {
+      const marker = doc.createComment('report control');
+      node.before(marker);
+      positions.set(node, marker);
+    }
+    destination.append(node);
   }
-  const toggle=()=>{if(!compact.matches)return;if(opened){close();return;}opened=true;sync();(panel.querySelector('#tr-range [aria-pressed="true"]')||panel.querySelector('button')).focus({preventScroll:true});};
-  const escape=event=>{if(opened&&event.key==='Escape'){event.preventDefault();close();}};
-  const outside=event=>{if(opened&&!panel.contains(event.target)&&!trigger.contains(event.target))close(false);};
-  const focusOutside=event=>{if(opened&&!panel.contains(event.target)&&!trigger.contains(event.target))close(false);};
-  const choose=event=>{if(event.target.closest('[data-range]:not([data-range="custom"]),[data-scope],#tr-refresh'))close();};
-  const observer=new win.MutationObserver(updateCaption);
-  observer.observe(root.querySelector('#tr-context'),{childList:true,subtree:true,characterData:true});
-  trigger.addEventListener('click',toggle);root.querySelector('#tr-date-close').addEventListener('click',closeClicked);
-  doc.addEventListener('keydown',escape);doc.addEventListener('pointerdown',outside);doc.addEventListener('focusin',focusOutside);panel.addEventListener('click',choose);compact.addEventListener('change',sync);
-  function closeClicked(){close();}
+
+  function restore(node) {
+    const marker = positions.get(node);
+    if (!marker) return;
+    if (marker.isConnected) marker.replaceWith(node);
+    else node.remove();
+    positions.delete(node);
+  }
+
+  function updateCaption() {
+    const dates = find('#tr-context').textContent.split(' · ')[0];
+    const company = find('#tr-company-label').hidden ? '' : find('#tr-company').selectedOptions[0]?.textContent.trim();
+    caption.textContent = company ? `${company} · ${dates}` : dates;
+    caption.title = caption.textContent;
+  }
+
+  function visibility() {
+    const phone = compact.matches;
+    panel.hidden = phone && !sheetOpen;
+    panel.toggleAttribute('data-open', phone && sheetOpen);
+    options.hidden = !phone && !optionsOpen;
+    optionsToggle.hidden = phone;
+    trigger.setAttribute('aria-expanded', String(phone && sheetOpen));
+    optionsToggle.setAttribute('aria-expanded', String(!phone && optionsOpen));
+    if (phone) {
+      panel.setAttribute('role', 'dialog');
+      panel.setAttribute('aria-labelledby', 'tr-report-controls-title');
+    } else {
+      panel.removeAttribute('role');
+      panel.removeAttribute('aria-labelledby');
+    }
+  }
+
+  function sync() {
+    const focus = doc.activeElement;
+    const ownedFocus = panel.contains(focus) || headerActions.includes(focus) || scope.contains(focus);
+    // A report render replaces its source content. Discard the previous controls
+    // along with their source markers before mounting the new report's inputs.
+    for (const [node, marker] of positions) if (!marker.isConnected) restore(node);
+    const controls = content.querySelector('.vf-controls');
+    if (controls) move(controls, analysis);
+    const interval = analysis.querySelector('.vf-segmented');
+    if (interval) move(interval, grouping);
+    grouping.hidden = !grouping.querySelector('.vf-segmented');
+
+    const budgetControls = '.vf-section-heading>label, .vf-section-heading>[data-action="vf-legacy-budget"], .vf-section-heading>[data-action="vf-definitions"]';
+    if (compact.matches) {
+      for (const action of headerActions) move(action, actions);
+      move(scope, context);
+      for (const node of content.querySelectorAll(budgetControls)) move(node, analysis);
+    } else {
+      for (const node of [...headerActions, scope]) restore(node);
+      for (const node of [...analysis.children]) if (!node.matches('.vf-controls')) restore(node);
+    }
+    visibility();
+    updateCaption();
+    if (!ownedFocus || doc.activeElement === focus) return;
+    // Keep keyboard focus on the corresponding picker when report data arrives.
+    const key = ['vfInput','grain','action'].find(key => focus.dataset[key]);
+    const replacement = focus.isConnected ? focus : key && [...panel.querySelectorAll('select,button')].find(node => node.dataset[key] === focus.dataset[key]);
+    if (replacement?.getClientRects().length) replacement.focus({preventScroll:true});
+    else if (compact.matches && !sheetOpen) trigger.focus({preventScroll:true});
+  }
+
+  function close(returnFocus = true) {
+    if (!sheetOpen && !optionsOpen) return;
+    const opener = sheetOpen ? trigger : optionsToggle;
+    sheetOpen = false;
+    optionsOpen = false;
+    visibility();
+    if (returnFocus) opener.focus({preventScroll:true});
+  }
+
+  function toggleSheet() {
+    if (sheetOpen) {close(); return;}
+    sheetOpen = true;
+    visibility();
+    range.focus({preventScroll:true});
+  }
+  function toggleOptions() {
+    optionsOpen = !optionsOpen;
+    visibility();
+  }
+  function escape(event) {
+    if ((sheetOpen || optionsOpen) && event.key === 'Escape' && !event.defaultPrevented) {
+      event.preventDefault();
+      close();
+    }
+  }
+  function outside(event) {
+    if (sheetOpen && !panel.contains(event.target) && !trigger.contains(event.target)) close(false);
+    else if (optionsOpen && !options.contains(event.target) && !optionsToggle.contains(event.target)) close(false);
+  }
+  function choose(event) {
+    if (sheetOpen && event.target.closest('[data-scope],#tr-refresh')) close();
+  }
+  function setRange(event) {
+    if (sheetOpen && event.target === range && range.value !== 'custom') close();
+  }
+  function resize() {close(false); sync();}
+  function finish() {close();}
+  const observer = new doc.defaultView.MutationObserver(updateCaption);
+  observer.observe(find('#tr-context'), {childList:true, subtree:true, characterData:true});
+  const bindings = [
+    [trigger, 'click', toggleSheet], [done, 'click', finish], [optionsToggle, 'click', toggleOptions],
+    [doc, 'keydown', escape], [doc, 'pointerdown', outside], [doc, 'focusin', outside],
+    [panel, 'click', choose], [panel, 'change', setRange], [compact, 'change', resize],
+  ];
+  for (const [node, type, handler] of bindings) node.addEventListener(type, handler);
   sync();
-  return {sync,close,destroy(){close(false);restore(dynamic);restore(permanent);panel.hidden=false;observer.disconnect();trigger.removeEventListener('click',toggle);root.querySelector('#tr-date-close').removeEventListener('click',closeClicked);doc.removeEventListener('keydown',escape);doc.removeEventListener('pointerdown',outside);doc.removeEventListener('focusin',focusOutside);panel.removeEventListener('click',choose);compact.removeEventListener('change',sync);}};
+  return {sync, close, destroy() {
+    for (const [node, type, handler] of bindings) node.removeEventListener(type, handler);
+    observer.disconnect();
+    close(false);
+    for (const node of positions.keys()) restore(node);
+    panel.hidden = false;
+  }};
 }

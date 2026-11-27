@@ -275,15 +275,17 @@ class BudgetEnvelopeService
         $cashReportsOverlap = $summaryRows->contains(fn ($row) => in_array('cash_reports_overlap', $row['reasons'], true)
             || ($row['status'] === 'overlapping_targets' && $row['reported_cash_as_of'] !== null));
         $reportedCashTotal = $cashReportsOverlap ? null : (int) $summaryRows->sum('reported_cash_spent_cents');
+        $payoff = $space->kind === 'household' && $programId === null ? app(DebtPayoffPlanService::class)->reservation($space, $month) : null;
 
         return ['month' => $month, 'range' => ['from' => $start->toDateString(), 'through' => $end->toDateString()], 'program_id' => $programId,
             'as_of' => $today->toDateString(), 'actual_through' => $actualThrough, 'future' => $future,
+            'debt_payoff_reservation' => $payoff,
             'seasonal_spending' => $space->kind === 'household' && $programId === null
                 ? $this->seasonalSpending($start, $actualThrough, $all, $accounts, $catalog) : [],
             'rows' => $rows, 'summary' => ['spent_cents' => $hasActuals && ! $cashReportsOverlap ? -(int) $current->sum('amount_cents') + $reportedCashTotal : null,
                 'bank_spent_cents' => $hasActuals ? -(int) $current->sum('amount_cents') : null, 'reported_cash_spent_cents' => $reportedCashTotal, 'pending_cents' => -(int) $committed->sum('amount_cents'),
                 'target_cents' => $summaryRows->isEmpty() || $summaryRows->contains('target_cents', null) ? null : (int) $summaryRows->sum('target_cents'),
-                'remaining_cents' => ! $complete || $summaryRows->isEmpty() || $summaryRows->contains('remaining_cents', null) ? null : (int) $summaryRows->sum('remaining_cents')],
+                'remaining_cents' => ! $complete || $summaryRows->isEmpty() || $summaryRows->contains('remaining_cents', null) ? null : (int) $summaryRows->sum('remaining_cents') - ($payoff['amount_cents'] ?? 0)],
             'coverage' => ['complete' => false, 'costs_resolved' => $complete, 'range_covered' => $covered, 'has_recorded_activity' => $monthEntries->isNotEmpty(), 'notes' => ['Category allowances are plans, not available bank cash.', 'Pending purchases reserve budget until settled or removed. Missing history can change remaining amounts.', 'Ordinary categories reset monthly. Explicit funds carry their approved opening allowance and recorded activity.']],
             'program_options' => $programs->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->values()->all()];
     }

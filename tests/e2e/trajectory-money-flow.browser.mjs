@@ -104,7 +104,10 @@ try{
     await page.locator('#tr-content:not([aria-busy="true"])').waitFor();
     assert.equal(dashboardReads.length,beforeBack[0],'Restoring another visual period/grain never reloads the dashboard');
     assert.equal(analysisReads.length,beforeBack[1]+1,'A different restored projection is fetched, rather than relabeling stale data');
-   }else await expect(page.locator('#tr-content .vf-controls')).toBeVisible();
+   }else{
+    await expect(page.locator('#tr-grouping-controls .vf-segmented')).toBeVisible();
+    await expect(page.locator('#tr-analysis-controls .vf-controls')).toBeHidden();
+   }
    // The compact Home is covered by the visual-finance browser. Preserve this
    // older forecast's lazy-chart and details coverage under its new tool entry.
    await navigateSection('Detailed forecast');

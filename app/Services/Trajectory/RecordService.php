@@ -51,6 +51,15 @@ class RecordService
                 $rules[$key][] = 'after_or_equal:effective_on';
             }
         }
+        if ($kind === 'metal') {
+            $rules['plan_net_per_item_cents'][] = 'required_with:plan_sale_quote_on';
+            $rules['plan_sale_quote_on'][] = 'required_with:plan_net_per_item_cents';
+            $rules['plan_sale_quote_on'][] = 'before_or_equal:'.now($space->timezone)->toDateString();
+        }
+        if ($kind === 'receipt_payment_plan') {
+            abort_unless($space->kind === 'household', 422, 'Receipt payment plans belong to a household.');
+            $rules['installments'] = ['required', 'integer', 'between:1,1200'];
+        }
         if ($kind === 'budget') {
             $rules['supersedes_record_ids.*'] = ['required', 'integer', 'min:1', 'distinct', Rule::exists('trajectory_records', 'id')->where('space_id', $space->id)->where('kind', 'budget')->where('active', true)];
             $rules['reported_cash_spent_cents'][] = 'required_with:reported_cash_as_of';
@@ -261,6 +270,19 @@ class RecordService
             $lockedData = $this->validate($space, $kind, [...$data, ...$admission]);
             if (in_array($kind, ['tax_remittance', 'transaction_source_identity'], true)) {
                 $data = $lockedData;
+            }
+            if ($kind === 'receipt_payment_plan') {
+                $source = collect(app(HouseholdTrajectoryService::class)->receiptGroups($space))
+                    ->where('month', $data['receipt_month'])->firstWhere('source_key', $data['source_key']);
+                abort_unless($source, 422, 'Choose a month and source with received household deposits.');
+                $existing = Record::where('space_id', $space->id)->where('kind', $kind)->where('active', true)
+                    ->lockForUpdate()->get()->first(fn ($item) => $item->data['receipt_month'] === $data['receipt_month']
+                        && $item->data['source_key'] === $data['source_key']);
+                if ($existing && $existing->id !== $record?->id) {
+                    abort_unless(! $record && $existing->data == $data, 409, 'These receipts already have a payment plan. Edit that plan.');
+
+                    return $existing;
+                }
             }
             if ($kind === 'company_support_source') {
                 app(FinanceAccess::class)->authorize($user, Space::where('kind', 'business')->findOrFail($data['business_space_id']));

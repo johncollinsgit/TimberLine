@@ -21,10 +21,66 @@
         </aside>
         <div class="tr-workspace">
         <div class="tr-mobile-bar"><a class="tr-mobile-brand" href="{{ $trajectoryEntry }}"><span class="tr-logo" aria-hidden="true">↗</span>trajectory<span>.</span></a><div id="tr-mobile-top-actions"></div><button type="button" id="tr-mobile-menu" class="tr-mobile-menu" aria-label="Open navigation" aria-controls="tr-mobile-drawer" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6H20M4 12H20M4 18H20"/></svg></button></div>
-        <header class="tr-header"><div class="tr-page-heading"><div class="tr-page-title-group"><button id="tr-back" type="button" aria-label="Back to previous view" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 5-7 7 7 7M7 12h14"/></svg><span>Back</span></button><h1 id="tr-page-title">Home</h1></div><span id="tr-mobile-period-label"></span></div><div class="tr-actions"><div id="tr-space-tabs" class="tr-space-tabs" role="tablist" aria-label="Finance view"></div><label id="tr-company-label" hidden>Organization <select id="tr-company"></select></label><button type="button" class="tr-icon-action" data-action="vf-inbox" aria-label="Open expense notifications" title="Expense notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span class="tr-action-text">Notifications</span></button><button id="tr-add" class="tr-primary tr-icon-action" aria-label="Add to your plan" title="Add to your plan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="tr-action-text">＋ Add to your plan</span></button><button type="button" id="tr-date-toggle" class="tr-date-toggle tr-icon-action" aria-label="Dates and view options" aria-controls="tr-report-controls" aria-expanded="false" aria-haspopup="dialog" title="Dates and view options"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2ZM7 2v5M17 2v5M3 10h18M7 14h3M14 14h3M7 17h3"/></svg></button></div></header>
+        <header class="tr-header">
+            <div class="tr-heading-main">
+                <button id="tr-back" type="button" aria-label="Back to previous view" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 5-7 7 7 7M7 12h14"/></svg><span>Back</span>
+                </button>
+                <div class="tr-page-heading">
+                    <h1 id="tr-page-title">Home</h1>
+                    <div id="tr-context">Loading your financial picture…</div>
+                    <span id="tr-mobile-period-label"></span>
+                </div>
+            </div>
+            <div class="tr-header-actions tr-actions">
+                <div id="tr-space-tabs" class="tr-space-tabs" role="tablist" aria-label="Finance view"></div>
+                <button type="button" class="tr-icon-action" data-action="vf-inbox" aria-label="Open expense notifications" title="Expense notifications">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span class="tr-action-text">Notifications</span>
+                </button>
+                <button type="button" id="tr-add" class="tr-primary tr-icon-action" aria-label="Add to your plan" title="Add to your plan">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="tr-action-text">Add to your plan</span>
+                </button>
+                <button type="button" id="tr-date-toggle" class="tr-date-toggle tr-icon-action" aria-label="Dates and view options" aria-controls="tr-report-controls" aria-expanded="false" aria-haspopup="dialog" title="Dates and view options">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2ZM7 2v5M17 2v5M3 10h18M7 14h3M14 14h3M7 17h3"/></svg>
+                </button>
+            </div>
+        </header>
         <div id="tr-feedback" role="status" aria-live="polite" hidden></div>
         <div id="tr-invite" hidden class="tr-notice">You have a household invitation. <button id="tr-accept">Accept invitation</button></div>
-        <div id="tr-report-controls" class="tr-report-controls"><div class="tr-report-controls-heading"><h2 id="tr-report-controls-title">Dates &amp; view</h2><button type="button" id="tr-date-close" aria-label="Close date and view options">Done</button></div><div id="tr-context-controls"></div><div class="tr-toolbar"><div id="tr-context">Loading your financial picture…</div><div class="tr-actions"><div id="tr-range" class="tr-period-tabs" role="group" aria-label="Reporting period">@foreach(['day' => 'Today', 'week' => 'Week', 'month' => 'Month', 'quarter' => 'Quarter', 'year' => 'Year', 'all' => 'All history', 'custom' => 'Custom'] as $value => $label)<button type="button" data-range="{{ $value }}" aria-pressed="{{ $value === 'month' ? 'true' : 'false' }}">{{ $label }}</button>@endforeach</div><span id="tr-date-fields" hidden><label class="sr-only" for="tr-start">Start date</label><input id="tr-start" type="date"><label class="sr-only" for="tr-end">End date</label><input id="tr-end" type="date"></span><button id="tr-compare" type="button" aria-pressed="false">Compare last year</button><button id="tr-refresh">↻ Refresh</button></div></div><div id="tr-analysis-controls"></div></div>
+        <div id="tr-report-controls" class="tr-report-controls">
+            <div class="tr-report-controls-heading">
+                <h2 id="tr-report-controls-title">Dates &amp; view</h2>
+                <button type="button" id="tr-date-close" aria-label="Close date and view options">Done</button>
+            </div>
+            <div id="tr-context-controls"></div>
+            <div class="tr-report-strip">
+                <label id="tr-company-label" hidden>Organization<select id="tr-company"></select></label>
+                <label class="tr-account-picker">Account<select id="tr-account-filter" aria-label="Filter financial figures by account"><option value="">All accounts</option></select></label>
+                <label class="tr-period-field">Period
+                    <select id="tr-range" aria-label="Reporting period">
+                        @foreach(['day' => 'Today', 'week' => 'Week', 'month' => 'Month', 'quarter' => 'Quarter', 'year' => 'Year', 'all' => 'All history', 'custom' => 'Custom'] as $value => $label)
+                        <option value="{{ $value }}" @selected($value === 'month')>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <div id="tr-grouping-controls" hidden><span class="tr-control-label">Group by</span></div>
+                <button type="button" id="tr-options-toggle" aria-controls="tr-report-options" aria-expanded="false">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M3 7h5m5 0h8M3 17h9m5 0h4"/><circle cx="10.5" cy="7" r="2.5"/><circle cx="14.5" cy="17" r="2.5"/></svg>
+                    Report options
+                </button>
+                <div id="tr-date-fields" hidden>
+                    <label>Start date<input id="tr-start" type="date"></label>
+                    <label>End date<input id="tr-end" type="date"></label>
+                </div>
+            </div>
+            <div id="tr-report-options" hidden>
+                <div id="tr-analysis-controls"></div>
+                <div class="tr-report-utilities">
+                    <button id="tr-compare" type="button" aria-pressed="false">Compare last year</button>
+                    <button id="tr-refresh" type="button"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2.34 5.66"/></svg>Refresh</button>
+                </div>
+            </div>
+        </div>
         <div id="tr-content" aria-busy="true"><div class="tr-empty">Loading your finance spaces…</div></div>
         <dialog id="tr-dialog" class="tr-dialog"><form id="tr-form"><header><h2 id="tr-dialog-title">Add to your plan</h2><button type="button" id="tr-close" aria-label="Close dialog">×</button></header><div id="tr-fields"></div><div id="tr-form-error" class="tr-error" role="alert" hidden></div><footer><button type="button" id="tr-cancel">Cancel</button><button type="submit" class="tr-primary" id="tr-save">Save</button></footer></form></dialog>
         </div>
