@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {devices, expect} from '@playwright/test';
-import {closeReportControls, openReportOptions, selectReportScope} from './trajectory-controls.browser-helpers.mjs';
+import {closeReportControls, selectReportRange, selectReportScope} from './trajectory-controls.browser-helpers.mjs';
 
 export async function checkReviewedCategoryChanges({context, origin, fixture, payments, childId, reviewId, phone}) {
   const deviceContext = phone ? await context.browser().newContext({
@@ -198,8 +198,7 @@ async function checkBadgeDuringWorkspaceSwitch(page, origin, fixture) {
     await page.goto(origin + '/trajectory?tab=analysis');
     await expect(badge).toHaveText('7');
     holdHousehold = true;
-    await openReportOptions(page);
-    await page.locator('#tr-refresh').click();
+    await selectReportRange(page, 'week');
     await closeReportControls(page);
     await expect.poll(() => householdWaiting).toBe(true);
     await selectReportScope(page, 'business');
