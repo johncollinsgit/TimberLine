@@ -148,3 +148,61 @@ test('monthly sharing sent to changing recipients uses one confirmed schedule an
         ->and($data['summary']['spending_cents'])->toBe(50000)->and($data['forecast']['daily'][0]['cash_cents'])->toBe(425000)
         ->and($data['forecast']['daily'][1]['cash_cents'])->toBe(425000);
 });
+
+test('households preserve exact encrypted originals and Ask can cite the saved case note', function (): void {
+    $this->actingAs($this->owner);
+    $path = "/trajectory/spaces/{$this->space->id}/medical/needs/{$this->need->id}/documents";
+    $bytes = "%PDF-1.7\nFictional medical statement\n%%EOF\n";
+    $upload = fn () => \Illuminate\Http\UploadedFile::fake()->createWithContent('Provider statement.pdf', $bytes);
+    $this->getJson($path)->assertOk()->assertExactJson(['documents' => []]);
+    $document = $this->postJson($path, ['document' => $upload(), 'note' => 'Provider confirms 12 monthly payments.'])
+        ->assertCreated()->assertJsonPath('created', true)->json('document');
+    $this->postJson($path, ['document' => $upload(), 'note' => 'Different retry'])->assertOk()
+        ->assertJsonPath('created', false)->assertJsonPath('document.id', $document['id']);
+    $this->getJson($path)->assertOk()->assertJsonCount(1, 'documents')->assertJsonPath('documents.0.filename', 'Provider statement.pdf')
+        ->assertJsonMissingPath('documents.0.contents');
+    $stored = \Illuminate\Support\Facades\DB::table('trajectory_medical_documents')->where('id', $document['id'])->sole();
+    expect($stored->metadata)->not->toContain('Provider confirms')->and($stored->contents)->not->toContain('Fictional medical');
+    $download = $this->get($path.'/'.$document['id'])->assertOk()->assertHeader('Content-Type', 'application/pdf');
+    expect($download->getContent())->toBe($bytes)
+        ->and($download->headers->get('Content-Disposition'))->toStartWith('attachment;')
+        ->and($download->headers->get('Cache-Control'))->toContain('no-store');
+    $this->postJson("/trajectory/spaces/{$this->space->id}/assistant", ['question' => 'Show my medical documents', 'request_id' => (string) \Illuminate\Support\Str::uuid()])
+        ->assertOk()->assertJsonPath('medical_documents.0.id', $document['id'])
+        ->assertJsonPath('medical_documents.0.note', 'Provider confirms 12 monthly payments.');
+    expect(Transaction::count())->toBe(0);
+});
+
+test('case documents require the current household and correct need and reject disguised files', function (): void {
+    $this->actingAs($this->owner);
+    $base = "/trajectory/spaces/{$this->space->id}/medical/needs";
+    $path = $base."/{$this->need->id}/documents";
+    $file = fn () => \Illuminate\Http\UploadedFile::fake()->createWithContent('Medical.pdf', "%PDF-1.7\nTest\n%%EOF\n");
+    $doc = $this->postJson($path, ['document' => $file()])->assertCreated()->json('document.id');
+    $temp = tmpfile();
+    fwrite($temp, '<html>unrelated file</html>');
+    $disguised = new \Illuminate\Http\UploadedFile(stream_get_meta_data($temp)['uri'], 'forged.pdf', 'application/pdf', null, true);
+    $this->postJson($path, ['document' => $disguised])->assertUnprocessable();
+    fclose($temp);
+    $otherNeed = ($this->saveMedical)('medical_need', ['ministry' => 'Example', 'status' => 'unknown', 'reserve_shares' => true]);
+    $household = "/trajectory/spaces/{$this->space->id}/medical/documents";
+    $general = $this->postJson($household, ['document' => $file(), 'note' => 'Household account summary'])->assertCreated()->json('document');
+    expect($general['need_id'])->toBeNull();
+    $this->getJson($household)->assertOk()->assertJsonCount(1, 'documents');
+    $this->get($household.'/'.$general['id'])->assertOk();
+    $this->get($household.'/'.$doc)->assertNotFound();
+    $this->get($path.'/'.$general['id'])->assertNotFound();
+    $this->get($base."/{$otherNeed->id}/documents/{$doc}")->assertNotFound();
+    $this->getJson($base."/{$this->bill->id}/documents")->assertNotFound();
+    $other = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    [$otherSpace] = app(PilotService::class)->prepare($other, null, true);
+    $this->actingAs($other);
+    $this->getJson($path)->assertForbidden();
+    $this->get($path.'/'.$doc)->assertForbidden();
+    $this->postJson($path, ['document' => $file()])->assertForbidden();
+    $this->getJson("/trajectory/spaces/{$otherSpace->id}/medical/needs/{$this->need->id}/documents")->assertNotFound();
+    $this->postJson("/trajectory/spaces/{$otherSpace->id}/assistant", ['question' => 'Show my medical documents', 'request_id' => (string) \Illuminate\Support\Str::uuid()])
+        ->assertOk()->assertJsonMissingPath('medical_documents');
+    $this->getJson("/trajectory/spaces/{$otherSpace->id}/medical/documents")->assertOk()->assertJsonCount(0, 'documents');
+    expect(\App\Models\Trajectory\MedicalDocument::count())->toBe(2);
+});

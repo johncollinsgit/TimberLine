@@ -45,6 +45,16 @@ expired, overlapping, partial or missing targets remain identified. A parent
 target and child targets cannot be added twice. Program targets select effective
 cohorts within their own program. Payroll retains owner, studio and event roles.
 
+## Original medical documents
+
+Medical sharing stores originals in the household database. Each attachment
+belongs to one medical need or to the household folder for shared statements.
+Both the original bytes and their filenames and notes are encrypted. Lists and
+Ask read metadata only. Download checks the household, active case and checksum.
+Uploading the same bytes to the same folder again returns the existing original.
+A document or note provides evidence. Editing bills, recording payments and
+matching sharing deposits are separate financial actions.
+
 ## Plan Trajectory
 
 Personal navigation has independent Plan and Debt destinations. The Debt deep link

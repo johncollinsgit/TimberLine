@@ -1,3 +1,9 @@
+## 2026-11-27 · Original medical documents
+
+Household members can save and download the original PDFs or photos under a
+medical need or in Household medical documents. Ask can find a saved original
+by its filename, case or note and link back to it.
+
 ## 2026-11-27 · Debt navigation, interactive charts and Ask review count
 
 Debt has its own destination in Personal on desktop and phone. Its balance and

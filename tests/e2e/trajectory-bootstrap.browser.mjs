@@ -8,11 +8,13 @@ import {createServer} from 'node:net';
 import {chromium,webkit,expect} from '@playwright/test';
 import {selectReportScope,selectReportRange,closeReportControls,openReportControls,openReportOptions} from './trajectory-controls.browser-helpers.mjs';
 import {checkAnalysisHeader} from './trajectory-analysis-header.browser-helpers.mjs';
+import {checkMedicalOriginal} from './trajectory-medical-documents.browser-helpers.mjs';
 import {checkPlanTrajectory} from './trajectory-plan-trajectory.browser-helpers.mjs';
 import {checkReviewedCategoryChanges} from './trajectory-reviewed-categories.browser-helpers.mjs';
 const exec=promisify(execFile),base=resolve(),probe=createServer();
 const onlyPlan=process.argv.includes('--plan-trajectory');
-const fullSuite=!onlyPlan && !process.argv.includes('--category-edits') && !process.argv.includes('--report-header');
+const onlyDocuments=process.argv.includes('--medical-documents');
+const fullSuite=!onlyDocuments && !onlyPlan && !process.argv.includes('--category-edits') && !process.argv.includes('--report-header');
 const includesPlan=fullSuite || onlyPlan;
 await new Promise(done=>probe.listen(0,'127.0.0.1',done));const port=probe.address().port;await new Promise(done=>probe.close(done));
 const dir=await mkdtemp(join(tmpdir(),'codex-money-flow-bootstrap-')),origin=`http://127.0.0.1:${port}`;
@@ -231,17 +233,21 @@ try{
     releaseBusiness();await expect(business.locator('#tr-add')).toBeEnabled();await business.close();
    }
   }
-  if(!process.argv.includes('--report-header')&&!onlyPlan){
+  if(!onlyDocuments && !process.argv.includes('--report-header')&&!onlyPlan){
    await checkReviewedCategoryChanges({context,origin,fixture,payments:combinedBudget.payments,childId:combinedBudget.child_id,reviewId:combinedBudget.review_purchases[name==='webkit'?'phone':'desktop'],phone:name==='webkit'});
    checks.push(name+' '+(name==='webkit'?'phone':'desktop')+': reviewed recategorizations preserve the ledger; a manual review updates the Ask count immediately and after reload');
   }
-  if(!process.argv.includes('--category-edits')&&!onlyPlan){
+  if(!onlyDocuments && !process.argv.includes('--category-edits')&&!onlyPlan){
    await checkAnalysisHeader({context,origin,phone:name==='webkit'});
    checks.push(name+': Analysis controls, focus, resize and drilled-ledger layout');
   }
   if(includesPlan){
    await checkPlanTrajectory({context,origin,width:name==='webkit'?390:1440,engine:name,database:join(dir,'db.sqlite')});
    checks.push(name+': direct and full-dashboard Plan, receipt installments, historical controls, debt comparisons, replaceable budget reservation and ledger integrity');
+  }
+  if(fullSuite || onlyDocuments){
+   await checkMedicalOriginal(context,origin,name);
+   checks.push(name+': medical original uploads, survives reload and is cited in Ask');
   }
   await context.close();await browser.close();browser=null;
  }

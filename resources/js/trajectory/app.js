@@ -2,6 +2,7 @@ import Chart from 'chart.js/auto';
 import {createTrajectoryApi} from './api.js';
 import { planningUI } from './planning.js';
 import {createPlanTrajectory} from './plan-trajectory.js';
+import {initMedicalDocuments, medicalDocumentPanel} from './medical-documents.js';
 import {initPlanChartDetails} from './plan-chart-ui.js';
 import { chartPresentation } from './chart-theme.js';
 import { outlookUI } from './outlook.js';
@@ -78,7 +79,7 @@ function boot() {
   let scope = requestedSpace?.kind==='business' ? 'business' : personalSpace ? 'personal' : 'business';
   let active = (scope==='personal' ? personalSpace : businessSpace)?.id, data, evidenceRows=null, tab = 'overview', charts = [], chartTables = {}, filter = {}, scenarioId = '', historyMonth = '', budgetSource = null, budgetMonth = '', seasonal = false, moneyFlowMode = 'spending', lenderInterestYear = null, formAction;
   let flowDialog=null,dismissingFlowDialog=false,restoringNavigation=false,displayedReportContext=null,assistantFocusedTransaction=null;
-  if (['overview','analysis','budget','transactions','accounts','planning','debt','anomalies','tax','sales-tax','profit','companies','bud'].includes(incoming.get('tab'))) {tab=incoming.get('tab');filter=tab==='transactions'?{review:true}:{};}
+  if (['overview','analysis','budget','transactions','accounts','planning','debt','medical','anomalies','tax','sales-tax','profit','companies','bud'].includes(incoming.get('tab'))) {tab=incoming.get('tab');filter=tab==='transactions'?{review:true}:{};}
   if (tab === 'planning' && incoming.get('section') === 'debt') tab = 'debt';
   if (oauthReturn) tab = 'accounts';
   const householdDebtAvailable = () => scope === 'personal' && !!personalSpace && accountFilter === null;
@@ -359,6 +360,7 @@ function boot() {
     void assistant.contextChanged().catch(error => notice(error.message));
     return load();
   }
+  initMedicalDocuments(root, {api, endpoint, esc, currentSpace:() => scope === 'personal' ? active : null});
   function currentAssistantContext(){
     const base={space_id:active,scope,...visualFinance.getAssistantContext()};
     if(assistantFocusedTransaction){const tx=assistantFocusedTransaction;return {...base,from:tx.date,through:tx.date,level:'transaction',category:tx.category,subcategory:null,transaction_ids:[tx.source_transaction_id??tx.id],transaction_versions:{[tx.source_transaction_id??tx.id]:tx.version},selection_truncated:false,focused_transaction:true};}
@@ -568,7 +570,9 @@ function boot() {
       ${m.needs.length?panel('Medical costs and sharing by need',plot('tr-medical','Medical bills, provider payments, received and expected shares')):''}
       ${m.needs.map(n=>panel(n.name,`<div class="tr-block tr-medical-need"><p class="tr-subtle">${esc(n.ministry)} · ${esc(title(n.status))}${n.submitted_on?' · Submitted '+date(n.submitted_on):''}</p><div class="tr-flow tr-medical-flow"><div>Paid to providers<strong>${money(n.paid_cents)}</strong></div><div>Still owed<strong>${money(n.owed_cents)}</strong></div><div>Shares received<strong>${money(n.received_cents)}</strong></div></div><p class="tr-subtle">Net paid after received sharing: ${money(n.net_paid_cents)}. Expected payments: ${money(n.expected_cents)} (unconfirmed). Remaining reviewed sharing target: ${money(n.remaining_sharing_cents)}. Reserved cash: ${money(n.reserve_cents)}.</p>
       <div class="tr-actions">${btn('Add provider bill','medical-child',`data-kind="medical_bill" data-parent-key="medical_need_record_id" data-id="${n.id}"`)}${btn('Pay across provider invoices','medical-child',`data-kind="medical_payment" data-parent-key="medical_need_record_id" data-id="${n.id}"`)}${btn('Record expected / received share','medical-child',`data-kind="medical_share" data-parent-key="medical_need_record_id" data-id="${n.id}"`)}${n.evidence_ids.length?btn('Share deposit evidence','medical-evidence',`data-ids="${esc(JSON.stringify(n.evidence_ids))}"`):''}</div>
+      ${medicalDocumentPanel(active,n.id)}
       ${n.bills.map(b=>`<div class="tr-row"><div><strong>${esc(b.name)} · ${esc(b.provider)}</strong><div class="tr-subtle">Invoice ${esc(b.reference)} · Net bill ${money(b.billed_cents-b.adjustment_cents)}<br>Paid ${money(b.paid_cents)} · Owed ${money(b.owed_cents)} · Next payment ${date(b.next_due_on)}${b.confirmed?'':' · Plan needs review'}</div></div><div class="tr-small-actions">${btn('Edit bill','edit',`data-id="${b.id}"`)}${btn('Record provider payment','medical-child',`data-kind="medical_payment" data-parent-key="medical_bill_record_id" data-id="${b.id}"`)}${b.evidence_ids.length?btn('Payment evidence','medical-evidence',`data-ids="${esc(JSON.stringify(b.evidence_ids))}"`):''}</div></div>`).join('')||empty('Add each provider invoice once, including any amount paid upfront.')}</div>`,btn('Edit need','edit',`data-id="${n.id}"`))).join('')||empty('Start with a medical need, then add its bills, provider payments, and incoming shares. Multiple bills and multiple monthly receipts can belong to one need.')}
+      ${medicalDocumentPanel(active)}
       ${panel('Payment and sharing history',records.map(r=>`<div class="tr-row"><div><strong>${esc(r.name)}</strong><div class="tr-subtle">${r.kind==='medical_payment'?'Paid to provider':r.kind==='medical_membership'?'Monthly contribution':title(r.data.status)+' share'} · ${date(r.data.paid_on)} · ${r.data.transaction_id?'Statement #'+r.data.transaction_id:'Manual / unmatched'}</div></div><div>${money(r.data.amount_cents)} ${btn('Edit','edit',`data-id="${r.id}"`)}</div></div>`).join('')||empty('Record payments as they happen. Change an expected share to received when it arrives; do not add the same receipt twice.'))}`;
   }
   function drawMedical(){

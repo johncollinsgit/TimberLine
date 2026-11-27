@@ -1,0 +1,15 @@
+.tr-case-docs { margin-block: 14px; border-block: 1px solid #d6e5df; padding-block: 10px; }
+.tr-case-docs summary { font-weight: 650; color: #245d50; cursor: pointer; }
+.tr-case-docs [data-case-files] { margin-block: 12px; overflow-wrap: anywhere; }
+.tr-case-docs ul { padding: 0; list-style: none; }
+.tr-case-docs li + li { margin-top: 12px; }
+.tr-case-docs li a { font-weight: 600; }
+.tr-case-docs li p { margin: 4px 0; white-space: pre-line; }
+.tr-case-docs small { display: block; color: #52685e; }
+.tr-case-docs form { display: grid; gap: 10px; max-width: 34rem; }
+.tr-case-docs label { display: grid; gap: 4px; }
+.tr-case-docs input, .tr-case-docs textarea { box-sizing: border-box; max-width: 100%; min-width: 0; }
+.tr-case-docs [role=status] { margin-inline-start: 10px; }
+.tr-ask-documents { margin: 8px 0; padding-inline-start: 18px; }
+.tr-ask-documents li { margin-block: 8px; overflow-wrap: anywhere; }
+.tr-ask-documents li p { margin: 4px 0; white-space: pre-line; }
