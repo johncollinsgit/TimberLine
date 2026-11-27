@@ -115,3 +115,5 @@
  .tr-mobile-enhanced #tr-analysis-controls select{width:100%;min-height:40px}
 }
 @media(max-width:360px){.trajectory-site .tr-mobile-enhanced .tr-mobile-brand{font-size:0;gap:0}.tr-mobile-enhanced .tr-mobile-brand>span:last-child{display:none}}
+
+.tr-tabs button[data-tab][hidden], .vf-mobile-nav button[data-tab][hidden] { display: none; }

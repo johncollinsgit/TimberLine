@@ -1,4 +1,6 @@
 import {minor} from './money.js';
+import {openChartDetail} from './plan-chart-ui.js';
+import {debtChartAccount, renderDebtCharts} from './plan-debt-charts.js';
 
 const methods = {avalanche:'Highest interest first', snowball:'Smallest balance first', minimum:'Required payments only', custom:'Custom extra · highest interest first'};
 const isAmount = Number.isSafeInteger;
@@ -32,23 +34,37 @@ export function createPlanDebt({getData, esc, precise, api, endpoint, load, getM
     const schedule = cadence[row.cash_payment_cadence ?? row.cash_cadence ?? row.payment_cadence];
     return rowMoney(row,amount) + (schedule ? ' · ' + schedule : '');
   }
+  const reportedPayment = row => ['reported','statement','last_statement'].includes(row.payment_status);
+  function accountFacts(row) {
+    const statement = row.latest_statement_interest, ytd = row.ytd_statement_interest, charge = row.interest;
+    const reported = reportedPayment(row);
+    const interestLabel = term => rowMoney(row,term.cents) + (term.from ? ' · ' + date(term.from) + ' – ' + date(term.through)
+      : term.through ? ' through ' + date(term.through) : '');
+    const interestSource = {posted:'posted transactions', statement:'lender statement'}[charge?.source];
+    return `<div class="pt-debt-facts">${pair(reported ? 'Previously reported payment' : 'Recorded cash payment', payment(row))}
+      ${isAmount(row.cash_payment_cents) && isAmount(row.payment_cents) ? pair('Lender principal and interest', rowMoney(row,row.payment_cents) + (cadence[row.payment_cadence] ? ' · ' + cadence[row.payment_cadence] : '')) : ''}
+      ${row.payment_notice && isAmount(row.payment_notice.amount_cents) ? pair('Dated lender notice', rowMoney(row,row.payment_notice.amount_cents) + (row.payment_notice.due_on ? ' due ' + date(row.payment_notice.due_on) : '') + (row.payment_notice.observed_on ? ' · recorded ' + date(row.payment_notice.observed_on) : '')) : ''}
+      ${pair(reported ? 'Previously reported due date' : 'Recorded due date', date(row.cash_next_due_on ?? row.next_due_on))}${row.terms_observed_on && reported ? pair('Terms reported on',date(row.terms_observed_on)) : ''}${isAmount(row.rate_millis) ? pair('Annual interest rate', rate(row.rate_millis) + (row.rate_status === 'reported' ? ' · reported' : '')) : ''}
+      ${pair('Interest this month', isAmount(charge?.cents) ? interestLabel(charge) + (interestSource ? ' · ' + interestSource : '') : 'Unknown')}
+      ${isAmount(statement?.cents) ? pair('Latest statement interest',interestLabel(statement)) : ''}${isAmount(ytd?.cents) ? pair('Statement interest year to date',interestLabel(ytd)) : ''}
+      ${row.maturity_on ? pair('Contract maturity',date(row.maturity_on)) : ''}</div>
+      ${row.missing?.length ? `<p class="pt-note">To review · ${esc(row.missing.map(key => ({confirmed_terms:'lender terms',fresh_balance:'updated balance',next_due_on:'next unpaid due date',maturity_on:'contract maturity',rate:'annual rate',payment:'required payment',balance:'account balance',payment_allocation:'lender payment allocation',duplicate_terms:'overlapping debt records',interest_paid_through:'date interest was paid through'}[key] ?? key.replaceAll('_',' '))).join(', '))}.</p>` : ''}`;
+  }
   function account(row) {
-    const statement = row.latest_statement_interest, ytd = row.ytd_statement_interest;
-    const reported = ['reported','statement','last_statement'].includes(row.payment_status);
-    const interestLabel = term => rowMoney(row,term.cents) + (term.through ? ' through ' + date(term.through) : '');
-    const charge = row.interest;
     const edit = row.record_id && getData()?.records?.some(r => r.id === row.record_id)
       ? `<button type="button" data-action="edit" data-id="${Number(row.record_id)}">Edit terms</button>`
       : row.account_id ? `<button type="button" data-action="pt-enter-terms" data-id="${Number(row.account_id)}">Enter terms</button>` : '';
-    return `<details class="pt-debt-account"><summary><span><strong>${esc(row.name)}</strong><small>${esc(row.balance_observed_on ? 'Balance on ' + date(row.balance_observed_on) : 'Balance date unknown')}</small><small>${esc(reported ? 'Last reported payment · ' : 'Payment · ')}${esc(payment(row))}</small></span><span class="pt-debt-balance">${esc(rowMoney(row,row.balance_cents))}<small>${esc(rate(row.rate_millis))} annual rate</small></span></summary>
-      <div class="pt-debt-facts">${pair(reported ? 'Previously reported payment' : 'Recorded cash payment', payment(row))}
-      ${isAmount(row.cash_payment_cents) && isAmount(row.payment_cents) ? pair('Lender principal and interest', rowMoney(row,row.payment_cents) + (cadence[row.payment_cadence] ? ' · ' + cadence[row.payment_cadence] : '')) : ''}
-      ${row.payment_notice && isAmount(row.payment_notice.amount_cents) ? pair('Dated lender notice', rowMoney(row,row.payment_notice.amount_cents) + (row.payment_notice.due_on ? ' due ' + date(row.payment_notice.due_on) : '')) : ''}
-      ${pair(reported ? 'Previously reported due date' : 'Recorded due date', date(row.cash_next_due_on ?? row.next_due_on))}${row.terms_observed_on && reported ? pair('Terms reported on',date(row.terms_observed_on)) : ''}${isAmount(row.rate_millis) ? pair('Annual interest rate', rate(row.rate_millis) + (row.rate_status === 'reported' ? ' · reported' : '')) : ''}
-      ${pair('Interest this month', isAmount(charge?.cents) ? interestLabel(charge) : 'Unknown')}
-      ${isAmount(statement?.cents) ? pair('Latest statement interest',interestLabel(statement)) : ''}${isAmount(ytd?.cents) ? pair('Statement interest year to date',interestLabel(ytd)) : ''}
-      ${row.maturity_on ? pair('Contract maturity',date(row.maturity_on)) : ''}</div>
-      ${row.missing?.length ? `<p class="pt-note">To review · ${esc(row.missing.map(key => ({confirmed_terms:'lender terms',fresh_balance:'updated balance',next_due_on:'next unpaid due date',maturity_on:'contract maturity',rate:'annual rate',payment:'required payment',balance:'account balance',payment_allocation:'lender payment allocation',duplicate_terms:'overlapping debt records',interest_paid_through:'date interest was paid through'}[key] ?? key.replaceAll('_',' '))).join(', '))}.</p>` : ''}${edit}</details>`;
+    return `<details class="pt-debt-account"><summary><span><strong>${esc(row.name)}</strong><small>${esc(row.balance_observed_on ? 'Balance on ' + date(row.balance_observed_on) : 'Balance date unknown')}</small><small>${esc(reportedPayment(row) ? 'Last reported payment · ' : 'Payment · ')}${esc(payment(row))}</small></span><span class="pt-debt-balance">${esc(rowMoney(row,row.balance_cents))}<small>${esc(rate(row.rate_millis))} annual rate</small></span></summary>
+      ${accountFacts(row)}${edit}</details>`;
+  }
+  function chartDetail(button) {
+    if (!panel?.contains(button) || getData() !== source || report?.space_id !== source?.space.id) return false;
+    const row = debtChartAccount(report, button.dataset.chart, button.dataset.key);
+    if (!row) return false;
+    const amount = rowMoney(row,row.balance_cents);
+    const balance = row.balance_observed_on ? amount + ' as of ' + date(row.balance_observed_on) : amount;
+    openChartDetail(button, {title:row.name, body:pair('Recorded balance', balance) + accountFacts(row)});
+    return true;
   }
   function inventory() {
     if (!report) return '';
@@ -73,7 +89,7 @@ export function createPlanDebt({getData, esc, precise, api, endpoint, load, getM
   }
   function render() {
     const current = saved();
-    return `<section class="pt-panel pt-debt-controls"><header><h2>Payoff scenario</h2></header>
+    return `<div class="pt-debt-charts pt-charts-grid" data-pt-debt-charts ${report?.inventory?.length ? '' : 'hidden'}>${renderDebtCharts(report,{esc,cash,rate})}</div><section class="pt-panel pt-debt-controls"><header><h2>Payoff scenario</h2></header>
       <div class="pt-fields"><label class="pt-field">Payoff order<select name="pt-debt-method">${Object.entries(methods).filter(([key]) => key !== 'custom' || method === 'custom').map(([key,label]) => `<option value="${key}" ${method === key ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>
       <label class="pt-field">Extra per month ($)<input name="pt-debt-extra" inputmode="decimal" type="text" value="${esc(method === 'minimum' ? '0' : extra)}" ${method === 'minimum' ? 'disabled' : ''}></label></div>
       <div class="pt-actions"><button type="button" data-action="pt-debt-preview">Compare approaches</button><button class="pt-primary" type="button" data-action="pt-debt-apply">Apply to budget</button></div>
@@ -93,7 +109,12 @@ export function createPlanDebt({getData, esc, precise, api, endpoint, load, getM
     const response = await api(endpoint('/debt-scenarios',data.space.id),'POST',{view:'household_plan',extra_cents:amount});
     if (ticket !== sequence || getData() !== data) return false;
     report = response; previewExtra = amount;
-    if (panel?.isConnected) panel.querySelector('[data-pt-inventory]').innerHTML = inventory();
+    if (panel?.isConnected) {
+      const charts = panel.querySelector('[data-pt-debt-charts]');
+      charts.innerHTML = renderDebtCharts(report,{esc,cash,rate});
+      charts.hidden = !charts.firstElementChild;
+      panel.querySelector('[data-pt-inventory]').innerHTML = inventory();
+    }
     return true;
   }
   async function work(apply) {
@@ -142,6 +163,7 @@ export function createPlanDebt({getData, esc, precise, api, endpoint, load, getM
     feedback = ''; paint();
   }
   async function handle(action, button) {
+    if (action === 'pt-chart-detail') return chartDetail(button);
     if (!['pt-debt-preview','pt-debt-apply'].includes(action) || !button.closest('.pt-debt-section')) return false;
     await work(action === 'pt-debt-apply');
     return true;

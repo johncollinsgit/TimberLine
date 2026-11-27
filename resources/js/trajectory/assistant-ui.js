@@ -10,7 +10,7 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
   root.append(host);
   const dialog = host.querySelector('dialog'), content = host.querySelector('[data-assistant-content]'), input = host.querySelector('input');
   let currentSpace = null, loadedSpace = null, messages = [], inbox = null, selectedExpense = null, busy = false, view = 'chat';
-  let pushCheckVersion = 0;
+  let pushCheckVersion = 0, badgeRequest = 0;
   const requestIds = new Map();
   const transactionId=Number(new URLSearchParams(location.search).get('transaction'));
   let deepLinkOpened=false;
@@ -34,7 +34,10 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
     generation++;currentSpace=id;loadedSpace=null;messages=[];selectedExpense=null;inbox=null;
     action=null;historyAction=null;picker=null;catalog=null;historyRequest=null;busy=false;baseSelection=baseKey();
     requestIds.clear();input.disabled=false;input.value='';
-    host.querySelector('[data-assistant-badge]').hidden=true;
+    const badge=host.querySelector('[data-assistant-badge]');
+    badge.hidden=true;badge.textContent='';badge.removeAttribute('aria-label');
+    host.querySelector('.tr-assistant-launch').removeAttribute('title');
+    host.querySelector('[data-assistant-inbox]').textContent='Expenses';
     content.replaceChildren();
   }
   const isCurrent = token => generation===token && currentSpace!==null && spaceId()===currentSpace;
@@ -151,11 +154,18 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
   }
   async function loadInbox(summary=false) {
     const requestedSpace=spaceId(); if(!requestedSpace)return;
-    const token=generation;
+    const token=generation, request=++badgeRequest;
     const result=await api(endpoint(summary?'/notifications?summary=1':'/notifications',requestedSpace));
     if(!isCurrent(token)||spaceId()!==requestedSpace)return false;
     if(!summary)inbox=result;
-    const badge=host.querySelector('[data-assistant-badge]');badge.hidden=!result.unread_count;badge.textContent=result.unread_count || '';
+    if(request===badgeRequest){
+      const badge=host.querySelector('[data-assistant-badge]'), launch=host.querySelector('.tr-assistant-launch');
+      const count=result.review_count, hasCount=Number.isSafeInteger(count) && count >= 0;
+      badge.hidden=!hasCount || count===0;badge.textContent=hasCount && count>0 ? String(count) : '';
+      const label=hasCount ? count + (count===1?' transaction needs':' transactions need') + ' category review in this workspace' : '';
+      if(label){launch.title=label;badge.setAttribute('aria-label',label);}else{launch.removeAttribute('title');badge.removeAttribute('aria-label');}
+      host.querySelector('[data-assistant-inbox]').textContent=result.unread_count>0 ? 'Expenses ('+result.unread_count+' unread)' : 'Expenses';
+    }
     return true;
   }
   const noticeRow = row => row.payload.unavailable ? '<div class="tr-expense-notice"><strong>Purchase no longer available in this household</strong><span>Its ownership, purpose or bank status changed.</span></div>' : `<button type="button" class="tr-expense-notice" data-open-expense="${row.id}"><strong>${esc(row.payload.merchant)} · ${money(row.payload.amount_cents)}</strong><span>${esc(row.payload.date)} · ${esc(row.payload.category_label)}${row.payload.pending?' · Pending':''}${row.payload.removed?' · Removed':''}</span><span>${row.payload.remaining_cents==null?'Budget not established':money(row.payload.remaining_cents)+' left in category'}${row.payload.needs_purpose?' · What was this for?':''}</span></button>`;
@@ -167,6 +177,7 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
     host.querySelector('[data-assistant-form]').hidden=true;content.textContent='Loading expenses…';
     if(!dialog.open)dialog.showModal();
     if(getContext?.()?.scope==='business'||root.dataset.surface==='business'){
+      void refreshBadge();
       view='inbox';host.querySelector('[data-assistant-form]').hidden=true;
       host.querySelector('[data-assistant-scope]').textContent='Business workspace';
       content.innerHTML='<div class="tr-assistant-preferences"><strong>Personal expense alerts live in the Personal app</strong><p>Open Trajectory Personal to review household purchases and manage your phone notifications. Ask Everbranch is available here for this business’s financial information.</p><a href="/trajectory/personal/">Open Trajectory Personal</a><button type="button" data-assistant-chat>Ask about this business</button></div>';
@@ -183,6 +194,7 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
     const token=generation;
     await api(path(`/notifications/${row.id}/read`),'PATCH',{});
     if(!isCurrent(token)||view!=='inbox')return;
+    void refreshBadge();
     await loadHistory();if(!isCurrent(token)||view!=='inbox')return;
     selectedExpense=row.payload;picker=null;
     action={role:'assistant',reply:row.payload.needs_purpose?'What was this purchase for?':'Choose a category or ask about this purchase.',
@@ -202,7 +214,7 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
       const response={role:'assistant',...result};messages.push(response);
       action=baseKey()===submittedView || result.applied ? response : null;
       selectedExpense=action?.review_transaction??(action?selectedExpense:null);
-      if(result.applied){selectedExpense=null;await onChanged();}
+      if(result.applied){selectedExpense=null;void refreshBadge();await onChanged();}
     }catch(error){if(isCurrent(token))messages.push({role:'assistant',reply:error.message});}
     finally{if(isCurrent(token)){busy=false;input.disabled=false;input.value='';if(view==='chat'){renderChat();if(dialog.open)input.focus();}}}
   }
@@ -317,7 +329,7 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
         try{
           const result=await api(path(`/assistant/${id}/${command}`),'POST',{});
           if(!isCurrent(token))return;
-          action={role:'assistant',...result};messages=messages.map(message=>message===previous?action:message);selectedExpense=null;await onChanged();
+          action={role:'assistant',...result};messages=messages.map(message=>message===previous?action:message);selectedExpense=null;void refreshBadge();await onChanged();
         }finally{
           if(isCurrent(token)){busy=false;input.disabled=false;if(view==='chat')renderChat();}
         }
@@ -339,6 +351,10 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
   host.querySelector('form').addEventListener('submit',event=>{event.preventDefault();const q=input.value.trim();if(q)void send(q);});
   const surface=location.pathname.startsWith('/trajectory/personal/')?'personal':location.pathname.startsWith('/trajectory/business/')?'business':null;
   if(surface&&'serviceWorker'in navigator&&window.isSecureContext)navigator.serviceWorker.register(`/trajectory/${surface}/sw.js`,{scope:`/trajectory/${surface}/`}).catch(()=>{});
+  async function refreshBadge(){
+    enterSpace(spaceId());
+    if(currentSpace)try{await loadInbox(true);}catch{/* Keep the last confirmed count until the next read. */}
+  }
   async function refresh(){
     enterSpace(spaceId());
     if(transactionId&&!deepLinkOpened&&currentSpace){
@@ -352,7 +368,7 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
       }
       if(row)await chooseExpense(row);return;
     }
-    if(dialog.open&&view==='inbox')await openInbox();else{try{await loadInbox(true);}catch{/* Finance navigation stays available. */}}
+    if(dialog.open&&view==='inbox')await openInbox();else await refreshBadge();
   }
   async function contextChanged(){
     const next=spaceId();
@@ -370,5 +386,5 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
     await refresh();
   }
   if(transactionId&&spaceId())void refresh().catch(()=>{});
-  return {openInbox,openChat,refresh,contextChanged,destroy(){generation++;dialog.close();host.remove();}};
+  return {openInbox,openChat,refresh,refreshBadge,contextChanged,destroy(){generation++;dialog.close();host.remove();}};
 }

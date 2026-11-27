@@ -1,3 +1,14 @@
+## 2026-11-27 · Debt navigation, interactive charts and Ask review count
+
+Debt has its own destination in Personal on desktop and phone. Its balance and
+interest-rate charts open individual lender details. Plan Trajectory’s charts
+show how the monthly target is built and how spending compares at the same
+point in previous years.
+
+The Ask Everbranch badge shows how many transactions in the workspace still
+need category review. Saving or undoing a category updates the count in place.
+Unread alerts appear on the Expenses tab.
+
 ## 2026-11-27 · Plan Trajectory
 
 The household Plan shows a monthly take-home target, dated bank balances and a

@@ -1,0 +1,56 @@
+.pt-charts-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: stretch; gap: 18px; min-width: 0; }
+.pt-debt-section > [data-pt-debt-charts] { grid-column: 1 / -1; min-width: 0; }
+.pt-debt-section > [data-pt-debt-charts]:empty { display: none; }
+.pt-chart-card {
+  container: finance-chart / inline-size;
+  min-width: 0; padding: clamp(16px,2.2vw,26px); color: #203a32; background: #fff;
+  border: 1px solid #d6e1dc; border-radius: 16px; box-shadow: 0 3px 10px #234e3906;
+}
+.pt-charts-grid > .pt-panel .pt-chart-card { padding: 0; border: 0; box-shadow: none; }
+.pt-chart-heading { margin: 0 0 15px; }
+.pt-trajectory .pt-chart-heading h2 { color: #1e3933; margin: 0; font-size: clamp(1.05rem,1.5vw,1.28rem); line-height: 1.24; letter-spacing: -.025em; }
+.pt-chart-heading p { color: #53665f; font-size: .83rem; margin: 5px 0 0; line-height: 1.4; }
+.pt-ring-layout { display: grid; grid-template-columns: minmax(115px,.8fr) minmax(0,1.8fr); align-items: center; gap: clamp(12px,3cqi,23px); }
+.pt-ring { width: 100%; max-width: 190px; aspect-ratio: 1; position: relative; isolation: isolate; justify-self: center; border-radius: 50%; background: #e5ebe8; }
+.pt-ring-marks { position: absolute; inset: 0; overflow: hidden; border-radius: 50%; }
+.pt-trajectory button.pt-ring-segment { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; padding: 0; margin: 0; border: 0; border-radius: 0; box-shadow: none; background: var(--pt-color); cursor: pointer; }
+.pt-trajectory button.pt-ring-segment:hover { filter: brightness(.9); }
+.pt-ring-center { position: absolute; inset: 18%; display: grid; align-content: center; justify-items: center; line-height: 1.15; gap: 4px; border-radius: 50%; background: white; box-shadow: 0 0 0 2px white; text-align: center; }
+.pt-ring-center span { color: #52685e; font-size: .68rem; max-width: 90%; }
+.pt-ring-center strong { font-variant-numeric: tabular-nums; font-size: clamp(.73rem,2.8cqi,1.04rem); letter-spacing: -.035em; overflow-wrap: anywhere; max-width: 96%; }
+.pt-chart-legend, .pt-chart-bars { list-style: none; margin: 0; padding: 0; min-width: 0; }
+.pt-chart-legend li, .pt-chart-bars li { margin: 0; padding: 0; }
+.pt-trajectory button:is(.pt-chart-legend-button,.pt-chart-bar) {
+  display: grid; align-items: center; width: 100%; padding: 8px 5px; min-height: 42px; margin: 0;
+  border: 0; background: transparent; border-radius: 6px; box-shadow: none; text-align: start;
+  color: #243d35; font: inherit; font-size: .83rem; line-height: 1.3; cursor: pointer;
+}
+.pt-trajectory button:is(.pt-chart-legend-button,.pt-chart-bar):hover { background: #f2f6f3; }
+.pt-trajectory .pt-chart-legend-button { grid-template-columns: 9px minmax(0,1fr) auto; gap: 8px; }
+.pt-chart-legend-button i { display: block; width: 9px; height: 9px; border-radius: 3px; background: var(--pt-color); }
+.pt-chart-legend-button span, .pt-bar-caption span { overflow-wrap: anywhere; }
+.pt-chart-legend-button strong, .pt-bar-caption strong { font-size: .8rem; font-variant-numeric: tabular-nums; font-weight: 650; }
+.pt-trajectory .pt-chart-bar { gap: 6px; }
+.pt-bar-caption { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.pt-bar-caption strong { text-align: end; }
+.pt-bar-track { display: block; height: 8px; position: relative; border-radius: 5px; background: #ecf0ee; overflow: hidden; }
+.pt-bar-fill { position: absolute; height: 100%; border-radius: inherit; background: var(--pt-color); }
+.pt-bar-axis { position: absolute; height: 100%; width: 1px; background: #5c6b65; z-index: 1; }
+.pt-bar-missing { background: repeating-linear-gradient(135deg,#e7edea 0 3px,#f5f7f6 3px 6px); }
+.pt-chart-detail { grid-column: 1/-1; min-width: 0; font-variant-numeric: tabular-nums; }
+.pt-chart-detail p { margin: 4px 0 14px; overflow-wrap: anywhere; }
+.pt-chart-detail dl { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,auto); align-items: baseline; gap: 0 14px; margin: 0; }
+.pt-chart-detail :is(dt,dd) { padding: 8px 0; margin: 0; }
+.pt-chart-detail dd { text-align: end; font-weight: 600; }
+.pt-chart-detail th { text-align: start; }
+.pt-chart-detail h3 { margin: 17px 0 7px; }
+@container household-plan (max-width: 48rem) { .pt-charts-grid { grid-template-columns: minmax(0,1fr); } }
+@container finance-chart (max-width: 27rem) {
+  .pt-ring-layout { grid-template-columns: minmax(0,1fr); gap: 9px; }
+  .pt-ring { width: min(48%,155px); min-width: 115px; }
+  .pt-trajectory .pt-chart-legend-button { min-height: 44px; }
+}
+@media (forced-colors: active) {
+  .pt-bar-track { border: 1px solid CanvasText; }
+  .pt-bar-fill, .pt-ring-segment, .pt-chart-legend-button i { forced-color-adjust: none; }
+}

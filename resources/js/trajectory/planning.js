@@ -17,7 +17,7 @@ export function planningUI({getData, householdPlan, spaces, esc, money, precise,
   function planning(){
     const report = getData().household_trajectory;
     if (!report) return savedPlan();
-    return householdPlan.render(report) + '<details class="pt-legacy" '+(householdPlan.debtOpen()?'hidden':'')+'><summary>Income sources, goals and debt options</summary>' + savedPlan() + '</details>';
+    return householdPlan.render(report) + '<details class="pt-legacy"><summary>Income sources, goals and debt options</summary>' + savedPlan() + '</details>';
   }
   function savedPlan(){
     const data=getData(),p=data.planning,view=planOverview(data),d=p.debt_strategy;

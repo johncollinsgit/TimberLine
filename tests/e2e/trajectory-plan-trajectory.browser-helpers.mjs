@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {expect} from '@playwright/test';
+import {checkDebtCharts} from './trajectory-debt-charts.browser-helpers.mjs';
 
 const exec = promisify(execFile);
 const money = cents => Number.isSafeInteger(cents)
@@ -48,20 +49,36 @@ async function checkDebtPlanning(page, origin, books, database) {
   assert.equal(baseline.debt_payoff_reservation, null);
   await expect(page.getByRole('region', {name:'Monthly budget totals', exact:true})).toBeVisible();
 
-  async function openDebt() {
+  async function openDebt(route = 'debt') {
     const loaded = responseFor(page, 'plan-context');
-    await page.goto(origin + '/trajectory?tab=planning');
-    const {debt_payoff: saved, household_trajectory:trajectory} = await (await loaded).json();
     const inventoryReady = responseFor(page, 'debt-scenarios', 'POST');
-    const tab = page.locator('[data-action="pt-section"][data-section="debt"]');
-    await tab.click();
-    await expect(tab).toHaveAttribute('aria-pressed', 'true');
+    if (route === 'navigation') {
+      await page.goto(origin + '/trajectory?tab=planning');
+      await expect(page.locator('[data-pt-monthly]')).toBeVisible();
+      await expect(panel).toHaveCount(0);
+      await primaryTab(page, 'debt');
+    } else {
+      await page.goto(origin + '/trajectory?tab=' + route);
+    }
+    const {debt_payoff:saved, household_trajectory:trajectory} = await (await loaded).json();
     await expect(panel).toBeVisible();
+    await expect(page.locator('#tr-page-title')).toHaveText('Debt');
+    await expect(page.locator('[data-tab="debt"][aria-current="page"]')).toHaveCount(2);
+    await expect(page.locator('[data-pt-monthly],.pt-legacy')).toHaveCount(0);
+    assert.equal(new URL(page.url()).search, '?tab=debt');
     const inventoryReply = await inventoryReady;
     assert.ok(inventoryReply.ok(), await inventoryReply.text());
     return {saved, report:await inventoryReply.json(), monthly:trajectory.monthly};
   }
-  const {saved, report, monthly} = await openDebt();
+  const {saved, report, monthly} = await openDebt('navigation');
+  await page.goBack();
+  await expect(page.locator('[data-pt-monthly]')).toBeVisible();
+  await expect(panel).toHaveCount(0);
+  assert.equal(new URL(page.url()).search, '?tab=planning');
+  await page.goForward();
+  await expect(panel.locator('.pt-debt-account').first()).toBeVisible();
+  assert.equal(new URL(page.url()).search, '?tab=debt');
+  await checkDebtCharts({page,panel,report});
   const debts = new Map(report.inventory.map(item => [item.name, item]));
   assert.equal(debts.size, report.inventory.length, 'A dated card snapshot and its current account represent one debt');
   for (const [name,balance,apr,minimum] of [['Fictional card',100000,11000,4500],['Fictional detail card',131902,29000,8000]]) {
@@ -175,7 +192,7 @@ async function checkDebtPlanning(page, origin, books, database) {
   await expect(reservation).toContainText(money(7000));
   await page.unroute('**/workspace');
   await verifyBudget('snowball', 7000, true);
-  const second = await openDebt();
+  const second = await openDebt('planning&section=debt');
   assert.equal(second.saved.method, 'snowball');
   assert.equal(second.saved.extra_cents, 7000);
   await method.selectOption('minimum');
@@ -196,7 +213,8 @@ export async function checkPlanTrajectory({context, origin, width, engine, datab
   await page.route('**/dashboard?*', route => route.abort());
   const contextReply = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/plan-context'));
   await page.goto(origin + '/trajectory?tab=planning');
-  const report = (await (await contextReply).json()).household_trajectory;
+  const planContext = await (await contextReply).json();
+  const report = planContext.household_trajectory;
   const plan = page.locator('.pt-trajectory');
   await expect(plan).toBeVisible();
   assert.equal(requests.filter(request => request.path.endsWith('/plan-context')).length, 1);
@@ -206,7 +224,84 @@ export async function checkPlanTrajectory({context, origin, width, engine, datab
   await expect(plan.locator('[data-pt-target]')).toHaveText(target);
   await expect(plan.locator('.pt-earnings')).toContainText(money(report.monthly.expected_income_cents));
   await expect(plan.locator('.pt-cash')).toContainText(money(report.cash.observed_balance_cents));
-  await expect(plan.locator('.pt-pace tbody tr')).toHaveCount(report.pace.length);
+  const ring = plan.locator('[data-pt-chart="plan-target-composition"]');
+  const spending = plan.locator('[data-pt-chart="plan-spending-pace"]');
+  const fixed = ring.locator('.pt-chart-legend-button[data-key="fixed"]');
+  const variable = ring.locator('.pt-chart-legend-button[data-key="variable"]');
+  const detail = page.locator('#tr-dialog');
+  const endDetail = async button => {
+    await detail.getByRole('button', {name:'Close dialog'}).click();
+    await expect(detail).toBeHidden();
+    await expect(button).toBeFocused();
+  };
+  await expect(ring.locator('.pt-ring-center')).toContainText(target);
+  await expect(ring.locator('.pt-chart-legend-button')).toHaveCount(3);
+  const writeCount = requests.filter(request => !['GET','HEAD'].includes(request.method)).length;
+  await fixed.focus();
+  await fixed.press('Enter');
+  await expect(detail.locator('#tr-dialog-title')).toHaveText('Scheduled bills and debt');
+  const medicalIds = new Set(report.medical.bills.map(bill => bill.id));
+  const fixedItem = planContext.planning.fixed_records.find(record => !medicalIds.has(record.record_id) && record.monthly_cents > 0);
+  assert.ok(fixedItem, 'The monthly fixture provides a scheduled payment');
+  await expect(detail).toContainText(fixedItem.name);
+  await expect(detail).toContainText(money(fixedItem.monthly_cents));
+  await endDetail(fixed);
+  const ringFace = ring.locator('.pt-ring');
+  await ringFace.scrollIntoViewIfNeeded();
+  const bounds = await ringFace.boundingBox();
+  const middleAngle = Math.PI * report.monthly.fixed_cents / targetCents;
+  assert.ok(bounds && middleAngle > 0, 'The fixed-cost sector is drawn');
+  const position = {
+    x:bounds.width * (0.5 + 0.43 * Math.sin(middleAngle)),
+    y:bounds.height * (0.5 - 0.43 * Math.cos(middleAngle)),
+  };
+  if (engine === 'webkit') await ringFace.tap({position});
+  else await ringFace.click({position});
+  await expect(detail.locator('#tr-dialog-title')).toHaveText('Scheduled bills and debt');
+  await endDetail(ring.locator('.pt-ring-segment[data-key="fixed"]'));
+  await variable.click();
+  await expect(detail).toContainText('Spending used for the historical average');
+  const historicalMonth = report.monthly.history.find(row => report.monthly.estimate_months.includes(row.month));
+  assert.ok(historicalMonth, 'The monthly fixture supplies an observed historical basis');
+  await expect(detail).toContainText(money(historicalMonth.flexible_cents));
+  await endDetail(variable);
+  const basis = plan.locator('[name="pt-basis"]');
+  await basis.selectOption('saved');
+  await expect(ring.locator('.pt-ring-center')).toContainText(money(report.monthly.override_sustainable_cents));
+  await expect(variable).toContainText(money(report.monthly.flexible_cents));
+  await variable.click();
+  await expect(detail).toContainText('Saved monthly estimate');
+  await expect(detail).toContainText(money(report.monthly.historical_flexible_cents));
+  await endDetail(variable);
+  await basis.selectOption('history');
+  await expect(ring.locator('.pt-ring-center')).toContainText(target);
+  const medical = ring.locator('.pt-chart-legend-button[data-key="medical"]');
+  await medical.click();
+  await expect(detail).toContainText(money(report.monthly.medical_installments_cents));
+  await endDetail(medical);
+  await expect(spending.locator('.pt-chart-bar')).toHaveCount(report.pace.length);
+  const prior = report.pace[1];
+  assert.equal(prior.spending_cents, 40390, 'Prior-year economic costs include the card interest once');
+  assert.equal(prior.debt_service_cents, 7000);
+  assert.equal(prior.card_payment_cents, 9500);
+  await expect(spending.locator(`button[data-key="${prior.year}"] .pt-bar-fill`)).toBeVisible();
+  assert.ok(report.pace.some(row => row.spending_cents === null), 'Missing history stays visible beside measured periods');
+  for (const row of report.pace) {
+    const button = spending.locator(`button[data-key="${row.year}"]`);
+    await expect(button).toContainText(money(row.spending_cents));
+    await button.click();
+    await expect(detail.locator('#tr-dialog-title')).toContainText(String(row.year));
+    await expect(detail).toContainText('Recorded spending after refunds');
+    await expect(detail).toContainText('Card payments');
+    await expect(detail).toContainText(money(row.card_payment_cents));
+    await expect(detail).toContainText('Loan payments');
+    await expect(detail).toContainText(money(row.debt_service_cents));
+    await expect(detail).toContainText('Financing interest included in spending');
+    await expect(detail).toContainText(money(row.interest_cents));
+    await endDetail(button);
+  }
+  assert.equal(requests.filter(request => !['GET','HEAD'].includes(request.method)).length, writeCount, 'Opening chart details reads the current Plan without a write or scenario request');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'Monthly charts fit the viewport');
   await expect(plan.locator('.pt-history tbody tr')).toHaveCount(report.monthly.history.length);
 
   const books = await financialFingerprint(database);
@@ -277,6 +372,25 @@ export async function checkPlanTrajectory({context, origin, width, engine, datab
   assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.tr-workspace'),'::after').animationName), 'tr-page-sheen');
   assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.tr-workspace'),'::after').pointerEvents), 'none');
   assert.equal(requests.filter(request => request.path.endsWith('/dashboard')).length, 0, 'Direct household Plan stays on its authorized lightweight context');
+  assert.equal(requests.filter(request => request.path.endsWith('/debt-scenarios')).length, 0, 'Monthly Plan only loads its own report');
+  const accountId = planContext.account_options[0].id;
+  await page.goto(origin + '/trajectory?tab=debt&account_id=' + accountId);
+  await expect(page.getByText('Household debt uses all accounts', {exact:true})).toBeVisible();
+  await expect(page.locator('.pt-debt-section,[data-tab="debt"]:visible')).toHaveCount(0);
+  assert.equal(requests.filter(request => request.path.endsWith('/debt-scenarios')).length, 0, 'An account filter cannot request household debt');
+  const cleared = responseFor(page, 'debt-scenarios', 'POST');
+  await page.getByRole('button', {name:'Show all accounts'}).click();
+  assert.ok((await cleared).ok());
+  await expect(page.locator('.pt-debt-section')).toBeVisible();
+  assert.equal(new URL(page.url()).searchParams.has('account_id'), false);
+  const spaces = await page.locator('#trajectory').evaluate(node => JSON.parse(node.dataset.spaces));
+  const business = spaces.find(space => space.kind === 'business');
+  assert.ok(business, 'Fixture includes a distinct business');
+  const previews = requests.filter(request => request.path.endsWith('/debt-scenarios')).length;
+  await page.goto(origin + '/trajectory?tab=debt&space=' + business.id);
+  await expect(page.getByText('Household debt', {exact:true})).toBeVisible();
+  await expect(page.locator('.pt-debt-section,[data-tab="debt"]:visible')).toHaveCount(0);
+  assert.equal(requests.filter(request => request.path.endsWith('/debt-scenarios')).length, previews, 'Business scope cannot request household payoff figures');
   assert.deepEqual(errors, []);
   await page.close();
 

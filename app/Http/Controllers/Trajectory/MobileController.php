@@ -8,6 +8,7 @@ use App\Models\Trajectory\ExpenseNotice;
 use App\Models\Trajectory\PushSubscription;
 use App\Models\Trajectory\Space;
 use App\Models\Trajectory\Transaction;
+use App\Services\Trajectory\AssistantService;
 use App\Services\Trajectory\ExpenseNotificationService;
 use App\Services\Trajectory\FinanceAccess;
 use App\Services\Trajectory\WebPushService;
@@ -53,12 +54,12 @@ class MobileController extends Controller
     {
         $access->authorize($request->user(), $space);
         $before = $request->validate(['before' => 'sometimes|integer|min:1', 'transaction_id' => 'sometimes|integer|min:1', 'summary' => 'sometimes|boolean']);
-        // The closed assistant only needs its badge. Do not rebuild historical
-        // purchase budgets merely to count this user's unread notices.
+        $counts = [
+            'unread_count' => ExpenseNotice::where('space_id', $space->id)->where('user_id', $request->user()->id)->whereNull('read_at')->count(),
+            'review_count' => app(AssistantService::class)->categoryReviewQueue($space)->count(),
+        ];
         if ($request->boolean('summary')) {
-            return response()->json([
-                'unread_count' => ExpenseNotice::where('space_id', $space->id)->where('user_id', $request->user()->id)->whereNull('read_at')->count(),
-            ])->header('Cache-Control', 'private, no-store');
+            return response()->json($counts)->header('Cache-Control', 'private, no-store');
         }
         $notices = ExpenseNotice::where('space_id', $space->id)->where('user_id', $request->user()->id)
             ->when(isset($before['before']), fn ($q) => $q->where('id', '<', $before['before']))
@@ -76,7 +77,7 @@ class MobileController extends Controller
 
         return response()->json([
             'rows' => $rows, 'next_before' => $more ? $rows->last()['id'] : null,
-            'unread_count' => ExpenseNotice::where('space_id', $space->id)->where('user_id', $request->user()->id)->whereNull('read_at')->count(),
+            ...$counts,
             'preferences' => $this->preference($request, $space),
             'push' => ['ready' => $push->ready(), 'public_key' => $push->ready() ? config('trajectory_mobile.public_key') : null],
         ])->header('Cache-Control', 'private, no-store');

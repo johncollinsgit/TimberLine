@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {reportNavigation} from '../../resources/js/trajectory/navigation-history.js';
+import {reportNavigation, planDestinationUrl} from '../../resources/js/trajectory/navigation-history.js';
 function harness(){
  const listeners=new Map(),entries=[{state:null,url:'https://fixture.invalid/prior-404'},{state:{oauthOther:'preserved'},url:'https://fixture.invalid/trajectory'}];let index=1,number=0,value={tab:'money-flow',mode:'inflows',filter:{},focus:'Fictional company'},scope='household:all:year',enabled=true;
  const win={crypto:{randomUUID:()=>`opaque-${++number}`},location:{href:entries[index].url},addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
@@ -23,4 +23,13 @@ test('changed financial scope invalidates historical snapshots instead of restor
 });
 test('OAuth-disabled navigation leaves callback state untouched',()=>{
  const h=harness();h.enabled=false;h.nav.sync();assert.equal(h.nav.push(),false);assert.equal(h.nav.back(),false);assert.deepEqual(h.win.history.state,{oauthOther:'preserved'});assert.equal(h.entries.length,2);h.enabled=true;h.nav.sync();assert.equal(h.win.history.state.oauthOther,'preserved');h.nav.dispose();
+});
+
+test('Debt has a reloadable public tab and resolves old Plan links without adding private selection', () => {
+ const old = 'https://fixture.invalid/trajectory/personal/?tab=planning&section=debt&space=4#main';
+ const debt = planDestinationUrl(old, 'debt', null, 4);
+ assert.equal(debt, 'https://fixture.invalid/trajectory/personal/?tab=debt&space=4#main');
+ assert.equal(planDestinationUrl(debt, 'planning', null, 4), 'https://fixture.invalid/trajectory/personal/?tab=planning&space=4#main');
+ assert.equal(planDestinationUrl(old.replace('space=4','account_id=22'), 'debt', null, 4), 'https://fixture.invalid/trajectory/personal/?tab=debt#main');
+ assert.equal(planDestinationUrl('https://fixture.invalid/trajectory', 'debt', 22, 4), 'https://fixture.invalid/trajectory?tab=debt');
 });
