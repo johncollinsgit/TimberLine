@@ -7,7 +7,8 @@ point in previous years.
 
 The Ask Everbranch badge shows how many transactions in the workspace still
 need category review. Saving or undoing a category updates the count in place.
-Unread alerts appear on the Expenses tab.
+Unread alerts appear on the Expenses tab. On phones, the report controls scroll
+above the bottom navigation so Refresh stays within reach.
 
 ## 2026-11-27 · Plan Trajectory
 

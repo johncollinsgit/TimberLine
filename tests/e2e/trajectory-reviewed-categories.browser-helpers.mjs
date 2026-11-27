@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import {devices, expect} from '@playwright/test';
-import {closeReportControls, selectReportRange, selectReportScope} from './trajectory-controls.browser-helpers.mjs';
+import {closeReportControls, openReportOptions, selectReportScope} from './trajectory-controls.browser-helpers.mjs';
 
 export async function checkReviewedCategoryChanges({context, origin, fixture, payments, childId, reviewId, phone}) {
   const deviceContext = phone ? await context.browser().newContext({
-    ...devices['iPhone 13'], storageState: await context.storageState(), reducedMotion: 'reduce',
+    ...devices['iPhone 13'], viewport:{width:390, height:664}, storageState: await context.storageState(), reducedMotion: 'reduce',
   }) : context;
   if (phone) await deviceContext.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   const page = await deviceContext.newPage();
@@ -164,12 +164,12 @@ export async function checkReviewedCategoryChanges({context, origin, fixture, pa
   assert.deepEqual(await reloaded, counts);
   await assertCount(counts.review_count);
   assert.deepEqual(errors, []);
-  await checkBadgeDuringWorkspaceSwitch(page, origin, fixture);
+  await checkBadgeDuringWorkspaceSwitch(page, origin, fixture, phone);
   await page.close();
   if (phone) await deviceContext.close();
 }
 
-async function checkBadgeDuringWorkspaceSwitch(page, origin, fixture) {
+async function checkBadgeDuringWorkspaceSwitch(page, origin, fixture, phone) {
   const badge = page.locator('.tr-assistant-launch [data-assistant-badge]');
   let holdHousehold = false, householdWaiting = false, businessWaiting = false, contextWaiting = false;
   let finishHousehold, finishBusiness, finishContext;
@@ -198,8 +198,21 @@ async function checkBadgeDuringWorkspaceSwitch(page, origin, fixture) {
     await page.goto(origin + '/trajectory?tab=analysis');
     await expect(badge).toHaveText('7');
     holdHousehold = true;
-    await selectReportRange(page, 'week');
+    await openReportOptions(page);
+    const refresh = page.getByRole('button', {name:'Refresh', exact:true});
+    if (phone) {
+      const panel = await page.locator('#tr-report-controls').boundingBox();
+      const rail = await page.locator('.vf-mobile-nav').boundingBox();
+      assert.ok(panel.y + panel.height <= rail.y, 'The open report panel clears the phone navigation');
+      await refresh.tap();
+    } else {
+      await refresh.click();
+    }
     await closeReportControls(page);
+    if (phone) {
+      await expect(page.locator('.vf-mobile-nav [data-tab="analysis"]')).toHaveAttribute('aria-current','page');
+      await expect(page.locator('.tr-assistant-launch')).toBeVisible();
+    }
     await expect.poll(() => householdWaiting).toBe(true);
     await selectReportScope(page, 'business');
     await expect(badge).toBeHidden();
