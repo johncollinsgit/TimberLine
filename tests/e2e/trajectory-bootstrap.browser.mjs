@@ -8,6 +8,7 @@ import {createServer} from 'node:net';
 import {chromium,webkit,expect} from '@playwright/test';
 import {selectReportScope,selectReportRange,closeReportControls,openReportControls,openReportOptions} from './trajectory-controls.browser-helpers.mjs';
 import {checkAnalysisHeader} from './trajectory-analysis-header.browser-helpers.mjs';
+import {checkPlanTrajectory} from './trajectory-plan-trajectory.browser-helpers.mjs';
 import {checkReviewedCategoryChanges} from './trajectory-reviewed-categories.browser-helpers.mjs';
 const exec=promisify(execFile),base=resolve(),probe=createServer();
 await new Promise(done=>probe.listen(0,'127.0.0.1',done));const port=probe.address().port;await new Promise(done=>probe.close(done));
@@ -35,6 +36,24 @@ try{
  $child=$attribution->saveDefinition($owner,$space,'category_definition','Family reimbursements',['key'=>'family_reimbursements','direction'=>'expense','parent_record_id'=>$parent->id]);
  $attribution->saveDefinition($owner,$space,'category_definition','Christmas',['key'=>'christmas','direction'=>'expense']);
  $cash=App\\Models\\Trajectory\\Account::where('space_id',$space->id)->where('source_key','fictional:flow-cash')->sole();
+ foreach ([['fictional:flow-card',1100,4500],['fictional:detail-card',2900,8000]] as [$key,$apr,$minimum]) {
+   $credit=App\\Models\\Trajectory\\Account::where('space_id',$space->id)->where('source_key',$key)->sole();
+   $service->save($owner,$space,'debt',$credit->name,['kind'=>'credit','account_id'=>$credit->id,'payment_account_id'=>$cash->id,
+     'balance_cents'=>$credit->balance_cents+32040,'observed_on'=>now($space->timezone)->subMonthNoOverflow()->toDateString(),
+     'apr_bps'=>$apr,'payment_cents'=>$minimum,'escrow_cents'=>0,'fees_cents'=>0,'confirmed'=>true,'interest_method'=>'monthly',
+     'payment_cadence'=>'monthly','next_due_on'=>now($space->timezone)->addDays(3)->toDateString()]);
+ }
+ foreach ([1,2,3] as $offset) {
+   $key='fictional-prior-living-cost-'.$offset;
+   app(App\\Services\\Trajectory\\LedgerService::class)->ingest($cash,[['id'=>$key,'date'=>now($space->timezone)->startOfMonth()->subMonthsNoOverflow($offset)->toDateString(),'merchant'=>'Fictional household supply','amount_cents'=>-43000]]);
+   App\\Models\\Trajectory\\Transaction::where('account_id',$cash->id)->where('source_key',$cash->source_key.':'.$key)->sole()->update(['flow'=>'expense','category'=>'groceries','reviewed'=>true]);
+ }
+ foreach ([12345,16789] as $i=>$cents) {
+   $key='fictional-plan-share-'.$i;
+   app(App\\Services\\Trajectory\\LedgerService::class)->ingest($cash,[['id'=>$key,'date'=>$start,'merchant'=>'SAMARITAN MEMBER Transfer '.(991000+$i),'amount_cents'=>$cents]]);
+   App\\Models\\Trajectory\\Transaction::where('account_id',$cash->id)->where('source_key',$cash->source_key.':'.$key)->sole()->update(['flow'=>'medical_share','category'=>'health','reviewed'=>true]);
+ }
+ $service->save($owner,$space,'asset','Fictional saleable trailer',['asset_type'=>'other','value_cents'=>65000,'observed_on'=>$start,'plan_sale_proceeds_cents'=>55000]);
  $payments=[];
  foreach ([-2167,-4312] as $amount) {
    $key='fictional-zelle-'.$amount;
@@ -52,7 +71,7 @@ try{
   await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
   const csrf=(await(await context.request.get(origin+'/login')).text()).match(/<meta name="csrf-token" content="([^"]+)"/)?.[1];assert.ok(csrf);
   assert.ok((await context.request.post(origin+'/login',{form:{email:'flow@fixture.invalid',password:'Fictional-flow-only-2028!',_token:csrf},headers:{Accept:'application/json'}})).ok());
-  for(const width of process.argv.includes('--category-edits')||process.argv.includes('--report-header')?[]:[390,1440]){
+  for(const width of process.argv.includes('--category-edits')||process.argv.includes('--report-header')||process.argv.includes('--plan-trajectory')?[]:[390,1440]){
    const page=await context.newPage(),errors=[],reads=[];page.setDefaultTimeout(12000);await page.setViewportSize({width,height:950});
    page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.method()==='GET')reads.push(new URL(request.url()).pathname);});
    let releaseDashboard,delivered=false;const dashboardGate=new Promise(done=>{releaseDashboard=done;});
@@ -150,17 +169,7 @@ try{
    // Analysis tab is a section home, not a link back to Budget's drilldown.
    await primary('budget');await primary('analysis');await expect(page.locator('#tr-page-title')).toHaveText('Analysis');await expect(page.locator('#vf-period-chart')).toBeVisible();await expect(page.locator('#tr-back')).toBeHidden();
    assert.deepEqual(errors,[]);await page.close();
-   const planPage=await context.newPage();await planPage.setViewportSize({width,height:950});const planReads=[];
-   planPage.on('request',request=>{if(request.method()==='GET')planReads.push(new URL(request.url()).pathname);});
-   await planPage.route('**/dashboard?*',route=>route.abort());
-   await planPage.goto(origin+'/trajectory?tab=planning');await expect(planPage.locator('#tr-plan-outlook')).toBeVisible();await expect(planPage.locator('.tr-plan-stats')).toBeVisible();
-   assert.equal(planReads.filter(path=>path.endsWith('/plan-context')).length,1);assert.equal(planReads.filter(path=>path.endsWith('/dashboard')).length,0);
-   assert.equal(await planPage.evaluate(()=>getComputedStyle(document.querySelector('.tr-workspace'),'::after').animationName),'none','Reduced motion stops the page sheen');
-   assert.equal(await planPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
-   await planPage.screenshot({path:`/tmp/trajectory-clarity-qa/plan-${name}-${width}.png`,fullPage:true});
-   await planPage.locator('.tr-plan-stats [data-kind="costs"]').click();await expect(planPage.locator('#tr-dialog')).toBeVisible();await planPage.locator('#tr-close').click();
-   await planPage.emulateMedia({reducedMotion:'no-preference'});assert.equal(await planPage.evaluate(()=>getComputedStyle(document.querySelector('.tr-workspace'),'::after').animationName),'tr-page-sheen');
-   assert.equal(await planPage.evaluate(()=>getComputedStyle(document.querySelector('.tr-workspace'),'::after').pointerEvents),'none');await planPage.close();
+   await checkPlanTrajectory({context,origin,width,engine:name,database:join(dir,'db.sqlite')});
 
    const failed=await context.newPage();await failed.setViewportSize({width,height:950});
    let releaseFailure;const failureGate=new Promise(done=>{releaseFailure=done;});
@@ -197,13 +206,17 @@ try{
     releaseBusiness();await expect(business.locator('#tr-add')).toBeEnabled();await business.close();
    }
   }
-  if(!process.argv.includes('--report-header')){
+  if(!process.argv.includes('--report-header')&&!process.argv.includes('--plan-trajectory')){
    await checkReviewedCategoryChanges({context,origin,fixture,payments:combinedBudget.payments,childId:combinedBudget.child_id,phone:name==='webkit'});
    checks.push(name+' '+(name==='webkit'?'phone':'desktop')+': two reviewed purchases recategorized in the mounted merchant ledger');
   }
-  if(!process.argv.includes('--category-edits')){
+  if(!process.argv.includes('--category-edits')&&!process.argv.includes('--plan-trajectory')){
    await checkAnalysisHeader({context,origin,phone:name==='webkit'});
    checks.push(name+': Analysis controls, focus, resize and drilled-ledger layout');
+  }
+  if(process.argv.includes('--plan-trajectory')){
+   await checkPlanTrajectory({context,origin,width:name==='webkit'?390:1440,engine:name,database:join(dir,'db.sqlite')});
+   checks.push(name+': direct and full-dashboard Plan, receipt installments, historical controls, debt comparisons, replaceable budget reservation and ledger integrity');
   }
   await context.close();await browser.close();browser=null;
  }

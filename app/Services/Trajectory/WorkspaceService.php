@@ -28,12 +28,23 @@ class WorkspaceService
         abort_if($space->kind === 'household' && $space->owner_user_id !== $user->id, 403, 'Only the household owner can change ownership and sharing settings.');
     }
 
-    public function save(User $user, Space $space, array $data): void
+    public function save(User $user, Space $space, array $data): ?array
     {
         $this->manage($user, $space);
-        DB::transaction(function () use ($user, $space, $data): void {
+
+        return DB::transaction(function () use ($user, $space, $data): ?array {
             $space = Space::whereKey($space->id)->lockForUpdate()->firstOrFail();
+            $this->manage($user, $space);
             $before = $space->only(['name', 'settings']);
+            if ($space->kind === 'household' && array_key_exists('debt_extra_cents', $data)) {
+                abort_unless(isset($data['debt_payoff_method'], $data['debt_payoff_version']), 422, 'Choose a debt payoff method using the current plan version.');
+            }
+            $payoff = isset($data['debt_payoff_method']) ? app(DebtPayoffPlanService::class) : null;
+            if ($payoff) {
+                $changes = $payoff->changes($space, $data['debt_payoff_method'], $data['debt_extra_cents'], $data['debt_payoff_version']);
+                unset($data['debt_payoff_method'], $data['debt_extra_cents'], $data['debt_payoff_version']);
+                $data = [...$data, ...$changes];
+            }
             if (isset($data['income_categories'])) {
                 // Never remove a category that is still used by historical records.
                 $data['income_categories'] = [...($space->settings['income_categories'] ?? []), ...$data['income_categories']];
@@ -41,8 +52,13 @@ class WorkspaceService
             }
             $name = $data['name'] ?? $space->name;
             unset($data['name']);
+            if ($payoff && ! $data && $space->name === $name) {
+                return $payoff->current($space);
+            }
             $space->update(['name' => $name, 'settings' => [...($space->settings ?? []), ...$data]]);
             Event::create(['space_id' => $space->id, 'actor_id' => $user->id, 'action' => 'workspace_settings', 'before' => $before, 'after' => $space->only(['name', 'settings'])]);
+
+            return $payoff?->current($space);
         });
     }
 

@@ -187,7 +187,7 @@ class MedicalSharingService
                 $owed = max(0, $d['billed_cents'] - $d['adjustment_cents'] - $paid);
                 $bills[] = ['id' => $bill->id, 'name' => $bill->name, ...$d, 'paid_cents' => $paid, 'owed_cents' => $owed, 'evidence_ids' => array_values(array_unique($allocation['evidence'][$bill->id] ?? []))];
                 // Retain settled records to suppress a replaced perpetual provider schedule.
-                $debts[] = ['id' => $bill->id, 'name' => $bill->name, 'kind' => 'medical', 'medical_need_id' => $need->id, 'balance_cents' => $owed, 'apr_bps' => 0, 'payment_cents' => $d['confirmed'] ? $d['payment_cents'] : 0, 'next_due_on' => ($d['next_due_on'] ?? '') > $today->toDateString() ? $d['next_due_on'] : $today->addDay()->toDateString(), 'recurring_record_id' => $d['recurring_record_id'] ?? null];
+                $debts[] = ['id' => $bill->id, 'name' => $bill->name, 'kind' => 'medical', 'medical_need_id' => $need->id, 'balance_cents' => $owed, 'rate_millis' => $d['rate_millis'] ?? 0, 'apr_bps' => Money::ratio($d['rate_millis'] ?? 0, 1, 10), 'payment_cents' => $d['confirmed'] ? $d['payment_cents'] : 0, 'next_due_on' => ($d['next_due_on'] ?? '') > $today->toDateString() ? $d['next_due_on'] : $today->addDay()->toDateString(), 'recurring_record_id' => $d['recurring_record_id'] ?? null];
                 if ($owed > 0 && (! $d['confirmed'] || ($d['next_due_on'] ?? '') <= $today->toDateString())) {
                     $issues[] = 'Review the payment amount and next unpaid date for '.$bill->name.'. Due or overdue confirmed payments are provisionally scheduled tomorrow.';
                 }

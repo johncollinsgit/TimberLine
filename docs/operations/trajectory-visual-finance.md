@@ -45,6 +45,38 @@ expired, overlapping, partial or missing targets remain identified. A parent
 target and child targets cannot be added twice. Program targets select effective
 cohorts within their own program. Payroll retains owner, studio and event roles.
 
+## Plan Trajectory
+
+The Debt payoff view loads the household’s inventory on demand from
+`debt-scenarios` with `view=household_plan`. Separate observations of an account
+describe one liability. The view compares payoff orders with the same monthly
+extra. The highest known rate can identify a conditional first target when
+missing terms prevent a payoff projection. Saving a method and amount updates
+one versioned monthly reservation. Budget applies it once to the remaining
+allowance from its effective month. Required payments stay in scheduled costs.
+
+The household Plan opens through the authorized plan-context endpoint. The
+monthly take-home target combines scheduled bills, required debt service,
+confirmed medical installments and variable spending. The default uses the available
+history from the previous three complete calendar months. A saved estimate can
+be selected independently. Optional
+savings and extra debt payments are shown separately. Current-month spending
+and the preceding two years use the same calendar cutoff. Coverage appears
+beside each period.
+
+Bank cash uses the selected balance sources and displays observation dates.
+Plan shows recorded medical reserves and medical deposits awaiting a case match.
+Received medical deposits can be spread over a chosen number of monthly
+payments. A saved plan identifies one sender and receipt month. It records an allocation
+schedule against the original receipts. The original total can differ
+from the amount still on hand.
+
+A cash-cushion scenario can include a chosen amount of cash and selected
+estimates of asset sale proceeds. General assets require an entered net sale
+estimate. Metal lots use the remaining quantity and an identified price or
+dated owner offer. A temporary draw from medical cash includes a replacement
+amount for the remaining payment months. Scenarios assume even monthly timing.
+
 ## Interfaces and attribution
 
 All space routes require authentication, verified account and FinanceAccess.

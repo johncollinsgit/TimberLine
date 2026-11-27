@@ -237,12 +237,17 @@ class DashboardService
         if ($planningOnly) {
             abort_unless($viewer, 403);
             $context = app(VisualContextService::class)->build($viewer, $space, $accountId);
+            $planning = app(PlanningService::class)->build($space, $entries, $records, $accounts, $start, $end, $baseline);
 
             return [...$context,
                 'projection' => 'plan_context',
                 'available' => [...$context['available'], 'planning'],
                 'range' => ['key' => $range, 'start' => $start->toDateString(), 'end' => $end->toDateString()],
-                'planning' => app(PlanningService::class)->build($space, $entries, $records, $accounts, $start, $end, $baseline),
+                'planning' => $planning,
+                ...($space->kind === 'household' && ! $scopeAccount ? [
+                    'debt_payoff' => app(DebtPayoffPlanService::class)->current($space),
+                    'household_trajectory' => app(HouseholdTrajectoryService::class)->build($space, $accounts, $entries, $records, $planning, $medical, $today),
+                ] : []),
                 'workspace_settings' => array_intersect_key($space->settings ?? [], array_flip(['income_categories', 'flexible_monthly_cents', 'debt_extra_cents', 'debt_target_months'])),
             ];
         }
@@ -354,6 +359,7 @@ class DashboardService
             'review_suggestions' => app(ReviewSuggestionService::class)->forEntries($entries),
             'anomalies' => app(AnomalyService::class)->detect($space, $entries),
             'planning' => $planning,
+            ...($space->kind === 'household' && ! $scopeAccount ? ['debt_payoff' => app(DebtPayoffPlanService::class)->current($space)] : []),
             'decision_support' => $decisionSupport,
             'question_summary' => $questionSummary,
             'support_business_options' => $questionSummary['business_options'] ?? [],

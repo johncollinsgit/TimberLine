@@ -74,7 +74,7 @@ class PlanningService
             $minimum = $medicalDebt['payment_cents'];
             $fixed += $minimum;
             $fixedRows[] = ['name' => $medicalDebt['name'], 'record_id' => $medicalDebt['id'], 'monthly_cents' => $minimum, 'estimated' => false];
-            $debts[] = ['name' => $medicalDebt['name'], 'id' => $medicalDebt['id'], 'balance_cents' => $medicalDebt['balance_cents'], 'rate_millis' => 0, 'minimum_cents' => $minimum];
+            $debts[] = ['name' => $medicalDebt['name'], 'id' => $medicalDebt['id'], 'balance_cents' => $medicalDebt['balance_cents'], 'rate_millis' => $medicalDebt['rate_millis'], 'minimum_cents' => $minimum];
         }
         $variable = $recent->whereIn('flow', ['expense', 'refund'])->filter(function ($e) use ($schedules, $terms) {
             return ! $e['face_punched'] && $e['category'] !== 'interest' && ! $schedules->contains(fn ($r) => ($r->data['account_id'] ?? null) === $e['account_id'] && ClassificationService::merchant($r->data['merchant']) === ClassificationService::merchant($e['merchant']))

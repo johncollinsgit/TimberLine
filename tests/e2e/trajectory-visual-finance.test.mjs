@@ -289,6 +289,23 @@ test('budget totals exclude savings goals and parent-shared lines, retaining est
  assert.equal(financeBudgetTotals({rows,future:true}).left,null);
  assert.equal(financeBudgetTotals({rows:[{category:'food',status:'overlapping_targets',target_cents:10000,remaining_cents:5000}]}).total,null);
 });
+test('the payoff reserve reduces only known remaining allowance and never double-subtracts the server summary', () => {
+  const reservation = {label:'Extra debt payoff', amount_cents:4000, method:'snowball'};
+  const rows = [{category:'groceries', target_cents:22000, remaining_cents:12000},
+    {category:'produce', uses_parent_budget:'groceries', remaining_cents:3000},
+    {category:'savings', mode:'fund', remaining_cents:9000}];
+  const known = {rows, debt_payoff_reservation:reservation, summary:{target_cents:22000, remaining_cents:8000}};
+  assert.deepEqual(financeBudgetTotals(known), {total:22000,left:8000,partialTotal:false,partialLeft:false,estimated:false});
+  assert.equal(financeBudgetTotals({...known,summary:{remaining_cents:0}}).left,0);
+  assert.equal(financeBudgetTotals({...known,future:true}).left,null);
+  const partial = financeBudgetTotals({debt_payoff_reservation:reservation,rows:[
+    ...rows, {category:'fuel',planned_cents:6000,estimated_remaining_cents:1500}, {category:'health'}]});
+  assert.deepEqual(partial,{total:28000,left:9500,partialTotal:true,partialLeft:true,estimated:true});
+  assert.equal(financeBudgetTotals({debt_payoff_reservation:reservation, rows:[]}).left,null);
+  assert.equal(financeBudgetTotals({debt_payoff_reservation:reservation, rows:[{category:'groceries',planned_cents:200}]}).left,null);
+  assert.equal(financeBudgetTotals({debt_payoff_reservation:reservation, rows:[{category:'fuel',remaining_cents:500}]}).left,-3500);
+  assert.equal(financeBudgetTotals({rows}).left,12000);
+});
 test('goals are separate, collapsed and absent from the home budget preview; list indexes still open the original row', async () => {
  const budgets={rows:[{key:'goal',category:'repairs',label:'Repair goal',mode:'fund',fund:{target_cents:150000,saved_cents:0}},{key:'food',category:'groceries',label:'Groceries',target_cents:140000,spent_cents:100000,remaining_cents:40000}]};
  const {ui,changes}=fixture(async path=>path.includes('budget-envelopes')?budgets:structuredClone(report));await ui.refresh();
