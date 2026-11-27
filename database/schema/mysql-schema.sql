@@ -13097,6 +13097,27 @@ CREATE TABLE `trajectory_links` (
   UNIQUE KEY `traj_link_unique` (`household_id`,`business_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `trajectory_medical_documents`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `trajectory_medical_documents` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `space_id` bigint unsigned NOT NULL,
+  `need_id` bigint unsigned DEFAULT NULL,
+  `uploaded_by` bigint unsigned NOT NULL,
+  `sha256` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `byte_size` int unsigned NOT NULL,
+  `metadata` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `contents` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `traj_medical_doc_unique` (`space_id`,`need_id`,`sha256`),
+  KEY `trajectory_medical_documents_need_id_foreign` (`need_id`),
+  CONSTRAINT `trajectory_medical_documents_need_id_foreign` FOREIGN KEY (`need_id`) REFERENCES `trajectory_records` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `trajectory_medical_documents_space_id_foreign` FOREIGN KEY (`space_id`) REFERENCES `trajectory_spaces` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `trajectory_members`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -15130,3 +15151,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (350,'2026_11_22_12
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (351,'2026_11_22_140000_add_marketplace_video_themes',60);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (352,'2026_11_22_150000_add_maker_video_source_post',60);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (353,'2026_11_26_120000_add_budget_account_to_trajectory_allocation_details',61);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (354,'2026_11_27_190000_create_trajectory_medical_documents',62);
