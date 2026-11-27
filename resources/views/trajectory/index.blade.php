@@ -2,6 +2,7 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="csrf-token" content="{{ csrf_token() }}"><meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#25766b"><title>Trajectory · Your money, in focus</title>@if(isset($trajectorySurface) && in_array($trajectorySurface, ['personal','business'], true))<link rel="manifest" href="/trajectory/{{ $trajectorySurface }}/manifest.webmanifest"><link rel="apple-touch-icon" href="/trajectory-brand/{{ $trajectorySurface }}-192.png"><meta name="apple-mobile-web-app-capable" content="yes">@endif</head><body class="trajectory-site">
     @vite('resources/js/trajectory/app.js')
+    @php($primaryTabs = ['overview'=>['⌂','Home'],'analysis'=>['◴','Analysis'],'budget'=>['▦','Budget'],'planning'=>['↗','Plan']] + ($spaces->contains('kind','household') ? ['debt'=>['↘','Debt']] : []) + ['accounts'=>['▤','Accounts']])
     <main id="trajectory" class="tr-app" data-viewer-id="{{ request()->user()->getAuthIdentifier() }}" data-spaces="{{ json_encode($spaces->map->only(['id','name','kind'])->values()) }}" data-invite="{{ request('invite','') }}" data-surface="{{ $trajectorySurface ?? '' }}">
         <div id="tr-mobile-overlay" class="tr-mobile-overlay" aria-hidden="true" hidden></div>
         <section id="tr-mobile-splash" class="tr-mobile-splash" aria-label="Loading Trajectory" hidden>
@@ -12,8 +13,8 @@
             <a class="tr-wordmark" href="{{ $trajectoryEntry }}"><span class="tr-logo" aria-hidden="true">↗</span>trajectory<span class="tr-brand-dot">.</span></a>
             <p class="tr-nav-label">YOUR MONEY, IN FOCUS</p>
             <nav class="tr-tabs tr-primary-navigation" aria-label="Trajectory sections">
-                @foreach(['overview'=>['⌂','Home'],'analysis'=>['◴','Analysis'],'budget'=>['▦','Budget'],'planning'=>['↗','Plan'],'accounts'=>['▤','Accounts']] as $key=>$item)
-                <button data-tab="{{ $key }}" @if($key==='overview') aria-current="page" @endif><span aria-hidden="true">{{ $item[0] }}</span>{{ $item[1] }}</button>
+                @foreach($primaryTabs as $key=>$item)
+                <button data-tab="{{ $key }}" @if($key==='debt') hidden @endif @if($key==='overview') aria-current="page" @endif><span aria-hidden="true">{{ $item[0] }}</span>{{ $item[1] }}</button>
                 @endforeach
             </nav>
             <details class="tr-nav-tools"><summary>More tools</summary><nav class="tr-tabs" aria-label="Financial tools">@foreach(['transactions'=>['⇄','Review transactions'],'money-flow'=>['⇢','Money flow'],'history'=>['◷','Cash flow & history'],'bills'=>['▣','Bills & goals'],'medical'=>['♡','Medical sharing'],'assets'=>['◈','Wealth & debt'],'business'=>['▥','Business'],'anomalies'=>['!','Category anomalies'],'profit'=>['▤','Profit & loss'],'sales-tax'=>['▤','Sales tax'],'tax'=>['✓','Tax review'],'companies'=>['▦','Businesses'],'legacy-overview'=>['↗','Detailed forecast']] as $key=>$item)<button data-tab="{{ $key }}"><span aria-hidden="true">{{ $item[0] }}</span>{{ $item[1] }}</button>@endforeach</nav></details>
@@ -84,6 +85,6 @@
         <div id="tr-content" aria-busy="true"><div class="tr-empty">Loading your finance spaces…</div></div>
         <dialog id="tr-dialog" class="tr-dialog"><form id="tr-form"><header><h2 id="tr-dialog-title">Add to your plan</h2><button type="button" id="tr-close" aria-label="Close dialog">×</button></header><div id="tr-fields"></div><div id="tr-form-error" class="tr-error" role="alert" hidden></div><footer><button type="button" id="tr-cancel">Cancel</button><button type="submit" class="tr-primary" id="tr-save">Save</button></footer></form></dialog>
         </div>
-        <nav class="vf-mobile-nav" aria-label="Primary phone navigation">@foreach(['overview'=>['⌂','Home'],'analysis'=>['◴','Analysis'],'budget'=>['▦','Budget'],'planning'=>['↗','Plan'],'accounts'=>['▤','Accounts']] as $key=>$item)<button type="button" data-tab="{{ $key }}" @if($key==='overview') aria-current="page" @endif><span aria-hidden="true">{{ $item[0] }}</span>{{ $item[1] }}</button>@endforeach</nav>
+        <nav class="vf-mobile-nav" aria-label="Primary phone navigation">@foreach($primaryTabs as $key=>$item)<button type="button" data-tab="{{ $key }}" @if($key==='debt') hidden @endif @if($key==='overview') aria-current="page" @endif><span aria-hidden="true">{{ $item[0] }}</span>{{ $item[1] }}</button>@endforeach</nav>
     </main>
 </body></html>

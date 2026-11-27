@@ -371,8 +371,10 @@
     background: #f4f8f5;
   }
   .trajectory-site .tr-mobile-enhanced #tr-mobile-top-actions #tr-date-toggle[aria-expanded="true"] { background: #deeee3; color: #225841; }
+  .tr-mobile-enhanced:has(#tr-report-controls[data-open]) .tr-assistant-launch { visibility: hidden; }
   .trajectory-site .tr-mobile-enhanced #tr-report-controls {
-    max-height: calc(100dvh - 86px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    /* Leave the 59px top bar and the fixed bottom navigation clear. */
+    max-height: calc(100dvh - 135px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     width: min(370px, calc(100vw - 24px));
     padding: 16px;
   }

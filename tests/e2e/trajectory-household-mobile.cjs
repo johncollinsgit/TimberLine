@@ -6,12 +6,12 @@ const { chromium } = require('playwright');
 const base = path.resolve(__dirname, '../..');
 function fixture() {
   let html = fs.readFileSync(path.join(base, 'resources/views/trajectory/index.blade.php'), 'utf8');
-  html = html.replace(/^@php\([^\n]+\)\n/, '').replace(/@if\(isset\(\$trajectorySurface\)[\s\S]*?@endif/, '');
+  html = html.replace(/^[ \t]*@php\([^\n]+\)\n/gm, '').replace(/@if\(isset\(\$trajectorySurface\)[\s\S]*?@endif/, '');
   html = html.replace(/@vite\([^\n]+\)/, '<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/household-mobile.css"><link rel="stylesheet" href="/visual-finance.css"><link rel="stylesheet" href="/report-header.css">');
   html = html.replace(/data-spaces="[^"]*"/, 'data-spaces="[]"');
   // Render each named Blade container, rather than depending on loop order.
-  // Both navigation surfaces exercise the same five production destinations.
-  const destinations = [['overview','Home'], ['analysis','Analysis'], ['budget','Budget'], ['planning','Plan'], ['accounts','Accounts']];
+  // Both navigation surfaces exercise the same household destinations.
+  const destinations = [['overview','Home'], ['analysis','Analysis'], ['budget','Budget'], ['planning','Plan'], ['debt','Debt'], ['accounts','Accounts']];
   const primary = destinations.map(([key, label]) => `<button type="button" data-tab="${key}">${label}</button>`).join('');
   html = html.replace(/(<nav class="tr-tabs tr-primary-navigation"[^>]*>)[\s\S]*?<\/nav>/, `$1${primary}</nav>`);
   const tools = [['transactions','Review transactions'],['money-flow','Money flow'],['history','Cash flow & history'],['bills','Bills & goals'],['medical','Medical sharing'],['assets','Wealth & debt'],['business','Business'],['anomalies','Category anomalies'],['profit','Profit & loss'],['sales-tax','Sales tax'],['tax','Tax review'],['companies','Businesses'],['legacy-overview','Detailed forecast']];
@@ -93,10 +93,10 @@ async function main() {
     await page.locator('#tr-mobile-close').focus();
     await page.keyboard.press('Shift+Tab');
     assert.equal(await page.locator('#tr-mobile-drawer').evaluate(el => el.contains(document.activeElement)), true);
-    assert.deepEqual(await page.locator('.tr-primary-navigation [data-tab]').allTextContents(), ['Home','Analysis','Budget','Plan','Accounts']);
-    assert.deepEqual(await page.locator('.vf-mobile-nav [data-tab]').allTextContents(), ['Home','Analysis','Budget','Plan','Accounts']);
-    await page.locator('#tr-mobile-drawer [data-tab="budget"]').click();
-    assert.equal(await page.locator('#tr-page-title').textContent(), 'budget');
+    assert.deepEqual(await page.locator('.tr-primary-navigation [data-tab]').allTextContents(), ['Home','Analysis','Budget','Plan','Debt','Accounts']);
+    assert.deepEqual(await page.locator('.vf-mobile-nav [data-tab]').allTextContents(), ['Home','Analysis','Budget','Plan','Debt','Accounts']);
+    await page.locator('#tr-mobile-drawer [data-tab="debt"]').click();
+    assert.equal(await page.locator('#tr-page-title').textContent(), 'debt');
     assert.equal(await page.locator('#tr-mobile-menu').getAttribute('aria-expanded'), 'false');
     assert.deepEqual(await page.locator('#tr-range option').evaluateAll(nodes => nodes.map(node => node.value)), ['day','week','month','quarter','year','all','custom']);
     await page.locator('.vf-mobile-nav [data-tab="analysis"]').click();
@@ -138,7 +138,7 @@ async function main() {
     assert.equal(await page.getByRole('link', {name: 'Contact us', exact: true}).getAttribute('href'), '/platform.contact');
     assert.equal(await page.locator('img').first().getAttribute('src'), '/images/marketplace/studio.jpg');
     assert.equal(await page.getByRole('link', {name: 'Privacy', exact: true}).getAttribute('href'), '/legal.privacy');
-    console.log('Fictional mobile/landing assertions passed: five primary destinations, phone navigation, splash, skip, drawer, focus, overlay, reporting periods, reduced motion, local image and genuine contact/legal links.');
+    console.log('Fictional mobile/landing assertions passed: household primary destinations, phone navigation, splash, skip, drawer, focus, overlay, reporting periods, reduced motion, local image and genuine contact/legal links.');
   } finally { await browser.close(); }
 }
 main().catch(error => {console.error(error);process.exitCode = 1;});

@@ -11,6 +11,9 @@ import {checkAnalysisHeader} from './trajectory-analysis-header.browser-helpers.
 import {checkPlanTrajectory} from './trajectory-plan-trajectory.browser-helpers.mjs';
 import {checkReviewedCategoryChanges} from './trajectory-reviewed-categories.browser-helpers.mjs';
 const exec=promisify(execFile),base=resolve(),probe=createServer();
+const onlyPlan=process.argv.includes('--plan-trajectory');
+const fullSuite=!onlyPlan && !process.argv.includes('--category-edits') && !process.argv.includes('--report-header');
+const includesPlan=fullSuite || onlyPlan;
 await new Promise(done=>probe.listen(0,'127.0.0.1',done));const port=probe.address().port;await new Promise(done=>probe.close(done));
 const dir=await mkdtemp(join(tmpdir(),'codex-money-flow-bootstrap-')),origin=`http://127.0.0.1:${port}`;
 await writeFile(join(dir,'db.sqlite'),'');
@@ -26,6 +29,7 @@ try{
  $app=require ${JSON.stringify(join(base,'bootstrap/app.php'))};$app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();
  if(!app()->environment('testing')||config('database.default')!=='sqlite'||realpath(config('database.connections.sqlite.database'))!==realpath(${JSON.stringify(join(dir,'db.sqlite'))}))throw new RuntimeException('Disposable fixture only');
  $space=App\\Models\\Trajectory\\Space::findOrFail(${Number(fixture.space_id)});$owner=App\\Models\\User::where('email','flow@fixture.invalid')->firstOrFail();
+ ${includesPlan ? "$space->update(['settings' => [...($space->settings ?? []), 'flexible_monthly_cents' => 173200]]);" : ''}
  app(App\\Services\\Trajectory\\RecordService::class)->save($owner,$space,'budget','Fictional planned debt payments',['category'=>'transport','monthly_cents'=>10000,'purpose'=>'debt_payment','effective_on'=>now($space->timezone)->startOfMonth()->toDateString(),'reviewed'=>true]);
  $service=app(App\\Services\\Trajectory\\RecordService::class);$start=now($space->timezone)->startOfMonth()->toDateString();$end=now($space->timezone)->endOfMonth()->toDateString();$parts=[];
  foreach([1000,2000] as $amount){$parts[]=$service->save($owner,$space,'budget','Fictional utility source',['category'=>'utilities','purpose'=>'spending','monthly_cents'=>$amount,'effective_on'=>$start,'reviewed'=>true])->id;}
@@ -42,6 +46,15 @@ try{
      'balance_cents'=>$credit->balance_cents+32040,'observed_on'=>now($space->timezone)->subMonthNoOverflow()->toDateString(),
      'apr_bps'=>$apr,'payment_cents'=>$minimum,'escrow_cents'=>0,'fees_cents'=>0,'confirmed'=>true,'interest_method'=>'monthly',
      'payment_cadence'=>'monthly','next_due_on'=>now($space->timezone)->addDays(3)->toDateString()]);
+ }
+ if (${includesPlan ? 'true' : 'false'}) {
+   $chartDay=now($space->timezone)->subYearNoOverflow()->startOfMonth()->toDateString();
+   $card=App\\Models\\Trajectory\\Account::where('space_id',$space->id)->where('source_key','fictional:detail-card')->sole();
+   foreach ([[$cash,'groceries','expense',-39156],[$card,'interest','expense',-1234],[$cash,'loan','debt_payment',-7000],[$cash,'card','card_payment',-9500]] as [$account,$category,$flow,$amount]) {
+     $key='fictional-plan-comparison-'.$category;
+     app(App\\Services\\Trajectory\\LedgerService::class)->ingest($account,[['id'=>$key,'date'=>$chartDay,'merchant'=>'Fictional prior-year activity','amount_cents'=>$amount]]);
+     App\\Models\\Trajectory\\Transaction::where('account_id',$account->id)->where('source_key',$account->source_key.':'.$key)->sole()->update(['flow'=>$flow,'category'=>$category,'reviewed'=>true]);
+   }
  }
  foreach ([1,2,3] as $offset) {
    $key='fictional-prior-living-cost-'.$offset;
@@ -64,16 +77,27 @@ try{
    $attribution->save($owner,$space,$payment,[['space_id'=>$space->id,'amount_cents'=>$amount,'category'=>'shopping','subcategory_record_id'=>$child->id]],$payment->version);
    $payments[]=$payment->id;
  }
- echo json_encode(['id'=>$merged->id,'sources'=>$parts,'payments'=>$payments,'child_id'=>$child->id]);
+ $reviewPurchases=[];
+ foreach (['desktop','phone'] as $engine) {
+   $key='fixture-manual-category-'.$engine;
+   app(App\\Services\\Trajectory\\LedgerService::class)->ingest($cash,[['id'=>$key,'date'=>now($space->timezone)->toDateString(),
+     'merchant'=>'Fictional category review '.$engine,'amount_cents'=>-378]]);
+   $purchase=App\\Models\\Trajectory\\Transaction::where('account_id',$cash->id)->where('source_key',$cash->source_key.':'.$key)->sole();
+   $purchase->update(['flow'=>'expense','category'=>'uncategorized','reviewed'=>false]);
+   $reviewPurchases[$engine]=$purchase->id;
+ }
+ App\\Models\\Trajectory\\ExpenseNotice::firstOrCreate(['space_id'=>$space->id,'user_id'=>$owner->id,'transaction_id'=>$payments[0]],
+   ['payload'=>['merchant'=>'Fictional reviewed payment'],'delivery_status'=>'inbox_only']);
+ echo json_encode(['id'=>$merged->id,'sources'=>$parts,'payments'=>$payments,'child_id'=>$child->id,'review_purchases'=>$reviewPurchases]);
  `);const combinedBudget=JSON.parse((await exec('php',[seed],{cwd:base,env})).stdout);
  server=spawn('php',['artisan','serve','--host=127.0.0.1',`--port=${port}`,'--no-reload'],{cwd:base,env,stdio:'ignore'});
  await expect.poll(async()=>{try{return(await fetch(origin+'/up')).ok;}catch{return false;}}).toBe(true);
  for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
-  browser=await engine.launch();const context=await browser.newContext({reducedMotion:'reduce'});
+  browser=await engine.launch();const context=await browser.newContext({reducedMotion:'reduce',hasTouch:name==='webkit' && includesPlan});
   await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
   const csrf=(await(await context.request.get(origin+'/login')).text()).match(/<meta name="csrf-token" content="([^"]+)"/)?.[1];assert.ok(csrf);
   assert.ok((await context.request.post(origin+'/login',{form:{email:'flow@fixture.invalid',password:'Fictional-flow-only-2028!',_token:csrf},headers:{Accept:'application/json'}})).ok());
-  for(const width of process.argv.includes('--category-edits')||process.argv.includes('--report-header')||process.argv.includes('--plan-trajectory')?[]:[390,1440]){
+  for(const width of fullSuite?[390,1440]:[]){
    const page=await context.newPage(),errors=[],reads=[];page.setDefaultTimeout(12000);await page.setViewportSize({width,height:950});
    page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.method()==='GET')reads.push(new URL(request.url()).pathname);});
    let releaseDashboard,delivered=false;const dashboardGate=new Promise(done=>{releaseDashboard=done;});
@@ -171,7 +195,6 @@ try{
    // Analysis tab is a section home, not a link back to Budget's drilldown.
    await primary('budget');await primary('analysis');await expect(page.locator('#tr-page-title')).toHaveText('Analysis');await expect(page.locator('#vf-period-chart')).toBeVisible();await expect(page.locator('#tr-back')).toBeHidden();
    assert.deepEqual(errors,[]);await page.close();
-   await checkPlanTrajectory({context,origin,width,engine:name,database:join(dir,'db.sqlite')});
 
    const failed=await context.newPage();await failed.setViewportSize({width,height:950});
    let releaseFailure;const failureGate=new Promise(done=>{releaseFailure=done;});
@@ -208,15 +231,15 @@ try{
     releaseBusiness();await expect(business.locator('#tr-add')).toBeEnabled();await business.close();
    }
   }
-  if(!process.argv.includes('--report-header')&&!process.argv.includes('--plan-trajectory')){
-   await checkReviewedCategoryChanges({context,origin,fixture,payments:combinedBudget.payments,childId:combinedBudget.child_id,phone:name==='webkit'});
-   checks.push(name+' '+(name==='webkit'?'phone':'desktop')+': two reviewed purchases recategorized in the mounted merchant ledger');
+  if(!process.argv.includes('--report-header')&&!onlyPlan){
+   await checkReviewedCategoryChanges({context,origin,fixture,payments:combinedBudget.payments,childId:combinedBudget.child_id,reviewId:combinedBudget.review_purchases[name==='webkit'?'phone':'desktop'],phone:name==='webkit'});
+   checks.push(name+' '+(name==='webkit'?'phone':'desktop')+': reviewed recategorizations preserve the ledger; a manual review updates the Ask count immediately and after reload');
   }
-  if(!process.argv.includes('--category-edits')&&!process.argv.includes('--plan-trajectory')){
+  if(!process.argv.includes('--category-edits')&&!onlyPlan){
    await checkAnalysisHeader({context,origin,phone:name==='webkit'});
    checks.push(name+': Analysis controls, focus, resize and drilled-ledger layout');
   }
-  if(process.argv.includes('--plan-trajectory')){
+  if(includesPlan){
    await checkPlanTrajectory({context,origin,width:name==='webkit'?390:1440,engine:name,database:join(dir,'db.sqlite')});
    checks.push(name+': direct and full-dashboard Plan, receipt installments, historical controls, debt comparisons, replaceable budget reservation and ledger integrity');
   }

@@ -1,6 +1,7 @@
 import {minor} from './money.js';
 import {installmentAmounts, bridgeTarget, temporaryMedicalDraw} from './plan-scenario.js';
 import {createPlanDebt} from './plan-debt.js';
+import {createPlanCharts} from './plan-charts.js';
 import './plan-trajectory.css';
 
 const moneyValue = value => Number.isSafeInteger(value);
@@ -10,15 +11,16 @@ const prettyDate = (value, options) => new Intl.DateTimeFormat('en-US', {timeZon
 const monthName = month => prettyDate(month + '-01', {month:'short', year:'numeric'});
 const dateName = date => prettyDate(date, {month:'short', day:'numeric', year:'numeric'});
 
-export function createPlanTrajectory({getData, esc, precise, btn, api, endpoint, load, notice, initialSection = 'monthly'}) {
+export function createPlanTrajectory({getData, esc, precise, btn, api, endpoint, load, notice}) {
+  const charts = createPlanCharts({esc, format:precise, monthName, dateName});
   const debt = createPlanDebt({getData, esc, precise, api, endpoint, load,
     getMonthlyTarget:() => spendingBasis(getData().household_trajectory.monthly).target});
-  let workspace = null, scenario, receipts, basis, section, saving = false;
+  let workspace = null, scenario, receipts, basis, saving = false;
 
   function reset() {
     if (workspace !== getData().space.id) {
       workspace = getData().space.id;
-      basis = 'history'; section = initialSection === 'debt' ? 'debt' : 'monthly'; initialSection = 'monthly'; debt.reset();
+      basis = 'history'; debt.reset();
       scenario = {months:6, cash:'0', medicalCash:'0', assets:new Set()};
       receipts = {key:null, count:'', edited:false};
       saving = false;
@@ -83,7 +85,7 @@ export function createPlanTrajectory({getData, esc, precise, btn, api, endpoint,
 
   function spendingBasis(monthly) {
     const history = moneyValue(monthly.historical_sustainable_cents) && (basis === 'history' || !moneyValue(monthly.override_sustainable_cents));
-    return {target:history ? monthly.historical_sustainable_cents : monthly.sustainable_cents,
+    return {usesOverride:!history && monthly.flexible_source === 'owner_override', target:history ? monthly.historical_sustainable_cents : monthly.sustainable_cents,
       variable:history ? monthly.historical_flexible_cents : monthly.flexible_cents,
       label:history || monthly.flexible_source !== 'owner_override' ? 'Variable spending from prior months' : 'Your variable spending estimate'};
   }
@@ -133,12 +135,9 @@ export function createPlanTrajectory({getData, esc, precise, btn, api, endpoint,
       <p class="pt-note">This estimate spreads the cash you enter and the proceeds from selected sales evenly over the period. The ongoing monthly target resumes afterward.</p>
     </section>`;
   }
-  function spendingTable(rows, history) {
-    const heading = history ? 'Month' : 'Period';
-    return `<table class="pt-table"><thead><tr><th>${heading}</th><th>Spending</th><th>Debt payments</th></tr></thead><tbody>${rows.map(r => {
-      const label = history ? monthName(r.month) : prettyDate(r.from,{month:'short',day:'numeric'}) + '–' + prettyDate(r.through,{day:'numeric'}) + ', ' + r.year;
-      return `<tr><th scope="row">${esc(label)}${r.status === 'partial' ? '<small>Partial history</small>' : ''}</th><td>${esc(money(r.spending_cents))}</td><td>${esc(money(r.debt_service_cents))}</td></tr>`;
-    }).join('')}</tbody></table>`;
+  function spendingTable(rows) {
+    return `<table class="pt-table"><thead><tr><th>Month</th><th>Spending</th><th>Loan payments</th></tr></thead><tbody>${rows.map(row =>
+      `<tr><th scope="row">${esc(monthName(row.month))}${row.status === 'partial' ? '<small>Partial history</small>' : ''}</th><td>${esc(money(row.spending_cents))}</td><td>${esc(money(row.debt_service_cents))}</td></tr>`).join('')}</tbody></table>`;
   }
   function historyBreakdown(history) {
     const average = key => history.length === 3 && history.every(row => moneyValue(row[key]))
@@ -155,28 +154,29 @@ export function createPlanTrajectory({getData, esc, precise, btn, api, endpoint,
   }
   function render(report) {
     reset();
-    const monthly = report.monthly, {target, variable, label} = spendingBasis(monthly), income = monthly.expected_income_cents;
+    const monthly = report.monthly, choice = spendingBasis(monthly), {target} = choice, income = monthly.expected_income_cents;
     const difference = moneyValue(target) && moneyValue(income) ? target - income : null;
     const extras = monthly.goals_cents + monthly.debt_extra_cents;
     return `<div class="pt-trajectory">
-      <nav class="pt-views" aria-label="Plan views">${[['monthly','Monthly plan'],['debt','Debt payoff']].map(([key,label]) => `<button type="button" data-action="pt-section" data-section="${key}" aria-pressed="${section === key}">${label}</button>`).join('')}</nav>
-      <div class="pt-monthly" data-pt-monthly ${section === 'monthly' ? '' : 'hidden'}>
+      <div class="pt-monthly" data-pt-monthly data-space-id="${Number(getData().space.id)}">
       <section class="pt-hero"><div><span class="pt-kicker">Monthly take-home needed</span><strong class="pt-target" data-pt-target>${esc(money(target))}</strong><p class="pt-note">Projected spending and recorded required payments, before optional savings and extra debt payoff.${getData().planning?.debt_strategy?.missing?.length ? ' Some debt payments still need current lender terms.' : monthly.status !== 'estimated' ? ' Based on incomplete records.' : ''}</p></div>
         <div class="pt-earnings">${line('Expected take-home', money(income))}<div data-pt-gap>${line(difference !== null && difference < 0 ? 'Above monthly target' : 'Additional income needed', money(difference === null ? null : Math.abs(difference)))}</div>${btn('Review income','plan-income')}</div>
       </section>
-      <div class="pt-grid">${cashPanel(report)}${receiptsPanel(report.medical)}</div>
-      <div class="pt-grid"><section class="pt-panel pt-history"><header><h2>Projected monthly expenses</h2></header>
+      <div class="pt-grid pt-charts-grid"><section class="pt-panel pt-history">
         ${moneyValue(monthly.historical_sustainable_cents) && moneyValue(monthly.override_sustainable_cents) ? `<label class="pt-field">Estimate from<select name="pt-basis"><option value="history" ${basis === 'history' ? 'selected' : ''}>Previous months’ spending</option><option value="saved" ${basis === 'saved' ? 'selected' : ''}>My saved estimate</option></select></label>` : ''}
-        ${line('Scheduled bills and debt', money(monthly.fixed_cents))}${line('Confirmed medical installments', money(monthly.medical_installments_cents))}
-        <div data-pt-variable>${line(label, money(variable))}</div>
+        <div data-pt-variable>${charts.target(report, choice)}</div>
         ${extras ? line('Optional savings and extra debt payments', money(extras)) : ''}<div data-pt-optional>${extras ? line('Including optional goals', money(moneyValue(target) ? target + extras : null)) : ''}</div>
-        <details class="pt-detail"><summary>Previous three calendar months</summary>${historyBreakdown(monthly.history)}${spendingTable(monthly.history,true)}<p class="pt-note">Spending includes purchases, refunds and interest charges. Loan and credit-card payments are separate. The forecast matches scheduled costs before averaging the remaining spending.</p></details>
+        <details class="pt-detail"><summary>Previous three calendar months</summary>${historyBreakdown(monthly.history)}${spendingTable(monthly.history)}<p class="pt-note">Spending includes purchases, refunds and interest charges. Loan and credit-card payments are separate. The forecast matches scheduled costs before averaging the remaining spending.</p></details>
         <div class="pt-actions">${btn('Adjust spending','plan-costs')}</div></section>
-      <section class="pt-panel pt-pace"><header><h2>Month-to-date spending</h2></header>${spendingTable(report.pace,false)}
-        <p class="pt-note">Through the same day in each year. Purchases and refunds appear when posted. Card settlements and transfers are excluded.</p></section></div>
+      <section class="pt-panel pt-pace">${charts.pace(report)}</section></div>
+      <div class="pt-grid">${cashPanel(report)}${receiptsPanel(report.medical)}</div>
       ${scenarioPanel(report)}</div>
-      <section class="pt-debt-section" aria-label="Debt payoff" ${section === 'debt' ? '' : 'hidden'}>${section === 'debt' ? debt.render() : ''}</section>
     </div>`;
+  }
+
+  function renderDebt() {
+    reset();
+    return '<div class="pt-trajectory"><section class="pt-debt-section" aria-label="Debt payoff"></section></div>';
   }
 
   function input(event) {
@@ -191,7 +191,7 @@ export function createPlanTrajectory({getData, esc, precise, btn, api, endpoint,
       const gap = moneyValue(choice.target) && moneyValue(income) ? choice.target - income : null;
       live(surface.querySelector('[data-pt-target]'), money(choice.target));
       surface.querySelector('[data-pt-gap]').innerHTML = line(gap !== null && gap < 0 ? 'Above monthly target' : 'Additional income needed', money(gap === null ? null : Math.abs(gap)));
-      surface.querySelector('[data-pt-variable]').innerHTML = line(choice.label, money(choice.variable));
+      surface.querySelector('[data-pt-variable]').innerHTML = charts.target(report, choice);
       const extras = monthly.goals_cents + monthly.debt_extra_cents;
       surface.querySelector('[data-pt-optional]').innerHTML = extras ? line('Including optional goals', money(moneyValue(choice.target) ? choice.target + extras : null)) : '';
       live(surface.querySelector('[data-pt-bridge-result]'), scenarioMessage(report));
@@ -237,18 +237,13 @@ export function createPlanTrajectory({getData, esc, precise, btn, api, endpoint,
     } finally {saving = false; if (button.isConnected) button.disabled = false;}
   }
   async function handle(action, button) {
+    if (action === 'pt-chart-detail') {
+      if (button.closest('.pt-debt-section')) return debt.handle(action, button);
+      const data = getData();
+      return data?.household_trajectory ? charts.open(button, data, spendingBasis(data.household_trajectory.monthly)) : false;
+    }
     if (action.startsWith('pt-debt-')) return debt.handle(action, button);
-    if (action !== 'pt-section') return false;
-    section = button.dataset.section === 'debt' ? 'debt' : 'monthly';
-    const surface = button.closest('.pt-trajectory');
-    surface.querySelector('[data-pt-monthly]').hidden = section !== 'monthly';
-    const panel = surface.querySelector('.pt-debt-section');
-    panel.hidden = section !== 'debt';
-    const legacy = surface.nextElementSibling;
-    if (legacy?.matches('.pt-legacy')) legacy.hidden = section !== 'monthly';
-    for (const tab of surface.querySelectorAll('[data-section]')) tab.setAttribute('aria-pressed', String(tab.dataset.section === section));
-    if (section === 'debt') await debt.open(panel);
-    return true;
+    return false;
   }
-  return {render, input, save, handle, mount:surface => section === 'debt' && debt.open(surface?.querySelector('.pt-debt-section')), debtOpen:() => section === 'debt'};
+  return {render, renderDebt, input, save, handle, mountDebt:surface => debt.open(surface.querySelector('.pt-debt-section'))};
 }

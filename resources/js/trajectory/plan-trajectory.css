@@ -1,3 +1,5 @@
+@import './plan-charts.css';
+
 .pt-trajectory {
   --pt-ink: #203a32;
   --pt-muted: #50665c;
@@ -171,9 +173,6 @@
 
 .pt-trajectory [hidden], .tr-workspace .pt-legacy[hidden] { display: none; }
 .pt-monthly, .pt-debt-section { display: grid; min-width: 0; gap: 20px; }
-.pt-views { display: flex; align-items: center; gap: 4px; justify-self: start; border: 1px solid var(--pt-stroke); border-radius: 12px; padding: 4px; background: #edf2ee; }
-.pt-views button { min-height: 40px; border: 0; background: transparent; color: var(--pt-muted); padding: 7px 16px; border-radius: 8px; font-weight: 600; }
-.pt-views button[aria-pressed="true"] { color: var(--pt-green); background: white; box-shadow: 0 1px 4px #203a3226; }
 .pt-debt-section { grid-template-columns: minmax(0,.92fr) minmax(0,1.08fr); align-items: start; }
 .pt-debt-section [data-pt-inventory] { min-width: 0; }
 .pt-debt-controls { background: linear-gradient(135deg,#f0f6f0,white) !important; }
@@ -196,7 +195,6 @@
 @media(max-width: 760px) {
   .tr-workspace:has(.pt-trajectory) { padding-bottom: calc(105px + env(safe-area-inset-bottom)); }
   .tr-workspace .pt-legacy { scroll-margin-bottom: 100px; }
-  .pt-views button { min-height: 44px; }
 }
 .pt-asset-choice { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 9px; border-bottom: 1px solid var(--pt-stroke); }
 .pt-trajectory .pt-asset-choice label { border: 0; }

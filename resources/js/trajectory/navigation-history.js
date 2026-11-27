@@ -1,16 +1,31 @@
+export function planDestinationUrl(href, tab, accountId, spaceId) {
+  const url = new URL(href);
+  const previous = url.searchParams.get('tab');
+  if (!['debt', 'planning'].includes(tab) && !['debt', 'planning'].includes(previous)) return href;
+  url.searchParams.set('tab', tab);
+  if (url.searchParams.get('section') === 'debt') url.searchParams.delete('section');
+  if (url.searchParams.has('account_id')) {
+    if (accountId === null) url.searchParams.delete('account_id');
+    else url.searchParams.set('account_id', String(accountId));
+  }
+  if (url.searchParams.has('space') && spaceId) url.searchParams.set('space', String(spaceId));
+  return url.href;
+}
+
 /** Only opaque navigation keys enter browser history; report state stays in memory. */
-export function reportNavigation({window:win,capture,restore,context,enabled=()=>true,invalidate=()=>{}}){
+export function reportNavigation({window:win,capture,restore,context,enabled=()=>true,invalidate=()=>{},destination=()=>win.location.href}){
   let session=key(),current=null,scope=null,sequence=0;
   const frames=new Map();
   function key(){return win.crypto?.randomUUID?.()||`${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;}
   function metadata(){return {version:1,session,entry:current};}
-  function write(method){const state=win.history.state;win.history[method]({...((state&&typeof state==='object')?state:{}),trajectoryNavigation:metadata()},'',win.location.href);}
+  function write(method){const state=win.history.state;win.history[method]({...((state&&typeof state==='object')?state:{}),trajectoryNavigation:metadata()},'',destination());}
   function reset(){session=key();scope=context();current=key();frames.clear();frames.set(current,{context:scope,parent:null,value:capture()});if(enabled())write('replaceState');}
   function sync(){
     if(!enabled())return;
     if(current===null){reset();return;}
     if(scope!==context()){invalidate('context');reset();return;}
     frames.get(current).value=capture();
+    if(win.location.href!==destination())write('replaceState');
   }
   function push(){
     if(!enabled())return false;

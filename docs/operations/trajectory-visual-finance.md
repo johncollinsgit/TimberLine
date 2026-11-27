@@ -47,6 +47,12 @@ cohorts within their own program. Payroll retains owner, studio and event roles.
 
 ## Plan Trajectory
 
+Personal navigation has independent Plan and Debt destinations. The Debt deep link
+uses `?tab=debt`. The earlier `?tab=planning&section=debt` link also opens Debt.
+Plan’s monthly target and same-date spending comparisons can be opened for their
+components and timing. Debt charts open the lender details behind each balance
+and recorded rate. Keyboard users can open the same details from the chart labels.
+
 The Debt payoff view loads the household’s inventory on demand from
 `debt-scenarios` with `view=household_plan`. Separate observations of an account
 describe one liability. The view compares payoff orders with the same monthly
@@ -321,9 +327,10 @@ partial imitation of Dashboard totals or forecasts. Full Dashboard is loaded onl
 when a legacy view or advanced action needs it. Context responses recheck current
 space authorization and selected-account ownership, are private/no-store, and are
 discarded after a context change or revocation. Primary foreground refreshes use
-the same bounded metadata route. The closed assistant badge uses the authorized
-current member's unread-count summary; it does not rebuild historical expense
-budget payloads until the inbox or a deep-linked expense is opened.
+the same bounded metadata route. The Ask badge counts posted purchases and
+refunds still awaiting category review in the active workspace. The Expenses
+tab shows the member’s unread alerts. The summary returns both totals. Opening
+the inbox or an individual expense loads its budget details.
 
 Budget envelopes reuse request-local monthly projections and native-version context
 hashes. Ordinary plans read the current and prior month needed for spending and

@@ -4,11 +4,14 @@ namespace App\Services\Trajectory;
 
 use App\Http\Controllers\Trajectory\TrajectoryController;
 use App\Models\Trajectory\Account;
+use App\Models\Trajectory\Allocation;
+use App\Models\Trajectory\AllocationDetail;
 use App\Models\Trajectory\AssistantTurn;
 use App\Models\Trajectory\Event;
 use App\Models\Trajectory\Space;
 use App\Models\Trajectory\Transaction;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -184,11 +187,29 @@ class AssistantService
         }
     }
 
+    public function categoryReviewQueue(Space $space): Builder
+    {
+        $query = Transaction::where('space_id', $space->id)->where('removed', false)->where('pending', false)
+            ->where('posted_on', '<', now($space->timezone)->addDay()->toDateString())->where('amount_cents', '!=', 0)
+            ->whereIn('flow', ['expense', 'refund']);
+        $sourceNeedsReview = fn ($q) => $q->where('category', 'uncategorized')->orWhere('reviewed', false);
+        if (! app(AttributionService::class)->available()) {
+            return $query->where($sourceNeedsReview);
+        }
+
+        // A saved allocation replaces the bank category. Count native postings once,
+        // even when several household portions still need a category.
+        $active = AllocationDetail::select('transaction_id')->whereColumn('transaction_id', 'trajectory_transactions.id')->where('active', true);
+        $localUncategorized = (clone $active)->where('space_id', $space->id)->where('category', 'uncategorized');
+
+        return $query->where(fn ($q) => $q->where(fn ($source) => $source->whereNotExists($active)->where($sourceNeedsReview))
+            ->orWhereExists($localUncategorized));
+    }
+
     private function nextCategoryReview(User $user, Space $space, array $context): array
     {
         $selected = $this->selection($user, $space, $context);
-        $query = Transaction::where('space_id', $space->id)->where('removed', false)->where('pending', false)
-            ->whereIn('flow', ['expense', 'refund'])->where(fn ($q) => $q->where('category', 'uncategorized')->orWhere('reviewed', false));
+        $query = $this->categoryReviewQueue($space);
         if (! empty($context['transaction_ids']) || isset($context['budget_account_id'])) {
             $query->whereIn('id', $selected->pluck('id'));
         } elseif (! empty($context['program_id'])) {
@@ -204,8 +225,10 @@ class AssistantService
         if (! $transaction) {
             return ['reply' => 'No uncategorized or unreviewed posted purchases remain in this selection.', 'mode' => 'Category review'];
         }
-        $attribution = app(AttributionService::class)->describe($user, $space, $transaction);
-        $line = count($attribution['lines']) === 1 && $attribution['lines'][0]['space_id'] === $space->id ? $attribution['lines'][0] : null;
+        // A source-space reviewer may have no access to another allocation's destination.
+        $shared = Allocation::where('transaction_id', $transaction->id)->where('amount_cents', '!=', 0)->where('space_id', '!=', $space->id)->exists();
+        $lines = $shared ? [] : $this->reviewAttribution($user, $space, $transaction)['lines'];
+        $line = count($lines) === 1 && $lines[0]['space_id'] === $space->id ? $lines[0] : null;
         if (! $line) {
             return ['reply' => 'This transaction has multiple allocations. Open its split details to review the intended portion.', 'clarification' => true];
         }
@@ -225,6 +248,18 @@ class AssistantService
     {
         return ['transaction_id' => $transaction->id, 'version' => $transaction->version, 'date' => $transaction->posted_on->toDateString(),
             'merchant' => $transaction->merchant, 'amount_cents' => abs($transaction->amount_cents), 'suggestion' => null];
+    }
+
+    private function reviewAttribution(User $user, Space $space, Transaction $transaction): array
+    {
+        $service = app(AttributionService::class);
+        if ($service->available()) {
+            return $service->describe($user, $space, $transaction);
+        }
+
+        // A plain category can still be reviewed using the original allocation schema.
+        return ['attribution_status' => 'none', 'lines' => Allocation::where('transaction_id', $transaction->id)
+            ->where('amount_cents', '!=', 0)->get(['space_id', 'amount_cents'])->toArray()];
     }
 
     private function isFocusedReviewCard(array $context, array $previous, array $target): bool
@@ -260,7 +295,7 @@ class AssistantService
             foreach ($turn->response['proposal']['actions'] as $action) {
                 $tx = Transaction::where('space_id', $space->id)->lockForUpdate()->findOrFail($action['transaction_id']);
                 abort_unless(! $tx->removed && $tx->version === $action['version'], 409, 'A transaction changed after the preview. No batch changes were saved.');
-                $attribution = app(AttributionService::class)->describe($user, $space, $tx);
+                $attribution = $this->reviewAttribution($user, $space, $tx);
                 abort_unless(count($attribution['lines']) === 1 && $attribution['lines'][0]['space_id'] === $space->id, 422, 'This purchase has split ownership or categories. Open its split editor to change the intended portion.');
                 $target = $action['destination'];
                 if ($target['type'] === 'split') {

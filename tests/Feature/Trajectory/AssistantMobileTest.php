@@ -12,6 +12,7 @@ use App\Models\Trajectory\Record;
 use App\Models\Trajectory\Transaction;
 use App\Models\User;
 use App\Services\Trajectory\AssistantService;
+use App\Services\Trajectory\AttributionService;
 use App\Services\Trajectory\ExpenseNotificationService;
 use App\Services\Trajectory\LedgerService;
 use App\Services\Trajectory\PilotService;
@@ -153,11 +154,129 @@ test('closed expense badge counts private notices without rebuilding purchase bu
     }
     $this->mock(ExpenseNotificationService::class)->shouldNotReceive('payload');
     $url = '/trajectory/spaces/'.$this->space->id.'/notifications?summary=1';
-    $response = $this->actingAs($this->owner)->getJson($url)->assertOk()->assertExactJson(['unread_count' => 1]);
+    $response = $this->actingAs($this->owner)->getJson($url)->assertOk()->assertExactJson(['unread_count' => 1, 'review_count' => 0]);
     expect($response->headers->get('Cache-Control'))->toContain('no-store');
     $this->actingAs($other)->getJson($url)->assertForbidden();
     ExpenseNotice::where('user_id', $this->owner->id)->update(['read_at' => now()]);
-    $this->actingAs($this->owner)->getJson($url)->assertOk()->assertExactJson(['unread_count' => 0]);
+    $this->actingAs($this->owner)->getJson($url)->assertOk()->assertExactJson(['unread_count' => 0, 'review_count' => 0]);
+});
+
+test('the Ask badge follows the native category review queue through save and undo', function (): void {
+    $base = '/trajectory/spaces/'.$this->space->id.'/notifications';
+    $purchase = ($this->entry)('review purchase', -9000);
+    $purchase->update(['category' => 'uncategorized']);
+    ($this->entry)('unreviewed')->update(['reviewed' => false]);
+    ($this->entry)('refund', 800)->update(['category' => 'uncategorized', 'flow' => 'refund']);
+    foreach ([
+        'future' => ['posted_on' => '2027-02-13'], 'removed' => ['removed' => true], 'pending' => ['pending' => true],
+        'card settlement' => ['flow' => 'card_payment'], 'zero' => ['amount_cents' => 0],
+    ] as $key => $changes) {
+        ($this->entry)($key)->update(['category' => 'uncategorized', 'reviewed' => false, ...$changes]);
+    }
+    $this->actingAs($this->owner)->getJson($base.'?summary=1')->assertExactJson(['review_count' => 3, 'unread_count' => 0]);
+    $this->getJson($base.'?transaction_id='.$purchase->id)->assertOk()->assertJsonPath('review_count', 3);
+    $assistant = app(AssistantService::class);
+    $next = fn () => $assistant->respond($this->owner, $this->space, 'Review the next uncategorized transaction', [], (string) Str::uuid());
+    expect($next()['review_transaction']['transaction_id'])->toBe($purchase->id);
+    $changed = $assistant->respond($this->owner, $this->space, 'Move this to groceries', ($this->context)($purchase), (string) Str::uuid());
+    expect($purchase->fresh()->category)->toBe('groceries');
+    $this->getJson($base.'?summary=1')->assertExactJson(['review_count' => 2, 'unread_count' => 0]);
+    expect($next()['review_transaction']['transaction_id'])->not->toBe($purchase->id);
+    $assistant->undo($this->owner, $this->space, AssistantTurn::findOrFail($changed['id']));
+    $this->getJson($base.'?summary=1')->assertExactJson(['review_count' => 3, 'unread_count' => 0]);
+    expect($next()['review_transaction']['transaction_id'])->toBe($purchase->id);
+});
+
+test('effective split lines count one native purchase until all local portions have categories', function (): void {
+    $purchase = ($this->entry)('split categories', -10000);
+    $purchase->update(['category' => 'uncategorized', 'reviewed' => false]);
+    $summary = '/trajectory/spaces/'.$this->space->id.'/notifications?summary=1';
+    $service = app(AttributionService::class);
+    $parts = [
+        ['space_id' => $this->space->id, 'category' => 'shopping', 'amount_cents' => -4000],
+        ['space_id' => $this->space->id, 'category' => 'uncategorized', 'amount_cents' => -4000],
+        ['space_id' => $this->space->id, 'category' => 'uncategorized', 'amount_cents' => -2000],
+    ];
+    $partial = $service->save($this->owner, $this->space, $purchase, $parts, $purchase->version);
+    $this->actingAs($this->owner)->getJson($summary)->assertExactJson(['review_count' => 1, 'unread_count' => 0]);
+    $next = fn () => app(AssistantService::class)->respond($this->owner, $this->space, 'Review the next uncategorized transaction', [], (string) Str::uuid());
+    expect($next()['reply'])->toContain('split details');
+    $parts[1]['category'] = 'groceries';
+    $parts[2]['category'] = 'transport';
+    $done = $service->save($this->owner, $this->space, $purchase, $parts, $partial['version']);
+    expect($purchase->fresh()->category)->toBe('uncategorized');
+    $this->getJson($summary)->assertExactJson(['review_count' => 0, 'unread_count' => 0]);
+    expect($next()['reply'])->toContain('No uncategorized');
+    $service->undo($this->owner, $this->space, $purchase, $done['version'], $done['event_id']);
+    $this->getJson($summary)->assertExactJson(['review_count' => 1, 'unread_count' => 0]);
+    expect($next()['reply'])->toContain('split details');
+});
+
+test('a changed bank posting reopens a categorized allocation in the badge', function (): void {
+    $purchase = ($this->entry)('amended purchase');
+    $part = ['space_id' => $this->space->id, 'category' => 'groceries', 'amount_cents' => $purchase->amount_cents];
+    app(AttributionService::class)->save($this->owner, $this->space, $purchase, [$part], $purchase->version);
+    $url = '/trajectory/spaces/'.$this->space->id.'/notifications?summary=1';
+    $bank = ['id' => 'amended purchase', 'date' => '2027-02-12', 'merchant' => 'Example amended purchase', 'amount_cents' => -2500];
+    $ledger = app(LedgerService::class);
+    $ledger->ingest($this->cash, [$bank]);
+    $this->actingAs($this->owner)->getJson($url)->assertExactJson(['review_count' => 0, 'unread_count' => 0]);
+    $ledger->ingest($this->cash, [[...$bank, 'amount_cents' => -2600]]);
+    expect(app(AttributionService::class)->hasActiveDetails($purchase))->toBeFalse()->and($purchase->fresh()->reviewed)->toBeFalse();
+    $this->getJson($url)->assertExactJson(['review_count' => 1, 'unread_count' => 0]);
+});
+
+test('the badge and plain category review still use the original ledger during an attribution schema upgrade', function (): void {
+    $purchase = ($this->entry)('legacy purchase');
+    $purchase->update(['category' => 'uncategorized']);
+    $this->partialMock(AttributionService::class, fn ($mock) => $mock->shouldReceive('available')->andReturn(false));
+    $url = '/trajectory/spaces/'.$this->space->id.'/notifications?summary=1';
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    try {
+        $this->actingAs($this->owner)->getJson($url)->assertExactJson(['review_count' => 1, 'unread_count' => 0]);
+        $assistant = app(AssistantService::class);
+        $reply = $assistant->respond($this->owner, $this->space, 'Review the next uncategorized transaction', [], (string) Str::uuid());
+        expect($reply['review_transaction']['transaction_id'])->toBe($purchase->id);
+        $assistant->respond($this->owner, $this->space, 'Move this to groceries', ($this->context)($purchase), (string) Str::uuid());
+        $this->getJson($url)->assertExactJson(['review_count' => 0, 'unread_count' => 0]);
+        expect(collect(DB::getQueryLog())->pluck('query')->implode(' '))->not->toContain('trajectory_allocation_details');
+    } finally {
+        DB::disableQueryLog();
+        DB::flushQueryLog();
+    }
+});
+
+test('category badge and Ask disclose only the native workspace and its own uncategorized portions', function (): void {
+    $tenant = \App\Models\Tenant::create(['slug' => 'assistant-private-business', 'name' => 'Example private company']);
+    \App\Models\TenantAccessProfile::create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct']);
+    $this->owner->tenants()->attach($tenant->id, ['role' => 'owner', 'membership_active' => true]);
+    [, $business] = app(PilotService::class)->prepare($this->owner, $tenant, true);
+    app()->forgetInstance(\App\Services\Tenancy\TenantModuleAccessResolver::class);
+    $member = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    DB::table('trajectory_members')->insert(['space_id' => $this->space->id, 'user_id' => $member->id, 'created_at' => now(), 'updated_at' => now()]);
+    $account = Account::create(['space_id' => $business->id, 'source_key' => 'private:cash', 'name' => 'Company bank', 'kind' => 'cash', 'currency' => 'USD']);
+    app(LedgerService::class)->ingest($account, [['id' => 'company-only', 'date' => '2027-02-12', 'amount_cents' => -18000, 'merchant' => 'Private company purchase']]);
+    Transaction::where('account_id', $account->id)->sole()->update(['category' => 'uncategorized', 'flow' => 'expense', 'reviewed' => false]);
+    $parts = [
+        ['space_id' => $this->space->id, 'category' => 'shopping', 'amount_cents' => -1000],
+        ['space_id' => $business->id, 'category' => 'uncategorized', 'amount_cents' => -1500],
+    ];
+    $purchase = ($this->entry)('shared purchase', -2500);
+    $purchase->update(['category' => 'uncategorized']);
+    $service = app(AttributionService::class);
+    $saved = $service->save($this->owner, $this->space, $purchase, $parts, $purchase->version);
+    $url = '/trajectory/spaces/'.$this->space->id.'/notifications?summary=1';
+    $other = '/trajectory/spaces/'.$business->id.'/notifications?summary=1';
+    $this->actingAs($member)->getJson($url)->assertExactJson(['review_count' => 0, 'unread_count' => 0]);
+    $this->getJson($other)->assertForbidden();
+    $this->actingAs($this->owner)->getJson($other)->assertExactJson(['review_count' => 1, 'unread_count' => 0]);
+    $parts[0]['category'] = 'uncategorized';
+    $service->save($this->owner, $this->space, $purchase, $parts, $saved['version']);
+    $this->actingAs($member)->getJson($url)->assertExactJson(['review_count' => 1, 'unread_count' => 0]);
+    $review = app(AssistantService::class)->respond($member, $this->space, 'Review the next uncategorized transaction', [], (string) Str::uuid());
+    expect($review['reply'])->toContain('split details')->and($review)->not->toHaveKey('review_transaction')
+        ->and(json_encode($review))->not->toContain('Private company purchase', 'Example private company');
 });
 
 test('push subscriptions reject arbitrary network URLs and stay user-private and encrypted', function (): void {
