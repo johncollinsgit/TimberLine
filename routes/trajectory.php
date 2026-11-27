@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Trajectory\AccountLedgerController;
+use App\Http\Controllers\Trajectory\MedicalDocumentController;
 use App\Http\Controllers\Trajectory\PlanningController as Planning;
 use App\Http\Controllers\Trajectory\ProfitLossExportController;
 use App\Http\Controllers\Trajectory\ProfitLossRefreshController;
@@ -29,6 +30,13 @@ Route::middleware(['auth', 'verified', 'throttle:120,1'])->prefix('trajectory')-
         Route::post('/sms/verify', [Trajectory::class, 'verifySms'])->name('trajectory.verifySms')->middleware('throttle:3,10');
         Route::post('/sms/confirm', [Trajectory::class, 'confirmSms'])->name('trajectory.confirmSms')->middleware('throttle:5,10');
         Route::patch('/review-email', [Trajectory::class, 'reviewEmailPreferences'])->name('trajectory.reviewEmailPreferences');
+        foreach (['medical/needs/{need}/documents', 'medical/documents'] as $documentPath) {
+            Route::prefix($documentPath)->whereNumber('need')->group(function (): void {
+                Route::get('/', [MedicalDocumentController::class, 'index']);
+                Route::post('/', [MedicalDocumentController::class, 'store'])->middleware('throttle:20,1');
+                Route::get('/{document}', [MedicalDocumentController::class, 'download'])->whereNumber('document');
+            });
+        }
         Route::get('/plan-context', [Trajectory::class, 'planContext'])->name('trajectory.plan-context');
         Route::get('/dashboard', [Trajectory::class, 'dashboard'])->name('trajectory.dashboard');
         Route::get('/profit-loss/accounts/transactions', [AccountLedgerController::class, 'show'])->middleware('throttle:15,1,pnl-account-ledger')->name('trajectory.profit-loss.account-transactions');

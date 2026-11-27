@@ -46,6 +46,13 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
     if(view!=='chat'){notice(error.message || 'Unable to complete this request.');return;}
     messages.push({role:'assistant',reply:error.message || 'Unable to complete this request.'});renderChat();
   }
+  function documentSources(message) {
+    if (!currentSpace || !Array.isArray(message.medical_documents)) return '';
+    const sources = message.medical_documents.filter(doc => Number.isSafeInteger(doc.id) && (doc.need_id === null || Number.isSafeInteger(doc.need_id)));
+    return sources.length ? '<ul class="tr-ask-documents">' + sources.map(doc =>
+      `<li><a download href="${esc(path('/medical/' + (doc.need_id ? 'needs/' + doc.need_id + '/' : '') + 'documents/' + doc.id))}">${esc(doc.filename)}</a><small>${esc(doc.case)}</small>${doc.note ? '<p>Saved note · ' + esc(doc.note) + '</p>' : ''}</li>`
+    ).join('') + '</ul>' : '';
+  }
   function chatActions(message) {
     if(busy)return '';
     if(message.historical){
@@ -80,7 +87,7 @@ export function initTrajectoryAssistant({root, getContext, api, endpoint, notice
   }
   function messageHtml(message) {
     const oldCard=message.review_transaction&&message!==action ? `<small>${esc(message.review_transaction.merchant)} · ${money(message.review_transaction.amount_cents)}</small>` : '';
-    return `<article class="tr-assistant-message ${message.role}" aria-label="${message.role==='user'?'You':'Everbranch'}"><div>${esc(message.reply).replaceAll('\n','<br>')}</div>${oldCard}${chatActions(message)}</article>`;
+    return `<article class="tr-assistant-message ${message.role}" aria-label="${message.role==='user'?'You':'Everbranch'}"><div>${esc(message.reply).replaceAll('\n','<br>')}</div>${documentSources(message)}${oldCard}${chatActions(message)}</article>`;
   }
   function updatePicker(query) {
     if(!picker)return;

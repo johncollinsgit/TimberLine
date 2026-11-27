@@ -43,6 +43,13 @@ class AssistantService
 
                 return ['id' => $turn->id, ...$reply];
             }
+            $documents = app(MedicalDocumentLookup::class)->answer($space, $question, $context);
+            if ($documents !== null) {
+                app(FinanceAccess::class)->authorize($user->fresh(), $space->fresh());
+                $turn->update(['response' => $documents, 'state' => 'answered']);
+
+                return ['id' => $turn->id, ...$documents];
+            }
             $destination = $this->destination($space, $question);
             $reviewRequest = preg_match('/\b(?:categorize|classify|review|suggest)\b.*\b(?:uncategorized|needing a category|need(?:ing)? categor|transactions? needing|next transaction)\b|\b(?:next|uncategorized) transaction\b/i', $question);
             $previous = AssistantTurn::where('space_id', $space->id)->where('user_id', $user->id)->where('id', '<', $turn->id)->latest('id')->first();
