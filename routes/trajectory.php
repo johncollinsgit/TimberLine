@@ -11,6 +11,7 @@ Route::get('/trajectory/welcome', fn () => view('trajectory.welcome'))->name('tr
 
 Route::middleware(['auth', 'verified', 'throttle:120,1'])->prefix('trajectory')->group(function (): void {
     Route::get('/', [Trajectory::class, 'index'])->name('trajectory.index');
+    Route::get('/session-token', [Trajectory::class, 'sessionToken']);
     Route::get('/businesses', [Planning::class, 'businesses']);
     Route::post('/businesses', [Planning::class, 'addBusiness']);
     Route::post('/invites/accept', [Trajectory::class, 'acceptInvite'])->name('trajectory.acceptInvite');

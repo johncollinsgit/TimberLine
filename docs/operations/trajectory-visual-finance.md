@@ -354,6 +354,18 @@ updates that bar immediately. A zero/unknown child under an unresolved parent st
 has no zero-percent progress claim. This is presentation only; no spending, review
 flags or saved allowance is changed.
 
+### Editing categories inside a ledger
+
+An inline category edit re-reads the current Analysis and budget projections and
+updates the mounted ledger. Removing its last row leaves the current drilldown
+open. Amounts and seasonal spending come from the committed household allocations.
+A failed refresh after a successful save is reported separately from a rejected edit.
+
+If Laravel rejects a write because the page’s CSRF token expired, the client
+requests a fresh token for the signed-in viewer and retries the same payload once.
+The original transaction version still applies. Authentication changes and
+uncertain write outcomes require a fresh user action.
+
 ### Purchase returns, budget accounts and seasonal spending
 
 The transaction ledger groups a uniquely matched purchase and full return into a

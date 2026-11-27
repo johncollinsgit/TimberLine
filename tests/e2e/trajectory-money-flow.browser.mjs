@@ -207,7 +207,18 @@ try{
     await page.getByRole('heading',{name:'Review transactions',level:1,exact:true}).waitFor();
     await page.goBack();await expect(page.locator('#tr-dialog')).toBeVisible();
     await expect(page.locator('#tr-dialog-title')).toHaveText('Fictional Candle Studio · Net payroll');
+    // A notification from the earlier programmatic close can arrive after this
+    // restored dialog opens. Only an explicit dismissal owns a history step.
+    assert.equal(await page.locator('#tr-dialog').evaluate(dialog => {
+      let steps = 0;
+      const back = history.back;
+      history.back = () => {steps++;};
+      try {dialog.dispatchEvent(new Event('close'));} finally {history.back = back;}
+      return steps;
+    }), 0);
     await page.goBack();await expect(page.locator('#tr-dialog')).not.toBeVisible();await expect(type).toBeFocused();
+    await type.click();await page.keyboard.press('Escape');
+    await expect(page.locator('#tr-dialog')).not.toBeVisible();await expect(type).toBeFocused();
    }
    await page.screenshot({path:join(evidence,`${name}-${width}-family-inflows.png`),fullPage:true});
    const receiptTrend=page.locator('#tr-flow-trend');await receiptTrend.scrollIntoViewIfNeeded();

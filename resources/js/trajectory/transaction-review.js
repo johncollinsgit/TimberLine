@@ -35,20 +35,32 @@ export function initCompactTransactionList({root, getContext}) {
   modal.innerHTML = '<header><h2>Transaction details</h2><button type="button" data-close-transaction-detail aria-label="Close transaction details">×</button></header><div data-transaction-detail-body></div>';
   root.append(modal);
   const body = modal.querySelector('[data-transaction-detail-body]');
-  let selected = null, context = null, sourceHtml = null, opener = null;
+  let selected = null, entry = null, index = -1, context = null, sourceHtml = null, opener = null;
   const key = () => JSON.stringify(getContext());
   function close(restore = true) {
-    selected = context = sourceHtml = null;
+    selected = entry = context = sourceHtml = null;
     modal.close();body.replaceChildren();
     if (restore && opener?.isConnected) opener.focus({preventScroll: true});
   }
   function sync() {
     if (selected === null) return;
-    const row = [...content.querySelectorAll('tr[data-list-key]')].find(row => row.dataset.listKey === selected);
-    if (context !== key() || !row) {close(false);return;}
-    if (sourceHtml === row.innerHTML || modal.contains(doc.activeElement) && doc.activeElement.matches('input,select,textarea')) return;
+    const rows = [...content.querySelectorAll('tr[data-list-key]')];
+    if (context !== key()) {close(false);return;}
+    const row = rows.find(tr => tr.dataset.listKey === selected || (entry && tr.dataset.entryKey === entry));
+    if (!row) {
+      close(false);
+      const nearby = rows[Math.min(index, rows.length - 1)]?.querySelector('[data-action="transaction-list-detail"]');
+      (nearby ?? content.querySelector('[data-vf-input="query"]'))?.focus({preventScroll: true});
+      return;
+    }
+    const newVersion = row.dataset.listKey !== selected;
+    selected = row.dataset.listKey;
+    opener = row.querySelector('[data-action="transaction-list-detail"]');
+    index = rows.indexOf(row);
+    if (sourceHtml === row.innerHTML || (!newVersion && modal.contains(doc.activeElement) && doc.activeElement.matches('input,select,textarea'))) return;
     sourceHtml = row.innerHTML;
     const focused = modal.contains(doc.activeElement) ? doc.activeElement.dataset.action : null;
+    const editingCategory = modal.contains(doc.activeElement) && doc.activeElement.hasAttribute('data-vf-category');
     body.replaceChildren();
     for (const cell of row.cells) {
       const section = doc.createElement('section');
@@ -57,21 +69,22 @@ export function initCompactTransactionList({root, getContext}) {
       details.querySelectorAll('[data-action="transaction-list-detail"]').forEach(button => button.remove());
       section.append(details);body.append(section);
     }
-    if (focused) [...body.querySelectorAll('[data-action]')].find(node => node.dataset.action === focused)?.focus({preventScroll: true});
+    if (editingCategory) body.querySelector('[data-vf-category]')?.focus({preventScroll:true});
+    else if (focused) [...body.querySelectorAll('[data-action]')].find(node => node.dataset.action === focused)?.focus({preventScroll: true});
   }
   const click = event => {
     const button = event.target.closest('[data-action="transaction-list-detail"]');
     if (button) {
       event.preventDefault();event.stopImmediatePropagation();
       const row = button.closest('tr[data-list-key]');if (!row) return;
-      opener = button;selected = row.dataset.listKey;context = key();sourceHtml = null;sync();
+      opener = button;selected = row.dataset.listKey;entry = row.dataset.entryKey;context = key();sourceHtml = null;sync();
       modal.showModal();modal.querySelector('[data-close-transaction-detail]').focus({preventScroll: true});return;
     }
     if (event.target.closest('[data-close-transaction-detail]')) {close();return;}
     // The original native editor takes over for deeper details or a split.
     if (modal.contains(event.target) && event.target.closest('[data-action="classify"],[data-action="vf-review-row"],[data-action="vf-attribution"],[data-action="vf-select-row"],[data-action="category-review-change"]')) close(false);
   };
-  const cancel = () => {selected = context = sourceHtml = null;opener?.isConnected && opener.focus({preventScroll: true});};
+  const cancel = () => {selected = entry = context = sourceHtml = null;opener?.isConnected && opener.focus({preventScroll: true});};
   const observer = new doc.defaultView.MutationObserver(sync);
   observer.observe(content, {childList: true, subtree: true});
   root.addEventListener('click', click, true);modal.addEventListener('cancel', cancel);
@@ -83,11 +96,14 @@ export function normalizedReviewRow(row, definitions = []) {
   const details = row.allocation_details ?? [];
   const current = {...row, source_space_id: row.source_space_id ?? row.source_identity?.source_space_id,
     attribution_editable: row.attribution_editable ?? row.source_identity?.authorized_source === true};
-  if (row.attribution_detail_id || details.length !== 1) return current;
-  const detail = details[0], leaf = definitions.find(d => (d.record_id ?? d.id) === detail.subcategory_record_id);
+  if (row.attribution_detail_id || !details.length) return current;
+  const categoryFor = detail => (detail.subcategory_record_id != null
+    ? definitions.find(d => (d.record_id ?? d.id) === detail.subcategory_record_id)?.key : null) ?? detail.category;
+  if (details.length > 1) return {...current, split_categories: [...new Set(details.map(categoryFor))]};
+  const detail = details[0];
   return {...current, source_transaction_id: row.id,
     attribution_detail_id: detail.id ?? detail.detail_id, program_record_id: detail.program_record_id,
-    subcategory_record_id: detail.subcategory_record_id, category: leaf?.key ?? detail.category};
+    subcategory_record_id: detail.subcategory_record_id, category: categoryFor(detail)};
 }
 
 /** Explicit owner choice only; the proposal itself never writes or learns a rule. */
@@ -95,11 +111,12 @@ export async function saveTransactionCategory({row, category, targetSpace, categ
   if (!isCurrent()) throw Error('Your financial view changed. Review this purchase again.');
   const sourceSpace = row.source_space_id ?? targetSpace, id = row.source_transaction_id ?? row.id;
   const definition = categoryDefinitions.find(d => d.key === category);
-  if (row.attribution_detail_id || row.allocation_details?.length || definition?.parent_key || !row.editable) {
+  const detailId = row.attribution_detail_id ?? row.detail_id;
+  if (detailId != null || row.allocation_details?.length || definition?.parent_key || !row.editable) {
     const path = `/transactions/${id}/attribution`, description = await api(endpoint(path, sourceSpace));
     if (description.version !== row.version) throw Error('This transaction changed. Refresh before confirming.');
     const eligible = description.lines.filter(line => line.space_id === targetSpace);
-    const detail = description.lines.find(line => line.detail_id === row.attribution_detail_id) ?? (eligible.length === 1 ? eligible[0] : null);
+    const detail = detailId != null ? eligible.find(line => line.detail_id === detailId) : (eligible.length === 1 ? eligible[0] : null);
     if (!detail) throw Error('Choose the current allocation detail before changing its category.');
     const catalog = await api(endpoint('/attribution/definitions', detail.space_id));
     const chosen = catalog.category_definitions.find(d => d.key === category && d.active);
@@ -163,6 +180,12 @@ export function createTransactionReview({getContext, canRefine = () => false, ap
     if (scopeKey() === snapshot) {proposals.delete(key);declined.delete(key);undo = {...result, merchant: row.merchant, context: snapshot};}
     return result;
   }
+  async function reportSavedChange(message, snapshot) {
+    if (scopeKey() !== snapshot) return;
+    let refreshed = false;
+    try {refreshed = await onChanged() !== false;} catch {}
+    if (scopeKey() === snapshot) notice(refreshed ? message : message + ' Refresh to update this list and its totals.');
+  }
   async function handleClick(action, target) {
     if (!action.startsWith('category-review-')) return false;
     const snapshot = scopeKey(), key = target.dataset.reviewKey, row = rows.get(key);
@@ -172,7 +195,7 @@ export function createTransactionReview({getContext, canRefine = () => false, ap
       try {
         const path = `/transactions/${saved.id}/${saved.kind === 'attribution' ? 'attribution/undo' : 'undo'}`;
         await api(endpoint(path, saved.space_id), 'POST', {version: saved.version, ...(saved.kind === 'attribution' ? {event_id: saved.event_id} : {})});
-        if (scopeKey() === snapshot) {undo = null;notice('Undid this category change.');await onChanged();}
+        if (scopeKey() === snapshot) {undo = null;await reportSavedChange('Undid this category change.', snapshot);}
       } catch (error) {if (scopeKey() === snapshot) notice(error.message);}finally {if (target.isConnected) target.disabled = false;}
       return true;
     }
@@ -187,7 +210,7 @@ export function createTransactionReview({getContext, canRefine = () => false, ap
       try {
         await saveChoice(row, proposal.category);
         if (scopeKey() !== snapshot) return true;
-        notice('Category confirmed.');await onChanged();
+        await reportSavedChange('Category confirmed.', snapshot);
       } catch (error) {if (scopeKey() === snapshot) {errors.set(key, error.message);proposals.delete(key);notice(error.message);onRender();}}
       finally {if (target.isConnected) target.disabled = false;}
       return true;
@@ -199,5 +222,5 @@ export function createTransactionReview({getContext, canRefine = () => false, ap
 
 
 export function renderLegacyTransactionLedger({rows,scope,active,filter,transactionReview,esc,title,date,evidenceMoney,btn,empty}) {
-  return rows.length?`${transactionReview.renderUndo()}<div class="tr-table-wrap tr-review-table-wrap"><table class="tr-table tr-review-table"><caption>${rows.length} transactions</caption><thead><tr><th>Date</th>${scope==='both'?'<th>Space</th>':''}<th>Merchant</th><th>Category</th><th>Classification</th><th>Amount</th><th>Review</th></tr></thead><tbody>${rows.map(t=>`<tr data-list-key="${esc((t.space_id||active)+':'+reviewRowKey(t))}"><td data-label="Date" class="tr-review-date">${date(t.date)}</td>${scope==='both'?`<td><span class="tr-pill">${esc(t.space_label)}</span></td>`:''}<td data-label="Merchant" class="tr-review-merchant"><button type="button" class="tr-list-merchant-mobile" data-action="transaction-list-detail">${esc(t.merchant)}</button><span class="tr-list-merchant-desktop">${esc(t.merchant)}</span>${transactionIdentityHtml(t,{esc})}<div class="tr-subtle">${esc(title(t.flow))}</div></td><td data-label="Category" class="tr-review-category">${esc(title(t.category))}${transactionReview.render(t)}</td><td data-label="Flags">${t.face_punched?'<span class="tr-pill">Face Punched</span> ':''}${t.bullshit_spending?'<span class="tr-pill">Bullshit Spending</span>':''}</td><td data-label="Amount" class="tr-money tr-review-amount ${t.amount_cents>0?'tr-positive':''}">${evidenceMoney(t,t.amount_cents)}${refundMatchLabel(t, esc)}${t.tax_purpose?`<div class="tr-subtle">${!['tax_economic_cost','sales_tax_principal','owned_bank_cash'].includes(t.amount_basis)?'Full bank amount; components below<br>':''}${['tax_economic_cost','sales_tax_principal'].includes(t.amount_basis)?`Bank amount ${evidenceMoney(t,t.bank_amount_cents)}<br>Shown: ${t.economic_category?esc(title(t.economic_category)):t.economic_categories?.length?t.economic_categories.map(c=>esc(title(c))).join(', '):'known economic costs'}<br>`:''}${t.tax_purpose.valid&&t.tax_purpose.components?`Sales-tax principal ${evidenceMoney(t,t.tax_purpose.components.tax_principal_cents)}<br>Interest ${evidenceMoney(t,t.tax_purpose.components.interest_cents)} · Penalty ${evidenceMoney(t,t.tax_purpose.components.penalty_cents)} · Fees ${evidenceMoney(t,t.tax_purpose.components.other_fees_cents)}`:esc(t.tax_purpose.issue||'Tax purpose / economic split needs review')}</div>`:''}${t.amount_basis==='owned_bank_cash'?`<div class="tr-subtle">Full bank cash<br>Economic allocation ${evidenceMoney(t,t.allocated_amount_cents)}</div>`:''}${t.amount_basis==='owned_credit_activity'?`<div class="tr-subtle">Full card amount<br>Economic allocation ${evidenceMoney(t,t.allocated_amount_cents)}<br>${esc(t.currency||'Currency unavailable')}</div>`:''}</td><td data-label="Actions" class="tr-review-actions">${t.editable||t.attribution_editable?btn(t.reviewed?'Edit category':'Categorize','classify',`data-id="${t.id}" data-space-id="${t.space_id||active}"`):'Allocated'}</td></tr>`).join('')}</tbody></table></div>`:empty(filter.review?'Everything in this space is reviewed.':'No transactions match this view.');
+  return rows.length?`${transactionReview.renderUndo()}<div class="tr-table-wrap tr-review-table-wrap"><table class="tr-table tr-review-table"><caption>${rows.length} transactions</caption><thead><tr><th>Date</th>${scope==='both'?'<th>Space</th>':''}<th>Merchant</th><th>Category</th><th>Classification</th><th>Amount</th><th>Review</th></tr></thead><tbody>${rows.map(t=>`<tr data-list-key="${esc((t.space_id||active)+':'+reviewRowKey(t))}"><td data-label="Date" class="tr-review-date">${date(t.date)}</td>${scope==='both'?`<td><span class="tr-pill">${esc(t.space_label)}</span></td>`:''}<td data-label="Merchant" class="tr-review-merchant"><button type="button" class="tr-list-merchant-mobile" data-action="transaction-list-detail">${esc(t.merchant)}</button><span class="tr-list-merchant-desktop">${esc(t.merchant)}</span>${transactionIdentityHtml(t,{esc})}<div class="tr-subtle">${esc(title(t.flow))}</div></td><td data-label="Category" class="tr-review-category">${t.split_categories?.length ? `Split · ${t.split_categories.map(category => esc(title(category))).join(' / ')}` : esc(title(t.category))}${transactionReview.render(t)}</td><td data-label="Flags">${t.face_punched?'<span class="tr-pill">Face Punched</span> ':''}${t.bullshit_spending?'<span class="tr-pill">Bullshit Spending</span>':''}</td><td data-label="Amount" class="tr-money tr-review-amount ${t.amount_cents>0?'tr-positive':''}">${evidenceMoney(t,t.amount_cents)}${refundMatchLabel(t, esc)}${t.tax_purpose?`<div class="tr-subtle">${!['tax_economic_cost','sales_tax_principal','owned_bank_cash'].includes(t.amount_basis)?'Full bank amount; components below<br>':''}${['tax_economic_cost','sales_tax_principal'].includes(t.amount_basis)?`Bank amount ${evidenceMoney(t,t.bank_amount_cents)}<br>Shown: ${t.economic_category?esc(title(t.economic_category)):t.economic_categories?.length?t.economic_categories.map(c=>esc(title(c))).join(', '):'known economic costs'}<br>`:''}${t.tax_purpose.valid&&t.tax_purpose.components?`Sales-tax principal ${evidenceMoney(t,t.tax_purpose.components.tax_principal_cents)}<br>Interest ${evidenceMoney(t,t.tax_purpose.components.interest_cents)} · Penalty ${evidenceMoney(t,t.tax_purpose.components.penalty_cents)} · Fees ${evidenceMoney(t,t.tax_purpose.components.other_fees_cents)}`:esc(t.tax_purpose.issue||'Tax purpose / economic split needs review')}</div>`:''}${t.amount_basis==='owned_bank_cash'?`<div class="tr-subtle">Full bank cash<br>Economic allocation ${evidenceMoney(t,t.allocated_amount_cents)}</div>`:''}${t.amount_basis==='owned_credit_activity'?`<div class="tr-subtle">Full card amount<br>Economic allocation ${evidenceMoney(t,t.allocated_amount_cents)}<br>${esc(t.currency||'Currency unavailable')}</div>`:''}</td><td data-label="Actions" class="tr-review-actions">${t.editable||t.attribution_editable?btn(t.reviewed?'Edit category':'Categorize','classify',`data-id="${t.id}" data-space-id="${t.space_id||active}"`):'Allocated'}</td></tr>`).join('')}</tbody></table></div>`:empty(filter.review?'Everything in this space is reviewed.':'No transactions match this view.');
 }

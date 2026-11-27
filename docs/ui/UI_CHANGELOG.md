@@ -1,3 +1,9 @@
+## 2026-11-26 · Keep transaction review in place
+
+Changing a payment’s category in Analysis updates the current ledger. A payment
+that leaves the selected category disappears from the list. The same merchant
+heading, filters and navigation stay available after the last payment moves.
+
 ## 2026-11-26 · Ask Everbranch
 
 Ask offers purchase review and transfer matching from the conversation. Review

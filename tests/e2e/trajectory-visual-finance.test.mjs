@@ -17,12 +17,12 @@ const report = {
   entries, periods: [{label: 'Feb', from: '2028-02-01', through: '2028-02-15', inflow_cents: 40000, spending_cents: 15000, comparison: {from: '2027-02-01', through: '2027-02-15', spending_cents: null}}],
   category_options: ['food', 'groceries', 'dining', 'office'], category_definitions: [{key: 'food', label: 'Food'}, {key: 'groceries', label: 'Groceries', parent_key: 'food'}, {key: 'dining', label: 'Dining', parent_key: 'food'}], coverage: {complete: false},
 };
-function fixture(apiOverride = null) {
+function fixture(apiOverride = null, onCategorySaved) {
   const calls = [], changes = [], notices = [];
   const ctx = {space_id: 7, scope: 'personal', account_id: null, from: '2028-02-01', through: '2028-02-15'};
   const budgets = {rows: [{key: 'food', category: 'food', label: 'Food', target_cents: 20000, spent_cents: 15000, pending_cents: 2000, remaining_cents: 3000}], summary: {remaining_cents: 3000}};
-  const api = async (path, method = 'GET', body) => {calls.push({path, method, body}); if (apiOverride) return apiOverride(path, method, body); return path.includes('budget-envelopes') ? budgets : structuredClone(report);};
-  const ui = createVisualFinance({root: {querySelector: () => null}, getContext: () => ctx, api, endpoint: (path, id = ctx.space_id) => `/spaces/${id}${path}`, esc, precise, chart: () => {}, onBeforeChange: () => changes.push('remember'), onChange: () => changes.push('render'), onChanged: async () => changes.push('reload'), onNavigate: () => {}, onReviewTransaction: () => {}, onEditBudget: () => {}, onOpenBudget: row => changes.push({budget: row.key ?? row.category}), onAddDefinition: () => {}, notice: x => notices.push(x)});
+  const api = async (path, method = 'GET', body) => {calls.push({path, method, body}); if (apiOverride) return apiOverride(path, method, body); if (method === 'PATCH') return {version: body.version + 1}; return path.includes('budget-envelopes') ? budgets : structuredClone(report);};
+  const ui = createVisualFinance({root: {querySelector: () => null}, getContext: () => ctx, api, endpoint: (path, id = ctx.space_id) => `/spaces/${id}${path}`, esc, precise, chart: () => {}, onBeforeChange: () => changes.push('remember'), onChange: () => changes.push('render'), onChanged: async () => changes.push('reload'), onCategorySaved, onNavigate: () => {}, onReviewTransaction: () => {}, onEditBudget: () => {}, onOpenBudget: row => changes.push({budget: row.key ?? row.category}), onAddDefinition: () => {}, notice: x => notices.push(x)});
   return {ui, calls, ctx, changes, notices};
 }
 
@@ -354,4 +354,61 @@ test('budget account ledger filter uses the assigned split or the same-space fun
   await ui.handleInput({dataset:{vfInput:'budget-account'},value:'11'});
   assert.match(ui.render('analysis'),/From checking/);
   assert.doesNotMatch(ui.render('analysis'),/Gift allocation|External funding/);
+});
+
+test('a committed inline category survives a failed totals refresh and an obsolete selector cannot overwrite it', async () => {
+  const saved = [];
+  const {ui, calls, notices, changes} = fixture(null, async change => {saved.push(change); return false;});
+  await ui.refresh();
+  const target = {dataset: {vfCategory: 'line:1', vfVersion: '2'}, value: 'christmas', isConnected: true};
+  await ui.handleInput(target);
+  assert.equal(saved[0].row.id, 1);
+  assert.equal(saved[0].result.version, 3);
+  assert.equal(saved[0].category, 'christmas');
+  assert.equal(target.value, 'christmas');
+  assert.equal(changes.includes('reload'), false);
+  assert.match(notices.at(-1), /Category saved\. Refresh.*totals/);
+  target.dataset.vfVersion = '1';
+  await ui.handleInput(target);
+  assert.match(notices.at(-1), /transaction changed/i);
+  assert.equal(calls.filter(call => call.method === 'PATCH').length, 1);
+});
+
+test('the original merchant ledger remains mounted in normal renders when its last Christmas gift moves', async () => {
+  const before = structuredClone(report), child = before.categories[0].children[0];
+  child.children = [{key: 'merchant:zelle', group_kind: 'merchant', label: 'Zelle Recipient', category_key: 'groceries', entry_keys: ['line:1']}];
+  let current = before;
+  const {ui, changes} = fixture(async url => url.includes('budget-envelopes') ? {rows: []} : structuredClone(current));
+  await ui.refresh();
+  for (const dataset of [{action: 'vf-category', direction: 'out', key: 'food'}, {action:'vf-subcategory', key:'groceries'}, {action:'vf-subcategory', key:'merchant:zelle'}]) await ui.handleClick({dataset});
+  assert.match(ui.render('analysis'), /<h2>Zelle Recipient<\/h2>/);
+  const initialState = ui.capture(), beforeChanges = changes.length;
+  current = {...before, categories: [], entries: []};
+  assert.equal(await ui.refresh({afterSave: true}), true);
+  const html = ui.render('analysis');
+  assert.match(html, /<h2>Zelle Recipient<\/h2>/);
+  assert.match(html, /0 recorded entries/);
+  assert.match(html, /No transactions match this view/);
+  assert.match(html, /data-level="subcategory"/);
+  assert.match(html, /data-vf-input="sort"/);
+  assert.deepEqual(ui.capture(), initialState);
+  assert.equal(changes.length, beforeChanges);
+});
+
+test('a repeated edit cannot write twice while another transaction can save independently', async () => {
+  const releases = new Map();
+  const {ui, calls} = fixture(async (path, method, body) => {
+    if (method === 'PATCH') return new Promise(resolve => releases.set(path, () => resolve({version: body.version + 1})));
+    return path.includes('budget-envelopes') ? {rows: []} : structuredClone(report);
+  }, async () => true);
+  await ui.refresh();
+  const edit = key => ({dataset: {vfCategory:key}, value:'christmas', isConnected:true});
+  const first = ui.handleInput(edit('line:1'));
+  const second = ui.handleInput(edit('line:2'));
+  await ui.handleInput(edit('line:1'));
+  assert.equal(calls.filter(call => call.method === 'PATCH').length, 2);
+  releases.get('/spaces/7/transactions/1')();await first;
+  assert.equal(ui.isBusy(), true);
+  releases.get('/spaces/7/transactions/2')();await second;
+  assert.equal(ui.isBusy(), false);
 });
