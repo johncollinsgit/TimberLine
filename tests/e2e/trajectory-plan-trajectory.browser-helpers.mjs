@@ -51,7 +51,7 @@ async function checkDebtPlanning(page, origin, books, database) {
   async function openDebt() {
     const loaded = responseFor(page, 'plan-context');
     await page.goto(origin + '/trajectory?tab=planning');
-    const {debt_payoff: saved} = await (await loaded).json();
+    const {debt_payoff: saved, household_trajectory:trajectory} = await (await loaded).json();
     const inventoryReady = responseFor(page, 'debt-scenarios', 'POST');
     const tab = page.locator('[data-action="pt-section"][data-section="debt"]');
     await tab.click();
@@ -59,9 +59,9 @@ async function checkDebtPlanning(page, origin, books, database) {
     await expect(panel).toBeVisible();
     const inventoryReply = await inventoryReady;
     assert.ok(inventoryReply.ok(), await inventoryReply.text());
-    return {saved, report:await inventoryReply.json()};
+    return {saved, report:await inventoryReply.json(), monthly:trajectory.monthly};
   }
-  const {saved, report} = await openDebt();
+  const {saved, report, monthly} = await openDebt();
   const debts = new Map(report.inventory.map(item => [item.name, item]));
   assert.equal(debts.size, report.inventory.length, 'A dated card snapshot and its current account represent one debt');
   for (const [name,balance,apr,minimum] of [['Fictional card',100000,11000,4500],['Fictional detail card',131902,29000,8000]]) {
@@ -94,6 +94,12 @@ async function checkDebtPlanning(page, origin, books, database) {
   assert.deepEqual(previewReply.request().postDataJSON(), {view:'household_plan',extra_cents:15000});
   assert.ok(previewReply.ok(), await previewReply.text());
   const preview = await previewReply.json();
+  const impact = panel.locator('.pt-impact');
+  const targetWithExtra = (monthly.historical_sustainable_cents ?? monthly.sustainable_cents) + 15000;
+  assert.ok(Number.isSafeInteger(monthly.expected_income_cents));
+  await expect(impact).toContainText('Monthly take-home with this extra');
+  await expect(impact).toContainText(money(targetWithExtra));
+  await expect(impact).toContainText(money(Math.abs(targetWithExtra - monthly.expected_income_cents)));
   const comparisons = new Map(preview.method_comparisons.map(item => [item.method,item]));
   for (const key of ['avalanche','snowball']) {
     assert.equal(comparisons.get(key)?.status, 'projected', JSON.stringify(preview.missing));
@@ -212,6 +218,13 @@ export async function checkPlanTrajectory({context, origin, width, engine, datab
   await expect(bridge.locator('[data-pt-bridge-result]')).toContainText(money(Math.max(0, targetCents - Math.floor(55000 / 12))));
   await expect(plan.locator('[data-pt-target]')).toHaveText(target);
   assert.equal(requests.filter(request => ['POST','PUT','PATCH','DELETE'].includes(request.method)).length, 0);
+
+  const editMetal = bridge.getByRole('button', {name:'Edit sale estimate for Fictional silver holding'});
+  await editMetal.click();
+  const metalDialog = page.locator('#tr-dialog');
+  await expect(metalDialog.locator('[name="name"]')).toHaveValue('Fictional silver holding');
+  await expect(metalDialog.locator('[name="plan_net_per_item_cents"]')).toBeEditable();
+  await metalDialog.getByRole('button', {name:'Close dialog'}).click();
 
   const receipts = plan.locator('.pt-receipts');
   const source = receipts.locator('select[name="receipts"]');

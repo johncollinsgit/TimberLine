@@ -54,6 +54,8 @@ try{
    App\\Models\\Trajectory\\Transaction::where('account_id',$cash->id)->where('source_key',$cash->source_key.':'.$key)->sole()->update(['flow'=>'medical_share','category'=>'health','reviewed'=>true]);
  }
  $service->save($owner,$space,'asset','Fictional saleable trailer',['asset_type'=>'other','value_cents'=>65000,'observed_on'=>$start,'plan_sale_proceeds_cents'=>55000]);
+ $service->save($owner,$space,'metal','Fictional silver holding',['metal'=>'silver','quantity'=>'1','weight'=>'1','unit'=>'troy_ounce',
+   'weight_basis'=>'gross','purity_bps'=>9990,'cost_basis_cents'=>2300,'acquired_on'=>$start]);
  $payments=[];
  foreach ([-2167,-4312] as $amount) {
    $key='fictional-zelle-'.$amount;
